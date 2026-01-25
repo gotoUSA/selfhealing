@@ -22,215 +22,159 @@
 
 ## 2. 구현 순서 (체크리스트)
 
-### Phase 1: 신규 Settings 모듈 생성 [예상: 4시간]
+### Phase 1: 신규 Settings 모듈 생성 [완료: 2026-01-25]
 
-#### 1.1 settings/stress_test.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_stress_test_settings.py`
+#### 1.1 settings/stress_test.py ✅
+- [x] 파일 생성: `settings/stress_test.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestStressTestSettings`
 
-```python
-# 필요한 설정 필드 (stress_views.py 기반)
-# 파일: api/django/stress_views.py
-SELFHEALING_STRESS_TEST_DEFAULT_LOCK_TIMEOUT_MS = 1  # Line 282
-SELFHEALING_STRESS_TEST_DEFAULT_SLEEP_SECONDS = 1   # Line 330
-```
+설정 필드 (services/stress_test_service.py):
+- `default_lock_timeout_ms`: Lock 획득 기본 타임아웃 (기본 1ms)
+- `max_burst_duration_seconds`: Burst Failure 최대 지속 시간 (기본 30초)
+- `max_concurrent_locks`: 동시 Lock 시도 최대 수 (기본 100)
+- `default_leak_hold_seconds`: Connection Leak 시뮬레이션 유지 시간 (기본 30초)
+- `inter_request_sleep_ms`: 요청 간 대기 시간 (기본 10ms)
 
-#### 1.2 settings/cleanup.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_cleanup_settings.py`
+#### 1.2 settings/cleanup.py ✅
+- [x] 파일 생성: `settings/cleanup.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestCleanupSettings`
 
-```python
-# 필요한 설정 필드 (cleanup_service.py, cleanup_tasks.py 기반)
-# 파일: services/cleanup_service.py, tasks/cleanup_tasks.py
-SELFHEALING_CLEANUP_ARCHIVE_OLDER_THAN_DAYS = 30      # Line 68
-SELFHEALING_CLEANUP_EXPIRED_CONFIG_HOURS = 24         # Line 118
-SELFHEALING_CLEANUP_APPROVAL_EXPIRY_HOURS = 72        # Line 168
-SELFHEALING_CLEANUP_PURGE_OLDER_THAN_DAYS = 90        # Line 212
-```
+설정 필드 (services/cleanup_service.py, tasks/cleanup_tasks.py):
+- `archive_older_than_days`: DLQ 아카이브 기준 일수 (기본 30일)
+- `expired_config_hours`: Pending Config 만료 기준 (기본 24시간)
+- `approval_expiry_hours`: 승인 요청 만료 기준 (기본 72시간)
+- `purge_older_than_days`: 아카이브 영구 삭제 기준 (기본 90일)
 
-#### 1.3 settings/precomputed_cache.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_precomputed_cache_settings.py`
+#### 1.3 settings/precomputed_cache.py ✅
+- [x] 파일 생성: `settings/precomputed_cache.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestPrecomputedCacheSettings`
 
-```python
-# 필요한 설정 필드 (precomputed_cache.py 기반)
-# 파일: services/precomputed_cache.py
-SELFHEALING_PRECOMPUTED_CACHE_L1_TTL_SECONDS = 5.0   # Line 23
-SELFHEALING_PRECOMPUTED_CACHE_L2_TTL_SECONDS = 30.0  # Line 24
-SELFHEALING_PRECOMPUTED_CACHE_MAXSIZE = 100          # Line 111
-```
+설정 필드 (services/precomputed_cache.py):
+- `l1_ttl_seconds`: L1 In-Process 캐시 TTL (기본 2.0초)
+- `l1_maxsize`: L1 캐시 최대 항목 수 (기본 100)
+- `l2_ttl_seconds`: L2 Redis 캐시 TTL (기본 15.0초)
+- `refresh_interval_seconds`: 백그라운드 갱신 주기 (기본 10.0초)
 
-#### 1.4 settings/backoff.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_backoff_settings.py`
+#### 1.4 settings/backoff.py ✅
+- [x] 파일 생성: `settings/backoff.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestBackoffSettings`
 
-```python
-# 필요한 설정 필드 (core/backoff.py 기반)
-# 파일: core/backoff.py
-SELFHEALING_BACKOFF_EXPONENTIAL_BASE_DELAY = 1.0     # Line 44
-SELFHEALING_BACKOFF_EXPONENTIAL_MAX_DELAY = 300.0    # Line 45
-SELFHEALING_BACKOFF_EXPONENTIAL_MULTIPLIER = 2.0     # Line 46
-SELFHEALING_BACKOFF_EXPONENTIAL_JITTER = 0.2         # Line 49
-SELFHEALING_BACKOFF_LINEAR_BASE_DELAY = 1.0          # Line 74
-SELFHEALING_BACKOFF_LINEAR_INCREMENT = 1.0           # Line 75
-SELFHEALING_BACKOFF_LINEAR_MAX_DELAY = 60.0          # Line 76
-SELFHEALING_BACKOFF_LINEAR_JITTER = 0.1              # Line 80
-SELFHEALING_BACKOFF_CONSTANT_DELAY = 5.0             # Line 106
-SELFHEALING_BACKOFF_CONSTANT_JITTER = 0.1            # Line 109
-```
+설정 필드 (core/backoff.py):
+- Exponential: `base_delay=1.0`, `max_delay=300.0`, `multiplier=2.0`, `jitter_factor=0.2`
+- Linear: `base_delay=1.0`, `increment=1.0`, `max_delay=60.0`, `jitter_factor=0.1`
+- Constant: `delay=5.0`, `jitter_factor=0.1`
+- Legacy: `base=4`, `max_delay=180`, `jitter_percent=25`, `min_delay=1`
 
-#### 1.5 settings/pool_monitor.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_pool_monitor_settings.py`
+#### 1.5 settings/pool_monitor.py ✅
+- [x] 파일 생성: `settings/pool_monitor.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestPoolMonitorSettings`
 
-```python
-# 필요한 설정 필드 (core/pool_monitor.py 기반)
-# 파일: core/pool_monitor.py
-SELFHEALING_POOL_WARNING_THRESHOLD = 70.0            # Line 114
-SELFHEALING_POOL_CRITICAL_THRESHOLD = 90.0           # Line 115
-SELFHEALING_POOL_LEAK_THRESHOLD_SECONDS = 300.0      # Line 116
-```
+설정 필드 (core/pool_monitor.py):
+- `warning_threshold`: Pool 사용률 경고 임계값 (기본 70.0%)
+- `critical_threshold`: Pool 사용률 위험 임계값 (기본 90.0%)
+- `leak_threshold_seconds`: 누수 의심 기준 시간 (기본 300.0초)
+- `max_history`: 통계 히스토리 최대 개수 (기본 100)
 
-#### 1.6 settings/namespace_emergency.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_namespace_emergency_settings.py`
+#### 1.6 settings/namespace_emergency.py ✅
+- [x] 파일 생성: `settings/namespace_emergency.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestNamespaceEmergencySettings`
 
-```python
-# 필요한 설정 필드 (services/namespace_emergency/*.py 기반)
-# 파일: services/namespace_emergency/cascade_detector.py
-SELFHEALING_NAMESPACE_EMERGENCY_ESCALATION_THRESHOLD = 2     # Line 44
-SELFHEALING_NAMESPACE_EMERGENCY_CASCADE_WINDOW_MINUTES = 30  # Line 47
-# 파일: services/namespace_emergency/tracker.py
-SELFHEALING_NAMESPACE_EMERGENCY_EXPIRY_HOURS = 8             # Line 48
-SELFHEALING_NAMESPACE_EMERGENCY_CACHE_TTL_SECONDS = 30.0     # Line 51
-# 파일: services/namespace_emergency/escalation_audit.py
-SELFHEALING_NAMESPACE_EMERGENCY_MAX_BUFFER_SIZE = 1000       # Line 203
-```
+설정 필드 (services/namespace_emergency/*.py):
+- `escalation_threshold`: GLOBAL 격상 임계값 (기본 2개 리전)
+- `cascade_window_minutes`: Cascade 판단 윈도우 (기본 30분)
+- `expiry_hours`: Emergency 상태 만료 시간 (기본 8시간)
+- `cache_ttl_seconds`: 로컬 캐시 TTL (기본 30.0초)
+- `max_buffer_size`: 감사 이벤트 버퍼 최대 크기 (기본 1000)
 
-#### 1.7 settings/canary.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_canary_settings.py`
+#### 1.7 settings/canary.py ✅
+- [x] 파일 생성: `settings/canary.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestCanarySettings`
 
-```python
-# 필요한 설정 필드 (services/canary/*.py 기반)
-# 파일: services/canary/service.py
-SELFHEALING_CANARY_ROLLOUT_TTL_DAYS = 7              # Line 103
-# 파일: services/canary/cross_cluster.py
-SELFHEALING_CANARY_CROSS_CLUSTER_TIMEOUT = 10        # Line 388
-SELFHEALING_CANARY_DEFAULT_EXPIRY_HOURS = 24         # Line 599
-# 파일: services/canary/locking.py
-SELFHEALING_CANARY_LOCK_TIMEOUT_MINUTES = 30         # Line 81
-```
+설정 필드 (services/canary/*.py):
+- `rollout_ttl_days`: 롤아웃 데이터 보관 기간 (기본 7일)
+- `lock_timeout_minutes`: Config Lock 만료 시간 (기본 30분)
+- `cross_cluster_timeout_seconds`: 크로스 클러스터 타임아웃 (기본 10초)
+- `default_expiry_hours`: 전파 요청 만료 시간 (기본 24시간)
 
-#### 1.8 settings/canary_watchdog.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_canary_watchdog_settings.py`
+#### 1.8 settings/canary_watchdog.py ✅
+- [x] 파일 생성: `settings/canary_watchdog.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestCanaryWatchdogSettings`
 
-```python
-# 필요한 설정 필드 (tasks/canary_watchdog.py 기반)
-# 파일: tasks/canary_watchdog.py
-SELFHEALING_CANARY_WATCHDOG_ZOMBIE_THRESHOLD_MINUTES = 30    # Line 64
-SELFHEALING_CANARY_WATCHDOG_AUTO_ROLLBACK_MINUTES = 60       # Line 65
-SELFHEALING_CANARY_WATCHDOG_MAX_STAGE_DURATION_MINUTES = 15  # Line 66
-SELFHEALING_CANARY_WATCHDOG_SLACK_CHANNEL = "#selfhealing-alerts"  # Line 70
-```
+설정 필드 (tasks/canary_watchdog.py WatchdogConfig):
+- `zombie_threshold_minutes`: 정체 판단 시간 (기본 30분)
+- `auto_rollback_after_minutes`: 자동 롤백 대기 시간 (기본 60분)
+- `max_stage_duration_minutes`: 단계별 최대 체류 시간 (기본 15분)
+- `enable_auto_promote/rollback`: 자동 프로모션/롤백 활성화
+- `slack_channel`: 알림 채널 (기본 #selfhealing-alerts)
 
-#### 1.9 settings/chaos_safety_caps.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_chaos_safety_caps_settings.py`
+#### 1.9 settings/chaos_safety_caps.py ✅
+- [x] 파일 생성: `settings/chaos_safety_caps.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestChaosSafetyCapsSettings`
 
-```python
-# 필요한 설정 필드 (services/chaos/constants.py 기반)
-# 파일: services/chaos/constants.py
-SELFHEALING_CHAOS_DISK_IO_MAX_LATENCY_MS = 2000              # Line 31
-SELFHEALING_CHAOS_DISK_IO_MAX_FAILURE_RATE = 0.30            # Line 34
-SELFHEALING_CHAOS_REPLAY_FLOOD_MAX_ENTRIES = 5000            # Line 37
-SELFHEALING_CHAOS_REPLAY_FLOOD_MAX_RATE = 500                # Line 40
-SELFHEALING_CHAOS_CLOCK_SKEW_MAX_SECONDS = 86400             # Line 43
-SELFHEALING_CHAOS_BLACKHOLE_MAX_DURATION_SECONDS = 300       # Line 46
-SELFHEALING_CHAOS_POOL_EXHAUSTION_MAX_SECONDS = 120          # Line 52
-SELFHEALING_CHAOS_POOL_EXHAUSTION_MAX_PERCENTAGE = 0.50      # Line 55
-SELFHEALING_CHAOS_TLS_FAILURE_MAX_SECONDS = 180              # Line 58
-SELFHEALING_CHAOS_TLS_FAILURE_MAX_RATE = 0.25                # Line 61
-```
+설정 필드 (services/chaos/constants.py ExperimentHardCaps):
+- DiskIO: `max_latency_ms=2000`, `max_failure_rate=0.30`
+- ReplayFlood: `max_entries=5000`, `max_rate=500`
+- ClockSkew: `max_seconds=86400`
+- Blackhole: `max_duration_seconds=300`
+- PoolExhaustion: `max_duration_seconds=120`, `max_percentage=0.50`
+- TLSFailure: `max_duration_seconds=180`, `max_rate=0.25`
 
-#### 1.10 settings/audit_reconciler.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_audit_reconciler_settings.py`
+#### 1.10 settings/audit_reconciler.py ✅
+- [x] 파일 생성: `settings/audit_reconciler.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestAuditReconcilerSettings`
 
-```python
-# 필요한 설정 필드 (audit/reconciler.py 기반)
-# 파일: audit/reconciler.py
-SELFHEALING_AUDIT_RECONCILER_CHECK_INTERVAL_SECONDS = 300.0  # Line 41
-SELFHEALING_AUDIT_RECONCILER_CHECK_WINDOW_SECONDS = 3600.0   # Line 44
-SELFHEALING_AUDIT_RECONCILER_RESEND_BATCH_SIZE = 50          # Line 47
-SELFHEALING_AUDIT_RECONCILER_MAX_RESEND_ATTEMPTS = 3         # Line 50
-SELFHEALING_AUDIT_RECONCILER_ALERT_THRESHOLD = 10            # Line 53
-SELFHEALING_AUDIT_RECONCILER_MAX_CONFIRMED_IDS = 10000       # Line 170
-```
+설정 필드 (audit/reconciler.py ReconcilerConfig):
+- `check_interval_seconds`: 검증 주기 (기본 300.0초)
+- `check_window_seconds`: 검증 범위 (기본 3600.0초)
+- `resend_batch_size`: 재전송 배치 크기 (기본 50)
+- `max_resend_attempts`: 최대 재전송 시도 (기본 3회)
+- `alert_threshold`: 알림 임계값 (기본 10)
+- `max_confirmed_ids`: 확인된 ID 캐시 최대 크기 (기본 10000)
 
-#### 1.11 settings/jitter.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_jitter_settings.py`
+#### 1.11 settings/jitter.py ✅
+- [x] 파일 생성: `settings/jitter.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestJitterSettings`
 
-```python
-# 필요한 설정 필드 (utils/jitter.py 기반)
-# 파일: utils/jitter.py
-SELFHEALING_JITTER_MAX_DELAY_SECONDS = 60.0          # Line 27, 75, 99, 122
-SELFHEALING_JITTER_MIN_DELAY_SECONDS = 0.0           # Line 28, 76, 100, 123
-```
+설정 필드 (utils/jitter.py):
+- `max_delay_seconds`: 최대 지연 시간 (기본 60.0초)
+- `min_delay_seconds`: 최소 지연 시간 (기본 0.0초)
+- `startup_max_delay_seconds`: 시작 시 최대 지연 (기본 30.0초)
+- `enabled`: Jitter 활성화 여부 (기본 True)
 
-#### 1.12 settings/gate_fault.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_gate_fault_settings.py`
+#### 1.12 settings/gate_fault.py ✅
+- [x] 파일 생성: `settings/gate_fault.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestGateFaultSettings`
 
-```python
-# 필요한 설정 필드 (services/error_budget_gate/fault_detector.py 기반)
-# 파일: services/error_budget_gate/fault_detector.py
-SELFHEALING_GATE_FAULT_FAILURE_THRESHOLD = 5         # Line 46
-SELFHEALING_GATE_FAULT_RECOVERY_TIMEOUT = 30         # Line 46
-```
+설정 필드 (services/error_budget_gate/fault_detector.py GateFaultDetector):
+- `failure_threshold`: DEGRADED 전환 임계값 (기본 5회)
+- `recovery_timeout_seconds`: 복구 대기 시간 (기본 30초)
 
-#### 1.13 settings/forensic.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_forensic_settings.py`
+#### 1.13 settings/forensic.py (기존 파일 존재 - Phase 2로 연기)
+- [x] 기존 파일 확인: `settings/forensic.py` 이미 존재
+- [ ] Phase 2에서 ForensicRateLimiter 관련 필드 추가 예정
 
-```python
-# 필요한 설정 필드 (services/forensic_audit_bridge.py 기반)
-# 파일: services/forensic_audit_bridge.py
-SELFHEALING_FORENSIC_EXCEPTION_LIMIT = 10            # Line 59
-SELFHEALING_FORENSIC_SNAPSHOT_LIMIT = 1              # Line 60
-SELFHEALING_FORENSIC_ANOMALY_LIMIT = 5               # Line 61
-SELFHEALING_FORENSIC_WINDOW_SECONDS = 60.0           # Line 64
-```
+기존 forensic.py에 추가 필요 필드 (services/forensic_audit_bridge.py ForensicRateLimiter):
+- `exception_limit`: 분당 예외 캡처 최대 횟수 (기본 10)
+- `snapshot_limit`: 분당 스냅샷 최대 횟수 (기본 1)
+- `anomaly_limit`: 분당 이상 탐지 최대 횟수 (기본 5)
+- `window_seconds`: 윈도우 크기 (기본 60.0초)
 
-#### 1.14 settings/graceful_degradation.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_graceful_degradation_settings.py`
+#### 1.14 settings/graceful_degradation.py ✅
+- [x] 파일 생성: `settings/graceful_degradation.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestGracefulDegradationSettings`
 
-```python
-# 필요한 설정 필드 (audit/graceful_degradation/enums.py 기반)
-# 파일: audit/graceful_degradation/enums.py - FallbackConfig
-SELFHEALING_GRACEFUL_DEGRADATION_REDIS_TIMEOUT_SECONDS = 5.0     # Line 45
-SELFHEALING_GRACEFUL_DEGRADATION_REPLICA_TIMEOUT_SECONDS = 3.0   # Line 46
-SELFHEALING_GRACEFUL_DEGRADATION_MEMORY_MAX_ENTRIES = 10000      # Line 48
-# 파일: audit/graceful_degradation/enums.py - CircuitBreakerConfig
-SELFHEALING_GRACEFUL_DEGRADATION_CB_FAILURE_THRESHOLD = 5        # Line 55
-SELFHEALING_GRACEFUL_DEGRADATION_CB_RECOVERY_TIMEOUT = 30.0      # Line 56
-SELFHEALING_GRACEFUL_DEGRADATION_CB_HALF_OPEN_REQUESTS = 3       # Line 57
-SELFHEALING_GRACEFUL_DEGRADATION_CB_SUCCESS_THRESHOLD = 2        # Line 58
-```
+설정 필드 (audit/graceful_degradation/enums.py):
+- FallbackConfig: `redis_timeout=5.0`, `replica_timeout=3.0`, `memory_max_entries=10000`
+- CircuitBreakerConfig: `failure_threshold=5`, `recovery_timeout=30.0`, `half_open_requests=3`, `success_threshold=2`
 
-#### 1.15 settings/ring_buffer.py (신규)
-- [ ] 파일 생성
-- [ ] 테스트 파일: `tests/unit/settings/test_ring_buffer_settings.py`
+#### 1.15 settings/ring_buffer.py ✅
+- [x] 파일 생성: `settings/ring_buffer.py`
+- [x] 테스트: `tests/unit/settings/test_phase1_settings.py::TestRingBufferSettings`
 
-```python
-# 필요한 설정 필드 (audit/ring_buffer.py 기반)
-# 파일: audit/ring_buffer.py
-SELFHEALING_RING_BUFFER_CAPACITY = 10000             # Line 67
-SELFHEALING_RING_BUFFER_BATCH_MAX_SIZE = 100         # Line 60
-```
+설정 필드 (audit/ring_buffer.py RingBuffer):
+- `capacity`: 버퍼 최대 용량 (기본 10000)
+- `batch_max_size`: 배치 처리 최대 항목 수 (기본 100)
+- `strategy`: 배압 전략 (기본 drop_oldest)
 
 ---
 
@@ -668,16 +612,38 @@ def get_default_timeout() -> int:
 
 | Phase | 상태 | 완료율 |
 |-------|------|--------|
-| Phase 1: Settings 생성 | 미시작 | 0% |
+| Phase 1: Settings 생성 | ✅ 완료 | 100% (14/14 파일) |
 | Phase 2: Settings 확장 | 미시작 | 0% |
 | Phase 3: 소스 리팩토링 | 미시작 | 0% |
-| Phase 4: 테스트 작성 | 미시작 | 0% |
+| Phase 4: 테스트 작성 | 부분 완료 | 10% (Phase 1 테스트 완료) |
 | Phase 5: 최종 검증 | 미시작 | 0% |
+
+### Phase 1 완료 내역 (2026-01-25)
+
+| Settings 파일 | 테스트 | 상태 |
+|--------------|--------|------|
+| stress_test.py | ✅ 4 tests | 완료 |
+| cleanup.py | ✅ 3 tests | 완료 |
+| precomputed_cache.py | ✅ 2 tests | 완료 |
+| backoff.py | ✅ 2 tests | 완료 |
+| pool_monitor.py | ✅ 3 tests | 완료 |
+| namespace_emergency.py | ✅ 2 tests | 완료 |
+| canary.py | ✅ 2 tests | 완료 |
+| canary_watchdog.py | ✅ 3 tests | 완료 |
+| chaos_safety_caps.py | ✅ 2 tests | 완료 |
+| audit_reconciler.py | ✅ 2 tests | 완료 |
+| jitter.py | ✅ 3 tests | 완료 |
+| gate_fault.py | ✅ 3 tests | 완료 |
+| graceful_degradation.py | ✅ 2 tests | 완료 |
+| ring_buffer.py | ✅ 4 tests | 완료 |
+
+**총 테스트**: 37개 통과
 
 ### 마지막 업데이트
 - **날짜**: 2026-01-25
 - **작성자**: AI Assistant
-- **다음 작업**: Phase 1.1 시작 (settings/stress_test.py 생성)
+- **완료 작업**: Phase 1 완료 (14개 Settings 파일 생성, 37개 테스트 통과)
+- **다음 작업**: Phase 2 시작 (기존 Settings 확장)
 
 ---
 
