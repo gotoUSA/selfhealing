@@ -1,7 +1,7 @@
 """
-Tests for Phase 1 Settings Modules.
+Tests for Settings Modules - Defaults and Validation.
 
-Phase 1에서 생성된 14개의 신규 Settings 모듈 테스트:
+신규 Settings 모듈들의 기본값, 환경변수 오버라이드, 유효성 검증 테스트:
 - StressTestSettings
 - CleanupSettings
 - PrecomputedCacheSettings

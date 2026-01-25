@@ -1,7 +1,7 @@
 """
-Tests for Phase 2 Settings extensions and new settings.
+Tests for Settings Extensions and New Settings.
 
-Phase 2에서 확장/신규 생성된 Settings 모듈에 대한 테스트입니다:
+확장/신규 생성된 Settings 모듈에 대한 테스트입니다:
 - ErrorBudgetPropagationSettings 확장 필드
 - ThrottleSettings 확장 필드
 - AntiFlappingSettings 확장 필드
