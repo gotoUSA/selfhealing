@@ -33,6 +33,15 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+def _get_snapshot_max_age() -> int:
+    """MetricsSettings에서 스냅샷 최대 유효 기간을 가져온다."""
+    try:
+        from selfhealing.settings.metrics import get_metrics_settings
+        return get_metrics_settings().snapshot_max_age
+    except Exception:
+        return 3600  # 1시간 fallback
+
+
 @dataclass
 class MetricSnapshot:
     """메트릭 스냅샷 데이터."""
@@ -128,13 +137,13 @@ class MetricSnapshotStorage:
     """
     
     DEFAULT_FILENAME = "last_known_metrics.json"
-    DEFAULT_MAX_AGE = 3600  # 1시간
+    DEFAULT_MAX_AGE = 3600  # 하위 호환성용 레거시 상수
     
     def __init__(
         self,
         storage_dir: Optional[str] = None,
         filename: str = DEFAULT_FILENAME,
-        max_age_seconds: float = DEFAULT_MAX_AGE,
+        max_age_seconds: Optional[float] = None,
     ):
         """
         Initialize MetricSnapshotStorage.
@@ -142,11 +151,11 @@ class MetricSnapshotStorage:
         Args:
             storage_dir: 저장 디렉토리 (None이면 기본 위치 사용)
             filename: 스냅샷 파일명
-            max_age_seconds: 스냅샷 최대 유효 기간 (초)
+            max_age_seconds: 스냅샷 최대 유효 기간 (초). None이면 Settings에서 가져옴.
         """
         self._storage_dir = Path(storage_dir) if storage_dir else self._get_default_dir()
         self._filename = filename
-        self._max_age = max_age_seconds
+        self._max_age = max_age_seconds if max_age_seconds is not None else _get_snapshot_max_age()
         self._lock = threading.Lock()
         self._snapshot: Optional[MetricSnapshot] = None
         self._dirty = False

@@ -149,6 +149,16 @@ class AuditSettings(BaseSettings):
         description="법적 요구사항에 따른 최대 보관 기간 (일). 기본 1년, 최대 7년.",
     )
 
+    # ==========================================================================
+    # Redis Buffer TTL - from adapters/audit/redis_buffer.py
+    # ==========================================================================
+    buffer_redis_ttl: int = Field(
+        default=86400,
+        ge=3600,
+        le=604800,
+        description="Redis Audit 버퍼 TTL (초). 기본 24시간.",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

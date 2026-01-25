@@ -79,6 +79,16 @@ class MetricsSettings(BaseSettings):
         description="Maximum jitter delay in seconds",
     )
 
+    # ==========================================================================
+    # Snapshot Storage - from metrics/snapshot_storage.py
+    # ==========================================================================
+    snapshot_max_age: int = Field(
+        default=3600,
+        ge=300,
+        le=86400,
+        description="메트릭 스냅샷 최대 유효 기간 (초). 기본 1시간.",
+    )
+
 
 # Singleton instance (cached)
 _settings: Optional[MetricsSettings] = None

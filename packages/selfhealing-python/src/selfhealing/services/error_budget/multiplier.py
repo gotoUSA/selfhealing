@@ -49,14 +49,36 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Constants
+# Settings Helpers
+# =============================================================================
+
+def _get_multiplier_cache_ttl() -> float:
+    """ErrorBudgetSettings에서 Multiplier 캐시 TTL을 가져온다."""
+    try:
+        from selfhealing.settings.error_budget import get_error_budget_settings
+        return get_error_budget_settings().multiplier_cache_ttl
+    except Exception:
+        return 30.0  # fallback
+
+
+def _get_multiplier_max() -> float:
+    """ErrorBudgetSettings에서 최대 Multiplier를 가져온다."""
+    try:
+        from selfhealing.settings.error_budget import get_error_budget_settings
+        return get_error_budget_settings().multiplier_max
+    except Exception:
+        return 10.0  # fallback
+
+
+# =============================================================================
+# Constants (하위 호환성용)
 # =============================================================================
 
 DEFAULT_CACHE_TTL_SECONDS = 30.0
-"""기본 캐시 TTL (30초)."""
+"""기본 캐시 TTL (하위 호환성용 레거시 상수)."""
 
 DEFAULT_MAX_MULTIPLIER = 10.0
-"""기본 최대 가중치 제한."""
+"""기본 최대 가중치 (하위 호환성용 레거시 상수)."""
 
 
 # =============================================================================
@@ -110,8 +132,8 @@ class CrisisMultiplierConfig:
     enabled: bool = True
     """Crisis Multiplier 활성화 여부. False면 항상 1.0 반환."""
     
-    max_multiplier: float = DEFAULT_MAX_MULTIPLIER
-    """최대 허용 가중치 (안전 제한)."""
+    max_multiplier: float = field(default_factory=_get_multiplier_max)
+    """최대 허용 가중치 (안전 제한). Settings에서 가져옴."""
     
     def get_multiplier(self, level: EmergencyLevel) -> float:
         """
@@ -216,18 +238,18 @@ class CrisisMultiplierProvider:
     def __init__(
         self,
         config: Optional[CrisisMultiplierConfig] = None,
-        cache_ttl: float = DEFAULT_CACHE_TTL_SECONDS,
+        cache_ttl: Optional[float] = None,
     ):
         """
         CrisisMultiplierProvider 초기화.
         
         Args:
             config: 가중치 설정 (None이면 기본값 사용)
-            cache_ttl: 캐시 TTL (초, 기본 30초)
+            cache_ttl: 캐시 TTL (초). None이면 Settings에서 가져옴.
         """
         self.config = config or CrisisMultiplierConfig()
         self._emergency_tracker = None
-        self._cache_ttl = cache_ttl
+        self._cache_ttl = cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
         
         # 캐시 상태
         self._cached_multiplier: Optional[float] = None

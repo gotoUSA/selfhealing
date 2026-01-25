@@ -111,6 +111,16 @@ class RateLimitSettings(BaseSettings):
         description="Emergency window size",
     )
 
+    # ==========================================================================
+    # Redis Storage TTL - from adapters/rate_limit/redis_adapter.py
+    # ==========================================================================
+    redis_ttl: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="Redis에 저장되는 Rate Limit 상태의 TTL (초). 기본 1시간.",
+    )
+
     @field_validator("emergency_rate_limit")
     @classmethod
     def validate_emergency_rate_limit(cls, v: int) -> int:

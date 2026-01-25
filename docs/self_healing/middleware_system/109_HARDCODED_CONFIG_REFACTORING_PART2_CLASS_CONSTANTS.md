@@ -141,15 +141,61 @@
 
 | 항목 | 완료 |
 |------|------|
-| Settings 파일 생성/확장 | ☐ |
-| 헬퍼 함수 생성 | ☐ |
-| 클래스 수정 | ☐ |
-| 하위 호환성 유지 | ☐ |
-| 단위 테스트 | ☐ |
+| Settings 파일 생성/확장 | ✅ |
+| 헬퍼 함수 생성 | ✅ |
+| 클래스 수정 | ✅ |
+| 하위 호환성 유지 | ✅ |
+| 단위 테스트 | ✅ |
 
 ---
 
-## 6. 관련 문서
+## 6. 구현 결과
+
+### 6.1 생성된 Settings 파일
+
+| 파일 | 설명 |
+|------|------|
+| `settings/airgap.py` | Air-Gap Redis TTL 및 키 접두사 설정 |
+| `settings/safe_gauge.py` | SafeGauge 최대 레이블 조합 수 설정 |
+
+### 6.2 확장된 Settings 파일
+
+| 파일 | 추가된 필드 |
+|------|------------|
+| `settings/rate_limit.py` | `redis_ttl` |
+| `settings/audit_settings.py` | `buffer_redis_ttl` |
+| `settings/error_budget.py` | `multiplier_cache_ttl`, `multiplier_max` |
+| `settings/metrics.py` | `snapshot_max_age` |
+| `settings/dashboard.py` | 기존 `stale_threshold_minutes`, `max_regional_status` 활용 |
+| `settings/audit_integrity.py` | 기존 `archive_threshold_days`, `cold_retention_years` 활용 |
+
+### 6.3 수정된 클래스 (Settings 연동)
+
+| 클래스 | 헬퍼 함수 | 연동 필드 |
+|--------|----------|----------|
+| `RedisRateLimitStorage` | `_get_redis_ttl()` | `RateLimitSettings.redis_ttl` |
+| `RedisAirGapAdapter` | `_get_airgap_redis_ttl()`, `_get_airgap_key_prefix()` | `AirGapSettings` |
+| `RedisAuditBuffer` | `_get_audit_buffer_ttl()` | `AuditSettings.buffer_redis_ttl` |
+| `CrisisMultiplierConfig` | `_get_multiplier_max()` | `ErrorBudgetSettings.multiplier_max` |
+| `CrisisMultiplierProvider` | `_get_multiplier_cache_ttl()` | `ErrorBudgetSettings.multiplier_cache_ttl` |
+| `RecoveryDashboardService` | `_get_stale_threshold_minutes()`, `_get_max_regional_status()` | `DashboardSettings` |
+| `MetricSnapshotStorage` | `_get_snapshot_max_age()` | `MetricsSettings.snapshot_max_age` |
+| `SafeGauge` | `_get_max_label_combinations()` | `SafeGaugeSettings.max_label_combinations` |
+
+### 6.4 하위 호환성
+
+모든 클래스에서 레거시 상수(`DEFAULT_TTL`, `DEFAULT_MAX_AGE` 등)가 유지되어
+기존 코드와의 호환성이 보장됩니다.
+
+### 6.5 단위 테스트
+
+- 테스트 파일: `tests/unit/settings/test_class_constants_settings_109.py`
+- 테스트 수: 33개
+- 결과: 전체 통과
+
+---
+
+## 7. 관련 문서
 
 - [108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md](108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
 - [111_HARDCODED_CONFIG_REFACTORING_PART4_TIMEOUT_TTL.md](111_HARDCODED_CONFIG_REFACTORING_PART4_TIMEOUT_TTL.md)

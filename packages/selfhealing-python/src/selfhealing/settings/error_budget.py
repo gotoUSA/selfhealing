@@ -162,6 +162,22 @@ class ErrorBudgetSettings(BaseSettings):
         description="Mention targets for escalation",
     )
 
+    # ==========================================================================
+    # Crisis Multiplier Settings - from services/error_budget/multiplier.py
+    # ==========================================================================
+    multiplier_cache_ttl: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=300.0,
+        description="위기 가중치 캐시 TTL (초). 기본 30초.",
+    )
+    multiplier_max: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=50.0,
+        description="최대 위기 가중치. 과도한 Error Budget 소진 방지.",
+    )
+
 
 # Singleton instance (cached)
 _settings: Optional[ErrorBudgetSettings] = None

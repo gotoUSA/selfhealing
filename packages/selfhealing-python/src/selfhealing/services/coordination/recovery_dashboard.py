@@ -38,6 +38,29 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Settings Helpers
+# =============================================================================
+
+
+def _get_stale_threshold_minutes() -> int:
+    """DashboardSettings에서 방치 기준 시간을 가져온다."""
+    try:
+        from selfhealing.settings.dashboard import get_dashboard_settings
+        return get_dashboard_settings().stale_threshold_minutes
+    except Exception:
+        return 30  # fallback
+
+
+def _get_max_regional_status() -> int:
+    """DashboardSettings에서 최대 리전 표시 수를 가져온다."""
+    try:
+        from selfhealing.settings.dashboard import get_dashboard_settings
+        return get_dashboard_settings().max_regional_status
+    except Exception:
+        return 5  # fallback
+
+
+# =============================================================================
 # Data Classes
 # =============================================================================
 
@@ -306,10 +329,8 @@ class RecoveryDashboardService:
         77_RECOVERY_COORDINATOR.md#8.6
     """
 
-    # 기본 방치 기준 시간 (분)
+    # 하위 호환성용 레거시 상수
     DEFAULT_STALE_THRESHOLD_MINUTES = 30
-
-    # 최대 리전 표시 수
     DEFAULT_MAX_REGIONAL_STATUS = 5
 
     def __init__(
@@ -318,6 +339,8 @@ class RecoveryDashboardService:
         circuit_breaker: Optional["RecoveryCircuitBreaker"] = None,
         approval_manager: Optional["PendingRecoveryApprovalManager"] = None,
         policy_engine: Optional["RegionalRecoveryPolicyEngine"] = None,
+        stale_threshold_minutes: Optional[int] = None,
+        max_regional_status: Optional[int] = None,
     ):
         """
         Args:
@@ -325,11 +348,21 @@ class RecoveryDashboardService:
             circuit_breaker: RecoveryCircuitBreaker 인스턴스
             approval_manager: PendingRecoveryApprovalManager 인스턴스
             policy_engine: RegionalRecoveryPolicyEngine 인스턴스
+            stale_threshold_minutes: 방치 기준 시간 (분). None이면 Settings에서 가져옴.
+            max_regional_status: 최대 리전 표시 수. None이면 Settings에서 가져옴.
         """
         self._coordinator = coordinator
         self._circuit_breaker = circuit_breaker
         self._approval_manager = approval_manager
         self._policy_engine = policy_engine
+        self._stale_threshold_minutes = (
+            stale_threshold_minutes if stale_threshold_minutes is not None 
+            else _get_stale_threshold_minutes()
+        )
+        self._max_regional_status = (
+            max_regional_status if max_regional_status is not None 
+            else _get_max_regional_status()
+        )
         self._lock = threading.RLock()
 
     def _get_coordinator(self) -> "RecoveryCoordinator":
@@ -386,9 +419,9 @@ class RecoveryDashboardService:
             # 통계
             stats = self._get_recovery_stats()
 
-            # 리전별 상태
+            # 리전별 상태 (Settings에서 가져온 max_regional_status 사용)
             regional_status = self.get_regional_status(
-                limit=self.DEFAULT_MAX_REGIONAL_STATUS
+                limit=self._max_regional_status
             )
 
             # 사용 가능한 액션
@@ -457,7 +490,7 @@ class RecoveryDashboardService:
 
             pending = approval_manager.list_pending_requests()
             stale = approval_manager.list_stale_requests(
-                stale_threshold_minutes=self.DEFAULT_STALE_THRESHOLD_MINUTES
+                stale_threshold_minutes=self._stale_threshold_minutes
             )
             stats = self._get_recovery_stats()
 
@@ -532,7 +565,7 @@ class RecoveryDashboardService:
             approval_manager = self._get_approval_manager()
             pending = approval_manager.list_pending_requests()
             stale = approval_manager.list_stale_requests(
-                stale_threshold_minutes=self.DEFAULT_STALE_THRESHOLD_MINUTES
+                stale_threshold_minutes=self._stale_threshold_minutes
             )
 
             return PendingApprovalsInfo(

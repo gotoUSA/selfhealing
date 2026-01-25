@@ -37,6 +37,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _get_max_label_combinations() -> int:
+    """SafeGaugeSettings에서 최대 레이블 조합 수를 가져온다."""
+    try:
+        from selfhealing.settings.safe_gauge import get_safe_gauge_settings
+        return get_safe_gauge_settings().max_label_combinations
+    except Exception:
+        return 1000  # fallback
+
+
 class SafeGaugeChild:
     """
     Safe wrapper for labeled Gauge child.
@@ -289,13 +298,13 @@ class SafeGauge:
         - K8s 100+ Pods: max_label_combinations=200
     """
 
-    # 기본 최대 레이블 조합 수
+    # 하위 호환성용 레거시 상수
     DEFAULT_MAX_LABEL_COMBINATIONS = 1000
 
     def __init__(
         self, 
         gauge: Optional["Gauge"],
-        max_label_combinations: int = DEFAULT_MAX_LABEL_COMBINATIONS,
+        max_label_combinations: Optional[int] = None,
         on_eviction: Optional[Callable[[tuple, "SafeGaugeChild"], None]] = None,
     ):
         """
@@ -303,14 +312,17 @@ class SafeGauge:
 
         Args:
             gauge: Prometheus Gauge to wrap. If None, operations are no-ops.
-            max_label_combinations: 캐시할 최대 레이블 조합 수 (기본: 1000).
+            max_label_combinations: 캐시할 최대 레이블 조합 수. None이면 Settings에서 가져옴.
                                     초과 시 가장 오래된 조합 자동 제거.
             on_eviction: 레이블 조합 제거 시 호출되는 콜백 (모니터링용).
                         (evicted_key, evicted_child) -> None
         """
         self._gauge = gauge
         self._children: OrderedDict[tuple, SafeGaugeChild] = OrderedDict()
-        self._max_label_combinations = max_label_combinations
+        self._max_label_combinations = (
+            max_label_combinations if max_label_combinations is not None 
+            else _get_max_label_combinations()
+        )
         self._on_eviction = on_eviction
         self._lock = threading.Lock()
         self._eviction_count = 0

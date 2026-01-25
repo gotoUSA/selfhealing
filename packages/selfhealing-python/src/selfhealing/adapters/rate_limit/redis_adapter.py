@@ -46,6 +46,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _get_redis_ttl() -> int:
+    """RateLimitSettings에서 Redis TTL을 가져온다."""
+    try:
+        from selfhealing.settings.rate_limit import get_rate_limit_settings
+        return get_rate_limit_settings().redis_ttl
+    except Exception:
+        return 3600  # 1 hour fallback
+
+
 class RedisRateLimitStorage(RateLimitStorageInterface):
     """
     Redis-based rate limit storage.
@@ -72,16 +81,18 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
     """
 
     KEY_PREFIX = "ratelimit"
-    DEFAULT_TTL = 3600  # 1 hour
+    DEFAULT_TTL = 3600  # 하위 호환성용 레거시 상수
 
-    def __init__(self, redis_client: Any) -> None:
+    def __init__(self, redis_client: Any, ttl: Optional[int] = None) -> None:
         """
         Initialize Redis rate limit storage.
 
         Args:
             redis_client: Redis client instance (redis.Redis or compatible)
+            ttl: Redis 키 TTL (초). None이면 Settings에서 가져옴.
         """
         self._redis = redis_client
+        self._ttl = ttl if ttl is not None else _get_redis_ttl()
         self._available: Optional[bool] = None
         # v6.3.0: Fallback 모드 및 로컬 상태 추적
         self._fallback_mode = False
@@ -183,17 +194,17 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
         pipeline.set(
             self._make_key(key, "cooldown_until"),
             str(state.cooldown_until),
-            ex=self.DEFAULT_TTL,
+            ex=self._ttl,
         )
         pipeline.set(
             self._make_key(key, "consecutive_429s"),
             str(state.consecutive_429s),
-            ex=self.DEFAULT_TTL,
+            ex=self._ttl,
         )
         pipeline.set(
             self._make_key(key, "last_updated"),
             str(state.last_updated),
-            ex=self.DEFAULT_TTL,
+            ex=self._ttl,
         )
         pipeline.execute()
 
@@ -230,7 +241,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
     ) -> None:
         """Set cooldown in Redis with TTL."""
         try:
-            ttl = ttl or self.DEFAULT_TTL
+            ttl = ttl or self._ttl
             now = time.time()
 
             pipeline = self._redis.pipeline()
@@ -260,7 +271,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             # Atomic increment with TTL
             pipeline = self._redis.pipeline()
             pipeline.incr(redis_key)
-            pipeline.expire(redis_key, self.DEFAULT_TTL)
+            pipeline.expire(redis_key, self._ttl)
             results = pipeline.execute()
 
             new_value = results[0]

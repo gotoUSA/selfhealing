@@ -22,6 +22,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _get_airgap_redis_ttl() -> int:
+    """AirGapSettings에서 Redis TTL을 가져온다."""
+    try:
+        from selfhealing.settings.airgap import get_airgap_settings
+        return get_airgap_settings().redis_ttl
+    except Exception:
+        return 3600  # 1 hour fallback
+
+
+def _get_airgap_key_prefix() -> str:
+    """AirGapSettings에서 키 접두사를 가져온다."""
+    try:
+        from selfhealing.settings.airgap import get_airgap_settings
+        return get_airgap_settings().key_prefix
+    except Exception:
+        return "sh:airgap:"
+
+
 class RedisAirGapAdapter(BaseAirGapAdapter):
     """
     Redis 기반 Air-Gap 저장소 어댑터.
@@ -48,13 +66,13 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         >>> print(count)  # 5
     """
 
-    # 기본 TTL: 1시간 (장애 시 자동 정리)
+    # 하위 호환성용 레거시 상수
     DEFAULT_TTL = 3600
 
     def __init__(
         self,
         redis_client: "redis.Redis",
-        prefix: str = "sh:airgap:",
+        prefix: Optional[str] = None,
         default_ttl: Optional[int] = None,
     ) -> None:
         """
@@ -62,13 +80,13 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
 
         Args:
             redis_client: Redis client instance
-            prefix: Key prefix for all Air-Gap keys
-            default_ttl: Default TTL in seconds (None = no expiration)
+            prefix: Key prefix for all Air-Gap keys (None = Settings에서 가져옴)
+            default_ttl: Default TTL in seconds (None = Settings에서 가져옴)
         """
         self.redis = redis_client
-        self.prefix = prefix
-        self.default_ttl = default_ttl or self.DEFAULT_TTL
-        logger.info(f"[AirGap] RedisAirGapAdapter initialized (prefix={prefix})")
+        self.prefix = prefix if prefix is not None else _get_airgap_key_prefix()
+        self.default_ttl = default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
+        logger.info(f"[AirGap] RedisAirGapAdapter initialized (prefix={self.prefix})")
 
     def _make_key(self, key: str) -> str:
         """Create a Redis key with the configured prefix."""

@@ -21,6 +21,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _get_audit_buffer_ttl() -> int:
+    """AuditSettings에서 Redis 버퍼 TTL을 가져온다."""
+    try:
+        from selfhealing.settings.audit_settings import get_audit_settings
+        return get_audit_settings().buffer_redis_ttl
+    except Exception:
+        return 86400  # 24시간 fallback
+
+
 class AuditLogAdapterProtocol(Protocol):
     """Audit Log Adapter 프로토콜."""
     
@@ -56,15 +65,15 @@ class RedisAuditBuffer:
     """
     
     DEFAULT_KEY_PREFIX = "audit:buffer:"
-    DEFAULT_TTL_SECONDS = 86400  # 24시간
+    DEFAULT_TTL_SECONDS = 86400  # 하위 호환성용 레거시 상수
     MAX_CONSECUTIVE_FAILURES = 3
     
     def __init__(
         self,
         redis_client: "redis.Redis",
         fallback_adapter: Optional[AuditLogAdapterProtocol] = None,
-        key_prefix: str = DEFAULT_KEY_PREFIX,
-        ttl_seconds: int = DEFAULT_TTL_SECONDS,
+        key_prefix: Optional[str] = None,
+        ttl_seconds: Optional[int] = None,
         on_fallback: Optional[Callable[[Exception], None]] = None,
     ):
         """
@@ -73,14 +82,14 @@ class RedisAuditBuffer:
         Args:
             redis_client: Redis 클라이언트
             fallback_adapter: 폴백 어댑터 (파일 등)
-            key_prefix: Redis 키 프리픽스
-            ttl_seconds: TTL (초)
+            key_prefix: Redis 키 프리픽스 (None = 기본값)
+            ttl_seconds: TTL (초). None이면 Settings에서 가져옴.
             on_fallback: 폴백 발생 시 콜백
         """
         self._redis = redis_client
         self._fallback = fallback_adapter
-        self._key_prefix = key_prefix
-        self._ttl_seconds = ttl_seconds
+        self._key_prefix = key_prefix if key_prefix is not None else self.DEFAULT_KEY_PREFIX
+        self._ttl_seconds = ttl_seconds if ttl_seconds is not None else _get_audit_buffer_ttl()
         self._on_fallback = on_fallback
         
         # 상태 추적 (CB Advanced Protection 패턴)
