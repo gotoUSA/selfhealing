@@ -315,15 +315,16 @@ class SafetyBounds:
         return results
     
     def reset_to_defaults(self) -> None:
-        """기본 한계로 리셋"""
+        """기본 한계로 리셋 (settings에서 다시 로드)"""
         with self._lock:
+            default_bounds = self._get_default_bounds()
             self.bounds = {
                 k: ParameterBound(
                     min_value=v.min_value,
                     max_value=v.max_value,
                     max_change_per_cycle=v.max_change_per_cycle,
                 )
-                for k, v in self.DEFAULT_BOUNDS.items()
+                for k, v in default_bounds.items()
             }
             logger.info("[SafetyBounds] Reset to defaults")
 

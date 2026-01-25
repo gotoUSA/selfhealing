@@ -241,8 +241,8 @@ settings/
 - [x] 환경변수 설정 시 값 오버라이드 확인 (2026-01-25 완료)
 - [x] 신규 settings 단위 테스트 26개 통과 (2026-01-25 완료)
 - [x] 기존 단위 테스트 100% 통과 (2026-01-25 완료)
-- [ ] 통합 테스트 통과
-- [ ] mypy 타입 체크 통과
+- [x] 통합 테스트 통과 (2026-01-25 완료) - 121개 테스트 PASSED
+- [x] mypy 타입 체크 통과 (2026-01-25 완료) - 신규 Settings 모듈 7개 에러 없음
 
 ---
 
@@ -312,3 +312,31 @@ Core 모듈 8개 리팩토링 완료:
 |----------|----------------|------|
 | `settings/resource_monitor.py` | `SELFHEALING_RESOURCE_` | safety_margin (0.15), cpu_margin (0.10) |
 
+### Step 4 완료 (2026-01-25)
+
+통합 테스트 추가 및 검증 완료:
+
+**신규 통합 테스트 파일**:
+- `packages/selfhealing-python/tests/integration/test_core_settings_env_override.py`
+
+**테스트 범위 (19개 테스트)**:
+
+| 테스트 클래스 | 검증 내용 |
+|-------------|---------|
+| `TestRuntimeFeedbackEnvOverride` | MAX_CONSECUTIVE_FAILURES, ROLLBACK_COOLDOWN 환경변수 오버라이드 → RuntimeFeedbackLoop 반영 |
+| `TestAutoRollbackGuardEnvOverride` | ERROR_RATE_*, LATENCY_*, FAILURES_* 환경변수 오버라이드 → AutoRollbackGuard 반영 |
+| `TestAdaptiveJitterEnvOverride` | error_budget_*_threshold, load_*_threshold 환경변수 → jitter 범위 선택 로직 변경 |
+| `TestSafetyBoundsEnvOverride` | BOUNDS_TIMEOUT_MS_* 환경변수 → clamp_to_bounds 동작 변경 |
+| `TestStateCacheEnvOverride` | STATE_CACHE_BASE_TTL, JITTER_RANGE 환경변수 → TTL 계산 범위 변경 |
+| `TestResourceMonitorEnvOverride` | RESOURCE_SAFETY_MARGIN 환경변수 → 메모리 계산 반영 |
+| `TestApplyStrategyEnvOverride` | APPLY_*_DELAY 환경변수 → get_default_apply_config 반영 |
+| `TestDecisionEngineEnvOverride` | DECISION_MIN_CHANGE_RATIO, CONFIDENCE_*, STABILITY_* 환경변수 → 결정 로직 반영 |
+| `TestMultipleCoreModulesEnvOverride` | 8개 Settings 모듈 독립 동작 검증, 교차 오염 없음 확인 |
+
+**버그 수정**:
+- `core/safety_bounds.py`: `reset_to_defaults()` 메서드에서 `DEFAULT_BOUNDS` → `_get_default_bounds()` 수정
+
+**전체 테스트 결과**:
+- 통합 테스트: 75개 PASSED (기존 56개 + 신규 19개)
+- 단위 테스트: 46개 PASSED
+- 합계: 121개 PASSED
