@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Protocol
 from enum import Enum
 
+from selfhealing.settings.runtime_feedback import get_runtime_feedback_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,14 +82,27 @@ class RuntimeFeedbackLoop:
     - 조정 후 헬스체크 (metrics degradation detection)
     - 문제 감지 시 자동 롤백
     - 연속 실패 시 피드백 루프 일시 정지
-    """
     
-    # 연속 실패 임계값 - 초과 시 자동 일시 정지
-    MAX_CONSECUTIVE_FAILURES = 3
-    # 롤백 후 안정화 대기 시간 (초)
-    POST_ROLLBACK_COOLDOWN = 120
-    # 조정 후 효과 확인 대기 시간 (초)
-    POST_ADJUSTMENT_WAIT = 30
+    설정값은 RuntimeFeedbackSettings를 통해 환경변수로 오버라이드 가능:
+    - SELFHEALING_RUNTIME_MAX_CONSECUTIVE_FAILURES
+    - SELFHEALING_RUNTIME_ROLLBACK_COOLDOWN
+    - SELFHEALING_RUNTIME_ADJUSTMENT_WAIT
+    """
+
+    @property
+    def MAX_CONSECUTIVE_FAILURES(self) -> int:
+        """최대 연속 실패 횟수 - 초과 시 자동 일시 정지"""
+        return get_runtime_feedback_settings().max_consecutive_failures
+
+    @property
+    def POST_ROLLBACK_COOLDOWN(self) -> int:
+        """롤백 후 안정화 대기 시간 (초)"""
+        return get_runtime_feedback_settings().rollback_cooldown
+
+    @property
+    def POST_ADJUSTMENT_WAIT(self) -> int:
+        """조정 후 효과 확인 대기 시간 (초)"""
+        return get_runtime_feedback_settings().adjustment_wait
     
     def __init__(
         self,

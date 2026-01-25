@@ -5,6 +5,9 @@ cgroup v1/v2 지원 리소스 모니터링 유틸리티.
 
 Cgroup 기반으로 컨테이너의 메모리/CPU 제한을 감지하고,
 Chaos Experiment의 Resource Exhaustion이 안전 한계 내에서 동작하도록 합니다.
+
+설정값은 StateCacheSettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_STATE_CACHE_RESOURCE_SAFETY_MARGIN
 """
 
 from __future__ import annotations
@@ -12,6 +15,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Optional
+
+from selfhealing.settings.state_cache import get_state_cache_settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +41,11 @@ class CgroupResourceMonitor:
     # cgroup v1 경로 (레거시 호환)
     CGROUP_V1_MEMORY_LIMIT = Path("/sys/fs/cgroup/memory/memory.limit_in_bytes")
     CGROUP_V1_MEMORY_USAGE = Path("/sys/fs/cgroup/memory/memory.usage_in_bytes")
-    
-    # 안전 마진 기본값 (15% - 아키텍트 제안 10% + 5% 버퍼)
-    DEFAULT_SAFETY_MARGIN = 0.15
+
+    @classmethod
+    def _get_default_safety_margin(cls) -> float:
+        """기본 안전 마진 (15%). StateCacheSettings에서 로드."""
+        return get_state_cache_settings().resource_safety_margin
     
     @classmethod
     def get_memory_max_bytes(cls) -> Optional[int]:
@@ -92,7 +99,7 @@ class CgroupResourceMonitor:
     @classmethod
     def get_available_memory_bytes(
         cls,
-        safety_margin: float = DEFAULT_SAFETY_MARGIN,
+        safety_margin: Optional[float] = None,
     ) -> Optional[int]:
         """
         안전하게 사용 가능한 메모리 (bytes).
@@ -100,7 +107,7 @@ class CgroupResourceMonitor:
         OOM Killer 발동을 방지하기 위해 안전 마진을 적용합니다.
         
         Args:
-            safety_margin: OOM 방지 여유분 비율 (기본 15%)
+            safety_margin: OOM 방지 여유분 비율 (기본 15%, 환경변수로 설정 가능)
         
         Returns:
             (max - current) * (1 - safety_margin). None = 계산 불가.
@@ -109,6 +116,9 @@ class CgroupResourceMonitor:
             # 1GB 제한, 700MB 사용 중, 15% 마진
             # available = (1024MB - 700MB) * 0.85 = 275MB
         """
+        if safety_margin is None:
+            safety_margin = cls._get_default_safety_margin()
+        
         max_bytes = cls.get_memory_max_bytes()
         current_bytes = cls.get_memory_current_bytes()
         
@@ -157,20 +167,23 @@ class CgroupResourceMonitor:
     def check_safe_for_exhaustion(
         cls,
         requested_bytes: int,
-        safety_margin: float = DEFAULT_SAFETY_MARGIN,
+        safety_margin: Optional[float] = None,
     ) -> tuple[bool, int]:
         """
         ResourceExhaustion 실험에서 요청된 메모리가 안전한지 확인.
         
         Args:
             requested_bytes: 요청된 메모리 (bytes)
-            safety_margin: 안전 마진 (기본 15%)
+            safety_margin: 안전 마진 (기본 15%, 환경변수로 설정 가능)
         
         Returns:
             (is_safe, actual_bytes_to_use)
             - is_safe: 요청량이 안전 한계 내인지
             - actual_bytes_to_use: 실제 사용해야 할 bytes (캡 적용됨)
         """
+        if safety_margin is None:
+            safety_margin = cls._get_default_safety_margin()
+        
         available = cls.get_available_memory_bytes(safety_margin)
         
         if available is None:

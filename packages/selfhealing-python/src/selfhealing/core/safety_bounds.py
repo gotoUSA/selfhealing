@@ -7,6 +7,11 @@ Safety Bounds - 자율 조정 안전 한계
 - 파라미터별 min/max 범위 검증
 - 한 번에 변경 가능한 최대 비율 제한
 - 런타임 한계 업데이트 (관리자 전용)
+
+설정값은 SafetyBoundsSettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_BOUNDS_TIMEOUT_MS_MIN / MAX / MAX_CHANGE
+- SELFHEALING_BOUNDS_RETRY_COUNT_MIN / MAX / MAX_CHANGE
+- 기타 파라미터...
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from threading import RLock
+
+from selfhealing.settings.safety_bounds import get_safety_bounds_settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,50 +53,57 @@ class SafetyBounds:
     2. 변경폭 제한: 한 번에 max_change_per_cycle % 이내
     3. 알 수 없는 파라미터 거부
     """
-    
-    # 기본 한계 설정
-    DEFAULT_BOUNDS: Dict[str, ParameterBound] = {
-        "timeout_ms": ParameterBound(
-            min_value=100,       # 최소 100ms
-            max_value=30000,     # 최대 30초
-            max_change_per_cycle=0.3,  # 한 번에 30% 이내
-        ),
-        "retry_count": ParameterBound(
-            min_value=0,
-            max_value=10,
-            max_change_per_cycle=0.5,  # 한 번에 50% 이내 (정수라서)
-        ),
-        "circuit_breaker_threshold": ParameterBound(
-            min_value=0.1,       # 최소 10%
-            max_value=0.9,       # 최대 90%
-            max_change_per_cycle=0.2,  # 한 번에 20% 이내
-        ),
-        "jitter_range": ParameterBound(
-            min_value=0.01,      # 최소 10ms
-            max_value=1.0,       # 최대 1초
-            max_change_per_cycle=0.5,
-        ),
-        "rate_limit_rps": ParameterBound(
-            min_value=10,
-            max_value=10000,
-            max_change_per_cycle=0.2,
-        ),
-        "backoff_base_ms": ParameterBound(
-            min_value=10,
-            max_value=5000,
-            max_change_per_cycle=0.3,
-        ),
-        "backoff_max_ms": ParameterBound(
-            min_value=1000,
-            max_value=60000,
-            max_change_per_cycle=0.3,
-        ),
-        "connection_pool_size": ParameterBound(
-            min_value=1,
-            max_value=100,
-            max_change_per_cycle=0.2,
-        ),
-    }
+
+    @classmethod
+    def _get_default_bounds(cls) -> Dict[str, ParameterBound]:
+        """
+        SafetyBoundsSettings에서 기본 한계 설정 로드.
+        
+        환경변수로 오버라이드 가능한 파라미터별 한계값 반환.
+        """
+        settings = get_safety_bounds_settings()
+        return {
+            "timeout_ms": ParameterBound(
+                min_value=settings.timeout_ms_min,
+                max_value=settings.timeout_ms_max,
+                max_change_per_cycle=settings.timeout_ms_max_change,
+            ),
+            "retry_count": ParameterBound(
+                min_value=settings.retry_count_min,
+                max_value=settings.retry_count_max,
+                max_change_per_cycle=settings.retry_count_max_change,
+            ),
+            "circuit_breaker_threshold": ParameterBound(
+                min_value=settings.circuit_breaker_threshold_min,
+                max_value=settings.circuit_breaker_threshold_max,
+                max_change_per_cycle=settings.circuit_breaker_threshold_max_change,
+            ),
+            "jitter_range": ParameterBound(
+                min_value=settings.jitter_range_min,
+                max_value=settings.jitter_range_max,
+                max_change_per_cycle=settings.jitter_range_max_change,
+            ),
+            "rate_limit_rps": ParameterBound(
+                min_value=settings.rate_limit_rps_min,
+                max_value=settings.rate_limit_rps_max,
+                max_change_per_cycle=settings.rate_limit_rps_max_change,
+            ),
+            "backoff_base_ms": ParameterBound(
+                min_value=settings.backoff_base_ms_min,
+                max_value=settings.backoff_base_ms_max,
+                max_change_per_cycle=settings.backoff_base_ms_max_change,
+            ),
+            "backoff_max_ms": ParameterBound(
+                min_value=settings.backoff_max_ms_min,
+                max_value=settings.backoff_max_ms_max,
+                max_change_per_cycle=settings.backoff_max_ms_max_change,
+            ),
+            "connection_pool_size": ParameterBound(
+                min_value=settings.connection_pool_size_min,
+                max_value=settings.connection_pool_size_max,
+                max_change_per_cycle=settings.connection_pool_size_max_change,
+            ),
+        }
     
     def __init__(
         self,
@@ -104,14 +118,15 @@ class SafetyBounds:
         self._lock = RLock()
         self.strict_mode = strict_mode
         
-        # 기본 한계 복사
+        # 기본 한계 복사 (settings에서 로드)
+        default_bounds = self._get_default_bounds()
         self.bounds: Dict[str, ParameterBound] = {
             k: ParameterBound(
                 min_value=v.min_value,
                 max_value=v.max_value,
                 max_change_per_cycle=v.max_change_per_cycle,
             )
-            for k, v in self.DEFAULT_BOUNDS.items()
+            for k, v in default_bounds.items()
         }
         
         # 커스텀 한계 적용

@@ -40,6 +40,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, List, Optional, Protocol
 from enum import Enum
 
+from selfhealing.settings.auto_rollback import get_auto_rollback_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,16 +132,36 @@ class AutoRollbackGuard:
         SafeDefault("jitter_range", 0.1, "시스템 기본 지터"),
         SafeDefault("rate_limit_rps", 1000, "시스템 기본 Rate Limit - 보수적"),
     ]
-    
-    # 임계값
-    ERROR_RATE_MAJOR = 0.1      # 10% 이상 에러 → MAJOR
-    ERROR_RATE_CRITICAL = 0.3   # 30% 이상 에러 → CRITICAL
-    LATENCY_MAJOR_MS = 5000     # 5초 이상 레이턴시 → MAJOR
-    LATENCY_CRITICAL_MS = 10000 # 10초 이상 레이턴시 → CRITICAL
-    
-    # 연속 실패 임계값
-    CONSECUTIVE_FAILURES_ALERT = 3
-    CONSECUTIVE_FAILURES_EMERGENCY = 5
+
+    @property
+    def ERROR_RATE_MAJOR(self) -> float:
+        """Major 등급 에러율 임계값 (10% 이상)"""
+        return get_auto_rollback_settings().error_rate_major
+
+    @property
+    def ERROR_RATE_CRITICAL(self) -> float:
+        """Critical 등급 에러율 임계값 (30% 이상)"""
+        return get_auto_rollback_settings().error_rate_critical
+
+    @property
+    def LATENCY_MAJOR_MS(self) -> int:
+        """Major 등급 레이턴시 임계값 (ms)"""
+        return get_auto_rollback_settings().latency_major_ms
+
+    @property
+    def LATENCY_CRITICAL_MS(self) -> int:
+        """Critical 등급 레이턴시 임계값 (ms)"""
+        return get_auto_rollback_settings().latency_critical_ms
+
+    @property
+    def CONSECUTIVE_FAILURES_ALERT(self) -> int:
+        """알림 발생 연속 실패 횟수"""
+        return get_auto_rollback_settings().failures_alert
+
+    @property
+    def CONSECUTIVE_FAILURES_EMERGENCY(self) -> int:
+        """긴급 상태 진입 연속 실패 횟수"""
+        return get_auto_rollback_settings().failures_emergency
     
     def __init__(
         self,

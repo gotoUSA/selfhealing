@@ -7,11 +7,18 @@ Strategies:
 - IMMEDIATE: Apply changes right away
 - DELAYED: Apply changes after N seconds (cancellable)
 - GRACEFUL: Wait for in-progress operations to complete, then apply
+
+설정값은 ApplyStrategySettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_APPLY_CIRCUIT_BREAKER_DELAY
+- SELFHEALING_APPLY_SECURITY_DELAY
+- 기타 config 타입별 delay...
 """
 
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
+
+from selfhealing.settings.apply_strategy import get_apply_strategy_settings
 
 
 class ApplyStrategy(Enum):
@@ -75,63 +82,75 @@ class DefaultApplyConfig:
     warning_message: Optional[str] = None
 
 
-# Default apply strategy per config type
-DEFAULT_APPLY_STRATEGIES: dict[str, DefaultApplyConfig] = {
-    # Safe - immediate by default
-    "sla": DefaultApplyConfig(
-        strategy=ApplyStrategy.IMMEDIATE,
-    ),
-    "metrics": DefaultApplyConfig(
-        strategy=ApplyStrategy.IMMEDIATE,
-    ),
-    "notification": DefaultApplyConfig(
-        strategy=ApplyStrategy.IMMEDIATE,
-    ),
-    "forensic": DefaultApplyConfig(
-        strategy=ApplyStrategy.IMMEDIATE,
-    ),
-    # Traffic control - immediate but with warning
-    "rate_limit": DefaultApplyConfig(
-        strategy=ApplyStrategy.IMMEDIATE,
-        warning_message="Rate limit changes take effect immediately for new requests",
-    ),
-    # Processing - delayed to protect in-flight operations
-    "retry": DefaultApplyConfig(
-        strategy=ApplyStrategy.DELAYED,
-        delay_seconds=10,
-    ),
-    "dlq": DefaultApplyConfig(
-        strategy=ApplyStrategy.DELAYED,
-        delay_seconds=10,
-    ),
-    # Critical - delayed with longer window for cancellation
-    "circuit_breaker": DefaultApplyConfig(
-        strategy=ApplyStrategy.DELAYED,
-        delay_seconds=30,
-        warning_message="Circuit breaker protects system stability. Change with caution.",
-    ),
-    "idempotency": DefaultApplyConfig(
-        strategy=ApplyStrategy.DELAYED,
-        delay_seconds=30,
-        warning_message="Idempotency prevents duplicate transactions. Change with caution.",
-    ),
-    "security": DefaultApplyConfig(
-        strategy=ApplyStrategy.DELAYED,
-        delay_seconds=60,
-        warning_message="Security settings are highly sensitive. Ensure you have reviewed the changes.",
-    ),
-    # Error Budget - delayed to prevent alert storm from threshold changes
-    "error_budget": DefaultApplyConfig(
-        strategy=ApplyStrategy.DELAYED,
-        delay_seconds=30,
-        warning_message="Error budget threshold changes can trigger immediate state transitions and alerts.",
-    ),
-}
+def _get_default_apply_strategies() -> dict[str, DefaultApplyConfig]:
+    """
+    ApplyStrategySettings에서 delay 값을 로드하여 기본 전략 딕셔너리 생성.
+    
+    환경변수로 config 타입별 delay_seconds 오버라이드 가능.
+    """
+    settings = get_apply_strategy_settings()
+    return {
+        # Safe - immediate by default
+        "sla": DefaultApplyConfig(
+            strategy=ApplyStrategy.IMMEDIATE,
+            delay_seconds=settings.sla_delay,
+        ),
+        "metrics": DefaultApplyConfig(
+            strategy=ApplyStrategy.IMMEDIATE,
+            delay_seconds=settings.metrics_delay,
+        ),
+        "notification": DefaultApplyConfig(
+            strategy=ApplyStrategy.IMMEDIATE,
+            delay_seconds=settings.notification_delay,
+        ),
+        "forensic": DefaultApplyConfig(
+            strategy=ApplyStrategy.IMMEDIATE,
+            delay_seconds=settings.forensic_delay,
+        ),
+        # Traffic control - immediate but with warning
+        "rate_limit": DefaultApplyConfig(
+            strategy=ApplyStrategy.IMMEDIATE,
+            delay_seconds=settings.rate_limit_delay,
+            warning_message="Rate limit changes take effect immediately for new requests",
+        ),
+        # Processing - delayed to protect in-flight operations
+        "retry": DefaultApplyConfig(
+            strategy=ApplyStrategy.DELAYED,
+            delay_seconds=settings.retry_delay,
+        ),
+        "dlq": DefaultApplyConfig(
+            strategy=ApplyStrategy.DELAYED,
+            delay_seconds=settings.dlq_delay,
+        ),
+        # Critical - delayed with longer window for cancellation
+        "circuit_breaker": DefaultApplyConfig(
+            strategy=ApplyStrategy.DELAYED,
+            delay_seconds=settings.circuit_breaker_delay,
+            warning_message="Circuit breaker protects system stability. Change with caution.",
+        ),
+        "idempotency": DefaultApplyConfig(
+            strategy=ApplyStrategy.DELAYED,
+            delay_seconds=settings.idempotency_delay,
+            warning_message="Idempotency prevents duplicate transactions. Change with caution.",
+        ),
+        "security": DefaultApplyConfig(
+            strategy=ApplyStrategy.DELAYED,
+            delay_seconds=settings.security_delay,
+            warning_message="Security settings are highly sensitive. Ensure you have reviewed the changes.",
+        ),
+        # Error Budget - delayed to prevent alert storm from threshold changes
+        "error_budget": DefaultApplyConfig(
+            strategy=ApplyStrategy.DELAYED,
+            delay_seconds=settings.error_budget_delay,
+            warning_message="Error budget threshold changes can trigger immediate state transitions and alerts.",
+        ),
+    }
 
 
 def get_default_apply_config(config_type: str) -> DefaultApplyConfig:
     """Get default apply configuration for a config type."""
-    return DEFAULT_APPLY_STRATEGIES.get(
+    strategies = _get_default_apply_strategies()
+    return strategies.get(
         config_type,
         DefaultApplyConfig(strategy=ApplyStrategy.IMMEDIATE),
     )

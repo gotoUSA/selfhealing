@@ -4,6 +4,11 @@ Decision Engine - 메트릭 기반 조정 결정
 실시간 메트릭을 분석하여 파라미터 조정을 제안합니다.
 
 Netflix Hystrix, Google Autopilot 스타일의 자율 조정 엔진
+
+설정값은 DecisionEngineSettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_DECISION_MIN_CHANGE_RATIO
+- SELFHEALING_DECISION_CONFIDENCE_* (신뢰도 매핑)
+- SELFHEALING_DECISION_STABILITY_* (안정성 계수)
 """
 
 from __future__ import annotations
@@ -13,6 +18,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Protocol
 from enum import Enum
+
+from selfhealing.settings.decision_engine import get_decision_engine_settings
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +121,11 @@ class DecisionEngine:
             priority=AdjustmentPriority.LOW,
         ),
     ]
-    
-    # 변경이 의미있으려면 최소 5% 이상 변경
-    MIN_CHANGE_RATIO = 0.05
+
+    @property
+    def MIN_CHANGE_RATIO(self) -> float:
+        """변경이 의미있으려면 최소 이 비율 이상 변경 필요 (기본 5%)"""
+        return get_decision_engine_settings().min_change_ratio
     
     def __init__(
         self,
@@ -235,36 +244,24 @@ class DecisionEngine:
         """
         신뢰도 계산
         
-        샘플 수, 메트릭 변동성 등을 고려
-        최소 0.5 기준으로 샘플 수에 따라 0.5 ~ 1.0 범위
+        샘플 수, 메트릭 변동성 등을 고려.
+        DecisionEngineSettings에서 임계값 및 계수 로드.
         """
-        # 기본 신뢰도 (샘플 수 기반)
-        sample_count = metrics.get("sample_count", 10)
-        if sample_count < 5:
-            sample_confidence = 0.3
-        elif sample_count < 20:
-            sample_confidence = 0.5
-        elif sample_count < 50:
-            sample_confidence = 0.65
-        elif sample_count < 100:
-            sample_confidence = 0.75
-        else:
-            sample_confidence = 0.9
+        settings = get_decision_engine_settings()
         
-        # 메트릭 변동성이 낮을수록 신뢰도 증가 (선택적)
+        # 기본 신뢰도 (샘플 수 기반 - settings에서 조회)
+        sample_count = metrics.get("sample_count", 10)
+        sample_confidence = settings.get_sample_confidence(int(sample_count))
+        
+        # 메트릭 변동성이 낮을수록 신뢰도 증가 (settings에서 조회)
         variance = metrics.get(f"{rule.metric}_variance", 0)
         mean = metrics.get(rule.metric, 1)
         if mean > 0 and variance > 0:
             cv = (variance ** 0.5) / mean  # Coefficient of variation
-            if cv > 0.5:
-                stability_factor = 0.7
-            elif cv > 0.2:
-                stability_factor = 0.85
-            else:
-                stability_factor = 1.0
+            stability_factor = settings.get_stability_factor(cv)
         else:
             # 변동성 정보 없으면 기본값 유지
-            stability_factor = 1.0
+            stability_factor = settings.stability_factor_stable
         
         confidence = sample_confidence * stability_factor
         return min(1.0, max(0.0, confidence))

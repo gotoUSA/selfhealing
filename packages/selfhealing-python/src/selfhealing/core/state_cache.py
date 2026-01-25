@@ -4,12 +4,18 @@ Circuit Breaker 상태 캐시 (Platinum SLA 최적화)
 
 TTL 기반 로컬 캐싱으로 네트워크 호출 최소화
 Polling Jitter로 Thundering Herd 방지
+
+설정값은 StateCacheSettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_STATE_CACHE_BASE_TTL
+- SELFHEALING_STATE_CACHE_JITTER_RANGE
 """
 
 import time
 import random
 import threading
 from typing import Dict, Any, Optional, Callable
+
+from selfhealing.settings.state_cache import get_state_cache_settings
 
 __all__ = ["CBStateCache"]
 
@@ -33,10 +39,16 @@ class CBStateCache:
     _cache: Dict[str, Dict[str, Any]] = {}
     _lock = threading.RLock()
     _fetch_callback: Optional[Callable[[str], Dict]] = None
-    
-    # 설정
-    BASE_TTL = 5.0  # 기본 TTL (초)
-    JITTER_RANGE = 0.5  # ±0.5초 랜덤 지터
+
+    @classmethod
+    def _get_base_ttl(cls) -> float:
+        """기본 TTL (초). StateCacheSettings에서 로드."""
+        return get_state_cache_settings().base_ttl
+
+    @classmethod
+    def _get_jitter_range(cls) -> float:
+        """랜덤 지터 범위 (초). StateCacheSettings에서 로드."""
+        return get_state_cache_settings().jitter_range
     
     @classmethod
     def configure(cls, fetch_callback: Callable[[str], Dict]) -> None:
@@ -124,10 +136,11 @@ class CBStateCache:
         """
         Jitter가 적용된 TTL 계산
         
-        Thundering Herd 방지를 위해 4.5초 ~ 5.5초 사이 랜덤
+        Thundering Herd 방지를 위해 base_ttl ± jitter_range 사이 랜덤
         """
-        jitter = random.uniform(-cls.JITTER_RANGE, cls.JITTER_RANGE)
-        return cls.BASE_TTL + jitter
+        jitter_range = cls._get_jitter_range()
+        jitter = random.uniform(-jitter_range, jitter_range)
+        return cls._get_base_ttl() + jitter
     
     @classmethod
     def _refresh(cls, service: str) -> Optional[Dict]:

@@ -240,7 +240,7 @@ settings/
 - [x] 환경변수 없이 기본값으로 정상 동작 (2026-01-25 완료)
 - [x] 환경변수 설정 시 값 오버라이드 확인 (2026-01-25 완료)
 - [x] 신규 settings 단위 테스트 26개 통과 (2026-01-25 완료)
-- [ ] 기존 단위 테스트 100% 통과
+- [x] 기존 단위 테스트 100% 통과 (2026-01-25 완료)
 - [ ] 통합 테스트 통과
 - [ ] mypy 타입 체크 통과
 
@@ -276,4 +276,25 @@ settings/
 
 - 테스트 파일: `packages/selfhealing-python/tests/unit/settings/test_core_module_settings.py`
 - 총 26개 테스트 PASSED
+
+### Step 3 완료 (2026-01-25)
+
+Core 모듈 8개 리팩토링 완료:
+
+| Core 모듈 | Settings 모듈 | 리팩토링 내용 |
+|----------|--------------|--------------|
+| `core/runtime_feedback.py` | `settings/runtime_feedback.py` | MAX_CONSECUTIVE_FAILURES, POST_ROLLBACK_COOLDOWN, POST_ADJUSTMENT_WAIT를 property로 변경 |
+| `core/auto_rollback_guard.py` | `settings/auto_rollback.py` | ERROR_RATE_*, LATENCY_*_MS, CONSECUTIVE_FAILURES_* 상수를 property로 변경 |
+| `core/adaptive_jitter.py` | `settings/jitter.py` | 임계값 상수를 classmethod로 변경하여 settings에서 조회 |
+| `core/safety_bounds.py` | `settings/safety_bounds.py` | DEFAULT_BOUNDS 딕셔너리를 classmethod로 변경하여 settings에서 동적 로드 |
+| `core/state_cache.py` | `settings/state_cache.py` | BASE_TTL, JITTER_RANGE를 classmethod로 변경 |
+| `core/resource_monitor.py` | `settings/state_cache.py` | DEFAULT_SAFETY_MARGIN을 classmethod로 변경 (resource_safety_margin 필드 추가) |
+| `core/apply_strategy.py` | `settings/apply_strategy.py` | DEFAULT_APPLY_STRATEGIES를 함수로 변경하여 settings에서 delay 로드 |
+| `core/decision_engine.py` | `settings/decision_engine.py` | MIN_CHANGE_RATIO를 property로, _calculate_confidence를 settings 메서드 활용으로 변경 |
+
+### Step 3 테스트 결과
+
+- 테스트 파일: `packages/selfhealing-python/tests/unit/core/test_core_settings_integration.py`
+- 총 19개 테스트 PASSED
+- 기존 settings 테스트 26개도 여전히 PASSED
 

@@ -4,10 +4,18 @@
 
 시스템 상태에 따라 Jitter 범위를 동적으로 조절
 P99 안정화 및 불필요한 지연 제거
+
+설정값은 JitterSettings를 통해 환경변수로 오버라이드 가능:
+- SELFHEALING_JITTER_ERROR_BUDGET_DANGER_THRESHOLD
+- SELFHEALING_JITTER_ERROR_BUDGET_SAFE_THRESHOLD
+- SELFHEALING_JITTER_LOAD_HIGH_THRESHOLD
+- SELFHEALING_JITTER_LOAD_LOW_THRESHOLD
 """
 
 import random
 from typing import Optional, Tuple
+
+from selfhealing.settings.jitter import get_jitter_settings
 
 __all__ = ["AdaptiveJitter"]
 
@@ -38,13 +46,27 @@ class AdaptiveJitter:
     JITTER_MIN_RELAXED: Tuple[float, float] = (0, 0.05)      # 여유: 0~50ms
     JITTER_MIN_NORMAL: Tuple[float, float] = (0.03, 0.1)     # 보통: 30~100ms
     JITTER_MIN_STRESSED: Tuple[float, float] = (0.1, 0.3)    # 위험: 100~300ms
-    
-    # 임계값
-    ERROR_BUDGET_DANGER_THRESHOLD = 0.2   # 에러 버짓 20% 이하 → 위험
-    ERROR_BUDGET_SAFE_THRESHOLD = 0.5     # 에러 버짓 50% 이상 → 여유
-    LOAD_HIGH_THRESHOLD = 0.8             # 부하 80% 이상 → 위험
-    LOAD_LOW_THRESHOLD = 0.3              # 부하 30% 이하 → 여유
-    
+
+    @classmethod
+    def _get_error_budget_danger_threshold(cls) -> float:
+        """에러 버짓 위험 임계값 (20% 이하 → 위험)"""
+        return get_jitter_settings().error_budget_danger_threshold
+
+    @classmethod
+    def _get_error_budget_safe_threshold(cls) -> float:
+        """에러 버짓 안전 임계값 (50% 이상 → 여유)"""
+        return get_jitter_settings().error_budget_safe_threshold
+
+    @classmethod
+    def _get_load_high_threshold(cls) -> float:
+        """고부하 임계값 (80% 이상 → 위험)"""
+        return get_jitter_settings().load_high_threshold
+
+    @classmethod
+    def _get_load_low_threshold(cls) -> float:
+        """저부하 임계값 (30% 이하 → 여유)"""
+        return get_jitter_settings().load_low_threshold
+
     @classmethod
     def calculate(
         cls,
@@ -93,24 +115,24 @@ class AdaptiveJitter:
         if error_budget_remaining is None and current_load is None:
             return cls.JITTER_MIN_NORMAL
         
-        # 위험 상황 판단
+        # 위험 상황 판단 (settings에서 임계값 조회)
         is_budget_danger = (
             error_budget_remaining is not None and 
-            error_budget_remaining < cls.ERROR_BUDGET_DANGER_THRESHOLD
+            error_budget_remaining < cls._get_error_budget_danger_threshold()
         )
         is_load_high = (
             current_load is not None and 
-            current_load > cls.LOAD_HIGH_THRESHOLD
+            current_load > cls._get_load_high_threshold()
         )
         
-        # 여유 상황 판단
+        # 여유 상황 판단 (settings에서 임계값 조회)
         is_budget_safe = (
             error_budget_remaining is not None and 
-            error_budget_remaining > cls.ERROR_BUDGET_SAFE_THRESHOLD
+            error_budget_remaining > cls._get_error_budget_safe_threshold()
         )
         is_load_low = (
             current_load is not None and 
-            current_load < cls.LOAD_LOW_THRESHOLD
+            current_load < cls._get_load_low_threshold()
         )
         
         # 위험: 최대 지터
