@@ -24,8 +24,8 @@ R = TypeVar("R")
 
 
 def with_jitter(
-    max_delay_seconds: float = 60.0,
-    min_delay_seconds: float = 0.0,
+    max_delay_seconds: float | None = None,
+    min_delay_seconds: float | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     동기화 함수에 무작위 지연을 추가하는 데코레이터.
@@ -34,8 +34,8 @@ def with_jitter(
     시간적으로 분산시켜 Thundering Herd를 방지합니다.
 
     Args:
-        max_delay_seconds: 최대 지연 시간 (초). 기본 60초.
-        min_delay_seconds: 최소 지연 시간 (초). 기본 0초.
+        max_delay_seconds: 최대 지연 시간 (초). None이면 Settings에서 로드.
+        min_delay_seconds: 최소 지연 시간 (초). None이면 Settings에서 로드.
 
     Example:
         >>> @with_jitter(max_delay_seconds=30.0)
@@ -48,6 +48,14 @@ def with_jitter(
         - K8s 10 Pods: 30초
         - K8s 100+ Pods: 60초
     """
+    # Settings에서 기본값 로드
+    if max_delay_seconds is None or min_delay_seconds is None:
+        from selfhealing.settings.jitter import get_jitter_settings
+        settings = get_jitter_settings()
+        if max_delay_seconds is None:
+            max_delay_seconds = settings.max_delay_seconds
+        if min_delay_seconds is None:
+            min_delay_seconds = settings.min_delay_seconds
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
@@ -72,8 +80,8 @@ def with_jitter(
 
 
 def calculate_jitter(
-    max_delay_seconds: float = 60.0,
-    min_delay_seconds: float = 0.0,
+    max_delay_seconds: float | None = None,
+    min_delay_seconds: float | None = None,
 ) -> float:
     """
     Jitter 지연 시간을 계산합니다.
@@ -81,8 +89,8 @@ def calculate_jitter(
     데코레이터를 사용할 수 없는 경우 직접 호출하여 사용합니다.
 
     Args:
-        max_delay_seconds: 최대 지연 시간 (초)
-        min_delay_seconds: 최소 지연 시간 (초)
+        max_delay_seconds: 최대 지연 시간 (초). None이면 Settings에서 로드.
+        min_delay_seconds: 최소 지연 시간 (초). None이면 Settings에서 로드.
 
     Returns:
         계산된 지연 시간 (초)
@@ -92,19 +100,26 @@ def calculate_jitter(
         >>> time.sleep(delay)
         >>> do_sync()
     """
+    if max_delay_seconds is None or min_delay_seconds is None:
+        from selfhealing.settings.jitter import get_jitter_settings
+        settings = get_jitter_settings()
+        if max_delay_seconds is None:
+            max_delay_seconds = settings.max_delay_seconds
+        if min_delay_seconds is None:
+            min_delay_seconds = settings.min_delay_seconds
     return random.uniform(min_delay_seconds, max_delay_seconds)
 
 
 def sleep_with_jitter(
-    max_delay_seconds: float = 60.0,
-    min_delay_seconds: float = 0.0,
+    max_delay_seconds: float | None = None,
+    min_delay_seconds: float | None = None,
 ) -> float:
     """
     Jitter를 적용하여 동기적으로 대기합니다.
 
     Args:
-        max_delay_seconds: 최대 지연 시간 (초)
-        min_delay_seconds: 최소 지연 시간 (초)
+        max_delay_seconds: 최대 지연 시간 (초). None이면 Settings에서 로드.
+        min_delay_seconds: 최소 지연 시간 (초). None이면 Settings에서 로드.
 
     Returns:
         실제 대기한 시간 (초)
@@ -119,15 +134,15 @@ def sleep_with_jitter(
 
 
 async def async_sleep_with_jitter(
-    max_delay_seconds: float = 60.0,
-    min_delay_seconds: float = 0.0,
+    max_delay_seconds: float | None = None,
+    min_delay_seconds: float | None = None,
 ) -> float:
     """
     Jitter를 적용하여 비동기적으로 대기합니다.
 
     Args:
-        max_delay_seconds: 최대 지연 시간 (초)
-        min_delay_seconds: 최소 지연 시간 (초)
+        max_delay_seconds: 최대 지연 시간 (초). None이면 Settings에서 로드.
+        min_delay_seconds: 최소 지연 시간 (초). None이면 Settings에서 로드.
 
     Returns:
         실제 대기한 시간 (초)
@@ -167,19 +182,34 @@ class JitterConfig:
         self.min_delay_seconds = min_delay_seconds
 
     @classmethod
-    def from_env(cls) -> "JitterConfig":
-        """환경 변수에서 설정을 로드합니다."""
-        import os
+    def from_settings(cls, settings=None, **overrides) -> "JitterConfig":
+        """
+        Settings 기반 인스턴스 생성.
 
-        enabled = os.environ.get("SELFHEALING_METRICS_JITTER_ENABLED", "true").lower() == "true"
-        max_delay = float(os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0"))
-        min_delay = float(os.environ.get("SELFHEALING_METRICS_JITTER_MIN_DELAY_SECONDS", "0.0"))
+        Args:
+            settings: JitterSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
 
+        Returns:
+            JitterConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.jitter import get_jitter_settings
+
+        s = settings or get_jitter_settings()
         return cls(
-            enabled=enabled,
-            max_delay_seconds=max_delay,
-            min_delay_seconds=min_delay,
+            enabled=overrides.get("enabled", s.enabled),
+            max_delay_seconds=overrides.get("max_delay_seconds", s.max_delay_seconds),
+            min_delay_seconds=overrides.get("min_delay_seconds", s.min_delay_seconds),
         )
+
+    @classmethod
+    def from_env(cls) -> "JitterConfig":
+        """
+        환경 변수에서 설정을 로드합니다.
+
+        Deprecated: from_settings() 사용을 권장합니다.
+        """
+        return cls.from_settings()
 
     def get_delay(self) -> float:
         """Jitter 지연 시간을 반환합니다 (비활성화 시 0)."""

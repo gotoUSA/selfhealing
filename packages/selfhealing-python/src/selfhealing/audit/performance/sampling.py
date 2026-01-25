@@ -4,12 +4,17 @@ Sampling Verifier (O(n) → O(k)).
 Provides probabilistic chain verification using sampling.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
 import random
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from selfhealing.settings.sampling import SamplingSettings
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +26,34 @@ class SamplingConfig:
     min_samples: int = 10
     max_samples: int = 1000
     full_verify_on_failure: bool = True
+
+    @classmethod
+    def from_settings(
+        cls,
+        settings: "SamplingSettings | None" = None,
+        **overrides,
+    ) -> "SamplingConfig":
+        """
+        Settings에서 SamplingConfig 인스턴스 생성.
+
+        Args:
+            settings: SamplingSettings 인스턴스 (없으면 싱글톤 사용)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            SamplingConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.sampling import get_sampling_settings
+
+        s = settings or get_sampling_settings()
+        return cls(
+            sample_rate=overrides.get("sample_rate", s.sample_rate),
+            min_samples=overrides.get("min_samples", s.min_samples),
+            max_samples=overrides.get("max_samples", s.max_samples),
+            full_verify_on_failure=overrides.get(
+                "full_verify_on_failure", s.full_verify_on_failure
+            ),
+        )
 
 
 class SamplingVerifier:

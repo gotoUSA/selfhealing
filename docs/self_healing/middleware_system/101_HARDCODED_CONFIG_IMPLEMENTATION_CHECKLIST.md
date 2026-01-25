@@ -259,70 +259,70 @@
 ### Phase 3: 소스 파일 리팩토링 [예상: 25시간]
 
 #### 3.1 Core 모듈 (5개 파일)
-- [ ] `core/backoff.py` - Settings 연동
-- [ ] `core/pool_monitor.py` - Settings 연동
-- [ ] `core/connection_health.py` - Settings 연동
-- [ ] `core/decision_engine.py` - Settings 연동
-- [ ] `core/apply_strategy.py` - Settings 연동
+- [x] `core/backoff.py` - Settings 연동 ✅ (from_settings() 추가)
+- [x] `core/pool_monitor.py` - Settings 연동 ✅ (from_settings() 추가)
+- [x] `core/connection_health.py` - Settings 연동 ✅ (from_settings() 추가)
+- [x] `core/decision_engine.py` - 스킵 (클래스 수준 상수, 변경 빈도 낮음)
+- [x] `core/apply_strategy.py` - 스킵 (전략 패턴, 변경 빈도 낮음)
 
 #### 3.2 Services 모듈 (30개+ 파일)
-- [ ] `services/cleanup_service.py` - Settings 연동
-- [ ] `services/pending_config.py` - Settings 연동
-- [ ] `services/precomputed_cache.py` - Settings 연동
-- [ ] `services/retry_handler.py` - Settings 연동
-- [ ] `services/governance_checks.py` - Settings 연동
-- [ ] `services/forensic_audit_bridge.py` - Settings 연동
-- [ ] `services/idempotency_service.py` - Settings 연동
-- [ ] `services/error_budget/constants.py` - Settings 연동
-- [ ] `services/error_budget/backfill.py` - Settings 연동
-- [ ] `services/error_budget_gate/fault_detector.py` - Settings 연동
-- [ ] `services/namespace_emergency/cascade_detector.py` - Settings 연동
-- [ ] `services/namespace_emergency/tracker.py` - Settings 연동
-- [ ] `services/namespace_emergency/escalation_audit.py` - Settings 연동
-- [ ] `services/canary/service.py` - Settings 연동
-- [ ] `services/canary/cross_cluster.py` - Settings 연동
-- [ ] `services/canary/locking.py` - Settings 연동
-- [ ] `services/throttle/adaptive.py` - Settings 연동
-- [ ] `services/chaos/constants.py` - Settings 연동
-- [ ] `services/chaos/traffic_shaper.py` - Settings 연동
-- [ ] `services/chaos/blast_radius.py` - Settings 연동
-- [ ] `services/chaos/base/models.py` - Settings 연동
-- [ ] `services/coordination/critical_worker.py` - Settings 연동
-- [ ] `services/coordination/recovery_tasks.py` - Settings 연동
-- [ ] `services/isolation/regional_gate.py` - Settings 연동
-- [ ] `services/control_api_service.py` - Settings 연동
-- [ ] `services/finops/service.py` - Settings 연동
+- [x] `services/cleanup_service.py` - Settings 연동 ✅
+- [x] `services/pending_config.py` - Settings 연동 ✅ (get_audit_settings() 사용)
+- [x] `services/precomputed_cache.py` - Settings 연동 ✅
+- [x] `services/retry_handler.py` - Settings 연동 ✅ (RetryConfig.from_settings() 존재)
+- [x] `services/governance_checks.py` - Settings 연동 ✅
+- [x] `services/forensic_audit_bridge.py` - Settings 연동 ✅ (get_forensic_settings() 사용)
+- [x] `services/idempotency_service.py` - Settings 연동 ✅ (get_config().idempotency 사용)
+- [x] `services/error_budget/constants.py` - Settings 연동 ✅ (get_domain_sensitivity_settings() 사용)
+- [x] `services/error_budget/backfill.py` - ⏭️ 스킵 (Settings 패턴 미발견, 하드코딩 값 없음)
+- [x] `services/error_budget_gate/fault_detector.py` - ⏭️ 스킵 (DI 패턴으로 생성자 주입, 하드코딩 값 없음)
+- [x] `services/namespace_emergency/cascade_detector.py` - Settings 연동 ✅ (get_namespace_emergency_settings() 사용)
+- [x] `services/namespace_emergency/tracker.py` - Settings 연동 ✅ (_get_emergency_expiry_hours(), _get_cache_ttl_seconds())
+- [x] `services/namespace_emergency/escalation_audit.py` - Settings 연동 ✅ (get_namespace_emergency_settings() 사용)
+- [x] `services/canary/service.py` - Settings 연동 ✅ (rollout_ttl_days property via CanarySettings)
+- [x] `services/canary/cross_cluster.py` - Settings 연동 ✅ (get_slack_channel_settings(), get_key_prefix() 사용)
+- [x] `services/canary/locking.py` - Settings 연동 ✅ (get_key_prefix() 6회 사용)
+- [x] `services/throttle/adaptive.py` - ⏭️ 스킵 (Settings 패턴 미발견, DI 패턴)
+- [x] `services/chaos/constants.py` - ⏭️ 스킵 (Safety Hard Caps - 의도적 불변)
+- [x] `services/chaos/traffic_shaper.py` - ⏭️ 스킵 (Settings 패턴 미발견, dataclass 기본값)
+- [x] `services/chaos/blast_radius.py` - Settings 연동 ✅ (get_layered_settings(ChaosBlastRadiusSettings) 사용)
+- [x] `services/chaos/base/models.py` - Settings 연동 ✅ (get_layered_settings(ChaosExperimentSettings) 사용)
+- [x] `services/coordination/critical_worker.py` - Settings 연동 ✅ (get_critical_worker_settings() 사용)
+- [x] `services/coordination/recovery_tasks.py` - Settings 연동 ✅ (get_celery_task_settings() 사용)
+- [x] `services/isolation/regional_gate.py` - ⏭️ 스킵 (duration_seconds=300 파라미터 기본값, DI 패턴)
+- [x] `services/control_api_service.py` - ⏭️ 스킵 (timedelta 값은 비즈니스 로직, 카운터 초기화)
+- [x] `services/finops/service.py` - ⏭️ 스킵 (alert_threshold는 파라미터 기본값, MAX_CHAOS_WEIGHT_MULTIPLIER는 안전 상수)
 
 #### 3.3 Audit 모듈 (15개+ 파일)
-- [ ] `audit/reconciler.py` - Settings 연동 (from_env → from_settings)
-- [ ] `audit/sync_worker.py` - Settings 연동 (from_env → from_settings)
-- [ ] `audit/audit_integration.py` - Settings 연동
-- [ ] `audit/audit_watchdog.py` - Settings 연동 (from_env → from_settings)
-- [ ] `audit/ring_buffer.py` - Settings 연동
-- [ ] `audit/performance/sampling.py` - Settings 연동
-- [ ] `audit/cascade_load_shedding.py` - Settings 연동
-- [ ] `audit/self_audit.py` - Settings 연동
-- [ ] `audit/graceful_degradation/enums.py` - Settings 연동
+- [x] `audit/reconciler.py` - Settings 연동 ✅ (from_settings() 추가, from_env deprecated)
+- [x] `audit/sync_worker.py` - Settings 연동 ✅ (from_settings() 추가, from_env deprecated)
+- [x] `audit/audit_integration.py` - Settings 연동 ✅ (AsyncLoggerConfig.from_settings())
+- [x] `audit/audit_watchdog.py` - Settings 연동 ✅ (from_settings() 추가, from_env deprecated)
+- [x] `audit/ring_buffer.py` - Settings 연동 ✅ (from_settings() 추가)
+- [x] `audit/performance/sampling.py` - Settings 연동 ✅ (SamplingConfig.from_settings())
+- [ ] `audit/cascade_load_shedding.py` - 하드코딩 존재: buffer_size=8000, buffer_capacity=10000, _rate_window_seconds=1.0
+- [ ] `audit/self_audit.py` - 하드코딩 존재: _max_recent_events=100, limit=20, max_failure_rate=0.1
+- [x] `audit/graceful_degradation/enums.py` - Settings 연동 ✅ (FallbackConfig, CircuitBreakerConfig.from_settings())
 
 #### 3.4 Tasks 모듈 (8개 파일)
-- [ ] `tasks/cleanup_tasks.py` - Settings 연동
-- [ ] `tasks/canary_watchdog.py` - Settings 연동
-- [ ] `tasks/drift_detection.py` - Settings 연동
-- [ ] `tasks/intelligence_tasks.py` - Settings 연동
-- [ ] `tasks/traffic_aware_replay.py` - Settings 연동
+- [x] `tasks/cleanup_tasks.py` - Settings 연동 ✅ (서비스 레이어에서 이미 Settings 사용)
+- [x] `tasks/canary_watchdog.py` - Settings 연동 ✅ (WatchdogConfig.from_settings())
+- [ ] `tasks/drift_detection.py` - 하드코딩 존재: timedelta(hours=24) 분석 윈도우
+- [ ] `tasks/intelligence_tasks.py` - 하드코딩 존재: threshold, cooldown_seconds, batch_size 등 다수
+- [ ] `tasks/traffic_aware_replay.py` - 하드코딩 존재: emergency_min_level=2, threshold=1, cooldown_seconds=300
 
 #### 3.5 API 모듈 (6개 파일)
-- [ ] `api/django/stress_views.py` - Settings 연동
-- [ ] `api/django/permissions.py` - Settings 연동
-- [ ] `api/django/views/canary.py` - Settings 연동
-- [ ] `api/django/views/auto_tuning.py` - Settings 연동
-- [ ] `api/django/views/xtest/observability.py` - Settings 연동
+- [x] `api/django/stress_views.py` - Settings 연동 ✅ (StressTestService에서 Settings 사용)
+- [x] `api/django/permissions.py` - Settings 연동 ✅ (GovernanceSettings via emergency_expiry_hours, _get_thresholds())
+- [ ] `api/django/views/canary.py` - 하드코딩 존재: limit=20 (service.get_completed_rollouts)
+- [ ] `api/django/views/auto_tuning.py` - 하드코딩 존재: limit=1000 (service.adjustment_recorder.get_records)
+- [ ] `api/django/views/xtest/observability.py` - 하드코딩 존재: limit=50, limit=100, limit=10 (히스토리/인시던트 조회)
 
 #### 3.6 Utils 모듈 (2개 파일)
-- [ ] `utils/jitter.py` - Settings 연동
+- [x] `utils/jitter.py` - Settings 연동 ✅ (JitterConfig.from_settings())
 
 #### 3.7 SLO 모듈 (1개 파일)
-- [ ] `slo.py` - Settings 연동
+- [ ] `slo.py` - 하드코딩 존재: fast_burn_rate=14.4, slow_burn_rate=3.0 (SLO dataclass 기본값)
 
 ---
 
@@ -560,9 +560,50 @@ def get_default_timeout() -> int:
 |-------|------|--------|
 | Phase 1: Settings 생성 | ✅ 완료 | 100% (14/14 파일) |
 | Phase 2: Settings 확장 | ✅ 완료 | 100% (6/6 작업) |
-| Phase 3: 소스 리팩토링 | 미시작 | 0% |
+| Phase 3: 소스 리팩토링 | 🔄 진행 중 | 85% (Services 완료, Audit/Tasks/API/SLO 남음) |
 | Phase 4: 테스트 작성 | 부분 완료 | 30% (Phase 1, 2 테스트 완료) |
 | Phase 5: 최종 검증 | 미시작 | 0% |
+
+### Phase 3 진행 내역 (2026-01-26)
+
+#### 3.1 Core 모듈 ✅ 완료 (5/5 파일)
+- 모든 파일 Settings 연동 또는 스킵 처리 완료
+
+#### 3.2 Services 모듈 ✅ 완료 (26/26 파일)
+| 파일 | 상태 | 비고 |
+|-----|------|------|
+| pending_config.py | ✅ | get_audit_settings() 사용 |
+| cascade_detector.py | ✅ | get_namespace_emergency_settings() 사용 |
+| escalation_audit.py | ✅ | get_namespace_emergency_settings() 사용 |
+| cross_cluster.py | ✅ | get_slack_channel_settings() 사용 |
+| locking.py | ✅ | get_key_prefix() 6회 사용 |
+| blast_radius.py | ✅ | get_layered_settings() 사용 |
+| base/models.py | ✅ | get_layered_settings() 사용 |
+| critical_worker.py | ✅ | get_critical_worker_settings() 사용 |
+| recovery_tasks.py | ✅ | get_celery_task_settings() 사용 |
+| backfill.py | ⏭️ 스킵 | 하드코딩 값 없음 |
+| fault_detector.py | ⏭️ 스킵 | DI 패턴 |
+| adaptive.py | ⏭️ 스킵 | DI 패턴 |
+| constants.py | ⏭️ 스킵 | Safety Hard Caps |
+| traffic_shaper.py | ⏭️ 스킵 | dataclass 기본값 |
+| regional_gate.py | ⏭️ 스킵 | DI 패턴 |
+| control_api_service.py | ⏭️ 스킵 | 비즈니스 로직 |
+| finops/service.py | ⏭️ 스킵 | 안전 상수 |
+
+#### 3.3 Audit 모듈 🔄 (7/9 파일)
+- ✅ 7개 완료, ❌ 2개 미완료 (cascade_load_shedding.py, self_audit.py)
+
+#### 3.4 Tasks 모듈 🔄 (2/5 파일)
+- ✅ 2개 완료, ❌ 3개 미완료 (drift_detection.py, intelligence_tasks.py, traffic_aware_replay.py)
+
+#### 3.5 API 모듈 🔄 (2/5 파일)
+- ✅ 2개 완료, ❌ 3개 미완료 (canary.py, auto_tuning.py, observability.py)
+
+#### 3.6 Utils 모듈 ✅ 완료 (1/1 파일)
+- jitter.py Settings 연동 완료
+
+#### 3.7 SLO 모듈 ❌ (0/1 파일)
+- slo.py 하드코딩 존재 (fast_burn_rate=14.4, slow_burn_rate=3.0)
 
 ### Phase 1 완료 내역 (2026-01-25)
 
@@ -601,10 +642,13 @@ def get_default_timeout() -> int:
 **전체 테스트 합계**: 55개 통과
 
 ### 마지막 업데이트
-- **날짜**: 2026-01-25
+- **날짜**: 2026-01-26
 - **작성자**: AI Assistant
-- **완료 작업**: Phase 2 완료 (4개 Settings 확장, 2개 Settings 신규 생성, 18개 테스트 통과)
-- **다음 작업**: Phase 3 시작 (소스 파일 리팩토링)
+- **완료 작업**: Phase 3 Services 모듈 코드 분석 및 체크리스트 업데이트
+  - Services 26개 파일 전체 분석 완료
+  - Settings 사용 파일 17개 확인 (✅ 마킹)
+  - DI 패턴/스킵 파일 9개 확인 (⏭️ 마킹)
+- **다음 작업**: Phase 3 Audit/Tasks/API/SLO 미완료 파일 Settings 연동
 
 ---
 

@@ -48,6 +48,24 @@ DEFAULT_CASCADE_WINDOW_MINUTES = 30
 """Cascade 판단 시간 윈도우 (분)."""
 
 
+def _get_escalation_threshold() -> int:
+    """Settings에서 escalation_threshold 로드."""
+    try:
+        from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+        return get_namespace_emergency_settings().escalation_threshold
+    except ImportError:
+        return DEFAULT_ESCALATION_THRESHOLD
+
+
+def _get_cascade_window_minutes() -> int:
+    """Settings에서 cascade_window_minutes 로드."""
+    try:
+        from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+        return get_namespace_emergency_settings().cascade_window_minutes
+    except ImportError:
+        return DEFAULT_CASCADE_WINDOW_MINUTES
+
+
 @dataclass
 class CascadeEvent:
     """
@@ -119,8 +137,8 @@ class RegionalCascadeDetector:
     def __init__(
         self,
         tracker: Optional[Any] = None,
-        escalation_threshold: int = DEFAULT_ESCALATION_THRESHOLD,
-        cascade_window_minutes: int = DEFAULT_CASCADE_WINDOW_MINUTES,
+        escalation_threshold: Optional[int] = None,
+        cascade_window_minutes: Optional[int] = None,
         auto_escalate: bool = False,
     ):
         """
@@ -128,13 +146,13 @@ class RegionalCascadeDetector:
         
         Args:
             tracker: NamespacedEmergencyTracker 인스턴스
-            escalation_threshold: STRICT 리전 수 임계값 (기본: 2)
-            cascade_window_minutes: cascade 판단 시간 윈도우
+            escalation_threshold: STRICT 리전 수 임계값 (None이면 Settings에서 로드)
+            cascade_window_minutes: cascade 판단 시간 윈도우 (None이면 Settings에서 로드)
             auto_escalate: True면 자동 GLOBAL 격상 (위험, 기본: False)
         """
         self._tracker = tracker
-        self._threshold = escalation_threshold
-        self._window_minutes = cascade_window_minutes
+        self._threshold = escalation_threshold if escalation_threshold is not None else _get_escalation_threshold()
+        self._window_minutes = cascade_window_minutes if cascade_window_minutes is not None else _get_cascade_window_minutes()
         self._auto_escalate = auto_escalate
         self._lock = threading.Lock()
         

@@ -65,17 +65,21 @@ class CleanupService:
 
     def archive_old_dlq_entries(
         self,
-        older_than_days: int = 30,
+        older_than_days: int | None = None,
     ) -> CleanupResult:
         """
         30일 이상 된 해결된 DLQ 항목을 아카이브.
 
         Args:
-            older_than_days: 아카이브 기준 일수 (기본 30일)
+            older_than_days: 아카이브 기준 일수 (None이면 Settings에서 로드)
 
         Returns:
             CleanupResult with archived count
         """
+        if older_than_days is None:
+            from selfhealing.settings.cleanup import get_cleanup_settings
+            older_than_days = get_cleanup_settings().archive_older_than_days
+
         logger.info(
             f"[CleanupService] Archiving DLQ entries older than {older_than_days} days"
         )
@@ -115,17 +119,21 @@ class CleanupService:
 
     def cleanup_expired_config(
         self,
-        older_than_hours: int = 24,
+        older_than_hours: int | None = None,
     ) -> CleanupResult:
         """
         만료된 Pending Config 항목 정리.
 
         Args:
-            older_than_hours: 만료 기준 시간 (기본 24시간)
+            older_than_hours: 만료 기준 시간 (None이면 Settings에서 로드)
 
         Returns:
             CleanupResult with expired count
         """
+        if older_than_hours is None:
+            from selfhealing.settings.cleanup import get_cleanup_settings
+            older_than_hours = get_cleanup_settings().expired_config_hours
+
         logger.info(
             f"[CleanupService] Cleaning up configs older than {older_than_hours} hours"
         )
@@ -165,17 +173,21 @@ class CleanupService:
 
     def expire_approval_requests(
         self,
-        older_than_hours: int = 72,
+        older_than_hours: int | None = None,
     ) -> CleanupResult:
         """
         72시간 이상 대기 중인 승인 요청 만료 처리.
 
         Args:
-            older_than_hours: 만료 기준 시간 (기본 72시간)
+            older_than_hours: 만료 기준 시간 (None이면 Settings에서 로드)
 
         Returns:
             CleanupResult with expired count
         """
+        if older_than_hours is None:
+            from selfhealing.settings.cleanup import get_cleanup_settings
+            older_than_hours = get_cleanup_settings().approval_expiry_hours
+
         logger.info(
             f"[CleanupService] Expiring approval requests older than "
             f"{older_than_hours} hours"
@@ -209,7 +221,7 @@ class CleanupService:
 
     def purge_archived_dlq_entries(
         self,
-        older_than_days: int = 90,
+        older_than_days: int | None = None,
         dry_run: bool = False,
     ) -> CleanupResult:
         """
@@ -218,12 +230,16 @@ class CleanupService:
         ⚠️ 고위험: 사전 승인 필수, 복구 불가
 
         Args:
-            older_than_days: 삭제 기준 일수 (기본 90일)
+            older_than_days: 삭제 기준 일수 (None이면 Settings에서 로드)
             dry_run: True면 실제 삭제하지 않고 대상 수만 반환
 
         Returns:
             CleanupResult with purged count
         """
+        if older_than_days is None:
+            from selfhealing.settings.cleanup import get_cleanup_settings
+            older_than_days = get_cleanup_settings().purge_older_than_days
+
         logger.warning(
             f"[CleanupService] ⚠️ Purging archived DLQ entries older than "
             f"{older_than_days} days (dry_run={dry_run})"

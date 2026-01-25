@@ -5,12 +5,14 @@ DB Connection Pool 모니터링 및 누수 감지 설정.
 
 Source:
 - core/pool_monitor.py
+- core/connection_health.py
 
 Environment Variables:
     SELFHEALING_POOL_MONITOR_WARNING_THRESHOLD=70.0
     SELFHEALING_POOL_MONITOR_CRITICAL_THRESHOLD=90.0
     SELFHEALING_POOL_MONITOR_LEAK_THRESHOLD_SECONDS=300.0
     SELFHEALING_POOL_MONITOR_MAX_HISTORY=100
+    SELFHEALING_POOL_MONITOR_CONNECTION_FAILURE_THRESHOLD=3
 """
 
 import logging
@@ -71,6 +73,16 @@ class PoolMonitorSettings(BaseSettings):
         ge=10,
         le=1000,
         description="트렌드 분석용 통계 히스토리 최대 개수",
+    )
+
+    # ==========================================================================
+    # Connection Health Monitor (from core/connection_health.py line 108)
+    # ==========================================================================
+    connection_failure_threshold: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="UNHEALTHY 판정을 위한 연속 실패 횟수",
     )
 
     @model_validator(mode="after")

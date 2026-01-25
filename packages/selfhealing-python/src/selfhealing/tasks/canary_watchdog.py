@@ -38,6 +38,7 @@ from selfhealing.utils.time import utc_now
 
 if TYPE_CHECKING:
     from selfhealing.services.canary import CanaryRollout
+    from selfhealing.settings.canary_watchdog import CanaryWatchdogSettings
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,47 @@ class WatchdogConfig:
     enable_auto_rollback: bool = True
     notification_enabled: bool = True
     slack_channel: str = "#selfhealing-alerts"
+
+    @classmethod
+    def from_settings(
+        cls,
+        settings: "CanaryWatchdogSettings | None" = None,
+        **overrides,
+    ) -> "WatchdogConfig":
+        """
+        Settings에서 WatchdogConfig 인스턴스 생성.
+
+        Args:
+            settings: CanaryWatchdogSettings 인스턴스 (없으면 싱글톤 사용)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            WatchdogConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.canary_watchdog import get_canary_watchdog_settings
+
+        s = settings or get_canary_watchdog_settings()
+        return cls(
+            zombie_threshold_minutes=overrides.get(
+                "zombie_threshold_minutes", s.zombie_threshold_minutes
+            ),
+            auto_rollback_after_minutes=overrides.get(
+                "auto_rollback_after_minutes", s.auto_rollback_after_minutes
+            ),
+            max_stage_duration_minutes=overrides.get(
+                "max_stage_duration_minutes", s.max_stage_duration_minutes
+            ),
+            enable_auto_promote=overrides.get(
+                "enable_auto_promote", s.enable_auto_promote
+            ),
+            enable_auto_rollback=overrides.get(
+                "enable_auto_rollback", s.enable_auto_rollback
+            ),
+            notification_enabled=overrides.get(
+                "notification_enabled", s.notification_enabled
+            ),
+            slack_channel=overrides.get("slack_channel", s.slack_channel),
+        )
 
 
 @dataclass

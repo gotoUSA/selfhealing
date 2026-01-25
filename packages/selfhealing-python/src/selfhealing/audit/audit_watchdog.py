@@ -40,6 +40,8 @@ Usage:
 최소 의존성: urllib만 사용 (requests 불필요)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -51,9 +53,12 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from selfhealing.audit.self_audit import SelfAuditEvent, self_audit
+
+if TYPE_CHECKING:
+    from selfhealing.settings.audit_watchdog import AuditWatchdogSettings
 
 logger = logging.getLogger(__name__)
 
@@ -100,28 +105,67 @@ class WatchdogConfig:
     on_threshold_exceeded: Optional[Callable[[int], None]] = None
 
     @classmethod
-    def from_env(cls) -> "WatchdogConfig":
-        """환경 변수에서 설정 로드."""
-        targets = []
+    def from_settings(
+        cls,
+        settings: "AuditWatchdogSettings | None" = None,
+        **overrides,
+    ) -> "WatchdogConfig":
+        """
+        Settings에서 WatchdogConfig 인스턴스 생성.
 
-        # AUDIT_HEARTBEAT_URL 환경 변수 지원
-        heartbeat_url = os.environ.get("AUDIT_HEARTBEAT_URL")
-        if heartbeat_url:
-            targets.append(HeartbeatTarget(
-                name="env_heartbeat",
-                url=heartbeat_url,
-            ))
+        Args:
+            settings: AuditWatchdogSettings 인스턴스 (없으면 싱글톤 사용)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            WatchdogConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.audit_watchdog import get_audit_watchdog_settings
+
+        s = settings or get_audit_watchdog_settings()
+
+        # Settings에서 heartbeat_url이 있으면 target 생성
+        targets = overrides.get("targets", [])
+        if not targets and s.heartbeat_url:
+            targets.append(
+                HeartbeatTarget(
+                    name="env_heartbeat",
+                    url=s.heartbeat_url,
+                    timeout_seconds=s.timeout_seconds,
+                )
+            )
 
         return cls(
-            heartbeat_interval_seconds=float(
-                os.environ.get("AUDIT_HEARTBEAT_INTERVAL", "30.0")
+            heartbeat_interval_seconds=overrides.get(
+                "heartbeat_interval_seconds", s.heartbeat_interval_seconds
             ),
-            missed_threshold=int(
-                os.environ.get("AUDIT_HEARTBEAT_MISSED_THRESHOLD", "3")
+            missed_threshold=overrides.get(
+                "missed_threshold", s.missed_threshold
             ),
             targets=targets,
-            local_heartbeat_file=os.environ.get("AUDIT_HEARTBEAT_FILE"),
+            local_heartbeat_file=overrides.get(
+                "local_heartbeat_file", s.local_heartbeat_file
+            ),
+            on_heartbeat_success=overrides.get("on_heartbeat_success"),
+            on_heartbeat_failure=overrides.get("on_heartbeat_failure"),
+            on_threshold_exceeded=overrides.get("on_threshold_exceeded"),
         )
+
+    @classmethod
+    def from_env(cls) -> "WatchdogConfig":
+        """
+        환경 변수에서 설정 로드.
+
+        .. deprecated::
+            Use `from_settings()` instead for Pydantic v2 Settings support.
+        """
+        import warnings
+        warnings.warn(
+            "from_env() is deprecated, use from_settings() instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return cls.from_settings()
 
 
 @dataclass

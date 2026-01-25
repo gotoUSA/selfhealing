@@ -228,6 +228,16 @@ from selfhealing.settings.audit_integrity import (
     get_audit_integrity_settings,
     reset_audit_integrity_settings,
 )
+from selfhealing.settings.audit_sync import (
+    AuditSyncSettings,
+    get_audit_sync_settings,
+    reset_audit_sync_settings,
+)
+from selfhealing.settings.audit_watchdog import (
+    AuditWatchdogSettings,
+    get_audit_watchdog_settings,
+    reset_audit_watchdog_settings,
+)
 from selfhealing.settings.regional_recovery_policy import (
     RegionalRecoveryPolicySettings,
     get_regional_recovery_policy_settings,
@@ -475,6 +485,14 @@ __all__ = [
     "AuditIntegritySettings",
     "get_audit_integrity_settings",
     "reset_audit_integrity_settings",
+    # Audit Sync
+    "AuditSyncSettings",
+    "get_audit_sync_settings",
+    "reset_audit_sync_settings",
+    # Audit Watchdog
+    "AuditWatchdogSettings",
+    "get_audit_watchdog_settings",
+    "reset_audit_watchdog_settings",
     # Regional Recovery Policy
     "RegionalRecoveryPolicySettings",
     "get_regional_recovery_policy_settings",

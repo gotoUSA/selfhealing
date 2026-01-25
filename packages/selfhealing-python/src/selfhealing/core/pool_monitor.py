@@ -114,6 +114,7 @@ class ConnectionPoolMonitor:
         warning_threshold: float = 70.0,
         critical_threshold: float = 90.0,
         leak_threshold_seconds: float = 300.0,  # 5분
+        max_history: int = 100,
     ):
         self._stats_provider = stats_provider
         self._warning_threshold = warning_threshold
@@ -126,12 +127,41 @@ class ConnectionPoolMonitor:
 
         # History for trend analysis
         self._stats_history: List[PoolStats] = []
-        self._max_history = 100
+        self._max_history = max_history
         
         # Simulation override for chaos testing
         self._simulation_override: Optional[PoolHealthStatus] = None
         self._simulation_stats: Optional[PoolStats] = None
         self._simulation_experiment_id: Optional[str] = None
+
+    @classmethod
+    def from_settings(
+        cls,
+        stats_provider: Optional[PoolStatsProvider] = None,
+        settings=None,
+        **overrides,
+    ) -> "ConnectionPoolMonitor":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            stats_provider: Pool 통계 제공자
+            settings: PoolMonitorSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            ConnectionPoolMonitor: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.pool_monitor import get_pool_monitor_settings
+
+        s = settings or get_pool_monitor_settings()
+        return cls(
+            stats_provider=stats_provider,
+            warning_threshold=overrides.get("warning_threshold", s.warning_threshold),
+            critical_threshold=overrides.get("critical_threshold", s.critical_threshold),
+            leak_threshold_seconds=overrides.get("leak_threshold_seconds", s.leak_threshold_seconds),
+            max_history=overrides.get("max_history", s.max_history),
+        )
 
     def set_simulation_override(
         self,

@@ -22,13 +22,18 @@ Usage:
     worker.stop()
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from selfhealing.settings.audit_sync import AuditSyncSettings
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +59,64 @@ class SyncWorkerConfig:
     
     # 메트릭 리포팅 주기 (초)
     metrics_interval_seconds: float = 60.0
+
+    @classmethod
+    def from_settings(
+        cls,
+        settings: "AuditSyncSettings | None" = None,
+        **overrides,
+    ) -> "SyncWorkerConfig":
+        """
+        Settings에서 SyncWorkerConfig 인스턴스 생성.
+
+        Args:
+            settings: AuditSyncSettings 인스턴스 (없으면 싱글톤 사용)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            SyncWorkerConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.audit_sync import get_audit_sync_settings
+
+        s = settings or get_audit_sync_settings()
+        return cls(
+            sync_interval_seconds=overrides.get(
+                "sync_interval_seconds", s.sync_interval_seconds
+            ),
+            batch_size=overrides.get("batch_size", s.batch_size),
+            max_retries=overrides.get("max_retries", s.max_retries),
+            retry_delay_seconds=overrides.get(
+                "retry_delay_seconds", s.retry_delay_seconds
+            ),
+            retry_backoff_multiplier=overrides.get(
+                "retry_backoff_multiplier", s.retry_backoff_multiplier
+            ),
+            max_retry_delay_seconds=overrides.get(
+                "max_retry_delay_seconds", s.max_retry_delay_seconds
+            ),
+            cleanup_after_seconds=overrides.get(
+                "cleanup_after_seconds", s.cleanup_after_seconds
+            ),
+            metrics_interval_seconds=overrides.get(
+                "metrics_interval_seconds", s.metrics_interval_seconds
+            ),
+        )
     
     @classmethod
     def from_env(cls) -> "SyncWorkerConfig":
-        """환경변수에서 설정 로드."""
-        return cls(
-            sync_interval_seconds=float(os.environ.get("AUDIT_SYNC_INTERVAL", 1.0)),
-            batch_size=int(os.environ.get("AUDIT_SYNC_BATCH_SIZE", 100)),
-            max_retries=int(os.environ.get("AUDIT_SYNC_MAX_RETRIES", 3)),
-            retry_delay_seconds=float(os.environ.get("AUDIT_SYNC_RETRY_DELAY", 1.0)),
-            cleanup_after_seconds=float(os.environ.get("AUDIT_SYNC_CLEANUP_AFTER", 3600.0)),
+        """
+        환경변수에서 설정 로드.
+        
+        .. deprecated::
+            Use `from_settings()` instead for Pydantic v2 Settings support.
+        """
+        import warnings
+        warnings.warn(
+            "from_env() is deprecated, use from_settings() instead",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return cls.from_settings()
 
 
 @dataclass

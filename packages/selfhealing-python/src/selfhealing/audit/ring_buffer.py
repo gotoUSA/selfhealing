@@ -84,6 +84,30 @@ class RingBuffer(Generic[T]):
         self._total_enqueued = 0
         self._total_dropped = 0
 
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "RingBuffer[T]":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: RingBufferSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            RingBuffer: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.ring_buffer import get_ring_buffer_settings
+
+        s = settings or get_ring_buffer_settings()
+        strategy_map = {
+            "drop_oldest": BackpressureStrategy.DROP_OLDEST,
+            "drop_newest": BackpressureStrategy.DROP_NEWEST,
+        }
+        return cls(
+            capacity=overrides.get("capacity", s.capacity),
+            strategy=overrides.get("strategy", strategy_map.get(s.strategy, BackpressureStrategy.DROP_OLDEST)),
+        )
+
     @property
     def capacity(self) -> int:
         """Get buffer capacity."""
@@ -162,16 +186,20 @@ class RingBuffer(Generic[T]):
                 return self._buffer.popleft()
             return None
 
-    def get_batch(self, max_size: int = 100) -> List[T]:
+    def get_batch(self, max_size: int | None = None) -> List[T]:
         """
         Get and remove batch of items.
 
         Args:
-            max_size: Maximum batch size
+            max_size: Maximum batch size (None이면 Settings에서 로드)
 
         Returns:
             List of items (may be smaller than max_size)
         """
+        if max_size is None:
+            from selfhealing.settings.ring_buffer import get_ring_buffer_settings
+            max_size = get_ring_buffer_settings().batch_max_size
+
         with self._lock:
             batch = []
             count = min(max_size, len(self._buffer))

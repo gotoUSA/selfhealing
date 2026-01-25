@@ -45,11 +45,31 @@ logger = logging.getLogger(__name__)
 GLOBAL_NAMESPACE = "global"
 """Global 네임스페이스 식별자."""
 
+
+def _get_emergency_expiry_hours() -> int:
+    """Settings에서 Emergency 만료 시간 로드."""
+    try:
+        from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+        return get_namespace_emergency_settings().expiry_hours
+    except ImportError:
+        return 8  # 기본값
+
+
+def _get_cache_ttl_seconds() -> float:
+    """Settings에서 로컬 캐시 TTL 로드."""
+    try:
+        from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+        return get_namespace_emergency_settings().cache_ttl_seconds
+    except ImportError:
+        return 30.0  # 기본값
+
+
+# 하위 호환성을 위한 상수 (권장하지 않음)
 DEFAULT_EMERGENCY_EXPIRY_HOURS = 8
-"""Emergency 상태 기본 만료 시간 (8시간)."""
+"""Emergency 상태 기본 만료 시간 (8시간). 권장: _get_emergency_expiry_hours() 사용."""
 
 CACHE_TTL_SECONDS = 30.0
-"""로컬 캐시 TTL (30초)."""
+"""로컬 캐시 TTL (30초). 권장: _get_cache_ttl_seconds() 사용."""
 
 
 class NamespacedEmergencyTracker:
@@ -340,8 +360,8 @@ class NamespacedEmergencyTracker:
         if scope == EmergencyScope.GLOBAL:
             target_ns = GLOBAL_NAMESPACE
         
-        # 만료 시간 계산
-        hours = expiry_hours or DEFAULT_EMERGENCY_EXPIRY_HOURS
+        # 만료 시간 계산 (Settings에서 로드)
+        hours = expiry_hours or _get_emergency_expiry_hours()
         expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
         
         # Governance 모드 결정 (LEVEL_2 이상이면 STRICT)
@@ -470,11 +490,12 @@ class NamespacedEmergencyTracker:
         cache_key = f"state:{namespace}"
         now = time.time()
         
-        # 캐시 확인
+        # 캐시 확인 (Settings에서 TTL 로드)
+        cache_ttl = _get_cache_ttl_seconds()
         with self._lock:
             if cache_key in self._local_cache:
                 cache_time = self._cache_timestamps.get(cache_key, 0)
-                if now - cache_time < CACHE_TTL_SECONDS:
+                if now - cache_time < cache_ttl:
                     return self._local_cache[cache_key]
         
         # Backend 조회

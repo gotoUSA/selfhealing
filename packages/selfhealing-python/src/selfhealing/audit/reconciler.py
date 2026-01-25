@@ -22,13 +22,18 @@ Usage:
     reconciler.stop()
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
+
+if TYPE_CHECKING:
+    from selfhealing.settings.audit_reconciler import AuditReconcilerSettings
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +56,61 @@ class ReconcilerConfig:
     
     # 알림 임계값 - N개 이상 누락 시 알림
     alert_threshold: int = 10
+
+    @classmethod
+    def from_settings(
+        cls,
+        settings: "AuditReconcilerSettings | None" = None,
+        **overrides,
+    ) -> "ReconcilerConfig":
+        """
+        Settings에서 ReconcilerConfig 인스턴스 생성.
+
+        Args:
+            settings: AuditReconcilerSettings 인스턴스 (없으면 싱글톤 사용)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            ReconcilerConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.audit_reconciler import (
+            get_audit_reconciler_settings,
+        )
+
+        s = settings or get_audit_reconciler_settings()
+        return cls(
+            check_interval_seconds=overrides.get(
+                "check_interval_seconds", s.check_interval_seconds
+            ),
+            check_window_seconds=overrides.get(
+                "check_window_seconds", s.check_window_seconds
+            ),
+            resend_batch_size=overrides.get(
+                "resend_batch_size", s.resend_batch_size
+            ),
+            max_resend_attempts=overrides.get(
+                "max_resend_attempts", s.max_resend_attempts
+            ),
+            alert_threshold=overrides.get(
+                "alert_threshold", s.alert_threshold
+            ),
+        )
     
     @classmethod
     def from_env(cls) -> "ReconcilerConfig":
-        """환경변수에서 설정 로드."""
-        return cls(
-            check_interval_seconds=float(os.environ.get("AUDIT_RECONCILE_INTERVAL", 300.0)),
-            check_window_seconds=float(os.environ.get("AUDIT_RECONCILE_WINDOW", 3600.0)),
-            resend_batch_size=int(os.environ.get("AUDIT_RECONCILE_BATCH_SIZE", 50)),
-            max_resend_attempts=int(os.environ.get("AUDIT_RECONCILE_MAX_ATTEMPTS", 3)),
-            alert_threshold=int(os.environ.get("AUDIT_RECONCILE_ALERT_THRESHOLD", 10)),
+        """
+        환경변수에서 설정 로드.
+        
+        .. deprecated::
+            Use `from_settings()` instead for Pydantic v2 Settings support.
+        """
+        import warnings
+        warnings.warn(
+            "from_env() is deprecated, use from_settings() instead",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return cls.from_settings()
 
 
 @dataclass

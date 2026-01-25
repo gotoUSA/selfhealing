@@ -48,6 +48,29 @@ class ExponentialBackoff(BackoffCalculator):
     jitter: bool = True
     jitter_factor: float = 0.2
 
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "ExponentialBackoff":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: BackoffSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            ExponentialBackoff: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.backoff import get_backoff_settings
+
+        s = settings or get_backoff_settings()
+        return cls(
+            base_delay=overrides.get("base_delay", s.exponential_base_delay),
+            max_delay=overrides.get("max_delay", s.exponential_max_delay),
+            multiplier=overrides.get("multiplier", s.exponential_multiplier),
+            jitter=overrides.get("jitter", True),
+            jitter_factor=overrides.get("jitter_factor", s.exponential_jitter_factor),
+        )
+
     def calculate(self, attempt: int) -> float:
         """Calculate exponential delay with optional jitter."""
         delay = self.base_delay * (self.multiplier ** (attempt - 1))
@@ -79,6 +102,29 @@ class LinearBackoff(BackoffCalculator):
     jitter: bool = False
     jitter_factor: float = 0.1
 
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "LinearBackoff":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: BackoffSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            LinearBackoff: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.backoff import get_backoff_settings
+
+        s = settings or get_backoff_settings()
+        return cls(
+            base_delay=overrides.get("base_delay", s.linear_base_delay),
+            increment=overrides.get("increment", s.linear_increment),
+            max_delay=overrides.get("max_delay", s.linear_max_delay),
+            jitter=overrides.get("jitter", False),
+            jitter_factor=overrides.get("jitter_factor", s.linear_jitter_factor),
+        )
+
     def calculate(self, attempt: int) -> float:
         """Calculate linear delay."""
         delay = self.base_delay + (self.increment * (attempt - 1))
@@ -108,6 +154,27 @@ class ConstantBackoff(BackoffCalculator):
     jitter: bool = False
     jitter_factor: float = 0.1
 
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "ConstantBackoff":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: BackoffSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            ConstantBackoff: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.backoff import get_backoff_settings
+
+        s = settings or get_backoff_settings()
+        return cls(
+            delay=overrides.get("delay", s.constant_delay),
+            jitter=overrides.get("jitter", False),
+            jitter_factor=overrides.get("jitter_factor", s.constant_jitter_factor),
+        )
+
     def calculate(self, attempt: int) -> float:
         """Return constant delay."""
         result = self.delay
@@ -136,6 +203,26 @@ class DecorrelatedJitterBackoff(BackoffCalculator):
     base_delay: float = 1.0
     max_delay: float = 300.0
     _previous_delay: Optional[float] = None
+
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "DecorrelatedJitterBackoff":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: BackoffSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            DecorrelatedJitterBackoff: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.backoff import get_backoff_settings
+
+        s = settings or get_backoff_settings()
+        return cls(
+            base_delay=overrides.get("base_delay", s.decorrelated_base_delay),
+            max_delay=overrides.get("max_delay", s.decorrelated_max_delay),
+        )
 
     def calculate(self, attempt: int) -> float:
         """Calculate decorrelated jitter delay."""
@@ -197,6 +284,28 @@ class BackoffConfig:
     max_delay: int = 180  # Maximum wait time (3 minutes)
     jitter_percent: int = 25  # ±25% random jitter
     min_delay: int = 1  # Minimum delay in seconds
+
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "BackoffConfig":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: BackoffSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            BackoffConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.backoff import get_backoff_settings
+
+        s = settings or get_backoff_settings()
+        return cls(
+            base=overrides.get("base", s.legacy_base),
+            max_delay=overrides.get("max_delay", s.legacy_max_delay),
+            jitter_percent=overrides.get("jitter_percent", s.legacy_jitter_percent),
+            min_delay=overrides.get("min_delay", s.legacy_min_delay),
+        )
 
 
 class LegacyBackoffCalculator:

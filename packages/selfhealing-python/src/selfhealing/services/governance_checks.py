@@ -337,16 +337,20 @@ def is_system_enabled() -> bool:
         return True
 
 
-def is_emergency_blocking(min_level: int = 2) -> Tuple[bool, str]:
+def is_emergency_blocking(min_level: int | None = None) -> Tuple[bool, str]:
     """
     비상 모드로 인해 작업이 차단되어야 하는지 확인.
 
     Args:
-        min_level: 차단을 트리거하는 최소 비상 레벨 (기본: 2)
+        min_level: 차단을 트리거하는 최소 비상 레벨 (None이면 Settings에서 로드)
 
     Returns:
         (is_blocked, level_name) 튜플
     """
+    if min_level is None:
+        from selfhealing.settings.governance import get_governance_settings
+        min_level = get_governance_settings().emergency_min_level
+
     cache_key = f"emergency_blocking_{min_level}"
     cached = _governance_cache.get(cache_key)
     if cached is not None:
@@ -400,7 +404,7 @@ def is_error_budget_blocking() -> Tuple[bool, float, float]:
 def check_all_governance(
     check_kill_switch: bool = True,
     check_emergency: bool = True,
-    emergency_min_level: int = 2,
+    emergency_min_level: int | None = None,
     check_error_budget: bool = True,
     operation_name: str = "unknown_operation",
     service_name: Optional[str] = None,
@@ -421,7 +425,7 @@ def check_all_governance(
     Args:
         check_kill_switch: Kill Switch 체크 여부
         check_emergency: 비상 모드 체크 여부
-        emergency_min_level: 비상 모드 차단 최소 레벨
+        emergency_min_level: 비상 모드 차단 최소 레벨 (None이면 Settings에서 로드)
         check_error_budget: 에러 예산 체크 여부
         operation_name: 작업 이름 (Audit 로깅용)
         service_name: 서비스 이름 (Audit 로깅용)
@@ -431,6 +435,11 @@ def check_all_governance(
     Returns:
         GovernanceCheckResult
     """
+    # emergency_min_level이 None이면 Settings에서 로드
+    if emergency_min_level is None:
+        from selfhealing.settings.governance import get_governance_settings
+        emergency_min_level = get_governance_settings().emergency_min_level
+
     # 1. Kill Switch
     if check_kill_switch and not is_system_enabled():
         logger.warning("[GovernanceChecks] Blocked by Kill Switch")
@@ -618,7 +627,7 @@ def require_error_budget() -> Callable[[F], F]:
 def require_governance(
     check_kill_switch: bool = True,
     check_emergency: bool = True,
-    emergency_min_level: int = 2,
+    emergency_min_level: int | None = None,
     check_error_budget: bool = True,
     operation_name: Optional[str] = None,
     audit_on_block: bool = True,
@@ -628,6 +637,7 @@ def require_governance(
 
     여러 거버넌스 체크를 한 번에 적용.
     차단 시 AuditLog에 기록됩니다.
+    emergency_min_level이 None이면 Settings에서 로드합니다.
 
     Args:
         check_kill_switch: Kill Switch 체크 여부
@@ -698,12 +708,15 @@ class GovernanceCheckMixin:
     def is_automation_allowed(
         self,
         check_emergency: bool = True,
-        emergency_min_level: int = 2,
+        emergency_min_level: int | None = None,
         check_error_budget: bool = True,
         operation_name: str = "automation_check",
     ) -> bool:
         """
         자동화가 허용되는지 빠르게 체크.
+
+        Args:
+            emergency_min_level: None이면 Settings에서 로드
 
         Returns:
             True if allowed, False otherwise
@@ -720,7 +733,7 @@ class GovernanceCheckMixin:
         self,
         check_kill_switch: bool = True,
         check_emergency: bool = True,
-        emergency_min_level: int = 2,
+        emergency_min_level: int | None = None,
         check_error_budget: bool = True,
         operation_name: str = "governance_check",
         audit_on_block: bool = True,
@@ -731,7 +744,7 @@ class GovernanceCheckMixin:
         Args:
             check_kill_switch: Kill Switch 체크 여부
             check_emergency: 비상 모드 체크 여부
-            emergency_min_level: 비상 모드 차단 최소 레벨
+            emergency_min_level: 비상 모드 차단 최소 레벨 (None이면 Settings에서 로드)
             check_error_budget: 에러 예산 체크 여부
             operation_name: 작업 이름 (Audit 로깅용)
             audit_on_block: 차단 시 Audit Log 기록 여부
@@ -753,7 +766,7 @@ class GovernanceCheckMixin:
     def require_automation_allowed(
         self,
         check_emergency: bool = True,
-        emergency_min_level: int = 2,
+        emergency_min_level: int | None = None,
         check_error_budget: bool = True,
         operation_name: str = "require_automation",
     ) -> Optional[GovernanceCheckResult]:

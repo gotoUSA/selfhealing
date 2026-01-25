@@ -2,6 +2,7 @@
 Tests for Jitter utilities.
 """
 
+import os
 import pytest
 import time
 from unittest.mock import patch
@@ -108,20 +109,24 @@ class TestJitterConfig:
             delay = config.get_delay()
             assert 5.0 <= delay <= 10.0
 
-    @patch.dict(
-        "os.environ",
-        {
-            "SELFHEALING_METRICS_JITTER_ENABLED": "false",
-            "SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS": "30.0",
-            "SELFHEALING_METRICS_JITTER_MIN_DELAY_SECONDS": "5.0",
-        },
-    )
     def test_from_env_loads_environment_variables(self):
-        """from_env should load config from environment."""
-        config = JitterConfig.from_env()
-        assert config.enabled is False
-        assert config.max_delay_seconds == 30.0
-        assert config.min_delay_seconds == 5.0
+        """from_settings should load config from environment (from_env deprecated)."""
+        from selfhealing.settings.jitter import reset_jitter_settings
+        
+        with patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_JITTER_ENABLED": "false",
+                "SELFHEALING_JITTER_MAX_DELAY_SECONDS": "30.0",
+                "SELFHEALING_JITTER_MIN_DELAY_SECONDS": "5.0",
+            },
+        ):
+            reset_jitter_settings()  # 싱글톤 리셋
+            config = JitterConfig.from_settings()
+            assert config.enabled is False
+            assert config.max_delay_seconds == 30.0
+            assert config.min_delay_seconds == 5.0
+        reset_jitter_settings()  # 테스트 후 정리
 
     def test_sleep_respects_disabled_flag(self):
         """sleep should not wait when disabled."""

@@ -127,6 +127,25 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         self._partition_override: Optional[PartitionState] = None
         self._simulation_experiment_id: Optional[str] = None
 
+    @classmethod
+    def from_settings(cls, settings=None, **overrides) -> "DefaultConnectionHealthMonitor":
+        """
+        Settings 기반 인스턴스 생성.
+
+        Args:
+            settings: PoolMonitorSettings 인스턴스 (None이면 자동 로드)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            DefaultConnectionHealthMonitor: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.pool_monitor import get_pool_monitor_settings
+
+        s = settings or get_pool_monitor_settings()
+        return cls(
+            failure_threshold=overrides.get("failure_threshold", s.connection_failure_threshold),
+        )
+
     def set_simulation_override(
         self,
         connection_type: ConnectionType,

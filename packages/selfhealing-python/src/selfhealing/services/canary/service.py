@@ -99,19 +99,28 @@ class CanaryRolloutService:
     ACTIVE_ROLLOUTS_KEY = "{prefix}canary:active"
     CLUSTER_CONFIG_KEY = "{prefix}canary:cluster:{cluster_id}:config:{config_type}"
 
-    # 기본 설정
-    ROLLOUT_TTL_DAYS = 7  # 롤아웃 데이터 보관 기간
-
     def __init__(self):
         """CanaryRolloutService 초기화."""
         self._redis_client = None
         self._config_history = None
         self._config_lock = None
         self._chaos_guard = None
+        self._rollout_ttl_days: Optional[int] = None
 
     # =========================================================================
     # Properties (Lazy Loading)
     # =========================================================================
+
+    @property
+    def rollout_ttl_days(self) -> int:
+        """롤아웃 데이터 보관 기간 (Settings에서 로드)."""
+        if self._rollout_ttl_days is None:
+            try:
+                from selfhealing.settings.canary import get_canary_settings
+                self._rollout_ttl_days = get_canary_settings().rollout_ttl_days
+            except ImportError:
+                self._rollout_ttl_days = 7  # 기본값
+        return self._rollout_ttl_days
 
     @property
     def redis_client(self):
@@ -684,7 +693,7 @@ class CanaryRolloutService:
         
         key = self._make_rollout_key(rollout.id)
         data = self._serialize_rollout(rollout)
-        ttl = 86400 * self.ROLLOUT_TTL_DAYS
+        ttl = 86400 * self.rollout_ttl_days
         self.redis_client.set(key, json.dumps(data), ex=ttl)
 
     def _add_to_active(self, rollout_id: str) -> None:
@@ -758,7 +767,7 @@ class CanaryRolloutService:
         self.redis_client.set(
             key,
             json.dumps(values),
-            ex=86400 * self.ROLLOUT_TTL_DAYS,
+            ex=86400 * self.rollout_ttl_days,
         )
         
         logger.info(

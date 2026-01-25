@@ -200,16 +200,25 @@ class EscalationAuditTrail:
         decisions = audit.get_recent_decisions(namespace="seoul", limit=10)
     """
     
-    def __init__(self, max_buffer_size: int = 1000):
+    def __init__(self, max_buffer_size: Optional[int] = None):
         """
         EscalationAuditTrail 초기화.
         
         Args:
-            max_buffer_size: 메모리 버퍼 최대 크기 (기본: 1000)
+            max_buffer_size: 메모리 버퍼 최대 크기 (None이면 Settings에서 로드)
         """
         self._lock = threading.RLock()
         self._memory_buffer: List[EscalationAuditEntry] = []
-        self._max_buffer_size = max_buffer_size
+        self._max_buffer_size = max_buffer_size if max_buffer_size is not None else self._get_max_buffer_size()
+    
+    @staticmethod
+    def _get_max_buffer_size() -> int:
+        """Settings에서 max_buffer_size 로드."""
+        try:
+            from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+            return get_namespace_emergency_settings().max_buffer_size
+        except ImportError:
+            return 1000  # 기본값
     
     def log_decision(
         self,

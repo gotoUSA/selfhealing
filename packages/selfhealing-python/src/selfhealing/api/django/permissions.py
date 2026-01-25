@@ -220,7 +220,15 @@ class EmergencyEscalationPermission(BasePermission):
     """
 
     message = "긴급 에스컬레이션 권한이 없습니다. STRICT 전환은 Operator 이상, NORMAL 복구는 Admin만 가능합니다."
-    EMERGENCY_EXPIRY_HOURS = 4  # 긴급 모드 자동 만료 시간 (governance config로 오버라이드 가능)
+
+    @property
+    def emergency_expiry_hours(self) -> int:
+        """긴급 모드 자동 만료 시간 (Settings에서 로드)."""
+        try:
+            from selfhealing.settings.governance import get_governance_settings
+            return get_governance_settings().emergency_expiry_hours
+        except ImportError:
+            return 4  # 기본값
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -257,7 +265,7 @@ class EmergencyEscalationPermission(BasePermission):
                 logger.warning(
                     f"[RBAC] Emergency escalation to STRICT by operator: "
                     f"user={request.user}, reason={reason[:50]}, "
-                    f"expiry_hours={self.EMERGENCY_EXPIRY_HOURS}"
+                    f"expiry_hours={self.emergency_expiry_hours}"
                 )
             return has_perm
 
@@ -339,20 +347,24 @@ class ThresholdBasedPermission(BasePermission):
                     "dual_approval": governance.get("threshold_dual_approval", 0.50),
                 }
         except Exception as e:
-            logger.debug(f"[RBAC] RuntimeConfigManager unavailable, using env/defaults: {e}")
+            logger.debug(f"[RBAC] RuntimeConfigManager unavailable, using Settings: {e}")
 
-        # 환경변수 폴백
-        return {
-            "operator_approve": float(
-                os.environ.get("SELFHEALING_THRESHOLD_OPERATOR", "0.15")
-            ),
-            "admin_approve": float(
-                os.environ.get("SELFHEALING_THRESHOLD_ADMIN", "0.30")
-            ),
-            "dual_approval": float(
-                os.environ.get("SELFHEALING_THRESHOLD_DUAL_APPROVAL", "0.50")
-            ),
-        }
+        # Settings 폴백 (환경변수 대신)
+        try:
+            from selfhealing.settings.governance import get_governance_settings
+            settings = get_governance_settings()
+            return {
+                "operator_approve": settings.threshold_operator,
+                "admin_approve": settings.threshold_admin,
+                "dual_approval": getattr(settings, "threshold_dual_approval", 0.50),
+            }
+        except ImportError:
+            # 기본값 폴백
+            return {
+                "operator_approve": 0.15,
+                "admin_approve": 0.30,
+                "dual_approval": 0.50,
+            }
 
     @property
     def thresholds(self) -> Dict[str, float]:

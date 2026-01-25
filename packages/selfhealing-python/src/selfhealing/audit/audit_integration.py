@@ -26,6 +26,8 @@ Usage:
     recorder.attach_async_logger(async_adapter)
 """
 
+from __future__ import annotations
+
 import logging
 import queue
 import threading
@@ -33,9 +35,12 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
+
+if TYPE_CHECKING:
+    from selfhealing.settings.batch import BatchSettings
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +74,39 @@ class AsyncLoggerConfig:
     immediate_severities: Set[EventSeverity] = field(
         default_factory=lambda: {EventSeverity.CRITICAL, EventSeverity.WARNING}
     )
+
+    @classmethod
+    def from_settings(
+        cls,
+        settings: "BatchSettings | None" = None,
+        **overrides,
+    ) -> "AsyncLoggerConfig":
+        """
+        Settings에서 AsyncLoggerConfig 인스턴스 생성.
+
+        Args:
+            settings: BatchSettings 인스턴스 (없으면 싱글톤 사용)
+            **overrides: 개별 필드 오버라이드
+
+        Returns:
+            AsyncLoggerConfig: Settings 기반 인스턴스
+        """
+        from selfhealing.settings.batch import get_batch_settings
+
+        s = settings or get_batch_settings()
+        return cls(
+            batch_size=overrides.get("batch_size", s.async_logger_batch_size),
+            flush_interval_seconds=overrides.get(
+                "flush_interval_seconds", s.async_logger_flush_interval
+            ),
+            max_queue_size=overrides.get(
+                "max_queue_size", s.async_logger_max_queue_size
+            ),
+            immediate_severities=overrides.get(
+                "immediate_severities",
+                {EventSeverity.CRITICAL, EventSeverity.WARNING},
+            ),
+        )
 
 
 class AsyncLoggerAdapter:

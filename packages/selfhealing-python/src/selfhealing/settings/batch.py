@@ -114,6 +114,30 @@ class BatchSettings(BaseSettings):
         description="감사 로그 플러시 간격 (초)",
     )
 
+    # ==========================================================================
+    # Async Logger Config - from audit/audit_integration.py AsyncLoggerConfig
+    # ==========================================================================
+    async_logger_batch_size: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="AsyncLogger 배치 크기",
+    )
+
+    async_logger_flush_interval: float = Field(
+        default=2.0,
+        ge=0.5,
+        le=30.0,
+        description="AsyncLogger 플러시 간격 (초)",
+    )
+
+    async_logger_max_queue_size: int = Field(
+        default=5000,
+        ge=100,
+        le=100000,
+        description="AsyncLogger 최대 큐 크기",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

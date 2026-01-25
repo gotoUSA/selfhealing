@@ -59,13 +59,32 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Constants
+# Constants (defaults, actual values loaded from Settings)
 # =============================================================================
 
-# Cache TTLs
-L1_TTL_SECONDS = 2.0       # In-process cache TTL
-L2_TTL_SECONDS = 15.0      # Redis cache TTL
-REFRESH_INTERVAL = 10.0    # Background refresh interval (less than L2 TTL)
+def _get_l1_ttl_seconds() -> float:
+    """L1 TTL을 Settings에서 로드."""
+    from selfhealing.settings.precomputed_cache import get_precomputed_cache_settings
+    return get_precomputed_cache_settings().l1_ttl_seconds
+
+
+def _get_l2_ttl_seconds() -> float:
+    """L2 TTL을 Settings에서 로드."""
+    from selfhealing.settings.precomputed_cache import get_precomputed_cache_settings
+    return get_precomputed_cache_settings().l2_ttl_seconds
+
+
+def _get_refresh_interval() -> float:
+    """Refresh interval을 Settings에서 로드."""
+    from selfhealing.settings.precomputed_cache import get_precomputed_cache_settings
+    return get_precomputed_cache_settings().refresh_interval_seconds
+
+
+def _get_l1_maxsize() -> int:
+    """L1 maxsize를 Settings에서 로드."""
+    from selfhealing.settings.precomputed_cache import get_precomputed_cache_settings
+    return get_precomputed_cache_settings().l1_maxsize
+
 
 # Cache Keys
 CACHE_KEY_HEALTH = "selfhealing:cache:health"
@@ -108,7 +127,11 @@ class L1Cache:
     Falls back to simple dict if cachetools not installed.
     """
     
-    def __init__(self, maxsize: int = 100, ttl: float = L1_TTL_SECONDS):
+    def __init__(self, maxsize: int | None = None, ttl: float | None = None):
+        if maxsize is None:
+            maxsize = _get_l1_maxsize()
+        if ttl is None:
+            ttl = _get_l1_ttl_seconds()
         self._ttl = ttl
         if HAS_CACHETOOLS:
             self._cache = TTLCache(maxsize=maxsize, ttl=ttl)
@@ -204,8 +227,10 @@ class L2RedisCache:
             logger.debug(f"[PrecomputedCache] Redis get failed: {e}")
         return None
         
-    def set(self, key: str, value: str, ttl: float = L2_TTL_SECONDS) -> bool:
+    def set(self, key: str, value: str, ttl: float | None = None) -> bool:
         """Set pre-computed JSON string in Redis."""
+        if ttl is None:
+            ttl = _get_l2_ttl_seconds()
         try:
             redis = self._get_redis()
             if redis:
@@ -460,7 +485,7 @@ class PrecomputedCacheWorker:
         """Schedule the next refresh."""
         if not self._running:
             return
-        self._timer = threading.Timer(REFRESH_INTERVAL, self._do_refresh)
+        self._timer = threading.Timer(_get_refresh_interval(), self._do_refresh)
         self._timer.daemon = True  # Don't block process exit
         self._timer.start()
         
@@ -504,9 +529,9 @@ class PrecomputedCacheWorker:
         return {
             "running": self._running,
             "registered_keys": list(self._compute_functions.keys()),
-            "refresh_interval_seconds": REFRESH_INTERVAL,
-            "l1_ttl_seconds": L1_TTL_SECONDS,
-            "l2_ttl_seconds": L2_TTL_SECONDS,
+            "refresh_interval_seconds": _get_refresh_interval(),
+            "l1_ttl_seconds": _get_l1_ttl_seconds(),
+            "l2_ttl_seconds": _get_l2_ttl_seconds(),
             "has_orjson": HAS_ORJSON,
             "has_cachetools": HAS_CACHETOOLS,
         }

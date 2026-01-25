@@ -66,20 +66,24 @@ class TestWatchdogConfig:
         assert config.local_heartbeat_file == "/tmp/heartbeat.json"
 
     def test_from_env(self):
-        """환경 변수에서 설정 로드 테스트."""
+        """환경 변수에서 설정 로드 테스트 (deprecated, from_settings로 전환)."""
+        from selfhealing.settings.audit_watchdog import reset_audit_watchdog_settings
+        
         with patch.dict(os.environ, {
-            "AUDIT_HEARTBEAT_URL": "http://test.com/ping",
-            "AUDIT_HEARTBEAT_INTERVAL": "45.0",
-            "AUDIT_HEARTBEAT_MISSED_THRESHOLD": "5",
-            "AUDIT_HEARTBEAT_FILE": "/tmp/test_heartbeat.json",
+            "SELFHEALING_AUDIT_WATCHDOG_HEARTBEAT_URL": "http://test.com/ping",
+            "SELFHEALING_AUDIT_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS": "45.0",
+            "SELFHEALING_AUDIT_WATCHDOG_MISSED_THRESHOLD": "5",
+            "SELFHEALING_AUDIT_WATCHDOG_LOCAL_HEARTBEAT_FILE": "/tmp/test_heartbeat.json",
         }):
-            config = WatchdogConfig.from_env()
+            reset_audit_watchdog_settings()  # 싱글톤 리셋
+            config = WatchdogConfig.from_settings()
 
             assert config.heartbeat_interval_seconds == 45.0
             assert config.missed_threshold == 5
             assert len(config.targets) == 1
             assert config.targets[0].url == "http://test.com/ping"
             assert config.local_heartbeat_file == "/tmp/test_heartbeat.json"
+        reset_audit_watchdog_settings()  # 테스트 후 정리
 
     def test_from_env_defaults(self):
         """환경 변수 없을 때 기본값 테스트."""
