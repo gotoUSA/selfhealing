@@ -355,7 +355,7 @@ class TestEmergencyTrackerIntegration:
     @patch("selfhealing.services.governance.get_emergency_tracker")
     def test_strict_mode_activates_tracker(self, mock_get_tracker):
         """STRICT mode change should activate EmergencyModeTracker."""
-        from selfhealing.api.django.views.governance.service import GovernanceService
+        from selfhealing.services.governance_api_service import GovernanceApiService
         
         mock_tracker = Mock()
         mock_tracker.record_emergency_activation.return_value = {
@@ -364,7 +364,7 @@ class TestEmergencyTrackerIntegration:
         }
         mock_get_tracker.return_value = mock_tracker
         
-        service = GovernanceService()
+        service = GovernanceApiService()
         
         with patch.object(service, '_log_mode_change'):
             with patch(
@@ -385,7 +385,7 @@ class TestEmergencyTrackerIntegration:
     @patch("selfhealing.services.governance.get_emergency_tracker")
     def test_normal_mode_deactivates_tracker_from_strict(self, mock_get_tracker):
         """NORMAL mode from STRICT should deactivate EmergencyModeTracker."""
-        from selfhealing.api.django.views.governance.service import GovernanceService
+        from selfhealing.services.governance_api_service import GovernanceApiService
         
         mock_tracker = Mock()
         mock_tracker.record_normal_restoration.return_value = {
@@ -393,7 +393,7 @@ class TestEmergencyTrackerIntegration:
         }
         mock_get_tracker.return_value = mock_tracker
         
-        service = GovernanceService()
+        service = GovernanceApiService()
         
         with patch.object(service, '_log_mode_change'):
             with patch(

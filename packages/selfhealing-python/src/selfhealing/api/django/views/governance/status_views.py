@@ -20,7 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
-from selfhealing.api.django.views.governance.service import get_governance_service
+from selfhealing.services.governance_api_service import get_governance_api_service
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class MetricStatusView(APIView):
 
     def get(self, request: Request) -> Response:
         """통합 상태 조회."""
-        service = get_governance_service()
+        service = get_governance_api_service()
         result = service.get_status()
 
         return Response(result, status=status.HTTP_200_OK)

@@ -14,10 +14,10 @@ Design Philosophy:
 """
 
 # Service Layer
-from selfhealing.api.django.views.governance.service import (
-    GovernanceService,
-    get_governance_service,
-    reset_governance_service,
+from selfhealing.services.governance_api_service import (
+    GovernanceApiService,
+    get_governance_api_service,
+    reset_governance_api_service,
 )
 
 # Status Views (Observability)
@@ -48,9 +48,9 @@ from selfhealing.api.django.views.governance.approval_views import (
 
 __all__ = [
     # Service
-    "GovernanceService",
-    "get_governance_service",
-    "reset_governance_service",
+    "GovernanceApiService",
+    "get_governance_api_service",
+    "reset_governance_api_service",
     # API Views
     "MetricStatusView",
     "GovernanceReconcileView",

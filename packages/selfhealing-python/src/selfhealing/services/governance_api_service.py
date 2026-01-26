@@ -1,8 +1,12 @@
 """
-Governance Service Layer.
+Governance API Service Layer.
 
-거버넌스 비즈니스 로직을 담당하는 서비스 클래스입니다.
+거버넌스 API 비즈니스 로직을 담당하는 서비스 클래스입니다.
 메트릭 상태 조회, 정합성 조정, 모드 전환 기능을 제공합니다.
+
+Note:
+    이 서비스는 API View에서 사용됩니다.
+    Celery Task용 GovernanceService는 governance_service.py를 참조하세요.
 
 Break Glass Pattern:
 - STRICT 전환: EmergencyModeTracker에 기록 (자동 만료 추적)
@@ -26,9 +30,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class GovernanceService:
+class GovernanceApiService:
     """
-    거버넌스 서비스.
+    거버넌스 API 서비스.
 
     메트릭 상태 조회, 정합성 조정, 모드 전환 기능을 제공합니다.
     """
@@ -484,27 +488,27 @@ class GovernanceService:
 # =============================================================================
 
 
-_governance_service: Optional[GovernanceService] = None
+_governance_api_service: Optional[GovernanceApiService] = None
 
 
-def get_governance_service() -> GovernanceService:
-    """GovernanceService 싱글톤 인스턴스 반환."""
-    global _governance_service
+def get_governance_api_service() -> GovernanceApiService:
+    """GovernanceApiService 싱글톤 인스턴스 반환."""
+    global _governance_api_service
 
-    if _governance_service is None:
-        _governance_service = GovernanceService()
+    if _governance_api_service is None:
+        _governance_api_service = GovernanceApiService()
 
-    return _governance_service
+    return _governance_api_service
 
 
-def reset_governance_service() -> None:
-    """GovernanceService 인스턴스 리셋 (테스트용)."""
-    global _governance_service
-    _governance_service = None
+def reset_governance_api_service() -> None:
+    """GovernanceApiService 인스턴스 리셋 (테스트용)."""
+    global _governance_api_service
+    _governance_api_service = None
 
 
 __all__ = [
-    "GovernanceService",
-    "get_governance_service",
-    "reset_governance_service",
+    "GovernanceApiService",
+    "get_governance_api_service",
+    "reset_governance_api_service",
 ]

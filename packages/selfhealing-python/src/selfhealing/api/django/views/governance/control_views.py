@@ -22,7 +22,7 @@ from selfhealing.api.django.permissions import (
     IsSelfHealingAdmin,
     EmergencyEscalationPermission,
 )
-from selfhealing.api.django.views.governance.service import get_governance_service
+from selfhealing.services.governance_api_service import get_governance_api_service
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class GovernanceReconcileView(APIView):
         if request.user and request.user.is_authenticated:
             actor = request.user.username
         
-        service = get_governance_service()
+        service = get_governance_api_service()
         result = service.reconcile(
             domains=domains,
             dry_run=dry_run,
@@ -136,7 +136,7 @@ class GovernanceModeView(APIView):
         if request.user and request.user.is_authenticated:
             actor = request.user.username
         
-        service = get_governance_service()
+        service = get_governance_api_service()
         result = service.set_mode(
             mode=mode,
             actor=actor,
