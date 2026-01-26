@@ -441,10 +441,11 @@ class TestResetToDefaults:
         # 리셋
         safety_bounds.reset_to_defaults()
         
-        # 기본값 확인
+        # 기본값 확인 (_get_default_bounds() 메서드 사용)
+        default_bounds = SafetyBounds._get_default_bounds()
         timeout_bound = safety_bounds.bounds["timeout_ms"]
-        assert timeout_bound.min_value == SafetyBounds.DEFAULT_BOUNDS["timeout_ms"].min_value
-        assert timeout_bound.max_value == SafetyBounds.DEFAULT_BOUNDS["timeout_ms"].max_value
+        assert timeout_bound.min_value == default_bounds["timeout_ms"].min_value
+        assert timeout_bound.max_value == default_bounds["timeout_ms"].max_value
         
         # 커스텀 파라미터는 제거됨
         assert "custom_param" not in safety_bounds.bounds

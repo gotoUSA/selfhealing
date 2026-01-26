@@ -558,22 +558,28 @@ class TestDegradationLevel:
 
 
 class TestThresholdConstants:
-    """Test threshold constants."""
+    """Test threshold constants via settings."""
     
     def test_error_rate_thresholds(self):
-        """에러율 임계값."""
-        assert AutoRollbackGuard.ERROR_RATE_MAJOR == 0.1
-        assert AutoRollbackGuard.ERROR_RATE_CRITICAL == 0.3
+        """에러율 임계값 (인스턴스 속성으로 확인)."""
+        from selfhealing.settings.auto_rollback import get_auto_rollback_settings
+        settings = get_auto_rollback_settings()
+        assert settings.error_rate_major == 0.1
+        assert settings.error_rate_critical == 0.3
     
     def test_latency_thresholds(self):
-        """레이턴시 임계값."""
-        assert AutoRollbackGuard.LATENCY_MAJOR_MS == 5000
-        assert AutoRollbackGuard.LATENCY_CRITICAL_MS == 10000
+        """레이턴시 임계값 (인스턴스 속성으로 확인)."""
+        from selfhealing.settings.auto_rollback import get_auto_rollback_settings
+        settings = get_auto_rollback_settings()
+        assert settings.latency_major_ms == 5000
+        assert settings.latency_critical_ms == 10000
     
     def test_consecutive_failure_thresholds(self):
-        """연속 실패 임계값."""
-        assert AutoRollbackGuard.CONSECUTIVE_FAILURES_ALERT == 3
-        assert AutoRollbackGuard.CONSECUTIVE_FAILURES_EMERGENCY == 5
+        """연속 실패 임계값 (인스턴스 속성으로 확인)."""
+        from selfhealing.settings.auto_rollback import get_auto_rollback_settings
+        settings = get_auto_rollback_settings()
+        assert settings.failures_alert == 3
+        assert settings.failures_emergency == 5
 
 
 # =============================================================================

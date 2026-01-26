@@ -280,7 +280,8 @@ class TestMinChangeRatio:
         for decision in decisions:
             if decision.parameter == "timeout_ms":
                 change_ratio = abs(decision.suggested_value - decision.current_value) / decision.current_value
-                assert change_ratio >= DecisionEngine.MIN_CHANGE_RATIO
+                # MIN_CHANGE_RATIO는 인스턴스 property이므로 engine에서 접근
+                assert change_ratio >= engine.MIN_CHANGE_RATIO
 
 
 # =============================================================================

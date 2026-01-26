@@ -117,6 +117,9 @@ class TestCBStateCache:
     
     def test_ttl_jitter_is_applied(self):
         """TTL에 jitter가 적용됨"""
+        from selfhealing.settings.state_cache import get_state_cache_settings
+        settings = get_state_cache_settings()
+        
         ttls = set()
         for _ in range(10):
             ttl = CBStateCache._calculate_ttl()
@@ -124,9 +127,9 @@ class TestCBStateCache:
         
         # jitter로 인해 다양한 TTL 값이 생성되어야 함
         assert len(ttls) > 1
-        # 모든 TTL은 BASE_TTL ± JITTER_RANGE 범위 내
+        # 모든 TTL은 base_ttl ± jitter_range 범위 내
         for ttl in ttls:
-            assert CBStateCache.BASE_TTL - CBStateCache.JITTER_RANGE <= ttl <= CBStateCache.BASE_TTL + CBStateCache.JITTER_RANGE
+            assert settings.base_ttl - settings.jitter_range <= ttl <= settings.base_ttl + settings.jitter_range
     
     def test_callback_failure_triggers_degraded_mode(self):
         """콜백 실패 시 DegradedModeHandler로 폴백 및 degraded mode 진입"""

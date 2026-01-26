@@ -109,7 +109,7 @@ class GovernanceService:
         
         기존 MetricSyncService.sync_metrics() 래핑.
         """
-        from selfhealing.api.django.views.metric_sync import get_metric_sync_service
+        from selfhealing.services.metric_sync_service import get_metric_sync_service
         
         service = get_metric_sync_service()
         result = service.sync_metrics(
@@ -409,7 +409,7 @@ class GovernanceService:
     def _get_drift_summary(self) -> Dict[str, Any]:
         """Drift 요약 조회."""
         try:
-            from selfhealing.api.django.views.metric_sync import get_metric_sync_service
+            from selfhealing.services.metric_sync_service import get_metric_sync_service
             
             service = get_metric_sync_service()
             report = service.get_drift_report()

@@ -616,7 +616,8 @@ class TestConsecutiveFailures:
     
     def test_max_consecutive_failures_pause(self, feedback_loop):
         """연속 실패 시 일시 정지."""
-        feedback_loop._consecutive_failures = RuntimeFeedbackLoop.MAX_CONSECUTIVE_FAILURES
+        # 인스턴스 property로 접근
+        feedback_loop._consecutive_failures = feedback_loop.MAX_CONSECUTIVE_FAILURES
         
         # 에러 핸들링
         feedback_loop._handle_loop_error(Exception("Test error"))
@@ -767,16 +768,22 @@ class TestThreadSafety:
 
 
 class TestConstants:
-    """Test constant values."""
+    """Test constant values via settings."""
     
     def test_max_consecutive_failures(self):
-        """MAX_CONSECUTIVE_FAILURES 상수."""
-        assert RuntimeFeedbackLoop.MAX_CONSECUTIVE_FAILURES == 3
+        """MAX_CONSECUTIVE_FAILURES 상수 (인스턴스 속성으로 확인)."""
+        from selfhealing.settings.runtime_feedback import get_runtime_feedback_settings
+        settings = get_runtime_feedback_settings()
+        assert settings.max_consecutive_failures == 3
     
     def test_post_rollback_cooldown(self):
-        """POST_ROLLBACK_COOLDOWN 상수."""
-        assert RuntimeFeedbackLoop.POST_ROLLBACK_COOLDOWN == 120
+        """POST_ROLLBACK_COOLDOWN 상수 (인스턴스 속성으로 확인)."""
+        from selfhealing.settings.runtime_feedback import get_runtime_feedback_settings
+        settings = get_runtime_feedback_settings()
+        assert settings.rollback_cooldown == 120
     
     def test_post_adjustment_wait(self):
-        """POST_ADJUSTMENT_WAIT 상수."""
-        assert RuntimeFeedbackLoop.POST_ADJUSTMENT_WAIT == 30
+        """POST_ADJUSTMENT_WAIT 상수 (인스턴스 속성으로 확인)."""
+        from selfhealing.settings.runtime_feedback import get_runtime_feedback_settings
+        settings = get_runtime_feedback_settings()
+        assert settings.adjustment_wait == 30
