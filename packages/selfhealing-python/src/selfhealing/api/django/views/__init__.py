@@ -158,15 +158,20 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "GovernanceReconcileView": ("selfhealing.api.django.views.governance", "GovernanceReconcileView"),
     "GovernanceModeView": ("selfhealing.api.django.views.governance", "GovernanceModeView"),
     # -------------------------------------------------------------------------
-    # xtest_mode.py (7 symbols)
+    # xtest/ package (11 symbols) - 직접 import 패턴 사용
     # -------------------------------------------------------------------------
-    "XTestModeMixin": ("selfhealing.api.django.views.xtest_mode", "XTestModeMixin"),
-    "InjectCBFailureView": ("selfhealing.api.django.views.xtest_mode", "InjectCBFailureView"),
-    "ResetCBView": ("selfhealing.api.django.views.xtest_mode", "ResetCBView"),
-    "CBStatusDetailView": ("selfhealing.api.django.views.xtest_mode", "CBStatusDetailView"),
-    "InjectErrorBudgetView": ("selfhealing.api.django.views.xtest_mode", "InjectErrorBudgetView"),
-    "SystemSnapshotView": ("selfhealing.api.django.views.xtest_mode", "SystemSnapshotView"),
-    "FastFailTestView": ("selfhealing.api.django.views.xtest_mode", "FastFailTestView"),
+    "XTestModeMixin": ("selfhealing.api.django.views.xtest", "XTestModeMixin"),
+    "InjectCBFailureView": ("selfhealing.api.django.views.xtest", "InjectCBFailureView"),
+    "ResetCBView": ("selfhealing.api.django.views.xtest", "ResetCBView"),
+    "CBStatusDetailView": ("selfhealing.api.django.views.xtest", "CBStatusDetailView"),
+    "InjectErrorBudgetView": ("selfhealing.api.django.views.xtest", "InjectErrorBudgetView"),
+    "SystemSnapshotView": ("selfhealing.api.django.views.xtest", "SystemSnapshotView"),
+    "FastFailTestView": ("selfhealing.api.django.views.xtest", "FastFailTestView"),
+    # DLQ X-Test Views
+    "InjectDLQEntryView": ("selfhealing.api.django.views.xtest", "InjectDLQEntryView"),
+    "DLQXTestStatusView": ("selfhealing.api.django.views.xtest", "DLQXTestStatusView"),
+    "ForceStatusView": ("selfhealing.api.django.views.xtest", "ForceStatusView"),
+    "ResetDLQXTestView": ("selfhealing.api.django.views.xtest", "ResetDLQXTestView"),
     # -------------------------------------------------------------------------
     # auto_tuning.py (9 symbols)
     # -------------------------------------------------------------------------
@@ -332,7 +337,8 @@ if TYPE_CHECKING:
         GovernanceModeView,
     )
     # X-Test-Mode Views (Stage 48: Chaos Proof)
-    from selfhealing.api.django.views.xtest_mode import (
+    # 직접 import 패턴 사용 (xtest_mode.py re-export 대신)
+    from selfhealing.api.django.views.xtest import (
         XTestModeMixin,
         InjectCBFailureView,
         ResetCBView,
@@ -340,6 +346,11 @@ if TYPE_CHECKING:
         InjectErrorBudgetView,
         SystemSnapshotView,
         FastFailTestView,
+        # DLQ X-Test Views
+        InjectDLQEntryView,
+        DLQXTestStatusView,
+        ForceStatusView,
+        ResetDLQXTestView,
     )
     # Auto Tuning Views
     from selfhealing.api.django.views.auto_tuning import (
@@ -461,6 +472,11 @@ __all__ = [
     "InjectErrorBudgetView",
     "SystemSnapshotView",
     "FastFailTestView",
+    # DLQ X-Test Views
+    "InjectDLQEntryView",
+    "DLQXTestStatusView",
+    "ForceStatusView",
+    "ResetDLQXTestView",
     # Auto Tuning Views (Stage 38)
     "AutoTuningStatusView",
     "AutoTuningEnableView",

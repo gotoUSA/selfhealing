@@ -1,8 +1,17 @@
 """
 Stage 48: X-Test-Mode (Chaos Monkey) Control Views
 
-REFACTORED: 이 파일은 하위 호환성을 위해 유지됩니다.
-실제 구현은 xtest/ 패키지로 이동되었습니다.
+DEPRECATED: 이 파일은 레거시 호환성을 위해서만 유지됩니다.
+새 코드에서는 직접 import를 사용하세요:
+
+    # 권장 (직접 import)
+    from selfhealing.api.django.views.xtest import XTestModeMixin, InjectCBFailureView
+
+    # 비권장 (레거시 re-export)
+    from selfhealing.api.django.views.xtest_mode import XTestModeMixin, InjectCBFailureView
+
+실제 구현은 xtest/ 패키지에 있습니다.
+이 파일은 향후 제거될 예정입니다.
 
 Rate Limiter(L1)를 우회하여 L2/L3 동작을 직접 관찰하기 위한 테스트 전용 API.
 

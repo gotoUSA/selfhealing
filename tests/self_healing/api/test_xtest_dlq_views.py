@@ -494,9 +494,9 @@ class TestImportCompatibility:
         assert ForceStatusView is not None
         assert ResetDLQXTestView is not None
 
-    def test_import_from_xtest_mode(self):
-        """xtest_mode 모듈에서 import 가능한지 확인."""
-        from selfhealing.api.django.views.xtest_mode import (
+    def test_import_from_views_package(self):
+        """views 패키지 __init__.py에서 import 가능한지 확인."""
+        from selfhealing.api.django.views import (
             InjectDLQEntryView,
             DLQXTestStatusView,
             ForceStatusView,

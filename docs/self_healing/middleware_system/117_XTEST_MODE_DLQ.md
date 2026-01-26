@@ -15,6 +15,30 @@
 | View 파일 | `selfhealing/api/django/views/xtest/dlq.py` |
 | 테스트 파일 | `tests/self_healing/api/test_xtest_dlq_views.py` |
 | 테스트 결과 | 29 passed |
+| Import 패턴 | 직접 import (`from selfhealing.api.django.views.xtest import ...`) |
+
+### Import 가이드
+
+```python
+# ✅ 권장 (직접 import)
+from selfhealing.api.django.views.xtest import (
+    InjectDLQEntryView,
+    DLQXTestStatusView,
+    ForceStatusView,
+    ResetDLQXTestView,
+)
+
+# ✅ 패키지 레벨 import
+from selfhealing.api.django.views import (
+    InjectDLQEntryView,
+    DLQXTestStatusView,
+    ForceStatusView,
+    ResetDLQXTestView,
+)
+
+# ⚠️ 비권장 - 레거시 re-export (DEPRECATED)
+from selfhealing.api.django.views.xtest_mode import ...
+```
 
 ---
 
