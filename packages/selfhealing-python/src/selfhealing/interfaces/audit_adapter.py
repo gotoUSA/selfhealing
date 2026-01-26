@@ -88,6 +88,16 @@ class AuditAction(str, Enum):
     COMPLIANCE_CHECK = "compliance_check"
     COMPLIANCE_VIOLATION = "compliance_violation"
 
+    # API 예외 (DRF 예외 핸들러에서 사용)
+    API_ERROR = "api_error"
+    """API 처리 중 에러 발생."""
+    
+    VALIDATION_FAILED = "validation_failed"
+    """입력값 검증 실패."""
+    
+    AUTHORIZATION_DENIED = "authorization_denied"
+    """인가 거부 (권한 없음)."""
+
 
 class ContextType(str, Enum):
     """

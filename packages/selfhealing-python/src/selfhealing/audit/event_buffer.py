@@ -85,6 +85,12 @@ class AuditEventType(Enum):
     API_AUTH_ERROR = "api_auth_error"
     """인증/인가 실패 (AuthenticationFailed, PermissionDenied 등)."""
     
+    API_NOT_FOUND = "api_not_found"
+    """리소스를 찾을 수 없음 (Http404, NotFound 예외)."""
+    
+    API_THROTTLED = "api_throttled"
+    """요청 제한 초과 (Throttled 예외)."""
+    
     # 복구 관련
     RECOVERY_EVENT = "recovery_event"
     RECOVERY_CHAIN_STARTED = "recovery_chain_started"

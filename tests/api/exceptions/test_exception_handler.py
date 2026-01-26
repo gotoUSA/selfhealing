@@ -103,8 +103,8 @@ class TestGetAuditEventType:
         result = _get_audit_event_type(classified)
         assert result == AuditEventType.API_VALIDATION_ERROR
     
-    def test_rate_limit_category_returns_rate_limited(self):
-        """RATE_LIMIT 카테고리는 RATE_LIMITED를 반환해야 함."""
+    def test_rate_limit_category_returns_api_throttled(self):
+        """RATE_LIMIT 카테고리는 API_THROTTLED를 반환해야 함."""
         from selfhealing.audit.event_buffer import AuditEventType
         
         classified = ClassifiedError(
@@ -114,7 +114,7 @@ class TestGetAuditEventType:
             message="test",
         )
         result = _get_audit_event_type(classified)
-        assert result == AuditEventType.RATE_LIMITED
+        assert result == AuditEventType.API_THROTTLED
     
     def test_authz_category_returns_api_auth_error(self):
         """AUTHZ 카테고리는 API_AUTH_ERROR를 반환해야 함."""
@@ -142,8 +142,8 @@ class TestGetAuditEventType:
         result = _get_audit_event_type(classified)
         assert result == AuditEventType.API_AUTH_ERROR
     
-    def test_not_found_category_returns_api_exception(self):
-        """NOT_FOUND 카테고리는 API_EXCEPTION을 반환해야 함."""
+    def test_not_found_category_returns_api_not_found(self):
+        """NOT_FOUND 카테고리는 API_NOT_FOUND를 반환해야 함."""
         from selfhealing.audit.event_buffer import AuditEventType
         
         classified = ClassifiedError(
@@ -153,7 +153,7 @@ class TestGetAuditEventType:
             message="test",
         )
         result = _get_audit_event_type(classified)
-        assert result == AuditEventType.API_EXCEPTION
+        assert result == AuditEventType.API_NOT_FOUND
     
     def test_internal_category_returns_api_exception(self):
         """INTERNAL 카테고리는 API_EXCEPTION을 반환해야 함."""
@@ -530,3 +530,89 @@ class TestAuditEventTypeMapping:
         # has_event_from_source 메서드로 확인
         assert buffer.has_event_from_source("ExceptionHandler") is True
         assert buffer.has_event_from_source("AuditMiddleware") is False
+
+
+class TestPoolTimeoutHandling:
+    """Pool Timeout 처리 테스트."""
+    
+    def test_pool_timeout_returns_503(self):
+        """Pool Timeout 예외는 503 응답을 반환해야 함."""
+        from selfhealing.api.django.exceptions.handler import _is_pool_timeout
+        
+        # QueuePool limit 감지
+        exc = Exception("QueuePool limit of size 5 overflow 10 reached")
+        assert _is_pool_timeout(exc) is True
+    
+    def test_connection_timed_out_detected(self):
+        """Connection timed out 메시지 감지."""
+        from selfhealing.api.django.exceptions.handler import _is_pool_timeout
+        
+        exc = Exception("connection timed out")
+        assert _is_pool_timeout(exc) is True
+    
+    def test_pool_exhausted_detected(self):
+        """Pool exhausted 메시지 감지."""
+        from selfhealing.api.django.exceptions.handler import _is_pool_timeout
+        
+        exc = Exception("pool exhausted")
+        assert _is_pool_timeout(exc) is True
+    
+    def test_normal_exception_not_pool_timeout(self):
+        """일반 예외는 Pool Timeout으로 감지되지 않아야 함."""
+        from selfhealing.api.django.exceptions.handler import _is_pool_timeout
+        
+        exc = ValueError("Invalid value")
+        assert _is_pool_timeout(exc) is False
+
+
+class TestSensitiveMasking:
+    """민감정보 마스킹 테스트."""
+    
+    def test_mask_password_in_message(self):
+        """password 단어가 포함된 메시지 마스킹."""
+        from selfhealing.api.django.exceptions.handler import _mask_error_message
+        
+        message = "Invalid password: abc123"
+        result = _mask_error_message(message)
+        assert "MASKED" in result
+        assert "abc123" not in result
+    
+    def test_mask_token_in_message(self):
+        """token 단어가 포함된 메시지 마스킹."""
+        from selfhealing.api.django.exceptions.handler import _mask_error_message
+        
+        message = "Token validation failed: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        result = _mask_error_message(message)
+        assert "MASKED" in result
+    
+    def test_normal_message_not_masked(self):
+        """일반 메시지는 마스킹되지 않아야 함."""
+        from selfhealing.api.django.exceptions.handler import _mask_error_message
+        
+        message = "Resource not found"
+        result = _mask_error_message(message)
+        assert result == "Resource not found"
+
+
+class TestPrometheusMetrics:
+    """Prometheus 메트릭 테스트."""
+    
+    def test_metrics_initialization(self):
+        """메트릭 초기화가 오류 없이 수행되어야 함."""
+        from selfhealing.api.django.exceptions.handler import _init_metrics
+        
+        # 초기화 함수 호출 (예외 발생 안함)
+        _init_metrics()
+    
+    def test_record_metrics_does_not_raise(self):
+        """메트릭 기록이 예외를 발생시키지 않아야 함."""
+        from selfhealing.api.django.exceptions.handler import _record_metrics
+        
+        # 메트릭 기록 (예외 발생 안함)
+        _record_metrics(
+            path="/api/test/",
+            method="POST",
+            status_code=400,
+            error_code="VALIDATION_FIELD_REQUIRED",
+            category="validation",
+        )
