@@ -75,6 +75,7 @@ class DLQEntryResult:
     success: bool
     dlq_id: int | None = None
     error: str | None = None
+    fallback_path: str | None = None  # Local fallback 경로 (DB 실패 시)
 
     @classmethod
     def created(cls, dlq_id: int) -> "DLQEntryResult":
@@ -83,8 +84,18 @@ class DLQEntryResult:
 
     @classmethod
     def failed(cls, error: str) -> "DLQEntryResult":
-        """Factory for failed operation."""
+        """Factory for failed operation (no fallback)."""
         return cls(success=False, error=error)
+
+    @classmethod
+    def fallback(cls, error: str, fallback_path: str) -> "DLQEntryResult":
+        """Factory for fallback to local file (data preserved)."""
+        return cls(success=False, error=error, fallback_path=fallback_path)
+
+    @property
+    def is_fallback(self) -> bool:
+        """데이터가 local fallback에 저장되었는지 여부."""
+        return self.fallback_path is not None
 
 
 @dataclass
