@@ -72,22 +72,19 @@ class RollbackPolicyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data if request.data else {}
-            from selfhealing.services.rollback.models import RollbackStrategy
+        data = request.data if request.data else {}
+        from selfhealing.services.rollback.models import RollbackStrategy
 
-            strategy = RollbackStrategy(data.get("strategy", "automatic"))
+        strategy = RollbackStrategy(data.get("strategy", "automatic"))
 
-            policy = service.set_policy(
-                stage_name=stage_name,
-                strategy=strategy,
-                timeout_seconds=data.get("timeout_seconds", 120),
-                max_retries=data.get("max_retries", 3),
-                require_approval=data.get("require_approval", False),
-            )
-            return Response(policy.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        policy = service.set_policy(
+            stage_name=stage_name,
+            strategy=strategy,
+            timeout_seconds=data.get("timeout_seconds", 120),
+            max_retries=data.get("max_retries", 3),
+            require_approval=data.get("require_approval", False),
+        )
+        return Response(policy.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class RollbackRequestView(APIView):
@@ -136,19 +133,16 @@ class RollbackRequestView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            rollback_request = service.request_rollback(
-                stage_name=data.get("stage_name"),
-                reason=data.get("reason"),
-                triggered_by=data.get("triggered_by", "user"),
-                source_version=data.get("source_version", ""),
-                target_version=data.get("target_version", ""),
-                metadata=data.get("metadata", {}),
-            )
-            return Response(rollback_request.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+        rollback_request = service.request_rollback(
+            stage_name=data.get("stage_name"),
+            reason=data.get("reason"),
+            triggered_by=data.get("triggered_by", "user"),
+            source_version=data.get("source_version", ""),
+            target_version=data.get("target_version", ""),
+            metadata=data.get("metadata", {}),
+        )
+        return Response(rollback_request.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class RollbackExecuteView(APIView):

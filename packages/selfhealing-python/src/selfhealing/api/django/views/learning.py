@@ -127,22 +127,19 @@ class LearningPatternView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            from selfhealing.services.learning.models import PatternType
+        data = request.data
+        from selfhealing.services.learning.models import PatternType
 
-            pattern = service.learn_pattern(
-                pattern_type=PatternType(data.get("pattern_type", "failure")),
-                name=data.get("name"),
-                description=data.get("description", ""),
-                features=data.get("features", {}),
-                confidence=data.get("confidence", 0.8),
-                session_id=data.get("session_id"),
-                metadata=data.get("metadata", {}),
-            )
-            return Response(pattern.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        pattern = service.learn_pattern(
+            pattern_type=PatternType(data.get("pattern_type", "failure")),
+            name=data.get("name"),
+            description=data.get("description", ""),
+            features=data.get("features", {}),
+            confidence=data.get("confidence", 0.8),
+            session_id=data.get("session_id"),
+            metadata=data.get("metadata", {}),
+        )
+        return Response(pattern.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class LearningSuggestionView(APIView):
@@ -211,18 +208,15 @@ class LearningMetricView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            metric = service.record_metric(
-                metric_name=data.get("metric_name"),
-                value=float(data.get("value")),
-                stage_name=data.get("stage_name", ""),
-                unit=data.get("unit", ""),
-                tags=data.get("tags", {}),
-            )
-            return Response(metric.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+        metric = service.record_metric(
+            metric_name=data.get("metric_name"),
+            value=float(data.get("value")),
+            stage_name=data.get("stage_name", ""),
+            unit=data.get("unit", ""),
+            tags=data.get("tags", {}),
+        )
+        return Response(metric.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class LearningInsightsView(APIView):

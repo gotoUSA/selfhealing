@@ -72,22 +72,19 @@ class BlastRadiusPolicyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data if request.data else {}
-            from selfhealing.services.blast_radius.models import BlastRadiusLevel
+        data = request.data if request.data else {}
+        from selfhealing.services.blast_radius.models import BlastRadiusLevel
 
-            level = BlastRadiusLevel(data.get("level", "isolated"))
+        level = BlastRadiusLevel(data.get("level", "isolated"))
 
-            policy = service.set_policy(
-                stage_name=stage_name,
-                level=level,
-                affected_services=data.get("affected_services", []),
-                max_affected_percentage=data.get("max_affected_percentage", 10.0),
-                auto_isolate=data.get("auto_isolate", True),
-            )
-            return Response(policy.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        policy = service.set_policy(
+            stage_name=stage_name,
+            level=level,
+            affected_services=data.get("affected_services", []),
+            max_affected_percentage=data.get("max_affected_percentage", 10.0),
+            auto_isolate=data.get("auto_isolate", True),
+        )
+        return Response(policy.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class BlastRadiusDependencyView(APIView):
@@ -130,17 +127,14 @@ class BlastRadiusDependencyView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            dep = service.add_dependency(
-                source_service=data.get("source_service"),
-                target_service=data.get("target_service"),
-                dependency_type=data.get("dependency_type", "sync"),
-                criticality=data.get("criticality", "medium"),
-            )
-            return Response(dep.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+        dep = service.add_dependency(
+            source_service=data.get("source_service"),
+            target_service=data.get("target_service"),
+            dependency_type=data.get("dependency_type", "sync"),
+            criticality=data.get("criticality", "medium"),
+        )
+        return Response(dep.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class BlastRadiusAssessmentView(APIView):
@@ -180,17 +174,14 @@ class BlastRadiusAssessmentView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            assessment = service.assess_impact(
-                stage_name=data.get("stage_name"),
-                trigger_event=data.get("trigger_event"),
-                failing_services=data.get("failing_services", []),
-                total_users=data.get("total_users", 1000),
-            )
-            return Response(assessment.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+        assessment = service.assess_impact(
+            stage_name=data.get("stage_name"),
+            trigger_event=data.get("trigger_event"),
+            failing_services=data.get("failing_services", []),
+            total_users=data.get("total_users", 1000),
+        )
+        return Response(assessment.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class BlastRadiusIsolationView(APIView):

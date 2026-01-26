@@ -69,20 +69,17 @@ class ComplianceStandardsView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            from selfhealing.services.compliance.models import ComplianceStandard
+        data = request.data
+        from selfhealing.services.compliance.models import ComplianceStandard
 
-            standards = [
-                ComplianceStandard(s) for s in data.get("standards", ["DORA_2025"])
-            ]
-            service.set_stage_standards(stage_name, standards)
-            return Response(
-                {"stage_name": stage_name, "standards": [s.value for s in standards]},
-                status=status.HTTP_201_CREATED,
-            )
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        standards = [
+            ComplianceStandard(s) for s in data.get("standards", ["DORA_2025"])
+        ]
+        service.set_stage_standards(stage_name, standards)
+        return Response(
+            {"stage_name": stage_name, "standards": [s.value for s in standards]},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ComplianceCheckView(APIView):
@@ -103,18 +100,15 @@ class ComplianceCheckView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data if request.data else {}
-            from selfhealing.services.compliance.models import ComplianceStandard
+        data = request.data if request.data else {}
+        from selfhealing.services.compliance.models import ComplianceStandard
 
-            standards = None
-            if "standards" in data:
-                standards = [ComplianceStandard(s) for s in data["standards"]]
+        standards = None
+        if "standards" in data:
+            standards = [ComplianceStandard(s) for s in data["standards"]]
 
-            report = service.run_all_checks(stage_name, standards)
-            return Response(report.to_dict())
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        report = service.run_all_checks(stage_name, standards)
+        return Response(report.to_dict())
 
 
 class ComplianceViolationView(APIView):

@@ -73,18 +73,15 @@ class FinOpsBudgetView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            budget = service.set_budget(
-                stage_name=stage_name,
-                max_budget=Decimal(str(data.get("max_budget", "10.00"))),
-                alert_threshold=data.get("alert_threshold", 0.8),
-                hard_limit=data.get("hard_limit", True),
-                reset_period=data.get("reset_period", "daily"),
-            )
-            return Response(budget.to_dict(), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+        budget = service.set_budget(
+            stage_name=stage_name,
+            max_budget=Decimal(str(data.get("max_budget", "10.00"))),
+            alert_threshold=data.get("alert_threshold", 0.8),
+            hard_limit=data.get("hard_limit", True),
+            reset_period=data.get("reset_period", "daily"),
+        )
+        return Response(budget.to_dict(), status=status.HTTP_201_CREATED)
 
     def delete(self, request, stage_name: str):
         """예산 리셋"""
@@ -121,24 +118,16 @@ class FinOpsCostView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data
-            cost = data.get("cost")
-            record = service.record_cost(
-                operation=data.get("operation"),
-                stage_name=data.get("stage_name"),
-                cost=Decimal(str(cost)) if cost else None,
-                success=data.get("success", True),
-                metadata=data.get("metadata", {}),
-            )
-            return Response(record.to_dict(), status=status.HTTP_201_CREATED)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        data = request.data
+        cost = data.get("cost")
+        record = service.record_cost(
+            operation=data.get("operation"),
+            stage_name=data.get("stage_name"),
+            cost=Decimal(str(cost)) if cost else None,
+            success=data.get("success", True),
+            metadata=data.get("metadata", {}),
+        )
+        return Response(record.to_dict(), status=status.HTTP_201_CREATED)
 
 
 class FinOpsReportView(APIView):

@@ -49,36 +49,27 @@ class DLQReplayView(APIView):
     def post(self, request):
         """Trigger DLQ replay."""
         serializer = DLQReplayRequestSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         domain = serializer.validated_data.get("domain")
         batch_size = serializer.validated_data.get("batch_size", 50)
 
-        try:
-            service = get_dlq_service()
-            result = service.replay(domain=domain, batch_size=batch_size)
+        service = get_dlq_service()
+        result = service.replay(domain=domain, batch_size=batch_size)
 
-            logger.info(
-                f"[DLQ] Replay triggered via API: domain={domain}, "
-                f"batch_size={batch_size}, processed={result.processed}, "
-                f"success={result.success}, failed={result.failed}"
-            )
+        logger.info(
+            f"[DLQ] Replay triggered via API: domain={domain}, "
+            f"batch_size={batch_size}, processed={result.processed}, "
+            f"success={result.success}, failed={result.failed}"
+        )
 
-            return Response({
-                "status": "success",
-                "total": result.processed,
-                "success_count": result.success,
-                "failed_count": result.failed,
-                "skipped_count": result.skipped,
-            })
-
-        except Exception as e:
-            logger.error(f"[DLQ] Replay failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({
+            "status": "success",
+            "total": result.processed,
+            "success_count": result.success,
+            "failed_count": result.failed,
+            "skipped_count": result.skipped,
+        })
 
 
 class DLQCleanupStatsView(APIView):
