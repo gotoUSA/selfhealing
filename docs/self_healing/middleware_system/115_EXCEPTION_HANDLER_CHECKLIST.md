@@ -110,7 +110,9 @@
 
 ### 3.1.1 레거시 호환성
 
-- [x] `api/django/exception_handler.py` 레거시 re-export 파일 생성
+- [x] ~~`api/django/exception_handler.py` 레거시 re-export 파일 생성~~ → **삭제됨 (2026-01-26)**
+  - 직접 import 사용: `from selfhealing.api.django.exceptions.handler import selfhealing_exception_handler`
+  - 사용처 없음 확인 후 제거
 
 ### 3.1.2 Prometheus 메트릭 연동
 
