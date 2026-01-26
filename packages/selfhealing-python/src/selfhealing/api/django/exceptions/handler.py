@@ -184,25 +184,30 @@ def _record_audit_event(
 
 
 def _get_audit_event_type(classified: "ClassifiedError") -> "AuditEventType":
-    """분류된 예외에 해당하는 AuditEventType 반환."""
+    """
+    분류된 예외에 해당하는 AuditEventType 반환.
+    
+    API 예외 전용 이벤트 타입을 사용하여 AuditMiddleware에서
+    ERROR_DETECTED 중복 기록을 방지합니다.
+    """
     from selfhealing.audit.event_buffer import AuditEventType
     from .classifier import ExceptionCategory
 
-    # 카테고리별 매핑
+    # 카테고리별 매핑 - API 예외 전용 이벤트 타입 사용
     category_to_event_type = {
-        ExceptionCategory.VALIDATION: AuditEventType.ERROR_DETECTED,
-        ExceptionCategory.AUTH: AuditEventType.ERROR_DETECTED,
-        ExceptionCategory.AUTHZ: AuditEventType.GOVERNANCE_BLOCKED,
-        ExceptionCategory.NOT_FOUND: AuditEventType.ERROR_DETECTED,
-        ExceptionCategory.CONFLICT: AuditEventType.ERROR_DETECTED,
+        ExceptionCategory.VALIDATION: AuditEventType.API_VALIDATION_ERROR,
+        ExceptionCategory.AUTH: AuditEventType.API_AUTH_ERROR,
+        ExceptionCategory.AUTHZ: AuditEventType.API_AUTH_ERROR,
+        ExceptionCategory.NOT_FOUND: AuditEventType.API_EXCEPTION,
+        ExceptionCategory.CONFLICT: AuditEventType.API_EXCEPTION,
         ExceptionCategory.RATE_LIMIT: AuditEventType.RATE_LIMITED,
-        ExceptionCategory.INTERNAL: AuditEventType.ERROR_DETECTED,
-        ExceptionCategory.SERVICE: AuditEventType.ERROR_DETECTED,
+        ExceptionCategory.INTERNAL: AuditEventType.API_EXCEPTION,
+        ExceptionCategory.SERVICE: AuditEventType.API_EXCEPTION,
     }
 
     return category_to_event_type.get(
         classified.category,
-        AuditEventType.ERROR_DETECTED,
+        AuditEventType.API_EXCEPTION,
     )
 
 

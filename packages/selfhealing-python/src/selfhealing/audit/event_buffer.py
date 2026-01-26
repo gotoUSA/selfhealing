@@ -75,6 +75,16 @@ class AuditEventType(Enum):
     CONFIG_CHANGE = "config_change"
     MANUAL_OVERRIDE = "manual_override"
     
+    # API 예외 관련 - DRF 예외 핸들러에서 사용
+    API_EXCEPTION = "api_exception"
+    """API 요청 처리 중 예외 발생 (일반 예외)."""
+    
+    API_VALIDATION_ERROR = "api_validation_error"
+    """입력값 검증 실패 (ValidationError, ValueError 등)."""
+    
+    API_AUTH_ERROR = "api_auth_error"
+    """인증/인가 실패 (AuthenticationFailed, PermissionDenied 등)."""
+    
     # 복구 관련
     RECOVERY_EVENT = "recovery_event"
     RECOVERY_CHAIN_STARTED = "recovery_chain_started"
@@ -379,6 +389,21 @@ class RequestAuditBuffer:
     def get_failed_events(self) -> List[AuditEvent]:
         """실패 이벤트만 반환."""
         return [e for e in self.events if not e.success]
+    
+    def has_event_from_source(self, source: str) -> bool:
+        """
+        특정 source에서 기록한 이벤트가 존재하는지 확인.
+        
+        AuditMiddleware에서 중복 기록 방지에 사용됩니다.
+        예: ExceptionHandler가 이미 예외를 기록했으면 ERROR_DETECTED 스킵.
+        
+        Args:
+            source: 이벤트 발생 위치 (ExceptionHandler, AuditMiddleware 등)
+            
+        Returns:
+            해당 source의 이벤트 존재 여부
+        """
+        return any(e.source == source for e in self.events)
     
     def set_request_metadata(
         self,

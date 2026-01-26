@@ -451,3 +451,178 @@ class TestAuditHelpersWithRequest:
         
         assert len(events) == 1
         assert events[0].details["current_utilization"] == 0.95
+
+
+# =============================================================================
+# Test AuditMiddleware Exception Handler Integration - 중복 기록 방지
+# =============================================================================
+
+class TestAuditMiddlewareDuplicatePrevention:
+    """AuditMiddleware와 ExceptionHandler 간 중복 기록 방지 테스트."""
+    
+    def test_middleware_skips_error_detected_when_exception_handler_recorded(self):
+        """
+        ExceptionHandler가 이미 예외를 기록했으면 ERROR_DETECTED 추가하지 않음.
+        
+        ExceptionHandler → API_EXCEPTION 기록
+        AuditMiddleware → ERROR_DETECTED 스킵 (중복 방지)
+        """
+        from selfhealing.api.django.audit_middleware import AuditMiddleware
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        mock_response = MagicMock(status_code=500)
+        get_response = MagicMock(return_value=mock_response)
+        middleware = AuditMiddleware(get_response)
+        
+        mock_request = MagicMock()
+        mock_request.path = "/api/test/"
+        mock_request.method = "POST"
+        mock_request.META = {}
+        mock_request.user = MagicMock(is_authenticated=False)
+        
+        # ExceptionHandler가 먼저 이벤트를 기록한 상황 시뮬레이션
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.API_EXCEPTION,
+            source="ExceptionHandler",
+            details={"error_code": "SYSTEM_INTERNAL_ERROR"},
+            success=False,
+        )
+        mock_request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        # 미들웨어 호출 (view 처리 후)
+        response = middleware(mock_request)
+        
+        # ERROR_DETECTED 이벤트가 추가되지 않아야 함
+        error_detected_events = buffer.get_events_by_type(AuditEventType.ERROR_DETECTED)
+        assert len(error_detected_events) == 0
+        
+        # ExceptionHandler의 API_EXCEPTION은 여전히 존재
+        api_exception_events = buffer.get_events_by_type(AuditEventType.API_EXCEPTION)
+        assert len(api_exception_events) == 1
+    
+    def test_middleware_adds_error_detected_when_no_exception_handler(self):
+        """
+        ExceptionHandler가 없을 때 AuditMiddleware가 ERROR_DETECTED 추가.
+        
+        예: View에서 직접 4xx/5xx Response를 반환하는 경우.
+        """
+        from selfhealing.api.django.audit_middleware import AuditMiddleware
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        mock_response = MagicMock(status_code=400)
+        get_response = MagicMock(return_value=mock_response)
+        middleware = AuditMiddleware(get_response)
+        
+        mock_request = MagicMock()
+        mock_request.path = "/api/test/"
+        mock_request.method = "POST"
+        mock_request.META = {}
+        mock_request.user = MagicMock(is_authenticated=False)
+        
+        response = middleware(mock_request)
+        
+        buffer = RequestAuditBuffer.get(mock_request)
+        
+        # ExceptionHandler 이벤트 없음
+        assert buffer.has_event_from_source("ExceptionHandler") is False
+        
+        # ERROR_DETECTED가 추가되어야 함
+        error_detected_events = buffer.get_events_by_type(AuditEventType.ERROR_DETECTED)
+        assert len(error_detected_events) == 1
+        assert error_detected_events[0].source == "AuditMiddleware"
+    
+    def test_middleware_skips_for_api_validation_error(self):
+        """API_VALIDATION_ERROR가 있으면 ERROR_DETECTED 스킵."""
+        from selfhealing.api.django.audit_middleware import AuditMiddleware
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        mock_response = MagicMock(status_code=400)
+        get_response = MagicMock(return_value=mock_response)
+        middleware = AuditMiddleware(get_response)
+        
+        mock_request = MagicMock()
+        mock_request.path = "/api/test/"
+        mock_request.method = "POST"
+        mock_request.META = {}
+        mock_request.user = MagicMock(is_authenticated=False)
+        
+        # ExceptionHandler가 ValidationError를 기록
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.API_VALIDATION_ERROR,
+            source="ExceptionHandler",
+            details={"error_code": "VALIDATION_FIELD_REQUIRED"},
+            success=False,
+        )
+        mock_request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        response = middleware(mock_request)
+        
+        # ERROR_DETECTED 추가되지 않음
+        error_detected_events = buffer.get_events_by_type(AuditEventType.ERROR_DETECTED)
+        assert len(error_detected_events) == 0
+    
+    def test_middleware_skips_for_api_auth_error(self):
+        """API_AUTH_ERROR가 있으면 ERROR_DETECTED 스킵."""
+        from selfhealing.api.django.audit_middleware import AuditMiddleware
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        mock_response = MagicMock(status_code=401)
+        get_response = MagicMock(return_value=mock_response)
+        middleware = AuditMiddleware(get_response)
+        
+        mock_request = MagicMock()
+        mock_request.path = "/api/test/"
+        mock_request.method = "GET"
+        mock_request.META = {}
+        mock_request.user = MagicMock(is_authenticated=False)
+        
+        # ExceptionHandler가 AuthError를 기록
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.API_AUTH_ERROR,
+            source="ExceptionHandler",
+            details={"error_code": "AUTH_NOT_AUTHENTICATED"},
+            success=False,
+        )
+        mock_request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        response = middleware(mock_request)
+        
+        # ERROR_DETECTED 추가되지 않음
+        error_detected_events = buffer.get_events_by_type(AuditEventType.ERROR_DETECTED)
+        assert len(error_detected_events) == 0
+    
+    def test_middleware_records_error_for_different_source(self):
+        """다른 source의 이벤트가 있어도 ERROR_DETECTED는 추가됨."""
+        from selfhealing.api.django.audit_middleware import AuditMiddleware
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        mock_response = MagicMock(status_code=500)
+        get_response = MagicMock(return_value=mock_response)
+        middleware = AuditMiddleware(get_response)
+        
+        mock_request = MagicMock()
+        mock_request.path = "/api/test/"
+        mock_request.method = "POST"
+        mock_request.META = {}
+        mock_request.user = MagicMock(is_authenticated=False)
+        
+        # DLQService가 이벤트를 기록 (ExceptionHandler가 아님)
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.DLQ_STORE,
+            source="DLQService",
+            details={"dlq_id": 123},
+        )
+        mock_request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        response = middleware(mock_request)
+        
+        # ExceptionHandler 이벤트 없음
+        assert buffer.has_event_from_source("ExceptionHandler") is False
+        
+        # ERROR_DETECTED가 추가되어야 함
+        error_detected_events = buffer.get_events_by_type(AuditEventType.ERROR_DETECTED)
+        assert len(error_detected_events) == 1

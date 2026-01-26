@@ -90,8 +90,8 @@ class TestExtractMethod:
 class TestGetAuditEventType:
     """_get_audit_event_type 함수 테스트."""
     
-    def test_validation_category_returns_error_detected(self):
-        """VALIDATION 카테고리는 ERROR_DETECTED를 반환해야 함."""
+    def test_validation_category_returns_api_validation_error(self):
+        """VALIDATION 카테고리는 API_VALIDATION_ERROR를 반환해야 함."""
         from selfhealing.audit.event_buffer import AuditEventType
         
         classified = ClassifiedError(
@@ -101,7 +101,7 @@ class TestGetAuditEventType:
             message="test",
         )
         result = _get_audit_event_type(classified)
-        assert result == AuditEventType.ERROR_DETECTED
+        assert result == AuditEventType.API_VALIDATION_ERROR
     
     def test_rate_limit_category_returns_rate_limited(self):
         """RATE_LIMIT 카테고리는 RATE_LIMITED를 반환해야 함."""
@@ -116,8 +116,8 @@ class TestGetAuditEventType:
         result = _get_audit_event_type(classified)
         assert result == AuditEventType.RATE_LIMITED
     
-    def test_authz_category_returns_governance_blocked(self):
-        """AUTHZ 카테고리는 GOVERNANCE_BLOCKED를 반환해야 함."""
+    def test_authz_category_returns_api_auth_error(self):
+        """AUTHZ 카테고리는 API_AUTH_ERROR를 반환해야 함."""
         from selfhealing.audit.event_buffer import AuditEventType
         
         classified = ClassifiedError(
@@ -127,7 +127,72 @@ class TestGetAuditEventType:
             message="test",
         )
         result = _get_audit_event_type(classified)
-        assert result == AuditEventType.GOVERNANCE_BLOCKED
+        assert result == AuditEventType.API_AUTH_ERROR
+    
+    def test_auth_category_returns_api_auth_error(self):
+        """AUTH 카테고리는 API_AUTH_ERROR를 반환해야 함."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        classified = ClassifiedError(
+            category=ExceptionCategory.AUTH,
+            code=ErrorCode.AUTH_NOT_AUTHENTICATED,
+            http_status=401,
+            message="test",
+        )
+        result = _get_audit_event_type(classified)
+        assert result == AuditEventType.API_AUTH_ERROR
+    
+    def test_not_found_category_returns_api_exception(self):
+        """NOT_FOUND 카테고리는 API_EXCEPTION을 반환해야 함."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        classified = ClassifiedError(
+            category=ExceptionCategory.NOT_FOUND,
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            http_status=404,
+            message="test",
+        )
+        result = _get_audit_event_type(classified)
+        assert result == AuditEventType.API_EXCEPTION
+    
+    def test_internal_category_returns_api_exception(self):
+        """INTERNAL 카테고리는 API_EXCEPTION을 반환해야 함."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        classified = ClassifiedError(
+            category=ExceptionCategory.INTERNAL,
+            code=ErrorCode.SYSTEM_INTERNAL_ERROR,
+            http_status=500,
+            message="test",
+        )
+        result = _get_audit_event_type(classified)
+        assert result == AuditEventType.API_EXCEPTION
+    
+    def test_conflict_category_returns_api_exception(self):
+        """CONFLICT 카테고리는 API_EXCEPTION을 반환해야 함."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        classified = ClassifiedError(
+            category=ExceptionCategory.CONFLICT,
+            code=ErrorCode.CONFIG_LOCKED,
+            http_status=409,
+            message="test",
+        )
+        result = _get_audit_event_type(classified)
+        assert result == AuditEventType.API_EXCEPTION
+    
+    def test_service_category_returns_api_exception(self):
+        """SERVICE 카테고리는 API_EXCEPTION을 반환해야 함."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        classified = ClassifiedError(
+            category=ExceptionCategory.SERVICE,
+            code=ErrorCode.SERVICE_UNAVAILABLE,
+            http_status=503,
+            message="test",
+        )
+        result = _get_audit_event_type(classified)
+        assert result == AuditEventType.API_EXCEPTION
 
 
 class TestSelfHealingExceptionHandler:
@@ -351,3 +416,117 @@ class TestHandlerResponseFormat:
             assert "message" in response.data["error"]
             assert "retryable" in response.data["error"]
             assert "timestamp" in response.data["meta"]
+
+
+class TestAuditEventTypeMapping:
+    """Audit 이벤트 타입 매핑 테스트 - API 예외 전용 이벤트 타입 사용 확인."""
+    
+    def test_validation_error_uses_api_validation_error(self):
+        """ValidationError는 API_VALIDATION_ERROR 이벤트 타입을 사용해야 함."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        exc = ValueError("Invalid value")
+        request = Mock()
+        request.path = "/api/test/"
+        request.method = "POST"
+        request.META = {}
+        context = {"request": request}
+        
+        buffer = RequestAuditBuffer()
+        request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        selfhealing_exception_handler(exc, context)
+        
+        events = buffer.get_events()
+        assert len(events) >= 1
+        
+        event = events[-1]
+        assert event.event_type == AuditEventType.API_VALIDATION_ERROR
+        assert event.source == "ExceptionHandler"
+    
+    def test_auth_error_uses_api_auth_error(self):
+        """인증/인가 오류는 API_AUTH_ERROR 이벤트 타입을 사용해야 함."""
+        from rest_framework.exceptions import NotAuthenticated
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        exc = NotAuthenticated()
+        request = Mock()
+        request.path = "/api/test/"
+        request.method = "GET"
+        request.META = {}
+        context = {"request": request}
+        
+        buffer = RequestAuditBuffer()
+        request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        selfhealing_exception_handler(exc, context)
+        
+        events = buffer.get_events()
+        event = events[-1]
+        
+        assert event.event_type == AuditEventType.API_AUTH_ERROR
+        assert event.source == "ExceptionHandler"
+    
+    def test_permission_denied_uses_api_auth_error(self):
+        """PermissionDenied는 API_AUTH_ERROR 이벤트 타입을 사용해야 함."""
+        from rest_framework.exceptions import PermissionDenied
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        exc = PermissionDenied()
+        request = Mock()
+        request.path = "/api/test/"
+        request.method = "POST"
+        request.META = {}
+        context = {"request": request}
+        
+        buffer = RequestAuditBuffer()
+        request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        selfhealing_exception_handler(exc, context)
+        
+        events = buffer.get_events()
+        event = events[-1]
+        
+        assert event.event_type == AuditEventType.API_AUTH_ERROR
+    
+    def test_generic_exception_uses_api_exception(self):
+        """일반 예외는 API_EXCEPTION 이벤트 타입을 사용해야 함."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        exc = RuntimeError("Something went wrong")
+        request = Mock()
+        request.path = "/api/test/"
+        request.method = "POST"
+        request.META = {}
+        context = {"request": request}
+        
+        buffer = RequestAuditBuffer()
+        request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        selfhealing_exception_handler(exc, context)
+        
+        events = buffer.get_events()
+        event = events[-1]
+        
+        assert event.event_type == AuditEventType.API_EXCEPTION
+        assert event.source == "ExceptionHandler"
+    
+    def test_event_source_is_exception_handler(self):
+        """모든 예외 이벤트의 source는 ExceptionHandler여야 함."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
+        
+        exc = Exception("test")
+        request = Mock()
+        request.path = "/api/test/"
+        request.method = "POST"
+        request.META = {}
+        context = {"request": request}
+        
+        buffer = RequestAuditBuffer()
+        request.META[RequestAuditBuffer.META_KEY] = buffer
+        
+        selfhealing_exception_handler(exc, context)
+        
+        # has_event_from_source 메서드로 확인
+        assert buffer.has_event_from_source("ExceptionHandler") is True
+        assert buffer.has_event_from_source("AuditMiddleware") is False

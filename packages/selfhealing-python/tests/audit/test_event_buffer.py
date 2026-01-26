@@ -469,3 +469,158 @@ class TestAuditHelpersHybridNoRequest:
             threshold=0.90,
         )
         # 에러 없이 완료되면 성공
+
+
+# =============================================================================
+# Test API Exception EventTypes
+# =============================================================================
+
+class TestAPIExceptionEventTypes:
+    """API 예외 관련 AuditEventType 테스트."""
+    
+    def test_api_exception_event_types_exist(self):
+        """API 예외 관련 이벤트 타입이 존재하는지 확인."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        required_types = [
+            "API_EXCEPTION",
+            "API_VALIDATION_ERROR",
+            "API_AUTH_ERROR",
+        ]
+        
+        for type_name in required_types:
+            assert hasattr(AuditEventType, type_name), f"{type_name} should exist"
+    
+    def test_api_exception_event_type_values(self):
+        """API 예외 이벤트 타입 값이 올바른지 확인."""
+        from selfhealing.audit.event_buffer import AuditEventType
+        
+        assert AuditEventType.API_EXCEPTION.value == "api_exception"
+        assert AuditEventType.API_VALIDATION_ERROR.value == "api_validation_error"
+        assert AuditEventType.API_AUTH_ERROR.value == "api_auth_error"
+    
+    def test_create_api_exception_event(self):
+        """API 예외 이벤트 생성 테스트."""
+        from selfhealing.audit.event_buffer import AuditEvent, AuditEventType
+        
+        event = AuditEvent(
+            event_type=AuditEventType.API_EXCEPTION,
+            source="ExceptionHandler",
+            details={
+                "error_code": "SYSTEM_INTERNAL_ERROR",
+                "exception_class": "RuntimeError",
+                "path": "/api/test/",
+                "method": "POST",
+            },
+            success=False,
+            error_message="Internal server error",
+        )
+        
+        assert event.event_type == AuditEventType.API_EXCEPTION
+        assert event.source == "ExceptionHandler"
+        assert event.success is False
+        assert event.details["error_code"] == "SYSTEM_INTERNAL_ERROR"
+    
+    def test_create_api_validation_error_event(self):
+        """API 검증 오류 이벤트 생성 테스트."""
+        from selfhealing.audit.event_buffer import AuditEvent, AuditEventType
+        
+        event = AuditEvent(
+            event_type=AuditEventType.API_VALIDATION_ERROR,
+            source="ExceptionHandler",
+            details={
+                "error_code": "VALIDATION_FIELD_REQUIRED",
+                "exception_class": "ValidationError",
+                "field": "amount",
+            },
+            success=False,
+        )
+        
+        assert event.event_type == AuditEventType.API_VALIDATION_ERROR
+        assert event.details["field"] == "amount"
+    
+    def test_create_api_auth_error_event(self):
+        """API 인증 오류 이벤트 생성 테스트."""
+        from selfhealing.audit.event_buffer import AuditEvent, AuditEventType
+        
+        event = AuditEvent(
+            event_type=AuditEventType.API_AUTH_ERROR,
+            source="ExceptionHandler",
+            details={
+                "error_code": "AUTH_TOKEN_EXPIRED",
+                "exception_class": "AuthenticationFailed",
+            },
+            success=False,
+            error_message="Token has expired",
+        )
+        
+        assert event.event_type == AuditEventType.API_AUTH_ERROR
+        assert event.details["exception_class"] == "AuthenticationFailed"
+
+
+# =============================================================================
+# Test has_event_from_source
+# =============================================================================
+
+class TestHasEventFromSource:
+    """RequestAuditBuffer.has_event_from_source() 메서드 테스트."""
+    
+    def test_has_event_from_source_when_exists(self):
+        """특정 source의 이벤트가 존재할 때 True 반환."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.API_EXCEPTION,
+            source="ExceptionHandler",
+            details={"path": "/api/test/"},
+        )
+        
+        assert buffer.has_event_from_source("ExceptionHandler") is True
+    
+    def test_has_event_from_source_when_not_exists(self):
+        """특정 source의 이벤트가 없을 때 False 반환."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.DLQ_STORE,
+            source="DLQService",
+        )
+        
+        assert buffer.has_event_from_source("ExceptionHandler") is False
+    
+    def test_has_event_from_source_empty_buffer(self):
+        """빈 버퍼에서 False 반환."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
+        
+        buffer = RequestAuditBuffer()
+        
+        assert buffer.has_event_from_source("AnySource") is False
+    
+    def test_has_event_from_source_multiple_sources(self):
+        """여러 source가 있을 때 특정 source만 확인."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        buffer = RequestAuditBuffer()
+        buffer.add(event_type=AuditEventType.DLQ_STORE, source="DLQService")
+        buffer.add(event_type=AuditEventType.CB_STATE_CHANGE, source="CircuitBreaker")
+        buffer.add(event_type=AuditEventType.API_EXCEPTION, source="ExceptionHandler")
+        
+        assert buffer.has_event_from_source("ExceptionHandler") is True
+        assert buffer.has_event_from_source("DLQService") is True
+        assert buffer.has_event_from_source("AuditMiddleware") is False
+    
+    def test_has_event_from_source_case_sensitive(self):
+        """source 검색이 대소문자를 구분하는지 확인."""
+        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        
+        buffer = RequestAuditBuffer()
+        buffer.add(
+            event_type=AuditEventType.API_EXCEPTION,
+            source="ExceptionHandler",
+        )
+        
+        assert buffer.has_event_from_source("ExceptionHandler") is True
+        assert buffer.has_event_from_source("exceptionhandler") is False
+        assert buffer.has_event_from_source("EXCEPTIONHANDLER") is False

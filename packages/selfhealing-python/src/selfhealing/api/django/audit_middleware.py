@@ -269,7 +269,12 @@ class AuditMiddleware:
         response: "HttpResponse",
         buffer: "RequestAuditBuffer",
     ) -> None:
-        """응답 메타데이터 캡처 - 에러 응답 시 이벤트 추가."""
+        """
+        응답 메타데이터 캡처 - 에러 응답 시 이벤트 추가.
+        
+        ExceptionHandler가 이미 예외를 기록했으면 ERROR_DETECTED를 추가하지 않습니다.
+        이를 통해 동일 예외에 대한 중복 Audit 기록을 방지합니다.
+        """
         from selfhealing.audit.event_buffer import AuditEventType
         
         status_code = getattr(response, "status_code", 200)
@@ -277,6 +282,10 @@ class AuditMiddleware:
         
         # 4xx/5xx 에러 응답인 경우 이벤트 추가
         if status_code >= 400:
+            # ExceptionHandler가 이미 예외를 기록했으면 스킵 (중복 방지)
+            if buffer.has_event_from_source("ExceptionHandler"):
+                return
+            
             buffer.add(
                 event_type=AuditEventType.ERROR_DETECTED,
                 source="AuditMiddleware",

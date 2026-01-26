@@ -4,62 +4,62 @@
 
 ### 1.1 파일 생성
 
-- [ ] `api/django/exceptions/__init__.py`
-- [ ] `api/django/exceptions/codes.py` - 에러 코드 정의
-- [ ] `api/django/exceptions/classifier.py` - 예외 분류기
-- [ ] `api/django/exceptions/response.py` - 표준 응답 생성
-- [ ] `api/django/exceptions/handler.py` - DRF 예외 핸들러
+- [x] `api/django/exceptions/__init__.py`
+- [x] `api/django/exceptions/codes.py` - 에러 코드 정의
+- [x] `api/django/exceptions/classifier.py` - 예외 분류기
+- [x] `api/django/exceptions/response.py` - 표준 응답 생성
+- [x] `api/django/exceptions/handler.py` - DRF 예외 핸들러
 
 ### 1.2 에러 코드 정의 (codes.py)
 
-- [ ] ErrorCode enum 정의
-  - [ ] VALIDATION_* 카테고리
-  - [ ] AUTH_* 카테고리
-  - [ ] AUTHZ_* 카테고리
-  - [ ] RESOURCE_* 카테고리
-  - [ ] RATE_* 카테고리
-  - [ ] CONFIG_* 카테고리
-  - [ ] SYSTEM_* 카테고리
-  - [ ] SERVICE_* 카테고리
-- [ ] 에러 코드별 기본 메시지 매핑
-- [ ] 에러 코드별 HTTP 상태 코드 매핑
+- [x] ErrorCode enum 정의
+  - [x] VALIDATION_* 카테고리
+  - [x] AUTH_* 카테고리
+  - [x] AUTHZ_* 카테고리
+  - [x] RESOURCE_* 카테고리
+  - [x] RATE_* 카테고리
+  - [x] CONFIG_* 카테고리
+  - [x] SYSTEM_* 카테고리
+  - [x] SERVICE_* 카테고리
+- [x] 에러 코드별 기본 메시지 매핑
+- [x] 에러 코드별 HTTP 상태 코드 매핑
 
 ### 1.3 예외 분류기 (classifier.py)
 
-- [ ] ExceptionClassifier 클래스
-- [ ] DRF 예외 분류
-  - [ ] ValidationError
-  - [ ] AuthenticationFailed
-  - [ ] NotAuthenticated
-  - [ ] PermissionDenied
-  - [ ] NotFound
-  - [ ] Throttled
-- [ ] Django 예외 분류
-  - [ ] Http404
-  - [ ] PermissionDenied
-- [ ] selfhealing 커스텀 예외 분류
-  - [ ] ConfigLockError
-  - [ ] GovernanceBlockedError (있는 경우)
-- [ ] Python 기본 예외 분류
-  - [ ] ValueError
-  - [ ] KeyError
-  - [ ] TypeError
-- [ ] 재시도 가능 여부 판단 로직
+- [x] ExceptionClassifier 클래스
+- [x] DRF 예외 분류
+  - [x] ValidationError
+  - [x] AuthenticationFailed
+  - [x] NotAuthenticated
+  - [x] PermissionDenied
+  - [x] NotFound
+  - [x] Throttled
+- [x] Django 예외 분류
+  - [x] Http404
+  - [x] PermissionDenied
+- [x] selfhealing 커스텀 예외 분류
+  - [x] ConfigLockError
+  - [x] AutomationBlockedError
+- [x] Python 기본 예외 분류
+  - [x] ValueError
+  - [x] KeyError
+  - [x] TypeError
+- [x] 재시도 가능 여부 판단 로직
 
 ### 1.4 표준 응답 생성 (response.py)
 
-- [ ] StandardErrorResponse 데이터 클래스
-- [ ] 응답 포맷 생성 함수
+- [x] StandardErrorResponse 데이터 클래스
+- [x] 응답 포맷 생성 함수
 - [ ] 다국어 메시지 지원 (선택)
 - [ ] 민감정보 마스킹 연동
 
 ### 1.5 DRF 예외 핸들러 (handler.py)
 
-- [ ] selfhealing_exception_handler 함수
-- [ ] DRF 기본 핸들러 호출
-- [ ] 비-DRF 예외 처리
-- [ ] 표준 응답으로 변환
-- [ ] Audit 버퍼 연동
+- [x] selfhealing_exception_handler 함수
+- [x] DRF 기본 핸들러 호출
+- [x] 비-DRF 예외 처리
+- [x] 표준 응답으로 변환
+- [x] Audit 버퍼 연동
 
 ---
 
@@ -67,27 +67,27 @@
 
 ### 2.1 AuditEventType 확장
 
-- [ ] `audit/event_buffer.py` 수정
-  - [ ] API_EXCEPTION 추가
-  - [ ] API_VALIDATION_ERROR 추가
-  - [ ] API_AUTH_ERROR 추가
+- [x] `audit/event_buffer.py` 수정
+  - [x] API_EXCEPTION 추가
+  - [x] API_VALIDATION_ERROR 추가
+  - [x] API_AUTH_ERROR 추가
 
 ### 2.2 예외 핸들러에서 버퍼 적재
 
-- [ ] RequestAuditBuffer.get_or_create() 호출
-- [ ] buffer.add() 호출
-  - [ ] event_type 설정
-  - [ ] source="ExceptionHandler" 설정
-  - [ ] details 구성
-  - [ ] success=False 설정
-  - [ ] error_message 설정
+- [x] RequestAuditBuffer.get_or_create() 호출
+- [x] buffer.add() 호출
+  - [x] event_type 설정
+  - [x] source="ExceptionHandler" 설정
+  - [x] details 구성
+  - [x] success=False 설정
+  - [x] error_message 설정
 
 ### 2.3 중복 기록 방지
 
-- [ ] RequestAuditBuffer에 has_event_from_source() 메서드 추가
-- [ ] AuditMiddleware._capture_response_meta() 수정
-  - [ ] ExceptionHandler 이벤트 확인
-  - [ ] 있으면 ERROR_DETECTED 스킵
+- [x] RequestAuditBuffer에 has_event_from_source() 메서드 추가
+- [x] AuditMiddleware._capture_response_meta() 수정
+  - [x] ExceptionHandler 이벤트 확인
+  - [x] 있으면 ERROR_DETECTED 스킵
 
 ---
 
@@ -95,22 +95,22 @@
 
 ### 3.1 DRF 설정
 
-- [ ] settings.py에 EXCEPTION_HANDLER 설정 가이드 문서화
-- [ ] 테스트 프로젝트에서 설정 검증
+- [x] settings.py에 EXCEPTION_HANDLER 설정 가이드 문서화
+- [x] 테스트 프로젝트에서 설정 검증
 
 ### 3.2 단위 테스트
 
-- [ ] tests/unit/api/django/exceptions/ 폴더 생성
-- [ ] test_codes.py
-- [ ] test_classifier.py
-- [ ] test_response.py
-- [ ] test_handler.py
+- [x] tests/api/exceptions/ 폴더 생성
+- [x] test_codes.py
+- [x] test_classifier.py
+- [x] test_response.py
+- [x] test_handler.py
 
 ### 3.3 통합 테스트
 
-- [ ] AuditMiddleware 연동 테스트
+- [x] AuditMiddleware 연동 테스트
 - [ ] 해시 체인 포함 검증
-- [ ] 중복 기록 방지 검증
+- [x] 중복 기록 방지 검증
 
 ---
 
@@ -132,10 +132,10 @@
 
 ### 기능 검증
 
-- [ ] 모든 예외 유형이 분류되는가?
-- [ ] 표준 응답 포맷이 생성되는가?
-- [ ] Audit 버퍼에 이벤트가 적재되는가?
-- [ ] AuditMiddleware가 이벤트를 수집하는가?
+- [x] 모든 예외 유형이 분류되는가?
+- [x] 표준 응답 포맷이 생성되는가?
+- [x] Audit 버퍼에 이벤트가 적재되는가?
+- [x] AuditMiddleware가 이벤트를 수집하는가?
 
 ### 성능 검증
 
@@ -144,8 +144,8 @@
 
 ### 안정성 검증
 
-- [ ] 예외 핸들러 자체 에러 시 폴백 동작
-- [ ] Audit 실패 시 응답은 정상 반환
+- [x] 예외 핸들러 자체 에러 시 폴백 동작
+- [x] Audit 실패 시 응답은 정상 반환
 
 ---
 
