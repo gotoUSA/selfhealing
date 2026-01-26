@@ -374,43 +374,36 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
         if denied:
             return denied
 
+        # Exception은 exception handler가 처리
         incident_id = request.data.get("incident_id")
 
-        try:
-            from selfhealing.services.event_bus import get_event_bus
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        from selfhealing.services.event_bus import get_event_bus
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
-            bus = get_event_bus()
-            history_limit = self._get_postmortem_history_limit()
-            history = bus.get_history(limit=history_limit)
-            cb_service = get_circuit_breaker_service()
+        bus = get_event_bus()
+        history_limit = self._get_postmortem_history_limit()
+        history = bus.get_history(limit=history_limit)
+        cb_service = get_circuit_breaker_service()
 
-            affected, unaffected = _collect_service_states(cb_service)
-            snapshot = collect_system_snapshot()
-            local_events = get_healing_events(20)
-            timeline = _build_timeline(history, local_events)
+        affected, unaffected = _collect_service_states(cb_service)
+        snapshot = collect_system_snapshot()
+        local_events = get_healing_events(20)
+        timeline = _build_timeline(history, local_events)
 
-            if not incident_id:
-                incident_id = f"HEAL-{timezone.now().strftime('%Y-%m%d-%H%M')}"
+        if not incident_id:
+            incident_id = f"HEAL-{timezone.now().strftime('%Y-%m%d-%H%M')}"
 
-            fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
+        fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
 
-            postmortem = _generate_postmortem_data(
-                incident_id, timeline, affected, unaffected, fast_fail_count, snapshot
-            )
+        postmortem = _generate_postmortem_data(
+            incident_id, timeline, affected, unaffected, fast_fail_count, snapshot
+        )
 
-            add_healing_incident(postmortem)
+        add_healing_incident(postmortem)
 
-            logger.info(f"[Stage 51] Postmortem generated: {incident_id}")
+        logger.info(f"[Stage 51] Postmortem generated: {incident_id}")
 
-            return Response({"status": "success", "postmortem": postmortem, "timestamp": timezone.now().isoformat()})
-
-        except Exception as e:
-            logger.error(f"[Stage 51] Postmortem generation failed: {e}")
-            return Response(
-                {"status": "error", "error": "postmortem_generation_failed", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({"status": "success", "postmortem": postmortem, "timestamp": timezone.now().isoformat()})
 
     @staticmethod
     def _get_postmortem_history_limit() -> int:

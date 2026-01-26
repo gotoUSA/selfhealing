@@ -55,44 +55,9 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Exception은 exception handler가 처리 (ImportError는 모듈 미설치 케이스로 별도 처리)
         try:
             from selfhealing.services.error_budget_service import get_error_budget_service
-
-            eb_service = get_error_budget_service()
-
-            # 이전 상태
-            initial_budget = eb_service.get_remaining_budget_percent()
-
-            # 에러 주입
-            for i in range(count):
-                eb_service.record_error(
-                    error_type=error_type,
-                    context={"source": "x-test-mode", "injection_number": i + 1, "user": str(request.user)},
-                )
-
-            # 현재 상태
-            current_budget = eb_service.get_remaining_budget_percent()
-            budget_status = eb_service.get_budget_status()
-
-            logger.info(
-                f"[X-Test-Mode] Error Budget injection: type={error_type}, "
-                f"count={count}, budget={initial_budget:.1f}%→{current_budget:.1f}%, "
-                f"user={request.user}"
-            )
-
-            return Response(
-                {
-                    "status": "success",
-                    "error_type": error_type,
-                    "injected_count": count,
-                    "initial_budget_percent": initial_budget,
-                    "current_budget_percent": current_budget,
-                    "budget_consumed": initial_budget - current_budget,
-                    "budget_status": budget_status,
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
         except ImportError:
             return Response(
                 {
@@ -101,12 +66,41 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
                     "hint": "Error Budget may not be configured in this environment",
                 }
             )
-        except Exception as e:
-            logger.error(f"[X-Test-Mode] Error Budget injection failed: {e}")
-            return Response(
-                {"status": "error", "error": "injection_failed", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+
+        eb_service = get_error_budget_service()
+
+        # 이전 상태
+        initial_budget = eb_service.get_remaining_budget_percent()
+
+        # 에러 주입
+        for i in range(count):
+            eb_service.record_error(
+                error_type=error_type,
+                context={"source": "x-test-mode", "injection_number": i + 1, "user": str(request.user)},
             )
+
+        # 현재 상태
+        current_budget = eb_service.get_remaining_budget_percent()
+        budget_status = eb_service.get_budget_status()
+
+        logger.info(
+            f"[X-Test-Mode] Error Budget injection: type={error_type}, "
+            f"count={count}, budget={initial_budget:.1f}%→{current_budget:.1f}%, "
+            f"user={request.user}"
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "error_type": error_type,
+                "injected_count": count,
+                "initial_budget_percent": initial_budget,
+                "current_budget_percent": current_budget,
+                "budget_consumed": initial_budget - current_budget,
+                "budget_status": budget_status,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 __all__ = [

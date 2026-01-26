@@ -180,7 +180,16 @@
 | `error_budget/status.py` | 3 | History/Record/Exhaust/ResetSimulation - try-except 제거 (⚠️ FAIL-SAFE 보존: ErrorBudgetStatusView.get()) |
 | `xtest/circuit_breaker.py` | 7 | Inject/Reset/Status/FastFail/Recovery/TryRecovery/SwitchAuto - try-except 제거 |
 
-**누적 마이그레이션 현황: 109개 try-except 패턴 제거 (28개 파일)**
+#### Phase 4.2.4 - 최종 마이그레이션 (2026-01-26)
+
+총 **2개 try-except 패턴** 제거 (2개 파일):
+
+| 파일 | 변경 수 | 변경 유형 |
+|------|---------|-----------|
+| `xtest/observability.py` | 1 | PostmortemGeneratorView.post - try-except 제거 |
+| `xtest/error_budget.py` | 1 | InjectErrorBudgetView.post - try-except 제거 (ImportError는 모듈 미설치 케이스로 보존) |
+
+**누적 마이그레이션 현황: 111개 try-except 패턴 제거 (30개 파일)**
 
 | 파일 | 변경 수 | 변경 유형 |
 |------|---------|-----------|
@@ -220,6 +229,12 @@
 | `finops.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
 | `compliance_dna.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
 | `blast_radius.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
+
+#### 4.3.3 Service Layer 위치 이슈 (향후 리팩토링 필요)
+
+| 위치 | 이슈 | 권장 조치 |
+|------|------|-----------|
+| `views/governance/service.py` | Service 레이어가 views 폴더에 위치 | 별도 PR로 `services/governance/` 이동 + re-export 유지 |
 
 ### 4.4 하위 호환성
 
