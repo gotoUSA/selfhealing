@@ -91,6 +91,14 @@ from .replay import (
     ReplayStatusView,
 )
 
+# Retry X-Test views
+from .retry import (
+    BackoffPreviewView,
+    RetrySimulateView,
+    RetryRateLimitStatusView,
+    RetryConfigView,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -135,6 +143,11 @@ __all__ = [
     "ReplayBatchView",
     "TriggerReplayOnCBCloseView",
     "ReplayStatusView",
+    # Retry X-Test views
+    "BackoffPreviewView",
+    "RetrySimulateView",
+    "RetryRateLimitStatusView",
+    "RetryConfigView",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",

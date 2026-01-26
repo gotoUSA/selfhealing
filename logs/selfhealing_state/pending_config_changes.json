@@ -1331,6 +1331,26 @@
         "enabled": true,
         "failure_threshold": 15
       }
+    },
+    {
+      "id": "56f05f38",
+      "config_type": "circuit_breaker",
+      "changes": {
+        "enabled": true,
+        "failure_threshold": 20
+      },
+      "strategy": "delayed",
+      "status": "pending",
+      "created_at": "2026-01-26T11:33:43.155964+00:00",
+      "scheduled_at": "2026-01-26T11:34:13.155936+00:00",
+      "applied_at": null,
+      "cancelled_at": null,
+      "cancelled_by": null,
+      "error_message": null,
+      "previous_values": {
+        "enabled": true,
+        "failure_threshold": 10
+      }
     }
   ],
   "history": [

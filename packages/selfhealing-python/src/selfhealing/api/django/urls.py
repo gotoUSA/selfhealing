@@ -697,6 +697,11 @@ from selfhealing.api.django.views.xtest import (
     ReplayBatchView,
     TriggerReplayOnCBCloseView,
     ReplayStatusView,
+    # Retry X-Test Views
+    BackoffPreviewView,
+    RetrySimulateView,
+    RetryRateLimitStatusView,
+    RetryConfigView,
 )
 
 urlpatterns += [
@@ -729,6 +734,11 @@ urlpatterns += [
     path("xtest/replay/batch/", ReplayBatchView.as_view(), name="xtest-replay-batch"),
     path("xtest/replay/trigger-on-cb-close/", TriggerReplayOnCBCloseView.as_view(), name="xtest-replay-trigger-cb-close"),
     path("xtest/replay/status/", ReplayStatusView.as_view(), name="xtest-replay-status"),
+    # Retry X-Test Endpoints
+    path("xtest/retry/backoff-preview/", BackoffPreviewView.as_view(), name="xtest-retry-backoff-preview"),
+    path("xtest/retry/simulate/", RetrySimulateView.as_view(), name="xtest-retry-simulate"),
+    path("xtest/retry/rate-limit-status/", RetryRateLimitStatusView.as_view(), name="xtest-retry-rate-limit-status"),
+    path("xtest/retry/config/", RetryConfigView.as_view(), name="xtest-retry-config"),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # =========================================================================
