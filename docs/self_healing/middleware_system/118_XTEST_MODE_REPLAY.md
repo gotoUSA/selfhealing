@@ -2,8 +2,18 @@
 
 **문서 번호:** 118  
 **작성일:** 2026-01-26  
-**상태:** 설계 완료  
+**상태:** 구현 완료  
+**구현일:** 2026-01-26  
 **선행 문서:** 117_XTEST_MODE_DLQ.md
+
+## 구현 현황
+
+| 항목 | 파일 | 상태 |
+|------|------|------|
+| View 클래스 | `api/django/views/xtest/replay.py` | ✅ 완료 |
+| URL 라우팅 | `api/django/urls.py` | ✅ 완료 |
+| __init__.py | `api/django/views/xtest/__init__.py` | ✅ 완료 |
+| 테스트 | `tests/self_healing/api/test_xtest_replay_views.py` | ✅ 완료 (25개 테스트)
 
 ---
 

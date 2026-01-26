@@ -83,6 +83,14 @@ from .dlq import (
     ResetDLQXTestView,
 )
 
+# Replay X-Test views
+from .replay import (
+    ReplaySingleView,
+    ReplayBatchView,
+    TriggerReplayOnCBCloseView,
+    ReplayStatusView,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -122,6 +130,11 @@ __all__ = [
     "DLQXTestStatusView",
     "ForceStatusView",
     "ResetDLQXTestView",
+    # Replay X-Test views
+    "ReplaySingleView",
+    "ReplayBatchView",
+    "TriggerReplayOnCBCloseView",
+    "ReplayStatusView",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",
