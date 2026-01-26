@@ -149,6 +149,40 @@
 
 ---
 
+## 테스트 실행 결과
+
+### 최종 테스트 (2026-01-26)
+
+```
+테스트 위치: tests/api/exceptions/
+실행 명령: docker-compose -f docker-compose.test.yml run --rm test-global sh -c "python -m pytest tests/api/exceptions/ -v --tb=short --no-cov"
+결과: 113 passed, 14 warnings in 12.39s
+```
+
+#### 테스트 파일별 커버리지
+
+| 파일 | 테스트 수 | 상태 |
+|------|-----------|------|
+| test_exception_codes.py | 26개 | ✅ 통과 |
+| test_exception_classifier.py | 24개 | ✅ 통과 |
+| test_exception_response.py | 22개 | ✅ 통과 |
+| test_exception_handler.py | 41개 | ✅ 통과 |
+
+#### 주요 테스트 항목
+
+- ErrorCode enum HTTP 상태 매핑 (400, 401, 403, 404, 409, 429, 500, 503, 504)
+- 재시도 가능 여부 플래그 검증
+- DRF 예외 분류 (ValidationError, AuthenticationFailed, NotAuthenticated, PermissionDenied, NotFound, Throttled, ParseError)
+- Django 예외 분류 (Http404, PermissionDenied, ValidationError)
+- 커스텀 예외 분류 (ConfigLockError, AutomationBlockedError)
+- Python 예외 분류 (ValueError, TypeError, KeyError, TimeoutError, ConnectionError)
+- 표준 응답 포맷 생성 및 직렬화
+- Audit 버퍼 이벤트 적재 (API_EXCEPTION, API_VALIDATION_ERROR, API_AUTH_ERROR)
+- 중복 기록 방지 (has_event_from_source 메서드)
+- 예외 핸들러 실패 시 폴백 동작 (fail-open)
+
+---
+
 ## 참고 문서
 
 | 문서 | 내용 |
