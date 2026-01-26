@@ -133,7 +133,7 @@
 ### 3.3 통합 테스트
 
 - [x] AuditMiddleware 연동 테스트
-- [ ] 해시 체인 포함 검증
+- [x] 해시 체인 포함 검증 (`test_exception_handler_hash_chain.py` - 15개 테스트)
 - [x] 중복 기록 방지 검증
 
 ---
@@ -179,8 +179,8 @@
 
 ```
 테스트 위치: tests/api/exceptions/
-실행 명령: python -m pytest tests/api/exceptions/ -v --tb=short --no-cov
-결과: 122 passed, 14 warnings
+실행 명령: docker-compose -f docker-compose.test.yml run --rm test-global sh -c "python -m pytest tests/api/exceptions/ -v --tb=short --no-cov"
+결과: 137 passed, 14 warnings
 ```
 
 #### 테스트 파일별 커버리지
@@ -191,6 +191,7 @@
 | test_exception_classifier.py | 24개 | ✅ 통과 |
 | test_exception_response.py | 22개 | ✅ 통과 |
 | test_exception_handler.py | 50개 | ✅ 통과 |
+| test_exception_handler_hash_chain.py | 15개 | ✅ 통과 |
 
 #### 주요 테스트 항목
 
@@ -207,6 +208,9 @@
 - **Pool Timeout 감지 및 503 응답 처리**
 - **민감정보 마스킹 (password, token, api_key 등)**
 - **Prometheus 메트릭 초기화 및 기록**
+- **해시 체인 무결성 정보 포함 (sequence, previous_hash, current_hash)**
+- **해시 체인 연결 검증 (previous_hash → current_hash 링크)**
+- **변조 감지 (compute_hash 재계산으로 무결성 확인)**
 
 ---
 
