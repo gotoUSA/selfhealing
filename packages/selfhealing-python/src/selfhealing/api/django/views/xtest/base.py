@@ -12,6 +12,7 @@ Security:
 import logging
 import os
 import threading
+import uuid
 from typing import Any, Dict, Optional
 
 import psutil
@@ -20,6 +21,12 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
+
+from selfhealing.services.audit.xtest_audit import (
+    log_xtest_operation_audit,
+    log_xtest_injection_audit,
+    log_xtest_cleanup_audit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +94,111 @@ class XTestModeMixin:
                 status=status.HTTP_403_FORBIDDEN
             )
         return None
+
+    def get_xtest_session_id(self, request: Request) -> str:
+        """X-Test 세션 ID 추출. 헤더가 없으면 자동 생성."""
+        return request.headers.get("X-Test-Session", str(uuid.uuid4())[:8])
+
+    def get_xtest_user(self, request: Request) -> str:
+        """X-Test 사용자 추출."""
+        if hasattr(request, "user") and request.user.is_authenticated:
+            return str(request.user)
+        return "anonymous"
+
+    def log_xtest_audit(
+        self,
+        request: Request,
+        action: str,
+        component: str,
+        details: Dict[str, Any],
+        result: str = "success",
+        error_message: Optional[str] = None,
+    ) -> Optional[int]:
+        """
+        X-Test 작업을 WAL Audit 로그에 기록.
+        
+        Args:
+            request: HTTP 요청 객체
+            action: 수행 작업 (inject, force_status, reset, query 등)
+            component: 대상 컴포넌트 (dlq, cb, idempotency 등)
+            details: 응답 데이터 또는 작업 상세
+            result: 결과 상태 (success, failed, error)
+            error_message: 실패 시 에러 메시지
+        
+        Returns:
+            WAL 시퀀스 번호
+        """
+        session_id = self.get_xtest_session_id(request)
+        user = self.get_xtest_user(request)
+        trace_id = request.headers.get("X-Trace-ID")
+        
+        return log_xtest_operation_audit(
+            session_id=session_id,
+            action=action,
+            component=component,
+            details=details,
+            result=result,
+            user=user,
+            trace_id=trace_id,
+            error_message=error_message,
+        )
+
+    def log_xtest_injection(
+        self,
+        request: Request,
+        component: str,
+        injection_type: str,
+        count: int,
+        target_ids: list,
+    ) -> Optional[int]:
+        """
+        X-Test 데이터 주입을 WAL Audit 로그에 기록.
+        
+        Args:
+            request: HTTP 요청 객체
+            component: 대상 컴포넌트
+            injection_type: 주입 유형 (create, override 등)
+            count: 주입된 항목 수
+            target_ids: 생성된 ID 목록
+        """
+        session_id = self.get_xtest_session_id(request)
+        user = self.get_xtest_user(request)
+        
+        return log_xtest_injection_audit(
+            session_id=session_id,
+            component=component,
+            injection_type=injection_type,
+            count=count,
+            target_ids=target_ids,
+            user=user,
+        )
+
+    def log_xtest_cleanup(
+        self,
+        request: Request,
+        component: str,
+        cleaned_count: int,
+        cleaned_ids: list,
+    ) -> Optional[int]:
+        """
+        X-Test 정리(Reset)를 WAL Audit 로그에 기록.
+        
+        Args:
+            request: HTTP 요청 객체
+            component: 대상 컴포넌트
+            cleaned_count: 정리된 항목 수
+            cleaned_ids: 정리된 ID 목록
+        """
+        session_id = self.get_xtest_session_id(request)
+        user = self.get_xtest_user(request)
+        
+        return log_xtest_cleanup_audit(
+            session_id=session_id,
+            component=component,
+            cleaned_count=cleaned_count,
+            cleaned_ids=cleaned_ids,
+            user=user,
+        )
 
 
 # =============================================================================

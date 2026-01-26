@@ -49,6 +49,13 @@ from selfhealing.services.audit import (
     log_panic_threshold_audit,
     log_freeze_mode_audit,
     log_error_budget_blocked_audit,
+    # X-Test-Mode
+    log_xtest_operation_audit,
+    log_xtest_scenario_audit,
+    log_xtest_session_start_audit,
+    log_xtest_session_end_audit,
+    log_xtest_injection_audit,
+    log_xtest_cleanup_audit,
     # Compliance & FinOps
     log_compliance_audit,
     log_blast_radius_audit,
@@ -96,6 +103,13 @@ __all__ = [
     "log_panic_threshold_audit",
     "log_freeze_mode_audit",
     "log_error_budget_blocked_audit",
+    # X-Test-Mode
+    "log_xtest_operation_audit",
+    "log_xtest_scenario_audit",
+    "log_xtest_session_start_audit",
+    "log_xtest_session_end_audit",
+    "log_xtest_injection_audit",
+    "log_xtest_cleanup_audit",
     # Compliance & FinOps
     "log_compliance_audit",
     "log_blast_radius_audit",

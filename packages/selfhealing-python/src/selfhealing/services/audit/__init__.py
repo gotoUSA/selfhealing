@@ -77,6 +77,18 @@ from selfhealing.services.audit.chaos_audit import (
 )
 
 # ============================================================
+# X-Test-Mode Audit Functions
+# ============================================================
+from selfhealing.services.audit.xtest_audit import (
+    log_xtest_operation_audit,
+    log_xtest_scenario_audit,
+    log_xtest_session_start_audit,
+    log_xtest_session_end_audit,
+    log_xtest_injection_audit,
+    log_xtest_cleanup_audit,
+)
+
+# ============================================================
 # Compliance, Security & FinOps Audit Functions
 # ============================================================
 from selfhealing.services.audit.compliance_audit import (
@@ -135,6 +147,13 @@ __all__ = [
     "log_panic_threshold_audit",
     "log_freeze_mode_audit",
     "log_error_budget_blocked_audit",
+    # X-Test-Mode
+    "log_xtest_operation_audit",
+    "log_xtest_scenario_audit",
+    "log_xtest_session_start_audit",
+    "log_xtest_session_end_audit",
+    "log_xtest_injection_audit",
+    "log_xtest_cleanup_audit",
     # Compliance, Security & FinOps
     "log_compliance_audit",
     "log_security_violation_audit",
