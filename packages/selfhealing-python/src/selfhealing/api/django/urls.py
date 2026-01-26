@@ -670,12 +670,12 @@ except ImportError:
 # X-Test-Mode Endpoints (Chaos Proof)
 # =============================================================================
 # Always available but protected by X-Test-Mode header + environment checks
-from selfhealing.api.django.views.xtest_mode import (
+from selfhealing.api.django.views.xtest import (
     InjectCBFailureView,
     ResetCBView,
     CBStatusDetailView,
-    SwitchToAutoModeView,  # New! For releasing manually_controlled state
-    TryRecoveryTransitionView,  # Domain-free OPEN → HALF_OPEN transition
+    SwitchToAutoModeView,
+    TryRecoveryTransitionView,
     InjectErrorBudgetView,
     SystemSnapshotView,
     FastFailTestView,
