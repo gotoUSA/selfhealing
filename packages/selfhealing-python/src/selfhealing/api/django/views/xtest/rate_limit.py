@@ -145,6 +145,15 @@ class RateLimitStatusView(XTestModeMixin, APIView):
         if client_status:
             response_data["client_status"] = client_status
 
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_status",
+            component="rate_limit",
+            details={"mode": mode, "active_clients": active_clients},
+            result="success",
+        )
+
         return Response(response_data)
 
 
@@ -211,11 +220,22 @@ class RateLimitClientView(XTestModeMixin, APIView):
             f"count={client_status['current_count']}, blocked={client_status['blocked']}"
         )
 
-        return Response({
+        response_data = {
             "status": "success",
             "source": "local" if not health_checker.is_healthy else "redis_fallback",
             **client_status,
-        })
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_client",
+            component="rate_limit",
+            details={"client_key": client_key, "blocked": client_status["blocked"]},
+            result="success",
+        )
+
+        return Response(response_data)
 
 
 # =============================================================================
@@ -294,14 +314,25 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
             f"total={total_events}, exceeded={total_exceeded}"
         )
 
-        return Response({
+        response_data = {
             "status": "success",
             "total_events": total_events,
             "total_exceeded": total_exceeded,
             "returned_count": len(events),
             "recent_events": events,
             "by_client": client_stats if not client_key else {client_key: client_stats.get(client_key, {})},
-        })
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_history",
+            component="rate_limit",
+            details={"total_events": total_events, "returned_count": len(events)},
+            result="success",
+        )
+
+        return Response(response_data)
 
 
 # =============================================================================
@@ -382,7 +413,7 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
 
         logger.info(f"[X-Test-Mode] Rate limit config: source={source}")
 
-        return Response({
+        response_data = {
             "status": "success",
             "source": source,
             "normal_config": {
@@ -400,7 +431,18 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
                 "failure_threshold": health_checker.failure_threshold,
                 "recovery_jitter_max": health_checker.recovery_jitter_max,
             },
-        })
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_config",
+            component="rate_limit",
+            details={"source": source},
+            result="success",
+        )
+
+        return Response(response_data)
 
 
 # =============================================================================
@@ -490,10 +532,20 @@ class RateLimitResetView(XTestModeMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response({
+        response_data = {
             "status": "success",
             "reset_count": reset_count,
             "clients_reset": clients_reset,
             "events_reset": events_reset,
             "timestamp": timezone.now().isoformat(),
-        })
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_cleanup(
+            request=request,
+            component="rate_limit",
+            cleaned_count=reset_count,
+            cleaned_ids=clients_reset,
+        )
+
+        return Response(response_data)

@@ -149,19 +149,28 @@ class ReplaySingleView(XTestModeMixin, APIView):
             f"success={result['success']}, duration_ms={duration_ms}"
         )
 
-        return Response(
-            {
-                "status": "success" if result["success"] else "failed",
-                "success": result["success"],
-                "dlq_id": dlq_id,
-                "message": result["message"],
-                "error": result.get("error"),
-                "governance_result": governance_result,
-                "replay_duration_ms": duration_ms,
-                "snapshot": snapshot,
-            },
-            status=status.HTTP_200_OK,
+        response_data = {
+            "status": "success" if result["success"] else "failed",
+            "success": result["success"],
+            "dlq_id": dlq_id,
+            "message": result["message"],
+            "error": result.get("error"),
+            "governance_result": governance_result,
+            "replay_duration_ms": duration_ms,
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="replay_single",
+            component="replay",
+            details={"dlq_id": dlq_id, "duration_ms": duration_ms},
+            result="success" if result["success"] else "failed",
+            error_message=result.get("error"),
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def _check_governance(self, skip: bool) -> Dict[str, Any]:
         """거버넌스 체크 수행."""
@@ -385,20 +394,28 @@ class ReplayBatchView(XTestModeMixin, APIView):
             f"failed={result['failed_count']}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "total": result["total"],
-                "success_count": result["success_count"],
-                "failed_count": result["failed_count"],
-                "skipped_count": result["skipped_count"],
-                "governance_blocked": result["governance_blocked"],
-                "governance_block_reason": result.get("governance_block_reason"),
-                "results": result["results"],
-                "snapshot": snapshot,
-            },
-            status=status.HTTP_200_OK,
+        response_data = {
+            "status": "success",
+            "total": result["total"],
+            "success_count": result["success_count"],
+            "failed_count": result["failed_count"],
+            "skipped_count": result["skipped_count"],
+            "governance_blocked": result["governance_blocked"],
+            "governance_block_reason": result.get("governance_block_reason"),
+            "results": result["results"],
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="replay_batch",
+            component="replay",
+            details={"total": result["total"], "success_count": result["success_count"], "failed_count": result["failed_count"]},
+            result="success" if result["failed_count"] == 0 else "partial",
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def _get_eligible_entries(self, domain: Optional[str], limit: int) -> Dict[str, Any]:
         """재생 가능한 항목 목록 조회."""
@@ -577,20 +594,28 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
             f"eligible={eligible_count}, replayed={replay_result.get('success_count', 0)}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "triggered": replay_result.get("total", 0) > 0,
-                "eligible_count": eligible_count,
-                "replayed_count": replay_result.get("success_count", 0),
-                "failed_count": replay_result.get("failed_count", 0),
-                "cb_previous_state": cb_previous_state,
-                "cb_current_state": cb_current_state,
-                "replay_results": replay_result,
-                "snapshot": snapshot,
-            },
-            status=status.HTTP_200_OK,
+        response_data = {
+            "status": "success",
+            "triggered": replay_result.get("total", 0) > 0,
+            "eligible_count": eligible_count,
+            "replayed_count": replay_result.get("success_count", 0),
+            "failed_count": replay_result.get("failed_count", 0),
+            "cb_previous_state": cb_previous_state,
+            "cb_current_state": cb_current_state,
+            "replay_results": replay_result,
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="trigger_cb_close_replay",
+            component="replay",
+            details={"service_name": service_name, "eligible_count": eligible_count, "replayed_count": replay_result.get("success_count", 0)},
+            result="success",
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def _get_cb_state(self, service_name: str) -> str:
         """CB 상태 조회."""
@@ -728,19 +753,27 @@ class ReplayStatusView(XTestModeMixin, APIView):
 
         snapshot = collect_system_snapshot()
 
-        return Response(
-            {
-                "status": "success",
-                "pending_count": pending_stats["total"],
-                "by_domain": pending_stats["by_domain"],
-                "by_status": pending_stats.get("by_status", {}),
-                "governance_status": governance_status,
-                "cb_states": cb_states,
-                "timestamp": timezone.now().isoformat(),
-                "snapshot": snapshot,
-            },
-            status=status.HTTP_200_OK,
+        response_data = {
+            "status": "success",
+            "pending_count": pending_stats["total"],
+            "by_domain": pending_stats["by_domain"],
+            "by_status": pending_stats.get("by_status", {}),
+            "governance_status": governance_status,
+            "cb_states": cb_states,
+            "timestamp": timezone.now().isoformat(),
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_status",
+            component="replay",
+            details={"pending_count": pending_stats["total"]},
+            result="success",
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def _get_pending_stats(self, domain: Optional[str]) -> Dict[str, Any]:
         """대기 중인 DLQ 항목 통계 조회."""

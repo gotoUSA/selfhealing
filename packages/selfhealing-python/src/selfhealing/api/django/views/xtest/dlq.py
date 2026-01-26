@@ -148,19 +148,27 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
             f"session={xtest_session}, user={user_str}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "created_count": len(created_ids),
-                "dlq_ids": created_ids,
-                "domain": domain,
-                "failure_type": failure_type,
-                "xtest_session": xtest_session,
-                "timestamp": timezone.now().isoformat(),
-                "snapshot": snapshot,
-            },
-            status=status.HTTP_201_CREATED,
+        response_data = {
+            "status": "success",
+            "created_count": len(created_ids),
+            "dlq_ids": created_ids,
+            "domain": domain,
+            "failure_type": failure_type,
+            "xtest_session": xtest_session,
+            "timestamp": timezone.now().isoformat(),
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_injection(
+            request=request,
+            component="dlq",
+            injection_type="create",
+            count=len(created_ids),
+            target_ids=[str(id) for id in created_ids],
         )
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class DLQXTestStatusView(XTestModeMixin, APIView):
@@ -246,22 +254,31 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
             f"status={status_filter}, total={stats.get('total', 0)}, user={request.user}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "total_count": stats.get("total", 0),
-                "by_status": stats.get("by_status", {}),
-                "by_domain": stats.get("by_domain", {}),
-                "recent_entries": recent_entries,
-                "xtest_entries_count": xtest_entries_count,
-                "filters_applied": {
-                    "domain": domain_filter,
-                    "status": status_filter,
-                    "limit": limit,
-                },
-                "timestamp": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "total_count": stats.get("total", 0),
+            "by_status": stats.get("by_status", {}),
+            "by_domain": stats.get("by_domain", {}),
+            "recent_entries": recent_entries,
+            "xtest_entries_count": xtest_entries_count,
+            "filters_applied": {
+                "domain": domain_filter,
+                "status": status_filter,
+                "limit": limit,
+            },
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_status",
+            component="dlq",
+            details={"total_count": stats.get("total", 0), "xtest_count": xtest_entries_count},
+            result="success",
         )
+
+        return Response(response_data)
 
 
 class ForceStatusView(XTestModeMixin, APIView):
@@ -369,16 +386,25 @@ class ForceStatusView(XTestModeMixin, APIView):
             f"{previous_status}→{new_status}, reason={reason}, user={user_str}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "dlq_id": int(dlq_id),
-                "previous_status": previous_status,
-                "new_status": new_status,
-                "reason": reason,
-                "changed_at": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "dlq_id": int(dlq_id),
+            "previous_status": previous_status,
+            "new_status": new_status,
+            "reason": reason,
+            "changed_at": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="force_status",
+            component="dlq",
+            details={"dlq_id": int(dlq_id), "previous_status": previous_status, "new_status": new_status},
+            result="success",
         )
+
+        return Response(response_data)
 
 
 class ResetDLQXTestView(XTestModeMixin, APIView):
@@ -469,12 +495,20 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
             f"domain={domain_filter}, xtest_only={created_by_xtest}, user={user_str}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "deleted_count": deleted_count,
-                "domain_filter": domain_filter,
-                "xtest_only": created_by_xtest,
-                "timestamp": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "deleted_count": deleted_count,
+            "domain_filter": domain_filter,
+            "xtest_only": created_by_xtest,
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_cleanup(
+            request=request,
+            component="dlq",
+            cleaned_count=deleted_count,
+            cleaned_ids=[str(id) for id in ids_to_delete],
         )
+
+        return Response(response_data)

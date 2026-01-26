@@ -119,19 +119,28 @@ class InjectCBFailureView(XTestModeMixin, APIView):
             f"user={request.user}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "service": service_name,
-                "injected_failures": failure_count,
-                "previous_state": previous_state,
-                "cb_state": current_state,
-                "state_changed": previous_state != current_state,
-                "force_opened": force_opened,
-                "timestamp": timezone.now().isoformat(),
-                "snapshot": snapshot,
-            }
+        response_data = {
+            "status": "success",
+            "service": service_name,
+            "injected_failures": failure_count,
+            "previous_state": previous_state,
+            "cb_state": current_state,
+            "state_changed": previous_state != current_state,
+            "force_opened": force_opened,
+            "timestamp": timezone.now().isoformat(),
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_injection(
+            request=request,
+            component="cb",
+            injection_type="failure",
+            count=failure_count,
+            target_ids=[service_name],
         )
+
+        return Response(response_data)
 
 
 class ResetCBView(XTestModeMixin, APIView):
@@ -176,16 +185,24 @@ class ResetCBView(XTestModeMixin, APIView):
             f"state={previous_state}→{current_state}, user={request.user}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "service": service_name,
-                "previous_state": previous_state,
-                "cb_state": current_state,
-                "reset_result": result.success if hasattr(result, "success") else True,
-                "timestamp": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "service": service_name,
+            "previous_state": previous_state,
+            "cb_state": current_state,
+            "reset_result": result.success if hasattr(result, "success") else True,
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_cleanup(
+            request=request,
+            component="cb",
+            cleaned_count=1,
+            cleaned_ids=[service_name],
         )
+
+        return Response(response_data)
 
 
 class CBStatusDetailView(XTestModeMixin, APIView):
@@ -374,18 +391,27 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
             f"{state_before} → {state_after} (successes: {successes_recorded}, force: {force_close})"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "service": service_name,
-                "state_before": state_before,
-                "state_after": state_after,
-                "successes_recorded": successes_recorded,
-                "force_closed": force_close,
-                "recovery_success": recovery_success,
-                "timestamp": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "service": service_name,
+            "state_before": state_before,
+            "state_after": state_after,
+            "successes_recorded": successes_recorded,
+            "force_closed": force_close,
+            "recovery_success": recovery_success,
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="trigger_recovery",
+            component="cb",
+            details={"service": service_name, "state_before": state_before, "state_after": state_after},
+            result="success" if recovery_success else "partial",
         )
+
+        return Response(response_data)
 
 
 class TryRecoveryTransitionView(XTestModeMixin, APIView):
@@ -447,29 +473,38 @@ class TryRecoveryTransitionView(XTestModeMixin, APIView):
             f"allowed={allowed}, transition={transition_occurred}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "service": service_name,
-                "state_before": state_str_before,
-                "state_after": state_str_after,
-                "transition_occurred": transition_occurred,
-                "allowed": allowed,
-                "remaining_seconds": remaining_seconds,
-                "recovery_timeout": recovery_timeout,
-                "opened_at": opened_at.isoformat() if opened_at else None,
-                "message": (
-                    f"Transition {state_str_before}→{state_str_after}"
-                    if transition_occurred
-                    else (
-                        f"No transition yet, remaining: {remaining_seconds:.1f}s"
-                        if remaining_seconds and remaining_seconds > 0
-                        else f"State is {state_str_after}"
-                    )
-                ),
-                "timestamp": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "service": service_name,
+            "state_before": state_str_before,
+            "state_after": state_str_after,
+            "transition_occurred": transition_occurred,
+            "allowed": allowed,
+            "remaining_seconds": remaining_seconds,
+            "recovery_timeout": recovery_timeout,
+            "opened_at": opened_at.isoformat() if opened_at else None,
+            "message": (
+                f"Transition {state_str_before}→{state_str_after}"
+                if transition_occurred
+                else (
+                    f"No transition yet, remaining: {remaining_seconds:.1f}s"
+                    if remaining_seconds and remaining_seconds > 0
+                    else f"State is {state_str_after}"
+                )
+            ),
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="try_recovery_transition",
+            component="cb",
+            details={"service": service_name, "state_before": state_str_before, "state_after": state_str_after, "transition_occurred": transition_occurred},
+            result="success",
         )
+
+        return Response(response_data)
 
 
 class SwitchToAutoModeView(XTestModeMixin, APIView):
@@ -517,17 +552,26 @@ class SwitchToAutoModeView(XTestModeMixin, APIView):
             f"manually_controlled={was_manually_controlled} → False"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "service": service_name,
-                "cb_state": state_after.state,
-                "was_manually_controlled": was_manually_controlled,
-                "is_manually_controlled": state_after.manually_controlled,
-                "message": f"Circuit breaker for '{service_name}' switched to auto mode",
-                "timestamp": timezone.now().isoformat(),
-            }
+        response_data = {
+            "status": "success",
+            "service": service_name,
+            "cb_state": state_after.state,
+            "was_manually_controlled": was_manually_controlled,
+            "is_manually_controlled": state_after.manually_controlled,
+            "message": f"Circuit breaker for '{service_name}' switched to auto mode",
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="switch_to_auto",
+            component="cb",
+            details={"service": service_name, "was_manually_controlled": was_manually_controlled},
+            result="success",
         )
+
+        return Response(response_data)
 
 
 __all__ = [

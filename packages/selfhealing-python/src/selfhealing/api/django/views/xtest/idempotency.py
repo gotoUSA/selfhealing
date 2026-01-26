@@ -191,19 +191,27 @@ class GenerateKeyView(XTestModeMixin, APIView):
             service = get_idempotency_service()
             ttl = service.cache_ttl
 
-            return Response(
-                {
-                    "status": "success",
-                    "key_string": key.key,
-                    "cache_key": key.cache_key,
-                    "key_hash": key.hash,
-                    "domain": domain.name,
-                    "ttl_seconds": ttl,
-                    "components": key.components,
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
+            response_data = {
+                "status": "success",
+                "key_string": key.key,
+                "cache_key": key.cache_key,
+                "key_hash": key.hash,
+                "domain": domain.name,
+                "ttl_seconds": ttl,
+                "components": key.components,
+                "timestamp": timezone.now().isoformat(),
+            }
+
+            # WAL Audit 기록
+            self.log_xtest_audit(
+                request=request,
+                action="generate_key",
+                component="idempotency",
+                details={"key_string": key.key, "domain": domain.name},
+                result="success",
             )
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"[X-Test Idempotency] Key generation failed: {e}")
@@ -334,20 +342,28 @@ class CheckDuplicateView(XTestModeMixin, APIView):
                 except Exception as e:
                     logger.warning(f"[X-Test Idempotency] Registration failed: {e}")
 
-            return Response(
-                {
-                    "status": "success",
-                    "is_duplicate": is_duplicate,
-                    "first_seen_at": first_seen_at,
-                    "ttl_remaining": ttl_remaining,
-                    "registered": registered,
-                    "cache_key": cache_key,
-                    "key_string": key_string,
-                    "domain": domain.name,
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
+            response_data = {
+                "status": "success",
+                "is_duplicate": is_duplicate,
+                "first_seen_at": first_seen_at,
+                "ttl_remaining": ttl_remaining,
+                "registered": registered,
+                "cache_key": cache_key,
+                "key_string": key_string,
+                "domain": domain.name,
+                "timestamp": timezone.now().isoformat(),
+            }
+
+            # WAL Audit 기록
+            self.log_xtest_audit(
+                request=request,
+                action="check_duplicate",
+                component="idempotency",
+                details={"key_string": key_string, "is_duplicate": is_duplicate, "registered": registered},
+                result="success",
             )
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"[X-Test Idempotency] Duplicate check failed: {e}")
@@ -464,23 +480,31 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
             except Exception:
                 pass
 
-            return Response(
-                {
-                    "status": "success",
-                    "total_xtest_keys": len(tracked_keys),
-                    "by_domain": by_domain,
-                    "recent_keys": recent_keys,
-                    "cache_backend": cache_backend,
-                    "filters_applied": {
-                        "domain": domain_filter or None,
-                        "prefix": prefix_filter or None,
-                        "limit": limit,
-                    },
-                    "snapshot": collect_system_snapshot(),
-                    "timestamp": timezone.now().isoformat(),
+            response_data = {
+                "status": "success",
+                "total_xtest_keys": len(tracked_keys),
+                "by_domain": by_domain,
+                "recent_keys": recent_keys,
+                "cache_backend": cache_backend,
+                "filters_applied": {
+                    "domain": domain_filter or None,
+                    "prefix": prefix_filter or None,
+                    "limit": limit,
                 },
-                status=status.HTTP_200_OK,
+                "snapshot": collect_system_snapshot(),
+                "timestamp": timezone.now().isoformat(),
+            }
+
+            # WAL Audit 기록
+            self.log_xtest_audit(
+                request=request,
+                action="query_status",
+                component="idempotency",
+                details={"total_xtest_keys": len(tracked_keys)},
+                result="success",
             )
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"[X-Test Idempotency] Status retrieval failed: {e}")
@@ -595,23 +619,31 @@ class RegisterKeyView(XTestModeMixin, APIView):
             from datetime import timedelta
             expires_at = now + timedelta(seconds=ttl_seconds)
 
-            return Response(
-                {
-                    "status": "success",
-                    "registered": True,
-                    "cache_key": cache_key,
-                    "key_string": key_string,
-                    "domain": domain.name,
-                    "ttl_seconds": ttl_seconds,
-                    "expires_at": expires_at.isoformat(),
-                    "metadata": {
-                        "source": XTEST_SOURCE,
-                        "has_result_data": bool(result_data),
-                    },
-                    "timestamp": now.isoformat(),
+            response_data = {
+                "status": "success",
+                "registered": True,
+                "cache_key": cache_key,
+                "key_string": key_string,
+                "domain": domain.name,
+                "ttl_seconds": ttl_seconds,
+                "expires_at": expires_at.isoformat(),
+                "metadata": {
+                    "source": XTEST_SOURCE,
+                    "has_result_data": bool(result_data),
                 },
-                status=status.HTTP_201_CREATED,
+                "timestamp": now.isoformat(),
+            }
+
+            # WAL Audit 기록
+            self.log_xtest_injection(
+                request=request,
+                component="idempotency",
+                injection_type="register",
+                count=1,
+                target_ids=[cache_key],
             )
+
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"[X-Test Idempotency] Registration failed: {e}")
@@ -726,16 +758,23 @@ class ClearKeysView(XTestModeMixin, APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            return Response(
-                {
-                    "status": "success",
-                    "cleared_count": len(cleared_keys),
-                    "cleared_keys": cleared_keys[:MAX_STATUS_RESULTS],  # 최대 50개만 표시
-                    "errors": errors if errors else None,
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
+            response_data = {
+                "status": "success",
+                "cleared_count": len(cleared_keys),
+                "cleared_keys": cleared_keys[:MAX_STATUS_RESULTS],  # 최대 50개만 표시
+                "errors": errors if errors else None,
+                "timestamp": timezone.now().isoformat(),
+            }
+
+            # WAL Audit 기록
+            self.log_xtest_cleanup(
+                request=request,
+                component="idempotency",
+                cleaned_count=len(cleared_keys),
+                cleaned_ids=cleared_keys[:20],
             )
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"[X-Test Idempotency] Clear failed: {e}")

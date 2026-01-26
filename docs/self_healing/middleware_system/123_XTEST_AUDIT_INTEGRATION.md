@@ -266,16 +266,16 @@ class XTestAuditSessionView(XTestModeMixin, APIView):
 | audit_helpers.py | `services/audit_helpers.py` | re-export 추가 |
 | base.py | `views/xtest/base.py` | `log_xtest_audit()` 추가 |
 
-### 5.2 Phase 2: View Integration (문서 124)
+### 5.2 Phase 2: View Integration ✅ (구현 완료)
 
-모든 X-Test View에 Audit 호출 추가:
-- `dlq.py` - 4개 View
-- `replay.py` - 4개 View
-- `retry.py` - 4개 View
-- `rate_limit.py` - 5개 View
-- `idempotency.py` - 5개 View
-- `integration.py` - 4개 View
-- `circuit_breaker.py` - 기존 View
+모든 X-Test View에 Audit 호출 추가 완료:
+- `dlq.py` - 4개 View ✅ (inject, status, force_status, reset)
+- `replay.py` - 4개 View ✅ (single, batch, trigger_cb_close, status)
+- `retry.py` - 4개 View ✅ (backoff_preview, simulate, rate_limit_status, config)
+- `rate_limit.py` - 5개 View ✅ (status, client, history, config, reset)
+- `idempotency.py` - 5개 View ✅ (generate_key, check_duplicate, status, register, clear)
+- `integration.py` - 4개 View ✅ (run_scenario, scenario_status, snapshot, reset)
+- `circuit_breaker.py` - 5개 View ✅ (inject, reset, trigger_recovery, try_transition, switch_auto)
 
 ### 5.3 Phase 3: Session API (문서 125)
 

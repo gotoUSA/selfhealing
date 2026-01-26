@@ -43,6 +43,7 @@ from .integration_scenarios import (
     list_available_scenarios,
     clear_scenario_results,
 )
+from selfhealing.services.audit.xtest_audit import log_xtest_scenario_audit
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,20 @@ class RunScenarioView(XTestModeMixin, APIView):
                 f"status={result.status.value}, steps={len(result.steps)}"
             )
 
+            # WAL Audit 기록 (scenario_audit 사용)
+            log_xtest_scenario_audit(
+                scenario_id=result.scenario_id,
+                scenario_name=scenario_name,
+                service_name=service_name,
+                status=result.status.value,
+                steps_total=len(result.steps),
+                steps_completed=sum(1 for s in result.steps if s.get("success", False)),
+                errors=result.errors[:10] if result.errors else [],
+                duration_ms=result.duration_ms,
+                session_id=self.get_xtest_session_id(request),
+                user=self.get_xtest_user(request),
+            )
+
             return Response(
                 {
                     "status": "success",
@@ -200,6 +215,15 @@ class ScenarioStatusView(XTestModeMixin, APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_scenario",
+            component="integration",
+            details={"scenario_id": scenario_id},
+            result="success",
+        )
 
         return Response(
             {
@@ -357,6 +381,15 @@ class FullSnapshotView(XTestModeMixin, APIView):
 
         # 시스템 스냅샷 추가
         snapshot["system"] = collect_system_snapshot()
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="full_snapshot",
+            component="integration",
+            details={"service_filter": service_name, "include_history": include_history},
+            result="success",
+        )
 
         return Response(
             {
@@ -533,14 +566,21 @@ class ResetView(XTestModeMixin, APIView):
             f"service={service_name}, xtest_only={xtest_only}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "reset_results": reset_results,
-                "components_requested": components,
-                "service_name": service_name,
-                "xtest_only": xtest_only,
-                "timestamp": timezone.now().isoformat(),
-            },
-            status=status.HTTP_200_OK,
+        response_data = {
+            "status": "success",
+            "reset_results": reset_results,
+            "components_requested": components,
+            "service_name": service_name,
+            "xtest_only": xtest_only,
+            "timestamp": timezone.now().isoformat(),
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_cleanup(
+            request=request,
+            component="integration",
+            cleaned_count=len([k for k, v in reset_results.items() if v.get("reset", False)]),
+            cleaned_ids=list(reset_results.keys()),
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)

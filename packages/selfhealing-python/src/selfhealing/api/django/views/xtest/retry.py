@@ -139,22 +139,30 @@ class BackoffPreviewView(XTestModeMixin, APIView):
             f"delays={delays}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "config": {
-                    "max_attempts": final_max_attempts,
-                    "backoff_base": final_backoff_base,
-                    "backoff_max": final_backoff_max,
-                    "jitter_percent": final_jitter_percent,
-                },
-                "delays": delays,
-                "delays_with_jitter": delays_with_jitter,
-                "total_max_delay": total_max_delay,
-                "snapshot": snapshot,
+        response_data = {
+            "status": "success",
+            "config": {
+                "max_attempts": final_max_attempts,
+                "backoff_base": final_backoff_base,
+                "backoff_max": final_backoff_max,
+                "jitter_percent": final_jitter_percent,
             },
-            status=status.HTTP_200_OK,
+            "delays": delays,
+            "delays_with_jitter": delays_with_jitter,
+            "total_max_delay": total_max_delay,
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="backoff_preview",
+            component="retry",
+            details={"max_attempts": final_max_attempts, "total_max_delay": total_max_delay},
+            result="success",
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 # =============================================================================
@@ -307,24 +315,32 @@ class RetrySimulateView(XTestModeMixin, APIView):
             f"dlq_routed={dlq_routed}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "total_attempts": total_attempts,
-                "final_action": final_action,
-                "retry_sequence": retry_sequence,
-                "dlq_routed": dlq_routed,
-                "dlq_id": dlq_id,
-                "config_used": {
-                    "max_attempts": config.max_attempts,
-                    "backoff_base": config.backoff_base,
-                    "backoff_max": config.backoff_max,
-                    "enable_dlq": config.enable_dlq,
-                },
-                "snapshot": snapshot,
+        response_data = {
+            "status": "success",
+            "total_attempts": total_attempts,
+            "final_action": final_action,
+            "retry_sequence": retry_sequence,
+            "dlq_routed": dlq_routed,
+            "dlq_id": dlq_id,
+            "config_used": {
+                "max_attempts": config.max_attempts,
+                "backoff_base": config.backoff_base,
+                "backoff_max": config.backoff_max,
+                "enable_dlq": config.enable_dlq,
             },
-            status=status.HTTP_200_OK,
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="simulate",
+            component="retry",
+            details={"failure_count": failure_count, "total_attempts": total_attempts, "final_action": final_action},
+            result="success",
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     def _simulate_dlq_entry(
         self, domain: str, failure_count: int, max_attempts: int
@@ -438,26 +454,34 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
                 f"throttled={state.is_in_cooldown}, consecutive_429s={state.consecutive_429s}"
             )
 
-            return Response(
-                {
-                    "status": "success",
-                    "rate_limit_aware": True,
-                    "storage_type": coordinator.storage_type,
-                    "domain": domain,
-                    "state": state_info,
-                    "throttled": state.is_in_cooldown,
-                    "recommended_delay": round(recommended_delay, 2),
-                    "config": {
-                        "base_delay": config.base_delay,
-                        "max_delay": config.max_delay,
-                        "jitter_percent": config.jitter_percent,
-                        "default_retry_after": config.default_retry_after,
-                        "backoff_multiplier": config.backoff_multiplier,
-                    },
-                    "snapshot": snapshot,
+            response_data = {
+                "status": "success",
+                "rate_limit_aware": True,
+                "storage_type": coordinator.storage_type,
+                "domain": domain,
+                "state": state_info,
+                "throttled": state.is_in_cooldown,
+                "recommended_delay": round(recommended_delay, 2),
+                "config": {
+                    "base_delay": config.base_delay,
+                    "max_delay": config.max_delay,
+                    "jitter_percent": config.jitter_percent,
+                    "default_retry_after": config.default_retry_after,
+                    "backoff_multiplier": config.backoff_multiplier,
                 },
-                status=status.HTTP_200_OK,
+                "snapshot": snapshot,
+            }
+
+            # WAL Audit 기록
+            self.log_xtest_audit(
+                request=request,
+                action="query_rate_limit_status",
+                component="retry",
+                details={"domain": domain, "throttled": state.is_in_cooldown},
+                result="success",
             )
+
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.warning(f"[X-Test-Mode] Rate limit status check failed: {e}")
@@ -561,28 +585,36 @@ class RetryConfigView(XTestModeMixin, APIView):
             f"max_attempts={config.max_attempts}"
         )
 
-        return Response(
-            {
-                "status": "success",
-                "source": source,
-                "domain": domain,
-                "config": {
-                    "max_attempts": config.max_attempts,
-                    "backoff_base": config.backoff_base,
-                    "backoff_max": config.backoff_max,
-                    "jitter_percent": config.jitter_percent,
-                    "enable_dlq": config.enable_dlq,
-                    "rate_limit_aware": config.rate_limit_aware,
-                    "rate_limit_key": config.rate_limit_key,
-                    "retryable_exceptions": [
-                        exc.__name__ for exc in config.retryable_exceptions
-                    ],
-                    "non_retryable_exceptions": [
-                        exc.__name__ for exc in config.non_retryable_exceptions
-                    ],
-                },
-                "domain_overrides": domain_overrides,
-                "snapshot": snapshot,
+        response_data = {
+            "status": "success",
+            "source": source,
+            "domain": domain,
+            "config": {
+                "max_attempts": config.max_attempts,
+                "backoff_base": config.backoff_base,
+                "backoff_max": config.backoff_max,
+                "jitter_percent": config.jitter_percent,
+                "enable_dlq": config.enable_dlq,
+                "rate_limit_aware": config.rate_limit_aware,
+                "rate_limit_key": config.rate_limit_key,
+                "retryable_exceptions": [
+                    exc.__name__ for exc in config.retryable_exceptions
+                ],
+                "non_retryable_exceptions": [
+                    exc.__name__ for exc in config.non_retryable_exceptions
+                ],
             },
-            status=status.HTTP_200_OK,
+            "domain_overrides": domain_overrides,
+            "snapshot": snapshot,
+        }
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="query_config",
+            component="retry",
+            details={"domain": domain, "source": source},
+            result="success",
         )
+
+        return Response(response_data, status=status.HTTP_200_OK)
