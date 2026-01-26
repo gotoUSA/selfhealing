@@ -8,41 +8,6 @@ from datetime import datetime
 
 
 # =============================================================================
-# Django 설정 (DRF 테스트를 위해 필요)
-# =============================================================================
-
-def _configure_django_settings():
-    """
-    Django 설정을 최소한으로 구성.
-    
-    DRF (Django REST Framework) 예외 처리 테스트를 위해 필요.
-    """
-    try:
-        import django
-        from django.conf import settings
-        
-        if not settings.configured:
-            settings.configure(
-                DEBUG=True,
-                DATABASES={},
-                INSTALLED_APPS=[
-                    "django.contrib.contenttypes",
-                    "django.contrib.auth",
-                    "rest_framework",
-                ],
-                REST_FRAMEWORK={},
-                USE_TZ=True,
-            )
-            django.setup()
-    except ImportError:
-        pass
-
-
-# Django 설정은 모듈 로드 시 즉시 실행
-_configure_django_settings()
-
-
-# =============================================================================
 # Settings Singleton Reset Fixtures (테스트 격리용)
 # =============================================================================
 

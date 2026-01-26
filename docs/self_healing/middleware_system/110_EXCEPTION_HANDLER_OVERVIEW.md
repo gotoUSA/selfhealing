@@ -92,6 +92,11 @@
 
 - 참조: 115 문서 "Phase 3: 설정 및 테스트"
 - 작업: 단위/통합 테스트 작성
+- **테스트 위치**: `tests/api/exceptions/` (전역 tests 폴더)
+- **실행 방법**: `docker-compose -f docker-compose.test.yml run --rm test-global sh -c "python -m pytest tests/api/exceptions/ -v --tb=short --no-cov"`
+
+> ⚠️ **주의**: DRF 테스트는 Django 설정이 필요하므로 `packages/selfhealing-python/tests/` 가 아닌 전역 `tests/` 폴더에 위치합니다.
+> 전역 tests 폴더는 `pyproject.toml`에서 `DJANGO_SETTINGS_MODULE = "myproject.settings.test"`로 설정되어 있습니다.
 
 ---
 

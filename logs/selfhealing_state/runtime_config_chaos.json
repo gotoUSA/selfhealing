@@ -10,5 +10,13 @@
   "stop_on_latency_increase_pct": 50.0,
   "enabled": false,
   "failure_rate": 0.01,
-  "latency_max_ms": 1000
+  "latency_max_ms": 1000,
+  "scheduler_experiment_max_retries": 0,
+  "scheduler_experiment_soft_time_limit": 300,
+  "scheduler_experiment_time_limit": 360,
+  "scheduler_report_max_retries": 3,
+  "scheduler_report_retry_delay": 300,
+  "scheduler_cleanup_max_retries": 1,
+  "scheduler_pending_check_max_retries": 1,
+  "experiment_lock_ttl": 120
 }
