@@ -26,28 +26,28 @@ from .codes import ErrorCode, get_http_status, is_retryable, get_default_message
 
 class ExceptionCategory(str, Enum):
     """예외 카테고리."""
-    
+
     VALIDATION = "validation"
     """입력값 검증 실패."""
-    
+
     AUTH = "auth"
     """인증 실패."""
-    
+
     AUTHZ = "authz"
     """인가(권한) 실패."""
-    
+
     NOT_FOUND = "not_found"
     """리소스 없음."""
-    
+
     CONFLICT = "conflict"
     """리소스 상태 충돌."""
-    
+
     RATE_LIMIT = "rate_limit"
     """요청 제한."""
-    
+
     INTERNAL = "internal"
     """시스템 내부 오류."""
-    
+
     SERVICE = "service"
     """외부 서비스 오류."""
 
@@ -56,34 +56,34 @@ class ExceptionCategory(str, Enum):
 class ClassifiedError:
     """
     분류된 예외 정보.
-    
+
     예외 분류기가 반환하는 구조화된 에러 정보입니다.
     """
-    
+
     category: ExceptionCategory
     """예외 카테고리."""
-    
+
     code: ErrorCode
     """표준 에러 코드."""
-    
+
     http_status: int
     """HTTP 상태 코드."""
-    
+
     message: str
     """사용자 친화적 메시지."""
-    
+
     detail: Optional[str] = None
     """기술적 상세 정보 (str(exception))."""
-    
+
     field: Optional[str] = None
     """필드 관련 에러 시 필드명."""
-    
+
     retryable: bool = False
     """재시도 가능 여부."""
-    
+
     exception_class: str = ""
     """원본 예외 클래스명."""
-    
+
     extra: Optional[Dict[str, Any]] = None
     """추가 메타데이터 (ConfigLockError의 current_owner 등)."""
 
@@ -91,47 +91,47 @@ class ClassifiedError:
 class ExceptionClassifier:
     """
     예외 분류기.
-    
+
     다양한 예외 유형을 표준화된 에러 코드와 카테고리로 분류합니다.
     DRF 예외 → Django 예외 → 커스텀 예외 → Python 예외 순으로 검사합니다.
-    
+
     사용 예시:
         classifier = ExceptionClassifier()
         classified = classifier.classify(exception)
         # classified.code, classified.http_status 등 사용
     """
-    
+
     def classify(self, exc: BaseException) -> ClassifiedError:
         """
         예외를 분류하여 표준화된 에러 정보 반환.
-        
+
         Args:
             exc: 분류할 예외
-            
+
         Returns:
             ClassifiedError 인스턴스
         """
         exception_class = type(exc).__name__
-        
+
         # 1. DRF 예외 체크
         result = self._classify_drf_exception(exc)
         if result:
             return self._with_exception_class(result, exception_class)
-        
+
         # 2. Django 예외 체크
         result = self._classify_django_exception(exc)
         if result:
             return self._with_exception_class(result, exception_class)
-        
+
         # 3. 커스텀 예외 체크 (selfhealing 패키지)
         result = self._classify_custom_exception(exc)
         if result:
             return self._with_exception_class(result, exception_class)
-        
+
         # 4. 일반 Python 예외
         result = self._classify_python_exception(exc)
         return self._with_exception_class(result, exception_class)
-    
+
     def _with_exception_class(
         self,
         result: ClassifiedError,
@@ -140,7 +140,7 @@ class ExceptionClassifier:
         """예외 클래스명을 결과에 추가."""
         result.exception_class = exception_class
         return result
-    
+
     def _classify_drf_exception(self, exc: BaseException) -> Optional[ClassifiedError]:
         """DRF 예외 분류."""
         try:
@@ -159,14 +159,14 @@ class ExceptionClassifier:
             )
         except ImportError:
             return None
-        
+
         if not isinstance(exc, APIException):
             return None
-        
+
         # ValidationError
         if isinstance(exc, ValidationError):
             return self._handle_validation_error(exc)
-        
+
         # ParseError
         if isinstance(exc, ParseError):
             return ClassifiedError(
@@ -174,10 +174,10 @@ class ExceptionClassifier:
                 code=ErrorCode.VALIDATION_PARSE_ERROR,
                 http_status=400,
                 message=get_default_message(ErrorCode.VALIDATION_PARSE_ERROR),
-                detail=str(exc.detail) if hasattr(exc, 'detail') else str(exc),
+                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
                 retryable=False,
             )
-        
+
         # Authentication
         if isinstance(exc, (NotAuthenticated, AuthenticationFailed)):
             code = ErrorCode.AUTH_NOT_AUTHENTICATED
@@ -188,10 +188,10 @@ class ExceptionClassifier:
                 code=code,
                 http_status=401,
                 message=get_default_message(code),
-                detail=str(exc.detail) if hasattr(exc, 'detail') else str(exc),
+                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
                 retryable=False,
             )
-        
+
         # Permission
         if isinstance(exc, PermissionDenied):
             return ClassifiedError(
@@ -199,10 +199,10 @@ class ExceptionClassifier:
                 code=ErrorCode.AUTHZ_PERMISSION_DENIED,
                 http_status=403,
                 message=get_default_message(ErrorCode.AUTHZ_PERMISSION_DENIED),
-                detail=str(exc.detail) if hasattr(exc, 'detail') else str(exc),
+                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
                 retryable=False,
             )
-        
+
         # NotFound
         if isinstance(exc, NotFound):
             return ClassifiedError(
@@ -210,10 +210,10 @@ class ExceptionClassifier:
                 code=ErrorCode.RESOURCE_NOT_FOUND,
                 http_status=404,
                 message=get_default_message(ErrorCode.RESOURCE_NOT_FOUND),
-                detail=str(exc.detail) if hasattr(exc, 'detail') else str(exc),
+                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
                 retryable=False,
             )
-        
+
         # Throttled
         if isinstance(exc, Throttled):
             return ClassifiedError(
@@ -221,21 +221,21 @@ class ExceptionClassifier:
                 code=ErrorCode.RATE_THROTTLED,
                 http_status=429,
                 message=get_default_message(ErrorCode.RATE_THROTTLED),
-                detail=str(exc.detail) if hasattr(exc, 'detail') else str(exc),
+                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
                 retryable=True,
-                extra={"wait": getattr(exc, 'wait', None)},
+                extra={"wait": getattr(exc, "wait", None)},
             )
-        
+
         # 기타 DRF 예외 → 상태 코드 기반 분류
-        status_code = getattr(exc, 'status_code', 500)
+        status_code = getattr(exc, "status_code", 500)
         return self._classify_by_status_code(exc, status_code)
-    
+
     def _handle_validation_error(self, exc: BaseException) -> ClassifiedError:
         """ValidationError 상세 처리."""
-        detail = getattr(exc, 'detail', str(exc))
+        detail = getattr(exc, "detail", str(exc))
         field = None
         message = get_default_message(ErrorCode.VALIDATION_SERIALIZER_ERROR)
-        
+
         # DRF ValidationError는 detail이 dict 또는 list일 수 있음
         if isinstance(detail, dict):
             # 첫 번째 필드 에러 추출
@@ -252,7 +252,7 @@ class ExceptionClassifier:
             detail = str(detail)
         else:
             detail = str(detail)
-        
+
         return ClassifiedError(
             category=ExceptionCategory.VALIDATION,
             code=ErrorCode.VALIDATION_SERIALIZER_ERROR,
@@ -262,7 +262,7 @@ class ExceptionClassifier:
             field=field,
             retryable=False,
         )
-    
+
     def _classify_django_exception(self, exc: BaseException) -> Optional[ClassifiedError]:
         """Django 예외 분류."""
         try:
@@ -274,7 +274,7 @@ class ExceptionClassifier:
             from django.db import IntegrityError, DatabaseError
         except ImportError:
             return None
-        
+
         # Http404
         if isinstance(exc, Http404):
             return ClassifiedError(
@@ -285,7 +285,7 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=False,
             )
-        
+
         # Django PermissionDenied
         if isinstance(exc, DjangoPermissionDenied):
             return ClassifiedError(
@@ -296,10 +296,10 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=False,
             )
-        
+
         # Django ValidationError
         if isinstance(exc, DjangoValidationError):
-            messages = getattr(exc, 'messages', [str(exc)])
+            messages = getattr(exc, "messages", [str(exc)])
             message = messages[0] if messages else str(exc)
             return ClassifiedError(
                 category=ExceptionCategory.VALIDATION,
@@ -309,7 +309,7 @@ class ExceptionClassifier:
                 detail=str(messages),
                 retryable=False,
             )
-        
+
         # IntegrityError (unique constraint 등)
         if isinstance(exc, IntegrityError):
             return ClassifiedError(
@@ -320,7 +320,7 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=False,
             )
-        
+
         # DatabaseError
         if isinstance(exc, DatabaseError):
             return ClassifiedError(
@@ -331,17 +331,17 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=True,
             )
-        
+
         return None
-    
+
     def _classify_custom_exception(self, exc: BaseException) -> Optional[ClassifiedError]:
         """selfhealing 패키지 커스텀 예외 분류."""
         exception_class = type(exc).__name__
-        
+
         # ConfigLockError
         if exception_class == "ConfigLockError":
-            current_owner = getattr(exc, 'current_owner', None)
-            config_type = getattr(exc, 'config_type', '')
+            current_owner = getattr(exc, "current_owner", None)
+            config_type = getattr(exc, "config_type", "")
             return ClassifiedError(
                 category=ExceptionCategory.CONFLICT,
                 code=ErrorCode.CONFIG_LOCKED,
@@ -354,11 +354,11 @@ class ExceptionClassifier:
                     "config_type": config_type,
                 },
             )
-        
+
         # AutomationBlockedError
         if exception_class == "AutomationBlockedError":
-            error_budget_percent = getattr(exc, 'error_budget_percent', None)
-            threshold_percent = getattr(exc, 'threshold_percent', None)
+            error_budget_percent = getattr(exc, "error_budget_percent", None)
+            threshold_percent = getattr(exc, "threshold_percent", None)
             return ClassifiedError(
                 category=ExceptionCategory.AUTHZ,
                 code=ErrorCode.AUTHZ_ERROR_BUDGET_BLOCKED,
@@ -371,10 +371,10 @@ class ExceptionClassifier:
                     "threshold_percent": threshold_percent,
                 },
             )
-        
+
         # CircuitBreakerOpenError
         if exception_class == "CircuitBreakerOpenError":
-            service_name = getattr(exc, 'service_name', None)
+            service_name = getattr(exc, "service_name", None)
             return ClassifiedError(
                 category=ExceptionCategory.SERVICE,
                 code=ErrorCode.SERVICE_CIRCUIT_OPEN,
@@ -384,11 +384,11 @@ class ExceptionClassifier:
                 retryable=True,
                 extra={"service_name": service_name},
             )
-        
+
         # PaymentRecoveryError (shopping 패키지)
         if exception_class == "PaymentRecoveryError":
-            code_attr = getattr(exc, 'code', 'RECOVERY_ERROR')
-            recoverable = getattr(exc, 'recoverable', True)
+            code_attr = getattr(exc, "code", "RECOVERY_ERROR")
+            recoverable = getattr(exc, "recoverable", True)
             return ClassifiedError(
                 category=ExceptionCategory.SERVICE,
                 code=ErrorCode.SERVICE_UNAVAILABLE,
@@ -398,12 +398,12 @@ class ExceptionClassifier:
                 retryable=recoverable,
                 extra={"error_code": code_attr},
             )
-        
+
         return None
-    
+
     def _classify_python_exception(self, exc: BaseException) -> ClassifiedError:
         """일반 Python 예외 분류."""
-        
+
         # ValueError
         if isinstance(exc, ValueError):
             return ClassifiedError(
@@ -414,7 +414,7 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=False,
             )
-        
+
         # TypeError
         if isinstance(exc, TypeError):
             return ClassifiedError(
@@ -425,7 +425,7 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=False,
             )
-        
+
         # KeyError
         if isinstance(exc, KeyError):
             return ClassifiedError(
@@ -437,7 +437,7 @@ class ExceptionClassifier:
                 field=str(exc).strip("'\""),
                 retryable=False,
             )
-        
+
         # TimeoutError
         if isinstance(exc, TimeoutError):
             return ClassifiedError(
@@ -448,7 +448,7 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=True,
             )
-        
+
         # ConnectionError
         if isinstance(exc, ConnectionError):
             return ClassifiedError(
@@ -459,7 +459,7 @@ class ExceptionClassifier:
                 detail=str(exc),
                 retryable=True,
             )
-        
+
         # 기본: 내부 서버 오류
         return ClassifiedError(
             category=ExceptionCategory.INTERNAL,
@@ -469,7 +469,7 @@ class ExceptionClassifier:
             detail=str(exc),
             retryable=True,
         )
-    
+
     def _classify_by_status_code(
         self,
         exc: BaseException,
@@ -477,7 +477,7 @@ class ExceptionClassifier:
     ) -> ClassifiedError:
         """HTTP 상태 코드 기반 분류 (fallback)."""
         detail = str(exc)
-        
+
         if 400 <= status_code < 500:
             if status_code == 400:
                 code = ErrorCode.VALIDATION_INVALID_VALUE
@@ -513,7 +513,7 @@ class ExceptionClassifier:
             else:
                 code = ErrorCode.SYSTEM_INTERNAL_ERROR
                 category = ExceptionCategory.INTERNAL
-        
+
         return ClassifiedError(
             category=category,
             code=code,

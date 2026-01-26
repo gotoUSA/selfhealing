@@ -14,14 +14,14 @@ SelfHealing Exception Handler.
     REST_FRAMEWORK = {
         'EXCEPTION_HANDLER': 'selfhealing.api.django.exceptions.selfhealing_exception_handler',
     }
-    
+
     # 코드에서 직접 표준 응답 생성
     from selfhealing.api.django.exceptions import (
         ErrorCode,
         StandardErrorResponse,
         create_error_response,
     )
-    
+
     # 에러 코드로 직접 응답 생성
     response = create_error_response(
         code=ErrorCode.VALIDATION_FIELD_REQUIRED,
@@ -29,7 +29,7 @@ SelfHealing Exception Handler.
         detail="The 'amount' field is required.",
     )
     return Response(response.to_dict(), status=response.http_status)
-    
+
     # 예외로부터 응답 생성
     try:
         ...
@@ -78,19 +78,16 @@ __all__ = [
     "is_retryable",
     "get_default_message",
     "get_error_info",
-    
     # === 예외 분류기 ===
     "ExceptionCategory",
     "ClassifiedError",
     "ExceptionClassifier",
     "get_exception_classifier",
-    
     # === 표준 응답 ===
     "ErrorInfo",
     "ResponseMeta",
     "StandardErrorResponse",
     "create_error_response",
-    
     # === DRF 핸들러 ===
     "selfhealing_exception_handler",
 ]

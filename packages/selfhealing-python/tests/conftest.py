@@ -11,14 +11,15 @@ from datetime import datetime
 # Settings Singleton Reset Fixtures (테스트 격리용)
 # =============================================================================
 
+
 @pytest.fixture(autouse=True, scope="function")
 def auto_reset_audit_settings():
     """
     모든 테스트 전후에 Audit 관련 Settings 싱글톤을 자동으로 리셋하는 fixture.
-    
+
     Step 3 리팩토링 후 Audit 모듈이 Pydantic Settings를 사용하므로,
     환경변수 변경이 다른 테스트에 영향을 주지 않도록 격리합니다.
-    
+
     리셋 대상 Settings:
     - HashChainSettings: AtomicMergeSwap, ShardedDateLock, IntegrityAuditTrail
     - AuditIntegritySettings: DailyHashAnchor, CrossClusterLinker, HealthScore, S3WORM
@@ -29,9 +30,9 @@ def auto_reset_audit_settings():
     """
     # Setup: 테스트 전에 settings 리셋
     _reset_all_audit_settings()
-    
+
     yield
-    
+
     # Teardown: 테스트 후에도 리셋 (다음 테스트를 위해)
     _reset_all_audit_settings()
 
@@ -40,49 +41,57 @@ def _reset_all_audit_settings():
     """모든 Audit 관련 Settings 싱글톤을 리셋합니다."""
     try:
         from selfhealing.settings import hash_chain
+
         hash_chain.reset_hash_chain_settings()
     except (ImportError, AttributeError):
         pass
-    
+
     try:
         from selfhealing.settings import audit_integrity
+
         audit_integrity.reset_audit_integrity_settings()
     except (ImportError, AttributeError):
         pass
-    
+
     try:
         from selfhealing.settings import cascade_retention
+
         cascade_retention.reset_cascade_retention_settings()
     except (ImportError, AttributeError):
         pass
-    
+
     try:
         from selfhealing.settings import resilient_recorder
+
         resilient_recorder.reset_resilient_recorder_settings()
     except (ImportError, AttributeError):
         pass
-    
+
     try:
         from selfhealing.settings import audit_settings
+
         audit_settings.reset_audit_settings()
     except (ImportError, AttributeError):
         pass
-    
+
     try:
         from selfhealing.settings import audit_watchdog
+
         audit_watchdog.reset_audit_watchdog_settings()
     except (ImportError, AttributeError):
         pass
-    
+
     # Audit 모듈 싱글톤 리셋 (Settings 연동되어 있는 클래스들)
     try:
         from selfhealing.audit.resilience.buffer import InMemoryAuditBuffer
+
         InMemoryAuditBuffer.reset_instance()
     except (ImportError, AttributeError):
         pass
-    
+
     try:
         from selfhealing.audit.cascade_auditor import reset_cascade_auditor
+
         reset_cascade_auditor()
     except (ImportError, AttributeError):
         pass
@@ -92,15 +101,16 @@ def _reset_all_audit_settings():
 # Singleton Reset Fixtures (테스트 격리용)
 # =============================================================================
 
+
 @pytest.fixture(autouse=True, scope="function")
 def auto_reset_watchdog_singleton():
     """
     모든 테스트 전에 AuditWatchdog 싱글톤을 자동으로 리셋하는 fixture.
-    
+
     다른 테스트 파일에서 watchdog을 시작한 경우에도 격리를 보장합니다.
     """
     import selfhealing.audit.audit_watchdog as aw_module
-    
+
     # Setup: 기존 싱글톤 정리
     if aw_module._watchdog_instance is not None:
         try:
@@ -111,9 +121,9 @@ def auto_reset_watchdog_singleton():
         except Exception:
             pass
         aw_module._watchdog_instance = None
-    
+
     yield
-    
+
     # Teardown: 테스트 후 정리 (다음 테스트를 위해)
     if aw_module._watchdog_instance is not None:
         try:
@@ -130,14 +140,14 @@ def auto_reset_watchdog_singleton():
 def reset_watchdog_singleton():
     """
     AuditWatchdog 싱글톤을 테스트 전후로 리셋하는 fixture.
-    
+
     Usage:
         def test_something(reset_watchdog_singleton):
             # 테스트 코드
     """
     import selfhealing.audit.audit_watchdog as aw_module
     from selfhealing.audit.audit_watchdog import WatchdogState
-    
+
     # Setup: 기존 싱글톤 정리
     if aw_module._watchdog_instance is not None:
         try:
@@ -148,9 +158,9 @@ def reset_watchdog_singleton():
         except Exception:
             pass
         aw_module._watchdog_instance = None
-    
+
     yield
-    
+
     # Teardown: 테스트 후 정리
     if aw_module._watchdog_instance is not None:
         try:
@@ -167,25 +177,26 @@ def reset_watchdog_singleton():
 # Audit Module Reload Fixture (테스트 격리용)
 # =============================================================================
 
+
 @pytest.fixture(autouse=True, scope="function")
 def reset_audit_modules():
     """
-    각 테스트 전후에 audit 관련 모듈을 sys.modules에서 제거하여 
+    각 테스트 전후에 audit 관련 모듈을 sys.modules에서 제거하여
     mock이 올바르게 적용되도록 함.
-    
+
     이 fixture는 테스트 간 모듈 캐싱으로 인해 mock이 적용되지 않는 문제를 해결합니다.
-    
+
     문제 원인:
     - Python에서 `from X import Y`로 import된 객체는 로컬 바인딩됨
     - 모듈이 이미 import된 상태에서 patch하면 원본 참조에 영향 없음
     - 테스트 간 모듈 캐싱으로 이전 테스트의 import 상태가 유지됨
-    
+
     해결:
     - 테스트 전/후에 audit 관련 모듈을 sys.modules에서 제거
     - 각 테스트에서 fresh import + patch 적용 가능
     """
     import sys
-    
+
     # 제거할 모듈 목록 (의존성 역순으로 정렬)
     modules_to_clear = [
         "selfhealing.services.audit_helpers",
@@ -198,7 +209,7 @@ def reset_audit_modules():
         "selfhealing.services.audit.cb_audit",
         "selfhealing.services.audit.base",
     ]
-    
+
     def clear_modules():
         for mod_name in modules_to_clear:
             if mod_name in sys.modules:
@@ -206,13 +217,13 @@ def reset_audit_modules():
                     del sys.modules[mod_name]
                 except KeyError:
                     pass
-    
+
     # Setup: 테스트 전에 모듈 캐시 정리
     clear_modules()
-    
+
     # 테스트 실행
     yield
-    
+
     # Teardown: 테스트 후에도 정리 (다음 테스트를 위해)
     clear_modules()
 
@@ -220,6 +231,7 @@ def reset_audit_modules():
 # =============================================================================
 # DB 연결 필요 테스트 자동 Skip 설정
 # =============================================================================
+
 
 def pytest_collection_modifyitems(config, items):
     """
@@ -229,12 +241,12 @@ def pytest_collection_modifyitems(config, items):
     """
     # DB 연결 가능 여부 확인
     db_available = os.environ.get("SELFHEALING_TEST_DB_AVAILABLE", "false").lower() == "true"
-    
+
     if db_available:
         return  # DB가 있으면 skip하지 않음
-    
+
     skip_db = pytest.mark.skip(reason="Database not available (set SELFHEALING_TEST_DB_AVAILABLE=true to run)")
-    
+
     for item in items:
         if "django_db" in [marker.name for marker in item.iter_markers()]:
             item.add_marker(skip_db)

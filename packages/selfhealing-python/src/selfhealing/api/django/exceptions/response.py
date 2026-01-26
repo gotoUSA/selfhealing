@@ -36,40 +36,40 @@ from .classifier import ClassifiedError
 class ErrorInfo:
     """
     에러 상세 정보.
-    
+
     응답의 "error" 필드에 해당합니다.
     """
-    
+
     code: str
     """표준 에러 코드 문자열."""
-    
+
     message: str
     """사용자 친화적 메시지."""
-    
+
     detail: Optional[str] = None
     """기술적 상세 정보."""
-    
+
     field: Optional[str] = None
     """필드 관련 에러 시 필드명."""
-    
+
     retryable: bool = False
     """재시도 가능 여부."""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
         result: Dict[str, Any] = {
             "code": self.code,
             "message": self.message,
         }
-        
+
         if self.detail:
             result["detail"] = self.detail
-        
+
         if self.field:
             result["field"] = self.field
-        
+
         result["retryable"] = self.retryable
-        
+
         return result
 
 
@@ -77,37 +77,37 @@ class ErrorInfo:
 class ResponseMeta:
     """
     응답 메타데이터.
-    
+
     응답의 "meta" 필드에 해당합니다.
     """
-    
+
     request_id: Optional[str] = None
     """요청 추적 ID."""
-    
+
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     """에러 발생 시간."""
-    
+
     path: Optional[str] = None
     """요청 경로."""
-    
+
     method: Optional[str] = None
     """HTTP 메서드."""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
         result: Dict[str, Any] = {
             "timestamp": self.timestamp.isoformat(),
         }
-        
+
         if self.request_id:
             result["request_id"] = self.request_id
-        
+
         if self.path:
             result["path"] = self.path
-        
+
         if self.method:
             result["method"] = self.method
-        
+
         return result
 
 
@@ -115,32 +115,34 @@ class ResponseMeta:
 class StandardErrorResponse:
     """
     표준 에러 응답.
-    
+
     모든 API 예외가 이 형식으로 응답됩니다.
     """
-    
+
     success: bool = False
     """항상 False."""
-    
-    error: ErrorInfo = field(default_factory=lambda: ErrorInfo(
-        code=ErrorCode.SYSTEM_INTERNAL_ERROR.value,
-        message="오류가 발생했습니다.",
-    ))
+
+    error: ErrorInfo = field(
+        default_factory=lambda: ErrorInfo(
+            code=ErrorCode.SYSTEM_INTERNAL_ERROR.value,
+            message="오류가 발생했습니다.",
+        )
+    )
     """에러 상세 정보."""
-    
+
     meta: ResponseMeta = field(default_factory=ResponseMeta)
     """응답 메타데이터."""
-    
+
     http_status: int = 500
     """HTTP 상태 코드 (응답 객체 생성 시 사용)."""
-    
+
     extra: Optional[Dict[str, Any]] = None
     """추가 정보 (ConfigLockError의 current_owner 등)."""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """
         딕셔너리로 변환 (JSON 직렬화용).
-        
+
         http_status와 extra는 응답 본문에 포함되지 않습니다.
         """
         result: Dict[str, Any] = {
@@ -148,13 +150,13 @@ class StandardErrorResponse:
             "error": self.error.to_dict(),
             "meta": self.meta.to_dict(),
         }
-        
+
         # extra 정보가 있으면 error 객체에 병합
         if self.extra:
             result["error"].update(self.extra)
-        
+
         return result
-    
+
     @classmethod
     def from_classified_error(
         cls,
@@ -165,13 +167,13 @@ class StandardErrorResponse:
     ) -> "StandardErrorResponse":
         """
         ClassifiedError로부터 표준 응답 생성.
-        
+
         Args:
             classified: 분류된 예외 정보
             request_id: 요청 추적 ID
             path: 요청 경로
             method: HTTP 메서드
-            
+
         Returns:
             StandardErrorResponse 인스턴스
         """
@@ -182,13 +184,13 @@ class StandardErrorResponse:
             field=classified.field,
             retryable=classified.retryable,
         )
-        
+
         meta = ResponseMeta(
             request_id=request_id,
             path=path,
             method=method,
         )
-        
+
         return cls(
             success=False,
             error=error_info,
@@ -196,7 +198,7 @@ class StandardErrorResponse:
             http_status=classified.http_status,
             extra=classified.extra,
         )
-    
+
     @classmethod
     def from_exception(
         cls,
@@ -207,21 +209,21 @@ class StandardErrorResponse:
     ) -> "StandardErrorResponse":
         """
         예외로부터 표준 응답 생성 (분류 포함).
-        
+
         Args:
             exc: 발생한 예외
             request_id: 요청 추적 ID
             path: 요청 경로
             method: HTTP 메서드
-            
+
         Returns:
             StandardErrorResponse 인스턴스
         """
         from .classifier import get_exception_classifier
-        
+
         classifier = get_exception_classifier()
         classified = classifier.classify(exc)
-        
+
         return cls.from_classified_error(
             classified=classified,
             request_id=request_id,
@@ -242,7 +244,7 @@ def create_error_response(
 ) -> StandardErrorResponse:
     """
     에러 코드로부터 표준 응답 생성 (편의 함수).
-    
+
     Args:
         code: 에러 코드
         message: 사용자 메시지 (없으면 기본 메시지 사용)
@@ -252,15 +254,15 @@ def create_error_response(
         path: 요청 경로
         method: HTTP 메서드
         extra: 추가 정보
-        
+
     Returns:
         StandardErrorResponse 인스턴스
     """
     from .codes import get_http_status, is_retryable, get_default_message
-    
+
     if message is None:
         message = get_default_message(code)
-    
+
     error_info = ErrorInfo(
         code=code.value,
         message=message,
@@ -268,13 +270,13 @@ def create_error_response(
         field=field,
         retryable=is_retryable(code),
     )
-    
+
     meta = ResponseMeta(
         request_id=request_id,
         path=path,
         method=method,
     )
-    
+
     return StandardErrorResponse(
         success=False,
         error=error_info,
