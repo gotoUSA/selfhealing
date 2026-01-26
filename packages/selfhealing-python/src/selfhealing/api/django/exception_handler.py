@@ -6,7 +6,7 @@
 사용 예시:
     # 레거시 경로 (호환)
     from selfhealing.api.django.exception_handler import selfhealing_exception_handler
-    
+
     # 권장 경로
     from selfhealing.api.django.exceptions.handler import selfhealing_exception_handler
 """

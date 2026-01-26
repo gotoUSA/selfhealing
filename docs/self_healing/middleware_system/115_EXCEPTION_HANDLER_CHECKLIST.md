@@ -51,7 +51,7 @@
 - [x] StandardErrorResponse 데이터 클래스
 - [x] 응답 포맷 생성 함수
 - [ ] 다국어 메시지 지원 (선택)
-- [ ] 민감정보 마스킹 연동
+- [x] 민감정보 마스킹 연동 (`_mask_error_message` 함수 구현)
 
 ### 1.5 DRF 예외 핸들러 (handler.py)
 
@@ -71,6 +71,15 @@
   - [x] API_EXCEPTION 추가
   - [x] API_VALIDATION_ERROR 추가
   - [x] API_AUTH_ERROR 추가
+  - [x] API_NOT_FOUND 추가
+  - [x] API_THROTTLED 추가
+
+### 2.1.1 AuditAction 확장
+
+- [x] `interfaces/audit_adapter.py` 수정
+  - [x] API_ERROR 추가
+  - [x] VALIDATION_FAILED 추가
+  - [x] AUTHORIZATION_DENIED 추가
 
 ### 2.2 예외 핸들러에서 버퍼 적재
 
@@ -97,6 +106,21 @@
 
 - [x] settings.py에 EXCEPTION_HANDLER 설정 가이드 문서화
 - [x] 테스트 프로젝트에서 설정 검증
+- [x] settings/base.py에 selfhealing_exception_handler 설정 적용
+
+### 3.1.1 레거시 호환성
+
+- [x] `api/django/exception_handler.py` 레거시 re-export 파일 생성
+
+### 3.1.2 Prometheus 메트릭 연동
+
+- [x] `_init_metrics()` 함수 구현 (Counter: exception_handler_errors_total)
+- [x] `_record_metrics()` 함수 구현
+
+### 3.1.3 Pool Timeout 처리
+
+- [x] `_is_pool_timeout()` 함수 구현 (SQLAlchemy QueuePool, connection timeout 감지)
+- [x] Pool Timeout 시 503 Service Unavailable 반환
 
 ### 3.2 단위 테스트
 
@@ -151,12 +175,12 @@
 
 ## 테스트 실행 결과
 
-### 최종 테스트 (2026-01-26)
+### 최종 테스트 (2025-01-26)
 
 ```
 테스트 위치: tests/api/exceptions/
-실행 명령: docker-compose -f docker-compose.test.yml run --rm test-global sh -c "python -m pytest tests/api/exceptions/ -v --tb=short --no-cov"
-결과: 113 passed, 14 warnings in 12.39s
+실행 명령: python -m pytest tests/api/exceptions/ -v --tb=short --no-cov
+결과: 122 passed, 14 warnings
 ```
 
 #### 테스트 파일별 커버리지
@@ -166,7 +190,7 @@
 | test_exception_codes.py | 26개 | ✅ 통과 |
 | test_exception_classifier.py | 24개 | ✅ 통과 |
 | test_exception_response.py | 22개 | ✅ 통과 |
-| test_exception_handler.py | 41개 | ✅ 통과 |
+| test_exception_handler.py | 50개 | ✅ 통과 |
 
 #### 주요 테스트 항목
 
@@ -177,9 +201,12 @@
 - 커스텀 예외 분류 (ConfigLockError, AutomationBlockedError)
 - Python 예외 분류 (ValueError, TypeError, KeyError, TimeoutError, ConnectionError)
 - 표준 응답 포맷 생성 및 직렬화
-- Audit 버퍼 이벤트 적재 (API_EXCEPTION, API_VALIDATION_ERROR, API_AUTH_ERROR)
+- Audit 버퍼 이벤트 적재 (API_EXCEPTION, API_VALIDATION_ERROR, API_AUTH_ERROR, API_NOT_FOUND, API_THROTTLED)
 - 중복 기록 방지 (has_event_from_source 메서드)
 - 예외 핸들러 실패 시 폴백 동작 (fail-open)
+- **Pool Timeout 감지 및 503 응답 처리**
+- **민감정보 마스킹 (password, token, api_key 등)**
+- **Prometheus 메트릭 초기화 및 기록**
 
 ---
 

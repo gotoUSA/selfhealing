@@ -84,42 +84,36 @@ MIDDLEWARE = [
     # RED Metrics: Rate, Errors, Duration 자동 수집
     # Reference: https://github.com/korfuri/django-prometheus
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
-    
     # ==========================================================================
     # [1] Trace ID Middleware (분산 추적의 시작점)
     # ==========================================================================
     # 모든 요청에 trace_id 부여, X-Request-ID 헤더 전파
     # Reference: load_tests/scenarios/integration/stage08_observability.py
     "selfhealing.audit.trace.trace_id_middleware",
-    
     # ==========================================================================
     # [2] Health Bridge (DB-independent, Worker Saturation 방지)
     # ==========================================================================
     # DB 죽어도 /health/l3 즉시 응답 - Kubernetes Probe 필수
     # Reference: Stage 50 Observability
     "selfhealing.api.django.middleware.HealthBridgeMiddleware",
-    
     # ==========================================================================
     # [3] Tiering Middleware (Emergency Mode Load Shedding)
     # ==========================================================================
     # 비상 모드 시 Tier별 트래픽 제어 (critical/standard/non_essential)
     # 비활성화: SELFHEALING_TIERING_MIDDLEWARE_ENABLED = False
     "selfhealing.api.django.tiering.TieringMiddleware",
-    
     # ==========================================================================
     # [4] Self-Healing Middleware (Circuit Breaker + DLQ)
     # ==========================================================================
     # DB 오류/502 감지 → CircuitBreaker 기록 + DLQ 자동 적재
     # Reference: Stage 16 Healing Proof
     "selfhealing.api.django.middleware.SelfHealingMiddleware",
-    
     # ==========================================================================
     # [5] Actor Context Middleware (사용자 추적)
     # ==========================================================================
     # 모든 요청에서 "누가" 수행하는지 자동 추적 (Audit 연동)
     # 비활성화: SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = False
     "myproject.middleware.actor_middleware.ActorContextMiddleware",
-    
     # ==========================================================================
     # [6] Django Core Middlewares
     # ==========================================================================
@@ -131,12 +125,10 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    
     # ==========================================================================
     # [7] Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback)
     # ==========================================================================
     "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
-    
     # ==========================================================================
     # [8] Pool Circuit Breaker Middleware (DB Connection Pool 보호)
     # ==========================================================================
@@ -144,24 +136,20 @@ MIDDLEWARE = [
     # 비활성화: SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = False
     # Reference: load_tests/scenarios/chaos/stage26_connection_pool.py
     "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware",
-    
     # ==========================================================================
     # [9] Pool Timeout Middleware (SQLAlchemy Timeout 처리)
     # ==========================================================================
     # Pool Timeout 발생 시 503 반환
     # 비활성화: SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = False
     "myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware",
-    
     # ==========================================================================
     # [10] Chaos Middleware (HELLMODE 테스트용)
     # ==========================================================================
     # X-DB-Lock-Timeout, X-DB-Statement-Timeout 헤더 처리
     # 비활성화: CHAOS_MIDDLEWARE_ENABLED = False
     "myproject.middleware.chaos_middleware.ChaosMiddleware",
-    
     # Connection Pool 제한 (HELLMODE 시 5개로 제한)
     "myproject.middleware.chaos_middleware.ConnectionPoolLimiterMiddleware",
-    
     # ==========================================================================
     # [11] Audit Middleware (가장 마지막 - 모든 이벤트 수집)
     # ==========================================================================
@@ -169,7 +157,6 @@ MIDDLEWARE = [
     # 비활성화: SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = False
     # CRITICAL: 반드시 마지막 위치!
     "selfhealing.api.django.audit_middleware.AuditMiddleware",
-    
     # ==========================================================================
     # [12] Prometheus After Middleware (HTTP 요청 계측 완료)
     # ==========================================================================
@@ -184,19 +171,25 @@ MIDDLEWARE = [
 # 각 미들웨어의 활성화 여부를 환경변수 또는 여기서 설정
 
 # Tiering Middleware (Emergency Mode Load Shedding)
-SELFHEALING_TIERING_MIDDLEWARE_ENABLED = os.environ.get(
-    "SELFHEALING_TIERING_MIDDLEWARE_ENABLED", "True"
-).lower() in ("true", "1", "yes")
+SELFHEALING_TIERING_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_TIERING_MIDDLEWARE_ENABLED", "True").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # Actor Context Middleware (사용자 추적)
-SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = os.environ.get(
-    "SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", "True"
-).lower() in ("true", "1", "yes")
+SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", "True").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # Pool Circuit Breaker Middleware
-SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = os.environ.get(
-    "SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "True"
-).lower() in ("true", "1", "yes")
+SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "True").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # Pool Timeout Middleware
 SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = os.environ.get(
@@ -204,14 +197,14 @@ SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = os.environ.get(
 ).lower() in ("true", "1", "yes")
 
 # Chaos Middleware (테스트 환경에서만 True 권장)
-CHAOS_MIDDLEWARE_ENABLED = os.environ.get(
-    "CHAOS_MIDDLEWARE_ENABLED", "False"
-).lower() in ("true", "1", "yes")
+CHAOS_MIDDLEWARE_ENABLED = os.environ.get("CHAOS_MIDDLEWARE_ENABLED", "False").lower() in ("true", "1", "yes")
 
 # Audit Middleware
-SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = os.environ.get(
-    "SELFHEALING_AUDIT_MIDDLEWARE_ENABLED", "True"
-).lower() in ("true", "1", "yes")
+SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_AUDIT_MIDDLEWARE_ENABLED", "True").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 ROOT_URLCONF = "myproject.urls"
 

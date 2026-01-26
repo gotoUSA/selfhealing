@@ -91,10 +91,10 @@ class AuditAction(str, Enum):
     # API 예외 (DRF 예외 핸들러에서 사용)
     API_ERROR = "api_error"
     """API 처리 중 에러 발생."""
-    
+
     VALIDATION_FAILED = "validation_failed"
     """입력값 검증 실패."""
-    
+
     AUTHORIZATION_DENIED = "authorization_denied"
     """인가 거부 (권한 없음)."""
 
@@ -102,21 +102,22 @@ class AuditAction(str, Enum):
 class ContextType(str, Enum):
     """
     Audit 이벤트 발생 컨텍스트 유형.
-    
+
     미들웨어 vs Celery Task vs 시스템 자동화를 구분하여
     분석 시 일관된 필터링이 가능합니다.
-    
+
     업계 사례:
     - AWS CloudTrail: eventSource + eventType
     - Datadog APM: trace.origin
     - OpenTelemetry: SpanKind
     """
-    REQUEST = "request"      # HTTP 요청 처리 중 (미들웨어)
-    TASK = "task"            # 백그라운드 태스크 (Celery, RQ)
-    SYSTEM = "system"        # 시스템 자동화 (스케줄러, 자동 복구)
-    WEBHOOK = "webhook"      # 외부 웹훅 처리
-    CLI = "cli"              # CLI 명령 실행
-    UNKNOWN = "unknown"      # 알 수 없음 (폴백)
+
+    REQUEST = "request"  # HTTP 요청 처리 중 (미들웨어)
+    TASK = "task"  # 백그라운드 태스크 (Celery, RQ)
+    SYSTEM = "system"  # 시스템 자동화 (스케줄러, 자동 복구)
+    WEBHOOK = "webhook"  # 외부 웹훅 처리
+    CLI = "cli"  # CLI 명령 실행
+    UNKNOWN = "unknown"  # 알 수 없음 (폴백)
 
 
 def _get_default_actor() -> tuple[Optional[str], str, list[str]]:
@@ -162,7 +163,7 @@ class AuditEntry:
     actor_id: Optional[str] = field(default=None)
     actor_type: str = field(default="system")
     actor_roles: list[str] = field(default_factory=list)
-    
+
     # Context type - 이벤트 발생 환경 구분 (미들웨어/태스크/시스템)
     context_type: ContextType = field(default=ContextType.UNKNOWN)
 
@@ -196,11 +197,12 @@ class AuditEntry:
                 object.__setattr__(self, "actor_type", auto_actor_type)
                 if auto_roles and not self.actor_roles:
                     object.__setattr__(self, "actor_roles", auto_roles)
-        
+
         # actor_id가 설정되었지만 actor_roles가 비어있으면 ActorContext에서 가져오기
         if not self.actor_roles:
             try:
                 from selfhealing.context.actor_context import ActorContext
+
                 if ActorContext.is_set():
                     actor = ActorContext.get_current()
                     if actor.roles:

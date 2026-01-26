@@ -44,59 +44,53 @@ _api_exception_by_category = None
 def _init_metrics():
     """Prometheus 메트릭 초기화 (prometheus_client 있을 때만)."""
     global _METRICS_INITIALIZED, _api_exception_total, _api_exception_by_code, _api_exception_by_category
-    
+
     if _METRICS_INITIALIZED:
         return
-    
+
     try:
         from prometheus_client import Counter, REGISTRY
-        
+
         # 이미 등록된 메트릭이 있는지 확인
         try:
-            _api_exception_total = REGISTRY._names_to_collectors.get(
-                "selfhealing_api_exception_total"
-            )
+            _api_exception_total = REGISTRY._names_to_collectors.get("selfhealing_api_exception_total")
         except (AttributeError, KeyError):
             _api_exception_total = None
-        
+
         if _api_exception_total is None:
             _api_exception_total = Counter(
                 "selfhealing_api_exception_total",
                 "API 예외 발생 총 횟수",
                 ["path", "method", "status_code"],
             )
-        
+
         try:
-            _api_exception_by_code = REGISTRY._names_to_collectors.get(
-                "selfhealing_api_exception_by_code"
-            )
+            _api_exception_by_code = REGISTRY._names_to_collectors.get("selfhealing_api_exception_by_code")
         except (AttributeError, KeyError):
             _api_exception_by_code = None
-            
+
         if _api_exception_by_code is None:
             _api_exception_by_code = Counter(
                 "selfhealing_api_exception_by_code",
                 "에러 코드별 API 예외 횟수",
                 ["error_code"],
             )
-        
+
         try:
-            _api_exception_by_category = REGISTRY._names_to_collectors.get(
-                "selfhealing_api_exception_by_category"
-            )
+            _api_exception_by_category = REGISTRY._names_to_collectors.get("selfhealing_api_exception_by_category")
         except (AttributeError, KeyError):
             _api_exception_by_category = None
-            
+
         if _api_exception_by_category is None:
             _api_exception_by_category = Counter(
                 "selfhealing_api_exception_by_category",
                 "카테고리별 API 예외 횟수",
                 ["category"],
             )
-        
+
         _METRICS_INITIALIZED = True
         logger.debug("[ExceptionHandler] Prometheus metrics initialized")
-        
+
     except ImportError:
         logger.debug("[ExceptionHandler] prometheus_client not available, metrics disabled")
         _METRICS_INITIALIZED = True
@@ -111,7 +105,7 @@ def _record_metrics(
 ) -> None:
     """Prometheus 메트릭 기록."""
     _init_metrics()
-    
+
     try:
         if _api_exception_total is not None:
             _api_exception_total.labels(
@@ -119,13 +113,13 @@ def _record_metrics(
                 method=method or "unknown",
                 status_code=str(status_code),
             ).inc()
-        
+
         if _api_exception_by_code is not None:
             _api_exception_by_code.labels(error_code=error_code).inc()
-        
+
         if _api_exception_by_category is not None:
             _api_exception_by_category.labels(category=category).inc()
-            
+
     except Exception as e:
         logger.debug(f"[ExceptionHandler] Failed to record metrics: {e}")
 
@@ -136,6 +130,7 @@ def _record_metrics(
 
 try:
     from sqlalchemy.exc import TimeoutError as SATimeoutError
+
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SATimeoutError = type(None)  # Never matches
@@ -146,7 +141,7 @@ def _is_pool_timeout(exc: Exception) -> bool:
     """SQLAlchemy Pool Timeout 여부 확인."""
     error_str = str(exc).lower()
     error_type = type(exc).__name__
-    
+
     return (
         (SQLALCHEMY_AVAILABLE and isinstance(exc, SATimeoutError))
         or "queuepool limit" in error_str
@@ -189,10 +184,10 @@ def selfhealing_exception_handler(
     # Pool Timeout 우선 처리 (SQLAlchemy 연동)
     if _is_pool_timeout(exc):
         logger.error(f"[ExceptionHandler] Pool Timeout detected: {type(exc).__name__}: {exc}")
-        
+
         # 표준 응답 생성 (SERVICE_UNAVAILABLE)
         from .classifier import ExceptionCategory, ClassifiedError
-        
+
         pool_classified = ClassifiedError(
             category=ExceptionCategory.SERVICE,
             code=ErrorCode.SERVICE_UNAVAILABLE,
@@ -203,18 +198,18 @@ def selfhealing_exception_handler(
             exception_class=type(exc).__name__,
             extra={"retry_after": 10},
         )
-        
+
         standard_response = StandardErrorResponse.from_classified_error(
             classified=pool_classified,
             request_id=request_id,
             path=path,
             method=method,
         )
-        
+
         # Audit 및 메트릭 기록
         _record_audit_event(request, exc, pool_classified, standard_response)
         _record_metrics(path, method, 503, ErrorCode.SERVICE_UNAVAILABLE.value, "service")
-        
+
         response = Response(
             data=standard_response.to_dict(),
             status=503,
@@ -369,7 +364,7 @@ def _record_audit_event(
 def _get_audit_event_type(classified: "ClassifiedError") -> "AuditEventType":
     """
     분류된 예외에 해당하는 AuditEventType 반환.
-    
+
     API 예외 전용 이벤트 타입을 사용하여 AuditMiddleware에서
     ERROR_DETECTED 중복 기록을 방지합니다.
     """
@@ -397,12 +392,12 @@ def _get_audit_event_type(classified: "ClassifiedError") -> "AuditEventType":
 def _mask_error_message(message: str) -> str:
     """
     에러 메시지에서 민감정보 마스킹.
-    
+
     패스워드, 토큰, API 키 등의 패턴을 감지하여 마스킹합니다.
     """
     try:
         from selfhealing.audit.masking import mask_sensitive_fields
-        
+
         # 메시지를 딕셔너리로 감싸서 마스킹 후 다시 추출
         # 단순 문자열에서 민감 패턴 감지
         sensitive_patterns = [
@@ -414,15 +409,15 @@ def _mask_error_message(message: str) -> str:
             "authorization",
             "credential",
         ]
-        
+
         message_lower = message.lower()
         for pattern in sensitive_patterns:
             if pattern in message_lower:
                 # 민감정보가 포함된 것으로 보이면 상세 정보 숨김
                 return f"[MASKED] Error message may contain sensitive data"
-        
+
         return message
-        
+
     except ImportError:
         return message
     except Exception:
