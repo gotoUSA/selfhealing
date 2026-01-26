@@ -157,9 +157,30 @@
 | `learning.py` | 1 | LearningSessionView.post - try-except 제거, ValueError/Http404 raise 패턴 적용 |
 | `dlq.py` | 8 | DLQCleanupStatsView.get, DLQArchiveView.post, DLQPurgeView.post, DLQListView.get, DLQDetailView.get, DLQRetryView.post, DLQResolveView.post, DLQTestCreateView.post - try-except 제거 |
 
-#### Phase 4.2.2 - 대규모 마이그레이션 (2026-01-26)
+#### Phase 4.2.2 - 대규모 마이그레이션 (2025-01-26)
 
 총 **51개 try-except 패턴** 제거 (13개 파일):
+
+#### Phase 4.2.3 - 추가 마이그레이션 (2026-01-27)
+
+총 **48개 try-except 패턴** 제거 (12개 파일):
+
+| 파일 | 변경 수 | 변경 유형 |
+|------|---------|-----------|
+| `layered_storage/dashboard.py` | 1 | DashboardSummaryView.get - try-except 제거 |
+| `layered_storage/config_history.py` | 1 | ConfigRollbackView.post - try-except 제거, RuntimeError raise 패턴 |
+| `layered_storage/drift_threshold.py` | 3 | GET/PUT/POST - try-except 제거, ValueError raise 패턴 |
+| `layered_storage/l2_storage_config.py` | 3 | GET/PUT/POST - try-except 제거, ValueError raise 패턴 |
+| `layered_storage/l2_storage_drift.py` | 4 | GET/POST/PUT/DELETE - try-except 제거, ValueError raise 패턴 |
+| `layered_storage/l2_storage_status.py` | 6 | Status/Health/Sync/ForceSync/Repair/Evict - try-except 제거 |
+| `layered_storage/l2_storage_shadow_log.py` | 6 | GET/List/Clear/Stats/Export/Preview - try-except 제거 |
+| `layered_storage/metric_sync.py` | 2 | POST/GET - try-except 제거 |
+| `layered_storage/recovery.py` | 8 | Status/PendingApprovals/Start/Abort/Approve/Reject/History/Widget - try-except 제거, Http404 raise 패턴 |
+| `error_budget/deployment.py` | 4 | Acknowledge/Override/Lift/ActiveOverride - try-except 제거 (⚠️ FAIL-SAFE 보존: DeploymentVerdictView.get()) |
+| `error_budget/status.py` | 3 | History/Record/Exhaust/ResetSimulation - try-except 제거 (⚠️ FAIL-SAFE 보존: ErrorBudgetStatusView.get()) |
+| `xtest/circuit_breaker.py` | 7 | Inject/Reset/Status/FastFail/Recovery/TryRecovery/SwitchAuto - try-except 제거 |
+
+**누적 마이그레이션 현황: 109개 try-except 패턴 제거 (28개 파일)**
 
 | 파일 | 변경 수 | 변경 유형 |
 |------|---------|-----------|

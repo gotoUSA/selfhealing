@@ -72,61 +72,54 @@ class RecoveryStatusView(APIView):
         """Get current recovery status."""
         namespace = request.query_params.get("namespace", "global")
         
-        try:
-            coordinator = get_recovery_coordinator()
-            circuit_breaker = get_recovery_circuit_breaker()
-            approval_manager = get_pending_recovery_approval_manager()
-            policy_engine = get_regional_recovery_policy_engine()
-            
-            # 현재 상태
-            current_status = coordinator.get_current_status(namespace)
-            
-            # 활성 세션
-            active_session = coordinator.get_active_session(namespace)
-            session_data = None
-            if active_session:
-                session_data = {
-                    "session_id": active_session.session_id,
-                    "status": active_session.status.value,
-                    "current_step": active_session.current_step_index,
-                    "total_steps": len(active_session.steps),
-                    "started_at": active_session.started_at.isoformat() if active_session.started_at else None,
-                    "namespace": active_session.namespace,
-                }
-            
-            # 회로 차단기 상태
-            cb_status = circuit_breaker.get_status(namespace)
-            
-            # 대기 중인 승인
-            pending = approval_manager.list_pending_requests(namespace=namespace)
-            
-            # 리전 설정
-            config = policy_engine.get_config(namespace)
-            
-            return Response({
-                "status": current_status.value,
-                "namespace": namespace,
-                "active_session": session_data,
-                "circuit_breaker": {
-                    "state": cb_status.get("state", "unknown"),
-                    "trip_count": cb_status.get("trip_count", 0),
-                    "is_permanently_open": cb_status.get("is_permanently_open", False),
-                },
-                "pending_approvals_count": len(pending),
-                "regional_config": {
-                    "require_manual_approval": config.require_manual_approval,
-                    "stability_check_minutes": config.stability_check_minutes,
-                    "approval_timeout_minutes": config.approval_timeout_minutes,
-                },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryStatusView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        coordinator = get_recovery_coordinator()
+        circuit_breaker = get_recovery_circuit_breaker()
+        approval_manager = get_pending_recovery_approval_manager()
+        policy_engine = get_regional_recovery_policy_engine()
+        
+        # 현재 상태
+        current_status = coordinator.get_current_status(namespace)
+        
+        # 활성 세션
+        active_session = coordinator.get_active_session(namespace)
+        session_data = None
+        if active_session:
+            session_data = {
+                "session_id": active_session.session_id,
+                "status": active_session.status.value,
+                "current_step": active_session.current_step_index,
+                "total_steps": len(active_session.steps),
+                "started_at": active_session.started_at.isoformat() if active_session.started_at else None,
+                "namespace": active_session.namespace,
+            }
+        
+        # 회로 차단기 상태
+        cb_status = circuit_breaker.get_status(namespace)
+        
+        # 대기 중인 승인
+        pending = approval_manager.list_pending_requests(namespace=namespace)
+        
+        # 리전 설정
+        config = policy_engine.get_config(namespace)
+        
+        return Response({
+            "status": current_status.value,
+            "namespace": namespace,
+            "active_session": session_data,
+            "circuit_breaker": {
+                "state": cb_status.get("state", "unknown"),
+                "trip_count": cb_status.get("trip_count", 0),
+                "is_permanently_open": cb_status.get("is_permanently_open", False),
+            },
+            "pending_approvals_count": len(pending),
+            "regional_config": {
+                "require_manual_approval": config.require_manual_approval,
+                "stability_check_minutes": config.stability_check_minutes,
+                "approval_timeout_minutes": config.approval_timeout_minutes,
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -157,90 +150,78 @@ class RecoveryStartView(APIView):
         force = request.data.get("force", False)
         skip_approval = request.data.get("skip_approval", False)
         
-        try:
-            coordinator = get_recovery_coordinator()
-            policy_engine = get_regional_recovery_policy_engine()
-            approval_manager = get_pending_recovery_approval_manager()
+        coordinator = get_recovery_coordinator()
+        policy_engine = get_regional_recovery_policy_engine()
+        approval_manager = get_pending_recovery_approval_manager()
+        
+        # 현재 상태 확인
+        current_status = coordinator.get_current_status(namespace)
+        
+        if current_status == RecoveryStatus.RECOVERING:
+            active = coordinator.get_active_session(namespace)
+            return Response({
+                "error": "Recovery already in progress",
+                "session_id": active.session_id if active else None,
+                "status": current_status.value,
+            }, status=status.HTTP_409_CONFLICT)
+        
+        # 리전 설정 확인
+        config = policy_engine.get_config(namespace)
+        
+        # 수동 승인 필요 여부
+        if config.require_manual_approval and not skip_approval:
+            # 기존 대기 중인 요청 확인
+            existing = approval_manager.get_request_by_session_or_pending(
+                namespace=namespace
+            )
             
-            # 현재 상태 확인
-            current_status = coordinator.get_current_status(namespace)
-            
-            if current_status == RecoveryStatus.RECOVERING:
-                active = coordinator.get_active_session(namespace)
-                return Response({
-                    "error": "Recovery already in progress",
-                    "session_id": active.session_id if active else None,
-                    "status": current_status.value,
-                }, status=status.HTTP_409_CONFLICT)
-            
-            # 리전 설정 확인
-            config = policy_engine.get_config(namespace)
-            
-            # 수동 승인 필요 여부
-            if config.require_manual_approval and not skip_approval:
-                # 기존 대기 중인 요청 확인
-                existing = approval_manager.get_request_by_session_or_pending(
-                    namespace=namespace
+            if existing is None:
+                # 새 승인 요청 생성
+                request_obj = approval_manager.create_request(
+                    session_id=f"manual-{namespace}-{datetime.now(timezone.utc).isoformat()}",
+                    namespace=namespace,
+                    trigger_level="MANUAL",
+                    timeout_minutes=config.approval_timeout_minutes,
+                    metadata={
+                        "requested_by": str(request.user),
+                        "force": force,
+                    },
                 )
                 
-                if existing is None:
-                    # 새 승인 요청 생성
-                    request_obj = approval_manager.create_request(
-                        session_id=f"manual-{namespace}-{datetime.now(timezone.utc).isoformat()}",
-                        namespace=namespace,
-                        trigger_level="MANUAL",
-                        timeout_minutes=config.approval_timeout_minutes,
-                        metadata={
-                            "requested_by": str(request.user),
-                            "force": force,
-                        },
-                    )
-                    
-                    return Response({
-                        "message": "Approval required before starting recovery",
-                        "approval_request_id": request_obj.request_id,
-                        "status": RecoveryStatus.READY_TO_RESTORE.value,
-                        "approval_timeout_minutes": config.approval_timeout_minutes,
-                    }, status=status.HTTP_202_ACCEPTED)
-                
-                if existing.status.value == "pending":
-                    return Response({
-                        "message": "Waiting for approval",
-                        "approval_request_id": existing.request_id,
-                        "status": RecoveryStatus.READY_TO_RESTORE.value,
-                    }, status=status.HTTP_202_ACCEPTED)
+                return Response({
+                    "message": "Approval required before starting recovery",
+                    "approval_request_id": request_obj.request_id,
+                    "status": RecoveryStatus.READY_TO_RESTORE.value,
+                    "approval_timeout_minutes": config.approval_timeout_minutes,
+                }, status=status.HTTP_202_ACCEPTED)
             
-            # 복구 시작
-            session = coordinator.start_recovery(
-                namespace=namespace,
-                trigger_source="manual" if not force else "force",
-            )
-            
-            logger.info(
-                f"[RecoveryStartView] Recovery started: "
-                f"session_id={session.session_id}, namespace={namespace}, "
-                f"user={request.user}"
-            )
-            
-            return Response({
-                "session_id": session.session_id,
-                "status": session.status.value,
-                "namespace": namespace,
-                "steps": [s.name for s in session.steps],
-                "message": "Recovery started successfully",
-            }, status=status.HTTP_201_CREATED)
-            
-        except ValueError as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            logger.exception(f"[RecoveryStartView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            if existing.status.value == "pending":
+                return Response({
+                    "message": "Waiting for approval",
+                    "approval_request_id": existing.request_id,
+                    "status": RecoveryStatus.READY_TO_RESTORE.value,
+                }, status=status.HTTP_202_ACCEPTED)
+        
+        # 복구 시작 - ValueError는 exception handler가 400으로 처리
+        session = coordinator.start_recovery(
+            namespace=namespace,
+            trigger_source="manual" if not force else "force",
+        )
+        
+        logger.info(
+            f"[RecoveryStartView] Recovery started: "
+            f"session_id={session.session_id}, namespace={namespace}, "
+            f"user={request.user}"
+        )
+        
+        return Response({
+            "session_id": session.session_id,
+            "status": session.status.value,
+            "namespace": namespace,
+            "steps": [s.name for s in session.steps],
+            "message": "Recovery started successfully",
+        }, status=status.HTTP_201_CREATED)
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -266,50 +247,39 @@ class RecoveryAbortView(APIView):
         reason = request.data.get("reason", "Manual abort by user")
         namespace = request.data.get("namespace", "global")
         
-        try:
-            coordinator = get_recovery_coordinator()
-            
-            # session_id 없으면 활성 세션 사용
-            if not session_id:
-                active = coordinator.get_active_session(namespace)
-                if active:
-                    session_id = active.session_id
-            
-            if not session_id:
-                return Response(
-                    {"error": "No active recovery session to abort"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            
-            result = coordinator.abort_recovery(
-                session_id=session_id,
-                reason=f"{reason} (by {request.user})",
-            )
-            
-            if result:
-                logger.info(
-                    f"[RecoveryAbortView] Recovery aborted: "
-                    f"session_id={session_id}, user={request.user}"
-                )
-                
-                return Response({
-                    "session_id": session_id,
-                    "status": RecoveryStatus.ABORTED.value,
-                    "reason": reason,
-                    "message": "Recovery aborted successfully",
-                })
-            else:
-                return Response(
-                    {"error": f"Session not found or already completed: {session_id}"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryAbortView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        coordinator = get_recovery_coordinator()
+        
+        # session_id 없으면 활성 세션 사용
+        if not session_id:
+            active = coordinator.get_active_session(namespace)
+            if active:
+                session_id = active.session_id
+        
+        if not session_id:
+            from django.http import Http404
+            raise Http404("No active recovery session to abort")
+        
+        result = coordinator.abort_recovery(
+            session_id=session_id,
+            reason=f"{reason} (by {request.user})",
+        )
+        
+        if not result:
+            from django.http import Http404
+            raise Http404(f"Session not found or already completed: {session_id}")
+        
+        logger.info(
+            f"[RecoveryAbortView] Recovery aborted: "
+            f"session_id={session_id}, user={request.user}"
+        )
+        
+        return Response({
+            "session_id": session_id,
+            "status": RecoveryStatus.ABORTED.value,
+            "reason": reason,
+            "message": "Recovery aborted successfully",
+        })
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -330,23 +300,16 @@ class RecoveryPendingApprovalsView(APIView):
         """Get pending approval requests."""
         namespace = request.query_params.get("namespace")  # None이면 전체
         
-        try:
-            manager = get_pending_recovery_approval_manager()
-            
-            pending = manager.list_pending_requests(namespace=namespace)
-            
-            return Response({
-                "pending_approvals": [r.to_dict() for r in pending],
-                "total_count": len(pending),
-                "namespace_filter": namespace,
-            })
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryPendingApprovalsView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        manager = get_pending_recovery_approval_manager()
+        
+        pending = manager.list_pending_requests(namespace=namespace)
+        
+        return Response({
+            "pending_approvals": [r.to_dict() for r in pending],
+            "total_count": len(pending),
+            "namespace_filter": namespace,
+        })
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -378,55 +341,46 @@ class RecoveryApproveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        try:
-            manager = get_pending_recovery_approval_manager()
-            coordinator = get_recovery_coordinator()
-            
-            result = manager.approve(
-                request_id=request_id,
-                approved_by=str(request.user),
-                reason=reason,
-            )
-            
-            if result is None:
-                return Response(
-                    {"error": f"Request not found: {request_id}"},
-                    status=status.HTTP_404_NOT_FOUND,
+        manager = get_pending_recovery_approval_manager()
+        coordinator = get_recovery_coordinator()
+        
+        result = manager.approve(
+            request_id=request_id,
+            approved_by=str(request.user),
+            reason=reason,
+        )
+        
+        if result is None:
+            from django.http import Http404
+            raise Http404(f"Request not found: {request_id}")
+        
+        logger.info(
+            f"[RecoveryApproveView] Approved: "
+            f"request_id={request_id}, user={request.user}"
+        )
+        
+        response_data = {
+            "request_id": request_id,
+            "status": result.status.value,
+            "approved_by": result.approved_by,
+            "approved_at": result.approved_at.isoformat() if result.approved_at else None,
+        }
+        
+        # 승인 후 자동 시작
+        if auto_start:
+            try:
+                session = coordinator.start_recovery(
+                    namespace=result.namespace,
+                    trigger_source="approved",
                 )
-            
-            logger.info(
-                f"[RecoveryApproveView] Approved: "
-                f"request_id={request_id}, user={request.user}"
-            )
-            
-            response_data = {
-                "request_id": request_id,
-                "status": result.status.value,
-                "approved_by": result.approved_by,
-                "approved_at": result.approved_at.isoformat() if result.approved_at else None,
-            }
-            
-            # 승인 후 자동 시작
-            if auto_start:
-                try:
-                    session = coordinator.start_recovery(
-                        namespace=result.namespace,
-                        trigger_source="approved",
-                    )
-                    response_data["session_id"] = session.session_id
-                    response_data["recovery_started"] = True
-                except ValueError as e:
-                    response_data["recovery_started"] = False
-                    response_data["recovery_error"] = str(e)
-            
-            return Response(response_data)
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryApproveView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                response_data["session_id"] = session.session_id
+                response_data["recovery_started"] = True
+            except ValueError as e:
+                response_data["recovery_started"] = False
+                response_data["recovery_error"] = str(e)
+        
+        return Response(response_data)
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -458,44 +412,32 @@ class RecoveryRejectView(APIView):
             )
         
         if not reason:
-            return Response(
-                {"error": "reason is required for rejection"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValueError("reason is required for rejection")
         
-        try:
-            manager = get_pending_recovery_approval_manager()
-            
-            result = manager.reject(
-                request_id=request_id,
-                rejected_by=str(request.user),
-                reason=reason,
-            )
-            
-            if result is None:
-                return Response(
-                    {"error": f"Request not found: {request_id}"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            
-            logger.info(
-                f"[RecoveryRejectView] Rejected: "
-                f"request_id={request_id}, reason={reason}, user={request.user}"
-            )
-            
-            return Response({
-                "request_id": request_id,
-                "status": result.status.value,
-                "rejected_by": result.approved_by,
-                "rejection_reason": reason,
-            })
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryRejectView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        manager = get_pending_recovery_approval_manager()
+        
+        result = manager.reject(
+            request_id=request_id,
+            rejected_by=str(request.user),
+            reason=reason,
+        )
+        
+        if result is None:
+            from django.http import Http404
+            raise Http404(f"Request not found: {request_id}")
+        
+        logger.info(
+            f"[RecoveryRejectView] Rejected: "
+            f"request_id={request_id}, reason={reason}, user={request.user}"
+        )
+        
+        return Response({
+            "request_id": request_id,
+            "status": result.status.value,
+            "rejected_by": result.approved_by,
+            "rejection_reason": reason,
+        })
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -517,38 +459,31 @@ class RecoveryHistoryView(APIView):
         namespace = request.query_params.get("namespace")
         limit = int(request.query_params.get("limit", 20))
         
-        try:
-            coordinator = get_recovery_coordinator()
-            
-            # 세션 히스토리 조회
-            history = coordinator.get_session_history(
-                namespace=namespace,
-                limit=limit,
-            )
-            
-            return Response({
-                "history": [
-                    {
-                        "session_id": s.session_id,
-                        "status": s.status.value,
-                        "namespace": s.namespace,
-                        "started_at": s.started_at.isoformat() if s.started_at else None,
-                        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
-                        "steps_completed": sum(1 for step in s.steps if step.completed),
-                        "total_steps": len(s.steps),
-                    }
-                    for s in history
-                ],
-                "total_count": len(history),
-                "namespace_filter": namespace,
-            })
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryHistoryView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        coordinator = get_recovery_coordinator()
+        
+        # 세션 히스토리 조회
+        history = coordinator.get_session_history(
+            namespace=namespace,
+            limit=limit,
+        )
+        
+        return Response({
+            "history": [
+                {
+                    "session_id": s.session_id,
+                    "status": s.status.value,
+                    "namespace": s.namespace,
+                    "started_at": s.started_at.isoformat() if s.started_at else None,
+                    "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+                    "steps_completed": sum(1 for step in s.steps if step.completed),
+                    "total_steps": len(s.steps),
+                }
+                for s in history
+            ],
+            "total_count": len(history),
+            "namespace_filter": namespace,
+        })
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================
@@ -572,17 +507,10 @@ class RecoveryDashboardWidgetView(APIView):
         """Get dashboard widget data."""
         namespace = request.query_params.get("namespace", "global")
         
-        try:
-            service = get_recovery_dashboard_service()
-            widget_data = service.get_widget_data(namespace=namespace)
-            return Response(widget_data.to_dict())
-            
-        except Exception as e:
-            logger.exception(f"[RecoveryDashboardWidgetView] Error: {e}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        service = get_recovery_dashboard_service()
+        widget_data = service.get_widget_data(namespace=namespace)
+        return Response(widget_data.to_dict())
+        # Exception은 exception handler가 처리
 
 
 # =============================================================================

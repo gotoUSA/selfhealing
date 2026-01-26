@@ -39,73 +39,51 @@ class L2StorageConfigView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get current L2 storage configuration."""
-        try:
-            config = get_l2_storage_runtime_config()
-            
-            return Response(
-                {
-                    "status": "success",
-                    "config": config.to_dict(),
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[L2StorageAPI] Error getting config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        config = get_l2_storage_runtime_config()
+        
+        return Response(
+            {
+                "status": "success",
+                "config": config.to_dict(),
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
     def put(self, request: Request) -> Response:
         """Update L2 storage configuration."""
-        try:
-            serializer = L2StorageConfigSerializer(data=request.data)
-            if not serializer.is_valid():
-                return Response(
-                    {"status": "error", "errors": serializer.errors},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            config = get_l2_storage_runtime_config()
-            changes = serializer.get_config_changes()
-            
-            if not changes:
-                return Response(
-                    {"status": "error", "error": "No changes provided"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            updated_config = config.update(
-                **changes,
-                updated_by=str(request.user),
-            )
-            
-            logger.info(
-                f"[L2StorageAPI] Config updated by {request.user}: {changes}"
-            )
-            
-            return Response(
-                {
-                    "status": "success",
-                    "message": "L2 storage configuration updated",
-                    "config": updated_config,
-                    "changes": changes,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except ValueError as e:
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            logger.error(f"[L2StorageAPI] Error updating config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        serializer = L2StorageConfigSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise ValueError(f"Validation failed: {serializer.errors}")
+        
+        config = get_l2_storage_runtime_config()
+        changes = serializer.get_config_changes()
+        
+        if not changes:
+            raise ValueError("No changes provided")
+        
+        # ValueError는 exception handler가 400으로 처리
+        updated_config = config.update(
+            **changes,
+            updated_by=str(request.user),
+        )
+        
+        logger.info(
+            f"[L2StorageAPI] Config updated by {request.user}: {changes}"
+        )
+        
+        return Response(
+            {
+                "status": "success",
+                "message": "L2 storage configuration updated",
+                "config": updated_config,
+                "changes": changes,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class L2StorageConfigResetView(APIView):
@@ -119,24 +97,18 @@ class L2StorageConfigResetView(APIView):
 
     def post(self, request: Request) -> Response:
         """Reset L2 storage configuration to defaults."""
-        try:
-            config = get_l2_storage_runtime_config()
-            config.reset()
-            
-            logger.info(f"[L2StorageAPI] Config reset to defaults by {request.user}")
-            
-            return Response(
-                {
-                    "status": "success",
-                    "message": "L2 storage configuration reset to defaults",
-                    "config": config.to_dict(),
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[L2StorageAPI] Error resetting config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        config = get_l2_storage_runtime_config()
+        config.reset()
+        
+        logger.info(f"[L2StorageAPI] Config reset to defaults by {request.user}")
+        
+        return Response(
+            {
+                "status": "success",
+                "message": "L2 storage configuration reset to defaults",
+                "config": config.to_dict(),
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리

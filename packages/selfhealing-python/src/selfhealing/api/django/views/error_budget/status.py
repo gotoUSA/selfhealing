@@ -103,30 +103,23 @@ class ErrorBudgetHistoryView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
-        try:
-            limit = int(request.query_params.get("limit", 50))
-            decision_type = request.query_params.get("decision_type")
+        # Exception은 exception handler가 처리
+        limit = int(request.query_params.get("limit", 50))
+        decision_type = request.query_params.get("decision_type")
 
-            service = get_error_budget_service()
-            history = service.get_decision_history(limit=limit, decision_type=decision_type)
+        service = get_error_budget_service()
+        history = service.get_decision_history(limit=limit, decision_type=decision_type)
 
-            return Response(
-                {
-                    "status": "success",
-                    "data": {
-                        "records": [r.to_dict() for r in history],
-                        "count": len(history),
-                    },
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetAPI] History failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "data": {
+                    "records": [r.to_dict() for r in history],
+                    "count": len(history),
+                },
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class ErrorBudgetRecordView(APIView):
@@ -149,67 +142,60 @@ class ErrorBudgetRecordView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
-        try:
-            # 다양한 형식 지원 (호환성)
-            error_count = int(request.data.get("error_count", 1))
-            error_type = request.data.get("error_type", "simulated")
-            service_name = request.data.get("service_name", "test")
-            
-            # Extended format: domain, severity, multiplier
-            domain = request.data.get("domain", service_name)
-            severity = request.data.get("severity", "medium")
-            multiplier = float(request.data.get("multiplier", 1.0))
-            reason = request.data.get("reason", "")
-            
-            # severity에 따른 가중치 조정
-            severity_weights = {
-                "low": 1,
-                "medium": 3,
-                "high": 5,
-                "critical": 10,
+        # Exception은 exception handler가 처리
+        # 다양한 형식 지원 (호환성)
+        error_count = int(request.data.get("error_count", 1))
+        error_type = request.data.get("error_type", "simulated")
+        service_name = request.data.get("service_name", "test")
+        
+        # Extended format: domain, severity, multiplier
+        domain = request.data.get("domain", service_name)
+        severity = request.data.get("severity", "medium")
+        multiplier = float(request.data.get("multiplier", 1.0))
+        reason = request.data.get("reason", "")
+        
+        # severity에 따른 가중치 조정
+        severity_weights = {
+            "low": 1,
+            "medium": 3,
+            "high": 5,
+            "critical": 10,
+        }
+        base_errors = severity_weights.get(severity, 1)
+        effective_errors = int(base_errors * multiplier * error_count)
+
+        if effective_errors < 1:
+            effective_errors = 1
+
+        service = get_error_budget_service()
+        result = service.record_error(
+            error_count=effective_errors,
+            error_type=error_type,
+            service_name=domain,
+        )
+        
+        # 확장 정보 추가
+        result["severity"] = severity
+        result["multiplier"] = multiplier
+        result["domain"] = domain
+        result["effective_errors"] = effective_errors
+        if reason:
+            result["reason"] = reason
+
+        logger.info(
+            f"[ErrorBudgetAPI] Recorded {effective_errors} errors "
+            f"(domain={domain}, severity={severity}, multiplier={multiplier})"
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": f"{effective_errors} error(s) recorded for budget consumption",
+                "data": result,
+                "remaining_percent": result.get("budget_remaining_percent"),
+                "timestamp": timezone.now().isoformat(),
             }
-            base_errors = severity_weights.get(severity, 1)
-            effective_errors = int(base_errors * multiplier * error_count)
-
-            if effective_errors < 1:
-                effective_errors = 1
-
-            service = get_error_budget_service()
-            result = service.record_error(
-                error_count=effective_errors,
-                error_type=error_type,
-                service_name=domain,
-            )
-            
-            # 확장 정보 추가
-            result["severity"] = severity
-            result["multiplier"] = multiplier
-            result["domain"] = domain
-            result["effective_errors"] = effective_errors
-            if reason:
-                result["reason"] = reason
-
-            logger.info(
-                f"[ErrorBudgetAPI] Recorded {effective_errors} errors "
-                f"(domain={domain}, severity={severity}, multiplier={multiplier})"
-            )
-
-            return Response(
-                {
-                    "status": "success",
-                    "message": f"{effective_errors} error(s) recorded for budget consumption",
-                    "data": result,
-                    "remaining_percent": result.get("budget_remaining_percent"),
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetAPI] Record failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        )
 
 
 class ErrorBudgetExhaustView(APIView):
@@ -229,40 +215,27 @@ class ErrorBudgetExhaustView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
-        try:
-            target = float(request.data.get("target_remaining_percent", 0.0))
+        # Exception은 exception handler가 처리
+        target = float(request.data.get("target_remaining_percent", 0.0))
 
-            if target < 0 or target > 100:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "target_remaining_percent must be between 0 and 100",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if target < 0 or target > 100:
+            raise ValueError("target_remaining_percent must be between 0 and 100")
 
-            service = get_error_budget_service()
-            result = service.simulate_budget_exhaustion(target_remaining_percent=target)
+        service = get_error_budget_service()
+        result = service.simulate_budget_exhaustion(target_remaining_percent=target)
 
-            logger.warning(
-                f"[ErrorBudgetAPI] Budget exhaustion simulated: target={target}%"
-            )
+        logger.warning(
+            f"[ErrorBudgetAPI] Budget exhaustion simulated: target={target}%"
+        )
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": f"Budget exhaustion simulated to {target}%",
-                    "data": result,
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetAPI] Exhaust failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "message": f"Budget exhaustion simulated to {target}%",
+                "data": result,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class ErrorBudgetResetSimulationView(APIView):
@@ -277,27 +250,20 @@ class ErrorBudgetResetSimulationView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
-        try:
-            service = get_error_budget_service()
-            result = service.reset_simulated_stats()
+        # Exception은 exception handler가 처리
+        service = get_error_budget_service()
+        result = service.reset_simulated_stats()
 
-            logger.info("[ErrorBudgetAPI] Simulation stats reset")
+        logger.info("[ErrorBudgetAPI] Simulation stats reset")
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Simulation stats reset",
-                    "data": result,
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetAPI] Reset simulation failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "message": "Simulation stats reset",
+                "data": result,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 __all__ = [

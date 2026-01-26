@@ -60,108 +60,72 @@ class DriftThresholdConfigView(APIView):
 
     def get(self, request: Request) -> Response:
         """현재 Drift 임계값 설정 조회."""
-        try:
-            manager = get_runtime_config_manager()
-            config = manager.get_drift_threshold_config()
+        manager = get_runtime_config_manager()
+        config = manager.get_drift_threshold_config()
 
-            return Response(
-                {
-                    "status": "success",
-                    "config": config,
-                    "thresholds_percent": _get_threshold_percent_display(config),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[DriftThresholdAPI] Error getting config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "config": config,
+                "thresholds_percent": _get_threshold_percent_display(config),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
     def put(self, request: Request) -> Response:
         """Drift 임계값 설정 업데이트."""
-        try:
-            manager = get_runtime_config_manager()
-            actor_id = str(request.user) if request.user.is_authenticated else "anonymous"
+        manager = get_runtime_config_manager()
+        actor_id = str(request.user) if request.user.is_authenticated else "anonymous"
 
-            # 요청 데이터 검증
-            data = request.data
-            update_fields = {}
+        # 요청 데이터 검증
+        data = request.data
+        update_fields = {}
 
-            # 임계값 필드 검증
-            for field in ["warning_threshold", "critical_threshold", "incident_threshold"]:
-                if field in data:
-                    value = data[field]
-                    if not isinstance(value, (int, float)):
-                        return Response(
-                            {
-                                "status": "error",
-                                "error": f"{field} must be a number",
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    if not 0 < value <= 1.0:
-                        return Response(
-                            {
-                                "status": "error",
-                                "error": f"{field} must be between 0 and 1.0",
-                            },
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    update_fields[field] = float(value)
+        # 임계값 필드 검증
+        for field in ["warning_threshold", "critical_threshold", "incident_threshold"]:
+            if field in data:
+                value = data[field]
+                if not isinstance(value, (int, float)):
+                    raise ValueError(f"{field} must be a number")
+                if not 0 < value <= 1.0:
+                    raise ValueError(f"{field} must be between 0 and 1.0")
+                update_fields[field] = float(value)
 
-            # Boolean 필드 검증
-            for field in ["alert_enabled", "incident_auto_create"]:
-                if field in data:
-                    update_fields[field] = bool(data[field])
+        # Boolean 필드 검증
+        for field in ["alert_enabled", "incident_auto_create"]:
+            if field in data:
+                update_fields[field] = bool(data[field])
 
-            if not update_fields:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "No valid fields provided for update",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not update_fields:
+            raise ValueError("No valid fields provided for update")
 
-            # RuntimeConfigManager를 통해 업데이트 (검증 및 History 자동 처리)
-            try:
-                new_config = manager.update_drift_threshold_config(
-                    changed_by=actor_id,
-                    reason=f"API update: {list(update_fields.keys())}",
-                    **update_fields
-                )
-            except ValueError as e:
-                return Response(
-                    {"status": "error", "error": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        # RuntimeConfigManager를 통해 업데이트 (검증 및 History 자동 처리)
+        # ValueError는 exception handler가 400 응답으로 처리
+        new_config = manager.update_drift_threshold_config(
+            changed_by=actor_id,
+            reason=f"API update: {list(update_fields.keys())}",
+            **update_fields
+        )
 
-            # Audit 로깅
-            logger.info(
-                f"[DriftThresholdAPI] Config updated by {actor_id}: "
-                f"fields={list(update_fields.keys())}"
-            )
+        # Audit 로깅
+        logger.info(
+            f"[DriftThresholdAPI] Config updated by {actor_id}: "
+            f"fields={list(update_fields.keys())}"
+        )
 
-            return Response(
-                {
-                    "status": "updated",
-                    "config": new_config,
-                    "thresholds_percent": _get_threshold_percent_display(new_config),
-                    "updated_by": actor_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[DriftThresholdAPI] Error updating config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "updated",
+                "config": new_config,
+                "thresholds_percent": _get_threshold_percent_display(new_config),
+                "updated_by": actor_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class DriftThresholdResetView(APIView):
@@ -178,33 +142,26 @@ class DriftThresholdResetView(APIView):
 
     def post(self, request: Request) -> Response:
         """Drift 임계값 기본값으로 리셋."""
-        try:
-            actor_id = str(request.user) if request.user.is_authenticated else "anonymous"
-            manager = get_runtime_config_manager()
+        actor_id = str(request.user) if request.user.is_authenticated else "anonymous"
+        manager = get_runtime_config_manager()
 
-            # RuntimeConfigManager를 통해 리셋
-            default_config = manager.reset_drift_threshold_config(changed_by=actor_id)
+        # RuntimeConfigManager를 통해 리셋
+        default_config = manager.reset_drift_threshold_config(changed_by=actor_id)
 
-            # Audit 로깅
-            logger.info(f"[DriftThresholdAPI] Config reset by {actor_id}")
+        # Audit 로깅
+        logger.info(f"[DriftThresholdAPI] Config reset by {actor_id}")
 
-            return Response(
-                {
-                    "status": "reset",
-                    "config": default_config,
-                    "thresholds_percent": _get_threshold_percent_display(default_config),
-                    "reset_by": actor_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[DriftThresholdAPI] Error resetting config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "reset",
+                "config": default_config,
+                "thresholds_percent": _get_threshold_percent_display(default_config),
+                "reset_by": actor_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 __all__ = [

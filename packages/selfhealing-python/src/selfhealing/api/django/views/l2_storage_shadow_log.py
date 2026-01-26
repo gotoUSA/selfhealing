@@ -38,58 +38,49 @@ class ShadowLogListView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get shadow log entries."""
-        try:
-            shadow_logger = get_shadow_logger()
-            
-            if shadow_logger is None:
-                return Response(
-                    {"status": "error", "error": "Shadow logger not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-            
-            # Query parameters
-            unsynced_only = request.query_params.get("unsynced_only", "false").lower() == "true"
-            limit = int(request.query_params.get("limit", 100))
-            
-            if unsynced_only:
-                records = shadow_logger.get_unsynced_records()
-            else:
-                records = shadow_logger.get_all_records()
-            
-            # Apply limit
-            records = records[-limit:] if len(records) > limit else records
-            
-            # Serialize
-            entries = [
-                {
-                    "service_name": r.service_name,
-                    "intended_state": r.intended_state,
-                    "failure_time": r.failure_time.isoformat(),
-                    "error_message": r.error_message,
-                    "l1_state_at_failure": r.l1_state_at_failure,
-                    "adapter_type": r.adapter_type,
-                    "operation": r.operation,
-                    "synced_after_recovery": r.synced_after_recovery,
-                    "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
-                }
-                for r in records
-            ]
-            
-            return Response(
-                {
-                    "status": "success",
-                    "count": len(entries),
-                    "entries": entries,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[L2StorageAPI] Error getting shadow log: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        shadow_logger = get_shadow_logger()
+        
+        if shadow_logger is None:
+            raise RuntimeError("Shadow logger not available")
+        
+        # Query parameters
+        unsynced_only = request.query_params.get("unsynced_only", "false").lower() == "true"
+        limit = int(request.query_params.get("limit", 100))
+        
+        if unsynced_only:
+            records = shadow_logger.get_unsynced_records()
+        else:
+            records = shadow_logger.get_all_records()
+        
+        # Apply limit
+        records = records[-limit:] if len(records) > limit else records
+        
+        # Serialize
+        entries = [
+            {
+                "service_name": r.service_name,
+                "intended_state": r.intended_state,
+                "failure_time": r.failure_time.isoformat(),
+                "error_message": r.error_message,
+                "l1_state_at_failure": r.l1_state_at_failure,
+                "adapter_type": r.adapter_type,
+                "operation": r.operation,
+                "synced_after_recovery": r.synced_after_recovery,
+                "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
+            }
+            for r in records
+        ]
+        
+        return Response(
+            {
+                "status": "success",
+                "count": len(entries),
+                "entries": entries,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class ShadowLogStatsView(APIView):
@@ -103,31 +94,22 @@ class ShadowLogStatsView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get shadow log statistics."""
-        try:
-            shadow_logger = get_shadow_logger()
-            
-            if shadow_logger is None:
-                return Response(
-                    {"status": "error", "error": "Shadow logger not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-            
-            stats = shadow_logger.get_stats()
-            
-            return Response(
-                {
-                    "status": "success",
-                    "stats": stats,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[L2StorageAPI] Error getting shadow log stats: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        shadow_logger = get_shadow_logger()
+        
+        if shadow_logger is None:
+            raise RuntimeError("Shadow logger not available")
+        
+        stats = shadow_logger.get_stats()
+        
+        return Response(
+            {
+                "status": "success",
+                "stats": stats,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class ShadowLogClearView(APIView):
@@ -141,40 +123,31 @@ class ShadowLogClearView(APIView):
 
     def post(self, request: Request) -> Response:
         """Clear all shadow log entries."""
-        try:
-            shadow_logger = get_shadow_logger()
-            
-            if shadow_logger is None:
-                return Response(
-                    {"status": "error", "error": "Shadow logger not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-            
-            # Get stats before clearing
-            stats_before = shadow_logger.get_stats()
-            
-            shadow_logger.clear()
-            
-            logger.warning(
-                f"[L2StorageAPI] Shadow log cleared by {request.user}. "
-                f"Cleared {stats_before['total_records']} entries."
-            )
-            
-            return Response(
-                {
-                    "status": "success",
-                    "message": "Shadow log cleared",
-                    "cleared_count": stats_before["total_records"],
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[L2StorageAPI] Error clearing shadow log: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        shadow_logger = get_shadow_logger()
+        
+        if shadow_logger is None:
+            raise RuntimeError("Shadow logger not available")
+        
+        # Get stats before clearing
+        stats_before = shadow_logger.get_stats()
+        
+        shadow_logger.clear()
+        
+        logger.warning(
+            f"[L2StorageAPI] Shadow log cleared by {request.user}. "
+            f"Cleared {stats_before['total_records']} entries."
+        )
+        
+        return Response(
+            {
+                "status": "success",
+                "message": "Shadow log cleared",
+                "cleared_count": stats_before["total_records"],
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class ShadowLogAnalyzeView(APIView):
@@ -196,33 +169,22 @@ class ShadowLogAnalyzeView(APIView):
         - Adapter-specific statistics
         - Recommendations for recovery
         """
-        try:
-            shadow_logger = get_shadow_logger()
+        shadow_logger = get_shadow_logger()
 
-            if shadow_logger is None:
-                return Response(
-                    {"status": "error", "error": "Shadow logger not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+        if shadow_logger is None:
+            raise RuntimeError("Shadow logger not available")
 
-            analysis = shadow_logger.analyze_l2_failures()
+        analysis = shadow_logger.analyze_l2_failures()
 
-            return Response(
-                {
-                    "status": "success",
-                    "analysis": analysis,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error analyzing shadow log: {e}", exc_info=True
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "analysis": analysis,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class ShadowLogReplayView(APIView):
@@ -248,84 +210,67 @@ class ShadowLogReplayView(APIView):
         Returns:
             Replay results with success/failure counts
         """
-        try:
-            shadow_logger = get_shadow_logger()
-            repo = get_layered_repository()
+        shadow_logger = get_shadow_logger()
+        repo = get_layered_repository()
 
-            if shadow_logger is None:
-                return Response(
-                    {"status": "error", "error": "Shadow logger not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+        if shadow_logger is None:
+            raise RuntimeError("Shadow logger not available")
 
-            if repo is None:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "Layered storage not configured",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if repo is None:
+            raise ValueError("Layered storage not configured")
 
-            # Parse options
-            service_name = request.data.get("service_name")
-            mark_synced = request.data.get("mark_synced", True)
+        # Parse options
+        service_name = request.data.get("service_name")
+        mark_synced = request.data.get("mark_synced", True)
 
-            # Get records to replay
-            if service_name:
-                records = shadow_logger.get_records_by_service(service_name)
-                records = [r for r in records if not r.synced_after_recovery]
-            else:
-                records = shadow_logger.get_unsynced_records()
+        # Get records to replay
+        if service_name:
+            records = shadow_logger.get_records_by_service(service_name)
+            records = [r for r in records if not r.synced_after_recovery]
+        else:
+            records = shadow_logger.get_unsynced_records()
 
-            if not records:
-                return Response(
-                    {
-                        "status": "success",
-                        "message": "No unsynced records to replay",
-                        "replayed": 0,
-                        "failed": 0,
-                        "timestamp": timezone.now(),
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-            # Attempt replay via force sync to L2
-            result = repo.force_sync_to_l2()
-
-            # Mark records as synced if requested and sync was successful
-            marked_count = 0
-            if mark_synced and result.get("success", False):
-                if service_name:
-                    marked_count = shadow_logger.mark_as_synced(service_name)
-                else:
-                    marked_count = shadow_logger.mark_all_as_synced()
-
-            logger.info(
-                f"[L2StorageAPI] Shadow log replay by {request.user}: "
-                f"synced={result.get('synced', 0)}, failed={result.get('failed', 0)}, "
-                f"marked={marked_count}"
-            )
-
+        if not records:
             return Response(
                 {
-                    "status": "success" if result.get("success", False) else "partial",
-                    "message": "Shadow log replay completed",
-                    "records_found": len(records),
-                    "sync_result": result,
-                    "marked_as_synced": marked_count,
+                    "status": "success",
+                    "message": "No unsynced records to replay",
+                    "replayed": 0,
+                    "failed": 0,
                     "timestamp": timezone.now(),
                 },
                 status=status.HTTP_200_OK,
             )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error replaying shadow log: {e}", exc_info=True
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+
+        # Attempt replay via force sync to L2
+        result = repo.force_sync_to_l2()
+
+        # Mark records as synced if requested and sync was successful
+        marked_count = 0
+        if mark_synced and result.get("success", False):
+            if service_name:
+                marked_count = shadow_logger.mark_as_synced(service_name)
+            else:
+                marked_count = shadow_logger.mark_all_as_synced()
+
+        logger.info(
+            f"[L2StorageAPI] Shadow log replay by {request.user}: "
+            f"synced={result.get('synced', 0)}, failed={result.get('failed', 0)}, "
+            f"marked={marked_count}"
+        )
+
+        return Response(
+            {
+                "status": "success" if result.get("success", False) else "partial",
+                "message": "Shadow log replay completed",
+                "records_found": len(records),
+                "sync_result": result,
+                "marked_as_synced": marked_count,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class ShadowLogByServiceView(APIView):
@@ -339,48 +284,36 @@ class ShadowLogByServiceView(APIView):
 
     def get(self, request: Request, service_name: str) -> Response:
         """Get shadow log entries for a specific service."""
-        try:
-            shadow_logger = get_shadow_logger()
+        shadow_logger = get_shadow_logger()
 
-            if shadow_logger is None:
-                return Response(
-                    {"status": "error", "error": "Shadow logger not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+        if shadow_logger is None:
+            raise RuntimeError("Shadow logger not available")
 
-            records = shadow_logger.get_records_by_service(service_name)
+        records = shadow_logger.get_records_by_service(service_name)
 
-            entries = [
-                {
-                    "service_name": r.service_name,
-                    "intended_state": r.intended_state,
-                    "failure_time": r.failure_time.isoformat(),
-                    "error_message": r.error_message,
-                    "l1_state_at_failure": r.l1_state_at_failure,
-                    "adapter_type": r.adapter_type,
-                    "operation": r.operation,
-                    "synced_after_recovery": r.synced_after_recovery,
-                    "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
-                }
-                for r in records
-            ]
+        entries = [
+            {
+                "service_name": r.service_name,
+                "intended_state": r.intended_state,
+                "failure_time": r.failure_time.isoformat(),
+                "error_message": r.error_message,
+                "l1_state_at_failure": r.l1_state_at_failure,
+                "adapter_type": r.adapter_type,
+                "operation": r.operation,
+                "synced_after_recovery": r.synced_after_recovery,
+                "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
+            }
+            for r in records
+        ]
 
-            return Response(
-                {
-                    "status": "success",
-                    "service_name": service_name,
-                    "count": len(entries),
-                    "entries": entries,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error getting shadow log for service: {e}",
-                exc_info=True,
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "service_name": service_name,
+                "count": len(entries),
+                "entries": entries,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리

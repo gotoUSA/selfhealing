@@ -34,39 +34,30 @@ class DriftReconciliationStatsView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get drift reconciliation statistics."""
-        try:
-            repo = get_layered_repository()
+        repo = get_layered_repository()
 
-            if repo is None:
-                return Response(
-                    {
-                        "status": "success",
-                        "message": "Layered storage not configured",
-                        "stats": {},
-                        "timestamp": timezone.now(),
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-            stats = repo.get_drift_reconciler_stats()
-
+        if repo is None:
             return Response(
                 {
                     "status": "success",
-                    "stats": stats,
+                    "message": "Layered storage not configured",
+                    "stats": {},
                     "timestamp": timezone.now(),
                 },
                 status=status.HTTP_200_OK,
             )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error getting drift stats: {e}",
-                exc_info=True,
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+
+        stats = repo.get_drift_reconciler_stats()
+
+        return Response(
+            {
+                "status": "success",
+                "stats": stats,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class DriftReconciliationHistoryView(APIView):
@@ -80,47 +71,38 @@ class DriftReconciliationHistoryView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get drift reconciliation history."""
-        try:
-            repo = get_layered_repository()
+        repo = get_layered_repository()
 
-            if repo is None:
-                return Response(
-                    {
-                        "status": "success",
-                        "message": "Layered storage not configured",
-                        "history": [],
-                        "timestamp": timezone.now(),
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-            # Query parameters
-            limit = int(request.query_params.get("limit", 100))
-            
-            history = repo.get_drift_reconciliation_history()
-            
-            # Apply limit
-            if len(history) > limit:
-                history = history[-limit:]
-
+        if repo is None:
             return Response(
                 {
                     "status": "success",
-                    "count": len(history),
-                    "history": history,
+                    "message": "Layered storage not configured",
+                    "history": [],
                     "timestamp": timezone.now(),
                 },
                 status=status.HTTP_200_OK,
             )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error getting drift history: {e}",
-                exc_info=True,
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+
+        # Query parameters
+        limit = int(request.query_params.get("limit", 100))
+        
+        history = repo.get_drift_reconciliation_history()
+        
+        # Apply limit
+        if len(history) > limit:
+            history = history[-limit:]
+
+        return Response(
+            {
+                "status": "success",
+                "count": len(history),
+                "history": history,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class DriftReconciliationTriggerView(APIView):
@@ -144,45 +126,30 @@ class DriftReconciliationTriggerView(APIView):
         Returns:
             Reconciliation results with counts
         """
-        try:
-            repo = get_layered_repository()
+        repo = get_layered_repository()
 
-            if repo is None:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "Layered storage not configured",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if repo is None:
+            raise ValueError("Layered storage not configured")
 
-            result = repo.force_drift_reconciliation()
+        result = repo.force_drift_reconciliation()
 
-            logger.info(
-                f"[L2StorageAPI] Manual drift reconciliation by {request.user}: "
-                f"reconciled={result.get('reconciled', 0)}, "
-                f"l1_wins={result.get('l1_wins', 0)}, "
-                f"l2_wins={result.get('l2_wins', 0)}"
-            )
+        logger.info(
+            f"[L2StorageAPI] Manual drift reconciliation by {request.user}: "
+            f"reconciled={result.get('reconciled', 0)}, "
+            f"l1_wins={result.get('l1_wins', 0)}, "
+            f"l2_wins={result.get('l2_wins', 0)}"
+        )
 
-            return Response(
-                {
-                    "status": "success" if result.get("success", False) else "partial",
-                    "message": "Drift reconciliation completed",
-                    "result": result,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error triggering drift reconciliation: {e}",
-                exc_info=True,
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success" if result.get("success", False) else "partial",
+                "message": "Drift reconciliation completed",
+                "result": result,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리
 
 
 class DriftReconciliationServiceView(APIView):
@@ -205,56 +172,33 @@ class DriftReconciliationServiceView(APIView):
         Returns:
             Reconciliation result for the service
         """
-        try:
-            repo = get_layered_repository()
+        repo = get_layered_repository()
 
-            if repo is None:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "Layered storage not configured",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if repo is None:
+            raise ValueError("Layered storage not configured")
 
-            result = repo.reconcile_single_service(service_name)
+        result = repo.reconcile_single_service(service_name)
 
-            if not result.get("success", False):
-                logger.warning(
-                    f"[L2StorageAPI] Drift reconciliation failed for {service_name}: "
-                    f"{result.get('reason', 'unknown')}"
-                )
-                return Response(
-                    {
-                        "status": "error",
-                        "error": result.get("reason", "Reconciliation failed"),
-                        "result": result,
-                        "timestamp": timezone.now(),
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            logger.info(
-                f"[L2StorageAPI] Drift reconciliation for {service_name} by {request.user}: "
-                f"action={result.get('action', 'none')}, winner={result.get('winner', 'n/a')}"
+        if not result.get("success", False):
+            logger.warning(
+                f"[L2StorageAPI] Drift reconciliation failed for {service_name}: "
+                f"{result.get('reason', 'unknown')}"
             )
+            raise ValueError(result.get("reason", "Reconciliation failed"))
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": f"Drift reconciliation for {service_name} completed",
-                    "service_name": service_name,
-                    "result": result,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(
-                f"[L2StorageAPI] Error reconciling {service_name}: {e}",
-                exc_info=True,
-            )
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        logger.info(
+            f"[L2StorageAPI] Drift reconciliation for {service_name} by {request.user}: "
+            f"action={result.get('action', 'none')}, winner={result.get('winner', 'n/a')}"
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": f"Drift reconciliation for {service_name} completed",
+                "service_name": service_name,
+                "result": result,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+        # Exception은 exception handler가 처리

@@ -240,29 +240,10 @@ class ConfigRollbackView(APIView):
         )
         
         if not rolled_back:
-            return Response(
-                {
-                    "status": "error",
-                    "error": "Failed to rollback - see server logs for details",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            raise RuntimeError("Failed to rollback - see server logs for details")
         
-        # 실제 설정 적용
-        try:
-            self._apply_config_values(config_type, target.values)
-        except Exception as e:
-            logger.error(
-                f"[ConfigRollback] Failed to apply config: {e}",
-                exc_info=True,
-            )
-            return Response(
-                {
-                    "status": "error",
-                    "error": f"Rollback recorded but failed to apply: {str(e)}",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # 실제 설정 적용 - Exception은 exception handler가 처리
+        self._apply_config_values(config_type, target.values)
         
         logger.info(
             f"[ConfigRollback] {config_type} rolled back to v{target_version} "

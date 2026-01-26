@@ -38,14 +38,7 @@ class DashboardSummaryView(APIView):
 
     def get(self, request):
         """Get dashboard summary statistics."""
-        try:
-            service = get_dashboard_service()
-            summary = service.get_summary()
-            return Response(summary.to_dict())
-
-        except Exception as e:
-            logger.error(f"[Dashboard] Summary failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        service = get_dashboard_service()
+        summary = service.get_summary()
+        return Response(summary.to_dict())
+        # Exception은 exception handler가 처리

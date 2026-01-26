@@ -107,44 +107,30 @@ class DeploymentFreezeAcknowledgeView(APIView):
     permission_classes = [IsOperator]
 
     def post(self, request: Request) -> Response:
-        try:
-            justification = request.data.get("justification", "")
+        # Exception은 exception handler가 처리
+        justification = request.data.get("justification", "")
 
-            if not justification:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "justification is required",
-                        "message": "동결 확정 사유를 입력해주세요.",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not justification:
+            raise ValueError("justification is required: 동결 확정 사유를 입력해주세요.")
 
-            service = get_error_budget_service()
-            decided_by = getattr(request.user, "username", str(request.user))
+        service = get_error_budget_service()
+        decided_by = getattr(request.user, "username", str(request.user))
 
-            record = service.acknowledge_freeze(
-                decided_by=decided_by,
-                justification=justification,
-            )
+        record = service.acknowledge_freeze(
+            decided_by=decided_by,
+            justification=justification,
+        )
 
-            logger.info(f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}")
+        logger.info(f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}")
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "배포 동결이 확정되었습니다.",
-                    "data": record.to_dict(),
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[DeploymentPolicyAPI] Acknowledge failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "message": "배포 동결이 확정되었습니다.",
+                "data": record.to_dict(),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class DeploymentOverrideView(APIView):
@@ -169,80 +155,51 @@ class DeploymentOverrideView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request) -> Response:
+        # Exception은 exception handler가 처리
+        justification = request.data.get("justification", "")
+        override_type_str = request.data.get("override_type", "")
+        deployment_id = request.data.get("deployment_id")
+        deployment_name = request.data.get("deployment_name")
+        expires_hours = int(request.data.get("expires_hours", 4))
+
+        # Validation
+        if not justification:
+            raise ValueError("justification is required: Override 사유를 입력해주세요.")
+
+        if not override_type_str:
+            raise ValueError(f"override_type is required: Override 유형을 선택해주세요. valid_types={[t.value for t in OverrideType]}")
+
         try:
-            justification = request.data.get("justification", "")
-            override_type_str = request.data.get("override_type", "")
-            deployment_id = request.data.get("deployment_id")
-            deployment_name = request.data.get("deployment_name")
-            expires_hours = int(request.data.get("expires_hours", 4))
+            override_type = OverrideType(override_type_str)
+        except ValueError:
+            raise ValueError(f"Invalid override_type: {override_type_str}, valid_types={[t.value for t in OverrideType]}")
 
-            # Validation
-            if not justification:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "justification is required",
-                        "message": "Override 사유를 입력해주세요.",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        service = get_error_budget_service()
+        decided_by = getattr(request.user, "username", str(request.user))
 
-            if not override_type_str:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "override_type is required",
-                        "message": "Override 유형을 선택해주세요.",
-                        "valid_types": [t.value for t in OverrideType],
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        record = service.approve_override(
+            decided_by=decided_by,
+            justification=justification,
+            override_type=override_type,
+            deployment_id=deployment_id,
+            deployment_name=deployment_name,
+            expires_hours=expires_hours,
+        )
 
-            try:
-                override_type = OverrideType(override_type_str)
-            except ValueError:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": f"Invalid override_type: {override_type_str}",
-                        "valid_types": [t.value for t in OverrideType],
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        logger.warning(
+            f"[DeploymentPolicy] Override approved by {decided_by}: "
+            f"type={override_type.value}, deployment={deployment_name}"
+        )
 
-            service = get_error_budget_service()
-            decided_by = getattr(request.user, "username", str(request.user))
-
-            record = service.approve_override(
-                decided_by=decided_by,
-                justification=justification,
-                override_type=override_type,
-                deployment_id=deployment_id,
-                deployment_name=deployment_name,
-                expires_hours=expires_hours,
-            )
-
-            logger.warning(
-                f"[DeploymentPolicy] Override approved by {decided_by}: "
-                f"type={override_type.value}, deployment={deployment_name}"
-            )
-
-            return Response(
-                {
-                    "status": "success",
-                    "message": "배포 동결 무시가 승인되었습니다. 이 결정은 감사 로그에 기록됩니다.",
-                    "warning": "Error Budget이 낮은 상태에서의 배포는 추가 장애 위험이 있습니다.",
-                    "data": record.to_dict(),
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[DeploymentPolicyAPI] Override failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "message": "배포 동결 무시가 승인되었습니다. 이 결정은 감사 로그에 기록됩니다.",
+                "warning": "Error Budget이 낮은 상태에서의 배포는 추가 장애 위험이 있습니다.",
+                "data": record.to_dict(),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class DeploymentFreezeLiftView(APIView):
@@ -262,44 +219,30 @@ class DeploymentFreezeLiftView(APIView):
     permission_classes = [IsOperator]
 
     def post(self, request: Request) -> Response:
-        try:
-            justification = request.data.get("justification", "")
+        # Exception은 exception handler가 처리
+        justification = request.data.get("justification", "")
 
-            if not justification:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "justification is required",
-                        "message": "동결 해제 사유를 입력해주세요.",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not justification:
+            raise ValueError("justification is required: 동결 해제 사유를 입력해주세요.")
 
-            service = get_error_budget_service()
-            decided_by = getattr(request.user, "username", str(request.user))
+        service = get_error_budget_service()
+        decided_by = getattr(request.user, "username", str(request.user))
 
-            record = service.lift_freeze(
-                decided_by=decided_by,
-                justification=justification,
-            )
+        record = service.lift_freeze(
+            decided_by=decided_by,
+            justification=justification,
+        )
 
-            logger.info(f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}")
+        logger.info(f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}")
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "배포 동결이 해제되었습니다. 일반 배포가 가능합니다.",
-                    "data": record.to_dict(),
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[DeploymentPolicyAPI] Lift failed: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "message": "배포 동결이 해제되었습니다. 일반 배포가 가능합니다.",
+                "data": record.to_dict(),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class ActiveOverrideView(APIView):
@@ -316,34 +259,27 @@ class ActiveOverrideView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
-        try:
-            service = get_error_budget_service()
-            active_override = service.check_active_override()
+        # Exception은 exception handler가 처리
+        service = get_error_budget_service()
+        active_override = service.check_active_override()
 
-            if active_override:
-                return Response(
-                    {
-                        "status": "success",
-                        "has_active_override": True,
-                        "data": active_override.to_dict(),
-                        "timestamp": timezone.now().isoformat(),
-                    }
-                )
-            else:
-                return Response(
-                    {
-                        "status": "success",
-                        "has_active_override": False,
-                        "data": None,
-                        "timestamp": timezone.now().isoformat(),
-                    }
-                )
-
-        except Exception as e:
-            logger.error(f"[DeploymentPolicyAPI] Active override check failed: {e}", exc_info=True)
+        if active_override:
             return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {
+                    "status": "success",
+                    "has_active_override": True,
+                    "data": active_override.to_dict(),
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
+        else:
+            return Response(
+                {
+                    "status": "success",
+                    "has_active_override": False,
+                    "data": None,
+                    "timestamp": timezone.now().isoformat(),
+                }
             )
 
 

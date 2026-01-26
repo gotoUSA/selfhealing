@@ -89,33 +89,21 @@ class MetricSyncView(APIView):
         if request.user and request.user.is_authenticated:
             actor = request.user.username
 
-        try:
-            service = get_metric_sync_service()
-            result = service.sync_metrics(
-                domains=domains,
-                dry_run=dry_run,
-                actor=actor,
-                reason=reason,
-            )
+        service = get_metric_sync_service()
+        result = service.sync_metrics(
+            domains=domains,
+            dry_run=dry_run,
+            actor=actor,
+            reason=reason,
+        )
 
-            response_serializer = MetricSyncResponseSerializer(data=result)
-            if response_serializer.is_valid():
-                return Response(response_serializer.data, status=status.HTTP_200_OK)
-            else:
-                # 응답 직렬화 실패 시 원본 반환
-                return Response(result, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.exception(f"[MetricSync] Sync failed: {e}")
-            return Response(
-                {
-                    "status": "failed",
-                    "error": str(e),
-                    "synced_at": datetime.now(timezone.utc).isoformat(),
-                    "actor": actor,
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        response_serializer = MetricSyncResponseSerializer(data=result)
+        if response_serializer.is_valid():
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        else:
+            # 응답 직렬화 실패 시 원본 반환
+            return Response(result, status=status.HTTP_200_OK)
+        # Exception은 exception handler가 처리
 
 
 class DriftReportView(APIView):
@@ -142,25 +130,15 @@ class DriftReportView(APIView):
 
     def get(self, request: Request) -> Response:
         """Drift 리포트 조회."""
-        try:
-            service = get_metric_sync_service()
-            result = service.get_drift_report()
+        service = get_metric_sync_service()
+        result = service.get_drift_report()
 
-            response_serializer = DriftReportResponseSerializer(data=result)
-            if response_serializer.is_valid():
-                return Response(response_serializer.data, status=status.HTTP_200_OK)
-            else:
-                return Response(result, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.exception(f"[DriftReport] Report generation failed: {e}")
-            return Response(
-                {
-                    "error": str(e),
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        response_serializer = DriftReportResponseSerializer(data=result)
+        if response_serializer.is_valid():
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_200_OK)
+        # Exception은 exception handler가 처리
 
 
 __all__ = [
