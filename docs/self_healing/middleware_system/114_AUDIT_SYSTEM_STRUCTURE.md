@@ -295,7 +295,7 @@ buffer.add(
 # audit/event_buffer.py에 추가
 class AuditEventType(Enum):
     # ... 기존 ...
-    
+
     # API Exception 관련
     API_EXCEPTION = "api_exception"
     API_VALIDATION_ERROR = "api_validation_error"
@@ -308,7 +308,7 @@ class AuditEventType(Enum):
 # interfaces/audit_adapter.py에 추가
 class AuditAction(str, Enum):
     # ... 기존 ...
-    
+
     # API 관련
     API_ERROR = "api_error"
     VALIDATION_FAILED = "validation_failed"
@@ -322,7 +322,7 @@ def _capture_response_meta(self, request, response, buffer):
     # ExceptionHandler가 이미 기록했으면 스킵
     if buffer.has_event_from_source("ExceptionHandler"):
         return
-    
+
     # 기존 ERROR_DETECTED 로직
     if status_code >= 400:
         buffer.add(event_type=AuditEventType.ERROR_DETECTED, ...)

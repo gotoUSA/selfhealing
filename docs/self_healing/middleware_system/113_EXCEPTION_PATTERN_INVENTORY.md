@@ -116,7 +116,7 @@
 
 ### 패턴 G: ConfigLockError 특수 처리
 
-**구조**: 
+**구조**:
 ```json
 {
     "status": "error",

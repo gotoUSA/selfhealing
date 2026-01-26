@@ -142,11 +142,11 @@ def selfhealing_exception_handler(
 ) -> Response | None:
     """
     DRF 커스텀 예외 핸들러.
-    
+
     Args:
         exc: 발생한 예외
         context: DRF 컨텍스트 (view, request, format, args, kwargs)
-    
+
     Returns:
         Response 또는 None (None이면 예외 재발생)
     """
@@ -160,11 +160,11 @@ from rest_framework.views import exception_handler as drf_exception_handler
 def selfhealing_exception_handler(exc, context):
     # DRF 기본 핸들러 먼저 호출
     response = drf_exception_handler(exc, context)
-    
+
     if response is None:
         # DRF가 처리하지 않는 예외
         response = handle_non_drf_exception(exc, context)
-    
+
     # 표준화 및 Audit 기록
     return standardize_and_audit(response, exc, context)
 ```
@@ -178,17 +178,17 @@ def selfhealing_exception_handler(exc, context):
 ```python
 def selfhealing_exception_handler(exc, context):
     request = context.get('request')
-    
+
     # ... 예외 처리 로직 ...
-    
+
     # Audit 버퍼에 이벤트 적재
     if request:
         try:
             from selfhealing.audit.event_buffer import (
-                RequestAuditBuffer, 
+                RequestAuditBuffer,
                 AuditEventType
             )
-            
+
             buffer = RequestAuditBuffer.get_or_create(request)
             buffer.add(
                 event_type=AuditEventType.API_EXCEPTION,
@@ -205,7 +205,7 @@ def selfhealing_exception_handler(exc, context):
             )
         except Exception:
             pass  # Audit 실패가 응답을 막지 않음
-    
+
     return response
 ```
 
@@ -216,14 +216,14 @@ def selfhealing_exception_handler(exc, context):
 ```python
 class AuditEventType(Enum):
     # ... 기존 ...
-    
+
     # API Exception 관련 (112_EXCEPTION_HANDLER_IMPLEMENTATION)
     API_EXCEPTION = "api_exception"
     """API 요청 처리 중 예외 발생."""
-    
+
     API_VALIDATION_ERROR = "api_validation_error"
     """입력값 검증 실패."""
-    
+
     API_AUTH_ERROR = "api_auth_error"
     """인증/인가 실패."""
 ```
