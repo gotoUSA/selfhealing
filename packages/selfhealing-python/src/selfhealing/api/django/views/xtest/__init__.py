@@ -108,6 +108,15 @@ from .rate_limit import (
     RateLimitResetView,
 )
 
+# Idempotency X-Test views
+from .idempotency import (
+    GenerateKeyView,
+    CheckDuplicateView,
+    IdempotencyStatusView,
+    RegisterKeyView,
+    ClearKeysView,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -163,6 +172,12 @@ __all__ = [
     "RateLimitHistoryView",
     "RateLimitConfigXTestView",
     "RateLimitResetView",
+    # Idempotency X-Test views
+    "GenerateKeyView",
+    "CheckDuplicateView",
+    "IdempotencyStatusView",
+    "RegisterKeyView",
+    "ClearKeysView",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",

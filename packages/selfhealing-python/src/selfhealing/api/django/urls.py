@@ -708,6 +708,12 @@ from selfhealing.api.django.views.xtest import (
     RateLimitHistoryView,
     RateLimitConfigXTestView,
     RateLimitResetView,
+    # Idempotency X-Test Views
+    GenerateKeyView,
+    CheckDuplicateView,
+    IdempotencyStatusView,
+    RegisterKeyView,
+    ClearKeysView,
 )
 
 urlpatterns += [
@@ -751,6 +757,12 @@ urlpatterns += [
     path("xtest/rate-limit/history/", RateLimitHistoryView.as_view(), name="xtest-rate-limit-history"),
     path("xtest/rate-limit/config/", RateLimitConfigXTestView.as_view(), name="xtest-rate-limit-config"),
     path("xtest/rate-limit/reset/", RateLimitResetView.as_view(), name="xtest-rate-limit-reset"),
+    # Idempotency X-Test Endpoints
+    path("xtest/idempotency/generate-key/", GenerateKeyView.as_view(), name="xtest-idempotency-generate-key"),
+    path("xtest/idempotency/check-duplicate/", CheckDuplicateView.as_view(), name="xtest-idempotency-check-duplicate"),
+    path("xtest/idempotency/status/", IdempotencyStatusView.as_view(), name="xtest-idempotency-status"),
+    path("xtest/idempotency/register/", RegisterKeyView.as_view(), name="xtest-idempotency-register"),
+    path("xtest/idempotency/clear/", ClearKeysView.as_view(), name="xtest-idempotency-clear"),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # =========================================================================

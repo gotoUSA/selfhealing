@@ -2,8 +2,30 @@
 
 **문서 번호:** 121  
 **작성일:** 2026-01-26  
-**상태:** 설계 완료  
+**상태:** ✅ 구현 완료  
+**구현일:** 2026-01-27  
 **선행 문서:** 120_XTEST_MODE_RATE_LIMITER.md
+
+---
+
+## 구현 완료 내역
+
+| 항목 | 상태 | 파일 |
+|------|------|------|
+| View 파일 | ✅ 완료 | `selfhealing/api/django/views/xtest/idempotency.py` |
+| URL 라우팅 | ✅ 완료 | `selfhealing/api/django/urls.py` |
+| __init__.py | ✅ 완료 | `selfhealing/api/django/views/xtest/__init__.py` |
+| 단위 테스트 | ✅ 완료 (32 passed) | `tests/self_healing/api/test_xtest_idempotency_views.py` |
+
+### 구현된 View 클래스
+
+| 클래스 | 엔드포인트 |
+|--------|------------|
+| `GenerateKeyView` | `POST /api/self-healing/xtest/idempotency/generate-key/` |
+| `CheckDuplicateView` | `POST /api/self-healing/xtest/idempotency/check-duplicate/` |
+| `IdempotencyStatusView` | `GET /api/self-healing/xtest/idempotency/status/` |
+| `RegisterKeyView` | `POST /api/self-healing/xtest/idempotency/register/` |
+| `ClearKeysView` | `POST /api/self-healing/xtest/idempotency/clear/` |
 
 ---
 
