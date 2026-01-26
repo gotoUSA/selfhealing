@@ -117,6 +117,24 @@ from .idempotency import (
     ClearKeysView,
 )
 
+# Integration X-Test views
+from .integration import (
+    RunScenarioView,
+    ScenarioStatusView,
+    FullSnapshotView,
+    ResetView,
+)
+
+# Integration Scenario utilities
+from .integration_scenarios import (
+    SCENARIO_REGISTRY,
+    IntegrationScenario,
+    ScenarioResult,
+    ScenarioStatus,
+    get_scenario_class,
+    list_available_scenarios,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -178,6 +196,18 @@ __all__ = [
     "IdempotencyStatusView",
     "RegisterKeyView",
     "ClearKeysView",
+    # Integration X-Test views
+    "RunScenarioView",
+    "ScenarioStatusView",
+    "FullSnapshotView",
+    "ResetView",
+    # Integration Scenario utilities
+    "SCENARIO_REGISTRY",
+    "IntegrationScenario",
+    "ScenarioResult",
+    "ScenarioStatus",
+    "get_scenario_class",
+    "list_available_scenarios",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",

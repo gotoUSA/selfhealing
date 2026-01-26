@@ -714,6 +714,11 @@ from selfhealing.api.django.views.xtest import (
     IdempotencyStatusView,
     RegisterKeyView,
     ClearKeysView,
+    # Integration X-Test Views
+    RunScenarioView,
+    ScenarioStatusView,
+    FullSnapshotView,
+    ResetView,
 )
 
 urlpatterns += [
@@ -763,6 +768,11 @@ urlpatterns += [
     path("xtest/idempotency/status/", IdempotencyStatusView.as_view(), name="xtest-idempotency-status"),
     path("xtest/idempotency/register/", RegisterKeyView.as_view(), name="xtest-idempotency-register"),
     path("xtest/idempotency/clear/", ClearKeysView.as_view(), name="xtest-idempotency-clear"),
+    # Integration X-Test Endpoints (Component Integration Tests)
+    path("xtest/integration/run-scenario/", RunScenarioView.as_view(), name="xtest-integration-run-scenario"),
+    path("xtest/integration/scenario/<str:scenario_id>/", ScenarioStatusView.as_view(), name="xtest-integration-scenario-status"),
+    path("xtest/integration/full-snapshot/", FullSnapshotView.as_view(), name="xtest-integration-full-snapshot"),
+    path("xtest/integration/reset/", ResetView.as_view(), name="xtest-integration-reset"),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # =========================================================================
