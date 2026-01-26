@@ -147,20 +147,18 @@
 
 ### 4.2 마이그레이션 완료 내역
 
-총 **12개 try-except 패턴** 제거 (6개 파일):
+총 **10개 try-except 패턴** 제거 (3개 파일):
 
 | 파일 | 변경 수 | 변경 유형 |
 |------|---------|-----------|
-| `rollback.py` | 2 | try-except 제거 |
-| `learning.py` | 2 | try-except 제거 |
-| `finops.py` | 2 | try-except 제거 |
-| `compliance_dna.py` | 2 | try-except 제거 |
-| `blast_radius.py` | 3 | try-except 제거 |
-| `dlq.py` | 1 | serializer.is_valid(raise_exception=True) 패턴 적용 |
+| `rollback.py` | 1 | RollbackExecuteView.post - try-except 제거 |
+| `learning.py` | 1 | LearningSessionView.post - try-except 제거, ValueError/Http404 raise 패턴 적용 |
+| `dlq.py` | 8 | DLQCleanupStatsView.get, DLQArchiveView.post, DLQPurgeView.post, DLQListView.get, DLQDetailView.get, DLQRetryView.post, DLQResolveView.post, DLQTestCreateView.post - try-except 제거 |
 
 ### 4.3 마이그레이션 제외 항목
 
 - `auto_tuning.py`: `if "error" in result` 패턴은 서비스 응답 체크로, 예외 핸들링이 아님
+- `finops.py`, `compliance_dna.py`, `blast_radius.py`: ImportError try-except는 모듈 로드 시 폴백 처리로 유지
 
 ### 4.4 하위 호환성
 

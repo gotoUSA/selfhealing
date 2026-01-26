@@ -163,17 +163,11 @@ class RollbackExecuteView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data if request.data else {}
-            components = data.get("components")
+        data = request.data if request.data else {}
+        components = data.get("components")
 
-            result = service.execute_rollback(request_id, components)
-            return Response(result.to_dict())
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        result = service.execute_rollback(request_id, components)
+        return Response(result.to_dict())
 
 
 class RollbackCancelView(APIView):

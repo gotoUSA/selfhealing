@@ -45,40 +45,25 @@ class LearningSessionView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        try:
-            data = request.data if request.data else {}
+        data = request.data if request.data else {}
 
-            if action == "start":
-                stage_name = data.get("stage_name", "default")
-                session = service.start_session(stage_name)
-                return Response(session.to_dict(), status=status.HTTP_201_CREATED)
+        if action == "start":
+            stage_name = data.get("stage_name", "default")
+            session = service.start_session(stage_name)
+            return Response(session.to_dict(), status=status.HTTP_201_CREATED)
 
-            elif action == "end":
-                session_id = data.get("session_id")
-                if not session_id:
-                    return Response(
-                        {"error": "session_id required"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                session = service.end_session(session_id)
-                if session:
-                    return Response(session.to_dict())
-                return Response(
-                    {"error": "Session not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+        elif action == "end":
+            session_id = data.get("session_id")
+            if not session_id:
+                raise ValueError("session_id required")
+            session = service.end_session(session_id)
+            if session:
+                return Response(session.to_dict())
+            from django.http import Http404
+            raise Http404("Session not found")
 
-            else:
-                return Response(
-                    {"error": "Invalid action"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        else:
+            raise ValueError("Invalid action")
 
 
 class LearningPatternView(APIView):
