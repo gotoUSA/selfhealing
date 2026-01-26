@@ -702,6 +702,12 @@ from selfhealing.api.django.views.xtest import (
     RetrySimulateView,
     RetryRateLimitStatusView,
     RetryConfigView,
+    # Rate Limit X-Test Views
+    RateLimitStatusView,
+    RateLimitClientView,
+    RateLimitHistoryView,
+    RateLimitConfigXTestView,
+    RateLimitResetView,
 )
 
 urlpatterns += [
@@ -739,6 +745,12 @@ urlpatterns += [
     path("xtest/retry/simulate/", RetrySimulateView.as_view(), name="xtest-retry-simulate"),
     path("xtest/retry/rate-limit-status/", RetryRateLimitStatusView.as_view(), name="xtest-retry-rate-limit-status"),
     path("xtest/retry/config/", RetryConfigView.as_view(), name="xtest-retry-config"),
+    # Rate Limit X-Test Endpoints
+    path("xtest/rate-limit/status/", RateLimitStatusView.as_view(), name="xtest-rate-limit-status"),
+    path("xtest/rate-limit/client/", RateLimitClientView.as_view(), name="xtest-rate-limit-client"),
+    path("xtest/rate-limit/history/", RateLimitHistoryView.as_view(), name="xtest-rate-limit-history"),
+    path("xtest/rate-limit/config/", RateLimitConfigXTestView.as_view(), name="xtest-rate-limit-config"),
+    path("xtest/rate-limit/reset/", RateLimitResetView.as_view(), name="xtest-rate-limit-reset"),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # =========================================================================

@@ -99,6 +99,15 @@ from .retry import (
     RetryConfigView,
 )
 
+# Rate Limit X-Test views
+from .rate_limit import (
+    RateLimitStatusView,
+    RateLimitClientView,
+    RateLimitHistoryView,
+    RateLimitConfigXTestView,
+    RateLimitResetView,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -148,6 +157,12 @@ __all__ = [
     "RetrySimulateView",
     "RetryRateLimitStatusView",
     "RetryConfigView",
+    # Rate Limit X-Test views
+    "RateLimitStatusView",
+    "RateLimitClientView",
+    "RateLimitHistoryView",
+    "RateLimitConfigXTestView",
+    "RateLimitResetView",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",

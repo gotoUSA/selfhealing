@@ -253,6 +253,55 @@ class LocalMemoryRateLimiter:
         """Reset all rate limit state (for testing)."""
         with self._lock:
             self._requests.clear()
+    
+    def get_client_status(self, key: str) -> dict:
+        """
+        특정 클라이언트의 Rate Limit 상태 조회.
+        
+        Args:
+            key: Rate limit key (IP + user combination)
+            
+        Returns:
+            {
+                "client_key": "...",
+                "current_count": 5,
+                "limit": 10,
+                "remaining": 5,
+                "reset_at": timestamp,
+                "blocked": False
+            }
+        """
+        now = time.time()
+        window_start = now - self.window_seconds
+        
+        with self._lock:
+            timestamps = [ts for ts in self._requests.get(key, []) if ts > window_start]
+            current_count = len(timestamps)
+            remaining = max(0, self.max_requests - current_count)
+            blocked = current_count >= self.max_requests
+            
+            return {
+                "client_key": key,
+                "current_count": current_count,
+                "limit": self.max_requests,
+                "remaining": remaining,
+                "reset_at": int(now + self.window_seconds),
+                "blocked": blocked,
+                "window_seconds": self.window_seconds,
+            }
+    
+    def get_all_clients(self) -> list[str]:
+        """현재 추적 중인 모든 클라이언트 키 반환."""
+        with self._lock:
+            return list(self._requests.keys())
+    
+    def reset_client(self, key: str) -> bool:
+        """특정 클라이언트의 Rate Limit 상태 초기화."""
+        with self._lock:
+            if key in self._requests:
+                del self._requests[key]
+                return True
+            return False
 
 
 # =============================================================================
@@ -858,3 +907,111 @@ def get_current_state() -> dict:
         "redis_degraded": health_checker.is_degraded,
         "local_limiter_keys": len(local_limiter._requests),
     }
+
+
+# =============================================================================
+# Rate Limit Event History (In-Memory Ring Buffer for X-Test-Mode)
+# =============================================================================
+
+
+_rate_limit_events_lock = threading.Lock()
+_rate_limit_events: list[dict] = []
+_max_rate_limit_events = 500
+
+
+def record_rate_limit_event(event: dict) -> None:
+    """
+    Rate Limit 이벤트 기록 (히스토리 수집용).
+    
+    X-Test-Mode에서 Rate Limit 히스토리를 조회하기 위해 사용.
+    프로덕션에서도 안전하게 동작하며 메모리 사용량을 제한함.
+    """
+    global _rate_limit_events
+    with _rate_limit_events_lock:
+        event["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        _rate_limit_events.append(event)
+        if len(_rate_limit_events) > _max_rate_limit_events:
+            _rate_limit_events = _rate_limit_events[-_max_rate_limit_events:]
+
+
+def get_rate_limit_events(limit: int = 20) -> list[dict]:
+    """
+    Rate Limit 이벤트 히스토리 조회.
+    
+    Args:
+        limit: 반환할 최대 이벤트 수 (최대 100)
+        
+    Returns:
+        최근 Rate Limit 이벤트 목록 (역순)
+    """
+    limit = min(limit, 100)
+    with _rate_limit_events_lock:
+        return list(reversed(_rate_limit_events[-limit:]))
+
+
+def get_rate_limit_events_count() -> int:
+    """Rate Limit 이벤트 총 개수 반환."""
+    with _rate_limit_events_lock:
+        return len(_rate_limit_events)
+
+
+def get_rate_limit_events_by_client(client_key: str, limit: int = 20) -> list[dict]:
+    """
+    특정 클라이언트의 Rate Limit 이벤트만 조회.
+    
+    Args:
+        client_key: 클라이언트 식별자
+        limit: 반환할 최대 이벤트 수
+        
+    Returns:
+        해당 클라이언트의 Rate Limit 이벤트 목록
+    """
+    limit = min(limit, 100)
+    with _rate_limit_events_lock:
+        filtered = [e for e in _rate_limit_events if e.get("client_key") == client_key]
+        return list(reversed(filtered[-limit:]))
+
+
+def reset_rate_limit_events(client_key: Optional[str] = None) -> int:
+    """
+    Rate Limit 이벤트 히스토리 초기화 (테스트용).
+    
+    Args:
+        client_key: 특정 클라이언트만 초기화. None이면 전체 초기화.
+        
+    Returns:
+        초기화된 이벤트 수
+    """
+    global _rate_limit_events
+    with _rate_limit_events_lock:
+        if client_key is None:
+            count = len(_rate_limit_events)
+            _rate_limit_events = []
+            return count
+        else:
+            original_count = len(_rate_limit_events)
+            _rate_limit_events = [e for e in _rate_limit_events if e.get("client_key") != client_key]
+            return original_count - len(_rate_limit_events)
+
+
+def get_client_stats() -> dict:
+    """
+    클라이언트별 Rate Limit 통계 집계.
+    
+    Returns:
+        {
+            "client_key1": {"total": 10, "exceeded": 2},
+            "client_key2": {"total": 5, "exceeded": 0},
+            ...
+        }
+    """
+    with _rate_limit_events_lock:
+        stats: dict[str, dict] = {}
+        for event in _rate_limit_events:
+            client_key = event.get("client_key", "unknown")
+            if client_key not in stats:
+                stats[client_key] = {"total": 0, "exceeded": 0}
+            stats[client_key]["total"] += 1
+            if not event.get("allowed", True):
+                stats[client_key]["exceeded"] += 1
+        return stats

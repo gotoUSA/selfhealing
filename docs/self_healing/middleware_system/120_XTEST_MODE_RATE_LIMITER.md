@@ -2,8 +2,20 @@
 
 **문서 번호:** 120  
 **작성일:** 2026-01-26  
-**상태:** 설계 완료  
+**상태:** ✅ 구현 완료  
 **선행 문서:** 119_XTEST_MODE_RETRY.md
+
+---
+
+## 구현 완료 사항
+
+| 항목 | 파일 | 상태 |
+|------|------|------|
+| View 클래스 5개 | `api/django/views/xtest/rate_limit.py` | ✅ |
+| 히스토리 수집 | `api/django/rate_limit.py` (ring buffer) | ✅ |
+| URL 라우팅 | `api/django/urls.py` | ✅ |
+| 모듈 export | `api/django/views/xtest/__init__.py` | ✅ |
+| 단위 테스트 19개 | `tests/self_healing/api/test_xtest_rate_limit_views.py` | ✅ |
 
 ---
 
