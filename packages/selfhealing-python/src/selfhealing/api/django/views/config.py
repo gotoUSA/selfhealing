@@ -21,8 +21,10 @@ Apply Strategies:
 import logging
 from typing import Callable, Dict, Any, Optional
 
+from django.http import Http404
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -65,33 +67,27 @@ class AllConfigView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get all configuration with default apply strategies."""
-        try:
-            manager = get_runtime_config_manager()
-            config = manager.get_all_config()
+        # Exception은 exception handler가 처리
+        manager = get_runtime_config_manager()
+        config = manager.get_all_config()
 
-            # Add default strategy info for each config type
-            config_with_strategies = {}
-            for config_type, config_values in config.items():
-                config_with_strategies[config_type] = {
-                    "values": config_values,
-                    "default_strategy": manager.get_default_strategy(config_type),
-                }
+        # Add default strategy info for each config type
+        config_with_strategies = {}
+        for config_type, config_values in config.items():
+            config_with_strategies[config_type] = {
+                "values": config_values,
+                "default_strategy": manager.get_default_strategy(config_type),
+            }
 
-            return Response(
-                {
-                    "status": "success",
-                    "config": config_with_strategies,
-                    "pending_changes": manager.get_pending_changes(),
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error getting all config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "config": config_with_strategies,
+                "pending_changes": manager.get_pending_changes(),
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ResetConfigView(APIView):
@@ -107,27 +103,21 @@ class ResetConfigView(APIView):
 
     def post(self, request: Request) -> Response:
         """Reset all configuration to defaults."""
-        try:
-            manager = get_runtime_config_manager()
-            config = manager.reset_to_defaults()
+        # Exception은 exception handler가 처리
+        manager = get_runtime_config_manager()
+        config = manager.reset_to_defaults()
 
-            logger.info(f"[ConfigAPI] All config reset to defaults by {request.user}")
+        logger.info(f"[ConfigAPI] All config reset to defaults by {request.user}")
 
-            return Response(
-                {
-                    "status": "success",
-                    "message": "All configuration reset to defaults",
-                    "config": config,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error resetting config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "message": "All configuration reset to defaults",
+                "config": config,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PendingChangesView(APIView):
@@ -143,26 +133,20 @@ class PendingChangesView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get all pending configuration changes."""
-        try:
-            manager = get_runtime_config_manager()
-            config_type = request.query_params.get("config_type")
-            pending = manager.get_pending_changes(config_type)
+        # Exception은 exception handler가 처리
+        manager = get_runtime_config_manager()
+        config_type = request.query_params.get("config_type")
+        pending = manager.get_pending_changes(config_type)
 
-            return Response(
-                {
-                    "status": "success",
-                    "pending_changes": pending,
-                    "count": len(pending),
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error getting pending changes: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "pending_changes": pending,
+                "count": len(pending),
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class CancelPendingChangeView(APIView):
@@ -178,33 +162,22 @@ class CancelPendingChangeView(APIView):
 
     def post(self, request: Request, pending_id: str) -> Response:
         """Cancel a pending configuration change."""
-        try:
-            manager = get_runtime_config_manager()
-            result = manager.cancel_pending_change(
-                pending_id,
-                cancelled_by=str(request.user),
-            )
+        manager = get_runtime_config_manager()
+        result = manager.cancel_pending_change(
+            pending_id,
+            cancelled_by=str(request.user),
+        )
 
-            if result.get("status") == "cancelled":
-                return Response(
-                    {
-                        **result,
-                        "message": f"Pending change {pending_id} cancelled",
-                        "timestamp": timezone.now(),
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                return Response(
-                    result,
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error cancelling pending change: {e}", exc_info=True)
+        if result.get("status") == "cancelled":
             return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {
+                    **result,
+                    "message": f"Pending change {pending_id} cancelled",
+                    "timestamp": timezone.now(),
+                },
+                status=status.HTTP_200_OK,
             )
+        raise Http404(f"Pending change {pending_id} not found")
 
 
 class BaseConfigView(APIView):
@@ -244,110 +217,89 @@ class BaseConfigView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get configuration with default strategy info."""
-        try:
-            manager = get_runtime_config_manager()
-            config = manager._get_config(self.config_name)
-            default_strategy = manager.get_default_strategy(self.config_name)
-            pending = manager.get_pending_changes(self.config_name)
+        manager = get_runtime_config_manager()
+        config = manager._get_config(self.config_name)
+        default_strategy = manager.get_default_strategy(self.config_name)
+        pending = manager.get_pending_changes(self.config_name)
 
-            return Response(
-                {
-                    "status": "success",
-                    "config": config,
-                    "config_type": self.config_name,
-                    "default_strategy": default_strategy,
-                    "pending_changes": pending,
-                    "timestamp": timezone.now(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error getting {self.config_name} config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "config": config,
+                "config_type": self.config_name,
+                "default_strategy": default_strategy,
+                "pending_changes": pending,
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def put(self, request: Request) -> Response:
         """Update configuration with apply strategy support."""
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            # Audit log for validation failures (potential misuse detection)
+            client_ip = self._get_client_ip(request)
+            logger.warning(
+                f"[ConfigAudit] Validation failed: config={self.config_name}, "
+                f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
+            )
+            raise ValidationError(serializer.errors)
+
+        manager = get_runtime_config_manager()
+
+        # Extract apply options and config changes
+        apply_options = serializer.get_apply_options()
+        config_changes = serializer.get_config_changes()
+
+        if not config_changes:
+            raise ValueError("No valid configuration values provided")
+
+        # Get previous config for change logging
+        previous_config = manager._get_config(self.config_name)
+
+        # Extract reason for history tracking
+        reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
+
+        # Update with strategy (includes ConfigHistory integration)
+        result = manager.update_with_strategy(
+            config_type=self.config_name,
+            changes=config_changes,
+            changed_by=str(request.user),
+            reason=reason,
+            **apply_options,
+        )
+
+        # Format semantic change log (with fallback for robustness)
         try:
-            serializer = self.serializer_class(data=request.data)
-            if not serializer.is_valid():
-                # Audit log for validation failures (potential misuse detection)
-                client_ip = self._get_client_ip(request)
-                logger.warning(
-                    f"[ConfigAudit] Validation failed: config={self.config_name}, "
-                    f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
-                )
-                return Response(
-                    {"status": "error", "errors": serializer.errors},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            manager = get_runtime_config_manager()
-
-            # Extract apply options and config changes
-            apply_options = serializer.get_apply_options()
-            config_changes = serializer.get_config_changes()
-
-            if not config_changes:
-                return Response(
-                    {"status": "error", "error": "No valid configuration values provided"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Get previous config for change logging
-            previous_config = manager._get_config(self.config_name)
-
-            # Extract reason for history tracking
-            reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
-
-            # Update with strategy (includes ConfigHistory integration)
-            result = manager.update_with_strategy(
-                config_type=self.config_name,
-                changes=config_changes,
-                changed_by=str(request.user),
-                reason=reason,
-                **apply_options,
+            change_summary = format_changes_summary(config_changes, previous_config)
+            logger.info(
+                f"[ConfigAPI] {self.config_name.upper()} config updated by {request.user}:"
+                f"{change_summary}\n  Applied: {result.get('applied_strategy', 'immediate')}"
+            )
+        except Exception as log_err:
+            # Fallback to basic logging - never let logging failure affect the API
+            logger.warning(
+                f"[ConfigAPI] Semantic log formatting failed: {log_err}. "
+                f"Falling back to basic log."
+            )
+            logger.info(
+                f"[ConfigAPI] {self.config_name} config updated by {request.user}: "
+                f"changes={config_changes}, strategy={result.get('applied_strategy')}"
             )
 
-            # Format semantic change log (with fallback for robustness)
-            try:
-                change_summary = format_changes_summary(config_changes, previous_config)
-                logger.info(
-                    f"[ConfigAPI] {self.config_name.upper()} config updated by {request.user}:"
-                    f"{change_summary}\n  Applied: {result.get('applied_strategy', 'immediate')}"
-                )
-            except Exception as log_err:
-                # Fallback to basic logging - never let logging failure affect the API
-                logger.warning(
-                    f"[ConfigAPI] Semantic log formatting failed: {log_err}. "
-                    f"Falling back to basic log."
-                )
-                logger.info(
-                    f"[ConfigAPI] {self.config_name} config updated by {request.user}: "
-                    f"changes={config_changes}, strategy={result.get('applied_strategy')}"
-                )
+        # Determine response status based on result
+        if result.get("status") == "applied":
+            http_status = status.HTTP_200_OK
+        elif result.get("status") in ("scheduled", "waiting"):
+            http_status = status.HTTP_202_ACCEPTED
+        else:
+            http_status = status.HTTP_400_BAD_REQUEST
 
-            # Determine response status based on result
-            if result.get("status") == "applied":
-                http_status = status.HTTP_200_OK
-            elif result.get("status") in ("scheduled", "waiting"):
-                http_status = status.HTTP_202_ACCEPTED
-            else:
-                http_status = status.HTTP_400_BAD_REQUEST
+        result["timestamp"] = timezone.now()
+        result["config_type"] = self.config_name
 
-            result["timestamp"] = timezone.now()
-            result["config_type"] = self.config_name
-
-            return Response(result, status=http_status)
-
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error updating {self.config_name} config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(result, status=http_status)
 
 
 class CircuitBreakerConfigView(BaseConfigView):
@@ -470,83 +422,60 @@ class SLOConfigView(BaseConfigView):
 
     def put(self, request: Request) -> Response:
         """Add or update SLO definitions."""
-        try:
-            serializer = self.serializer_class(data=request.data)
-            if not serializer.is_valid():
-                # Audit log for validation failures
-                client_ip = self._get_client_ip(request)
-                logger.warning(
-                    f"[ConfigAudit] Validation failed: config={self.config_name}, "
-                    f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
-                )
-                return Response(
-                    {"status": "error", "errors": serializer.errors},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            manager = get_runtime_config_manager()
-            validated = serializer.validated_data
-
-            # Extract SLO-specific updates
-            result = manager.update_slo_config(
-                default_window_days=validated.get("default_window_days"),
-                default_target=validated.get("default_target"),
-                default_fast_burn_rate=validated.get("default_fast_burn_rate"),
-                default_slow_burn_rate=validated.get("default_slow_burn_rate"),
-                slo=validated.get("slo"),
-                slos=validated.get("slos"),
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            # Audit log for validation failures
+            client_ip = self._get_client_ip(request)
+            logger.warning(
+                f"[ConfigAudit] Validation failed: config={self.config_name}, "
+                f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
             )
+            raise ValidationError(serializer.errors)
 
-            logger.info(f"[ConfigAPI] SLO config updated by {request.user}")
+        manager = get_runtime_config_manager()
+        validated = serializer.validated_data
 
+        # Extract SLO-specific updates
+        result = manager.update_slo_config(
+            default_window_days=validated.get("default_window_days"),
+            default_target=validated.get("default_target"),
+            default_fast_burn_rate=validated.get("default_fast_burn_rate"),
+            default_slow_burn_rate=validated.get("default_slow_burn_rate"),
+            slo=validated.get("slo"),
+            slos=validated.get("slos"),
+        )
+
+        logger.info(f"[ConfigAPI] SLO config updated by {request.user}")
+
+        return Response(
+            {
+                "status": "success",
+                "config": result,
+                "config_type": "slo",
+                "timestamp": timezone.now(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def delete(self, request: Request) -> Response:
+        """Delete a specific SLO by name."""
+        slo_name = request.query_params.get("name")
+        if not slo_name:
+            raise ValueError("Query parameter 'name' is required")
+
+        manager = get_runtime_config_manager()
+        result = manager.delete_slo(slo_name)
+
+        if result.get("status") == "deleted":
+            logger.info(f"[ConfigAPI] SLO '{slo_name}' deleted by {request.user}")
             return Response(
                 {
-                    "status": "success",
-                    "config": result,
-                    "config_type": "slo",
+                    **result,
                     "timestamp": timezone.now(),
                 },
                 status=status.HTTP_200_OK,
             )
-
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error updating SLO config: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    def delete(self, request: Request) -> Response:
-        """Delete a specific SLO by name."""
-        try:
-            slo_name = request.query_params.get("name")
-            if not slo_name:
-                return Response(
-                    {"status": "error", "error": "Query parameter 'name' is required"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            manager = get_runtime_config_manager()
-            result = manager.delete_slo(slo_name)
-
-            if result.get("status") == "deleted":
-                logger.info(f"[ConfigAPI] SLO '{slo_name}' deleted by {request.user}")
-                return Response(
-                    {
-                        **result,
-                        "timestamp": timezone.now(),
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                return Response(result, status=status.HTTP_404_NOT_FOUND)
-
-        except Exception as e:
-            logger.error(f"[ConfigAPI] Error deleting SLO: {e}", exc_info=True)
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        raise Http404(f"SLO '{slo_name}' not found")
 
 
 class ReplayAutomationConfigView(BaseConfigView):

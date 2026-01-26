@@ -63,59 +63,51 @@ class HealingTimelineView(XTestModeMixin, APIView):
         default_limit = self._get_timeline_default_limit()
         limit = int(request.query_params.get("limit", default_limit))
 
-        try:
-            # 이벤트 버스에서 히스토리 조회
-            from selfhealing.services.event_bus import get_event_bus
+        # 이벤트 버스에서 히스토리 조회
+        from selfhealing.services.event_bus import get_event_bus
 
-            bus = get_event_bus()
-            history = bus.get_history(limit=limit)
+        bus = get_event_bus()
+        history = bus.get_history(limit=limit)
 
-            # 로컬 이벤트 추가
-            local_events = get_healing_events(limit)
+        # 로컬 이벤트 추가
+        local_events = get_healing_events(limit)
 
-            # 필터링
-            if service_filter:
-                history = [
-                    e
-                    for e in history
-                    if e.get("data", {}).get("service") == service_filter
-                    or e.get("data", {}).get("service_name") == service_filter
-                ]
-                local_events = [e for e in local_events if e.get("service") == service_filter]
+        # 필터링
+        if service_filter:
+            history = [
+                e
+                for e in history
+                if e.get("data", {}).get("service") == service_filter
+                or e.get("data", {}).get("service_name") == service_filter
+            ]
+            local_events = [e for e in local_events if e.get("service") == service_filter]
 
-            # CB 상태 정보 추가
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        # CB 상태 정보 추가
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
-            cb_service = get_circuit_breaker_service()
+        cb_service = get_circuit_breaker_service()
 
-            cb_states = {}
-            all_states = cb_service.repository.get_all_states()
-            for state in all_states:
-                cb_states[state.service_name] = {
-                    "state": state.state,
-                    "failure_count": state.failure_count,
-                    "success_count": getattr(state, "success_count", 0),
-                    "opened_at": str(getattr(state, "opened_at", None)),
-                }
+        cb_states = {}
+        all_states = cb_service.repository.get_all_states()
+        for state in all_states:
+            cb_states[state.service_name] = {
+                "state": state.state,
+                "failure_count": state.failure_count,
+                "success_count": getattr(state, "success_count", 0),
+                "opened_at": str(getattr(state, "opened_at", None)),
+            }
 
-            return Response(
-                {
-                    "status": "success",
-                    "service_filter": service_filter,
-                    "event_bus_events": history,
-                    "local_events": local_events,
-                    "current_cb_states": cb_states,
-                    "total_events": len(history) + len(local_events),
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"[Stage 51] Timeline query failed: {e}")
-            return Response(
-                {"status": "error", "error": "timeline_query_failed", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "service_filter": service_filter,
+                "event_bus_events": history,
+                "local_events": local_events,
+                "current_cb_states": cb_states,
+                "total_events": len(history) + len(local_events),
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 class BlastRadiusTestView(XTestModeMixin, APIView):
@@ -148,80 +140,72 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
             "details": {},
         }
 
-        try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
-            cb_service = get_circuit_breaker_service()
+        cb_service = get_circuit_breaker_service()
 
-            # Step 1: 대상 서비스에 장애 주입
-            for _ in range(failure_count):
-                cb_service.record_failure(affected_service, error_context={"source": "blast-radius-test"})
+        # Step 1: 대상 서비스에 장애 주입
+        for _ in range(failure_count):
+            cb_service.record_failure(affected_service, error_context={"source": "blast-radius-test"})
 
-            affected_state = cb_service.get_state(affected_service)
-            results["affected_service_state"] = affected_state
-            results["affected_services"].append(affected_service)
+        affected_state = cb_service.get_state(affected_service)
+        results["affected_service_state"] = affected_state
+        results["affected_services"].append(affected_service)
 
-            # 이벤트 기록
-            add_healing_event(
-                {
-                    "event_type": "blast_radius_test_started",
-                    "service": affected_service,
-                    "failure_count": failure_count,
-                    "check_services": check_services,
-                }
-            )
+        # 이벤트 기록
+        add_healing_event(
+            {
+                "event_type": "blast_radius_test_started",
+                "service": affected_service,
+                "failure_count": failure_count,
+                "check_services": check_services,
+            }
+        )
 
-            # Step 2: 다른 서비스들의 상태 확인
-            for service in check_services:
-                if service == affected_service:
-                    continue
+        # Step 2: 다른 서비스들의 상태 확인
+        for service in check_services:
+            if service == affected_service:
+                continue
 
-                service_state = cb_service.get_state(service)
-                allowed = cb_service.should_allow(service)
+            service_state = cb_service.get_state(service)
+            allowed = cb_service.should_allow(service)
 
-                results["details"][service] = {
-                    "state": service_state,
-                    "allowed": allowed,
-                    "isolated": service_state != "open" and allowed,
-                }
+            results["details"][service] = {
+                "state": service_state,
+                "allowed": allowed,
+                "isolated": service_state != "open" and allowed,
+            }
 
-                if service_state == "open" or not allowed:
-                    results["isolation_verified"] = False
-                    results["affected_services"].append(service)
-                else:
-                    results["unaffected_services"].append(service)
+            if service_state == "open" or not allowed:
+                results["isolation_verified"] = False
+                results["affected_services"].append(service)
+            else:
+                results["unaffected_services"].append(service)
 
-            # Step 3: 결과 스냅샷 저장
-            snapshot = collect_system_snapshot()
+        # Step 3: 결과 스냅샷 저장
+        snapshot = collect_system_snapshot()
 
-            # 이벤트 기록
-            add_healing_event(
-                {
-                    "event_type": "blast_radius_test_completed",
-                    "service": affected_service,
-                    "isolation_verified": results["isolation_verified"],
-                    "affected_count": len(results["affected_services"]),
-                    "unaffected_count": len(results["unaffected_services"]),
-                }
-            )
+        # 이벤트 기록
+        add_healing_event(
+            {
+                "event_type": "blast_radius_test_completed",
+                "service": affected_service,
+                "isolation_verified": results["isolation_verified"],
+                "affected_count": len(results["affected_services"]),
+                "unaffected_count": len(results["unaffected_services"]),
+            }
+        )
 
-            # Step 4: 대상 서비스 복구 (테스트 종료)
-            cb_service.force_close(affected_service, reason="Blast radius test cleanup", controlled_by="xtest")
+        # Step 4: 대상 서비스 복구 (테스트 종료)
+        cb_service.force_close(affected_service, reason="Blast radius test cleanup", controlled_by="xtest")
 
-            logger.info(
-                f"[Stage 51] Blast radius test: {affected_service} → "
-                f"isolated={results['isolation_verified']}, "
-                f"unaffected={len(results['unaffected_services'])}"
-            )
+        logger.info(
+            f"[Stage 51] Blast radius test: {affected_service} → "
+            f"isolated={results['isolation_verified']}, "
+            f"unaffected={len(results['unaffected_services'])}"
+        )
 
-            return Response({"status": "success", **results, "snapshot": snapshot, "timestamp": timezone.now().isoformat()})
-
-        except Exception as e:
-            logger.error(f"[Stage 51] Blast radius test failed: {e}")
-            return Response(
-                {"status": "error", "error": "blast_radius_test_failed", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({"status": "success", **results, "snapshot": snapshot, "timestamp": timezone.now().isoformat()})
 
 
 class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
@@ -247,63 +231,55 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
 
         matrix = {}
 
-        try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
-            cb_service = get_circuit_breaker_service()
+        cb_service = get_circuit_breaker_service()
 
-            for affected_service in test_services:
-                matrix[affected_service] = {"affects": [], "does_not_affect": []}
+        for affected_service in test_services:
+            matrix[affected_service] = {"affects": [], "does_not_affect": []}
 
-                # 모든 서비스 초기화
-                for svc in test_services:
-                    cb_service.force_close(svc, reason="matrix test reset", controlled_by="xtest")
-
-                # 대상 서비스에 장애 주입
-                for _ in range(failure_count):
-                    cb_service.record_failure(affected_service, error_context={"source": "multi-blast-radius-test"})
-
-                # 다른 서비스 확인
-                for check_service in test_services:
-                    if check_service == affected_service:
-                        continue
-
-                    state = cb_service.get_state(check_service)
-                    allowed = cb_service.should_allow(check_service)
-
-                    if state == "open" or not allowed:
-                        matrix[affected_service]["affects"].append(check_service)
-                    else:
-                        matrix[affected_service]["does_not_affect"].append(check_service)
-
-            # 모든 서비스 복구
+            # 모든 서비스 초기화
             for svc in test_services:
-                cb_service.force_close(svc, reason="matrix test cleanup", controlled_by="xtest")
+                cb_service.force_close(svc, reason="matrix test reset", controlled_by="xtest")
 
-            # 격리 점수 계산
-            total_checks = len(test_services) * (len(test_services) - 1)
-            isolated_count = sum(len(m["does_not_affect"]) for m in matrix.values())
-            isolation_score = (isolated_count / total_checks * 100) if total_checks > 0 else 100
+            # 대상 서비스에 장애 주입
+            for _ in range(failure_count):
+                cb_service.record_failure(affected_service, error_context={"source": "multi-blast-radius-test"})
 
-            logger.info(f"[Stage 51] Multi blast radius test: score={isolation_score:.1f}%")
+            # 다른 서비스 확인
+            for check_service in test_services:
+                if check_service == affected_service:
+                    continue
 
-            return Response(
-                {
-                    "status": "success",
-                    "matrix": matrix,
-                    "isolation_score_percent": round(isolation_score, 1),
-                    "total_services_tested": len(test_services),
-                    "expected_isolation": "database affects all, others should be isolated",
-                    "timestamp": timezone.now().isoformat(),
-                }
-            )
+                state = cb_service.get_state(check_service)
+                allowed = cb_service.should_allow(check_service)
 
-        except Exception as e:
-            logger.error(f"[Stage 51] Multi blast radius test failed: {e}")
-            return Response(
-                {"status": "error", "error": "multi_blast_radius_failed", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                if state == "open" or not allowed:
+                    matrix[affected_service]["affects"].append(check_service)
+                else:
+                    matrix[affected_service]["does_not_affect"].append(check_service)
+
+        # 모든 서비스 복구
+        for svc in test_services:
+            cb_service.force_close(svc, reason="matrix test cleanup", controlled_by="xtest")
+
+        # 격리 점수 계산
+        total_checks = len(test_services) * (len(test_services) - 1)
+        isolated_count = sum(len(m["does_not_affect"]) for m in matrix.values())
+        isolation_score = (isolated_count / total_checks * 100) if total_checks > 0 else 100
+
+        logger.info(f"[Stage 51] Multi blast radius test: score={isolation_score:.1f}%")
+
+        return Response(
+            {
+                "status": "success",
+                "matrix": matrix,
+                "isolation_score_percent": round(isolation_score, 1),
+                "total_services_tested": len(test_services),
+                "expected_isolation": "database affects all, others should be isolated",
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
 
 
 # =============================================================================

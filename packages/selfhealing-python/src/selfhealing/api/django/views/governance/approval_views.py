@@ -43,40 +43,32 @@ class ApprovalRequestListView(APIView):
             status: Filter by status (PENDING, APPROVED, REJECTED, EXPIRED)
             for_me: Only show requests I can approve (excludes my own)
         """
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
-            manager = get_runtime_config_manager()
+        manager = get_runtime_config_manager()
 
-            # Expire old requests first
-            manager.expire_old_requests()
+        # Expire old requests first
+        manager.expire_old_requests()
 
-            status_filter = request.query_params.get("status")
-            for_me = request.query_params.get("for_me", "").lower() == "true"
+        status_filter = request.query_params.get("status")
+        for_me = request.query_params.get("for_me", "").lower() == "true"
 
-            actor = getattr(request.user, "username", str(request.user))
+        actor = getattr(request.user, "username", str(request.user))
 
-            if for_me:
-                requests_list = manager.get_pending_requests_for_user(actor)
-            else:
-                requests_list = manager.get_approval_requests(status=status_filter)
+        if for_me:
+            requests_list = manager.get_pending_requests_for_user(actor)
+        else:
+            requests_list = manager.get_approval_requests(status=status_filter)
 
-            return Response(
-                {
-                    "status": "success",
-                    "requests": requests_list,
-                    "count": len(requests_list),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.exception(f"[Governance] Approval request list failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "requests": requests_list,
+                "count": len(requests_list),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def post(self, request: Request) -> Response:
         """
@@ -88,57 +80,43 @@ class ApprovalRequestListView(APIView):
             payload: Request data to be approved
             expiry_hours: Hours until expiry (default 24)
         """
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
-            manager = get_runtime_config_manager()
-            actor = getattr(request.user, "username", str(request.user))
+        manager = get_runtime_config_manager()
+        actor = getattr(request.user, "username", str(request.user))
 
-            request_type = request.data.get("request_type", "")
-            description = request.data.get("description", "")
-            payload = request.data.get("payload", {})
-            expiry_hours = request.data.get("expiry_hours", 24)
+        request_type = request.data.get("request_type", "")
+        description = request.data.get("description", "")
+        payload = request.data.get("payload", {})
+        expiry_hours = request.data.get("expiry_hours", 24)
 
-            if not request_type:
-                return Response(
-                    {"status": "error", "error": "request_type is required"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not request_type:
+            raise ValueError("request_type is required")
 
-            if not description:
-                return Response(
-                    {"status": "error", "error": "description is required"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not description:
+            raise ValueError("description is required")
 
-            approval_request = manager.create_approval_request(
-                request_type=request_type,
-                description=description,
-                requested_by=actor,
-                payload=payload,
-                expiry_hours=expiry_hours,
-            )
+        approval_request = manager.create_approval_request(
+            request_type=request_type,
+            description=description,
+            requested_by=actor,
+            payload=payload,
+            expiry_hours=expiry_hours,
+        )
 
-            logger.info(
-                f"[Governance] Approval request created: {approval_request['id']} by {actor}"
-            )
+        logger.info(
+            f"[Governance] Approval request created: {approval_request['id']} by {actor}"
+        )
 
-            return Response(
-                {
-                    "status": "created",
-                    "request": approval_request,
-                    "message": "Approval request created. Awaiting approval from another admin.",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_201_CREATED,
-            )
-
-        except Exception as e:
-            logger.exception(f"[Governance] Approval request creation failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "created",
+                "request": approval_request,
+                "message": "Approval request created. Awaiting approval from another admin.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ApprovalRequestApproveView(APIView):
@@ -154,41 +132,29 @@ class ApprovalRequestApproveView(APIView):
 
     def post(self, request: Request, request_id: str) -> Response:
         """Approve a pending request."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
-            manager = get_runtime_config_manager()
-            actor = getattr(request.user, "username", str(request.user))
+        manager = get_runtime_config_manager()
+        actor = getattr(request.user, "username", str(request.user))
 
-            result = manager.approve_request(request_id, actor)
+        result = manager.approve_request(request_id, actor)
 
-            if result is None:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "Request not found, already processed, expired, or self-approval attempted",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            logger.info(f"[Governance] Request {request_id} approved by {actor}")
-
-            return Response(
-                {
-                    "status": "approved",
-                    "request": result,
-                    "approved_by": actor,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
+        if result is None:
+            raise ValueError(
+                "Request not found, already processed, expired, or self-approval attempted"
             )
 
-        except Exception as e:
-            logger.exception(f"[Governance] Approval failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        logger.info(f"[Governance] Request {request_id} approved by {actor}")
+
+        return Response(
+            {
+                "status": "approved",
+                "request": result,
+                "approved_by": actor,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ApprovalRequestRejectView(APIView):
@@ -202,43 +168,29 @@ class ApprovalRequestRejectView(APIView):
 
     def post(self, request: Request, request_id: str) -> Response:
         """Reject a pending request."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
-            manager = get_runtime_config_manager()
-            actor = getattr(request.user, "username", str(request.user))
-            reason = request.data.get("reason", "")
+        manager = get_runtime_config_manager()
+        actor = getattr(request.user, "username", str(request.user))
+        reason = request.data.get("reason", "")
 
-            result = manager.reject_request(request_id, actor, reason)
+        result = manager.reject_request(request_id, actor, reason)
 
-            if result is None:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "Request not found or already processed",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if result is None:
+            raise ValueError("Request not found or already processed")
 
-            logger.info(f"[Governance] Request {request_id} rejected by {actor}")
+        logger.info(f"[Governance] Request {request_id} rejected by {actor}")
 
-            return Response(
-                {
-                    "status": "rejected",
-                    "request": result,
-                    "rejected_by": actor,
-                    "reason": reason,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.exception(f"[Governance] Rejection failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "rejected",
+                "request": result,
+                "rejected_by": actor,
+                "reason": reason,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 __all__ = [

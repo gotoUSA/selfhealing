@@ -223,49 +223,27 @@ class CanaryRolloutListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        # stages 파싱
-        try:
-            stages = [
-                CanaryStage(
-                    name=s.get("name", f"stage_{i}"),
-                    clusters=s.get("clusters", []),
-                    percentage=float(s.get("percentage", 0)),
-                    duration_minutes=int(s.get("duration_minutes", 5)),
-                    auto_promote=s.get("auto_promote", True),
-                )
-                for i, s in enumerate(stages_data)
-            ]
-        except (KeyError, TypeError, ValueError) as e:
-            return Response(
-                {"status": "error", "error": f"Invalid stages format: {e}"},
-                status=status.HTTP_400_BAD_REQUEST,
+        # stages 파싱 - ValueError/KeyError/TypeError는 exception handler가 처리
+        stages = [
+            CanaryStage(
+                name=s.get("name", f"stage_{i}"),
+                clusters=s.get("clusters", []),
+                percentage=float(s.get("percentage", 0)),
+                duration_minutes=int(s.get("duration_minutes", 5)),
+                auto_promote=s.get("auto_promote", True),
             )
+            for i, s in enumerate(stages_data)
+        ]
         
-        # 롤아웃 생성
-        try:
-            rollout = service.create_rollout(
-                config_type=config_type,
-                new_values=new_values,
-                stages=stages,
-                created_by=_get_username(request),
-                reason=request.data.get("reason", ""),
-                force_during_chaos=request.data.get("force_during_chaos", False),
-            )
-        except ConfigLockError as e:
-            return Response(
-                {
-                    "status": "error",
-                    "error": str(e),
-                    "error_type": "config_locked",
-                    "current_owner": e.current_owner,
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        except ValueError as e:
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # 롤아웃 생성 - ConfigLockError/ValueError는 exception handler가 처리
+        rollout = service.create_rollout(
+            config_type=config_type,
+            new_values=new_values,
+            stages=stages,
+            created_by=_get_username(request),
+            reason=request.data.get("reason", ""),
+            force_during_chaos=request.data.get("force_during_chaos", False),
+        )
         
         logger.info(
             f"[CanaryAPI] Rollout created: id={rollout.id}, "
@@ -410,15 +388,9 @@ class CanaryRolloutActionView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         
-        try:
-            handler = _ACTION_HANDLERS[action]
-            success, error_message = handler(service, rollout_id, rollout, request)
-        except Exception as e:
-            logger.exception(f"[CanaryAPI] Action failed: {action}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # 액션 핸들러 실행 - Exception은 exception handler가 처리
+        handler = _ACTION_HANDLERS[action]
+        success, error_message = handler(service, rollout_id, rollout, request)
         
         if not success:
             return Response(

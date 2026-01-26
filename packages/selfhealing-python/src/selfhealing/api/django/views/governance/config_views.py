@@ -56,93 +56,68 @@ class GovernanceConfigView(APIView):
     
     def get(self, request: Request) -> Response:
         """거버넌스 설정 조회."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
-            
-            manager = get_runtime_config_manager()
-            config = manager.get_governance_config()
-            
-            return Response(
-                {
-                    "status": "success",
-                    "config": config,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-            
-        except Exception as e:
-            logger.exception(f"[Governance] Config query failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        from selfhealing.services.runtime_config import get_runtime_config_manager
+        
+        manager = get_runtime_config_manager()
+        config = manager.get_governance_config()
+        
+        return Response(
+            {
+                "status": "success",
+                "config": config,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
     
     def put(self, request: Request) -> Response:
         """거버넌스 설정 변경."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
-            
-            manager = get_runtime_config_manager()
-            actor = str(request.user) if request.user.is_authenticated else "anonymous"
-            
-            # 허용된 필드만 추출
-            allowed_fields = {
-                "threshold_operator",
-                "threshold_admin",
-                "emergency_expiry_hours",
-                "emergency_warning_hours",
-                "emergency_final_warning_hours",
-                "default_mode",
-                "notify_on_emergency",
-                "notify_channels",
-                "emergency_slack_channel",
-                "emergency_email_recipients",
-                "four_eyes_enabled",
-                "four_eyes_expiry_hours",
-            }
-            
-            update_fields = {
-                k: v for k, v in request.data.items()
-                if k in allowed_fields
-            }
-            
-            if not update_fields:
-                return Response(
-                    {"status": "error", "error": "No valid fields provided"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            # 업데이트 수행
-            try:
-                new_config = manager.update_governance_config(**update_fields)
-            except ValueError as e:
-                return Response(
-                    {"status": "error", "error": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            logger.info(
-                f"[Governance] Config updated by {actor}: {list(update_fields.keys())}"
-            )
-            
-            return Response(
-                {
-                    "status": "updated",
-                    "config": new_config,
-                    "updated_by": actor,
-                    "updated_fields": list(update_fields.keys()),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-            
-        except Exception as e:
-            logger.exception(f"[Governance] Config update failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        from selfhealing.services.runtime_config import get_runtime_config_manager
+        
+        manager = get_runtime_config_manager()
+        actor = str(request.user) if request.user.is_authenticated else "anonymous"
+        
+        # 허용된 필드만 추출
+        allowed_fields = {
+            "threshold_operator",
+            "threshold_admin",
+            "emergency_expiry_hours",
+            "emergency_warning_hours",
+            "emergency_final_warning_hours",
+            "default_mode",
+            "notify_on_emergency",
+            "notify_channels",
+            "emergency_slack_channel",
+            "emergency_email_recipients",
+            "four_eyes_enabled",
+            "four_eyes_expiry_hours",
+        }
+        
+        update_fields = {
+            k: v for k, v in request.data.items()
+            if k in allowed_fields
+        }
+        
+        if not update_fields:
+            raise ValueError("No valid fields provided")
+        
+        # 업데이트 수행 - ValueError는 exception handler로 전파
+        new_config = manager.update_governance_config(**update_fields)
+        
+        logger.info(
+            f"[Governance] Config updated by {actor}: {list(update_fields.keys())}"
+        )
+        
+        return Response(
+            {
+                "status": "updated",
+                "config": new_config,
+                "updated_by": actor,
+                "updated_fields": list(update_fields.keys()),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class L2StorageConfigManagedView(APIView):
@@ -159,80 +134,61 @@ class L2StorageConfigManagedView(APIView):
 
     def get(self, request: Request) -> Response:
         """Get L2 storage configuration."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
-            manager = get_runtime_config_manager()
-            config = manager.get_l2_storage_config()
+        manager = get_runtime_config_manager()
+        config = manager.get_l2_storage_config()
 
-            return Response(
-                {
-                    "status": "success",
-                    "config": config,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.exception(f"[Governance] L2 storage config get failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "config": config,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def put(self, request: Request) -> Response:
         """Update L2 storage configuration."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
-            manager = get_runtime_config_manager()
-            actor = getattr(request.user, "username", str(request.user))
+        manager = get_runtime_config_manager()
+        actor = getattr(request.user, "username", str(request.user))
 
-            update_fields = {
-                k: v for k, v in request.data.items()
-                if k in [
-                    "redis_timeout_ms",
-                    "database_timeout_ms",
-                    "fallback_timeout_ms",
-                    "shadow_log_enabled",
-                    "shadow_log_max_entries",
-                    "reconciliation_jitter_min_seconds",
-                    "reconciliation_jitter_max_seconds",
-                    "health_check_interval_seconds",
-                    "health_check_timeout_ms",
-                ]
-            }
+        update_fields = {
+            k: v for k, v in request.data.items()
+            if k in [
+                "redis_timeout_ms",
+                "database_timeout_ms",
+                "fallback_timeout_ms",
+                "shadow_log_enabled",
+                "shadow_log_max_entries",
+                "reconciliation_jitter_min_seconds",
+                "reconciliation_jitter_max_seconds",
+                "health_check_interval_seconds",
+                "health_check_timeout_ms",
+            ]
+        }
 
-            if not update_fields:
-                return Response(
-                    {"status": "error", "error": "No valid fields provided"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not update_fields:
+            raise ValueError("No valid fields provided")
 
-            new_config = manager.update_l2_storage_config(**update_fields)
+        new_config = manager.update_l2_storage_config(**update_fields)
 
-            logger.info(
-                f"[Governance] L2 storage config updated by {actor}: {list(update_fields.keys())}"
-            )
+        logger.info(
+            f"[Governance] L2 storage config updated by {actor}: {list(update_fields.keys())}"
+        )
 
-            return Response(
-                {
-                    "status": "updated",
-                    "config": new_config,
-                    "updated_by": actor,
-                    "updated_fields": list(update_fields.keys()),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.exception(f"[Governance] L2 storage config update failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "updated",
+                "config": new_config,
+                "updated_by": actor,
+                "updated_fields": list(update_fields.keys()),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 __all__ = [

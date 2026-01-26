@@ -51,21 +51,10 @@ class MetricStatusView(APIView):
 
     def get(self, request: Request) -> Response:
         """통합 상태 조회."""
-        try:
-            service = get_governance_service()
-            result = service.get_status()
+        service = get_governance_service()
+        result = service.get_status()
 
-            return Response(result, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.exception(f"[Governance] Status query failed: {e}")
-            return Response(
-                {
-                    "error": str(e),
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class GovernanceRBACStatusView(APIView):
@@ -100,75 +89,63 @@ class GovernanceRBACStatusView(APIView):
 
     def get(self, request: Request) -> Response:
         """거버넌스 RBAC 상태 조회."""
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
-            from selfhealing.services.governance import get_emergency_tracker
+        from selfhealing.services.runtime_config import get_runtime_config_manager
+        from selfhealing.services.governance import get_emergency_tracker
 
-            manager = get_runtime_config_manager()
-            tracker = get_emergency_tracker()
+        manager = get_runtime_config_manager()
+        tracker = get_emergency_tracker()
 
-            # 거버넌스 설정 조회
-            governance_config = manager.get_governance_config()
+        # 거버넌스 설정 조회
+        governance_config = manager.get_governance_config()
 
-            # 긴급 모드 상태 조회
-            emergency_state = tracker.get_current_state()
+        # 긴급 모드 상태 조회
+        emergency_state = tracker.get_current_state()
 
-            # 만료 상태 확인
-            expiry_status = tracker.check_expiry_status()
+        # 만료 상태 확인
+        expiry_status = tracker.check_expiry_status()
 
-            # 응답 구성
-            response_data = {
-                "status": "success",
-                "governance": {
-                    # 현재 모드
-                    "current_mode": emergency_state.mode,
-                    "default_mode": governance_config.get("default_mode", "NORMAL"),
-                    # 모드 변경 정보
-                    "mode_changed_at": emergency_state.activated_at,
-                    "mode_changed_by": emergency_state.activated_by,
-                    # 만료 정보
-                    "mode_expires_at": expiry_status.get("expires_at"),
-                    "time_remaining_hours": expiry_status.get("time_remaining_hours"),
-                    # 임계값 (Risk-Based Access Control)
-                    "thresholds": {
-                        "operator_approve": governance_config.get("threshold_operator", 0.15),
-                        "admin_approve": governance_config.get("threshold_admin", 0.30),
-                    },
-                    # 긴급 모드 상태
-                    "emergency_active": emergency_state.is_active,
-                    "emergency_reason": emergency_state.reason,
-                    "emergency_warning_sent": emergency_state.warning_sent_at is not None,
-                    "emergency_final_warning_sent": emergency_state.final_warning_sent_at is not None,
-                    "pending_admin_acknowledgement": (emergency_state.is_active and emergency_state.acknowledged_by is None),
-                    # 경고 상태
-                    "should_warn": expiry_status.get("should_warn", False),
-                    "should_final_warn": expiry_status.get("should_final_warn", False),
-                    "should_auto_restore": expiry_status.get("should_auto_restore", False),
-                    # 설정 상세
-                    "config": {
-                        "emergency_expiry_hours": governance_config.get("emergency_expiry_hours", 8),
-                        "emergency_warning_hours": governance_config.get("emergency_warning_hours", 4),
-                        "emergency_final_warning_hours": governance_config.get("emergency_final_warning_hours", 6),
-                        "notify_on_emergency": governance_config.get("notify_on_emergency", True),
-                        "notify_channels": governance_config.get("notify_channels", ["slack", "email"]),
-                        "four_eyes_enabled": governance_config.get("four_eyes_enabled", False),
-                    },
+        # 응답 구성
+        response_data = {
+            "status": "success",
+            "governance": {
+                # 현재 모드
+                "current_mode": emergency_state.mode,
+                "default_mode": governance_config.get("default_mode", "NORMAL"),
+                # 모드 변경 정보
+                "mode_changed_at": emergency_state.activated_at,
+                "mode_changed_by": emergency_state.activated_by,
+                # 만료 정보
+                "mode_expires_at": expiry_status.get("expires_at"),
+                "time_remaining_hours": expiry_status.get("time_remaining_hours"),
+                # 임계값 (Risk-Based Access Control)
+                "thresholds": {
+                    "operator_approve": governance_config.get("threshold_operator", 0.15),
+                    "admin_approve": governance_config.get("threshold_admin", 0.30),
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.exception(f"[Governance] Status query failed: {e}")
-            return Response(
-                {
-                    "status": "error",
-                    "error": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                # 긴급 모드 상태
+                "emergency_active": emergency_state.is_active,
+                "emergency_reason": emergency_state.reason,
+                "emergency_warning_sent": emergency_state.warning_sent_at is not None,
+                "emergency_final_warning_sent": emergency_state.final_warning_sent_at is not None,
+                "pending_admin_acknowledgement": (emergency_state.is_active and emergency_state.acknowledged_by is None),
+                # 경고 상태
+                "should_warn": expiry_status.get("should_warn", False),
+                "should_final_warn": expiry_status.get("should_final_warn", False),
+                "should_auto_restore": expiry_status.get("should_auto_restore", False),
+                # 설정 상세
+                "config": {
+                    "emergency_expiry_hours": governance_config.get("emergency_expiry_hours", 8),
+                    "emergency_warning_hours": governance_config.get("emergency_warning_hours", 4),
+                    "emergency_final_warning_hours": governance_config.get("emergency_final_warning_hours", 6),
+                    "notify_on_emergency": governance_config.get("notify_on_emergency", True),
+                    "notify_channels": governance_config.get("notify_channels", ["slack", "email"]),
+                    "four_eyes_enabled": governance_config.get("four_eyes_enabled", False),
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 __all__ = [

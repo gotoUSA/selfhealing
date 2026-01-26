@@ -147,6 +147,8 @@
 
 ### 4.2 마이그레이션 완료 내역
 
+#### Phase 4.2.1 - 초기 마이그레이션 (2025-01-26)
+
 총 **10개 try-except 패턴** 제거 (3개 파일):
 
 | 파일 | 변경 수 | 변경 유형 |
@@ -155,10 +157,48 @@
 | `learning.py` | 1 | LearningSessionView.post - try-except 제거, ValueError/Http404 raise 패턴 적용 |
 | `dlq.py` | 8 | DLQCleanupStatsView.get, DLQArchiveView.post, DLQPurgeView.post, DLQListView.get, DLQDetailView.get, DLQRetryView.post, DLQResolveView.post, DLQTestCreateView.post - try-except 제거 |
 
-### 4.3 마이그레이션 제외 항목
+#### Phase 4.2.2 - 대규모 마이그레이션 (2026-01-26)
 
-- `auto_tuning.py`: `if "error" in result` 패턴은 서비스 응답 체크로, 예외 핸들링이 아님
-- `finops.py`, `compliance_dna.py`, `blast_radius.py`: ImportError try-except는 모듈 로드 시 폴백 처리로 유지
+총 **51개 try-except 패턴** 제거 (13개 파일):
+
+| 파일 | 변경 수 | 변경 유형 |
+|------|---------|-----------|
+| `canary.py` | 3 | stages parsing, rollout creation, action handler |
+| `health.py` | 5 | Metrics GET, GateHealth GET, GateConfig GET/PUT, GateReset POST |
+| `tiering.py` | 10 | TierDefinitions GET/PUT, TierMappings GET/PUT, TierOverrides GET/PUT, DryRun, Reset, Export, Import, Resolve |
+| `cascade.py` | 7 | EventList, EventDetail, ChainVerify, CausationTrace, Checkpoint GET/POST, LoadShedding |
+| `config.py` | 8 | AllConfig, ResetConfig, PendingChanges, CancelPendingChange, BaseConfig GET/PUT, SLOConfig PUT/DELETE |
+| `emergency.py` | 1 | EmergencyConfigView PUT |
+| `governance/config_views.py` | 4 | GovernanceConfig GET/PUT, L2StorageConfig GET/PUT |
+| `governance/control_views.py` | 3 | Reconcile POST, Mode POST/GET |
+| `governance/status_views.py` | 2 | MetricStatus GET, RBACStatus GET |
+| `governance/approval_views.py` | 4 | ApprovalList GET/POST, Approve POST, Reject POST |
+| `error_budget/reconciliation.py` | 12 | Status, FailSafePeriods, ShadowBudgets GET/POST, Detail, Approve, Reject, ExcludedPeriods GET/POST, ExcludedPeriodDetail DELETE, Config GET/PUT |
+| `xtest/observability.py` | 3 | HealingTimeline GET, BlastRadius POST, MultiBlastRadius POST |
+| `chaos/report_views.py` | 1 | DryRunAnalysis POST |
+
+### 4.3 마이그레이션 제외 항목 (의도적 유지)
+
+#### 4.3.1 부수적 작업 fallback (Audit 미기록 - 정상)
+
+이 패턴들은 **핵심 비즈니스 로직이 아닌 부수적 작업**이므로 실패해도 API가 계속 작동해야 합니다:
+
+| 위치 | 패턴 | 이유 | Audit 기록 |
+|------|------|------|------------|
+| `tiering.py: _log_change()` | 로깅 실패 시 warning만 | 로깅 실패가 API 실패로 이어지면 안 됨 | ❌ 미기록 |
+| `config.py: put()` | 로그 포맷팅 실패 시 fallback | 로깅 실패가 API 실패로 이어지면 안 됨 | ❌ 미기록 |
+| `xtest/observability.py: _get_timeline_default_limit()` | 설정 조회 실패 시 기본값 | 부수적 설정, 기본값으로 충분 | ❌ 미기록 |
+| `circuit_breaker.py: AuditLogsView.get()` | Audit 조회 실패 시 빈 결과 | 읽기 전용, 실패해도 시스템 영향 없음 | ❌ 미기록 |
+| `chaos/safety_views.py: KillAllView.post()` | TTL config clear 실패 | 클린업 실패는 치명적이지 않음 | ⚠️ 로그만 |
+
+#### 4.3.2 모듈 로드 fallback
+
+| 위치 | 패턴 | 이유 |
+|------|------|------|
+| `auto_tuning.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
+| `finops.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
+| `compliance_dna.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
+| `blast_radius.py` | ImportError fallback | 모듈 로드 시 폴백 처리 |
 
 ### 4.4 하위 호환성
 

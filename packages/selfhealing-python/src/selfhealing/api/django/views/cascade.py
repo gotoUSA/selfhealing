@@ -76,58 +76,48 @@ class CascadeEventListView(APIView):
         offset = int(request.query_params.get("offset", 0))
         trigger_type = request.query_params.get("trigger_type")
 
-        try:
-            auditor = _get_cascade_auditor()
-            events = auditor.get_recent_events(
-                namespace=namespace,
-                limit=limit + offset,  # offset 고려
-            )
-            
-            # offset 적용
-            events = events[offset:offset + limit]
-            
-            # 트리거 유형 필터
-            if trigger_type:
-                events = [
-                    e for e in events 
-                    if e.trigger.trigger_type == trigger_type
-                ]
-            
-            # 응답 형식 변환
-            event_list = []
-            for event in events:
-                event_list.append({
-                    "id": event.id,
-                    "timestamp": event.timestamp,
-                    "trigger_type": event.trigger.trigger_type,
-                    "trigger_details": event.trigger.details,
-                    "effects_count": len(event.effects),
-                    "namespace": event.namespace,
-                    "has_external_trace": event.external_trace is not None,
-                })
-            
-            # 전체 개수 조회
-            total = auditor.get_event_count(namespace)
-
-            return Response({
-                "success": True,
-                "namespace": namespace,
-                "events": event_list,
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+        # Exception은 exception handler가 처리
+        auditor = _get_cascade_auditor()
+        events = auditor.get_recent_events(
+            namespace=namespace,
+            limit=limit + offset,  # offset 고려
+        )
+        
+        # offset 적용
+        events = events[offset:offset + limit]
+        
+        # 트리거 유형 필터
+        if trigger_type:
+            events = [
+                e for e in events 
+                if e.trigger.trigger_type == trigger_type
+            ]
+        
+        # 응답 형식 변환
+        event_list = []
+        for event in events:
+            event_list.append({
+                "id": event.id,
+                "timestamp": event.timestamp,
+                "trigger_type": event.trigger.trigger_type,
+                "trigger_details": event.trigger.details,
+                "effects_count": len(event.effects),
+                "namespace": event.namespace,
+                "has_external_trace": event.external_trace is not None,
             })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] List events failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Cascade Event 목록 조회 실패",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        
+        # 전체 개수 조회
+        total = auditor.get_event_count(namespace)
+
+        return Response({
+            "success": True,
+            "namespace": namespace,
+            "events": event_list,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 class CascadeEventDetailView(APIView):
@@ -188,72 +178,56 @@ class CascadeEventDetailView(APIView):
     def get(self, request: Request, cascade_id: str) -> Response:
         namespace = request.query_params.get("namespace", "global")
 
-        try:
-            auditor = _get_cascade_auditor()
-            event = auditor.get_cascade_event(cascade_id, namespace)
-            
-            if not event:
-                return Response(
-                    {
-                        "success": False,
-                        "error": "not_found",
-                        "message": f"Cascade Event {cascade_id} not found",
-                    },
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            
-            # 효과 목록 변환
-            effects_list = []
-            for effect in event.effects:
-                effect_dict = {
-                    "action_type": effect.action_type,
-                    "event_id": effect.event_id,
-                    "success": effect.success,
-                    "caused_by": effect.caused_by,
-                    "details": effect.details,
-                    "timestamp": effect.executed_at,
-                }
-                if effect.error_message:
-                    effect_dict["error_message"] = effect.error_message
-                effects_list.append(effect_dict)
-            
-            # 외부 추적 정보
-            external_trace = None
-            if event.external_trace:
-                external_trace = event.external_trace.to_dict()
-            
-            return Response({
-                "success": True,
-                "event": {
-                    "id": event.id,
-                    "timestamp": event.timestamp,
-                    "namespace": event.namespace,
-                    "trigger": {
-                        "type": event.trigger.trigger_type,
-                        "event_id": event.trigger.event_id,
-                        "details": event.trigger.details,
-                        "triggered_by": event.trigger.triggered_by,
-                    },
-                    "effects": effects_list,
-                    "causation_chain": event.get_causation_chain(),
-                    "external_trace": external_trace,
-                    "hash_chain": {
-                        "previous_hash": event.previous_hash,
-                        "current_hash": event.current_hash,
-                    },
+        # Exception은 exception handler가 처리
+        auditor = _get_cascade_auditor()
+        event = auditor.get_cascade_event(cascade_id, namespace)
+        
+        if not event:
+            from django.http import Http404
+            raise Http404(f"Cascade Event {cascade_id} not found")
+        
+        # 효과 목록 변환
+        effects_list = []
+        for effect in event.effects:
+            effect_dict = {
+                "action_type": effect.action_type,
+                "event_id": effect.event_id,
+                "success": effect.success,
+                "caused_by": effect.caused_by,
+                "details": effect.details,
+                "timestamp": effect.executed_at,
+            }
+            if effect.error_message:
+                effect_dict["error_message"] = effect.error_message
+            effects_list.append(effect_dict)
+        
+        # 외부 추적 정보
+        external_trace = None
+        if event.external_trace:
+            external_trace = event.external_trace.to_dict()
+        
+        return Response({
+            "success": True,
+            "event": {
+                "id": event.id,
+                "timestamp": event.timestamp,
+                "namespace": event.namespace,
+                "trigger": {
+                    "type": event.trigger.trigger_type,
+                    "event_id": event.trigger.event_id,
+                    "details": event.trigger.details,
+                    "triggered_by": event.trigger.triggered_by,
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] Get event failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Cascade Event 조회 실패",
+                "effects": effects_list,
+                "causation_chain": event.get_causation_chain(),
+                "external_trace": external_trace,
+                "hash_chain": {
+                    "previous_hash": event.previous_hash,
+                    "current_hash": event.current_hash,
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 class CascadeChainVerifyView(APIView):
@@ -308,51 +282,41 @@ class CascadeChainVerifyView(APIView):
         from_checkpoint = request.data.get("from_checkpoint", True)
         full_verify = request.data.get("full_verify", False)
 
-        try:
-            import time
-            start_time = time.time()
-            
-            auditor = _get_cascade_auditor()
-            
-            # 검증 수행
-            if full_verify or not from_checkpoint:
-                result = auditor.verify_chain_integrity(namespace)
-            else:
-                result = auditor.verify_chain_integrity_from_checkpoint(namespace)
-            
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            
-            # 체크포인트 정보
-            checkpoint_info = None
-            if from_checkpoint and not full_verify:
-                checkpoint = auditor.get_checkpoint(namespace)
-                if checkpoint:
-                    checkpoint_info = {
-                        "timestamp": checkpoint.get("timestamp"),
-                        "hash": checkpoint.get("last_hash"),
-                    }
+        # Exception은 exception handler가 처리
+        import time
+        start_time = time.time()
+        
+        auditor = _get_cascade_auditor()
+        
+        # 검증 수행
+        if full_verify or not from_checkpoint:
+            result = auditor.verify_chain_integrity(namespace)
+        else:
+            result = auditor.verify_chain_integrity_from_checkpoint(namespace)
+        
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        
+        # 체크포인트 정보
+        checkpoint_info = None
+        if from_checkpoint and not full_verify:
+            checkpoint = auditor.get_checkpoint(namespace)
+            if checkpoint:
+                checkpoint_info = {
+                    "timestamp": checkpoint.get("timestamp"),
+                    "hash": checkpoint.get("last_hash"),
+                }
 
-            return Response({
-                "success": True,
-                "valid": result.get("valid", False),
-                "namespace": namespace,
-                "verified_count": result.get("verified_count", 0),
-                "from_checkpoint": from_checkpoint and not full_verify,
-                "checkpoint": checkpoint_info,
-                "verification_time_ms": elapsed_ms,
-                "errors": result.get("errors", []),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] Chain verify failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Hash Chain 무결성 검증 실패",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({
+            "success": True,
+            "valid": result.get("valid", False),
+            "namespace": namespace,
+            "verified_count": result.get("verified_count", 0),
+            "from_checkpoint": from_checkpoint and not full_verify,
+            "checkpoint": checkpoint_info,
+            "verification_time_ms": elapsed_ms,
+            "errors": result.get("errors", []),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 class CausationTraceView(APIView):
@@ -408,59 +372,36 @@ class CausationTraceView(APIView):
         direction = request.query_params.get("direction", "ancestors")
 
         if direction not in ("ancestors", "descendants", "both"):
-            return Response(
-                {
-                    "success": False,
-                    "error": "invalid_direction",
-                    "message": "direction must be one of: ancestors, descendants, both",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValueError("direction must be one of: ancestors, descendants, both")
 
-        try:
-            auditor = _get_cascade_auditor()
-            
-            # 인과관계 추적
-            trace = auditor.trace_causation(event_id, namespace)
-            
-            if not trace:
-                return Response(
-                    {
-                        "success": False,
-                        "error": "not_found",
-                        "message": f"Event {event_id} not found or no causation trace",
-                    },
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            
-            # cascade_id 추출 (첫 번째 이벤트에서)
-            cascade_id = None
-            if trace:
-                # trace는 [{"event_id": ..., "cascade_id": ...}, ...] 형태
-                for item in trace:
-                    if "cascade_id" in item:
-                        cascade_id = item["cascade_id"]
-                        break
+        # Exception은 exception handler가 처리
+        auditor = _get_cascade_auditor()
+        
+        # 인과관계 추적
+        trace = auditor.trace_causation(event_id, namespace)
+        
+        if not trace:
+            from django.http import Http404
+            raise Http404(f"Event {event_id} not found or no causation trace")
+        
+        # cascade_id 추출 (첫 번째 이벤트에서)
+        cascade_id = None
+        if trace:
+            # trace는 [{"event_id": ..., "cascade_id": ...}, ...] 형태
+            for item in trace:
+                if "cascade_id" in item:
+                    cascade_id = item["cascade_id"]
+                    break
 
-            return Response({
-                "success": True,
-                "event_id": event_id,
-                "direction": direction,
-                "trace": trace,
-                "cascade_id": cascade_id,
-                "namespace": namespace,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] Causation trace failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "인과관계 추적 실패",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({
+            "success": True,
+            "event_id": event_id,
+            "direction": direction,
+            "trace": trace,
+            "cascade_id": cascade_id,
+            "namespace": namespace,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 class CascadeCheckpointView(APIView):
@@ -503,52 +444,32 @@ class CascadeCheckpointView(APIView):
     def get(self, request: Request) -> Response:
         namespace = request.query_params.get("namespace", "global")
 
-        try:
-            auditor = _get_cascade_auditor()
-            checkpoint = auditor.get_checkpoint(namespace)
-            
-            return Response({
-                "success": True,
-                "namespace": namespace,
-                "checkpoint": checkpoint,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] Get checkpoint failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "체크포인트 조회 실패",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # Exception은 exception handler가 처리
+        auditor = _get_cascade_auditor()
+        checkpoint = auditor.get_checkpoint(namespace)
+        
+        return Response({
+            "success": True,
+            "namespace": namespace,
+            "checkpoint": checkpoint,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
     def post(self, request: Request) -> Response:
         namespace = request.data.get("namespace", "global")
 
-        try:
-            auditor = _get_cascade_auditor()
-            checkpoint = auditor.create_checkpoint(namespace)
-            
-            logger.info(f"[CascadeAPI] Checkpoint created for namespace={namespace}")
-            
-            return Response({
-                "success": True,
-                "namespace": namespace,
-                "checkpoint": checkpoint,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] Create checkpoint failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "체크포인트 생성 실패",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # Exception은 exception handler가 처리
+        auditor = _get_cascade_auditor()
+        checkpoint = auditor.create_checkpoint(namespace)
+        
+        logger.info(f"[CascadeAPI] Checkpoint created for namespace={namespace}")
+        
+        return Response({
+            "success": True,
+            "namespace": namespace,
+            "checkpoint": checkpoint,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
 
 class CascadeLoadSheddingStatusView(APIView):
@@ -580,24 +501,14 @@ class CascadeLoadSheddingStatusView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
-        try:
-            from selfhealing.audit.cascade_load_shedding import get_cascade_load_shedding
-            
-            load_shedding = get_cascade_load_shedding()
-            status_info = load_shedding.get_status()
-            
-            return Response({
-                "success": True,
-                **status_info,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-        except Exception as e:
-            logger.error(f"[CascadeAPI] Get load shedding status failed: {e}")
-            return Response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Load Shedding 상태 조회 실패",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        from selfhealing.audit.cascade_load_shedding import get_cascade_load_shedding
+        
+        # Exception은 exception handler가 처리
+        load_shedding = get_cascade_load_shedding()
+        status_info = load_shedding.get_status()
+        
+        return Response({
+            "success": True,
+            **status_info,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })

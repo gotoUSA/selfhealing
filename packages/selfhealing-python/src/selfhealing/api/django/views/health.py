@@ -198,16 +198,9 @@ class SelfHealingMetricsView(APIView):
         from selfhealing.api.django.views.circuit_breaker import get_control_api_service
 
         service = get_control_api_service()
-
-        try:
-            metrics = service.get_metrics()
-            return Response(metrics, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(f"[SelfHealing] Metrics collection failed: {e}")
-            return Response(
-                {"error": "Failed to collect metrics", "detail": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # Exception은 exception handler가 처리
+        metrics = service.get_metrics()
+        return Response(metrics, status=status.HTTP_200_OK)
 
 
 class ErrorBudgetGateHealthView(APIView):
@@ -227,28 +220,17 @@ class ErrorBudgetGateHealthView(APIView):
 
     def get(self, request):
         """Get Error Budget Gate health status."""
-        try:
-            from selfhealing.services.error_budget_gate import get_error_budget_gate
+        from selfhealing.services.error_budget_gate import get_error_budget_gate
 
-            gate = get_error_budget_gate()
-            health = gate.get_health_status()
+        # Exception은 exception handler가 처리
+        gate = get_error_budget_gate()
+        health = gate.get_health_status()
 
-            # HTTP 상태 코드 결정
-            if health.get("healthy"):
-                return Response(health)
-            else:
-                return Response(health, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetGate] Health check failed: {e}")
-            return Response(
-                {
-                    "healthy": False,
-                    "status": "error",
-                    "error": str(e),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # HTTP 상태 코드 결정
+        if health.get("healthy"):
+            return Response(health)
+        else:
+            return Response(health, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 class ErrorBudgetGateConfigView(APIView):
@@ -265,75 +247,58 @@ class ErrorBudgetGateConfigView(APIView):
 
     def get(self, request):
         """Get current gate configuration."""
-        try:
-            from selfhealing.services.error_budget_gate import get_error_budget_gate
+        from selfhealing.services.error_budget_gate import get_error_budget_gate
 
-            gate = get_error_budget_gate()
-            config = gate.get_config()
+        # Exception은 exception handler가 처리
+        gate = get_error_budget_gate()
+        config = gate.get_config()
 
-            return Response({
-                "status": "success",
-                "config": config.to_dict(),
-            })
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetGate] Config retrieval failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({
+            "status": "success",
+            "config": config.to_dict(),
+        })
 
     def put(self, request):
         """Update gate configuration."""
-        try:
-            from selfhealing.services.error_budget_gate import get_error_budget_gate
+        from selfhealing.services.error_budget_gate import get_error_budget_gate
 
-            gate = get_error_budget_gate()
-            
-            # 허용된 설정 필드
-            allowed_fields = {
-                "enabled",
-                "critical_threshold_percent",
-                "warning_threshold_percent",
-                "fail_open",
-                "cache_ttl_seconds",
-                "fail_open_rate_limit_enabled",
-                "fail_open_rate_limit_per_minute",
-                "fail_open_rate_limit_window_seconds",
-                "circuit_breaker_enabled",
-                "circuit_breaker_failure_threshold",
-                "circuit_breaker_recovery_timeout",
-                "alert_on_fail_open",
-                "alert_cooldown_seconds",
-            }
+        # Exception은 exception handler가 처리
+        gate = get_error_budget_gate()
+        
+        # 허용된 설정 필드
+        allowed_fields = {
+            "enabled",
+            "critical_threshold_percent",
+            "warning_threshold_percent",
+            "fail_open",
+            "cache_ttl_seconds",
+            "fail_open_rate_limit_enabled",
+            "fail_open_rate_limit_per_minute",
+            "fail_open_rate_limit_window_seconds",
+            "circuit_breaker_enabled",
+            "circuit_breaker_failure_threshold",
+            "circuit_breaker_recovery_timeout",
+            "alert_on_fail_open",
+            "alert_cooldown_seconds",
+        }
 
-            # 유효한 필드만 추출
-            updates = {
-                k: v for k, v in request.data.items()
-                if k in allowed_fields
-            }
+        # 유효한 필드만 추출
+        updates = {
+            k: v for k, v in request.data.items()
+            if k in allowed_fields
+        }
 
-            if not updates:
-                return Response(
-                    {"status": "error", "error": "No valid configuration fields provided"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not updates:
+            raise ValueError("No valid configuration fields provided")
 
-            config = gate.update_config(**updates)
+        config = gate.update_config(**updates)
 
-            return Response({
-                "status": "success",
-                "message": f"Updated {len(updates)} configuration field(s)",
-                "updated_fields": list(updates.keys()),
-                "config": config.to_dict(),
-            })
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetGate] Config update failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({
+            "status": "success",
+            "message": f"Updated {len(updates)} configuration field(s)",
+            "updated_fields": list(updates.keys()),
+            "config": config.to_dict(),
+        })
 
 
 class ErrorBudgetGateResetView(APIView):
@@ -349,50 +314,36 @@ class ErrorBudgetGateResetView(APIView):
 
     def post(self, request):
         """Reset gate components."""
-        try:
-            from selfhealing.services.error_budget_gate import get_error_budget_gate
+        from selfhealing.services.error_budget_gate import get_error_budget_gate
 
-            gate = get_error_budget_gate()
-            
-            component = request.data.get("component", "all")
-            reset_actions = []
+        # Exception은 exception handler가 처리
+        gate = get_error_budget_gate()
+        
+        component = request.data.get("component", "all")
+        reset_actions = []
 
-            if component in ("all", "cache"):
-                gate.clear_cache()
-                reset_actions.append("cache")
+        if component in ("all", "cache"):
+            gate.clear_cache()
+            reset_actions.append("cache")
 
-            if component in ("all", "rate_limiter"):
-                gate.reset_rate_limiter()
-                reset_actions.append("rate_limiter")
+        if component in ("all", "rate_limiter"):
+            gate.reset_rate_limiter()
+            reset_actions.append("rate_limiter")
 
-            # Use reset_fault_detector() instead of deprecated reset_circuit_breaker()
-            if component in ("all", "circuit_breaker"):
-                gate.reset_fault_detector()
-                reset_actions.append("circuit_breaker")
+        # Use reset_fault_detector() instead of deprecated reset_circuit_breaker()
+        if component in ("all", "circuit_breaker"):
+            gate.reset_fault_detector()
+            reset_actions.append("circuit_breaker")
 
-            if component in ("all", "alerts"):
-                gate.reset_alert_cooldowns()
-                reset_actions.append("alerts")
+        if component in ("all", "alerts"):
+            gate.reset_alert_cooldowns()
+            reset_actions.append("alerts")
 
-            if not reset_actions:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": f"Unknown component: {component}",
-                        "valid_components": ["all", "cache", "rate_limiter", "circuit_breaker", "alerts"],
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if not reset_actions:
+            raise ValueError(f"Unknown component: {component}")
 
-            return Response({
-                "status": "success",
-                "message": f"Reset completed for: {', '.join(reset_actions)}",
-                "reset_components": reset_actions,
-            })
-
-        except Exception as e:
-            logger.error(f"[ErrorBudgetGate] Reset failed: {e}")
-            return Response(
-                {"status": "error", "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response({
+            "status": "success",
+            "message": f"Reset completed for: {', '.join(reset_actions)}",
+            "reset_components": reset_actions,
+        })

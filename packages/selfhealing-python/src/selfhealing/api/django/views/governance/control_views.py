@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timezone
 
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -61,10 +62,7 @@ class GovernanceReconcileView(APIView):
         serializer = MetricSyncRequestSerializer(data=request.data)
         
         if not serializer.is_valid():
-            return Response(
-                {"error": "Invalid request", "details": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValidationError(serializer.errors)
         
         validated = serializer.validated_data
         domains = validated.get("domains")
@@ -76,28 +74,15 @@ class GovernanceReconcileView(APIView):
         if request.user and request.user.is_authenticated:
             actor = request.user.username
         
-        try:
-            service = get_governance_service()
-            result = service.reconcile(
-                domains=domains,
-                dry_run=dry_run,
-                actor=actor,
-                reason=reason,
-            )
-            
-            return Response(result, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.exception(f"[Governance] Reconcile failed: {e}")
-            return Response(
-                {
-                    "reconciliation_result": "failed",
-                    "error": str(e),
-                    "reconciled_at": datetime.now(timezone.utc).isoformat(),
-                    "actor": actor,
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        service = get_governance_service()
+        result = service.reconcile(
+            domains=domains,
+            dry_run=dry_run,
+            actor=actor,
+            reason=reason,
+        )
+        
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class GovernanceModeView(APIView):
@@ -144,65 +129,33 @@ class GovernanceModeView(APIView):
         reason = request.data.get("reason", "")
         
         if not mode:
-            return Response(
-                {
-                    "error": "mode is required",
-                    "valid_modes": ["NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"],
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValueError("mode is required")
         
         # 사용자 이름 추출
         actor = "unknown"
         if request.user and request.user.is_authenticated:
             actor = request.user.username
         
-        try:
-            service = get_governance_service()
-            result = service.set_mode(
-                mode=mode,
-                actor=actor,
-                reason=reason,
-            )
-            
-            return Response(result, status=status.HTTP_200_OK)
-            
-        except ValueError as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            logger.exception(f"[Governance] Mode change failed: {e}")
-            return Response(
-                {
-                    "status": "failed",
-                    "error": str(e),
-                    "changed_at": datetime.now(timezone.utc).isoformat(),
-                    "actor": actor,
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        service = get_governance_service()
+        result = service.set_mode(
+            mode=mode,
+            actor=actor,
+            reason=reason,
+        )
+        
+        return Response(result, status=status.HTTP_200_OK)
     
     def get(self, request: Request) -> Response:
         """현재 운영 모드 조회."""
-        try:
-            from selfhealing.metrics.reliability_manager import get_reliability_manager
-            
-            manager = get_reliability_manager()
-            mode = manager.get_global_mode()
-            
-            return Response({
-                "current_mode": mode.value if hasattr(mode, 'value') else str(mode),
-                "valid_modes": ["NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"],
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.exception(f"[Governance] Mode query failed: {e}")
-            return Response(
-                {"error": str(e), "current_mode": "unknown"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        from selfhealing.metrics.reliability_manager import get_reliability_manager
+        
+        manager = get_reliability_manager()
+        mode = manager.get_global_mode()
+        
+        return Response({
+            "current_mode": mode.value if hasattr(mode, 'value') else str(mode),
+            "valid_modes": ["NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"],
+        }, status=status.HTTP_200_OK)
 
 
 __all__ = [

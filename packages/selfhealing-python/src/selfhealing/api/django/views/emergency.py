@@ -459,17 +459,7 @@ class EmergencyConfigView(APIView):
     def put(self, request: Request) -> Response:
         actor = getattr(request.user, "username", "api")
 
-        try:
-            config = RecoveryGateConfig.from_dict(request.data)
-        except Exception as e:
-            return Response(
-                {
-                    "success": False,
-                    "error": "invalid_config",
-                    "message": str(e),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        config = RecoveryGateConfig.from_dict(request.data)
 
         manager = get_emergency_manager()
         manager.set_recovery_gate_config(config, changed_by=actor)
