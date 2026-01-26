@@ -24,6 +24,12 @@ Stage 51 Observability:
 - POST /api/self-healing/xtest/generate-postmortem/ - Post-mortem 생성
 - POST /api/self-healing/xtest/record-healing-event/ - 힐링 이벤트 기록
 - GET  /api/self-healing/xtest/healing-incidents/ - 인시던트 목록
+
+DLQ Test Endpoints:
+- POST /api/self-healing/xtest/dlq/inject/ - DLQ 테스트 항목 생성
+- GET  /api/self-healing/xtest/dlq/status/ - DLQ 현황 조회
+- POST /api/self-healing/xtest/dlq/force-status/ - DLQ 상태 강제 변경
+- POST /api/self-healing/xtest/dlq/reset/ - X-Test-Mode 생성 항목 초기화
 """
 
 # Base utilities
@@ -69,6 +75,14 @@ from .observability import (
     RecordHealingEventView,
 )
 
+# DLQ X-Test views
+from .dlq import (
+    InjectDLQEntryView,
+    DLQXTestStatusView,
+    ForceStatusView,
+    ResetDLQXTestView,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -103,6 +117,11 @@ __all__ = [
     "PostmortemGeneratorView",
     "RecordHealingEventView",
     "GetHealingIncidentsView",
+    # DLQ X-Test views
+    "InjectDLQEntryView",
+    "DLQXTestStatusView",
+    "ForceStatusView",
+    "ResetDLQXTestView",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",

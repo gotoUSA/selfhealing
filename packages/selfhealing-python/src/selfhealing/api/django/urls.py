@@ -687,6 +687,11 @@ from selfhealing.api.django.views.xtest_mode import (
     RecordHealingEventView,
     GetHealingIncidentsView,
     MultiServiceBlastRadiusView,
+    # DLQ X-Test Views
+    InjectDLQEntryView,
+    DLQXTestStatusView,
+    ForceStatusView,
+    ResetDLQXTestView,
 )
 
 urlpatterns += [
@@ -709,6 +714,11 @@ urlpatterns += [
     path("xtest/record-healing-event/", RecordHealingEventView.as_view(), name="xtest-record-healing-event"),
     path("xtest/healing-incidents/", GetHealingIncidentsView.as_view(), name="xtest-healing-incidents"),
     path("xtest/multi-blast-radius/", MultiServiceBlastRadiusView.as_view(), name="xtest-multi-blast-radius"),
+    # DLQ X-Test Endpoints
+    path("xtest/dlq/inject/", InjectDLQEntryView.as_view(), name="xtest-dlq-inject"),
+    path("xtest/dlq/status/", DLQXTestStatusView.as_view(), name="xtest-dlq-status"),
+    path("xtest/dlq/force-status/", ForceStatusView.as_view(), name="xtest-dlq-force-status"),
+    path("xtest/dlq/reset/", ResetDLQXTestView.as_view(), name="xtest-dlq-reset"),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # Reference: docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md
