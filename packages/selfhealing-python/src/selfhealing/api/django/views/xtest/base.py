@@ -11,13 +11,19 @@ Requirements:
 - X-Test-Mode: chaos-monkey 헤더 필수
 - DEBUG 또는 CHAOS_ENABLED 환경 변수 필요
 - production 환경에서는 완전 차단
+
+Regional Scope:
+- GLOBAL scope API는 X-Region 헤더 필수
+- X-Region 값이 현재 클러스터 리전과 일치해야 허용
+- 리전 불일치 시 403 Forbidden 반환
 """
 
 import logging
 import os
+import re
 import threading
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
 from django.conf import settings
@@ -36,6 +42,24 @@ from selfhealing.services.audit.xtest_audit import (
 from selfhealing.core.test_mode_context import TestModeContext
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Global Scope Endpoint Patterns (리전 경계 강제 필요)
+# =============================================================================
+
+# GLOBAL scope API: 다른 리전에 영향을 줄 수 있는 엔드포인트
+# 이 패턴과 매칭되는 API는 X-Region 헤더 필수 + 현재 리전 일치 검증
+GLOBAL_SCOPE_ENDPOINT_PATTERNS: List[str] = [
+    r"xtest/emergency/global/.*",      # 전역 Emergency 상태 변경
+    r"xtest/isolation/region/.*",      # 리전 격리 조작
+    r"xtest/governance/global/.*",     # 전역 거버넌스 설정
+]
+
+# 컴파일된 패턴 (성능 최적화)
+_COMPILED_GLOBAL_PATTERNS: List[re.Pattern] = [
+    re.compile(pattern, re.IGNORECASE) for pattern in GLOBAL_SCOPE_ENDPOINT_PATTERNS
+]
 
 
 # =============================================================================
@@ -91,13 +115,157 @@ class XTestModeMixin:
         
         return True, "Chaos mode allowed"
     
+    def get_current_region(self) -> Optional[str]:
+        """
+        현재 클러스터의 리전 조회.
+        
+        환경변수 SELFHEALING_REGION 또는 ClusterIdentity에서 리전 정보를 가져옵니다.
+        
+        Returns:
+            리전 식별자 (예: 'seoul', 'tokyo') 또는 None
+        """
+        # 1. 환경변수에서 직접 조회 (가장 빠름)
+        region = os.getenv("SELFHEALING_REGION")
+        if region:
+            return region
+        
+        # 2. ClusterIdentity에서 조회
+        try:
+            from selfhealing.core.cluster_identity import get_cluster_identity
+            identity = get_cluster_identity(skip_validation=True)
+            return identity.region
+        except Exception as e:
+            logger.warning(f"[X-Test-Mode] Failed to get cluster identity: {e}")
+            return None
+    
+    def is_global_scope_endpoint(self, request: Request) -> bool:
+        """
+        현재 요청이 GLOBAL scope API인지 판정.
+        
+        GLOBAL scope API는 다른 리전에 영향을 줄 수 있는 엔드포인트입니다:
+        - xtest/emergency/global/* : 전역 Emergency 상태 변경
+        - xtest/isolation/region/* : 리전 격리 조작
+        - xtest/governance/global/* : 전역 거버넌스 설정
+        
+        Args:
+            request: HTTP 요청 객체
+            
+        Returns:
+            GLOBAL scope이면 True, LOCAL scope이면 False
+        """
+        path = request.path.lstrip("/")
+        
+        for pattern in _COMPILED_GLOBAL_PATTERNS:
+            if pattern.search(path):
+                return True
+        
+        return False
+    
+    def check_regional_scope(self, request: Request) -> Tuple[bool, Optional[Response]]:
+        """
+        GLOBAL scope API에 대한 리전 경계 검증.
+        
+        GLOBAL scope API 호출 시:
+        1. X-Region 헤더 존재 확인
+        2. 헤더 값과 현재 클러스터 리전 일치 확인
+        3. 불일치 시 403 Forbidden 반환
+        
+        Args:
+            request: HTTP 요청 객체
+            
+        Returns:
+            (is_allowed, response): 허용 여부와 거부 시 Response
+        """
+        # LOCAL scope API는 리전 체크 불필요
+        if not self.is_global_scope_endpoint(request):
+            return True, None
+        
+        # 현재 클러스터 리전 조회
+        current_region = self.get_current_region()
+        
+        # 리전 미설정 환경에서는 GLOBAL scope 차단
+        if not current_region:
+            environment = os.getenv("ENVIRONMENT", "development").lower()
+            if environment == "development":
+                # 개발 환경에서는 경고만 출력
+                logger.warning(
+                    "[X-Test-Mode] SELFHEALING_REGION not set in development. "
+                    "GLOBAL scope API allowed with warning."
+                )
+                return True, None
+            
+            logger.warning(
+                "[X-Test-Mode] SELFHEALING_REGION not set. "
+                "GLOBAL scope API denied for safety."
+            )
+            return False, Response(
+                {
+                    "status": "error",
+                    "error": "region_not_configured",
+                    "message": "SELFHEALING_REGION not configured. GLOBAL scope API denied.",
+                    "hint": "Set SELFHEALING_REGION environment variable",
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # X-Region 헤더 확인
+        target_region = request.headers.get("X-Region")
+        
+        if not target_region:
+            logger.warning(
+                f"[X-Test-Mode] Missing X-Region header for GLOBAL scope API. "
+                f"current_region={current_region}, path={request.path}"
+            )
+            return False, Response(
+                {
+                    "status": "error",
+                    "error": "missing_region_header",
+                    "message": "X-Region header required for GLOBAL scope API",
+                    "current_region": current_region,
+                    "hint": f"Add header 'X-Region: {current_region}'",
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 리전 일치 확인
+        if target_region.lower() != current_region.lower():
+            logger.warning(
+                f"[X-Test-Mode] Cross-region X-Test denied: "
+                f"current={current_region}, target={target_region}, path={request.path}"
+            )
+            return False, Response(
+                {
+                    "status": "error",
+                    "error": "cross_region_xtest_denied",
+                    "message": (
+                        f"Cross-region X-Test operation denied. "
+                        f"Target region '{target_region}' does not match "
+                        f"current cluster region '{current_region}'."
+                    ),
+                    "current_region": current_region,
+                    "target_region": target_region,
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        logger.debug(
+            f"[X-Test-Mode] Regional scope check passed: "
+            f"region={current_region}, path={request.path}"
+        )
+        return True, None
+    
     def check_chaos_permission(self, request: Request) -> Optional[Response]:
         """
         Chaos 권한 체크. 실패시 Response 반환.
         
+        검증 순서:
+        1. Chaos 모드 허용 여부 (헤더, 환경변수)
+        2. GLOBAL scope API인 경우 리전 경계 검증
+        
         Returns:
             None if allowed, Response if denied
         """
+        # 1. Chaos 모드 기본 검증
         allowed, reason = self.is_chaos_allowed(request)
         if not allowed:
             logger.warning(f"[X-Test-Mode] Denied: {reason} (user: {request.user})")
@@ -110,6 +278,12 @@ class XTestModeMixin:
                 },
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        # 2. GLOBAL scope API 리전 경계 검증
+        region_allowed, region_response = self.check_regional_scope(request)
+        if not region_allowed:
+            return region_response
+        
         return None
 
     def get_xtest_session_id(self, request: Request) -> str:

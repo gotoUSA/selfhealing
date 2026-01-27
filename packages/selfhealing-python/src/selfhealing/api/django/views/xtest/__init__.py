@@ -8,6 +8,19 @@ Security:
 - DEBUG 또는 CHAOS_ENABLED 환경 변수 필요
 - production 환경에서는 완전 차단
 
+Regional Scope (리전 경계 강제):
+- GLOBAL scope API는 X-Region 헤더 필수
+- X-Region 값이 현재 클러스터 리전(SELFHEALING_REGION)과 일치해야 허용
+- 리전 불일치 시 403 Forbidden (cross_region_xtest_denied)
+
+GLOBAL Scope API (X-Region 헤더 필수):
+- xtest/emergency/global/* : 전역 Emergency 상태 변경
+- xtest/isolation/region/* : 리전 격리 조작
+- xtest/governance/global/* : 전역 거버넌스 설정
+
+LOCAL Scope API (X-Region 헤더 불필요):
+- 그 외 모든 X-Test API (DLQ, CB, Replay 등)
+
 Endpoints:
 - POST /api/self-healing/xtest/inject-cb-failure/ - CB 장애 주입
 - POST /api/self-healing/xtest/reset-cb/ - CB 상태 초기화
@@ -32,9 +45,10 @@ DLQ Test Endpoints:
 - POST /api/self-healing/xtest/dlq/reset/ - X-Test-Mode 생성 항목 초기화
 """
 
-# Base utilities
+# Base utilities and Regional Scope constants
 from .base import (
     XTestModeMixin,
+    GLOBAL_SCOPE_ENDPOINT_PATTERNS,
     add_healing_event,
     add_healing_incident,
     collect_system_snapshot,
@@ -143,6 +157,7 @@ _add_healing_incident = add_healing_incident
 __all__ = [
     # Base utilities
     "XTestModeMixin",
+    "GLOBAL_SCOPE_ENDPOINT_PATTERNS",
     "collect_system_snapshot",
     "add_healing_event",
     "add_healing_incident",
