@@ -17,7 +17,7 @@ Security:
 
 import logging
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 from rest_framework import status
@@ -407,6 +407,51 @@ class ForceStatusView(XTestModeMixin, APIView):
         return Response(response_data)
 
 
+# =============================================================================
+# DLQ Reset Helpers (Complexity Reduction)
+# =============================================================================
+
+
+def _find_xtest_entries(
+    dlq_service,
+    domain_filter: Optional[str],
+    created_by_xtest: bool,
+) -> List[int]:
+    """X-Test 생성 DLQ 항목 ID 조회."""
+    filters: Dict[str, Any] = {}
+    if domain_filter:
+        filters["domain"] = domain_filter
+
+    result = dlq_service.list_entries(filters=filters, page=1, page_size=500)
+    ids_to_delete: List[int] = []
+    
+    for entry in result.results:
+        entry_id = entry.get("id")
+        if entry_id is None:
+            continue
+
+        if created_by_xtest:
+            metadata = entry.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("source") == XTEST_SOURCE:
+                ids_to_delete.append(entry_id)
+        else:
+            ids_to_delete.append(entry_id)
+    
+    return ids_to_delete
+
+
+def _delete_dlq_entries(dlq_service, entry_ids: List[int]) -> int:
+    """DLQ 항목 삭제 실행. 삭제된 개수 반환."""
+    deleted_count = 0
+    for entry_id in entry_ids:
+        try:
+            dlq_service.repository.delete_by_id(entry_id)
+            deleted_count += 1
+        except Exception as e:
+            logger.warning(f"[X-Test-Mode] Failed to delete DLQ entry {entry_id}: {e}")
+    return deleted_count
+
+
 class ResetDLQXTestView(XTestModeMixin, APIView):
     """
     X-Test-Mode 생성 DLQ 항목 초기화 API.
@@ -440,42 +485,14 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
         created_by_xtest = request.data.get("created_by_xtest", True)
 
         from selfhealing.services.dlq import get_dlq_service
-
         dlq_service = get_dlq_service()
 
-        deleted_count = 0
-
         try:
-            # X-Test-Mode 생성 항목 조회 및 삭제
-            # Repository에서 metadata.source = 'x-test-mode' 항목 찾기
-            filters: Dict[str, Any] = {}
-            if domain_filter:
-                filters["domain"] = domain_filter
-
-            # 전체 항목 조회 (페이지네이션 무시하고 전체)
-            result = dlq_service.list_entries(filters=filters, page=1, page_size=500)
-
-            ids_to_delete: List[int] = []
-            for entry in result.results:
-                entry_id = entry.get("id")
-                if entry_id is None:
-                    continue
-
-                # X-Test-Mode 생성 항목만 필터링
-                if created_by_xtest:
-                    metadata = entry.get("metadata", {})
-                    if isinstance(metadata, dict) and metadata.get("source") == XTEST_SOURCE:
-                        ids_to_delete.append(entry_id)
-                else:
-                    ids_to_delete.append(entry_id)
-
+            # X-Test-Mode 생성 항목 조회
+            ids_to_delete = _find_xtest_entries(dlq_service, domain_filter, created_by_xtest)
+            
             # 삭제 실행
-            for entry_id in ids_to_delete:
-                try:
-                    dlq_service.repository.delete_by_id(entry_id)
-                    deleted_count += 1
-                except Exception as e:
-                    logger.warning(f"[X-Test-Mode] Failed to delete DLQ entry {entry_id}: {e}")
+            deleted_count = _delete_dlq_entries(dlq_service, ids_to_delete)
 
         except Exception as e:
             logger.error(f"[X-Test-Mode] DLQ reset failed: {e}")

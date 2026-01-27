@@ -138,15 +138,17 @@ class RunScenarioView(XTestModeMixin, APIView):
             )
 
             # WAL Audit 기록 (scenario_audit 사용)
+            # duration_ms 계산: 각 step의 duration_ms 합계
+            total_duration_ms = sum(s.duration_ms for s in result.steps)
             log_xtest_scenario_audit(
                 scenario_id=result.scenario_id,
                 scenario_name=scenario_name,
                 service_name=service_name,
                 status=result.status.value,
                 steps_total=len(result.steps),
-                steps_completed=sum(1 for s in result.steps if s.get("success", False)),
+                steps_completed=sum(1 for s in result.steps if s.success),
                 errors=result.errors[:10] if result.errors else [],
-                duration_ms=result.duration_ms,
+                duration_ms=total_duration_ms,
                 session_id=self.get_xtest_session_id(request),
                 user=self.get_xtest_user(request),
             )
@@ -405,6 +407,71 @@ class FullSnapshotView(XTestModeMixin, APIView):
 # =============================================================================
 
 
+# =============================================================================
+# Component Reset Helpers (Complexity Reduction)
+# =============================================================================
+
+
+def _reset_circuit_breakers(service_name: Optional[str], xtest_only: bool) -> Dict[str, Any]:
+    """Circuit Breaker 컴포넌트 초기화."""
+    try:
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        cb_service = get_circuit_breaker_service()
+        
+        if service_name:
+            cb_service.reset_circuit(service_name)
+            return {"reset": True, "service": service_name}
+        return {"reset": True, "scope": "xtest_only" if xtest_only else "all"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _reset_error_budget() -> Dict[str, Any]:
+    """Error Budget 컴포넌트 초기화."""
+    return {"reset": True, "note": "EB reset is simulated in X-Test mode"}
+
+
+def _reset_dlq(xtest_only: bool) -> Dict[str, Any]:
+    """DLQ 컴포넌트 초기화."""
+    try:
+        from selfhealing.services.dlq import get_dlq_service
+        get_dlq_service()  # 서비스 접근 확인
+        
+        if xtest_only:
+            return {"reset": True, "deleted_count": 0, "scope": "xtest_only"}
+        return {"reset": True, "scope": "test_data"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _reset_rate_limiter() -> Dict[str, Any]:
+    """Rate Limiter 컴포넌트 초기화."""
+    try:
+        from selfhealing.api.django.rate_limit import get_local_limiter
+        local_limiter = get_local_limiter()
+        
+        if hasattr(local_limiter, 'reset'):
+            local_limiter.reset()
+        
+        return {"reset": True, "scope": "local_counters"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _reset_idempotency(xtest_only: bool) -> Dict[str, Any]:
+    """Idempotency 컴포넌트 초기화."""
+    return {"reset": True, "scope": "xtest_keys" if xtest_only else "all_keys"}
+
+
+def _reset_scenarios() -> Dict[str, Any]:
+    """Scenario 결과 초기화."""
+    try:
+        count = clear_scenario_results()
+        return {"reset": True, "cleared_count": count}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 class ResetView(XTestModeMixin, APIView):
     """
     테스트 전 시스템 상태 초기화 API.
@@ -441,6 +508,47 @@ class ResetView(XTestModeMixin, APIView):
         "scenarios",
         "all",
     ]
+    
+    # 컴포넌트별 리셋 핸들러 매핑
+    RESET_HANDLERS = {
+        "circuit_breakers": lambda sn, xo: _reset_circuit_breakers(sn, xo),
+        "error_budget": lambda sn, xo: _reset_error_budget(),
+        "dlq": lambda sn, xo: _reset_dlq(xo),
+        "rate_limiter": lambda sn, xo: _reset_rate_limiter(),
+        "idempotency": lambda sn, xo: _reset_idempotency(xo),
+        "scenarios": lambda sn, xo: _reset_scenarios(),
+    }
+
+    def _validate_components(self, components: List[str]) -> Optional[Response]:
+        """컴포넌트 유효성 검증. 오류 시 Response 반환."""
+        invalid = [c for c in components if c not in self.VALID_COMPONENTS]
+        if invalid:
+            return Response(
+                {
+                    "status": "error",
+                    "error": "invalid_components",
+                    "message": f"Invalid components: {invalid}",
+                    "valid_components": self.VALID_COMPONENTS,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def _execute_resets(
+        self,
+        components: List[str],
+        service_name: Optional[str],
+        xtest_only: bool,
+    ) -> Dict[str, Any]:
+        """각 컴포넌트에 대한 리셋 실행."""
+        reset_all = "all" in components
+        results: Dict[str, Any] = {}
+        
+        for component, handler in self.RESET_HANDLERS.items():
+            if reset_all or component in components:
+                results[component] = handler(service_name, xtest_only)
+        
+        return results
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -455,111 +563,12 @@ class ResetView(XTestModeMixin, APIView):
             components = [components]
 
         # 유효성 검증
-        invalid_components = [c for c in components if c not in self.VALID_COMPONENTS]
-        if invalid_components:
-            return Response(
-                {
-                    "status": "error",
-                    "error": "invalid_components",
-                    "message": f"Invalid components: {invalid_components}",
-                    "valid_components": self.VALID_COMPONENTS,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        validation_error = self._validate_components(components)
+        if validation_error:
+            return validation_error
 
-        reset_all = "all" in components
-        reset_results: Dict[str, Any] = {}
-
-        # Circuit Breaker 초기화
-        if reset_all or "circuit_breakers" in components:
-            try:
-                from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-                cb_service = get_circuit_breaker_service()
-                
-                if service_name:
-                    cb_service.reset_circuit(service_name)
-                    reset_results["circuit_breakers"] = {
-                        "reset": True,
-                        "service": service_name,
-                    }
-                else:
-                    # 모든 서비스 리셋 (xtest 관련만)
-                    reset_results["circuit_breakers"] = {
-                        "reset": True,
-                        "scope": "xtest_only" if xtest_only else "all",
-                    }
-            except Exception as e:
-                reset_results["circuit_breakers"] = {"error": str(e)}
-
-        # Error Budget 초기화
-        if reset_all or "error_budget" in components:
-            try:
-                reset_results["error_budget"] = {
-                    "reset": True,
-                    "note": "EB reset is simulated in X-Test mode",
-                }
-            except Exception as e:
-                reset_results["error_budget"] = {"error": str(e)}
-
-        # DLQ 초기화
-        if reset_all or "dlq" in components:
-            try:
-                from selfhealing.services.dlq import get_dlq_service
-                dlq_service = get_dlq_service()
-                
-                # X-Test 항목만 삭제 (xtest_mode 메타데이터 기준)
-                if xtest_only:
-                    deleted_count = 0
-                    # X-Test 데이터만 삭제하는 로직
-                    reset_results["dlq"] = {
-                        "reset": True,
-                        "deleted_count": deleted_count,
-                        "scope": "xtest_only",
-                    }
-                else:
-                    reset_results["dlq"] = {
-                        "reset": True,
-                        "scope": "test_data",
-                    }
-            except Exception as e:
-                reset_results["dlq"] = {"error": str(e)}
-
-        # Rate Limiter 초기화
-        if reset_all or "rate_limiter" in components:
-            try:
-                from selfhealing.api.django.rate_limit import get_local_limiter
-                local_limiter = get_local_limiter()
-                
-                if hasattr(local_limiter, 'reset'):
-                    local_limiter.reset()
-                
-                reset_results["rate_limiter"] = {
-                    "reset": True,
-                    "scope": "local_counters",
-                }
-            except Exception as e:
-                reset_results["rate_limiter"] = {"error": str(e)}
-
-        # Idempotency 초기화
-        if reset_all or "idempotency" in components:
-            try:
-                reset_results["idempotency"] = {
-                    "reset": True,
-                    "scope": "xtest_keys" if xtest_only else "all_keys",
-                }
-            except Exception as e:
-                reset_results["idempotency"] = {"error": str(e)}
-
-        # 시나리오 결과 초기화
-        if reset_all or "scenarios" in components:
-            try:
-                count = clear_scenario_results()
-                reset_results["scenarios"] = {
-                    "reset": True,
-                    "cleared_count": count,
-                }
-            except Exception as e:
-                reset_results["scenarios"] = {"error": str(e)}
+        # 컴포넌트별 리셋 실행
+        reset_results = self._execute_resets(components, service_name, xtest_only)
 
         logger.info(
             f"[X-Test Integration] Reset completed: components={components}, "

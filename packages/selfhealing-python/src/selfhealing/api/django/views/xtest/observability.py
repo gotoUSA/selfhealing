@@ -222,6 +222,77 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         return Response({"status": "success", **results, "snapshot": snapshot, "timestamp": timezone.now().isoformat()})
 
 
+# =============================================================================
+# Multi-Service Blast Radius Helpers (Complexity Reduction)
+# =============================================================================
+
+
+def _get_test_services(cb_service, requested_services: list) -> list:
+    """테스트할 서비스 목록 조회. 비어있으면 CB에 등록된 모든 서비스 반환."""
+    if requested_services:
+        return requested_services
+    all_states = cb_service.repository.get_all_states()
+    return [s.service_name for s in all_states]
+
+
+def _reset_all_services(cb_service, services: list, reason: str) -> None:
+    """모든 서비스를 CLOSED 상태로 리셋."""
+    for svc in services:
+        cb_service.force_close(svc, reason=reason, controlled_by="xtest")
+
+
+def _inject_failures(cb_service, service: str, failure_count: int, source: str) -> None:
+    """특정 서비스에 장애 주입."""
+    for _ in range(failure_count):
+        cb_service.record_failure(service, error_context={"source": source})
+
+
+def _check_service_isolation(cb_service, affected_service: str, check_service: str) -> bool:
+    """다른 서비스가 영향 받았는지 확인. True면 격리됨(영향 없음)."""
+    state = cb_service.get_state(check_service)
+    allowed = cb_service.should_allow(check_service)
+    return state != "open" and allowed
+
+
+def _build_isolation_matrix(
+    cb_service,
+    test_services: list,
+    failure_count: int,
+) -> dict:
+    """각 서비스별 영향 매트릭스 구성."""
+    matrix = {}
+    
+    for affected_service in test_services:
+        matrix[affected_service] = {"affects": [], "does_not_affect": []}
+
+        # 모든 서비스 초기화
+        _reset_all_services(cb_service, test_services, "matrix test reset")
+
+        # 대상 서비스에 장애 주입
+        _inject_failures(cb_service, affected_service, failure_count, "multi-blast-radius-test")
+
+        # 다른 서비스 확인
+        for check_service in test_services:
+            if check_service == affected_service:
+                continue
+
+            if _check_service_isolation(cb_service, affected_service, check_service):
+                matrix[affected_service]["does_not_affect"].append(check_service)
+            else:
+                matrix[affected_service]["affects"].append(check_service)
+    
+    return matrix
+
+
+def _calculate_isolation_score(matrix: dict, total_services: int) -> float:
+    """격리 점수 계산 (백분율)."""
+    total_checks = total_services * (total_services - 1)
+    if total_checks == 0:
+        return 100.0
+    isolated_count = sum(len(m["does_not_affect"]) for m in matrix.values())
+    return isolated_count / total_checks * 100
+
+
 class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
     """
     Stage 51: 다중 서비스 Blast Radius 격리 매트릭스 테스트.
@@ -242,17 +313,14 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        test_services = request.data.get("test_services", [])
+        requested_services = request.data.get("test_services", [])
         failure_count = int(request.data.get("failure_count", 5))
 
         from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
-
         cb_service = get_circuit_breaker_service()
 
-        # test_services가 비어있으면 CB에 등록된 모든 서비스 조회
-        if not test_services:
-            all_states = cb_service.repository.get_all_states()
-            test_services = [s.service_name for s in all_states]
+        # 테스트할 서비스 목록 조회
+        test_services = _get_test_services(cb_service, requested_services)
         
         if len(test_services) < 2:
             return Response(
@@ -260,40 +328,14 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        matrix = {}
-
-        for affected_service in test_services:
-            matrix[affected_service] = {"affects": [], "does_not_affect": []}
-
-            # 모든 서비스 초기화
-            for svc in test_services:
-                cb_service.force_close(svc, reason="matrix test reset", controlled_by="xtest")
-
-            # 대상 서비스에 장애 주입
-            for _ in range(failure_count):
-                cb_service.record_failure(affected_service, error_context={"source": "multi-blast-radius-test"})
-
-            # 다른 서비스 확인
-            for check_service in test_services:
-                if check_service == affected_service:
-                    continue
-
-                state = cb_service.get_state(check_service)
-                allowed = cb_service.should_allow(check_service)
-
-                if state == "open" or not allowed:
-                    matrix[affected_service]["affects"].append(check_service)
-                else:
-                    matrix[affected_service]["does_not_affect"].append(check_service)
+        # 매트릭스 구성
+        matrix = _build_isolation_matrix(cb_service, test_services, failure_count)
 
         # 모든 서비스 복구
-        for svc in test_services:
-            cb_service.force_close(svc, reason="matrix test cleanup", controlled_by="xtest")
+        _reset_all_services(cb_service, test_services, "matrix test cleanup")
 
         # 격리 점수 계산
-        total_checks = len(test_services) * (len(test_services) - 1)
-        isolated_count = sum(len(m["does_not_affect"]) for m in matrix.values())
-        isolation_score = (isolated_count / total_checks * 100) if total_checks > 0 else 100
+        isolation_score = _calculate_isolation_score(matrix, len(test_services))
 
         logger.info(f"[Stage 51] Multi blast radius test: score={isolation_score:.1f}%")
 

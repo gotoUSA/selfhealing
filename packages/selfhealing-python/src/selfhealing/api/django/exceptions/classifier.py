@@ -163,10 +163,34 @@ class ExceptionClassifier:
         if not isinstance(exc, APIException):
             return None
 
-        # ValidationError
+        # ValidationError 특수 처리
         if isinstance(exc, ValidationError):
             return self._handle_validation_error(exc)
 
+        # 예외 타입별 핸들러 매핑
+        handler_result = self._try_drf_exception_handlers(exc, ParseError, NotAuthenticated, 
+                                                           AuthenticationFailed, PermissionDenied,
+                                                           NotFound, Throttled)
+        if handler_result:
+            return handler_result
+
+        # 기타 DRF 예외 → 상태 코드 기반 분류
+        status_code = getattr(exc, "status_code", 500)
+        return self._classify_by_status_code(exc, status_code)
+
+    def _try_drf_exception_handlers(
+        self, 
+        exc: BaseException,
+        ParseError,
+        NotAuthenticated,
+        AuthenticationFailed,
+        PermissionDenied,
+        NotFound,
+        Throttled,
+    ) -> Optional[ClassifiedError]:
+        """DRF 예외 타입별 핸들러 시도."""
+        detail = str(exc.detail) if hasattr(exc, "detail") else str(exc)
+        
         # ParseError
         if isinstance(exc, ParseError):
             return ClassifiedError(
@@ -174,21 +198,19 @@ class ExceptionClassifier:
                 code=ErrorCode.VALIDATION_PARSE_ERROR,
                 http_status=400,
                 message=get_default_message(ErrorCode.VALIDATION_PARSE_ERROR),
-                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
+                detail=detail,
                 retryable=False,
             )
 
         # Authentication
         if isinstance(exc, (NotAuthenticated, AuthenticationFailed)):
-            code = ErrorCode.AUTH_NOT_AUTHENTICATED
-            if isinstance(exc, AuthenticationFailed):
-                code = ErrorCode.AUTH_CREDENTIALS_INVALID
+            code = ErrorCode.AUTH_CREDENTIALS_INVALID if isinstance(exc, AuthenticationFailed) else ErrorCode.AUTH_NOT_AUTHENTICATED
             return ClassifiedError(
                 category=ExceptionCategory.AUTH,
                 code=code,
                 http_status=401,
                 message=get_default_message(code),
-                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
+                detail=detail,
                 retryable=False,
             )
 
@@ -199,7 +221,7 @@ class ExceptionClassifier:
                 code=ErrorCode.AUTHZ_PERMISSION_DENIED,
                 http_status=403,
                 message=get_default_message(ErrorCode.AUTHZ_PERMISSION_DENIED),
-                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
+                detail=detail,
                 retryable=False,
             )
 
@@ -210,7 +232,7 @@ class ExceptionClassifier:
                 code=ErrorCode.RESOURCE_NOT_FOUND,
                 http_status=404,
                 message=get_default_message(ErrorCode.RESOURCE_NOT_FOUND),
-                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
+                detail=detail,
                 retryable=False,
             )
 
@@ -221,14 +243,12 @@ class ExceptionClassifier:
                 code=ErrorCode.RATE_THROTTLED,
                 http_status=429,
                 message=get_default_message(ErrorCode.RATE_THROTTLED),
-                detail=str(exc.detail) if hasattr(exc, "detail") else str(exc),
+                detail=detail,
                 retryable=True,
                 extra={"wait": getattr(exc, "wait", None)},
             )
 
-        # 기타 DRF 예외 → 상태 코드 기반 분류
-        status_code = getattr(exc, "status_code", 500)
-        return self._classify_by_status_code(exc, status_code)
+        return None
 
     def _handle_validation_error(self, exc: BaseException) -> ClassifiedError:
         """ValidationError 상세 처리."""

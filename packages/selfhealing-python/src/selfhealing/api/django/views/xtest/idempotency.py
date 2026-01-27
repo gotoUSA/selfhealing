@@ -378,6 +378,80 @@ class CheckDuplicateView(XTestModeMixin, APIView):
 
 
 # =============================================================================
+# Idempotency Status Helpers (Complexity Reduction)
+# =============================================================================
+
+
+def _filter_tracked_keys(
+    tracked_keys: List[str],
+    domain_filter: str,
+    prefix_filter: str,
+) -> List[str]:
+    """도메인 및 프리픽스 필터 적용."""
+    from selfhealing.services.idempotency_service import IdempotencyDomain
+    
+    result = tracked_keys
+    
+    if domain_filter:
+        try:
+            domain = IdempotencyDomain[domain_filter]
+            result = [k for k in result if f":{domain.value}:" in k]
+        except KeyError:
+            pass
+    
+    if prefix_filter:
+        result = [k for k in result if prefix_filter in k]
+    
+    return result
+
+
+def _aggregate_by_domain(tracked_keys: List[str]) -> Dict[str, int]:
+    """도메인별 키 집계."""
+    from selfhealing.services.idempotency_service import IdempotencyDomain
+    
+    by_domain: Dict[str, int] = {}
+    for key in tracked_keys:
+        for domain in IdempotencyDomain:
+            if f":{domain.value}:" in key:
+                by_domain[domain.name] = by_domain.get(domain.name, 0) + 1
+                break
+    return by_domain
+
+
+def _get_recent_keys_details(tracked_keys: List[str], limit: int) -> List[Dict[str, Any]]:
+    """최근 키 상세 정보 조회."""
+    recent_keys = []
+    for cache_key in tracked_keys[:limit]:
+        try:
+            cached_value = cache.get(cache_key)
+            first_seen_at = None
+            if isinstance(cached_value, dict):
+                first_seen_at = cached_value.get("first_seen_at")
+            recent_keys.append({
+                "cache_key": cache_key,
+                "first_seen_at": first_seen_at,
+                "has_value": cached_value is not None,
+            })
+        except Exception:
+            recent_keys.append({
+                "cache_key": cache_key,
+                "first_seen_at": None,
+                "has_value": False,
+            })
+    return recent_keys
+
+
+def _get_cache_backend_name() -> str:
+    """캐시 백엔드 이름 조회."""
+    from django.conf import settings
+    try:
+        cache_config = settings.CACHES.get("default", {})
+        return cache_config.get("BACKEND", "unknown")
+    except Exception:
+        return "unknown"
+
+
+# =============================================================================
 # 멱등성 상태 조회 View
 # =============================================================================
 
@@ -417,10 +491,7 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        from selfhealing.services.idempotency_service import IdempotencyDomain
-        from django.conf import settings
-
-        # 쿼리 파라미터
+        # 쿼리 파라미터 파싱
         domain_filter = request.query_params.get("domain", "").upper()
         prefix_filter = request.query_params.get("prefix", "")
         try:
@@ -429,56 +500,18 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
             limit = MAX_STATUS_RESULTS
 
         try:
-            # X-Test로 등록된 키 조회
+            # X-Test로 등록된 키 조회 및 필터링
             tracked_keys = _get_xtest_tracked_keys()
-
-            # 도메인 필터 적용
-            if domain_filter:
-                try:
-                    domain = IdempotencyDomain[domain_filter]
-                    tracked_keys = [k for k in tracked_keys if f":{domain.value}:" in k]
-                except KeyError:
-                    pass
-
-            # 프리픽스 필터 적용
-            if prefix_filter:
-                tracked_keys = [k for k in tracked_keys if prefix_filter in k]
+            tracked_keys = _filter_tracked_keys(tracked_keys, domain_filter, prefix_filter)
 
             # 도메인별 집계
-            by_domain: Dict[str, int] = {}
-            for key in tracked_keys:
-                for domain in IdempotencyDomain:
-                    if f":{domain.value}:" in key:
-                        by_domain[domain.name] = by_domain.get(domain.name, 0) + 1
-                        break
+            by_domain = _aggregate_by_domain(tracked_keys)
 
             # 최근 키 상세 정보
-            recent_keys = []
-            for cache_key in tracked_keys[:limit]:
-                try:
-                    cached_value = cache.get(cache_key)
-                    first_seen_at = None
-                    if isinstance(cached_value, dict):
-                        first_seen_at = cached_value.get("first_seen_at")
-                    recent_keys.append({
-                        "cache_key": cache_key,
-                        "first_seen_at": first_seen_at,
-                        "has_value": cached_value is not None,
-                    })
-                except Exception:
-                    recent_keys.append({
-                        "cache_key": cache_key,
-                        "first_seen_at": None,
-                        "has_value": False,
-                    })
+            recent_keys = _get_recent_keys_details(tracked_keys, limit)
 
             # 캐시 백엔드 정보
-            cache_backend = "unknown"
-            try:
-                cache_config = settings.CACHES.get("default", {})
-                cache_backend = cache_config.get("BACKEND", "unknown")
-            except Exception:
-                pass
+            cache_backend = _get_cache_backend_name()
 
             response_data = {
                 "status": "success",

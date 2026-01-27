@@ -166,6 +166,98 @@ class BackoffPreviewView(XTestModeMixin, APIView):
 
 
 # =============================================================================
+# Retry Simulation Helpers (Complexity Reduction)
+# =============================================================================
+
+
+def _validate_failure_count(failure_count: Any) -> tuple[Optional[int], Optional[str]]:
+    """failure_count 유효성 검증. (값, 에러메시지) 반환."""
+    if failure_count is None:
+        return None, "failure_count is required"
+    try:
+        value = int(failure_count)
+        if value < 1:
+            return None, "failure_count must be positive"
+        return value, None
+    except (ValueError, TypeError) as e:
+        return None, str(e)
+
+
+def _build_retry_sequence(
+    failure_count: int,
+    config,
+    calculator,
+) -> tuple[List[Dict[str, Any]], int, str]:
+    """
+    재시도 시퀀스 구성.
+    
+    Returns:
+        tuple: (retry_sequence, total_attempts, final_action)
+    """
+    from selfhealing.services.retry_handler import RetryAction
+    
+    retry_sequence: List[Dict[str, Any]] = []
+    total_attempts = 0
+    final_action = RetryAction.SUCCESS.value
+
+    for attempt in range(1, config.max_attempts + 1):
+        total_attempts = attempt
+
+        if attempt <= failure_count:
+            # 실패 시뮬레이션
+            result = "FAILURE"
+
+            if attempt < config.max_attempts:
+                delay = calculator.calculate(attempt, with_jitter=False)
+                retry_sequence.append({
+                    "attempt": attempt,
+                    "result": result,
+                    "delay_before_next": delay,
+                })
+            else:
+                retry_sequence.append({
+                    "attempt": attempt,
+                    "result": result,
+                    "delay_before_next": None,
+                })
+                final_action = RetryAction.DLQ.value
+        else:
+            # 성공 시뮬레이션
+            retry_sequence.append({
+                "attempt": attempt,
+                "result": "SUCCESS",
+                "delay_before_next": None,
+            })
+            final_action = RetryAction.SUCCESS.value
+            break
+
+    return retry_sequence, total_attempts, final_action
+
+
+def _determine_final_action(
+    retry_sequence: List[Dict[str, Any]],
+    config,
+) -> tuple[str, bool]:
+    """
+    최종 액션 결정.
+    
+    Returns:
+        tuple: (final_action, dlq_routed)
+    """
+    from selfhealing.services.retry_handler import RetryAction
+    
+    last_attempt_failed = retry_sequence[-1]["result"] == "FAILURE"
+    dlq_routed = last_attempt_failed and config.enable_dlq
+    
+    if last_attempt_failed:
+        final_action = RetryAction.DLQ.value if dlq_routed else RetryAction.ABORT.value
+    else:
+        final_action = RetryAction.SUCCESS.value
+    
+    return final_action, dlq_routed
+
+
+# =============================================================================
 # 재시도 시뮬레이션 View
 # =============================================================================
 
@@ -208,29 +300,12 @@ class RetrySimulateView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        # 요청 파라미터 파싱
-        failure_count = request.data.get("failure_count")
-        if failure_count is None:
+        # 요청 파라미터 파싱 및 검증
+        failure_count, error_msg = _validate_failure_count(request.data.get("failure_count"))
+        if error_msg:
+            error_type = "missing_required_field" if failure_count is None and "required" in error_msg else "invalid_failure_count"
             return Response(
-                {
-                    "status": "error",
-                    "error": "missing_required_field",
-                    "message": "failure_count is required",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            failure_count = int(failure_count)
-            if failure_count < 1:
-                raise ValueError("failure_count must be positive")
-        except (ValueError, TypeError) as e:
-            return Response(
-                {
-                    "status": "error",
-                    "error": "invalid_failure_count",
-                    "message": str(e),
-                },
+                {"status": "error", "error": error_type, "message": error_msg},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -239,7 +314,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
         simulate_dlq = request.data.get("simulate_dlq", False)
 
         # 설정 로드
-        from selfhealing.services.retry_handler import RetryConfig, RetryAction
+        from selfhealing.services.retry_handler import RetryConfig
         from selfhealing.services.backoff_calculator import BackoffCalculator, BackoffConfig
 
         config = RetryConfig.from_settings(domain)
@@ -258,54 +333,15 @@ class RetrySimulateView(XTestModeMixin, APIView):
         calculator = BackoffCalculator(backoff_config)
 
         # 시뮬레이션 실행
-        retry_sequence: List[Dict[str, Any]] = []
-        total_attempts = 0
-        final_action = RetryAction.SUCCESS.value
-
-        for attempt in range(1, config.max_attempts + 1):
-            total_attempts = attempt
-
-            if attempt <= failure_count:
-                # 실패 시뮬레이션
-                result = "FAILURE"
-
-                if attempt < config.max_attempts:
-                    # 다음 재시도가 가능한 경우
-                    delay = calculator.calculate(attempt, with_jitter=False)
-                    retry_sequence.append({
-                        "attempt": attempt,
-                        "result": result,
-                        "delay_before_next": delay,
-                    })
-                else:
-                    # 마지막 시도 (재시도 없음)
-                    retry_sequence.append({
-                        "attempt": attempt,
-                        "result": result,
-                        "delay_before_next": None,
-                    })
-                    final_action = RetryAction.DLQ.value
-            else:
-                # 성공 시뮬레이션
-                retry_sequence.append({
-                    "attempt": attempt,
-                    "result": "SUCCESS",
-                    "delay_before_next": None,
-                })
-                final_action = RetryAction.SUCCESS.value
-                break
-
+        retry_sequence, total_attempts, _ = _build_retry_sequence(failure_count, config, calculator)
+        
         # 최종 액션 결정
-        last_attempt_failed = retry_sequence[-1]["result"] == "FAILURE"
-        dlq_routed = last_attempt_failed and config.enable_dlq
-        dlq_id = None
+        final_action, dlq_routed = _determine_final_action(retry_sequence, config)
 
-        # DLQ 시뮬레이션 (simulate_dlq=True인 경우)
+        # DLQ 시뮬레이션
+        dlq_id = None
         if dlq_routed and simulate_dlq:
             dlq_id = self._simulate_dlq_entry(domain, failure_count, config.max_attempts)
-
-        if last_attempt_failed:
-            final_action = RetryAction.DLQ.value if dlq_routed else RetryAction.ABORT.value
 
         snapshot = collect_system_snapshot()
 
