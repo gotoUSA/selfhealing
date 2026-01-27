@@ -7,7 +7,7 @@ exclude_synthetic 파라미터와 exclude_chaos deprecated 처리를 검증합�
 import warnings
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
 from selfhealing.slo import SLOConfig
@@ -133,6 +133,29 @@ class TestBackwardCompatibility:
 
 class TestErrorBudgetCalculation:
     """에러 버짓 계산 테스트."""
+
+    def test_error_budget_exclude_synthetic(self):
+        """
+        문서 137 섹션 5.1 명시 테스트: 합성 에러 버짓 제외.
+        
+        exclude_synthetic=True 시 합성 요청의 에러가 에러 버짓 계산에서
+        제외되는지 검증합니다.
+        """
+        called_params = {}
+        
+        def mock_stats(start_time, end_time, exclude_synthetic=True):
+            called_params["exclude_synthetic"] = exclude_synthetic
+            return {"total_errors": 5}
+        
+        calculator = ErrorBudgetCalculator(
+            get_failed_operation_stats=mock_stats
+        )
+        
+        # exclude_synthetic=True (기본값)로 호출
+        calculator.calculate_budget_status(exclude_synthetic=True)
+        
+        # stats 함수가 exclude_synthetic=True로 호출됨
+        assert called_params.get("exclude_synthetic") is True
 
     def test_synthetic_errors_excluded_from_budget(self):
         """합성 에러가 버짓 계산에서 제외됨."""

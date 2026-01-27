@@ -119,6 +119,23 @@ class TestMetricSyntheticLabel:
                         is_synthetic="true",
                     )
 
+    def test_metric_is_synthetic_label(self):
+        """
+        문서 137 섹션 5.1 명시 테스트: 메트릭 레이블 자동 설정.
+        
+        TestModeContext 활성화 시 메트릭에 is_synthetic="true" 레이블이
+        자동으로 설정되는지 검증합니다.
+        """
+        # 합성 모드 비활성화 상태
+        assert TestModeContext.get_synthetic_label_value() == "false"
+        
+        # 합성 모드 활성화 상태
+        with TestModeContext.start():
+            assert TestModeContext.get_synthetic_label_value() == "true"
+        
+        # 다시 비활성화 상태
+        assert TestModeContext.get_synthetic_label_value() == "false"
+
     def test_replay_metric_synthetic_label(self):
         """Replay 메트릭 합성 레이블 테스트."""
         from selfhealing.services.metrics import recorders

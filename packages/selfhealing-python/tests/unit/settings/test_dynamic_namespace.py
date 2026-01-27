@@ -91,6 +91,28 @@ class TestNamespaceSettingsKeyPrefix:
 class TestDynamicPrefixIntegration:
     """동적 프리픽스 통합 테스트."""
 
+    def test_dynamic_key_prefix(self):
+        """
+        문서 137 섹션 5.1 명시 테스트: 동적 prefix 선택.
+        
+        TestModeContext 상태에 따라 Redis 키 프리픽스가 동적으로
+        변경되는지 검증합니다.
+        """
+        # 운영 모드: 기본 프리픽스
+        prod_prefix = get_effective_key_prefix()
+        assert prod_prefix == "selfhealing:"
+        assert not prod_prefix.startswith(SYNTHETIC_KEY_PREFIX)
+        
+        # 합성 모드: xtest: 프리픽스 추가
+        with TestModeContext.start():
+            synth_prefix = get_effective_key_prefix()
+            assert synth_prefix == "xtest:selfhealing:"
+            assert synth_prefix.startswith(SYNTHETIC_KEY_PREFIX)
+        
+        # 컨텍스트 종료 후: 기본 프리픽스 복원
+        restored_prefix = get_effective_key_prefix()
+        assert restored_prefix == prod_prefix
+
     def test_key_format_in_production_mode(self):
         """운영 모드에서 키 형식 확인."""
         prefix = get_effective_key_prefix()

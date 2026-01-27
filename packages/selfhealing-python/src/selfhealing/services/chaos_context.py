@@ -227,6 +227,44 @@ def is_chaos_experiment(operation: FailedOperationProtocol) -> bool:
     return chaos_context is not None and isinstance(chaos_context, dict)
 
 
+# X-Test-Mode 소스 상수 (xtest/dlq.py, xtest/idempotency.py와 일관성 유지)
+XTEST_SOURCE = "x-test-mode"
+
+
+def is_xtest_operation(operation: FailedOperationProtocol) -> bool:
+    """
+    Check if a FailedOperation is from X-Test-Mode.
+    
+    Args:
+        operation: FailedOperation instance to check
+        
+    Returns:
+        True if source="x-test-mode" in metadata
+    """
+    if not operation.metadata:
+        return False
+    
+    source = operation.metadata.get("source")
+    return source == XTEST_SOURCE
+
+
+def is_synthetic_operation(operation: FailedOperationProtocol) -> bool:
+    """
+    Check if a FailedOperation is synthetic (Chaos or X-Test).
+    
+    합성 트래픽 판별:
+    - is_chaos_experiment=True (chaos_experiment_context 존재)
+    - source="x-test-mode" (X-Test-Mode에서 생성)
+    
+    Args:
+        operation: FailedOperation instance to check
+        
+    Returns:
+        True if this is a synthetic operation (Chaos or X-Test)
+    """
+    return is_chaos_experiment(operation) or is_xtest_operation(operation)
+
+
 def get_chaos_context(operation: FailedOperationProtocol) -> ChaosExperimentContext | None:
     """
     Extract chaos experiment context from a FailedOperation.

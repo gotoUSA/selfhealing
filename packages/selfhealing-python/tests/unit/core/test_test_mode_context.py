@@ -167,3 +167,31 @@ class TestSyntheticContextFunction:
             assert get_synthetic_session_id() == "func-test"
         
         assert is_synthetic_context() is False
+
+
+# =============================================================================
+# 문서 137 섹션 5.1 명시 테스트
+# =============================================================================
+
+def test_synthetic_context_propagation():
+    """
+    문서 137 섹션 5.1 명시 테스트: ContextVar 전파 확인.
+    
+    TestModeContext가 ContextVar를 통해 합성 요청 상태를
+    정확히 전파하고 복원하는지 검증합니다.
+    """
+    # 초기 상태: 합성 모드 아님
+    assert TestModeContext.is_synthetic() is False
+    assert is_synthetic_context() is False
+    
+    # 컨텍스트 진입: 합성 모드 활성화
+    with TestModeContext.start(session_id="propagation-test"):
+        assert TestModeContext.is_synthetic() is True
+        assert is_synthetic_context() is True
+        assert TestModeContext.get_session_id() == "propagation-test"
+        assert get_synthetic_session_id() == "propagation-test"
+    
+    # 컨텍스트 종료: 원래 상태로 복원
+    assert TestModeContext.is_synthetic() is False
+    assert is_synthetic_context() is False
+    assert TestModeContext.get_session_id() is None
