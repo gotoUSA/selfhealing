@@ -414,9 +414,7 @@ def _aggregate_by_domain(tracked_keys: list[str]) -> dict[str, int]:
     return by_domain
 
 
-def _get_recent_keys_details(
-    tracked_keys: list[str], limit: int
-) -> list[dict[str, Any]]:
+def _get_recent_keys_details(tracked_keys: list[str], limit: int) -> list[dict[str, Any]]:
     """최근 키 상세 정보 조회."""
     recent_keys = []
     for cache_key in tracked_keys[:limit]:
@@ -505,9 +503,7 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
         try:
             # X-Test로 등록된 키 조회 및 필터링
             tracked_keys = _get_xtest_tracked_keys()
-            tracked_keys = _filter_tracked_keys(
-                tracked_keys, domain_filter, prefix_filter
-            )
+            tracked_keys = _filter_tracked_keys(tracked_keys, domain_filter, prefix_filter)
 
             # 도메인별 집계
             by_domain = _aggregate_by_domain(tracked_keys)

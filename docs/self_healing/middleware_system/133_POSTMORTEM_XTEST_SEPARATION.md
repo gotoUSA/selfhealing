@@ -1,8 +1,8 @@
 # 133. Postmortem X-Test 분리 계획
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [130_POSTMORTEM_AUDIT_INTEGRATION.md](130_POSTMORTEM_AUDIT_INTEGRATION.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [130_POSTMORTEM_AUDIT_INTEGRATION.md](130_POSTMORTEM_AUDIT_INTEGRATION.md)
 **상태:** 계획 수립
 
 ---

@@ -99,18 +99,10 @@ class BackoffPreviewView(XTestModeMixin, APIView):
         default_config = RetryConfig.from_settings()
 
         # 요청 파라미터로 오버라이드
-        final_max_attempts = (
-            max_attempts if max_attempts > 0 else default_config.max_attempts
-        )
-        final_backoff_base = (
-            backoff_base if backoff_base > 0 else default_config.backoff_base
-        )
-        final_backoff_max = (
-            backoff_max if backoff_max > 0 else default_config.backoff_max
-        )
-        final_jitter_percent = (
-            jitter_percent if jitter_percent >= 0 else default_config.jitter_percent
-        )
+        final_max_attempts = max_attempts if max_attempts > 0 else default_config.max_attempts
+        final_backoff_base = backoff_base if backoff_base > 0 else default_config.backoff_base
+        final_backoff_max = backoff_max if backoff_max > 0 else default_config.backoff_max
+        final_jitter_percent = jitter_percent if jitter_percent >= 0 else default_config.jitter_percent
 
         # BackoffCalculator 생성
         config = BackoffConfig(
@@ -143,10 +135,7 @@ class BackoffPreviewView(XTestModeMixin, APIView):
 
         snapshot = collect_system_snapshot()
 
-        logger.info(
-            f"[X-Test-Mode] Backoff preview: max_attempts={final_max_attempts}, "
-            f"delays={delays}"
-        )
+        logger.info(f"[X-Test-Mode] Backoff preview: max_attempts={final_max_attempts}, " f"delays={delays}")
 
         response_data = {
             "status": "success",
@@ -316,14 +305,10 @@ class RetrySimulateView(XTestModeMixin, APIView):
             return denied
 
         # 요청 파라미터 파싱 및 검증
-        failure_count, error_msg = _validate_failure_count(
-            request.data.get("failure_count")
-        )
+        failure_count, error_msg = _validate_failure_count(request.data.get("failure_count"))
         if error_msg:
             error_type = (
-                "missing_required_field"
-                if failure_count is None and "required" in error_msg
-                else "invalid_failure_count"
+                "missing_required_field" if failure_count is None and "required" in error_msg else "invalid_failure_count"
             )
             return Response(
                 {"status": "error", "error": error_type, "message": error_msg},
@@ -357,9 +342,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
         calculator = BackoffCalculator(backoff_config)
 
         # 시뮬레이션 실행
-        retry_sequence, total_attempts, _ = _build_retry_sequence(
-            failure_count, config, calculator
-        )
+        retry_sequence, total_attempts, _ = _build_retry_sequence(failure_count, config, calculator)
 
         # 최종 액션 결정
         final_action, dlq_routed = _determine_final_action(retry_sequence, config)
@@ -367,9 +350,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
         # DLQ 시뮬레이션
         dlq_id = None
         if dlq_routed and simulate_dlq:
-            dlq_id = self._simulate_dlq_entry(
-                domain, failure_count, config.max_attempts
-            )
+            dlq_id = self._simulate_dlq_entry(domain, failure_count, config.max_attempts)
 
         snapshot = collect_system_snapshot()
 
@@ -410,9 +391,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    def _simulate_dlq_entry(
-        self, domain: str, failure_count: int, max_attempts: int
-    ) -> int | None:
+    def _simulate_dlq_entry(self, domain: str, failure_count: int, max_attempts: int) -> int | None:
         """DLQ 테스트 항목 생성 (X-Test-Mode 마커 포함)."""
         try:
             from selfhealing.services.dlq_service import store_to_dlq
@@ -495,15 +474,9 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
                 "consecutive_429s": state.consecutive_429s,
                 "is_in_cooldown": state.is_in_cooldown,
                 "cooldown_until": (
-                    time.strftime(
-                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(state.cooldown_until)
-                    )
-                    if state.cooldown_until
-                    else None
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(state.cooldown_until)) if state.cooldown_until else None
                 ),
-                "remaining_cooldown": (
-                    state.remaining_cooldown if state.is_in_cooldown else 0
-                ),
+                "remaining_cooldown": (state.remaining_cooldown if state.is_in_cooldown else 0),
             }
 
             # 권장 대기 시간 계산
@@ -513,8 +486,7 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
             elif state.consecutive_429s > 0:
                 # 연속 429가 있으면 다음 예상 백오프 계산
                 recommended_delay = min(
-                    config.base_delay
-                    * (config.backoff_multiplier**state.consecutive_429s),
+                    config.base_delay * (config.backoff_multiplier**state.consecutive_429s),
                     config.max_delay,
                 )
 
@@ -650,10 +622,7 @@ class RetryConfigView(XTestModeMixin, APIView):
 
         snapshot = collect_system_snapshot()
 
-        logger.info(
-            f"[X-Test-Mode] Retry config: domain={domain}, source={source}, "
-            f"max_attempts={config.max_attempts}"
-        )
+        logger.info(f"[X-Test-Mode] Retry config: domain={domain}, source={source}, " f"max_attempts={config.max_attempts}")
 
         response_data = {
             "status": "success",
@@ -667,12 +636,8 @@ class RetryConfigView(XTestModeMixin, APIView):
                 "enable_dlq": config.enable_dlq,
                 "rate_limit_aware": config.rate_limit_aware,
                 "rate_limit_key": config.rate_limit_key,
-                "retryable_exceptions": [
-                    exc.__name__ for exc in config.retryable_exceptions
-                ],
-                "non_retryable_exceptions": [
-                    exc.__name__ for exc in config.non_retryable_exceptions
-                ],
+                "retryable_exceptions": [exc.__name__ for exc in config.retryable_exceptions],
+                "non_retryable_exceptions": [exc.__name__ for exc in config.non_retryable_exceptions],
             },
             "domain_overrides": domain_overrides,
             "snapshot": snapshot,

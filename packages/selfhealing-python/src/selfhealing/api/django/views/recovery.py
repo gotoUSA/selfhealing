@@ -86,11 +86,7 @@ class RecoveryStatusView(APIView):
                 "status": active_session.status.value,
                 "current_step": active_session.current_step_index,
                 "total_steps": len(active_session.steps),
-                "started_at": (
-                    active_session.started_at.isoformat()
-                    if active_session.started_at
-                    else None
-                ),
+                "started_at": (active_session.started_at.isoformat() if active_session.started_at else None),
                 "namespace": active_session.namespace,
             }
 
@@ -178,9 +174,7 @@ class RecoveryStartView(APIView):
         # 수동 승인 필요 여부
         if config.require_manual_approval and not skip_approval:
             # 기존 대기 중인 요청 확인
-            existing = approval_manager.get_request_by_session_or_pending(
-                namespace=namespace
-            )
+            existing = approval_manager.get_request_by_session_or_pending(namespace=namespace)
 
             if existing is None:
                 # 새 승인 요청 생성
@@ -287,10 +281,7 @@ class RecoveryAbortView(APIView):
 
             raise Http404(f"Session not found or already completed: {session_id}")
 
-        logger.info(
-            f"[RecoveryAbortView] Recovery aborted: "
-            f"session_id={session_id}, user={request.user}"
-        )
+        logger.info(f"[RecoveryAbortView] Recovery aborted: " f"session_id={session_id}, user={request.user}")
 
         return Response(
             {
@@ -380,18 +371,13 @@ class RecoveryApproveView(APIView):
 
             raise Http404(f"Request not found: {request_id}")
 
-        logger.info(
-            f"[RecoveryApproveView] Approved: "
-            f"request_id={request_id}, user={request.user}"
-        )
+        logger.info(f"[RecoveryApproveView] Approved: " f"request_id={request_id}, user={request.user}")
 
         response_data = {
             "request_id": request_id,
             "status": result.status.value,
             "approved_by": result.approved_by,
-            "approved_at": (
-                result.approved_at.isoformat() if result.approved_at else None
-            ),
+            "approved_at": (result.approved_at.isoformat() if result.approved_at else None),
         }
 
         # 승인 후 자동 시작
@@ -456,10 +442,7 @@ class RecoveryRejectView(APIView):
 
             raise Http404(f"Request not found: {request_id}")
 
-        logger.info(
-            f"[RecoveryRejectView] Rejected: "
-            f"request_id={request_id}, reason={reason}, user={request.user}"
-        )
+        logger.info(f"[RecoveryRejectView] Rejected: " f"request_id={request_id}, reason={reason}, user={request.user}")
 
         return Response(
             {
@@ -507,12 +490,8 @@ class RecoveryHistoryView(APIView):
                         "session_id": s.session_id,
                         "status": s.status.value,
                         "namespace": s.namespace,
-                        "started_at": (
-                            s.started_at.isoformat() if s.started_at else None
-                        ),
-                        "completed_at": (
-                            s.completed_at.isoformat() if s.completed_at else None
-                        ),
+                        "started_at": (s.started_at.isoformat() if s.started_at else None),
+                        "completed_at": (s.completed_at.isoformat() if s.completed_at else None),
                         "steps_completed": sum(1 for step in s.steps if step.completed),
                         "total_steps": len(s.steps),
                     }
@@ -593,11 +572,7 @@ def _get_session_progress(session) -> dict:
 
     completed = sum(1 for s in session.steps if s.completed)
     total = len(session.steps)
-    current = (
-        session.steps[session.current_step_index]
-        if session.current_step_index < total
-        else None
-    )
+    current = session.steps[session.current_step_index] if session.current_step_index < total else None
 
     return {
         "percent": int((completed / total) * 100) if total > 0 else 0,

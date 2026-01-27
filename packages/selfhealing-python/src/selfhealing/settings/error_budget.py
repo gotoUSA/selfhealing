@@ -183,10 +183,7 @@ class ErrorBudgetSettings(BaseSettings):
     weight_combine_policy: str = Field(
         default="MAX",
         pattern=r"^(MAX|SUM|MULTIPLY)$",
-        description=(
-            "EmergencyLevel과 ErrorCode 가중치 결합 정책. "
-            "MAX: 최댓값 (권장), SUM: 합산, MULTIPLY: 곱셈 (비권장)"
-        ),
+        description=("EmergencyLevel과 ErrorCode 가중치 결합 정책. " "MAX: 최댓값 (권장), SUM: 합산, MULTIPLY: 곱셈 (비권장)"),
     )
     exception_weights_json: str | None = Field(
         default=None,

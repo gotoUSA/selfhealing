@@ -191,15 +191,11 @@ class XTestModeMixin:
             if environment == "development":
                 # 개발 환경에서는 경고만 출력
                 logger.warning(
-                    "[X-Test-Mode] SELFHEALING_REGION not set in development. "
-                    "GLOBAL scope API allowed with warning."
+                    "[X-Test-Mode] SELFHEALING_REGION not set in development. " "GLOBAL scope API allowed with warning."
                 )
                 return True, None
 
-            logger.warning(
-                "[X-Test-Mode] SELFHEALING_REGION not set. "
-                "GLOBAL scope API denied for safety."
-            )
+            logger.warning("[X-Test-Mode] SELFHEALING_REGION not set. " "GLOBAL scope API denied for safety.")
             return False, Response(
                 {
                     "status": "error",
@@ -250,10 +246,7 @@ class XTestModeMixin:
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        logger.debug(
-            f"[X-Test-Mode] Regional scope check passed: "
-            f"region={current_region}, path={request.path}"
-        )
+        logger.debug(f"[X-Test-Mode] Regional scope check passed: " f"region={current_region}, path={request.path}")
         return True, None
 
     def check_resource_constraints(self, request: Request) -> Response | None:
@@ -276,8 +269,7 @@ class XTestModeMixin:
 
             if not result.is_safe:
                 logger.warning(
-                    f"[X-Test-Mode] Resource constraint check failed: {result.block_reason} "
-                    f"(user: {request.user})"
+                    f"[X-Test-Mode] Resource constraint check failed: {result.block_reason} " f"(user: {request.user})"
                 )
 
                 response = Response(
@@ -291,8 +283,7 @@ class XTestModeMixin:
                 return response
 
             logger.debug(
-                f"[X-Test-Mode] Resource check passed: "
-                f"CPU={result.cpu_percent:.1f}%, Memory={result.memory_percent:.1f}%"
+                f"[X-Test-Mode] Resource check passed: " f"CPU={result.cpu_percent:.1f}%, Memory={result.memory_percent:.1f}%"
             )
             return None
 
@@ -420,8 +411,7 @@ class XTestModeMixin:
 
             if success:
                 logger.debug(
-                    f"[X-Test-Mode] Registered artifact: "
-                    f"session={session_id}, component={component}, id={artifact_id}"
+                    f"[X-Test-Mode] Registered artifact: " f"session={session_id}, component={component}, id={artifact_id}"
                 )
             return success
 

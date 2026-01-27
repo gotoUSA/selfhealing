@@ -74,7 +74,7 @@ def mock_cb_service():
     mock_service.try_recovery_transition.return_value = None
     mock_service.get_failure_count.return_value = 0
     mock_service.get_all_states.return_value = {}
-    
+
     with patch(
         "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
         return_value=mock_service,
@@ -86,21 +86,21 @@ def mock_cb_service():
 def mock_dlq_service():
     """Mock DLQ service for testing."""
     mock_service = MagicMock()
-    
+
     # Mock store_failure result
     mock_result = MagicMock()
     mock_result.success = True
     mock_result.dlq_id = 123
     mock_result.error = None
     mock_service.store_failure.return_value = mock_result
-    
+
     # Mock get_stats result
     mock_service.get_stats.return_value = {
         "total": 100,
         "by_status": {"pending": 80, "resolved": 20},
         "by_domain": {"external_service": 50, "internal_process": 50},
     }
-    
+
     # Mock get_entry result
     mock_service.get_entry.return_value = {
         "id": 123,
@@ -108,7 +108,7 @@ def mock_dlq_service():
         "domain": "test_service",
         "failure_type": "CIRCUIT_OPEN",
     }
-    
+
     with patch(
         "selfhealing.services.dlq.get_dlq_service",
         return_value=mock_service,
@@ -162,9 +162,9 @@ class TestRunScenarioView:
             {"service_name": "test_service"},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_field"
         assert "available_scenarios" in response.data
@@ -177,9 +177,9 @@ class TestRunScenarioView:
             {"scenario": "cb_open_dlq_flow"},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_field"
 
@@ -194,9 +194,9 @@ class TestRunScenarioView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "unknown_scenario"
         assert "available_scenarios" in response.data
@@ -215,9 +215,9 @@ class TestRunScenarioView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] in ("success", "completed")  # merged result
         assert response.data["scenario"] == "cb_open_dlq_flow"
@@ -225,9 +225,7 @@ class TestRunScenarioView:
         assert "steps" in response.data
         assert "timeline" in response.data
 
-    def test_run_retry_exhaust_scenario(
-        self, request_factory, mock_chaos_allowed, mock_dlq_service, mock_snapshot
-    ):
+    def test_run_retry_exhaust_scenario(self, request_factory, mock_chaos_allowed, mock_dlq_service, mock_snapshot):
         """Retry 소진 → DLQ 시나리오 실행 테스트."""
         view = RunScenarioView.as_view()
         request = request_factory.post(
@@ -239,16 +237,14 @@ class TestRunScenarioView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["scenario"] == "retry_exhaust_dlq"
         assert len(response.data["steps"]) == 6
 
-    def test_run_rate_limit_retry_scenario(
-        self, request_factory, mock_chaos_allowed, mock_snapshot
-    ):
+    def test_run_rate_limit_retry_scenario(self, request_factory, mock_chaos_allowed, mock_snapshot):
         """Rate Limit → Retry 시나리오 실행 테스트."""
         view = RunScenarioView.as_view()
         request = request_factory.post(
@@ -260,9 +256,9 @@ class TestRunScenarioView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["scenario"] == "rate_limit_retry"
 
@@ -271,15 +267,13 @@ class TestRunScenarioView:
     ):
         """전체 복구 사이클 시나리오 실행 테스트."""
         # Mock error budget service
-        with patch(
-            "selfhealing.services.error_budget.get_error_budget_service"
-        ) as mock_eb:
+        with patch("selfhealing.services.error_budget.get_error_budget_service") as mock_eb:
             mock_eb_service = MagicMock()
             mock_eb_status = MagicMock()
             mock_eb_status.remaining_percent = 50.0
             mock_eb_service.get_status.return_value = mock_eb_status
             mock_eb.return_value = mock_eb_service
-            
+
             view = RunScenarioView.as_view()
             request = request_factory.post(
                 "/api/self-healing/xtest/integration/run-scenario/",
@@ -290,9 +284,9 @@ class TestRunScenarioView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["scenario"] == "full_recovery_cycle"
             assert len(response.data["steps"]) == 11
@@ -308,9 +302,9 @@ class TestRunScenarioView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -333,9 +327,9 @@ class TestScenarioStatusView:
         request = request_factory.get(
             "/api/self-healing/xtest/integration/scenario/nonexistent-id/",
         )
-        
+
         response = view(request, scenario_id="nonexistent-id")
-        
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.data["error"] == "scenario_not_found"
 
@@ -351,14 +345,14 @@ class TestScenarioStatusView:
             completed_at="2026-01-26T10:01:00+09:00",
         )
         store_scenario_result(result)
-        
+
         view = ScenarioStatusView.as_view()
         request = request_factory.get(
             "/api/self-healing/xtest/integration/scenario/test-scenario-123/",
         )
-        
+
         response = view(request, scenario_id="test-scenario-123")
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["scenario_id"] == "test-scenario-123"
         assert response.data["scenario"] == "cb_open_dlq_flow"
@@ -383,39 +377,33 @@ class TestFullSnapshotView:
     ):
         """전체 스냅샷 조회 성공 테스트."""
         # Mock additional services
-        with patch(
-            "selfhealing.services.error_budget.get_error_budget_service"
-        ) as mock_eb:
+        with patch("selfhealing.services.error_budget.get_error_budget_service") as mock_eb:
             mock_eb_service = MagicMock()
             mock_eb_status = MagicMock()
             mock_eb_status.remaining_percent = 80.0
             mock_eb_status.consumed_percent = 20.0
             mock_eb_service.get_status.return_value = mock_eb_status
             mock_eb.return_value = mock_eb_service
-            
-            with patch(
-                "selfhealing.api.django.rate_limit.get_redis_health_checker"
-            ) as mock_health:
+
+            with patch("selfhealing.api.django.rate_limit.get_redis_health_checker") as mock_health:
                 mock_checker = MagicMock()
                 mock_checker.state = MagicMock(value="healthy")
                 mock_health.return_value = mock_checker
-                
+
                 with patch(
                     "selfhealing.api.django.rate_limit.get_rate_limit_config",
                     return_value={"control_api_rate_limit": 100},
                 ):
-                    with patch(
-                        "selfhealing.api.django.rate_limit.RedisHealthState"
-                    ) as mock_state:
+                    with patch("selfhealing.api.django.rate_limit.RedisHealthState") as mock_state:
                         mock_state.HEALTHY = mock_checker.state
-                        
+
                         view = FullSnapshotView.as_view()
                         request = request_factory.get(
                             "/api/self-healing/xtest/integration/full-snapshot/",
                         )
-                        
+
                         response = view(request)
-                        
+
                         assert response.status_code == status.HTTP_200_OK
                         assert "circuit_breakers" in response.data
                         assert "dlq" in response.data
@@ -425,35 +413,29 @@ class TestFullSnapshotView:
         self, request_factory, mock_chaos_allowed, mock_cb_service, mock_dlq_service, mock_snapshot
     ):
         """서비스 필터 적용 스냅샷 테스트."""
-        with patch(
-            "selfhealing.services.error_budget.get_error_budget_service"
-        ) as mock_eb:
+        with patch("selfhealing.services.error_budget.get_error_budget_service") as mock_eb:
             mock_eb.return_value = MagicMock()
-            
-            with patch(
-                "selfhealing.api.django.rate_limit.get_redis_health_checker"
-            ) as mock_health:
+
+            with patch("selfhealing.api.django.rate_limit.get_redis_health_checker") as mock_health:
                 mock_checker = MagicMock()
                 mock_checker.state = MagicMock(value="healthy")
                 mock_health.return_value = mock_checker
-                
+
                 with patch(
                     "selfhealing.api.django.rate_limit.get_rate_limit_config",
                     return_value={},
                 ):
-                    with patch(
-                        "selfhealing.api.django.rate_limit.RedisHealthState"
-                    ) as mock_state:
+                    with patch("selfhealing.api.django.rate_limit.RedisHealthState") as mock_state:
                         mock_state.HEALTHY = mock_checker.state
-                        
+
                         view = FullSnapshotView.as_view()
                         request = request_factory.get(
                             "/api/self-healing/xtest/integration/full-snapshot/",
                             {"service_name": "test_service"},
                         )
-                        
+
                         response = view(request)
-                        
+
                         assert response.status_code == status.HTTP_200_OK
                         assert response.data["service_filter"] == "test_service"
 
@@ -479,37 +461,31 @@ class TestResetView:
             {"components": ["invalid_component"]},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "invalid_components"
 
-    def test_reset_all_components(
-        self, request_factory, mock_chaos_allowed, mock_cb_service, mock_dlq_service
-    ):
+    def test_reset_all_components(self, request_factory, mock_chaos_allowed, mock_cb_service, mock_dlq_service):
         """모든 컴포넌트 초기화 테스트."""
-        with patch(
-            "selfhealing.api.django.rate_limit.get_local_limiter"
-        ) as mock_limiter:
+        with patch("selfhealing.api.django.rate_limit.get_local_limiter") as mock_limiter:
             mock_limiter.return_value = MagicMock()
-            
+
             view = ResetView.as_view()
             request = request_factory.post(
                 "/api/self-healing/xtest/integration/reset/",
                 {"components": ["all"]},
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert "reset_results" in response.data
             assert "circuit_breakers" in response.data["reset_results"]
 
-    def test_reset_specific_components(
-        self, request_factory, mock_chaos_allowed, mock_cb_service
-    ):
+    def test_reset_specific_components(self, request_factory, mock_chaos_allowed, mock_cb_service):
         """특정 컴포넌트만 초기화 테스트."""
         view = ResetView.as_view()
         request = request_factory.post(
@@ -520,22 +496,18 @@ class TestResetView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert "circuit_breakers" in response.data["reset_results"]
         assert "scenarios" in response.data["reset_results"]
 
-    def test_reset_xtest_only_flag(
-        self, request_factory, mock_chaos_allowed, mock_cb_service, mock_dlq_service
-    ):
+    def test_reset_xtest_only_flag(self, request_factory, mock_chaos_allowed, mock_cb_service, mock_dlq_service):
         """xtest_only 플래그 테스트."""
-        with patch(
-            "selfhealing.api.django.rate_limit.get_local_limiter"
-        ) as mock_limiter:
+        with patch("selfhealing.api.django.rate_limit.get_local_limiter") as mock_limiter:
             mock_limiter.return_value = MagicMock()
-            
+
             view = ResetView.as_view()
             request = request_factory.post(
                 "/api/self-healing/xtest/integration/reset/",
@@ -545,9 +517,9 @@ class TestResetView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["xtest_only"] is True
 
@@ -571,7 +543,7 @@ class TestScenarioRegistry:
             "full_recovery_cycle",
             "idempotent_replay",
         ]
-        
+
         for scenario_name in expected_scenarios:
             assert scenario_name in SCENARIO_REGISTRY
             assert get_scenario_class(scenario_name) is not None
@@ -579,7 +551,7 @@ class TestScenarioRegistry:
     def test_list_available_scenarios(self):
         """사용 가능한 시나리오 목록 조회."""
         scenarios = list_available_scenarios()
-        
+
         assert len(scenarios) == 7
         assert "cb_open_dlq_flow" in scenarios
         assert "full_recovery_cycle" in scenarios
@@ -587,7 +559,7 @@ class TestScenarioRegistry:
     def test_get_unknown_scenario(self):
         """알 수 없는 시나리오 조회 시 None 반환."""
         result = get_scenario_class("unknown_scenario")
-        
+
         assert result is None
 
     def test_scenario_result_storage(self):
@@ -599,10 +571,10 @@ class TestScenarioRegistry:
             status=ScenarioStatus.COMPLETED,
             started_at="2026-01-26T10:00:00+09:00",
         )
-        
+
         store_scenario_result(result)
         retrieved = get_scenario_result("test-id-456")
-        
+
         assert retrieved is not None
         assert retrieved.scenario_id == "test-id-456"
         assert retrieved.status == ScenarioStatus.COMPLETED
@@ -617,9 +589,9 @@ class TestScenarioRegistry:
             started_at="2026-01-26T10:00:00+09:00",
         )
         store_scenario_result(result)
-        
+
         cleared_count = clear_scenario_results()
-        
+
         assert cleared_count >= 1
         assert get_scenario_result("test-id-789") is None
 
@@ -632,56 +604,50 @@ class TestScenarioRegistry:
 class TestScenarioExecution:
     """Tests for individual scenario execution."""
 
-    def test_scenario_has_correct_steps_count(
-        self, mock_cb_service, mock_dlq_service, mock_snapshot
-    ):
+    def test_scenario_has_correct_steps_count(self, mock_cb_service, mock_dlq_service, mock_snapshot):
         """CB Open DLQ 시나리오가 6단계인지 확인."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             CBOpenDLQScenario,
         )
-        
+
         scenario = CBOpenDLQScenario(
             service_name="test_service",
             config={"failure_count": 5},
         )
         result = scenario.run()
-        
+
         assert len(result.steps) == 6
         assert result.scenario == "cb_open_dlq_flow"
 
-    def test_scenario_timeline_generated(
-        self, mock_cb_service, mock_dlq_service, mock_snapshot
-    ):
+    def test_scenario_timeline_generated(self, mock_cb_service, mock_dlq_service, mock_snapshot):
         """시나리오 실행 시 타임라인이 생성되는지 확인."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             CBOpenDLQScenario,
         )
-        
+
         scenario = CBOpenDLQScenario(
             service_name="test_service",
             config={"failure_count": 5},
         )
         result = scenario.run()
-        
+
         assert len(result.timeline) == len(result.steps)
         for event in result.timeline:
             assert "timestamp" in event.__dict__
             assert "action" in event.__dict__
 
-    def test_scenario_snapshot_collected(
-        self, mock_cb_service, mock_dlq_service, mock_snapshot
-    ):
+    def test_scenario_snapshot_collected(self, mock_cb_service, mock_dlq_service, mock_snapshot):
         """시나리오 완료 후 스냅샷이 수집되는지 확인."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             CBOpenDLQScenario,
         )
-        
+
         scenario = CBOpenDLQScenario(
             service_name="test_service",
             config={"failure_count": 5},
         )
         result = scenario.run()
-        
+
         assert result.snapshot is not None
         assert "timestamp" in result.snapshot
 
@@ -695,9 +661,9 @@ class TestScenarioExecution:
             started_at="2026-01-26T10:00:00+09:00",
             completed_at="2026-01-26T10:01:00+09:00",
         )
-        
+
         data = result.to_dict()
-        
+
         assert data["scenario_id"] == "test-id"
         assert data["status"] == "completed"
         assert isinstance(data["steps"], list)

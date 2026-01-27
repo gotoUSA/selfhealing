@@ -1,8 +1,8 @@
 # 131. Postmortem 알림 연동
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [130_POSTMORTEM_AUDIT_INTEGRATION.md](130_POSTMORTEM_AUDIT_INTEGRATION.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [130_POSTMORTEM_AUDIT_INTEGRATION.md](130_POSTMORTEM_AUDIT_INTEGRATION.md)
 **상태:** 분석 완료
 
 ---

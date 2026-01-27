@@ -148,9 +148,7 @@ class ErrorBudgetCalculator:
         if total_requests > 0:
             error_rate = error_count / total_requests
             allowed_error_rate = slo.error_budget
-            consumed_ratio = (
-                (error_rate / allowed_error_rate) if allowed_error_rate > 0 else 0
-            )
+            consumed_ratio = (error_rate / allowed_error_rate) if allowed_error_rate > 0 else 0
         else:
             # 요청 통계가 없으면 DLQ 건수 기반 추정
             # 예: 1000건당 1건 에러 허용 시 (99.9% SLO)
@@ -160,9 +158,7 @@ class ErrorBudgetCalculator:
         budget_consumed_minutes = budget_total_minutes * consumed_ratio
         budget_remaining_minutes = budget_total_minutes - budget_consumed_minutes
         budget_remaining_percent = (
-            (budget_remaining_minutes / budget_total_minutes * 100)
-            if budget_total_minutes > 0
-            else 100.0
+            (budget_remaining_minutes / budget_total_minutes * 100) if budget_total_minutes > 0 else 100.0
         )
 
         # Burn Rate 계산

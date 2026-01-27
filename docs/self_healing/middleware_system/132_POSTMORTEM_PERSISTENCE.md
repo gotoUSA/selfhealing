@@ -1,8 +1,8 @@
 # 132. Postmortem 영속성 (Persistence)
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [131_POSTMORTEM_NOTIFICATION.md](131_POSTMORTEM_NOTIFICATION.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [131_POSTMORTEM_NOTIFICATION.md](131_POSTMORTEM_NOTIFICATION.md)
 **상태:** 분석 완료
 
 ---

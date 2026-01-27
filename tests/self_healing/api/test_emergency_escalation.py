@@ -6,6 +6,7 @@ Tests the one-way emergency escalation for Self-Healing API:
 - Only Admin can restore to NORMAL mode
 - Proper audit logging for emergency actions
 """
+
 import os
 import sys
 
@@ -13,6 +14,7 @@ import sys
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 
 import django
+
 django.setup()
 
 import pytest
@@ -343,7 +345,7 @@ class TestEmergencyPermissionMessage:
         view = Mock()
 
         permission.has_permission(request, view)
-        
+
         # After failed check, message should be updated
         assert "reason" in permission.message.lower()
         assert "필수" in permission.message or "required" in permission.message.lower()
@@ -356,25 +358,23 @@ class TestEmergencyTrackerIntegration:
     def test_strict_mode_activates_tracker(self, mock_get_tracker):
         """STRICT mode change should activate EmergencyModeTracker."""
         from selfhealing.services.governance_api_service import GovernanceApiService
-        
+
         mock_tracker = Mock()
         mock_tracker.record_emergency_activation.return_value = {
             "status": "activated",
             "expiry_hours": 8,
         }
         mock_get_tracker.return_value = mock_tracker
-        
+
         service = GovernanceApiService()
-        
-        with patch.object(service, '_log_mode_change'):
-            with patch(
-                "selfhealing.metrics.reliability_manager.get_reliability_manager"
-            ) as mock_manager:
+
+        with patch.object(service, "_log_mode_change"):
+            with patch("selfhealing.metrics.reliability_manager.get_reliability_manager") as mock_manager:
                 mock_manager.return_value.get_global_mode.return_value = Mock(value="normal")
                 mock_manager.return_value.force_global_mode.return_value = None
-                
+
                 result = service.set_mode("STRICT", actor="test_operator", reason="Test")
-        
+
         mock_tracker.record_emergency_activation.assert_called_once_with(
             activated_by="test_operator",
             reason="Test",
@@ -386,25 +386,23 @@ class TestEmergencyTrackerIntegration:
     def test_normal_mode_deactivates_tracker_from_strict(self, mock_get_tracker):
         """NORMAL mode from STRICT should deactivate EmergencyModeTracker."""
         from selfhealing.services.governance_api_service import GovernanceApiService
-        
+
         mock_tracker = Mock()
         mock_tracker.record_normal_restoration.return_value = {
             "status": "restored",
         }
         mock_get_tracker.return_value = mock_tracker
-        
+
         service = GovernanceApiService()
-        
-        with patch.object(service, '_log_mode_change'):
-            with patch(
-                "selfhealing.metrics.reliability_manager.get_reliability_manager"
-            ) as mock_manager:
+
+        with patch.object(service, "_log_mode_change"):
+            with patch("selfhealing.metrics.reliability_manager.get_reliability_manager") as mock_manager:
                 # Previous mode was STRICT
                 mock_manager.return_value.get_global_mode.return_value = Mock(value="strict")
                 mock_manager.return_value.force_global_mode.return_value = None
-                
+
                 service.set_mode("NORMAL", actor="test_admin", reason="Recovery")
-        
+
         mock_tracker.record_normal_restoration.assert_called_once_with(
             restored_by="test_admin",
             reason="Recovery",

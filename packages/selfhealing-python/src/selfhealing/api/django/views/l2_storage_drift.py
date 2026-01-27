@@ -180,8 +180,7 @@ class DriftReconciliationServiceView(APIView):
 
         if not result.get("success", False):
             logger.warning(
-                f"[L2StorageAPI] Drift reconciliation failed for {service_name}: "
-                f"{result.get('reason', 'unknown')}"
+                f"[L2StorageAPI] Drift reconciliation failed for {service_name}: " f"{result.get('reason', 'unknown')}"
             )
             raise ValueError(result.get("reason", "Reconciliation failed"))
 

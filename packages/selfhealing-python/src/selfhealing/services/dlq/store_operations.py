@@ -97,10 +97,7 @@ class StoreOperationsMixin:
                 recommended_action=recommended_action,
             )
 
-            logger.info(
-                f"[DLQService] Created DLQ entry: id={failed_op.id}, "
-                f"domain={domain}, failure_type={failure_type}"
-            )
+            logger.info(f"[DLQService] Created DLQ entry: id={failed_op.id}, " f"domain={domain}, failure_type={failure_type}")
 
             # Push 이벤트 - Gauge 증가 (SafeGauge 사용)
             try:
@@ -191,9 +188,7 @@ class StoreOperationsMixin:
                 with open(DLQ_FALLBACK_PATH, "a", encoding="utf-8") as f:
                     f.write(json.dumps(fallback_entry, default=str) + "\n")
 
-                logger.info(
-                    f"[DLQService] Fallback entry saved: domain={entry_data.get('domain')}"
-                )
+                logger.info(f"[DLQService] Fallback entry saved: domain={entry_data.get('domain')}")
                 return str(DLQ_FALLBACK_PATH)
 
         except Exception as fallback_error:

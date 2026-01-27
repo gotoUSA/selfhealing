@@ -144,18 +144,13 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
                         or local_state.consecutive_429s != redis_state.consecutive_429s
                     ):
                         record_ratelimit_drift(key)
-                        logger.info(
-                            f"[RedisRateLimitStorage] Drift detected for {key}, "
-                            f"syncing local → Redis"
-                        )
+                        logger.info(f"[RedisRateLimitStorage] Drift detected for {key}, " f"syncing local → Redis")
                         # 더 보수적인 값 선택 (안전 우선)
                         merged = self._merge_conservative(local_state, redis_state)
                         self._save_to_redis(key, merged)
                         record_ratelimit_reconciliation(success=True)
             except Exception as e:
-                logger.warning(
-                    f"[RedisRateLimitStorage] Reconciliation failed for {key}: {e}"
-                )
+                logger.warning(f"[RedisRateLimitStorage] Reconciliation failed for {key}: {e}")
                 record_ratelimit_reconciliation(success=False)
 
         self._local_state.clear()
@@ -263,10 +258,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
             pipeline.execute()
 
-            logger.debug(
-                f"[RedisRateLimitStorage] Set cooldown for '{key}': "
-                f"until={cooldown_until}, ttl={ttl}"
-            )
+            logger.debug(f"[RedisRateLimitStorage] Set cooldown for '{key}': " f"until={cooldown_until}, ttl={ttl}")
 
         except Exception as e:
             logger.error(f"[RedisRateLimitStorage] Failed to set cooldown: {e}")
@@ -284,9 +276,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             results = pipeline.execute()
 
             new_value = results[0]
-            logger.debug(
-                f"[RedisRateLimitStorage] Incremented 429 counter for '{key}': {new_value}"
-            )
+            logger.debug(f"[RedisRateLimitStorage] Incremented 429 counter for '{key}': {new_value}")
             return new_value
 
         except Exception as e:

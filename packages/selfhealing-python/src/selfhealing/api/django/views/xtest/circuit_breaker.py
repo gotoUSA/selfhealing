@@ -178,8 +178,7 @@ class ResetCBView(XTestModeMixin, APIView):
         current_state = cb_service.get_state(service_name)
 
         logger.info(
-            f"[X-Test-Mode] CB reset: service={service_name}, "
-            f"state={previous_state}→{current_state}, user={request.user}"
+            f"[X-Test-Mode] CB reset: service={service_name}, " f"state={previous_state}→{current_state}, user={request.user}"
         )
 
         response_data = {
@@ -236,9 +235,7 @@ class CBStatusDetailView(XTestModeMixin, APIView):
                     "success_count": getattr(state_data, "success_count", 0),
                     "last_failure_time": getattr(state_data, "last_failure_time", None),
                     "opened_at": getattr(state_data, "opened_at", None),
-                    "manually_controlled": getattr(
-                        state_data, "manually_controlled", False
-                    ),
+                    "manually_controlled": getattr(state_data, "manually_controlled", False),
                     "config": {
                         "failure_threshold": cb_service.config.failure_threshold,
                         "recovery_timeout": cb_service.config.recovery_timeout,

@@ -127,9 +127,7 @@ class CrisisMultiplierConfig:
         )
     """
 
-    multipliers: dict[EmergencyLevel, float] = field(
-        default_factory=lambda: dict(DEFAULT_CRISIS_MULTIPLIERS)
-    )
+    multipliers: dict[EmergencyLevel, float] = field(default_factory=lambda: dict(DEFAULT_CRISIS_MULTIPLIERS))
     """Emergency Level별 가중치 매핑."""
 
     enabled: bool = True
@@ -195,9 +193,7 @@ class CrisisMultiplierConfig:
             설정 딕셔너리
         """
         return {
-            "multipliers": {
-                level.name: value for level, value in self.multipliers.items()
-            },
+            "multipliers": {level.name: value for level, value in self.multipliers.items()},
             "enabled": self.enabled,
             "max_multiplier": self.max_multiplier,
         }
@@ -250,9 +246,7 @@ class CrisisMultiplierProvider:
         """
         self.config = config or CrisisMultiplierConfig()
         self._emergency_tracker = None
-        self._cache_ttl = (
-            cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
-        )
+        self._cache_ttl = cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
 
         # 캐시 상태
         self._cached_multiplier: float | None = None
@@ -305,10 +299,7 @@ class CrisisMultiplierProvider:
             state = tracker.get_effective_state(namespace=namespace)
             level = state.emergency_level
         except Exception as e:
-            logger.warning(
-                f"[CrisisMultiplier] Failed to get emergency level, "
-                f"using NORMAL: {e}"
-            )
+            logger.warning(f"[CrisisMultiplier] Failed to get emergency level, " f"using NORMAL: {e}")
             level = EmergencyLevel.NORMAL
 
         # 가중치 조회
@@ -319,10 +310,7 @@ class CrisisMultiplierProvider:
         self._cached_namespace = namespace
         self._cache_timestamp = now
 
-        logger.debug(
-            f"[CrisisMultiplier] Level={level.name}, "
-            f"multiplier={multiplier}x, namespace={namespace}"
-        )
+        logger.debug(f"[CrisisMultiplier] Level={level.name}, " f"multiplier={multiplier}x, namespace={namespace}")
 
         return multiplier
 
@@ -355,10 +343,7 @@ class CrisisMultiplierProvider:
         self.config.multipliers[level] = capped_multiplier
         self.invalidate_cache()
 
-        logger.info(
-            f"[CrisisMultiplier] Override set: "
-            f"level={level.name}, multiplier={capped_multiplier}"
-        )
+        logger.info(f"[CrisisMultiplier] Override set: " f"level={level.name}, multiplier={capped_multiplier}")
 
     def get_config(self) -> CrisisMultiplierConfig:
         """
@@ -376,9 +361,7 @@ class CrisisMultiplierProvider:
         Returns:
             레벨명 -> 가중치 매핑
         """
-        return {
-            level.name: self.config.get_multiplier(level) for level in EmergencyLevel
-        }
+        return {level.name: self.config.get_multiplier(level) for level in EmergencyLevel}
 
     def get_combined_multiplier(
         self,

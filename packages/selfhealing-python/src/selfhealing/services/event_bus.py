@@ -233,11 +233,7 @@ class SelfHealingEventBus:
                 self._subscriptions[event_type] = []
 
             # 중복 구독 방지
-            existing = [
-                s
-                for s in self._subscriptions[event_type]
-                if s.handler_name == handler_name
-            ]
+            existing = [s for s in self._subscriptions[event_type] if s.handler_name == handler_name]
             if not existing:
                 self._subscriptions[event_type].append(subscription)
                 # 우선순위로 정렬 (높은 것 먼저)
@@ -245,14 +241,9 @@ class SelfHealingEventBus:
                     key=lambda s: s.priority.value,
                     reverse=True,
                 )
-                logger.debug(
-                    f"[EventBus] Subscribed {handler_name} to {event_type.value} "
-                    f"(priority={priority.name})"
-                )
+                logger.debug(f"[EventBus] Subscribed {handler_name} to {event_type.value} " f"(priority={priority.name})")
             else:
-                logger.debug(
-                    f"[EventBus] Handler {handler_name} already subscribed to {event_type.value}"
-                )
+                logger.debug(f"[EventBus] Handler {handler_name} already subscribed to {event_type.value}")
                 return existing[0]
 
         return subscription
@@ -279,17 +270,11 @@ class SelfHealingEventBus:
                 return False
 
             original_count = len(self._subscriptions[event_type])
-            self._subscriptions[event_type] = [
-                s
-                for s in self._subscriptions[event_type]
-                if s.handler_name != handler_name
-            ]
+            self._subscriptions[event_type] = [s for s in self._subscriptions[event_type] if s.handler_name != handler_name]
 
             removed = original_count > len(self._subscriptions[event_type])
             if removed:
-                logger.debug(
-                    f"[EventBus] Unsubscribed {handler_name} from {event_type.value}"
-                )
+                logger.debug(f"[EventBus] Unsubscribed {handler_name} from {event_type.value}")
 
             return removed
 
@@ -323,9 +308,7 @@ class SelfHealingEventBus:
             int: 호출된 핸들러 수
         """
         if not self._enabled:
-            logger.debug(
-                f"[EventBus] Event bus disabled, ignoring {event.event_type.value}"
-            )
+            logger.debug(f"[EventBus] Event bus disabled, ignoring {event.event_type.value}")
             return 0
 
         # 히스토리에 기록
@@ -349,10 +332,7 @@ class SelfHealingEventBus:
             try:
                 subscription.handler(event)
                 handlers_called += 1
-                logger.debug(
-                    f"[EventBus] Handler {subscription.handler_name} "
-                    f"executed for {event.event_type.value}"
-                )
+                logger.debug(f"[EventBus] Handler {subscription.handler_name} " f"executed for {event.event_type.value}")
             except Exception as e:
                 logger.error(
                     f"[EventBus] Handler {subscription.handler_name} failed "
@@ -360,8 +340,7 @@ class SelfHealingEventBus:
                 )
 
         logger.info(
-            f"[EventBus] Published {event.event_type.value} from {event.source}, "
-            f"{handlers_called} handlers called"
+            f"[EventBus] Published {event.event_type.value} from {event.source}, " f"{handlers_called} handlers called"
         )
 
         return handlers_called
@@ -462,9 +441,7 @@ class SelfHealingEventBus:
     def get_stats(self) -> dict[str, Any]:
         """이벤트 버스 통계."""
         with self._subscription_lock:
-            subscriptions_count = sum(
-                len(subs) for subs in self._subscriptions.values()
-            )
+            subscriptions_count = sum(len(subs) for subs in self._subscriptions.values())
             event_types_with_subs = len(self._subscriptions)
 
         with self._history_lock:
@@ -530,16 +507,11 @@ def _on_emergency_level_changed(event: SelfHealingEvent):
     previous_level = event.data.get("previous_level", 0)
     is_escalation = level > previous_level
 
-    logger.info(
-        f"[EventHandler] Emergency level changed: {previous_level} → {level} "
-        f"(escalation={is_escalation})"
-    )
+    logger.info(f"[EventHandler] Emergency level changed: {previous_level} → {level} " f"(escalation={is_escalation})")
 
     # LEVEL_3 이상이면 추가 조치
     if level >= 3 and is_escalation:
-        logger.warning(
-            "[EventHandler] LEVEL_3 emergency - blocking non-essential automation"
-        )
+        logger.warning("[EventHandler] LEVEL_3 emergency - blocking non-essential automation")
         # Circuit Breaker 자동 Open은 개별 서비스에서 처리
         # 여기서는 로깅만 수행
 
@@ -554,9 +526,7 @@ def _on_error_budget_critical(event: SelfHealingEvent):
     budget_percent = event.data.get("budget_percent", 0)
     threshold = event.data.get("threshold", 20)
 
-    logger.warning(
-        f"[EventHandler] Error budget critical: {budget_percent:.1f}% < {threshold}% threshold"
-    )
+    logger.warning(f"[EventHandler] Error budget critical: {budget_percent:.1f}% < {threshold}% threshold")
 
 
 def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
@@ -650,10 +620,7 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
     track1_enabled = config.get("track1_enabled", True)
 
     if not track1_enabled:
-        logger.info(
-            f"[EventHandler] Circuit breaker closed for {service_name}, "
-            f"Track 1 disabled - skipping auto replay"
-        )
+        logger.info(f"[EventHandler] Circuit breaker closed for {service_name}, " f"Track 1 disabled - skipping auto replay")
         return
 
     max_items = config.get("track1_max_items", 50)
@@ -673,14 +640,9 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
             f"triggered Track 1 auto replay (max_items={max_items})"
         )
     except ImportError:
-        logger.debug(
-            f"[EventHandler] Celery tasks not available, "
-            f"skipping Track 1 replay for {service_name}"
-        )
+        logger.debug(f"[EventHandler] Celery tasks not available, " f"skipping Track 1 replay for {service_name}")
     except Exception as e:
-        logger.error(
-            f"[EventHandler] Failed to trigger Track 1 replay for {service_name}: {e}"
-        )
+        logger.error(f"[EventHandler] Failed to trigger Track 1 replay for {service_name}: {e}")
 
 
 def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
@@ -698,9 +660,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         settings = get_api_view_settings()
 
         if not settings.xtest_auto_postmortem_enabled:
-            logger.debug(
-                f"[EventHandler] Auto postmortem disabled, skipping for {service_name}"
-            )
+            logger.debug(f"[EventHandler] Auto postmortem disabled, skipping for {service_name}")
             return
 
         min_duration = settings.xtest_auto_postmortem_min_duration
@@ -734,9 +694,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         snapshot = collect_system_snapshot()
 
         # Fast fail 카운트
-        fast_fail_count = len(
-            [e for e in history if e.get("data", {}).get("fast_fail")]
-        )
+        fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
 
         # 인시던트 ID 생성
         from django.utils import timezone
@@ -744,9 +702,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         incident_id = f"AUTO-{service_name}-{timezone.now().strftime('%Y%m%d-%H%M%S')}"
 
         # Post-mortem 생성
-        postmortem = _generate_postmortem_data(
-            incident_id, timeline, affected, unaffected, fast_fail_count, snapshot
-        )
+        postmortem = _generate_postmortem_data(incident_id, timeline, affected, unaffected, fast_fail_count, snapshot)
 
         # 최소 duration 확인
         duration = postmortem.get("duration_seconds")
@@ -760,15 +716,10 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         # 저장
         add_healing_incident(postmortem)
 
-        logger.info(
-            f"[EventHandler] Auto postmortem generated: {incident_id} "
-            f"(duration={duration}s)"
-        )
+        logger.info(f"[EventHandler] Auto postmortem generated: {incident_id} " f"(duration={duration}s)")
 
     except ImportError:
-        logger.debug(
-            "[EventHandler] Postmortem module not available, skipping auto generation"
-        )
+        logger.debug("[EventHandler] Postmortem module not available, skipping auto generation")
     except Exception as e:
         logger.error(f"[EventHandler] Failed to generate auto postmortem: {e}")
 

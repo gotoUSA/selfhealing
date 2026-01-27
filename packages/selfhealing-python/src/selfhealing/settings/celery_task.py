@@ -161,10 +161,7 @@ class CeleryTaskSettings(BaseSettings):
     def validate_time_limits(self) -> "CeleryTaskSettings":
         """soft_time_limit이 time_limit보다 작은지 검증."""
         if self.soft_time_limit >= self.time_limit:
-            raise ValueError(
-                f"soft_time_limit ({self.soft_time_limit}) must be less than "
-                f"time_limit ({self.time_limit})"
-            )
+            raise ValueError(f"soft_time_limit ({self.soft_time_limit}) must be less than " f"time_limit ({self.time_limit})")
         if self.min_retry_delay > self.max_retry_delay:
             raise ValueError(
                 f"min_retry_delay ({self.min_retry_delay}) must be less than or equal to "

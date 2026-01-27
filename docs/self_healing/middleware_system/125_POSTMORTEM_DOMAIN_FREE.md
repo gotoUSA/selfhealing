@@ -1,8 +1,8 @@
 # 125. Postmortem 도메인 프리 변환
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [124_POSTMORTEM_ENHANCEMENT_OVERVIEW.md](124_POSTMORTEM_ENHANCEMENT_OVERVIEW.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [124_POSTMORTEM_ENHANCEMENT_OVERVIEW.md](124_POSTMORTEM_ENHANCEMENT_OVERVIEW.md)
 **상태:** 구현 준비
 
 ---

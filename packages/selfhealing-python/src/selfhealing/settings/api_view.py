@@ -175,8 +175,7 @@ class ApiViewSettings(BaseSettings):
         """default_limit이 max_limit보다 작은지 검증."""
         if self.default_limit > self.max_limit:
             raise ValueError(
-                f"default_limit ({self.default_limit}) must be less than or equal to "
-                f"max_limit ({self.max_limit})"
+                f"default_limit ({self.default_limit}) must be less than or equal to " f"max_limit ({self.max_limit})"
             )
         return self
 

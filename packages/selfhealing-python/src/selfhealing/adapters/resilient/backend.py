@@ -162,10 +162,7 @@ class ResilientStorageBackend:
                 )
 
             if not self.config.allow_memory_only:
-                logger.critical(
-                    "[ResilientStorage] Redis unavailable. "
-                    "Operating in DEGRADED mode with Memory + WAL."
-                )
+                logger.critical("[ResilientStorage] Redis unavailable. " "Operating in DEGRADED mode with Memory + WAL.")
 
     def _init_wal(self) -> None:
         """Initialize Write-Ahead Log."""
@@ -224,21 +221,15 @@ class ResilientStorageBackend:
             if stats.total_entries == 0:
                 return  # Nothing to recover
 
-            logger.info(
-                f"[ResilientStorage] Found {stats.last_sequence} WAL entries to check"
-            )
+            logger.info(f"[ResilientStorage] Found {stats.last_sequence} WAL entries to check")
 
             # If Redis is unavailable, defer recovery
             if self._mode == StorageMode.DEGRADED:
-                logger.warning(
-                    "[ResilientStorage] Redis unavailable, WAL recovery deferred"
-                )
+                logger.warning("[ResilientStorage] Redis unavailable, WAL recovery deferred")
                 return
 
             # Replay WAL entries to Redis
-            entries = self._wal.recover_unprocessed(
-                last_processed_seq=self._last_processed_wal_seq
-            )
+            entries = self._wal.recover_unprocessed(last_processed_seq=self._last_processed_wal_seq)
 
             recovered_count = 0
             for entry in entries:
@@ -247,15 +238,11 @@ class ResilientStorageBackend:
                     self._last_processed_wal_seq = entry.sequence
                     recovered_count += 1
                 except Exception as e:
-                    logger.error(
-                        f"[ResilientStorage] WAL replay failed for seq {entry.sequence}: {e}"
-                    )
+                    logger.error(f"[ResilientStorage] WAL replay failed for seq {entry.sequence}: {e}")
                     # Continue with next entry
 
             if recovered_count > 0:
-                logger.info(
-                    f"[ResilientStorage] Recovered {recovered_count} entries from WAL"
-                )
+                logger.info(f"[ResilientStorage] Recovered {recovered_count} entries from WAL")
 
                 # Cleanup processed WAL entries
                 self._wal.cleanup_processed(self._last_processed_wal_seq)
@@ -359,9 +346,7 @@ class ResilientStorageBackend:
         else:
             return self._set_degraded(key, full_key, value, None)
 
-    def _set_degraded(
-        self, key: str, full_key: str, value: Any, error: Exception | None
-    ) -> bool:
+    def _set_degraded(self, key: str, full_key: str, value: Any, error: Exception | None) -> bool:
         """
         Set in degraded mode using WAL-First protocol.
 
@@ -492,9 +477,7 @@ class ResilientStorageBackend:
                     return {}
                 # Decode bytes
                 return {
-                    (k.decode() if isinstance(k, bytes) else k): (
-                        v.decode() if isinstance(v, bytes) else v
-                    )
+                    (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
                     for k, v in result.items()
                 }
             except Exception:
@@ -563,10 +546,7 @@ class ResilientStorageBackend:
                 import json
 
                 result = self._redis._redis.lrange(full_key, start, end)
-                return [
-                    json.loads(v.decode() if isinstance(v, bytes) else v)
-                    for v in result
-                ]
+                return [json.loads(v.decode() if isinstance(v, bytes) else v) for v in result]
             except Exception:
                 self._switch_to_degraded()
                 return self._memory.get(key, [])[start : end + 1 if end >= 0 else None]
@@ -640,9 +620,7 @@ class ResilientStorageBackend:
         # Degraded mode
         if key in self._memory:
             before = len(self._memory[key])
-            self._memory[key] = [
-                item for item in self._memory[key] if item["member"] not in members
-            ]
+            self._memory[key] = [item for item in self._memory[key] if item["member"] not in members]
             return before - len(self._memory[key])
         return 0
 
@@ -688,10 +666,7 @@ class ResilientStorageBackend:
         with self._lock:
             if self._mode != StorageMode.DEGRADED:
                 self._mode = StorageMode.DEGRADED
-                logger.critical(
-                    "[ResilientStorage] Switched to DEGRADED mode. "
-                    "Using Memory + WAL fallback."
-                )
+                logger.critical("[ResilientStorage] Switched to DEGRADED mode. " "Using Memory + WAL fallback.")
 
     def check_and_recover(self) -> bool:
         """
@@ -743,9 +718,7 @@ class ResilientStorageBackend:
 
             # 1. Replay WAL to Redis
             if self._wal and self._wal_initialized:
-                entries = self._wal.recover_unprocessed(
-                    last_processed_seq=self._last_processed_wal_seq
-                )
+                entries = self._wal.recover_unprocessed(last_processed_seq=self._last_processed_wal_seq)
 
                 for entry in entries:
                     try:

@@ -132,10 +132,7 @@ def _log_governance_blocked(
     adapter = _get_audit_adapter()
     if adapter is None:
         # Audit adapter not configured - just log to standard logger
-        logger.info(
-            f"[GovernanceAudit] BLOCKED | reason={block_reason} | "
-            f"operation={operation_name} | details={details}"
-        )
+        logger.info(f"[GovernanceAudit] BLOCKED | reason={block_reason} | " f"operation={operation_name} | details={details}")
         return
 
     try:
@@ -478,9 +475,7 @@ def check_all_governance(
     if check_emergency:
         is_blocked, level_name = is_emergency_blocking(min_level=emergency_min_level)
         if is_blocked:
-            logger.warning(
-                f"[GovernanceChecks] Blocked by Emergency Mode: {level_name}"
-            )
+            logger.warning(f"[GovernanceChecks] Blocked by Emergency Mode: {level_name}")
 
             if audit_on_block:
                 _log_governance_blocked(
@@ -503,9 +498,7 @@ def check_all_governance(
     if check_error_budget:
         is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
         if is_blocked:
-            logger.warning(
-                f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%"
-            )
+            logger.warning(f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%")
 
             if audit_on_block:
                 _log_governance_blocked(
@@ -551,9 +544,7 @@ def require_system_enabled(func: F) -> F:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if not is_system_enabled():
-            logger.warning(
-                f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active"
-            )
+            logger.warning(f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active")
             result = GovernanceCheckResult.blocked_by_kill_switch()
             _log_governance_blocked(
                 block_reason=result.block_reason,
@@ -587,10 +578,7 @@ def require_not_emergency(min_level: int = 2) -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             is_blocked, level_name = is_emergency_blocking(min_level=min_level)
             if is_blocked:
-                logger.warning(
-                    f"[GovernanceChecks] {func.__name__} blocked: "
-                    f"Emergency mode {level_name}"
-                )
+                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Emergency mode {level_name}")
                 result = GovernanceCheckResult.blocked_by_emergency(
                     level_name=level_name,
                     message=f"Emergency mode {level_name} blocks this operation",
@@ -630,10 +618,7 @@ def require_error_budget() -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
             if is_blocked:
-                logger.warning(
-                    f"[GovernanceChecks] {func.__name__} blocked: "
-                    f"Error budget {budget_pct:.1f}%"
-                )
+                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Error budget {budget_pct:.1f}%")
                 result = GovernanceCheckResult.blocked_by_error_budget(
                     budget_percent=budget_pct,
                     threshold_percent=threshold_pct,

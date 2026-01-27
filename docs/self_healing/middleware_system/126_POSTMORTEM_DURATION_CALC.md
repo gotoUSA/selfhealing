@@ -1,8 +1,8 @@
 # 126. Postmortem Duration 계산 구현
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [125_POSTMORTEM_DOMAIN_FREE.md](125_POSTMORTEM_DOMAIN_FREE.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [125_POSTMORTEM_DOMAIN_FREE.md](125_POSTMORTEM_DOMAIN_FREE.md)
 **상태:** 구현 준비
 
 ---

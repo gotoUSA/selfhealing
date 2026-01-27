@@ -1,8 +1,8 @@
 # 127. Postmortem 동적 Action Items 생성
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [126_POSTMORTEM_DURATION_CALC.md](126_POSTMORTEM_DURATION_CALC.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [126_POSTMORTEM_DURATION_CALC.md](126_POSTMORTEM_DURATION_CALC.md)
 **상태:** 구현 준비
 
 ---

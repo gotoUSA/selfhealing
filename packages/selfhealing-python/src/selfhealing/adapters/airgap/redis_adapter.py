@@ -87,9 +87,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         """
         self.redis = redis_client
         self.prefix = prefix if prefix is not None else _get_airgap_key_prefix()
-        self.default_ttl = (
-            default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
-        )
+        self.default_ttl = default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
         logger.info(f"[AirGap] RedisAirGapAdapter initialized (prefix={self.prefix})")
 
     def _make_key(self, key: str) -> str:
@@ -273,9 +271,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
 
         try:
             redis_key = self._make_key(key)
-            new_value = self.redis.eval(
-                lua_script, 1, redis_key, amount, self.default_ttl or 0
-            )
+            new_value = self.redis.eval(lua_script, 1, redis_key, amount, self.default_ttl or 0)
             logger.debug(f"[AirGap] Decremented: {redis_key} -= {amount} = {new_value}")
             return int(new_value)
 

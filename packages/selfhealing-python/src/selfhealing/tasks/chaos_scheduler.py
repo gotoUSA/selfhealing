@@ -406,9 +406,7 @@ def hunt_zombie_experiments() -> dict[str, Any]:
         idempotency = IdempotencyService()
 
         # RUNNING 상태 실험 조회
-        running_experiments = scheduler.get_experiments_by_status(
-            ExperimentStatus.RUNNING.value
-        )
+        running_experiments = scheduler.get_experiments_by_status(ExperimentStatus.RUNNING.value)
 
         hunted = 0
         skipped = 0
@@ -437,9 +435,7 @@ def hunt_zombie_experiments() -> dict[str, Any]:
                     components={"experiment_id": exp_id},
                 )
 
-                if not idempotency.acquire_lock(
-                    lock_key, ttl_seconds=_chaos_settings.experiment_lock_ttl
-                ):
+                if not idempotency.acquire_lock(lock_key, ttl_seconds=_chaos_settings.experiment_lock_ttl):
                     # 다른 스케줄러가 이미 처리 중
                     skipped += 1
                     logger.debug(f"[ZombieHunter] {exp_id} already being handled")

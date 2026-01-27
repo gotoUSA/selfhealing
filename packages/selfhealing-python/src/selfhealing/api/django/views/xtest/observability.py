@@ -77,9 +77,7 @@ class HealingTimelineView(XTestModeMixin, APIView):
                 if e.get("data", {}).get("service") == service_filter
                 or e.get("data", {}).get("service_name") == service_filter
             ]
-            local_events = [
-                e for e in local_events if e.get("service") == service_filter
-            ]
+            local_events = [e for e in local_events if e.get("service") == service_filter]
 
         # CB 상태 정보 추가
         from selfhealing.services.circuit_breaker_service import (
@@ -156,15 +154,11 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         # check_services가 비어있으면 CB에 등록된 모든 서비스 조회
         if not check_services:
             all_states = cb_service.repository.get_all_states()
-            check_services = [
-                s.service_name for s in all_states if s.service_name != affected_service
-            ]
+            check_services = [s.service_name for s in all_states if s.service_name != affected_service]
 
         # Step 1: 대상 서비스에 장애 주입
         for _ in range(failure_count):
-            cb_service.record_failure(
-                affected_service, error_context={"source": "blast-radius-test"}
-            )
+            cb_service.record_failure(affected_service, error_context={"source": "blast-radius-test"})
 
         affected_state = cb_service.get_state(affected_service)
         results["affected_service_state"] = affected_state
@@ -215,9 +209,7 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         )
 
         # Step 4: 대상 서비스 복구 (테스트 종료)
-        cb_service.force_close(
-            affected_service, reason="Blast radius test cleanup", controlled_by="xtest"
-        )
+        cb_service.force_close(affected_service, reason="Blast radius test cleanup", controlled_by="xtest")
 
         logger.info(
             f"[Stage 51] Blast radius test: {affected_service} → "
@@ -260,9 +252,7 @@ def _inject_failures(cb_service, service: str, failure_count: int, source: str) 
         cb_service.record_failure(service, error_context={"source": source})
 
 
-def _check_service_isolation(
-    cb_service, affected_service: str, check_service: str
-) -> bool:
+def _check_service_isolation(cb_service, affected_service: str, check_service: str) -> bool:
     """다른 서비스가 영향 받았는지 확인. True면 격리됨(영향 없음)."""
     state = cb_service.get_state(check_service)
     allowed = cb_service.should_allow(check_service)
@@ -284,9 +274,7 @@ def _build_isolation_matrix(
         _reset_all_services(cb_service, test_services, "matrix test reset")
 
         # 대상 서비스에 장애 주입
-        _inject_failures(
-            cb_service, affected_service, failure_count, "multi-blast-radius-test"
-        )
+        _inject_failures(cb_service, affected_service, failure_count, "multi-blast-radius-test")
 
         # 다른 서비스 확인
         for check_service in test_services:
@@ -494,18 +482,12 @@ def _generate_dynamic_actions(
     # Recommendations 생성
     if duration_seconds is not None:
         if duration_seconds > 120:
-            recommendations.append(
-                f"복구 시간이 {duration_seconds:.0f}초로 2분을 초과함 - SLA 검토 필요"
-            )
+            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 2분을 초과함 - SLA 검토 필요")
         elif duration_seconds > 60:
-            recommendations.append(
-                f"복구 시간이 {duration_seconds:.0f}초로 목표(60초) 초과 - 개선 검토 권장"
-            )
+            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 목표(60초) 초과 - 개선 검토 권장")
 
     if len(affected_services) > 3:
-        recommendations.append(
-            f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요"
-        )
+        recommendations.append(f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요")
 
     if not recommendations:
         recommendations.append("장애 근본 원인 분석 및 재발 방지 검토 권장")
@@ -519,10 +501,7 @@ def _build_timeline(history: list, local_events: list) -> list:
 
     # CB 상태 변경 이벤트 필터링
     cb_events = [
-        e
-        for e in history
-        if "circuit_breaker" in e.get("event_type", "").lower()
-        or e.get("data", {}).get("state_change")
+        e for e in history if "circuit_breaker" in e.get("event_type", "").lower() or e.get("data", {}).get("state_change")
     ]
 
     for e in cb_events[:20]:
@@ -560,9 +539,7 @@ def _generate_postmortem_data(
     started_at, resolved_at, duration_seconds = _calculate_incident_duration(timeline)
 
     # 동적 action items 생성
-    auto_actions, recommendations = _generate_dynamic_actions(
-        timeline, affected, duration_seconds
-    )
+    auto_actions, recommendations = _generate_dynamic_actions(timeline, affected, duration_seconds)
 
     return {
         "incident_id": incident_id,
@@ -619,13 +596,9 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
         if not incident_id:
             incident_id = f"HEAL-{timezone.now().strftime('%Y-%m%d-%H%M')}"
 
-        fast_fail_count = len(
-            [e for e in history if e.get("data", {}).get("fast_fail")]
-        )
+        fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
 
-        postmortem = _generate_postmortem_data(
-            incident_id, timeline, affected, unaffected, fast_fail_count, snapshot
-        )
+        postmortem = _generate_postmortem_data(incident_id, timeline, affected, unaffected, fast_fail_count, snapshot)
 
         add_healing_incident(postmortem)
 

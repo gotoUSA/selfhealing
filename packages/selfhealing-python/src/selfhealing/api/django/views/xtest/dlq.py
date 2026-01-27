@@ -81,9 +81,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
 
         entity_type = request.data.get("entity_type", "test")
         entity_id = request.data.get("entity_id", "")
-        error_message = request.data.get(
-            "error_message", "X-Test-Mode injected failure"
-        )
+        error_message = request.data.get("error_message", "X-Test-Mode injected failure")
         count = int(request.data.get("count", 1))
 
         # 최대 주입 횟수 제한 (안전 장치)
@@ -104,11 +102,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
 
         # X-Test-Mode 세션 식별자 생성
         xtest_session = str(uuid.uuid4())[:8]
-        user_str = (
-            str(request.user)
-            if request.user and request.user.is_authenticated
-            else "anonymous"
-        )
+        user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
 
         # DLQ 서비스를 통한 항목 생성
         from selfhealing.services.dlq import get_dlq_service
@@ -130,11 +124,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
                 domain=domain,
                 failure_type=failure_type,
                 entity_type=entity_type,
-                entity_id=(
-                    f"{entity_id}-{i + 1}"
-                    if entity_id
-                    else f"xtest-{xtest_session}-{i + 1}"
-                ),
+                entity_id=(f"{entity_id}-{i + 1}" if entity_id else f"xtest-{xtest_session}-{i + 1}"),
                 error_code="XTEST_INJECTED",
                 error_message=error_message,
                 metadata=metadata,
@@ -247,10 +237,7 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
 
                 # X-Test-Mode 생성 항목 카운트
                 metadata = entry.get("metadata", {})
-                if (
-                    isinstance(metadata, dict)
-                    and metadata.get("source") == XTEST_SOURCE
-                ):
+                if isinstance(metadata, dict) and metadata.get("source") == XTEST_SOURCE:
                     xtest_entries_count += 1
         except Exception as e:
             logger.warning(f"[X-Test-Mode] DLQ status list failed: {e}")
@@ -391,11 +378,7 @@ class ForceStatusView(XTestModeMixin, APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        user_str = (
-            str(request.user)
-            if request.user and request.user.is_authenticated
-            else "anonymous"
-        )
+        user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
 
         logger.info(
             f"[X-Test-Mode] DLQ force status: id={dlq_id}, "
@@ -507,9 +490,7 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
 
         try:
             # X-Test-Mode 생성 항목 조회
-            ids_to_delete = _find_xtest_entries(
-                dlq_service, domain_filter, created_by_xtest
-            )
+            ids_to_delete = _find_xtest_entries(dlq_service, domain_filter, created_by_xtest)
 
             # 삭제 실행
             deleted_count = _delete_dlq_entries(dlq_service, ids_to_delete)
@@ -525,11 +506,7 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        user_str = (
-            str(request.user)
-            if request.user and request.user.is_authenticated
-            else "anonymous"
-        )
+        user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
 
         logger.info(
             f"[X-Test-Mode] DLQ reset: deleted={deleted_count}, "

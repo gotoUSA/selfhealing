@@ -44,9 +44,7 @@ class ShadowLogListView(APIView):
             raise RuntimeError("Shadow logger not available")
 
         # Query parameters
-        unsynced_only = (
-            request.query_params.get("unsynced_only", "false").lower() == "true"
-        )
+        unsynced_only = request.query_params.get("unsynced_only", "false").lower() == "true"
         limit = int(request.query_params.get("limit", 100))
 
         if unsynced_only:
@@ -68,9 +66,7 @@ class ShadowLogListView(APIView):
                 "adapter_type": r.adapter_type,
                 "operation": r.operation,
                 "synced_after_recovery": r.synced_after_recovery,
-                "recovery_time": (
-                    r.recovery_time.isoformat() if r.recovery_time else None
-                ),
+                "recovery_time": (r.recovery_time.isoformat() if r.recovery_time else None),
             }
             for r in records
         ]
@@ -138,8 +134,7 @@ class ShadowLogClearView(APIView):
         shadow_logger.clear()
 
         logger.warning(
-            f"[L2StorageAPI] Shadow log cleared by {request.user}. "
-            f"Cleared {stats_before['total_records']} entries."
+            f"[L2StorageAPI] Shadow log cleared by {request.user}. " f"Cleared {stats_before['total_records']} entries."
         )
 
         return Response(
@@ -305,9 +300,7 @@ class ShadowLogByServiceView(APIView):
                 "adapter_type": r.adapter_type,
                 "operation": r.operation,
                 "synced_after_recovery": r.synced_after_recovery,
-                "recovery_time": (
-                    r.recovery_time.isoformat() if r.recovery_time else None
-                ),
+                "recovery_time": (r.recovery_time.isoformat() if r.recovery_time else None),
             }
             for r in records
         ]

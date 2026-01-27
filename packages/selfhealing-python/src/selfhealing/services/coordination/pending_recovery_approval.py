@@ -121,9 +121,7 @@ class RecoveryApprovalRequest:
             self.requested_at = datetime.now(timezone.utc)
 
         if self.expires_at is None and self.requested_at:
-            self.expires_at = self.requested_at + timedelta(
-                minutes=self.timeout_minutes
-            )
+            self.expires_at = self.requested_at + timedelta(minutes=self.timeout_minutes)
 
     def is_expired(self) -> bool:
         """만료 여부 확인."""
@@ -151,18 +149,14 @@ class RecoveryApprovalRequest:
             "namespace": self.namespace,
             "trigger_level": self.trigger_level,
             "status": self.status.value,
-            "requested_at": (
-                self.requested_at.isoformat() if self.requested_at else None
-            ),
+            "requested_at": (self.requested_at.isoformat() if self.requested_at else None),
             "timeout_minutes": self.timeout_minutes,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "approved_by": self.approved_by,
             "approved_at": self.approved_at.isoformat() if self.approved_at else None,
             "approval_reason": self.approval_reason,
             "reminder_count": self.reminder_count,
-            "last_reminder_at": (
-                self.last_reminder_at.isoformat() if self.last_reminder_at else None
-            ),
+            "last_reminder_at": (self.last_reminder_at.isoformat() if self.last_reminder_at else None),
             "waiting_time_minutes": self.get_waiting_time_minutes(),
             "is_expired": self.is_expired(),
             "metadata": self.metadata,
@@ -274,9 +268,7 @@ class PendingRecoveryApprovalManager:
                 existing_id = self._session_to_request[session_id]
                 existing = self._requests.get(existing_id)
                 if existing and existing.is_pending():
-                    raise ValueError(
-                        f"Approval request already exists for session: {session_id}"
-                    )
+                    raise ValueError(f"Approval request already exists for session: {session_id}")
 
             request = RecoveryApprovalRequest(
                 session_id=session_id,
@@ -320,15 +312,12 @@ class PendingRecoveryApprovalManager:
         with self._lock:
             request = self._requests.get(request_id)
             if not request:
-                logger.warning(
-                    f"[PendingRecoveryApproval] Request not found: {request_id}"
-                )
+                logger.warning(f"[PendingRecoveryApproval] Request not found: {request_id}")
                 return None
 
             if not request.is_pending():
                 logger.warning(
-                    f"[PendingRecoveryApproval] Request not pending: "
-                    f"{request_id}, status={request.status.value}"
+                    f"[PendingRecoveryApproval] Request not pending: " f"{request_id}, status={request.status.value}"
                 )
                 return request
 
@@ -337,10 +326,7 @@ class PendingRecoveryApprovalManager:
             request.approved_at = datetime.now(timezone.utc)
             request.approval_reason = reason
 
-            logger.info(
-                f"[PendingRecoveryApproval] Approved: "
-                f"id={request_id}, by={approved_by}"
-            )
+            logger.info(f"[PendingRecoveryApproval] Approved: " f"id={request_id}, by={approved_by}")
 
             # 승인 알림
             self._send_notification(request, "approved")
@@ -377,10 +363,7 @@ class PendingRecoveryApprovalManager:
             request.approved_at = datetime.now(timezone.utc)
             request.approval_reason = reason
 
-            logger.info(
-                f"[PendingRecoveryApproval] Rejected: "
-                f"id={request_id}, by={rejected_by}, reason={reason}"
-            )
+            logger.info(f"[PendingRecoveryApproval] Rejected: " f"id={request_id}, by={rejected_by}, reason={reason}")
 
             # 거부 알림
             self._send_notification(request, "rejected")
@@ -452,15 +435,10 @@ class PendingRecoveryApprovalManager:
         """
         with self._lock:
             pending = [
-                r
-                for r in self._requests.values()
-                if r.is_pending() and (namespace is None or r.namespace == namespace)
+                r for r in self._requests.values() if r.is_pending() and (namespace is None or r.namespace == namespace)
             ]
             # 오래된 순으로 정렬
-            pending.sort(
-                key=lambda r: r.requested_at
-                or datetime.min.replace(tzinfo=timezone.utc)
-            )
+            pending.sort(key=lambda r: r.requested_at or datetime.min.replace(tzinfo=timezone.utc))
             return pending
 
     def list_stale_requests(
@@ -481,11 +459,7 @@ class PendingRecoveryApprovalManager:
             now = datetime.now(timezone.utc)
 
             stale = [
-                r
-                for r in self._requests.values()
-                if r.is_pending()
-                and r.requested_at
-                and (now - r.requested_at) >= threshold
+                r for r in self._requests.values() if r.is_pending() and r.requested_at and (now - r.requested_at) >= threshold
             ]
 
             return stale
@@ -538,10 +512,7 @@ class PendingRecoveryApprovalManager:
                     self._send_notification(request, "expired")
                     expired.append(request)
 
-                    logger.warning(
-                        f"[PendingRecoveryApproval] Expired: "
-                        f"id={request.request_id}"
-                    )
+                    logger.warning(f"[PendingRecoveryApproval] Expired: " f"id={request.request_id}")
 
             return expired
 
@@ -583,9 +554,7 @@ class PendingRecoveryApprovalManager:
                 self._session_to_request.pop(request.session_id, None)
 
             if to_remove:
-                logger.info(
-                    f"[PendingRecoveryApproval] Cleaned up {len(to_remove)} old requests"
-                )
+                logger.info(f"[PendingRecoveryApproval] Cleaned up {len(to_remove)} old requests")
 
             return len(to_remove)
 
@@ -598,21 +567,9 @@ class PendingRecoveryApprovalManager:
         """
         with self._lock:
             pending = [r for r in self._requests.values() if r.is_pending()]
-            approved = [
-                r
-                for r in self._requests.values()
-                if r.status == RecoveryApprovalStatus.APPROVED
-            ]
-            rejected = [
-                r
-                for r in self._requests.values()
-                if r.status == RecoveryApprovalStatus.REJECTED
-            ]
-            expired = [
-                r
-                for r in self._requests.values()
-                if r.status == RecoveryApprovalStatus.EXPIRED
-            ]
+            approved = [r for r in self._requests.values() if r.status == RecoveryApprovalStatus.APPROVED]
+            rejected = [r for r in self._requests.values() if r.status == RecoveryApprovalStatus.REJECTED]
+            expired = [r for r in self._requests.values() if r.status == RecoveryApprovalStatus.EXPIRED]
 
             return {
                 "total_requests": len(self._requests),

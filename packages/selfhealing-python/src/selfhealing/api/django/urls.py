@@ -273,9 +273,7 @@ urlpatterns = [
     path("control/", ControlActionView.as_view(), name="control-action"),
     # Status endpoints
     path("status/", ControlStatusView.as_view(), name="status"),
-    path(
-        "status/<str:service_name>/", ServiceStatusView.as_view(), name="service-status"
-    ),
+    path("status/<str:service_name>/", ServiceStatusView.as_view(), name="service-status"),
     # Audit logs
     path("audit/", ControlAuditView.as_view(), name="audit"),
     # Quick actions
@@ -301,9 +299,7 @@ urlpatterns = [
     path("dlq/<int:pk>/resolve/", DLQResolveView.as_view(), name="dlq-resolve"),
     path("dlq/test/create/", DLQTestCreateView.as_view(), name="dlq-test-create"),
     # Dashboard
-    path(
-        "dashboard/summary/", DashboardSummaryView.as_view(), name="dashboard-summary"
-    ),
+    path("dashboard/summary/", DashboardSummaryView.as_view(), name="dashboard-summary"),
     # Pool Circuit Breaker API
     path("circuit-breaker/pool/status/", circuit_breaker_status, name="pool-cb-status"),
     path("circuit-breaker/pool/reset/", circuit_breaker_reset, name="pool-cb-reset"),
@@ -313,9 +309,7 @@ urlpatterns = [
     path("system/disable/", SystemDisableView.as_view(), name="system-disable"),
     # Dry Run Mode
     path("system/dry-run/enable/", DryRunEnableView.as_view(), name="dry-run-enable"),
-    path(
-        "system/dry-run/disable/", DryRunDisableView.as_view(), name="dry-run-disable"
-    ),
+    path("system/dry-run/disable/", DryRunDisableView.as_view(), name="dry-run-disable"),
     # Runtime Configuration API
     path("config/", AllConfigView.as_view(), name="config-all"),
     path("config/reset/", ResetConfigView.as_view(), name="config-reset"),
@@ -398,9 +392,7 @@ urlpatterns = [
         GovernanceRBACStatusView.as_view(),
         name="governance-status",
     ),
-    path(
-        "config/governance/", GovernanceConfigView.as_view(), name="config-governance"
-    ),
+    path("config/governance/", GovernanceConfigView.as_view(), name="config-governance"),
     # =========================================================================
     # 4-Eyes Approval Workflow API
     # =========================================================================
@@ -455,9 +447,7 @@ urlpatterns = [
     # =========================================================================
     path("config/tiers/", TierDefinitionsView.as_view(), name="config-tiers"),
     path("config/tiers/reset/", TierResetView.as_view(), name="config-tiers-reset"),
-    path(
-        "config/tiers/dry-run/", TierDryRunView.as_view(), name="config-tiers-dry-run"
-    ),
+    path("config/tiers/dry-run/", TierDryRunView.as_view(), name="config-tiers-dry-run"),
     path("config/tiers/export/", TierExportView.as_view(), name="config-tiers-export"),
     path("config/tiers/import/", TierImportView.as_view(), name="config-tiers-import"),
     path(
@@ -465,9 +455,7 @@ urlpatterns = [
         TierResolveLookupView.as_view(),
         name="config-tiers-resolve",
     ),
-    path(
-        "config/tier-mappings/", TierMappingsView.as_view(), name="config-tier-mappings"
-    ),
+    path("config/tier-mappings/", TierMappingsView.as_view(), name="config-tier-mappings"),
     path(
         "config/tier-overrides/",
         TierOverridesView.as_view(),
@@ -477,12 +465,8 @@ urlpatterns = [
     # Emergency Mode API
     # =========================================================================
     path("emergency/status/", EmergencyStatusView.as_view(), name="emergency-status"),
-    path(
-        "emergency/trigger/", EmergencyTriggerView.as_view(), name="emergency-trigger"
-    ),
-    path(
-        "emergency/release/", EmergencyReleaseView.as_view(), name="emergency-release"
-    ),
+    path("emergency/trigger/", EmergencyTriggerView.as_view(), name="emergency-trigger"),
+    path("emergency/release/", EmergencyReleaseView.as_view(), name="emergency-release"),
     path(
         "emergency/gradual-recovery/",
         GradualRecoveryStartView.as_view(),
@@ -493,9 +477,7 @@ urlpatterns = [
         GradualRecoveryStopView.as_view(),
         name="emergency-stop-recovery",
     ),
-    path(
-        "emergency/history/", EmergencyHistoryView.as_view(), name="emergency-history"
-    ),
+    path("emergency/history/", EmergencyHistoryView.as_view(), name="emergency-history"),
     path("emergency/config/", EmergencyConfigView.as_view(), name="emergency-config"),
     path("emergency/levels/", EmergencyLevelsView.as_view(), name="emergency-levels"),
     # =========================================================================
@@ -509,9 +491,7 @@ urlpatterns = [
         CascadeEventDetailView.as_view(),
         name="cascade-event-detail",
     ),
-    path(
-        "cascade/verify/", CascadeChainVerifyView.as_view(), name="cascade-chain-verify"
-    ),
+    path("cascade/verify/", CascadeChainVerifyView.as_view(), name="cascade-chain-verify"),
     path(
         "cascade/trace/<str:event_id>/",
         CausationTraceView.as_view(),
@@ -531,13 +511,9 @@ urlpatterns = [
     # Auto Tuning API - 자율 조정 제어
     # =========================================================================
     # Status
-    path(
-        "auto-tuning/status/", AutoTuningStatusView.as_view(), name="auto-tuning-status"
-    ),
+    path("auto-tuning/status/", AutoTuningStatusView.as_view(), name="auto-tuning-status"),
     # Enable/Disable
-    path(
-        "auto-tuning/enable/", AutoTuningEnableView.as_view(), name="auto-tuning-enable"
-    ),
+    path("auto-tuning/enable/", AutoTuningEnableView.as_view(), name="auto-tuning-enable"),
     path(
         "auto-tuning/disable/",
         AutoTuningDisableView.as_view(),
@@ -555,9 +531,7 @@ urlpatterns = [
         name="auto-tuning-module-disable",
     ),
     # Bounds
-    path(
-        "auto-tuning/bounds/", AutoTuningBoundsView.as_view(), name="auto-tuning-bounds"
-    ),
+    path("auto-tuning/bounds/", AutoTuningBoundsView.as_view(), name="auto-tuning-bounds"),
     # History
     path(
         "auto-tuning/history/",
@@ -709,9 +683,7 @@ urlpatterns = [
         SchedulerConfigView.as_view(),
         name="chaos-config-scheduler",
     ),
-    path(
-        "chaos/config/reports/", ReportConfigView.as_view(), name="chaos-config-reports"
-    ),
+    path("chaos/config/reports/", ReportConfigView.as_view(), name="chaos-config-reports"),
     # Safety Mechanism Configuration
     path(
         "chaos/config/stop-conditions/",
@@ -719,9 +691,7 @@ urlpatterns = [
         name="chaos-config-stop-conditions",
     ),
     path("chaos/config/ttl/", TTLConfigView.as_view(), name="chaos-config-ttl"),
-    path(
-        "chaos/config/dry-run/", DryRunConfigView.as_view(), name="chaos-config-dry-run"
-    ),
+    path("chaos/config/dry-run/", DryRunConfigView.as_view(), name="chaos-config-dry-run"),
     # Dry Run Analysis with Impact Prediction
     path(
         "chaos/dry-run/analyze/",
@@ -748,9 +718,7 @@ urlpatterns = [
     # Kill Switch
     path("chaos/kill-switch/", KillSwitchView.as_view(), name="chaos-kill-switch"),
     # Kill All Control
-    path(
-        "chaos/control/kill-all/", KillAllView.as_view(), name="chaos-control-kill-all"
-    ),
+    path("chaos/control/kill-all/", KillAllView.as_view(), name="chaos-control-kill-all"),
     # Safety & Blast Radius Checks
     path("chaos/safety-check/", SafetyCheckView.as_view(), name="chaos-safety-check"),
     path(
@@ -770,9 +738,7 @@ urlpatterns = [
         ReportGenerateView.as_view(),
         name="chaos-reports-generate",
     ),
-    path(
-        "chaos/reports/grades/", GradeHistoryView.as_view(), name="chaos-grade-history"
-    ),
+    path("chaos/reports/grades/", GradeHistoryView.as_view(), name="chaos-grade-history"),
     # Pending Approvals
     path(
         "chaos/pending-approvals/",
@@ -861,9 +827,7 @@ urlpatterns = [
         name="l2-storage-drift-reconcile-service",
     ),
     # Metrics
-    path(
-        "l2-storage/metrics/", L2StorageMetricsView.as_view(), name="l2-storage-metrics"
-    ),
+    path("l2-storage/metrics/", L2StorageMetricsView.as_view(), name="l2-storage-metrics"),
 ]
 
 # =============================================================================
@@ -921,12 +885,8 @@ try:
             name="dna-finops-budget",
         ),
         path("dna/finops/cost/", FinOpsCostView.as_view(), name="dna-finops-cost"),
-        path(
-            "dna/finops/report/", FinOpsReportView.as_view(), name="dna-finops-report"
-        ),
-        path(
-            "dna/finops/alerts/", FinOpsAlertsView.as_view(), name="dna-finops-alerts"
-        ),
+        path("dna/finops/report/", FinOpsReportView.as_view(), name="dna-finops-report"),
+        path("dna/finops/alerts/", FinOpsAlertsView.as_view(), name="dna-finops-alerts"),
         path(
             "dna/finops/alerts/<int:alert_index>/acknowledge/",
             FinOpsAlertsView.as_view(),
@@ -1147,9 +1107,7 @@ urlpatterns += [
         name="xtest-inject-error-budget",
     ),
     path("xtest/snapshot/", SystemSnapshotView.as_view(), name="xtest-snapshot"),
-    path(
-        "xtest/fast-fail-test/", FastFailTestView.as_view(), name="xtest-fast-fail-test"
-    ),
+    path("xtest/fast-fail-test/", FastFailTestView.as_view(), name="xtest-fast-fail-test"),
     path(
         "xtest/trigger-cb-recovery/",
         TriggerCBRecoveryView.as_view(),
@@ -1196,18 +1154,14 @@ urlpatterns += [
     ),
     path("xtest/dlq/reset/", ResetDLQXTestView.as_view(), name="xtest-dlq-reset"),
     # Replay X-Test Endpoints
-    path(
-        "xtest/replay/single/", ReplaySingleView.as_view(), name="xtest-replay-single"
-    ),
+    path("xtest/replay/single/", ReplaySingleView.as_view(), name="xtest-replay-single"),
     path("xtest/replay/batch/", ReplayBatchView.as_view(), name="xtest-replay-batch"),
     path(
         "xtest/replay/trigger-on-cb-close/",
         TriggerReplayOnCBCloseView.as_view(),
         name="xtest-replay-trigger-cb-close",
     ),
-    path(
-        "xtest/replay/status/", ReplayStatusView.as_view(), name="xtest-replay-status"
-    ),
+    path("xtest/replay/status/", ReplayStatusView.as_view(), name="xtest-replay-status"),
     # Retry X-Test Endpoints
     path(
         "xtest/retry/backoff-preview/",
@@ -1293,9 +1247,7 @@ urlpatterns += [
         FullSnapshotView.as_view(),
         name="xtest-integration-full-snapshot",
     ),
-    path(
-        "xtest/integration/reset/", ResetView.as_view(), name="xtest-integration-reset"
-    ),
+    path("xtest/integration/reset/", ResetView.as_view(), name="xtest-integration-reset"),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # =========================================================================
@@ -1325,9 +1277,7 @@ urlpatterns += [
     # Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
     # =========================================================================
     # List & Create
-    path(
-        "canary/rollouts/", CanaryRolloutListView.as_view(), name="canary-rollout-list"
-    ),
+    path("canary/rollouts/", CanaryRolloutListView.as_view(), name="canary-rollout-list"),
     # History (completed rollouts)
     path("canary/history/", CanaryHistoryView.as_view(), name="canary-history"),
     # Panic Rollback (all active rollouts)

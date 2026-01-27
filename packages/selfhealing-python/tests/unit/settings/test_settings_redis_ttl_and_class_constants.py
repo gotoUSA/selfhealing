@@ -5,7 +5,7 @@ Redis TTL 및 클래스 레벨 상수의 Settings 연동 테스트.
 
 테스트 대상 Settings 필드:
 - RateLimitSettings.redis_ttl: Rate Limit 상태 Redis 저장 TTL
-- AirGapSettings.redis_ttl: Air-Gap 중간 저장소 TTL  
+- AirGapSettings.redis_ttl: Air-Gap 중간 저장소 TTL
 - AuditSettings.buffer_redis_ttl: 감사 버퍼 Redis TTL
 - ErrorBudgetSettings.multiplier_cache_ttl: 위기 가중치 캐시 TTL
 - ErrorBudgetSettings.multiplier_max: 최대 위기 가중치
@@ -18,7 +18,7 @@ Redis TTL 및 클래스 레벨 상수의 Settings 연동 테스트.
 
 테스트 범위:
 1. 기본값 검증
-2. 환경 변수 로드 검증  
+2. 환경 변수 로드 검증
 3. 헬퍼 함수 동작 검증
 4. 하위 호환성 (레거시 상수 유지) 검증
 """
@@ -33,6 +33,7 @@ import pytest
 # 1. RateLimitSettings.redis_ttl
 # =============================================================================
 
+
 class TestRateLimitSettingsRedisTtl:
     """Rate Limit Redis 저장소 TTL 설정 테스트."""
 
@@ -42,6 +43,7 @@ class TestRateLimitSettingsRedisTtl:
             RateLimitSettings,
             reset_rate_limit_settings,
         )
+
         reset_rate_limit_settings()
         settings = RateLimitSettings()
         assert settings.redis_ttl == 3600  # 1시간
@@ -52,6 +54,7 @@ class TestRateLimitSettingsRedisTtl:
             RateLimitSettings,
             reset_rate_limit_settings,
         )
+
         reset_rate_limit_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_RATELIMIT_REDIS_TTL": "7200"}):
             settings = RateLimitSettings()
@@ -75,12 +78,14 @@ class TestRateLimitSettingsRedisTtl:
 # 2. AirGapSettings
 # =============================================================================
 
+
 class TestAirGapSettings:
     """AirGapSettings 테스트."""
 
     def test_default_values(self):
         """기본값 테스트."""
         from selfhealing.settings.airgap import AirGapSettings, reset_airgap_settings
+
         reset_airgap_settings()
         settings = AirGapSettings()
         assert settings.redis_ttl == 3600
@@ -89,6 +94,7 @@ class TestAirGapSettings:
     def test_redis_ttl_from_env(self):
         """환경 변수에서 Redis TTL 로드."""
         from selfhealing.settings.airgap import AirGapSettings, reset_airgap_settings
+
         reset_airgap_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_AIRGAP_REDIS_TTL": "1800"}):
             settings = AirGapSettings()
@@ -97,6 +103,7 @@ class TestAirGapSettings:
     def test_key_prefix_auto_colon(self):
         """키 접두사 자동 콜론 추가."""
         from selfhealing.settings.airgap import AirGapSettings, reset_airgap_settings
+
         reset_airgap_settings()
         settings = AirGapSettings(key_prefix="test")
         assert settings.key_prefix == "test:"
@@ -105,6 +112,7 @@ class TestAirGapSettings:
 # =============================================================================
 # 3. AuditSettings.buffer_redis_ttl
 # =============================================================================
+
 
 class TestAuditSettingsBufferRedisTtl:
     """AuditSettings.buffer_redis_ttl 필드 테스트."""
@@ -115,6 +123,7 @@ class TestAuditSettingsBufferRedisTtl:
             AuditSettings,
             reset_audit_settings,
         )
+
         reset_audit_settings()
         settings = AuditSettings()
         assert settings.buffer_redis_ttl == 86400
@@ -125,6 +134,7 @@ class TestAuditSettingsBufferRedisTtl:
             AuditSettings,
             reset_audit_settings,
         )
+
         reset_audit_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_AUDIT_BUFFER_REDIS_TTL": "172800"}):
             settings = AuditSettings()
@@ -135,6 +145,7 @@ class TestAuditSettingsBufferRedisTtl:
 # 4. ErrorBudgetSettings.multiplier_cache_ttl, multiplier_max
 # =============================================================================
 
+
 class TestErrorBudgetSettingsMultiplier:
     """ErrorBudgetSettings 위기 가중치 설정 테스트."""
 
@@ -144,6 +155,7 @@ class TestErrorBudgetSettingsMultiplier:
             ErrorBudgetSettings,
             reset_error_budget_settings,
         )
+
         reset_error_budget_settings()
         settings = ErrorBudgetSettings()
         assert settings.multiplier_cache_ttl == 30.0
@@ -155,11 +167,15 @@ class TestErrorBudgetSettingsMultiplier:
             ErrorBudgetSettings,
             reset_error_budget_settings,
         )
+
         reset_error_budget_settings()
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_ERRORBUDGET_MULTIPLIER_CACHE_TTL": "60.0",
-            "SELFHEALING_ERRORBUDGET_MULTIPLIER_MAX": "20.0",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_ERRORBUDGET_MULTIPLIER_CACHE_TTL": "60.0",
+                "SELFHEALING_ERRORBUDGET_MULTIPLIER_MAX": "20.0",
+            },
+        ):
             settings = ErrorBudgetSettings()
             assert settings.multiplier_cache_ttl == 60.0
             assert settings.multiplier_max == 20.0
@@ -168,6 +184,7 @@ class TestErrorBudgetSettingsMultiplier:
 # =============================================================================
 # 5. DashboardSettings (기존, 연동 확인)
 # =============================================================================
+
 
 class TestDashboardSettings:
     """DashboardSettings 테스트."""
@@ -178,6 +195,7 @@ class TestDashboardSettings:
             DashboardSettings,
             reset_dashboard_settings,
         )
+
         reset_dashboard_settings()
         settings = DashboardSettings()
         assert settings.stale_threshold_minutes == 30
@@ -189,11 +207,15 @@ class TestDashboardSettings:
             DashboardSettings,
             reset_dashboard_settings,
         )
+
         reset_dashboard_settings()
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_DASHBOARD_STALE_THRESHOLD_MINUTES": "60",
-            "SELFHEALING_DASHBOARD_MAX_REGIONAL_STATUS": "10",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_DASHBOARD_STALE_THRESHOLD_MINUTES": "60",
+                "SELFHEALING_DASHBOARD_MAX_REGIONAL_STATUS": "10",
+            },
+        ):
             settings = DashboardSettings()
             assert settings.stale_threshold_minutes == 60
             assert settings.max_regional_status == 10
@@ -202,6 +224,7 @@ class TestDashboardSettings:
 # =============================================================================
 # 6. MetricsSettings.snapshot_max_age
 # =============================================================================
+
 
 class TestMetricsSettingsSnapshotMaxAge:
     """MetricsSettings.snapshot_max_age 필드 테스트."""
@@ -212,6 +235,7 @@ class TestMetricsSettingsSnapshotMaxAge:
             MetricsSettings,
             reset_metrics_settings,
         )
+
         reset_metrics_settings()
         settings = MetricsSettings()
         assert settings.snapshot_max_age == 3600
@@ -222,6 +246,7 @@ class TestMetricsSettingsSnapshotMaxAge:
             MetricsSettings,
             reset_metrics_settings,
         )
+
         reset_metrics_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_METRICS_SNAPSHOT_MAX_AGE": "7200"}):
             settings = MetricsSettings()
@@ -232,6 +257,7 @@ class TestMetricsSettingsSnapshotMaxAge:
 # 7. SafeGaugeSettings
 # =============================================================================
 
+
 class TestSafeGaugeSettings:
     """SafeGaugeSettings 테스트."""
 
@@ -241,6 +267,7 @@ class TestSafeGaugeSettings:
             SafeGaugeSettings,
             reset_safe_gauge_settings,
         )
+
         reset_safe_gauge_settings()
         settings = SafeGaugeSettings()
         assert settings.max_label_combinations == 1000
@@ -251,6 +278,7 @@ class TestSafeGaugeSettings:
             SafeGaugeSettings,
             reset_safe_gauge_settings,
         )
+
         reset_safe_gauge_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_SAFE_GAUGE_MAX_LABEL_COMBINATIONS": "500"}):
             settings = SafeGaugeSettings()
@@ -262,6 +290,7 @@ class TestSafeGaugeSettings:
             SafeGaugeSettings,
             reset_safe_gauge_settings,
         )
+
         reset_safe_gauge_settings()
         settings = SafeGaugeSettings()
         assert settings.eviction_warning_threshold == 0.8
@@ -270,6 +299,7 @@ class TestSafeGaugeSettings:
 # =============================================================================
 # 8. AuditIntegritySettings (기존, 연동 확인)
 # =============================================================================
+
 
 class TestAuditIntegritySettings:
     """AuditIntegritySettings 테스트."""
@@ -280,6 +310,7 @@ class TestAuditIntegritySettings:
             AuditIntegritySettings,
             reset_audit_integrity_settings,
         )
+
         reset_audit_integrity_settings()
         settings = AuditIntegritySettings()
         assert settings.archive_threshold_days == 7
@@ -291,11 +322,15 @@ class TestAuditIntegritySettings:
             AuditIntegritySettings,
             reset_audit_integrity_settings,
         )
+
         reset_audit_integrity_settings()
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_AUDIT_INTEGRITY_ARCHIVE_THRESHOLD_DAYS": "14",
-            "SELFHEALING_AUDIT_INTEGRITY_COLD_RETENTION_YEARS": "10",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_AUDIT_INTEGRITY_ARCHIVE_THRESHOLD_DAYS": "14",
+                "SELFHEALING_AUDIT_INTEGRITY_COLD_RETENTION_YEARS": "10",
+            },
+        ):
             settings = AuditIntegritySettings()
             assert settings.archive_threshold_days == 14
             assert settings.cold_retention_years == 10
@@ -304,6 +339,7 @@ class TestAuditIntegritySettings:
 # =============================================================================
 # 9. 헬퍼 함수 테스트 (클래스 연동)
 # =============================================================================
+
 
 class TestHelperFunctions:
     """Settings 헬퍼 함수 테스트."""
@@ -391,30 +427,35 @@ class TestHelperFunctions:
 # 10. 하위 호환성 테스트
 # =============================================================================
 
+
 class TestBackwardCompatibility:
     """하위 호환성 테스트 - 레거시 상수가 유지되는지 확인."""
 
     def test_rate_limit_legacy_constant(self):
         """RedisRateLimitStorage.DEFAULT_TTL 레거시 상수 유지."""
         from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
+
         assert hasattr(RedisRateLimitStorage, "DEFAULT_TTL")
         assert RedisRateLimitStorage.DEFAULT_TTL == 3600
 
     def test_airgap_legacy_constant(self):
         """RedisAirGapAdapter.DEFAULT_TTL 레거시 상수 유지."""
         from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
+
         assert hasattr(RedisAirGapAdapter, "DEFAULT_TTL")
         assert RedisAirGapAdapter.DEFAULT_TTL == 3600
 
     def test_audit_buffer_legacy_constant(self):
         """RedisAuditBuffer.DEFAULT_TTL_SECONDS 레거시 상수 유지."""
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+
         assert hasattr(RedisAuditBuffer, "DEFAULT_TTL_SECONDS")
         assert RedisAuditBuffer.DEFAULT_TTL_SECONDS == 86400
 
     def test_multiplier_legacy_constants(self):
         """Error Budget Multiplier 레거시 상수 유지."""
         from selfhealing.services.error_budget import multiplier
+
         assert hasattr(multiplier, "DEFAULT_CACHE_TTL_SECONDS")
         assert hasattr(multiplier, "DEFAULT_MAX_MULTIPLIER")
         assert multiplier.DEFAULT_CACHE_TTL_SECONDS == 30.0
@@ -425,6 +466,7 @@ class TestBackwardCompatibility:
         from selfhealing.services.coordination.recovery_dashboard import (
             RecoveryDashboardService,
         )
+
         assert hasattr(RecoveryDashboardService, "DEFAULT_STALE_THRESHOLD_MINUTES")
         assert hasattr(RecoveryDashboardService, "DEFAULT_MAX_REGIONAL_STATUS")
         assert RecoveryDashboardService.DEFAULT_STALE_THRESHOLD_MINUTES == 30
@@ -433,12 +475,14 @@ class TestBackwardCompatibility:
     def test_metric_snapshot_legacy_constant(self):
         """MetricSnapshotStorage.DEFAULT_MAX_AGE 레거시 상수 유지."""
         from selfhealing.metrics.snapshot_storage import MetricSnapshotStorage
+
         assert hasattr(MetricSnapshotStorage, "DEFAULT_MAX_AGE")
         assert MetricSnapshotStorage.DEFAULT_MAX_AGE == 3600
 
     def test_safe_gauge_legacy_constant(self):
         """SafeGauge.DEFAULT_MAX_LABEL_COMBINATIONS 레거시 상수 유지."""
         from selfhealing.metrics.safe_gauge.core import SafeGauge
+
         assert hasattr(SafeGauge, "DEFAULT_MAX_LABEL_COMBINATIONS")
         assert SafeGauge.DEFAULT_MAX_LABEL_COMBINATIONS == 1000
 
@@ -447,10 +491,11 @@ class TestBackwardCompatibility:
 # 11. Mock Redis로 TTL 적용 검증 테스트
 # =============================================================================
 
+
 class TestRedisTtlAppliedToMock:
     """
     Settings에서 가져온 TTL 값이 실제 Redis 호출에 적용되는지 검증.
-    
+
     Mock Redis를 사용하여 setex, expire 등의 호출 시 TTL 값이 올바르게 전달되는지 확인합니다.
     """
 

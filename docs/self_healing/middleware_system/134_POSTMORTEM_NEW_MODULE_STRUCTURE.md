@@ -1,8 +1,8 @@
 # 134. Postmortem 신규 모듈 구조
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [133_POSTMORTEM_XTEST_SEPARATION.md](133_POSTMORTEM_XTEST_SEPARATION.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [133_POSTMORTEM_XTEST_SEPARATION.md](133_POSTMORTEM_XTEST_SEPARATION.md)
 **상태:** 설계 완료
 
 ---

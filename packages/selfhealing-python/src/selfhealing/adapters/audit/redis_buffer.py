@@ -90,12 +90,8 @@ class RedisAuditBuffer:
         """
         self._redis = redis_client
         self._fallback = fallback_adapter
-        self._key_prefix = (
-            key_prefix if key_prefix is not None else self.DEFAULT_KEY_PREFIX
-        )
-        self._ttl_seconds = (
-            ttl_seconds if ttl_seconds is not None else _get_audit_buffer_ttl()
-        )
+        self._key_prefix = key_prefix if key_prefix is not None else self.DEFAULT_KEY_PREFIX
+        self._ttl_seconds = ttl_seconds if ttl_seconds is not None else _get_audit_buffer_ttl()
         self._on_fallback = on_fallback
 
         # 상태 추적 (CB Advanced Protection 패턴)
@@ -161,9 +157,7 @@ class RedisAuditBuffer:
                         self._fallback.log(entry)
                     logger.info("[RedisAuditBuffer] Used file fallback")
                 except Exception as fallback_error:
-                    logger.error(
-                        f"[RedisAuditBuffer] Fallback also failed: {fallback_error}"
-                    )
+                    logger.error(f"[RedisAuditBuffer] Fallback also failed: {fallback_error}")
 
             return False
 

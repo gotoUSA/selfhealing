@@ -1,8 +1,8 @@
 # 130. Postmortem Audit 통합
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [128_POSTMORTEM_AUTO_TRIGGER.md](128_POSTMORTEM_AUTO_TRIGGER.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [128_POSTMORTEM_AUTO_TRIGGER.md](128_POSTMORTEM_AUTO_TRIGGER.md)
 **상태:** 분석 완료
 
 ---
@@ -39,7 +39,7 @@
 
 **observability.py의 Audit 현황:**
 - `PostmortemGeneratorView` - Audit 호출 없음
-- `BlastRadiusTestView` - Audit 호출 없음  
+- `BlastRadiusTestView` - Audit 호출 없음
 - `RecordHealingEventView` - Audit 호출 없음
 - `HealingTimelineView` - Audit 호출 없음 (조회 전용)
 - `GetHealingIncidentsView` - Audit 호출 없음 (조회 전용)

@@ -180,10 +180,7 @@ class CleanupSettings(BaseSettings):
         # Note: cross-field validation은 model_validator로 처리해야 하지만
         # 단순 경고만 발생시킴
         if v < 60:
-            logger.warning(
-                f"[CleanupSettings] Low purge_older_than_days={v}, "
-                "consider using >= 60 for data retention"
-            )
+            logger.warning(f"[CleanupSettings] Low purge_older_than_days={v}, " "consider using >= 60 for data retention")
         return v
 
 

@@ -133,10 +133,7 @@ def check_recovery_trigger_task(
         - session_id: 시작된 세션 ID (있으면)
         - reason: 트리거 이유 또는 불발 이유
     """
-    logger.info(
-        f"[check_recovery_trigger] namespace={namespace}, "
-        f"error_rate={error_rate}, success_rate={success_rate}"
-    )
+    logger.info(f"[check_recovery_trigger] namespace={namespace}, " f"error_rate={error_rate}, success_rate={success_rate}")
 
     try:
         coordinator = get_recovery_coordinator()
@@ -177,8 +174,7 @@ def check_recovery_trigger_task(
                 return {
                     "triggered": False,
                     "reason": (
-                        f"Stability not yet confirmed "
-                        f"(need {stability_minutes} minutes < {recovery_threshold:.0%})"
+                        f"Stability not yet confirmed " f"(need {stability_minutes} minutes < {recovery_threshold:.0%})"
                     ),
                     "namespace": namespace,
                     "current_error_rate": error_rate,
@@ -189,9 +185,7 @@ def check_recovery_trigger_task(
                 approval_manager = get_pending_recovery_approval_manager()
 
                 # 기존 대기 중인 승인 요청이 있는지 확인
-                existing = approval_manager.get_request_by_session_or_pending(
-                    namespace=namespace
-                )
+                existing = approval_manager.get_request_by_session_or_pending(namespace=namespace)
 
                 if existing is None:
                     # 새 승인 요청 생성
@@ -229,8 +223,7 @@ def check_recovery_trigger_task(
             )
 
             logger.info(
-                f"[check_recovery_trigger] Recovery STARTED: "
-                f"session_id={session.session_id}, namespace={namespace}"
+                f"[check_recovery_trigger] Recovery STARTED: " f"session_id={session.session_id}, namespace={namespace}"
             )
 
             # 다음 스텝 실행 예약
@@ -291,9 +284,7 @@ def execute_recovery_step_task(
         - status: 현재 상태
         - completed: 전체 복구 완료 여부
     """
-    logger.info(
-        f"[execute_recovery_step] session_id={session_id}, namespace={namespace}"
-    )
+    logger.info(f"[execute_recovery_step] session_id={session_id}, namespace={namespace}")
 
     try:
         coordinator = get_recovery_coordinator()
@@ -348,9 +339,7 @@ def execute_recovery_step_task(
         if not success:
             # 단계 실패 - 재시도 또는 중단
             error_msg = result.get("error", "Unknown error")
-            logger.warning(
-                f"[execute_recovery_step] Step failed: {step_name}, error={error_msg}"
-            )
+            logger.warning(f"[execute_recovery_step] Step failed: {step_name}, error={error_msg}")
 
             # 재시도 가능 여부 확인
             retry_count = result.get("retry_count", 0)
@@ -487,8 +476,7 @@ def monitor_recovery_health_task(
 
         if result["tripped"]:
             logger.warning(
-                f"[monitor_recovery_health] CircuitBreaker TRIPPED: "
-                f"namespace={namespace}, reason={result['reason']}"
+                f"[monitor_recovery_health] CircuitBreaker TRIPPED: " f"namespace={namespace}, reason={result['reason']}"
             )
 
             # 재에스컬레이션 필요 시 Emergency 재진입
@@ -502,10 +490,7 @@ def monitor_recovery_health_task(
                     )
 
                 # Emergency 재진입 (별도 태스크 또는 이벤트로 처리)
-                logger.critical(
-                    f"[monitor_recovery_health] RE-ESCALATION required: "
-                    f"namespace={namespace}"
-                )
+                logger.critical(f"[monitor_recovery_health] RE-ESCALATION required: " f"namespace={namespace}")
 
         return {
             "healthy": not result["tripped"],
@@ -551,10 +536,7 @@ def check_stale_pending_recoveries_task(
         - reminded_count: 알림 발송된 수
         - expired_count: 만료 처리된 수
     """
-    logger.info(
-        f"[check_stale_pending_recoveries] "
-        f"threshold={stale_threshold_minutes} minutes"
-    )
+    logger.info(f"[check_stale_pending_recoveries] " f"threshold={stale_threshold_minutes} minutes")
 
     try:
         manager = get_pending_recovery_approval_manager()
@@ -564,9 +546,7 @@ def check_stale_pending_recoveries_task(
         expired_count = len(expired)
 
         if expired_count > 0:
-            logger.warning(
-                f"[check_stale_pending_recoveries] " f"Expired {expired_count} requests"
-            )
+            logger.warning(f"[check_stale_pending_recoveries] " f"Expired {expired_count} requests")
 
         # 방치된 요청 확인 및 리마인더 발송
         reminded = manager.check_and_send_reminders()
@@ -577,10 +557,7 @@ def check_stale_pending_recoveries_task(
         stale_count = len(stale)
 
         if stale_count > 0:
-            logger.warning(
-                f"[check_stale_pending_recoveries] "
-                f"{stale_count} stale requests found"
-            )
+            logger.warning(f"[check_stale_pending_recoveries] " f"{stale_count} stale requests found")
 
         return {
             "stale_count": stale_count,

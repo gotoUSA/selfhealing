@@ -111,10 +111,7 @@ class CanarySettings(BaseSettings):
     def validate_lock_timeout(cls, v: int) -> int:
         """lock_timeout이 너무 길면 경고."""
         if v > 60:
-            logger.warning(
-                f"[CanarySettings] High lock_timeout_minutes={v}, "
-                "consider using <= 60 for responsiveness"
-            )
+            logger.warning(f"[CanarySettings] High lock_timeout_minutes={v}, " "consider using <= 60 for responsiveness")
         return v
 
 

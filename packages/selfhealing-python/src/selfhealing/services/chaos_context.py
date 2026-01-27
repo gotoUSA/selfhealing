@@ -163,9 +163,7 @@ class ChaosExperimentContext:
         return cls(
             experiment_id=data.get("experiment_id", ""),
             experiment_name=data.get("experiment_name", ""),
-            experiment_type=data.get(
-                "experiment_type", ChaosExperimentType.LATENCY_INJECTION.value
-            ),
+            experiment_type=data.get("experiment_type", ChaosExperimentType.LATENCY_INJECTION.value),
             started_at=data.get("started_at", ""),
             expected_duration_seconds=data.get("expected_duration_seconds", 300),
             expires_at=data.get("expires_at", ""),
@@ -317,10 +315,7 @@ def attach_chaos_context(
 
     operation.save(update_fields=["metadata", "next_action_hint", "updated_at"])
 
-    logger.info(
-        f"[ChaosContext] Attached experiment {context.experiment_id} "
-        f"to operation {operation.id}"
-    )
+    logger.info(f"[ChaosContext] Attached experiment {context.experiment_id} " f"to operation {operation.id}")
 
 
 def resolve_chaos_experiment(
@@ -362,10 +357,7 @@ def resolve_chaos_experiment(
         ]
     )
 
-    logger.info(
-        f"[ChaosContext] Resolved chaos experiment {context.experiment_id} "
-        f"for operation {operation.id}"
-    )
+    logger.info(f"[ChaosContext] Resolved chaos experiment {context.experiment_id} " f"for operation {operation.id}")
 
     return True
 
@@ -407,9 +399,7 @@ def create_chaos_context(
         experiment_type_str = experiment_type
 
     return ChaosExperimentContext(
-        experiment_name=kwargs.get(
-            "experiment_name", f"{experiment_type_str}_{target_service}"
-        ),
+        experiment_name=kwargs.get("experiment_name", f"{experiment_type_str}_{target_service}"),
         experiment_type=experiment_type_str,
         target_service=target_service,
         target_domain=target_domain,

@@ -109,9 +109,7 @@ class DeploymentFreezeAcknowledgeView(APIView):
         justification = request.data.get("justification", "")
 
         if not justification:
-            raise ValueError(
-                "justification is required: 동결 확정 사유를 입력해주세요."
-            )
+            raise ValueError("justification is required: 동결 확정 사유를 입력해주세요.")
 
         service = get_error_budget_service()
         decided_by = getattr(request.user, "username", str(request.user))
@@ -121,9 +119,7 @@ class DeploymentFreezeAcknowledgeView(APIView):
             justification=justification,
         )
 
-        logger.info(
-            f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}"
-        )
+        logger.info(f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}")
 
         return Response(
             {
@@ -176,9 +172,7 @@ class DeploymentOverrideView(APIView):
         try:
             override_type = OverrideType(override_type_str)
         except ValueError:
-            raise ValueError(
-                f"Invalid override_type: {override_type_str}, valid_types={[t.value for t in OverrideType]}"
-            )
+            raise ValueError(f"Invalid override_type: {override_type_str}, valid_types={[t.value for t in OverrideType]}")
 
         service = get_error_budget_service()
         decided_by = getattr(request.user, "username", str(request.user))
@@ -229,9 +223,7 @@ class DeploymentFreezeLiftView(APIView):
         justification = request.data.get("justification", "")
 
         if not justification:
-            raise ValueError(
-                "justification is required: 동결 해제 사유를 입력해주세요."
-            )
+            raise ValueError("justification is required: 동결 해제 사유를 입력해주세요.")
 
         service = get_error_budget_service()
         decided_by = getattr(request.user, "username", str(request.user))
@@ -241,9 +233,7 @@ class DeploymentFreezeLiftView(APIView):
             justification=justification,
         )
 
-        logger.info(
-            f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}"
-        )
+        logger.info(f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}")
 
         return Response(
             {

@@ -73,8 +73,7 @@ def log_xtest_operation_audit(
 
     if wal_seq:
         logger.debug(
-            f"[X-Test-Audit] {action} | component={component} | "
-            f"session={session_id} | result={result} | wal_seq={wal_seq}"
+            f"[X-Test-Audit] {action} | component={component} | " f"session={session_id} | result={result} | wal_seq={wal_seq}"
         )
 
     return wal_seq

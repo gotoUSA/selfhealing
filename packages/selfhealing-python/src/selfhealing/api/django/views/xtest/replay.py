@@ -141,8 +141,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] Replay single: dlq_id={dlq_id}, "
-            f"success={result['success']}, duration_ms={duration_ms}"
+            f"[X-Test-Mode] Replay single: dlq_id={dlq_id}, " f"success={result['success']}, duration_ms={duration_ms}"
         )
 
         response_data = {
@@ -213,9 +212,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
                 "allowed": result.allowed,
                 "checks_passed": checks_passed,
                 "checks_failed": checks_failed,
-                "block_reason": (
-                    result.block_reason.value if result.block_reason else None
-                ),
+                "block_reason": (result.block_reason.value if result.block_reason else None),
                 "block_message": result.block_message if not result.allowed else None,
             }
         except Exception as e:
@@ -286,8 +283,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
 
             return {
                 "success": result.success,
-                "message": result.message
-                or ("Replay completed" if result.success else "Replay failed"),
+                "message": result.message or ("Replay completed" if result.success else "Replay failed"),
                 "error": result.error,
                 "data": result.data,
             }
@@ -417,9 +413,7 @@ class ReplayBatchView(XTestModeMixin, APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    def _get_eligible_entries(
-        self, domain: str | None, limit: int
-    ) -> dict[str, Any]:
+    def _get_eligible_entries(self, domain: str | None, limit: int) -> dict[str, Any]:
         """재생 가능한 항목 목록 조회."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -473,9 +467,7 @@ class ReplayBatchView(XTestModeMixin, APIView):
         except Exception as e:
             return {"error": str(e)}
 
-    def _execute_batch_replay(
-        self, domain: str | None, batch_size: int
-    ) -> dict[str, Any]:
+    def _execute_batch_replay(self, domain: str | None, batch_size: int) -> dict[str, Any]:
         """배치 재생 실행."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -672,9 +664,7 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
             logger.warning(f"[X-Test-Mode] Failed to get eligible count: {e}")
             return 0
 
-    def _execute_conditional_replay(
-        self, service_name: str, max_items: int
-    ) -> dict[str, Any]:
+    def _execute_conditional_replay(self, service_name: str, max_items: int) -> dict[str, Any]:
         """조건부 재생 실행."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -826,9 +816,7 @@ class ReplayStatusView(XTestModeMixin, APIView):
                 "emergency_level": emergency_level,
                 "error_budget_blocking": budget_blocked,
                 "error_budget_percent": budget_pct,
-                "replay_allowed": system_enabled
-                and not emergency_blocked
-                and not budget_blocked,
+                "replay_allowed": system_enabled and not emergency_blocked and not budget_blocked,
             }
         except Exception as e:
             return {"error": str(e), "replay_allowed": True}
@@ -844,10 +832,7 @@ class ReplayStatusView(XTestModeMixin, APIView):
             # get_all_status 메서드가 있으면 사용
             if hasattr(cb_service, "get_all_status"):
                 all_status = cb_service.get_all_status()
-                return {
-                    name: status.get("state", "UNKNOWN")
-                    for name, status in all_status.items()
-                }
+                return {name: status.get("state", "UNKNOWN") for name, status in all_status.items()}
             return {}
         except Exception as e:
             logger.warning(f"[X-Test-Mode] Failed to get CB states: {e}")

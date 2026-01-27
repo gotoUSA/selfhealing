@@ -1,8 +1,8 @@
 # X-Test-Mode Audit 통합
 
-**문서 번호:** 123  
-**작성일:** 2026-01-27  
-**상태:** 구현 완료 ✅  
+**문서 번호:** 123
+**작성일:** 2026-01-27
+**상태:** 구현 완료 ✅
 **선행 문서:** 116-122, 20_AUDIT_UNIFICATION_PLAN.md
 
 ---
@@ -87,7 +87,7 @@ def log_xtest_operation_audit(
 ) -> Optional[int]:
     """
     X-Test 단일 작업을 Audit 로그에 기록.
-    
+
     Args:
         session_id: X-Test 세션 식별자 (헤더 또는 자동 생성)
         action: 수행 작업 (inject_dlq, run_scenario, reset, etc.)
@@ -96,7 +96,7 @@ def log_xtest_operation_audit(
         result: 결과 (success, failed, dry_run)
         user: 수행자
         trace_id: 분산 추적 ID
-    
+
     Returns:
         WAL 시퀀스 번호
     """
@@ -160,7 +160,7 @@ from selfhealing.services.audit.xtest_audit import log_xtest_operation_audit
 
 class XTestModeMixin:
     ...
-    
+
     def log_xtest_audit(
         self,
         request,
@@ -170,11 +170,11 @@ class XTestModeMixin:
     ) -> Optional[int]:
         """X-Test 작업을 Audit 로그에 기록."""
         session_id = request.headers.get(
-            "X-Test-Session", 
+            "X-Test-Session",
             str(uuid.uuid4())[:8]
         )
         user = str(request.user) if request.user.is_authenticated else "anonymous"
-        
+
         return log_xtest_operation_audit(
             session_id=session_id,
             action=action,
@@ -194,7 +194,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
     def post(self, request):
         ...
         response_data = {...}
-        
+
         # Audit 기록 추가
         self.log_xtest_audit(
             request,
@@ -202,7 +202,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
             component="dlq",
             result=response_data,
         )
-        
+
         return Response(response_data, ...)
 ```
 
@@ -232,12 +232,12 @@ curl -X POST /api/self-healing/xtest/dlq/inject/ \
 ```python
 class XTestAuditSessionView(XTestModeMixin, APIView):
     """특정 세션의 모든 X-Test 작업 조회."""
-    
+
     def get(self, request, session_id: str):
         # WAL에서 session_id로 필터링
         from selfhealing.audit.wal import get_wal_instance
         wal = get_wal_instance()
-        
+
         entries = wal.query(
             filter_fn=lambda e: (
                 e.get("domain") == "xtest" and
@@ -245,7 +245,7 @@ class XTestAuditSessionView(XTestModeMixin, APIView):
             ),
             limit=100,
         )
-        
+
         return Response({
             "session_id": session_id,
             "entries": entries,
@@ -300,10 +300,10 @@ class TestXTestAudit:
             details={"count": 5},
             result="success",
         )
-        
+
         assert seq is not None
         mock_wal.write.assert_called_once()
-        
+
     def test_log_xtest_scenario_audit(self, mock_wal):
         """시나리오 결과가 WAL에 기록되는지 확인."""
         ...
@@ -316,17 +316,17 @@ class TestXTestAuditIntegration:
     def test_session_tracking_across_operations(self):
         """동일 세션의 여러 작업이 추적되는지 확인."""
         session_id = "integration-test-001"
-        
+
         # 1. DLQ 주입
         client.post("/xtest/dlq/inject/", headers={
             "X-Test-Session": session_id,
         })
-        
+
         # 2. 시나리오 실행
         client.post("/xtest/integration/run-scenario/", headers={
             "X-Test-Session": session_id,
         })
-        
+
         # 3. 세션 조회
         response = client.get(f"/xtest/audit/session/{session_id}/")
         assert response.data["count"] == 2

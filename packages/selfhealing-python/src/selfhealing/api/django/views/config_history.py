@@ -248,8 +248,7 @@ class ConfigRollbackView(APIView):
         self._apply_config_values(config_type, target.values)
 
         logger.info(
-            f"[ConfigRollback] {config_type} rolled back to v{target_version} "
-            f"(new v{rolled_back.version}) by {username}"
+            f"[ConfigRollback] {config_type} rolled back to v{target_version} " f"(new v{rolled_back.version}) by {username}"
         )
 
         return Response(

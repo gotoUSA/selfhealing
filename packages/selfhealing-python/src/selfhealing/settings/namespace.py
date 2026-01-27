@@ -17,7 +17,6 @@ Usage:
     - 합성 요청: xtest:selfhealing:* (TestModeContext 활성화 시)
 """
 
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -82,13 +81,7 @@ class NamespaceSettings(BaseSettings):
         if not self.namespace_enabled:
             return ""  # 비활성화 시 빈 문자열 (기존 동작 유지)
 
-        return (
-            self.namespace
-            or self.region
-            or self.tenant
-            or self.env
-            or self.default_namespace
-        )
+        return self.namespace or self.region or self.tenant or self.env or self.default_namespace
 
     def get_key_prefix(self, base_prefix: str = "selfhealing") -> str:
         """

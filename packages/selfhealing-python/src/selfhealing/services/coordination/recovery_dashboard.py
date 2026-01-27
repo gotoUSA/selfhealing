@@ -239,9 +239,7 @@ class RecoveryWidgetData:
     active_session: ActiveSessionInfo | None = None
     """활성 세션 정보."""
 
-    pending_approvals: PendingApprovalsInfo = field(
-        default_factory=PendingApprovalsInfo
-    )
+    pending_approvals: PendingApprovalsInfo = field(default_factory=PendingApprovalsInfo)
     """대기 중인 승인 정보."""
 
     stats: RecoveryStats = field(default_factory=RecoveryStats)
@@ -262,9 +260,7 @@ class RecoveryWidgetData:
             "status": self.status,
             "status_display": self.status_display,
             "status_color": self.status_color,
-            "active_session": (
-                self.active_session.to_dict() if self.active_session else None
-            ),
+            "active_session": (self.active_session.to_dict() if self.active_session else None),
             "pending_approvals": self.pending_approvals.to_dict(),
             "stats": self.stats.to_dict(),
             "regional_status": [r.to_dict() for r in self.regional_status],
@@ -362,15 +358,9 @@ class RecoveryDashboardService:
         self._approval_manager = approval_manager
         self._policy_engine = policy_engine
         self._stale_threshold_minutes = (
-            stale_threshold_minutes
-            if stale_threshold_minutes is not None
-            else _get_stale_threshold_minutes()
+            stale_threshold_minutes if stale_threshold_minutes is not None else _get_stale_threshold_minutes()
         )
-        self._max_regional_status = (
-            max_regional_status
-            if max_regional_status is not None
-            else _get_max_regional_status()
-        )
+        self._max_regional_status = max_regional_status if max_regional_status is not None else _get_max_regional_status()
         self._lock = threading.RLock()
 
     def _get_coordinator(self) -> RecoveryCoordinator:
@@ -501,9 +491,7 @@ class RecoveryDashboardService:
             approval_manager = self._get_approval_manager()
 
             pending = approval_manager.list_pending_requests()
-            stale = approval_manager.list_stale_requests(
-                stale_threshold_minutes=self._stale_threshold_minutes
-            )
+            stale = approval_manager.list_stale_requests(stale_threshold_minutes=self._stale_threshold_minutes)
             stats = self._get_recovery_stats()
 
             # 활성 복구 세션 수 확인
@@ -548,11 +536,7 @@ class RecoveryDashboardService:
                 return None
 
             # 진행 상태 계산
-            completed = sum(
-                1
-                for s in session.steps
-                if hasattr(s, "status") and s.status == RecoveryStatus.COMPLETED
-            )
+            completed = sum(1 for s in session.steps if hasattr(s, "status") and s.status == RecoveryStatus.COMPLETED)
             total = len(session.steps)
             current_step = None
             if session.current_step_index < total:
@@ -569,9 +553,7 @@ class RecoveryDashboardService:
                 session_id=session.id,
                 progress=progress,
                 namespace=session.namespace,
-                started_at=(
-                    session.started_at if hasattr(session, "started_at") else None
-                ),
+                started_at=(session.started_at if hasattr(session, "started_at") else None),
             )
         except Exception as e:
             logger.warning(f"[RecoveryDashboard] Failed to get session: {e}")
@@ -582,9 +564,7 @@ class RecoveryDashboardService:
         try:
             approval_manager = self._get_approval_manager()
             pending = approval_manager.list_pending_requests()
-            stale = approval_manager.list_stale_requests(
-                stale_threshold_minutes=self._stale_threshold_minutes
-            )
+            stale = approval_manager.list_stale_requests(stale_threshold_minutes=self._stale_threshold_minutes)
 
             return PendingApprovalsInfo(
                 count=len(pending),

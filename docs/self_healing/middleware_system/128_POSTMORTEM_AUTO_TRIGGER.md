@@ -1,8 +1,8 @@
 # 128. Postmortem 자동 트리거 구현
 
-**문서 버전:** 1.0  
-**작성일:** 2026-01-27  
-**선행 문서:** [127_POSTMORTEM_ACTION_ITEMS.md](127_POSTMORTEM_ACTION_ITEMS.md)  
+**문서 버전:** 1.0
+**작성일:** 2026-01-27
+**선행 문서:** [127_POSTMORTEM_ACTION_ITEMS.md](127_POSTMORTEM_ACTION_ITEMS.md)
 **상태:** 구현 준비
 
 ---

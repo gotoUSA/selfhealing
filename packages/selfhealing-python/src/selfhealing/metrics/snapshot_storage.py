@@ -154,13 +154,9 @@ class MetricSnapshotStorage:
             filename: 스냅샷 파일명
             max_age_seconds: 스냅샷 최대 유효 기간 (초). None이면 Settings에서 가져옴.
         """
-        self._storage_dir = (
-            Path(storage_dir) if storage_dir else self._get_default_dir()
-        )
+        self._storage_dir = Path(storage_dir) if storage_dir else self._get_default_dir()
         self._filename = filename
-        self._max_age = (
-            max_age_seconds if max_age_seconds is not None else _get_snapshot_max_age()
-        )
+        self._max_age = max_age_seconds if max_age_seconds is not None else _get_snapshot_max_age()
         self._lock = threading.Lock()
         self._snapshot: MetricSnapshot | None = None
         self._dirty = False
@@ -207,9 +203,7 @@ class MetricSnapshotStorage:
         try:
             self._storage_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            logger.warning(
-                f"[Snapshot] Failed to create directory {self._storage_dir}: {e}"
-            )
+            logger.warning(f"[Snapshot] Failed to create directory {self._storage_dir}: {e}")
 
     def _load_snapshot(self) -> None:
         """파일에서 스냅샷 로드."""
@@ -366,9 +360,7 @@ class MetricSnapshotStorage:
             effective_max_age = max_age if max_age is not None else self._max_age
 
             if self._snapshot.age_seconds > effective_max_age:
-                logger.debug(
-                    f"[Snapshot] Value too old ({self._snapshot.age_seconds:.1f}s > {effective_max_age}s)"
-                )
+                logger.debug(f"[Snapshot] Value too old ({self._snapshot.age_seconds:.1f}s > {effective_max_age}s)")
                 return default
 
             return self._snapshot.get_value(category, key, default)

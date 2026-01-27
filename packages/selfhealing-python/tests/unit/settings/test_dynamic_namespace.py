@@ -43,7 +43,7 @@ class TestGetEffectiveKeyPrefix:
         """커스텀 base_prefix 적용."""
         prefix = get_effective_key_prefix(base_prefix="custom")
         assert prefix == "custom:"
-        
+
         with TestModeContext.start():
             prefix = get_effective_key_prefix(base_prefix="custom")
             assert prefix == "xtest:custom:"
@@ -51,11 +51,11 @@ class TestGetEffectiveKeyPrefix:
     def test_prefix_restored_after_context_exit(self):
         """컨텍스트 종료 후 프리픽스 복원."""
         original = get_effective_key_prefix()
-        
+
         with TestModeContext.start():
             synthetic = get_effective_key_prefix()
             assert synthetic != original
-        
+
         after = get_effective_key_prefix()
         assert after == original
 
@@ -71,19 +71,13 @@ class TestNamespaceSettingsKeyPrefix:
 
     def test_namespace_enabled_with_namespace(self):
         """namespace_enabled=True + namespace 설정 시."""
-        settings = NamespaceSettings(
-            namespace_enabled=True,
-            namespace="production"
-        )
+        settings = NamespaceSettings(namespace_enabled=True, namespace="production")
         prefix = settings.get_key_prefix()
         assert prefix == "selfhealing:production:"
 
     def test_namespace_enabled_with_region(self):
         """namespace_enabled=True + region 설정 시."""
-        settings = NamespaceSettings(
-            namespace_enabled=True,
-            region="seoul"
-        )
+        settings = NamespaceSettings(namespace_enabled=True, region="seoul")
         prefix = settings.get_key_prefix()
         assert prefix == "selfhealing:seoul:"
 
@@ -94,7 +88,7 @@ class TestDynamicPrefixIntegration:
     def test_dynamic_key_prefix(self):
         """
         문서 137 섹션 5.1 명시 테스트: 동적 prefix 선택.
-        
+
         TestModeContext 상태에 따라 Redis 키 프리픽스가 동적으로
         변경되는지 검증합니다.
         """
@@ -102,13 +96,13 @@ class TestDynamicPrefixIntegration:
         prod_prefix = get_effective_key_prefix()
         assert prod_prefix == "selfhealing:"
         assert not prod_prefix.startswith(SYNTHETIC_KEY_PREFIX)
-        
+
         # 합성 모드: xtest: 프리픽스 추가
         with TestModeContext.start():
             synth_prefix = get_effective_key_prefix()
             assert synth_prefix == "xtest:selfhealing:"
             assert synth_prefix.startswith(SYNTHETIC_KEY_PREFIX)
-        
+
         # 컨텍스트 종료 후: 기본 프리픽스 복원
         restored_prefix = get_effective_key_prefix()
         assert restored_prefix == prod_prefix
@@ -131,13 +125,13 @@ class TestDynamicPrefixIntegration:
     def test_keys_are_isolated_between_modes(self):
         """운영 모드와 합성 모드의 키가 분리됨."""
         prod_prefix = get_effective_key_prefix()
-        
+
         with TestModeContext.start():
             synth_prefix = get_effective_key_prefix()
-        
+
         # 서로 다른 프리픽스
         assert prod_prefix != synth_prefix
-        
+
         # 합성 프리픽스가 더 긴 패턴
         assert synth_prefix.startswith(SYNTHETIC_KEY_PREFIX)
         assert prod_prefix in synth_prefix

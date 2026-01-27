@@ -203,10 +203,7 @@ class ChaosSettings(BaseSettings):
     def validate_safety_limits(cls, v: float) -> float:
         """Warn if safety limits are set high."""
         if v > 0.3:
-            logger.warning(
-                f"[SafeDefault] High chaos limit={v}, "
-                "consider using <= 0.3 (30%) for safety"
-            )
+            logger.warning(f"[SafeDefault] High chaos limit={v}, " "consider using <= 0.3 (30%) for safety")
         return v
 
 

@@ -126,8 +126,7 @@ class RateLimitSettings(BaseSettings):
         """Emergency rate limit should be conservative."""
         if v > 50:
             logger.warning(
-                f"[SafeDefault] High emergency_rate_limit={v}, "
-                "consider using <= 50 for safety during Redis failures"
+                f"[SafeDefault] High emergency_rate_limit={v}, " "consider using <= 50 for safety during Redis failures"
             )
         return v
 

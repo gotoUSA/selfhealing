@@ -70,10 +70,7 @@ def record_dlq_item_created(domain: str, failure_type: str) -> None:
             is_synthetic=is_synthetic,
         ).inc()
         dlq_created_total.labels(domain=domain).inc()
-        logger.debug(
-            f"[Metrics] DLQ item created: domain={domain}, type={failure_type}, "
-            f"is_synthetic={is_synthetic}"
-        )
+        logger.debug(f"[Metrics] DLQ item created: domain={domain}, type={failure_type}, " f"is_synthetic={is_synthetic}")
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record DLQ creation metric: {e}")
 
@@ -147,13 +144,8 @@ def record_recovery_time(
     """
     try:
         duration = (resolved_at - created_at).total_seconds()
-        recovery_time_seconds.labels(
-            domain=domain, resolution_type=resolution_type
-        ).observe(duration)
-        logger.debug(
-            f"[Metrics] Recovery time recorded: domain={domain}, "
-            f"type={resolution_type}, duration={duration}s"
-        )
+        recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
+        logger.debug(f"[Metrics] Recovery time recorded: domain={domain}, " f"type={resolution_type}, duration={duration}s")
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record recovery time metric: {e}")
 
@@ -187,8 +179,7 @@ def record_circuit_breaker_state_change(
             is_synthetic=is_synthetic,
         ).inc()
         logger.info(
-            f"[Metrics] Circuit breaker transition: {service} {from_state} -> {to_state}, "
-            f"is_synthetic={is_synthetic}"
+            f"[Metrics] Circuit breaker transition: {service} {from_state} -> {to_state}, " f"is_synthetic={is_synthetic}"
         )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record circuit breaker metric: {e}")
@@ -204,9 +195,7 @@ def record_circuit_breaker_open_duration(service: str, duration_seconds: float) 
     """
     try:
         circuit_breaker_open_duration.labels(service=service).observe(duration_seconds)
-        logger.debug(
-            f"[Metrics] CB open duration recorded: {service}={duration_seconds}s"
-        )
+        logger.debug(f"[Metrics] CB open duration recorded: {service}={duration_seconds}s")
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record CB duration metric: {e}")
 
@@ -228,9 +217,7 @@ def record_l2_timeout(adapter_type: str, operation: str) -> None:
 def record_l2_sync_failure(adapter_type: str, operation: str) -> None:
     """Record L2 sync failure."""
     try:
-        l2_sync_failure_total.labels(
-            adapter_type=adapter_type, operation=operation
-        ).inc()
+        l2_sync_failure_total.labels(adapter_type=adapter_type, operation=operation).inc()
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record L2 sync failure: {e}")
 
@@ -389,10 +376,7 @@ def record_failsafe_triggered(component: str) -> None:
     try:
         failsafe_triggered_total.labels(component=component).inc()
         failsafe_mode_active.labels(component=component).set(1)
-        logger.critical(
-            f"[Metrics] FAIL-SAFE TRIGGERED: component={component}. "
-            "Alerting rules should fire."
-        )
+        logger.critical(f"[Metrics] FAIL-SAFE TRIGGERED: component={component}. " "Alerting rules should fire.")
     except Exception as e:
         logger.error(f"[Metrics] Failed to record fail-safe metric: {e}")
 
@@ -443,9 +427,7 @@ def emit_heartbeat(component: str = "error_budget") -> None:
         current_time = time.time()
         selfhealing_heartbeat_timestamp.labels(component=component).set(current_time)
         selfhealing_heartbeat_count.labels(component=component).inc()
-        logger.debug(
-            f"[Metrics] Heartbeat emitted: component={component}, time={current_time}"
-        )
+        logger.debug(f"[Metrics] Heartbeat emitted: component={component}, time={current_time}")
     except Exception as e:
         logger.error(f"[Metrics] Failed to emit heartbeat: {e}")
 

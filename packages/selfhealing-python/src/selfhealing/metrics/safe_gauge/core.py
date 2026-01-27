@@ -191,8 +191,7 @@ class SafeGaugeChild:
         with self._lock:
             if value < 0:
                 logger.warning(
-                    f"[SafeGauge] Attempted to set negative value {value}, "
-                    f"clamping to 0. labels={self._label_values}"
+                    f"[SafeGauge] Attempted to set negative value {value}, " f"clamping to 0. labels={self._label_values}"
                 )
                 value = 0.0
             self._shadow_value = value
@@ -230,10 +229,7 @@ class SafeGaugeChild:
             self._initialized = True
             self._sync_info.mark_synced(source)
             if old_shadow != actual_value:
-                logger.info(
-                    f"[SafeGauge] Synced from source: {old_shadow} -> {actual_value}. "
-                    f"labels={self._label_values}"
-                )
+                logger.info(f"[SafeGauge] Synced from source: {old_shadow} -> {actual_value}. " f"labels={self._label_values}")
 
     def mark_stale(self, reason: str = "external") -> None:
         """
@@ -321,9 +317,7 @@ class SafeGauge:
         self._gauge = gauge
         self._children: OrderedDict[tuple, SafeGaugeChild] = OrderedDict()
         self._max_label_combinations = (
-            max_label_combinations
-            if max_label_combinations is not None
-            else _get_max_label_combinations()
+            max_label_combinations if max_label_combinations is not None else _get_max_label_combinations()
         )
         self._on_eviction = on_eviction
         self._lock = threading.Lock()
@@ -455,9 +449,7 @@ class SafeGauge:
                 "max_size": self._max_label_combinations,
                 "eviction_count": self._eviction_count,
                 "utilization_percent": (
-                    (current / self._max_label_combinations) * 100
-                    if self._max_label_combinations > 0
-                    else 0
+                    (current / self._max_label_combinations) * 100 if self._max_label_combinations > 0 else 0
                 ),
             }
 

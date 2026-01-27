@@ -109,10 +109,7 @@ class DriftThresholdConfigView(APIView):
         )
 
         # Audit 로깅
-        logger.info(
-            f"[DriftThresholdAPI] Config updated by {actor_id}: "
-            f"fields={list(update_fields.keys())}"
-        )
+        logger.info(f"[DriftThresholdAPI] Config updated by {actor_id}: " f"fields={list(update_fields.keys())}")
 
         return Response(
             {

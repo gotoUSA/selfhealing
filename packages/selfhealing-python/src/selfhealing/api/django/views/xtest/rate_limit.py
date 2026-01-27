@@ -100,9 +100,7 @@ class RateLimitStatusView(XTestModeMixin, APIView):
         # 전역 통계
         total_events = get_rate_limit_events_count()
         client_stats = get_client_stats()
-        exceeded_count = sum(
-            stats.get("exceeded", 0) for stats in client_stats.values()
-        )
+        exceeded_count = sum(stats.get("exceeded", 0) for stats in client_stats.values())
         active_clients = len(local_limiter.get_all_clients())
 
         # 특정 클라이언트 조회 요청 시
@@ -298,13 +296,10 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
         # 통계 계산
         total_events = get_rate_limit_events_count()
         client_stats = get_client_stats()
-        total_exceeded = sum(
-            stats.get("exceeded", 0) for stats in client_stats.values()
-        )
+        total_exceeded = sum(stats.get("exceeded", 0) for stats in client_stats.values())
 
         logger.info(
-            f"[X-Test-Mode] Rate limit history: returned={len(events)}, "
-            f"total={total_events}, exceeded={total_exceeded}"
+            f"[X-Test-Mode] Rate limit history: returned={len(events)}, " f"total={total_events}, exceeded={total_exceeded}"
         )
 
         response_data = {
@@ -313,11 +308,7 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
             "total_exceeded": total_exceeded,
             "returned_count": len(events),
             "recent_events": events,
-            "by_client": (
-                client_stats
-                if not client_key
-                else {client_key: client_stats.get(client_key, {})}
-            ),
+            "by_client": (client_stats if not client_key else {client_key: client_stats.get(client_key, {})}),
         }
 
         # WAL Audit 기록
@@ -420,9 +411,7 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
                 "rate_limit": config["emergency_rate_limit"],
                 "window_seconds": config["emergency_window_seconds"],
             },
-            "path_prefix": _get_setting(
-                "control_api_path_prefix", _FALLBACK_CONTROL_API_PATH_PREFIX
-            ),
+            "path_prefix": _get_setting("control_api_path_prefix", _FALLBACK_CONTROL_API_PATH_PREFIX),
             "excluded_paths": excluded_paths,
             "redis_config": {
                 "ping_interval": health_checker.ping_interval,
@@ -500,10 +489,7 @@ class RateLimitResetView(XTestModeMixin, APIView):
             if reset_events:
                 events_reset = reset_rate_limit_events()
 
-            logger.warning(
-                f"[X-Test-Mode] Rate limit RESET ALL: "
-                f"clients={reset_count}, events={events_reset}"
-            )
+            logger.warning(f"[X-Test-Mode] Rate limit RESET ALL: " f"clients={reset_count}, events={events_reset}")
         elif client_key:
             # 특정 클라이언트만 초기화
             if local_limiter.reset_client(client_key):
@@ -513,10 +499,7 @@ class RateLimitResetView(XTestModeMixin, APIView):
             if reset_events:
                 events_reset = reset_rate_limit_events(client_key)
 
-            logger.info(
-                f"[X-Test-Mode] Rate limit reset client: client_key={client_key}, "
-                f"events_reset={events_reset}"
-            )
+            logger.info(f"[X-Test-Mode] Rate limit reset client: client_key={client_key}, " f"events_reset={events_reset}")
         else:
             return Response(
                 {

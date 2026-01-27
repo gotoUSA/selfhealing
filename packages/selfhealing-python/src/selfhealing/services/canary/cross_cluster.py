@@ -185,23 +185,11 @@ class PropagationRequest:
             config_change=ConfigChange.from_dict(data["config_change"]),
             status=PropagationRequestStatus(data.get("status", "pending_approval")),
             created_at=datetime.fromisoformat(data["created_at"]),
-            expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
             approved_by=data.get("approved_by"),
-            approved_at=(
-                datetime.fromisoformat(data["approved_at"])
-                if data.get("approved_at")
-                else None
-            ),
+            approved_at=(datetime.fromisoformat(data["approved_at"]) if data.get("approved_at") else None),
             rejected_by=data.get("rejected_by"),
-            rejected_at=(
-                datetime.fromisoformat(data["rejected_at"])
-                if data.get("rejected_at")
-                else None
-            ),
+            rejected_at=(datetime.fromisoformat(data["rejected_at"]) if data.get("rejected_at") else None),
             reject_reason=data.get("reject_reason"),
         )
 
@@ -283,9 +271,7 @@ class GovernancePolicy:
 
             # 허용값 목록 검사
             if "allowed" in rule and value not in rule["allowed"]:
-                violations.append(
-                    f"{field_name}={value} not in allowed={rule['allowed']}"
-                )
+                violations.append(f"{field_name}={value} not in allowed={rule['allowed']}")
 
         return len(violations) == 0, violations
 
@@ -333,10 +319,7 @@ class LoggingNotificationBackend(NotificationBackend):
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """로그로 알림 기록."""
-        logger.info(
-            f"[CrossClusterNotification] channel={channel}, "
-            f"message={message[:100]}..., metadata={metadata}"
-        )
+        logger.info(f"[CrossClusterNotification] channel={channel}, " f"message={message[:100]}..., metadata={metadata}")
         return True
 
 
@@ -378,14 +361,7 @@ class SlackNotificationBackend(NotificationBackend):
             }
 
             if metadata:
-                attachments = [
-                    {
-                        "fields": [
-                            {"title": k, "value": str(v), "short": True}
-                            for k, v in metadata.items()
-                        ]
-                    }
-                ]
+                attachments = [{"fields": [{"title": k, "value": str(v), "short": True} for k, v in metadata.items()]}]
                 payload["attachments"] = attachments
 
             response = requests.post(
@@ -455,13 +431,9 @@ class CrossClusterNotifier:
             notification_backend: 알림 전송 백엔드 (기본: 로깅)
             default_channel: 기본 알림 채널
         """
-        self.current_cluster = current_cluster or os.environ.get(
-            "SELFHEALING_NAMESPACE", "default"
-        )
+        self.current_cluster = current_cluster or os.environ.get("SELFHEALING_NAMESPACE", "default")
         self.other_clusters = other_clusters or []
-        self.notification_backend = (
-            notification_backend or self._create_default_backend()
-        )
+        self.notification_backend = notification_backend or self._create_default_backend()
         self.default_channel = default_channel or _get_default_slack_channel()
 
     def _create_default_backend(self) -> NotificationBackend:
@@ -516,10 +488,7 @@ class CrossClusterNotifier:
             results[cluster] = success
 
             if success:
-                logger.info(
-                    f"[CrossClusterNotifier] Notified {cluster} about "
-                    f"config change: {change.config_type}"
-                )
+                logger.info(f"[CrossClusterNotifier] Notified {cluster} about " f"config change: {change.config_type}")
             else:
                 logger.warning(f"[CrossClusterNotifier] Failed to notify {cluster}")
 
@@ -689,10 +658,7 @@ class CrossClusterPropagationRequest:
                 },
             )
 
-            logger.info(
-                f"[CrossClusterPropagation] Request created: {request.request_id} "
-                f"({source_cluster} → {cluster})"
-            )
+            logger.info(f"[CrossClusterPropagation] Request created: {request.request_id} " f"({source_cluster} → {cluster})")
 
         return request_id
 
@@ -752,9 +718,7 @@ class CrossClusterPropagationRequest:
             ),
         )
 
-        logger.info(
-            f"[CrossClusterPropagation] Approved: {request_id} by {approved_by}"
-        )
+        logger.info(f"[CrossClusterPropagation] Approved: {request_id} by {approved_by}")
 
         return True, None
 
@@ -794,16 +758,11 @@ class CrossClusterPropagationRequest:
         self.notification_backend.send(
             channel=self.default_channel,
             message=(
-                f"❌ 설정 전파 거절됨\n"
-                f"• 요청 ID: {request_id}\n"
-                f"• 거절자: {rejected_by}\n"
-                f"• 사유: {reason or 'N/A'}"
+                f"❌ 설정 전파 거절됨\n" f"• 요청 ID: {request_id}\n" f"• 거절자: {rejected_by}\n" f"• 사유: {reason or 'N/A'}"
             ),
         )
 
-        logger.info(
-            f"[CrossClusterPropagation] Rejected: {request_id} by {rejected_by}"
-        )
+        logger.info(f"[CrossClusterPropagation] Rejected: {request_id} by {rejected_by}")
 
         return True, None
 
@@ -834,10 +793,7 @@ class CrossClusterPropagationRequest:
 
         # 메모리 저장소에서 조회
         for req in self._memory_store.values():
-            if (
-                req.target_cluster == cluster
-                and req.status == PropagationRequestStatus.PENDING_APPROVAL
-            ):
+            if req.target_cluster == cluster and req.status == PropagationRequestStatus.PENDING_APPROVAL:
                 requests.append(req)
 
         return requests
@@ -1000,10 +956,7 @@ class GovernancePolicySync:
             success = self._notify_policy_update(cluster, policy)
             results[cluster] = success
 
-        logger.info(
-            f"[GovernancePolicySync] Synced policy: {policy.policy_id} "
-            f"to {len(self.clusters)} clusters"
-        )
+        logger.info(f"[GovernancePolicySync] Synced policy: {policy.policy_id} " f"to {len(self.clusters)} clusters")
 
         return results
 

@@ -262,9 +262,7 @@ class FullSnapshotView(XTestModeMixin, APIView):
             return denied
 
         service_name = request.query_params.get("service_name")
-        include_history = (
-            request.query_params.get("include_history", "false").lower() == "true"
-        )
+        include_history = request.query_params.get("include_history", "false").lower() == "true"
 
         snapshot = {
             "timestamp": timezone.now().isoformat(),
@@ -306,11 +304,7 @@ class FullSnapshotView(XTestModeMixin, APIView):
                     service_name: {
                         "remaining_percent": eb_status.remaining_percent,
                         "consumed_percent": eb_status.consumed_percent,
-                        "status": (
-                            eb_status.status.value
-                            if hasattr(eb_status, "status")
-                            else "unknown"
-                        ),
+                        "status": (eb_status.status.value if hasattr(eb_status, "status") else "unknown"),
                     }
                 }
             else:
@@ -418,9 +412,7 @@ class FullSnapshotView(XTestModeMixin, APIView):
 # =============================================================================
 
 
-def _reset_circuit_breakers(
-    service_name: str | None, xtest_only: bool
-) -> dict[str, Any]:
+def _reset_circuit_breakers(service_name: str | None, xtest_only: bool) -> dict[str, Any]:
     """Circuit Breaker 컴포넌트 초기화."""
     try:
         from selfhealing.services.circuit_breaker_service import (
@@ -598,9 +590,7 @@ class ResetView(XTestModeMixin, APIView):
         self.log_xtest_cleanup(
             request=request,
             component="integration",
-            cleaned_count=len(
-                [k for k, v in reset_results.items() if v.get("reset", False)]
-            ),
+            cleaned_count=len([k for k, v in reset_results.items() if v.get("reset", False)]),
             cleaned_ids=list(reset_results.keys()),
         )
 

@@ -225,9 +225,7 @@ class ErrorBudgetExhaustView(APIView):
         service = get_error_budget_service()
         result = service.simulate_budget_exhaustion(target_remaining_percent=target)
 
-        logger.warning(
-            f"[ErrorBudgetAPI] Budget exhaustion simulated: target={target}%"
-        )
+        logger.warning(f"[ErrorBudgetAPI] Budget exhaustion simulated: target={target}%")
 
         return Response(
             {
