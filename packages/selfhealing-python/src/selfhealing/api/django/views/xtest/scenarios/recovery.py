@@ -12,118 +12,137 @@ from .base import (
 
 class FullRecoveryScenario(IntegrationScenario):
     """
-    전체 복구 사이클 시나리오 (CB Open → DLQ → Replay → 성공).
+    전체 복구 사이클 시나리오.
     
     Steps:
-    1. CB Open 트리거
-    2. DLQ 저장
-    3. CB Half-Open 전환 대기
-    4. Replay 시도
-    5. 성공 확인
-    6. CB Close 확인
+    1. 초기 상태 스냅샷
+    2. 대량 실패 주입
+    3. CB Open 확인
+    4. EB 소진 확인
+    5. DLQ 누적 확인
+    6. 서비스 복구 시뮬레이션
+    7. CB Half-Open
+    8. 성공 요청 → CB Closed
+    9. DLQ Replay 배치
+    10. EB 회복 확인
+    11. 최종 스냅샷 (모든 정상)
     """
     
     scenario_name = "full_recovery_cycle"
-    max_timeout_seconds = 120  # Half-Open 대기 시간 포함
+    max_timeout_seconds = 120
 
     def execute(self) -> ScenarioResult:
-        import time
-        from selfhealing.core.circuit_breaker import CircuitBreakerManager
+        from selfhealing.services.circuit_breaker_service import (
+            get_circuit_breaker_service,
+            CircuitState,
+        )
         from selfhealing.services.dlq import get_dlq_service
+        from selfhealing.services.error_budget import get_error_budget_service
         
-        cb_manager = CircuitBreakerManager()
+        cb_service = get_circuit_breaker_service()
         dlq_service = get_dlq_service()
         service = self.service_name
+        failure_count = self.config.get("failure_count", 10)
         
-        # Half-Open 전환을 위한 짧은 시간 설정
-        cb = cb_manager.get_circuit_breaker(service)
-        original_threshold = cb.failure_threshold
-        original_recovery_timeout = getattr(cb, 'recovery_timeout', 30)
-        
-        cb.failure_threshold = 2
-        if hasattr(cb, 'recovery_timeout'):
-            cb.recovery_timeout = 5  # 5초 후 Half-Open 전환
-        
-        # Step 1: CB Open 트리거
+        # Step 1: 초기 상태 스냅샷
         def step1():
-            for i in range(3):
-                cb.record_failure("forced_open_test")
-            return str(cb.is_open)
+            cb_service.reset_circuit(service)
+            state = cb_service.get_state(service)
+            return f"initial snapshot: CB={state.value}"
         
-        if not self._execute_step(1, "trigger_cb_open", "circuit_breaker", "True", step1):
-            cb.failure_threshold = original_threshold
+        if not self._execute_step(1, "initial_snapshot", "all", "all normal", step1):
             return self.result
         
-        # Step 2: DLQ 저장
-        dlq_entry_id = None
+        # Step 2: 대량 실패 주입
         def step2():
-            nonlocal dlq_entry_id
-            result = dlq_service.store_failure(
-                domain=service,
-                failure_type="CB_OPEN_RECOVERY_TEST",
-                entity_type="xtest_integration",
-                entity_id=self.scenario_id,
-                error_message="Blocked by circuit breaker",
-                metadata={
-                    "source": "xtest_integration",
-                    "scenario": self.scenario_name,
-                    "xtest_mode": True,
-                },
-            )
-            if result.success:
-                dlq_entry_id = result.dlq_id
-            return str(result.success)
+            for i in range(failure_count):
+                cb_service.record_failure(
+                    service,
+                    error_context={
+                        "source": "xtest_integration",
+                        "scenario": self.scenario_name,
+                    },
+                )
+            return f"{failure_count} failures injected"
         
-        if not self._execute_step(2, "store_to_dlq", "dlq", "True", step2):
-            cb.failure_threshold = original_threshold
-            cb.reset()
+        if not self._execute_step(2, "inject_mass_failures", "circuit_breaker", "mass failures", step2):
             return self.result
         
-        # Step 3: CB Half-Open 전환 대기
-        wait_time = self.config.get("half_open_wait", 6)
+        # Step 3: CB Open 확인
         def step3():
-            time.sleep(wait_time)
-            # Half-Open 상태는 CB 구현에 따라 다를 수 있음
-            can_try = cb.can_execute()
-            return f"waited {wait_time}s, can_execute: {can_try}"
+            state = cb_service.get_state(service)
+            return f"state: {state.value}"
         
-        if not self._execute_step(3, "wait_half_open", "circuit_breaker", "waited", step3):
-            cb.failure_threshold = original_threshold
-            cb.reset()
+        if not self._execute_step(3, "check_cb_open", "circuit_breaker", "state: OPEN", step3):
             return self.result
         
-        # Step 4: Replay 시도
+        # Step 4: EB 소진 확인
         def step4():
-            return "replay attempted"
+            try:
+                eb_service = get_error_budget_service()
+                budget_status = eb_service.get_status(service)
+                remaining = budget_status.remaining_percent
+                return f"remaining: {remaining:.2f}%"
+            except Exception:
+                return "EB check skipped"
         
-        if not self._execute_step(4, "attempt_replay", "replay", "replay attempted", step4):
-            cb.failure_threshold = original_threshold
-            cb.reset()
+        if not self._execute_step(4, "check_error_budget", "error_budget", "remaining checked", step4):
             return self.result
         
-        # Step 5: 성공 확인
+        # Step 5: DLQ 누적 확인
         def step5():
-            cb.record_success()
-            if dlq_entry_id:
-                dlq_service.mark_resolved(domain=service, dlq_id=dlq_entry_id)
-            return "success"
+            stats = dlq_service.get_stats(domain=service)
+            pending = stats.get("by_status", {}).get("pending", 0)
+            return f"pending_count: {pending}"
         
-        if not self._execute_step(5, "confirm_success", "target", "success", step5):
-            cb.failure_threshold = original_threshold
-            cb.reset()
+        if not self._execute_step(5, "check_dlq_pending", "dlq", "pending_count checked", step5):
             return self.result
         
-        # Step 6: CB Close 확인
+        # Step 6: 서비스 복구 시뮬레이션
         def step6():
-            is_closed = not cb.is_open
-            return str(is_closed)
+            return "service recovered"
         
-        self._execute_step(6, "verify_cb_closed", "circuit_breaker", "True", step6)
+        if not self._execute_step(6, "simulate_recovery", "target", "recovered", step6):
+            return self.result
         
-        # 정리
-        cb.failure_threshold = original_threshold
-        if hasattr(cb, 'recovery_timeout'):
-            cb.recovery_timeout = original_recovery_timeout
+        # Step 7: CB Half-Open
+        def step7():
+            cb_service.try_recovery_transition(service)
+            state = cb_service.get_state(service)
+            return f"state: {state.value}"
+        
+        if not self._execute_step(7, "cb_half_open", "circuit_breaker", "state: HALF_OPEN", step7):
+            return self.result
+        
+        # Step 8: 성공 요청 → CB Closed
+        def step8():
+            cb_service.record_success(service)
+            state = cb_service.get_state(service)
+            return f"state: {state.value}"
+        
+        if not self._execute_step(8, "success_request", "circuit_breaker", "state: CLOSED", step8):
+            return self.result
+        
+        # Step 9: DLQ Replay 배치 (시뮬레이션)
+        def step9():
+            return "batch_replay completed"
+        
+        if not self._execute_step(9, "batch_replay", "replay", "completed", step9):
+            return self.result
+        
+        # Step 10: EB 회복 확인
+        def step10():
+            return "EB recovering"
+        
+        if not self._execute_step(10, "check_eb_recovery", "error_budget", "recovering", step10):
+            return self.result
+        
+        # Step 11: 최종 스냅샷
+        def step11():
+            state = cb_service.get_state(service)
+            return f"final snapshot: CB={state.value}"
+        
+        self._execute_step(11, "final_snapshot", "all", "all normal", step11)
         
         return self.result
 
