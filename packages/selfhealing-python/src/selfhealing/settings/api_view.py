@@ -156,6 +156,21 @@ class ApiViewSettings(BaseSettings):
         description="XTest 인시던트 목록 조회 기본 limit",
     )
 
+    # ==========================================================================
+    # XTest Auto Postmortem - CB CLOSED 시 자동 Post-mortem 생성
+    # ==========================================================================
+    xtest_auto_postmortem_enabled: bool = Field(
+        default=False,
+        description="CB CLOSED 시 자동 Post-mortem 생성 활성화",
+    )
+
+    xtest_auto_postmortem_min_duration: int = Field(
+        default=30,
+        ge=0,
+        le=3600,
+        description="자동 Post-mortem 생성 최소 인시던트 지속 시간 (초)",
+    )
+
     @model_validator(mode="after")
     def validate_limits(self) -> "ApiViewSettings":
         """default_limit이 max_limit보다 작은지 검증."""

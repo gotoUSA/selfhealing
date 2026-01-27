@@ -115,9 +115,12 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
     Stage 51: Blast Radius (영향 범위) 격리 테스트 API.
 
     POST /api/self-healing/xtest/blast-radius-test/
-    Body: {"affected_service": "payment", "check_services": ["product", "cart", "auth"]}
+    Body: {"affected_service": "service_a", "check_services": ["service_b", "service_c"]}
 
     특정 서비스에 장애를 주입하고, 다른 서비스들이 영향받지 않는지 확인합니다.
+    
+    - affected_service: 장애를 주입할 서비스 (필수)
+    - check_services: 영향 확인할 서비스 목록 (생략 시 CB에 등록된 모든 서비스)
     """
 
     authentication_classes = []
@@ -128,8 +131,14 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        affected_service = request.data.get("affected_service", "payment")
-        check_services = request.data.get("check_services", ["database", "product", "cart"])
+        affected_service = request.data.get("affected_service")
+        if not affected_service:
+            return Response(
+                {"error": "affected_service is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        check_services = request.data.get("check_services", [])
         failure_count = int(request.data.get("failure_count", 5))
 
         results = {
@@ -143,6 +152,11 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
         cb_service = get_circuit_breaker_service()
+
+        # check_services가 비어있으면 CB에 등록된 모든 서비스 조회
+        if not check_services:
+            all_states = cb_service.repository.get_all_states()
+            check_services = [s.service_name for s in all_states if s.service_name != affected_service]
 
         # Step 1: 대상 서비스에 장애 주입
         for _ in range(failure_count):
@@ -213,9 +227,11 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
     Stage 51: 다중 서비스 Blast Radius 격리 매트릭스 테스트.
 
     POST /api/self-healing/xtest/multi-blast-radius/
-    Body: {"test_services": ["database", "payment", "external_api"]}
+    Body: {"test_services": ["service_a", "service_b", "service_c"]}
 
     각 서비스 장애가 다른 서비스에 미치는 영향을 매트릭스로 분석합니다.
+    
+    - test_services: 테스트할 서비스 목록 (생략 시 CB에 등록된 모든 서비스)
     """
 
     authentication_classes = []
@@ -226,14 +242,25 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        test_services = request.data.get("test_services", ["database", "payment", "external_api", "cache"])
+        test_services = request.data.get("test_services", [])
         failure_count = int(request.data.get("failure_count", 5))
-
-        matrix = {}
 
         from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
 
         cb_service = get_circuit_breaker_service()
+
+        # test_services가 비어있으면 CB에 등록된 모든 서비스 조회
+        if not test_services:
+            all_states = cb_service.repository.get_all_states()
+            test_services = [s.service_name for s in all_states]
+        
+        if len(test_services) < 2:
+            return Response(
+                {"error": "At least 2 services required for matrix test"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        matrix = {}
 
         for affected_service in test_services:
             matrix[affected_service] = {"affects": [], "does_not_affect": []}
@@ -276,7 +303,6 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
                 "matrix": matrix,
                 "isolation_score_percent": round(isolation_score, 1),
                 "total_services_tested": len(test_services),
-                "expected_isolation": "database affects all, others should be isolated",
                 "timestamp": timezone.now().isoformat(),
             }
         )
@@ -292,6 +318,133 @@ def _collect_service_states(cb_service) -> tuple[list, list]:
     affected = [s.service_name for s in all_states if s.state == "open"]
     unaffected = [s.service_name for s in all_states if s.state != "open"]
     return affected, unaffected
+
+
+def _calculate_incident_duration(timeline: list) -> tuple[str | None, str | None, float | None]:
+    """
+    타임라인에서 인시던트 시작/종료 시점 및 지속 시간 계산.
+    
+    Returns:
+        tuple: (started_at, resolved_at, duration_seconds)
+    """
+    if not timeline:
+        return None, timezone.now().isoformat(), None
+    
+    from datetime import datetime
+    
+    started_at = None
+    resolved_at = None
+    
+    # 첫 번째 CB OPEN 이벤트 찾기
+    for event in timeline:
+        event_type = event.get("event_type", "").lower()
+        if "opened" in event_type or "open" in event_type:
+            started_at = event.get("timestamp")
+            break
+    
+    # OPEN 이벤트가 없으면 첫 번째 이벤트 사용
+    if not started_at and timeline:
+        started_at = timeline[0].get("timestamp")
+    
+    # 마지막 CB CLOSED 이벤트 찾기
+    for event in reversed(timeline):
+        event_type = event.get("event_type", "").lower()
+        if "closed" in event_type:
+            resolved_at = event.get("timestamp")
+            break
+    
+    # CLOSED 이벤트가 없으면 현재 시각 사용
+    if not resolved_at:
+        resolved_at = timezone.now().isoformat()
+    
+    # duration 계산
+    duration_seconds = None
+    if started_at and resolved_at:
+        try:
+            # ISO 형식 파싱
+            start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(resolved_at.replace("Z", "+00:00"))
+            duration_seconds = (end_dt - start_dt).total_seconds()
+            if duration_seconds < 0:
+                duration_seconds = None
+        except (ValueError, TypeError):
+            pass
+    
+    return started_at, resolved_at, duration_seconds
+
+
+def _generate_dynamic_actions(
+    timeline: list,
+    affected_services: list,
+    duration_seconds: float | None,
+) -> tuple[list, list]:
+    """
+    타임라인과 분석 결과를 기반으로 동적 action items 및 recommendations 생성.
+    
+    Returns:
+        tuple: (auto_actions, recommendations)
+    """
+    auto_actions = []
+    recommendations = []
+    
+    # 이벤트 타입별 액션 매핑
+    action_map = {
+        "circuit_breaker_opened": "Circuit Breaker OPEN 전환",
+        "circuit_breaker_half_opened": "Circuit Breaker 복구 시도 (HALF_OPEN)",
+        "circuit_breaker_closed": "Circuit Breaker 정상 복구 (CLOSED)",
+        "error_budget_critical": "Error Budget 임계치 경고",
+        "error_budget_exhausted": "Error Budget 소진",
+        "emergency_activated": "비상 모드 활성화",
+        "kill_switch_activated": "Kill Switch 활성화",
+    }
+    
+    seen_actions = set()
+    
+    for event in timeline:
+        event_type = event.get("event_type", "").lower()
+        service = event.get("details", {}).get("service_name", "")
+        timestamp = event.get("timestamp", "")
+        
+        for key, action_text in action_map.items():
+            if key in event_type and (key, service) not in seen_actions:
+                seen_actions.add((key, service))
+                auto_actions.append({
+                    "action": action_text,
+                    "status": "completed",
+                    "timestamp": timestamp,
+                    "service": service,
+                })
+                break
+    
+    # 액션이 없으면 기본 메시지
+    if not auto_actions:
+        auto_actions.append({
+            "action": "인시던트 기록됨",
+            "status": "completed",
+            "timestamp": timezone.now().isoformat(),
+            "service": None,
+        })
+    
+    # Recommendations 생성
+    if duration_seconds is not None:
+        if duration_seconds > 120:
+            recommendations.append(
+                f"복구 시간이 {duration_seconds:.0f}초로 2분을 초과함 - SLA 검토 필요"
+            )
+        elif duration_seconds > 60:
+            recommendations.append(
+                f"복구 시간이 {duration_seconds:.0f}초로 목표(60초) 초과 - 개선 검토 권장"
+            )
+    
+    if len(affected_services) > 3:
+        recommendations.append(
+            f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요"
+        )
+    
+    if not recommendations:
+        recommendations.append("장애 근본 원인 분석 및 재발 방지 검토 권장")
+    
+    return auto_actions, recommendations
 
 
 def _build_timeline(history: list, local_events: list) -> list:
@@ -327,13 +480,21 @@ def _generate_postmortem_data(
     incident_id: str, timeline: list, affected: list, 
     unaffected: list, fast_fail_count: int, snapshot: dict
 ) -> dict:
-    """Generate postmortem data structure."""
+    """Generate postmortem data structure with dynamic calculations."""
+    # duration 계산
+    started_at, resolved_at, duration_seconds = _calculate_incident_duration(timeline)
+    
+    # 동적 action items 생성
+    auto_actions, recommendations = _generate_dynamic_actions(
+        timeline, affected, duration_seconds
+    )
+    
     return {
         "incident_id": incident_id,
         "generated_at": timezone.now().isoformat(),
-        "started_at": timeline[0]["timestamp"] if timeline else None,
-        "resolved_at": timezone.now().isoformat(),
-        "duration_seconds": None,
+        "started_at": started_at,
+        "resolved_at": resolved_at,
+        "duration_seconds": duration_seconds,
         "summary": {
             "affected_services": affected,
             "unaffected_services": unaffected,
@@ -342,17 +503,8 @@ def _generate_postmortem_data(
         },
         "timeline": timeline[:30],
         "system_snapshot": snapshot,
-        "auto_actions": [
-            "✅ Circuit Breaker 자동 감지",
-            "✅ Fast Fail 활성화",
-            "✅ 연쇄 장애 차단 (Blast Radius 격리)",
-            "✅ 자동 복구 시도",
-        ],
-        "recommendations": [
-            "장애 근본 원인 분석 필요",
-            "복구 시간 개선 검토",
-            "모니터링 알림 설정 확인",
-        ],
+        "auto_actions": auto_actions,
+        "recommendations": recommendations,
     }
 
 
@@ -420,7 +572,7 @@ class RecordHealingEventView(XTestModeMixin, APIView):
     Stage 51: 힐링 이벤트 기록 API.
 
     POST /api/self-healing/xtest/record-healing-event/
-    Body: {"event_type": "cb_opened", "service": "database", "details": {...}}
+    Body: {"event_type": "cb_opened", "service": "my_service", "details": {...}}
 
     커스텀 힐링 이벤트를 기록합니다.
     """

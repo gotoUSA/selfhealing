@@ -406,6 +406,9 @@ selfhealing/
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 3.3.0 | 2026-01-27 | 133-134_POSTMORTEM 문서 추가 - X-Test 분리 및 신규 모듈 구조 설계 |
+| 3.2.0 | 2026-01-27 | 130-132_POSTMORTEM 문서 추가 - Audit/알림/영속성 분석 |
+| 3.1.0 | 2026-01-27 | 124-129_POSTMORTEM 문서 시리즈 추가 - Post-mortem 자동 생성 기능 확장 |
 | 3.0.0 | 2026-01-24 | 85-87_AUDIT_INTEGRATION 문서 시리즈 추가 - Audit 연동 누락 기능 통합 가이드 |
 | 2.9.0 | 2026-01-23 | 80-84_DEPRECATION_CLEANUP 문서 시리즈 추가 - Deprecated/Re-export 패턴 정리 가이드 |
 | 2.8.0 | 2026-01-19 | 70_MULTI_CLUSTER_ARCHITECTURE.md 대폭 확장 - ClusterIdentity, TieredRedisProvider, PropagationHealthMonitor 추가 |

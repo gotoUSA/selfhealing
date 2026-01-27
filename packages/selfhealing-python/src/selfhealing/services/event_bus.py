@@ -668,6 +668,90 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
         )
 
 
+def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
+    """
+    CB 복구 시 자동 Post-mortem 생성 (Stage 51 확장).
+    
+    Settings에서 xtest_auto_postmortem_enabled가 True인 경우에만 동작합니다.
+    """
+    service_name = event.data.get("service_name", "unknown")
+    
+    # Settings에서 자동 생성 활성화 여부 확인
+    try:
+        from selfhealing.settings.api_view import get_api_view_settings
+        settings = get_api_view_settings()
+        
+        if not settings.xtest_auto_postmortem_enabled:
+            logger.debug(
+                f"[EventHandler] Auto postmortem disabled, skipping for {service_name}"
+            )
+            return
+        
+        min_duration = settings.xtest_auto_postmortem_min_duration
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to get api_view settings: {e}")
+        return
+    
+    # Post-mortem 생성
+    try:
+        from selfhealing.api.django.views.xtest.observability import (
+            _collect_service_states,
+            _build_timeline,
+            _generate_postmortem_data,
+        )
+        from selfhealing.api.django.views.xtest.base import (
+            add_healing_incident,
+            collect_system_snapshot,
+            get_healing_events,
+        )
+        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        
+        # 히스토리 및 상태 수집
+        bus = get_event_bus()
+        history = bus.get_history(limit=100)
+        cb_service = get_circuit_breaker_service()
+        affected, unaffected = _collect_service_states(cb_service)
+        local_events = get_healing_events(20)
+        timeline = _build_timeline(history, local_events)
+        snapshot = collect_system_snapshot()
+        
+        # Fast fail 카운트
+        fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
+        
+        # 인시던트 ID 생성
+        from django.utils import timezone
+        incident_id = f"AUTO-{service_name}-{timezone.now().strftime('%Y%m%d-%H%M%S')}"
+        
+        # Post-mortem 생성
+        postmortem = _generate_postmortem_data(
+            incident_id, timeline, affected, unaffected, fast_fail_count, snapshot
+        )
+        
+        # 최소 duration 확인
+        duration = postmortem.get("duration_seconds")
+        if duration is not None and duration < min_duration:
+            logger.debug(
+                f"[EventHandler] Auto postmortem skipped for {service_name}: "
+                f"duration {duration:.0f}s < min {min_duration}s"
+            )
+            return
+        
+        # 저장
+        add_healing_incident(postmortem)
+        
+        logger.info(
+            f"[EventHandler] Auto postmortem generated: {incident_id} "
+            f"(duration={duration}s)"
+        )
+        
+    except ImportError:
+        logger.debug(
+            "[EventHandler] Postmortem module not available, skipping auto generation"
+        )
+    except Exception as e:
+        logger.error(f"[EventHandler] Failed to generate auto postmortem: {e}")
+
+
 def register_default_handlers():
     """
     기본 이벤트 핸들러 등록.
@@ -698,6 +782,13 @@ def register_default_handlers():
         EventType.CIRCUIT_BREAKER_CLOSED,
         _on_circuit_breaker_closed,
         priority=EventPriority.NORMAL,
+    )
+    
+    # Circuit Breaker 자동 Post-mortem 핸들러 (낮은 우선순위)
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_CLOSED,
+        _on_circuit_breaker_closed_postmortem,
+        priority=EventPriority.LOW,
     )
     
     # Circuit Breaker 알림 핸들러
