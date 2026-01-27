@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from selfhealing.services.circuit_breaker.canary_recovery import (
     CanaryRecoveryManager,
-    CanaryDecision,
     CanaryState,
     get_canary_recovery_manager,
 )
@@ -40,7 +38,7 @@ T = TypeVar("T")
 class CanaryWithStaleCacheConfig:
     """
     Canary Recovery + Stale Cache 결합 설정.
-    
+
     Attributes:
         enabled: 기능 활성화 여부
         stale_cache_max_age_seconds: Stale Cache 최대 허용 시간 (기본 5분)
@@ -50,24 +48,24 @@ class CanaryWithStaleCacheConfig:
         stale_header_name: Stale 표시 헤더 이름
         default_stale_value: Stale Cache Miss 시 기본값 (옵션)
     """
-    
+
     enabled: bool = True
-    
+
     # Stale Cache 설정
     stale_cache_max_age_seconds: int = 300  # 5분
-    
+
     # Canary 비율에서 제외된 요청 처리
     non_canary_action: str = "stale_cache"  # "stale_cache" | "reject" | "queue"
-    
+
     # Stale Cache 없을 때 fallback
     stale_cache_miss_action: str = "reject"  # "reject" | "default_value" | "allow"
-    
+
     # 응답에 Stale 여부 표시
     add_stale_indicator: bool = True
     stale_header_name: str = "X-Stale-Response"
-    
+
     # Stale Cache Miss 시 기본값
-    default_stale_value: Optional[Any] = None
+    default_stale_value: Any | None = None
 
 
 # =============================================================================
@@ -79,7 +77,7 @@ class CanaryWithStaleCacheConfig:
 class StaleCacheEntry(Generic[T]):
     """
     Stale Cache 엔트리.
-    
+
     Attributes:
         key: 캐시 키
         value: 캐시된 값
@@ -87,26 +85,26 @@ class StaleCacheEntry(Generic[T]):
         service_id: 서비스 ID
         ttl_seconds: 원래 TTL
     """
-    
+
     key: str
     value: T
     cached_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     service_id: str = ""
     ttl_seconds: int = 300  # 기본 5분
-    
+
     def age_seconds(self) -> float:
         """캐시 나이 (초)."""
         return (datetime.now(timezone.utc) - self.cached_at).total_seconds()
-    
+
     def is_stale(self) -> bool:
         """TTL 초과 여부 (stale 상태인지)."""
         return self.age_seconds() > self.ttl_seconds
-    
+
     def is_expired(self, max_stale_age: int) -> bool:
         """최대 stale 허용 시간 초과 여부."""
         return self.age_seconds() > (self.ttl_seconds + max_stale_age)
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "key": self.key,
@@ -128,7 +126,7 @@ class StaleCacheEntry(Generic[T]):
 class CanaryWithStaleDecision:
     """
     Canary + Stale Cache 통합 결정 결과.
-    
+
     Attributes:
         allow_backend: 백엔드 호출 허용 여부
         use_stale: Stale Cache 사용 여부
@@ -141,19 +139,19 @@ class CanaryWithStaleDecision:
         reject: 거부 여부 (Stale도 없음)
         cb_state: Circuit Breaker 상태
     """
-    
+
     allow_backend: bool = False
     use_stale: bool = False
-    stale_data: Optional[Any] = None
+    stale_data: Any | None = None
     stale_age_seconds: float = 0.0
     is_canary_request: bool = False
-    current_stage: Optional[CanaryState] = None
+    current_stage: CanaryState | None = None
     traffic_percent: float = 0.0
     reason: str = ""
     reject: bool = False
-    cb_state: Optional[str] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
+    cb_state: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "allow_backend": self.allow_backend,
@@ -177,18 +175,18 @@ class CanaryWithStaleDecision:
 class StaleCacheStore:
     """
     Stale Cache 저장소.
-    
+
     간단한 인메모리 캐시로 구현. 실제 운영에서는 Redis 등으로 교체 가능.
     """
-    
+
     def __init__(self, max_entries: int = 10000):
         """
         초기화.
-        
+
         Args:
             max_entries: 최대 캐시 엔트리 수
         """
-        self._cache: Dict[str, StaleCacheEntry] = {}
+        self._cache: dict[str, StaleCacheEntry] = {}
         self._max_entries = max_entries
         self._lock = threading.RLock()
         self._stats = {
@@ -198,43 +196,43 @@ class StaleCacheStore:
             "expired": 0,
             "sets": 0,
         }
-    
+
     def get(
         self,
         key: str,
         max_stale_age: int = 300,
-    ) -> Optional[StaleCacheEntry]:
+    ) -> StaleCacheEntry | None:
         """
         캐시 조회.
-        
+
         Args:
             key: 캐시 키
             max_stale_age: 최대 stale 허용 시간 (초)
-            
+
         Returns:
             StaleCacheEntry or None
         """
         with self._lock:
             entry = self._cache.get(key)
-            
+
             if entry is None:
                 self._stats["misses"] += 1
                 return None
-            
+
             # 만료 확인
             if entry.is_expired(max_stale_age):
                 self._stats["expired"] += 1
                 del self._cache[key]
                 return None
-            
+
             # Stale 여부 체크
             if entry.is_stale():
                 self._stats["stale_hits"] += 1
             else:
                 self._stats["hits"] += 1
-            
+
             return entry
-    
+
     def set(
         self,
         key: str,
@@ -244,13 +242,13 @@ class StaleCacheStore:
     ) -> StaleCacheEntry:
         """
         캐시 저장.
-        
+
         Args:
             key: 캐시 키
             value: 캐시할 값
             service_id: 서비스 ID
             ttl_seconds: TTL (초)
-            
+
         Returns:
             생성된 StaleCacheEntry
         """
@@ -258,7 +256,7 @@ class StaleCacheStore:
             # 용량 초과 시 오래된 항목 제거
             if len(self._cache) >= self._max_entries:
                 self._evict_oldest()
-            
+
             entry = StaleCacheEntry(
                 key=key,
                 value=value,
@@ -267,9 +265,9 @@ class StaleCacheStore:
             )
             self._cache[key] = entry
             self._stats["sets"] += 1
-            
+
             return entry
-    
+
     def delete(self, key: str) -> bool:
         """캐시 삭제."""
         with self._lock:
@@ -277,26 +275,23 @@ class StaleCacheStore:
                 del self._cache[key]
                 return True
             return False
-    
+
     def _evict_oldest(self) -> None:
         """가장 오래된 항목 제거."""
         if not self._cache:
             return
-        
-        oldest_key = min(
-            self._cache.keys(),
-            key=lambda k: self._cache[k].cached_at
-        )
+
+        oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k].cached_at)
         del self._cache[oldest_key]
-    
+
     def clear(self) -> int:
         """전체 캐시 삭제."""
         with self._lock:
             count = len(self._cache)
             self._cache.clear()
             return count
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """캐시 통계."""
         with self._lock:
             return {
@@ -314,20 +309,20 @@ class StaleCacheStore:
 class CanaryWithStaleCacheService:
     """
     Canary Recovery + Stale Cache 통합 서비스.
-    
+
     HALF_OPEN 상태에서 Canary 비율의 요청만 백엔드로 보내고,
     나머지는 Stale Cache를 반환하여 사용자 에러를 최소화합니다.
-    
+
     Usage:
         service = CanaryWithStaleCacheService()
-        
+
         # CB 상태 확인 + Canary 결정
         decision = service.should_allow_with_fallback(
             service_id="payment-api",
             cache_key="payment:user123",
             cb_state="half_open",
         )
-        
+
         if decision.allow_backend:
             try:
                 result = call_backend()
@@ -344,10 +339,10 @@ class CanaryWithStaleCacheService:
             # 거부
             raise ServiceUnavailable()
     """
-    
-    _instance: Optional[CanaryWithStaleCacheService] = None
+
+    _instance: CanaryWithStaleCacheService | None = None
     _lock: threading.Lock = threading.Lock()
-    
+
     def __new__(cls) -> CanaryWithStaleCacheService:
         """싱글톤 패턴."""
         if cls._instance is None:
@@ -356,16 +351,16 @@ class CanaryWithStaleCacheService:
                     cls._instance = super().__new__(cls)
                     cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(
         self,
-        config: Optional[CanaryWithStaleCacheConfig] = None,
-        canary_manager: Optional[CanaryRecoveryManager] = None,
-        cache_store: Optional[StaleCacheStore] = None,
+        config: CanaryWithStaleCacheConfig | None = None,
+        canary_manager: CanaryRecoveryManager | None = None,
+        cache_store: StaleCacheStore | None = None,
     ):
         """
         초기화.
-        
+
         Args:
             config: Stale Cache 설정
             canary_manager: Canary Recovery 매니저
@@ -373,7 +368,7 @@ class CanaryWithStaleCacheService:
         """
         if getattr(self, "_initialized", False):
             return
-        
+
         self._config = config or CanaryWithStaleCacheConfig()
         self._canary_manager = canary_manager or get_canary_recovery_manager()
         self._cache = cache_store or StaleCacheStore()
@@ -385,25 +380,25 @@ class CanaryWithStaleCacheService:
             "backend_failure": 0,
         }
         self._stats_lock = threading.Lock()
-        
+
         self._initialized = True
-    
+
     # =========================================================================
     # Configuration
     # =========================================================================
-    
+
     def set_config(self, config: CanaryWithStaleCacheConfig) -> None:
         """설정 업데이트."""
         self._config = config
-    
+
     def get_config(self) -> CanaryWithStaleCacheConfig:
         """현재 설정 조회."""
         return self._config
-    
+
     # =========================================================================
     # Main Decision Logic
     # =========================================================================
-    
+
     def should_allow_with_fallback(
         self,
         service_id: str,
@@ -412,12 +407,12 @@ class CanaryWithStaleCacheService:
     ) -> CanaryWithStaleDecision:
         """
         Canary + Stale Cache 통합 결정.
-        
+
         Args:
             service_id: 서비스 ID
             cache_key: 캐시 키
             cb_state: 현재 Circuit Breaker 상태
-            
+
         Returns:
             CanaryWithStaleDecision
         """
@@ -427,7 +422,7 @@ class CanaryWithStaleCacheService:
                 cb_state=cb_state,
                 reason="canary+stale disabled",
             )
-        
+
         # 1. CLOSED: 정상 허용
         if cb_state == CircuitState.CLOSED or cb_state == "closed":
             return CanaryWithStaleDecision(
@@ -435,22 +430,22 @@ class CanaryWithStaleCacheService:
                 cb_state=cb_state,
                 reason="CB is CLOSED - normal flow",
             )
-        
+
         # 2. OPEN: Stale Cache 사용
         if cb_state == CircuitState.OPEN or cb_state == "open":
             return self._handle_open_state(service_id, cache_key, cb_state)
-        
+
         # 3. HALF_OPEN: Canary 비율 적용
         if cb_state == CircuitState.HALF_OPEN or cb_state == "half_open":
             return self._handle_half_open_state(service_id, cache_key, cb_state)
-        
+
         # 알 수 없는 상태
         return CanaryWithStaleDecision(
             allow_backend=True,
             cb_state=cb_state,
             reason=f"unknown CB state: {cb_state}",
         )
-    
+
     def _handle_open_state(
         self,
         service_id: str,
@@ -461,11 +456,11 @@ class CanaryWithStaleCacheService:
         OPEN 상태 처리 - Stale Cache 반환.
         """
         stale_entry = self._get_stale_cache(cache_key)
-        
+
         if stale_entry is not None:
             with self._stats_lock:
                 self._stats["stale_served"] += 1
-            
+
             return CanaryWithStaleDecision(
                 allow_backend=False,
                 use_stale=True,
@@ -474,10 +469,10 @@ class CanaryWithStaleCacheService:
                 cb_state=cb_state,
                 reason="CB is OPEN - returning stale cache",
             )
-        
+
         # Stale Cache 없음 - 설정에 따라 처리
         return self._handle_stale_cache_miss(service_id, cache_key, cb_state)
-    
+
     def _handle_half_open_state(
         self,
         service_id: str,
@@ -489,12 +484,12 @@ class CanaryWithStaleCacheService:
         """
         # Canary 결정 요청
         canary_decision = self._canary_manager.should_allow_request(service_id)
-        
+
         if canary_decision.allow_backend:
             # Canary 요청 - 백엔드 호출 허용
             with self._stats_lock:
                 self._stats["canary_allowed"] += 1
-            
+
             return CanaryWithStaleDecision(
                 allow_backend=True,
                 is_canary_request=canary_decision.is_canary_request,
@@ -506,11 +501,11 @@ class CanaryWithStaleCacheService:
         else:
             # Non-Canary 요청 - Stale Cache 사용
             stale_entry = self._get_stale_cache(cache_key)
-            
+
             if stale_entry is not None:
                 with self._stats_lock:
                     self._stats["stale_served"] += 1
-                
+
                 return CanaryWithStaleDecision(
                     allow_backend=False,
                     use_stale=True,
@@ -522,29 +517,29 @@ class CanaryWithStaleCacheService:
                     cb_state=cb_state,
                     reason=f"non-canary request, using stale cache (age={stale_entry.age_seconds():.1f}s)",
                 )
-            
+
             # Stale Cache 없음
             return self._handle_stale_cache_miss(
-                service_id, 
-                cache_key, 
+                service_id,
+                cache_key,
                 cb_state,
                 current_stage=canary_decision.current_stage,
                 traffic_percent=canary_decision.traffic_percent,
             )
-    
+
     def _handle_stale_cache_miss(
         self,
         service_id: str,
         cache_key: str,
         cb_state: str,
-        current_stage: Optional[CanaryState] = None,
+        current_stage: CanaryState | None = None,
         traffic_percent: float = 0.0,
     ) -> CanaryWithStaleDecision:
         """
         Stale Cache Miss 처리.
         """
         action = self._config.stale_cache_miss_action
-        
+
         if action == "default_value" and self._config.default_stale_value is not None:
             return CanaryWithStaleDecision(
                 allow_backend=False,
@@ -556,7 +551,7 @@ class CanaryWithStaleCacheService:
                 cb_state=cb_state,
                 reason="stale cache miss, using default value",
             )
-        
+
         if action == "allow":
             return CanaryWithStaleDecision(
                 allow_backend=True,
@@ -565,11 +560,11 @@ class CanaryWithStaleCacheService:
                 cb_state=cb_state,
                 reason="stale cache miss, allowing backend call",
             )
-        
+
         # reject (기본)
         with self._stats_lock:
             self._stats["rejected"] += 1
-        
+
         return CanaryWithStaleDecision(
             allow_backend=False,
             use_stale=False,
@@ -579,34 +574,34 @@ class CanaryWithStaleCacheService:
             cb_state=cb_state,
             reason="stale cache miss, rejecting request",
         )
-    
-    def _get_stale_cache(self, cache_key: str) -> Optional[StaleCacheEntry]:
+
+    def _get_stale_cache(self, cache_key: str) -> StaleCacheEntry | None:
         """Stale Cache 조회."""
         return self._cache.get(
             key=cache_key,
             max_stale_age=self._config.stale_cache_max_age_seconds,
         )
-    
+
     # =========================================================================
     # Cache Management
     # =========================================================================
-    
+
     def update_cache(
         self,
         cache_key: str,
         value: Any,
         service_id: str = "",
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> StaleCacheEntry:
         """
         캐시 업데이트 (성공한 백엔드 응답 저장).
-        
+
         Args:
             cache_key: 캐시 키
             value: 캐시할 값
             service_id: 서비스 ID
             ttl_seconds: TTL (없으면 설정값 사용)
-            
+
         Returns:
             생성된 StaleCacheEntry
         """
@@ -617,49 +612,49 @@ class CanaryWithStaleCacheService:
             service_id=service_id,
             ttl_seconds=ttl,
         )
-    
+
     def invalidate_cache(self, cache_key: str) -> bool:
         """캐시 무효화."""
         return self._cache.delete(cache_key)
-    
+
     def clear_cache(self) -> int:
         """전체 캐시 삭제."""
         return self._cache.clear()
-    
+
     # =========================================================================
     # Metrics Recording (Canary 연동)
     # =========================================================================
-    
+
     def record_success(self, service_id: str) -> None:
         """
         백엔드 호출 성공 기록.
-        
+
         Args:
             service_id: 서비스 ID
         """
         with self._stats_lock:
             self._stats["backend_success"] += 1
-        
+
         # Canary 매니저에도 성공 기록
         self._canary_manager.record_success(service_id)
-    
+
     def record_failure(self, service_id: str) -> None:
         """
         백엔드 호출 실패 기록.
-        
+
         Args:
             service_id: 서비스 ID
         """
         with self._stats_lock:
             self._stats["backend_failure"] += 1
-        
+
         # Canary 매니저에도 실패 기록
         self._canary_manager.record_failure(service_id)
-    
+
     # =========================================================================
     # Response Wrapping
     # =========================================================================
-    
+
     def wrap_response(
         self,
         response: Any,
@@ -667,22 +662,22 @@ class CanaryWithStaleCacheService:
     ) -> Any:
         """
         응답에 Stale 표시 추가.
-        
+
         HTTP 응답이면 헤더 추가, 아니면 그대로 반환.
-        
+
         Args:
             response: 원본 응답
             decision: Canary+Stale 결정 결과
-            
+
         Returns:
             Stale 표시가 추가된 응답
         """
         if not self._config.add_stale_indicator:
             return response
-        
+
         if not decision.use_stale:
             return response
-        
+
         # HTTP 응답 스타일 헤더 추가 (Django Response 등)
         if hasattr(response, "__setitem__"):
             response[self._config.stale_header_name] = "true"
@@ -690,14 +685,14 @@ class CanaryWithStaleCacheService:
         elif hasattr(response, "headers"):
             response.headers[self._config.stale_header_name] = "true"
             response.headers["X-Stale-Age"] = str(int(decision.stale_age_seconds))
-        
+
         return response
-    
+
     # =========================================================================
     # Statistics
     # =========================================================================
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """통합 통계."""
         with self._stats_lock:
             return {
@@ -705,7 +700,7 @@ class CanaryWithStaleCacheService:
                 "cache_stats": self._cache.get_stats(),
                 "canary_states": self._canary_manager.get_all_recovery_states(),
             }
-    
+
     def reset_stats(self) -> None:
         """통계 초기화."""
         with self._stats_lock:
@@ -718,7 +713,7 @@ class CanaryWithStaleCacheService:
 # =============================================================================
 
 
-_service_instance: Optional[CanaryWithStaleCacheService] = None
+_service_instance: CanaryWithStaleCacheService | None = None
 _service_lock = threading.Lock()
 
 
@@ -762,7 +757,7 @@ def update_stale_cache(
     cache_key: str,
     value: Any,
     service_id: str = "",
-    ttl_seconds: Optional[int] = None,
+    ttl_seconds: int | None = None,
 ) -> StaleCacheEntry:
     """Stale Cache 업데이트."""
     return get_canary_stale_cache_service().update_cache(

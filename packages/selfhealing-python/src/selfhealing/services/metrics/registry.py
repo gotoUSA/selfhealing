@@ -8,9 +8,8 @@ and dynamic domain management for metric labeling.
 from __future__ import annotations
 
 import logging
-from typing import List, Set
 
-from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +58,10 @@ def get_or_create_histogram(
 # =============================================================================
 
 # Registered domains - populated dynamically by adapters at initialization
-_registered_domains: Set[str] = set()
+_registered_domains: set[str] = set()
 
 # Default domains (domain-neutral fallbacks)
-DEFAULT_DOMAINS: List[str] = [
+DEFAULT_DOMAINS: list[str] = [
     "external_service",
     "internal_process",
     "async_task",
@@ -81,7 +80,7 @@ def register_domain(domain: str) -> None:
     _registered_domains.add(domain.lower())
 
 
-def get_registered_domains() -> List[str]:
+def get_registered_domains() -> list[str]:
     """Get all registered domains, including defaults."""
     all_domains = _registered_domains | set(DEFAULT_DOMAINS)
     return sorted(all_domains)
@@ -89,7 +88,7 @@ def get_registered_domains() -> List[str]:
 
 # Legacy compatibility
 @property
-def DOMAINS() -> List[str]:
+def DOMAINS() -> list[str]:
     """@deprecated: use get_registered_domains()"""
     return get_registered_domains()
 

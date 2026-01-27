@@ -22,40 +22,37 @@ This package has been refactored from a single 1,700-line file into:
 
 from __future__ import annotations
 
-# Enums
-from .enums import (
-    TierFallbackReason,
-    PatternType,
-    OverrideIdentifierType,
-)
-
-# Models
-from .models import (
-    TierResult,
-    TierDefinition,
-    TierMapping,
-    TierOverride,
-)
-
-# Defaults
-from .defaults import (
-    STATIC_CRITICAL_PATHS,
-    STATIC_CRITICAL_PREFIXES,
-    DEFAULT_TIER_DEFINITIONS,
-    DEFAULT_TIER_MAPPINGS,
-    DEFAULT_TIER_OVERRIDES,
-)
-
 # Circuit Breaker
 from .circuit_breaker import (
     TieringCircuitBreaker,
     get_tiering_circuit_breaker,
 )
 
-# Validator
-from .validator import (
-    ValidationResult,
-    TierConfigValidator,
+# Defaults
+from .defaults import (
+    DEFAULT_TIER_DEFINITIONS,
+    DEFAULT_TIER_MAPPINGS,
+    DEFAULT_TIER_OVERRIDES,
+    STATIC_CRITICAL_PATHS,
+    STATIC_CRITICAL_PREFIXES,
+)
+
+# Enums
+from .enums import (
+    OverrideIdentifierType,
+    PatternType,
+    TierFallbackReason,
+)
+
+# Middleware
+from .middleware import TieringMiddleware
+
+# Models
+from .models import (
+    TierDefinition,
+    TierMapping,
+    TierOverride,
+    TierResult,
 )
 
 # Registry
@@ -64,9 +61,11 @@ from .registry import (
     get_tier_registry,
 )
 
-# Middleware
-from .middleware import TieringMiddleware
-
+# Validator
+from .validator import (
+    TierConfigValidator,
+    ValidationResult,
+)
 
 __all__ = [
     # Enums

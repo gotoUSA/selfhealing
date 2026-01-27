@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -92,7 +91,7 @@ class PrecomputedCacheSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[PrecomputedCacheSettings] = None
+_settings: PrecomputedCacheSettings | None = None
 
 
 def get_precomputed_cache_settings() -> PrecomputedCacheSettings:

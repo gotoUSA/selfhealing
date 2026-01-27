@@ -12,7 +12,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -51,7 +50,7 @@ class HttpClientSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[HttpClientSettings] = None
+_settings: HttpClientSettings | None = None
 
 
 def get_http_client_settings() -> HttpClientSettings:

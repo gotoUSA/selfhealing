@@ -11,7 +11,7 @@ Replaces:
 Environment Variables:
     SELFHEALING_CHAOS_MAX_BLAST_RADIUS=0.10
     SELFHEALING_CHAOS_DRY_RUN_DEFAULT=true
-    
+
     # Chaos Scheduler Celery Task 재시도 설정
     SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_MAX_RETRIES=0
     SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_SOFT_TIME_LIMIT=300
@@ -23,7 +23,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -212,7 +211,7 @@ class ChaosSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[ChaosSettings] = None
+_settings: ChaosSettings | None = None
 
 
 def get_chaos_settings() -> ChaosSettings:

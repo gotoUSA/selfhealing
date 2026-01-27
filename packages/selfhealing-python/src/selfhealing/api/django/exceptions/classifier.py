@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any
 
-from .codes import ErrorCode, get_http_status, is_retryable, get_default_message
+from .codes import ErrorCode, get_default_message, is_retryable
 
 
 class ExceptionCategory(str, Enum):
@@ -72,10 +72,10 @@ class ClassifiedError:
     message: str
     """사용자 친화적 메시지."""
 
-    detail: Optional[str] = None
+    detail: str | None = None
     """기술적 상세 정보 (str(exception))."""
 
-    field: Optional[str] = None
+    field: str | None = None
     """필드 관련 에러 시 필드명."""
 
     retryable: bool = False
@@ -84,7 +84,7 @@ class ClassifiedError:
     exception_class: str = ""
     """원본 예외 클래스명."""
 
-    extra: Optional[Dict[str, Any]] = None
+    extra: dict[str, Any] | None = None
     """추가 메타데이터 (ConfigLockError의 current_owner 등)."""
 
 
@@ -141,21 +141,21 @@ class ExceptionClassifier:
         result.exception_class = exception_class
         return result
 
-    def _classify_drf_exception(self, exc: BaseException) -> Optional[ClassifiedError]:
+    def _classify_drf_exception(self, exc: BaseException) -> ClassifiedError | None:
         """DRF 예외 분류."""
         try:
             from rest_framework.exceptions import (
                 APIException,
-                ValidationError,
-                ParseError,
                 AuthenticationFailed,
-                NotAuthenticated,
-                PermissionDenied,
-                NotFound,
                 MethodNotAllowed,
                 NotAcceptable,
-                UnsupportedMediaType,
+                NotAuthenticated,
+                NotFound,
+                ParseError,
+                PermissionDenied,
                 Throttled,
+                UnsupportedMediaType,
+                ValidationError,
             )
         except ImportError:
             return None
@@ -168,9 +168,15 @@ class ExceptionClassifier:
             return self._handle_validation_error(exc)
 
         # 예외 타입별 핸들러 매핑
-        handler_result = self._try_drf_exception_handlers(exc, ParseError, NotAuthenticated, 
-                                                           AuthenticationFailed, PermissionDenied,
-                                                           NotFound, Throttled)
+        handler_result = self._try_drf_exception_handlers(
+            exc,
+            ParseError,
+            NotAuthenticated,
+            AuthenticationFailed,
+            PermissionDenied,
+            NotFound,
+            Throttled,
+        )
         if handler_result:
             return handler_result
 
@@ -179,7 +185,7 @@ class ExceptionClassifier:
         return self._classify_by_status_code(exc, status_code)
 
     def _try_drf_exception_handlers(
-        self, 
+        self,
         exc: BaseException,
         ParseError,
         NotAuthenticated,
@@ -187,10 +193,10 @@ class ExceptionClassifier:
         PermissionDenied,
         NotFound,
         Throttled,
-    ) -> Optional[ClassifiedError]:
+    ) -> ClassifiedError | None:
         """DRF 예외 타입별 핸들러 시도."""
         detail = str(exc.detail) if hasattr(exc, "detail") else str(exc)
-        
+
         # ParseError
         if isinstance(exc, ParseError):
             return ClassifiedError(
@@ -204,7 +210,11 @@ class ExceptionClassifier:
 
         # Authentication
         if isinstance(exc, (NotAuthenticated, AuthenticationFailed)):
-            code = ErrorCode.AUTH_CREDENTIALS_INVALID if isinstance(exc, AuthenticationFailed) else ErrorCode.AUTH_NOT_AUTHENTICATED
+            code = (
+                ErrorCode.AUTH_CREDENTIALS_INVALID
+                if isinstance(exc, AuthenticationFailed)
+                else ErrorCode.AUTH_NOT_AUTHENTICATED
+            )
             return ClassifiedError(
                 category=ExceptionCategory.AUTH,
                 code=code,
@@ -283,15 +293,17 @@ class ExceptionClassifier:
             retryable=False,
         )
 
-    def _classify_django_exception(self, exc: BaseException) -> Optional[ClassifiedError]:
+    def _classify_django_exception(
+        self, exc: BaseException
+    ) -> ClassifiedError | None:
         """Django 예외 분류."""
         try:
-            from django.http import Http404
             from django.core.exceptions import (
                 PermissionDenied as DjangoPermissionDenied,
-                ValidationError as DjangoValidationError,
             )
-            from django.db import IntegrityError, DatabaseError
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            from django.db import DatabaseError, IntegrityError
+            from django.http import Http404
         except ImportError:
             return None
 
@@ -354,7 +366,9 @@ class ExceptionClassifier:
 
         return None
 
-    def _classify_custom_exception(self, exc: BaseException) -> Optional[ClassifiedError]:
+    def _classify_custom_exception(
+        self, exc: BaseException
+    ) -> ClassifiedError | None:
         """selfhealing 패키지 커스텀 예외 분류."""
         exception_class = type(exc).__name__
 
@@ -545,7 +559,7 @@ class ExceptionClassifier:
 
 
 # 싱글톤 인스턴스
-_classifier: Optional[ExceptionClassifier] = None
+_classifier: ExceptionClassifier | None = None
 
 
 def get_exception_classifier() -> ExceptionClassifier:

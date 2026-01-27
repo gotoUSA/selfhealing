@@ -18,13 +18,12 @@ Drift Detection Metrics for Self-Healing System.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Try to import prometheus_client, but don't fail if not installed
 try:
-    from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+    from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
@@ -40,7 +39,9 @@ except ImportError:
 # =============================================================================
 
 
-def _get_or_create_counter(name: str, description: str, labels: list = None) -> Optional[Counter]:
+def _get_or_create_counter(
+    name: str, description: str, labels: list = None
+) -> Counter | None:
     """Get existing counter or create new one to avoid duplicate registration."""
     if not PROMETHEUS_AVAILABLE:
         return None
@@ -52,7 +53,9 @@ def _get_or_create_counter(name: str, description: str, labels: list = None) -> 
         return REGISTRY._names_to_collectors.get(name)
 
 
-def _get_or_create_gauge(name: str, description: str, labels: list = None) -> Optional[Gauge]:
+def _get_or_create_gauge(
+    name: str, description: str, labels: list = None
+) -> Gauge | None:
     """Get existing gauge or create new one to avoid duplicate registration."""
     if not PROMETHEUS_AVAILABLE:
         return None
@@ -66,7 +69,7 @@ def _get_or_create_gauge(name: str, description: str, labels: list = None) -> Op
 
 def _get_or_create_histogram(
     name: str, description: str, labels: list = None, buckets: tuple = None
-) -> Optional[Histogram]:
+) -> Histogram | None:
     """Get existing histogram or create new one to avoid duplicate registration."""
     if not PROMETHEUS_AVAILABLE:
         return None

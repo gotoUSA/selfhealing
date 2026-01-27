@@ -41,8 +41,9 @@ Test Isolation:
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Optional, Dict, Type, Any, Generator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
@@ -60,12 +61,12 @@ class ProviderRegistry:
     """
 
     # Provider registries
-    _cache_providers: Dict[str, Type] = {}
-    _task_queues: Dict[str, Type] = {}
+    _cache_providers: dict[str, type] = {}
+    _task_queues: dict[str, type] = {}
 
     # Provider instances (singletons)
-    _cache_instances: Dict[str, Any] = {}
-    _queue_instances: Dict[str, Any] = {}
+    _cache_instances: dict[str, Any] = {}
+    _queue_instances: dict[str, Any] = {}
 
     # Default provider names
     _default_cache: str = "redis"
@@ -76,7 +77,7 @@ class ProviderRegistry:
     # =========================================================================
 
     @classmethod
-    def register_cache(cls, name: str, provider_class: Type) -> None:
+    def register_cache(cls, name: str, provider_class: type) -> None:
         """
         Register a cache provider adapter.
 
@@ -90,10 +91,10 @@ class ProviderRegistry:
     @classmethod
     def get_cache(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         force_new: bool = False,
         **kwargs,
-    ) -> "CacheProviderInterface":
+    ) -> CacheProviderInterface:
         """
         Get a cache provider instance.
 
@@ -125,7 +126,7 @@ class ProviderRegistry:
     # =========================================================================
 
     @classmethod
-    def register_queue(cls, name: str, provider_class: Type) -> None:
+    def register_queue(cls, name: str, provider_class: type) -> None:
         """
         Register a task queue adapter.
 
@@ -139,10 +140,10 @@ class ProviderRegistry:
     @classmethod
     def get_queue(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         force_new: bool = False,
         **kwargs,
-    ) -> "TaskQueueInterface":
+    ) -> TaskQueueInterface:
         """
         Get a task queue instance.
 
@@ -176,8 +177,8 @@ class ProviderRegistry:
     @classmethod
     def set_defaults(
         cls,
-        cache: Optional[str] = None,
-        queue: Optional[str] = None,
+        cache: str | None = None,
+        queue: str | None = None,
     ) -> None:
         """
         Set default providers.
@@ -194,7 +195,7 @@ class ProviderRegistry:
             logger.debug(f"[ProviderRegistry] Default queue: {queue}")
 
     @classmethod
-    def list_providers(cls) -> Dict[str, list]:
+    def list_providers(cls) -> dict[str, list]:
         """
         List all registered providers.
 
@@ -207,7 +208,7 @@ class ProviderRegistry:
         }
 
     @classmethod
-    def get_defaults(cls) -> Dict[str, str]:
+    def get_defaults(cls) -> dict[str, str]:
         """
         Get current default providers.
 
@@ -224,7 +225,7 @@ class ProviderRegistry:
     # =========================================================================
 
     @classmethod
-    def health_check_all(cls) -> Dict[str, bool]:
+    def health_check_all(cls) -> dict[str, bool]:
         """
         Perform health check on all providers.
 
@@ -265,7 +266,7 @@ class ProviderRegistry:
         return all(results.values())
 
     @classmethod
-    def get_health_summary(cls) -> Dict[str, Any]:
+    def get_health_summary(cls) -> dict[str, Any]:
         """
         Get detailed health summary for monitoring.
 
@@ -289,7 +290,10 @@ class ProviderRegistry:
         """Auto-register available cache adapters."""
         # Try selfhealing package first
         try:
-            from selfhealing.adapters.cache import RedisCacheAdapter, InMemoryCacheAdapter
+            from selfhealing.adapters.cache import (
+                InMemoryCacheAdapter,
+                RedisCacheAdapter,
+            )
 
             if "redis" not in cls._cache_providers:
                 cls.register_cache("redis", RedisCacheAdapter)
@@ -421,20 +425,18 @@ class ProviderRegistry:
     @classmethod
     @contextmanager
     def override_provider(
-        cls, 
-        provider_type: str, 
-        mock_instance: Any
+        cls, provider_type: str, mock_instance: Any
     ) -> Generator[None, None, None]:
         """
         테스트용 Provider 임시 교체 (Context Manager).
-        
+
         전역 상태를 안전하게 교체하고 자동으로 복원합니다.
         private 속성에 직접 접근하는 대신 이 메서드를 사용하세요.
-        
+
         Args:
             provider_type: "cache" 또는 "queue"
             mock_instance: Mock 인스턴스
-        
+
         Usage:
             >>> mock_cache = MagicMock()
             >>> with ProviderRegistry.override_provider("cache", mock_cache):
@@ -442,11 +444,11 @@ class ProviderRegistry:
             ...     result = ProviderRegistry.get_cache()
             ...     assert result is mock_cache
             >>> # 자동 복원
-        
+
         Thread Safety:
-            이 메서드는 thread-local이 아니므로, 
+            이 메서드는 thread-local이 아니므로,
             멀티스레드 테스트에서는 각 테스트가 독립 프로세스에서 실행되어야 합니다.
-        
+
         Raises:
             ValueError: provider_type이 "cache" 또는 "queue"가 아닌 경우
         """
@@ -455,20 +457,24 @@ class ProviderRegistry:
                 f"Unknown provider_type: {provider_type}. "
                 f"Must be 'cache' or 'queue'."
             )
-        
-        instances = cls._cache_instances if provider_type == "cache" else cls._queue_instances
-        default_name = cls._default_cache if provider_type == "cache" else cls._default_queue
-        
+
+        instances = (
+            cls._cache_instances if provider_type == "cache" else cls._queue_instances
+        )
+        default_name = (
+            cls._default_cache if provider_type == "cache" else cls._default_queue
+        )
+
         # 기존 인스턴스 백업
         old_instance = instances.get(default_name)
-        
+
         # Mock 인스턴스 설정
         instances[default_name] = mock_instance
         logger.debug(
             f"[ProviderRegistry] Override {provider_type}: "
             f"{type(mock_instance).__name__}"
         )
-        
+
         try:
             yield
         finally:
@@ -478,23 +484,23 @@ class ProviderRegistry:
             else:
                 instances.pop(default_name, None)
             logger.debug(f"[ProviderRegistry] Restored {provider_type}")
-    
+
     @classmethod
     @contextmanager
-    def isolated_test_context(cls) -> Generator["ProviderRegistry", None, None]:
+    def isolated_test_context(cls) -> Generator[ProviderRegistry, None, None]:
         """
         완전히 격리된 테스트 컨텍스트 제공.
-        
+
         모든 인스턴스와 기본값을 임시로 교체하고 자동 복원합니다.
         테스트 간 전역 상태 오염을 방지합니다.
-        
+
         Usage:
             >>> with ProviderRegistry.isolated_test_context() as registry:
             ...     registry.set_defaults(cache="memory", queue="sync")
             ...     # 격리된 환경에서 테스트
             ...     cache = registry.get_cache()
             >>> # 자동 복원 - 기존 상태로 돌아감
-        
+
         Returns:
             ProviderRegistry 클래스 자체 (메서드 체이닝용)
         """
@@ -503,13 +509,13 @@ class ProviderRegistry:
         old_queue_instances = cls._queue_instances.copy()
         old_default_cache = cls._default_cache
         old_default_queue = cls._default_queue
-        
+
         # 초기화 (빈 상태로 시작)
         cls._cache_instances = {}
         cls._queue_instances = {}
-        
+
         logger.debug("[ProviderRegistry] Entering isolated test context")
-        
+
         try:
             yield cls
         finally:

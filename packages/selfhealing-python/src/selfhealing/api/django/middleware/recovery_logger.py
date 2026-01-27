@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -45,7 +45,7 @@ class SelfHealingRecoveryLogger:
 
     def __init__(self):
         """Initialize recovery logger."""
-        self._chains: Dict[str, Dict[str, Any]] = {}
+        self._chains: dict[str, dict[str, Any]] = {}
         self._audit_logger = None
         self._lock = None
 
@@ -68,7 +68,7 @@ class SelfHealingRecoveryLogger:
         self,
         trigger: str,
         affected_services: list[str],
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Start a new recovery event chain."""
         import uuid
@@ -106,8 +106,8 @@ class SelfHealingRecoveryLogger:
         self,
         chain_id: str,
         event_type: str,
-        data: Dict[str, Any],
-        request: Optional["HttpRequest"] = None,
+        data: dict[str, Any],
+        request: HttpRequest | None = None,
     ) -> bool:
         """
         Log an event to the recovery chain.
@@ -135,7 +135,10 @@ class SelfHealingRecoveryLogger:
         # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
-                from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
+                from selfhealing.audit.event_buffer import (
+                    AuditEventType,
+                    RequestAuditBuffer,
+                )
 
                 buffer = RequestAuditBuffer.get_or_create(request)
                 buffer.add(
@@ -174,8 +177,8 @@ class SelfHealingRecoveryLogger:
         self,
         chain_id: str,
         success: bool = True,
-        summary: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        summary: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Complete a recovery chain and return summary."""
         self._lazy_init()
 
@@ -190,7 +193,9 @@ class SelfHealingRecoveryLogger:
 
             # 소요 시간 계산
             started = datetime.fromisoformat(chain["started_at"].replace("Z", "+00:00"))
-            completed = datetime.fromisoformat(chain["completed_at"].replace("Z", "+00:00"))
+            completed = datetime.fromisoformat(
+                chain["completed_at"].replace("Z", "+00:00")
+            )
             chain["duration_seconds"] = (completed - started).total_seconds()
 
             if summary:
@@ -210,13 +215,13 @@ class SelfHealingRecoveryLogger:
 
         return chain
 
-    def get_chain(self, chain_id: str) -> Optional[Dict[str, Any]]:
+    def get_chain(self, chain_id: str) -> dict[str, Any] | None:
         """Get a recovery chain by ID."""
         self._lazy_init()
         with self._lock:
             return self._chains.get(chain_id)
 
-    def generate_audit_report(self, chain_id: str) -> Dict[str, Any]:
+    def generate_audit_report(self, chain_id: str) -> dict[str, Any]:
         """Generate audit report for a recovery chain."""
         chain = self.get_chain(chain_id)
         if not chain:

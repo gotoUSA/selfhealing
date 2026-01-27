@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -185,7 +184,7 @@ class ApiViewSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_api_view_settings: Optional[ApiViewSettings] = None
+_api_view_settings: ApiViewSettings | None = None
 
 
 def get_api_view_settings() -> ApiViewSettings:

@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -80,7 +79,7 @@ class CircuitBreakerSettings(BaseSettings):
         le=1000,
         description="Request limit in half-open state",
     )
-    excluded_exceptions: List[str] = Field(
+    excluded_exceptions: list[str] = Field(
         default_factory=list,
         description="Exception types to exclude from failure count",
     )
@@ -144,7 +143,7 @@ class CircuitBreakerSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[CircuitBreakerSettings] = None
+_settings: CircuitBreakerSettings | None = None
 
 
 def get_circuit_breaker_settings() -> CircuitBreakerSettings:

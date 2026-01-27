@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 from rest_framework.permissions import BasePermission
 
@@ -26,24 +26,28 @@ logger = logging.getLogger(__name__)
 
 def _is_auth_disabled() -> bool:
     """Check if SelfHealing auth is disabled for testing."""
-    return os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in ("true", "1", "yes")
+    return os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
 
 class IsSelfHealingAuthenticated(BasePermission):
     """
     인증된 사용자만 접근 허용 (테스트 환경 바이패스 지원).
-    
+
     DISABLE_SELFHEALING_AUTH=true 환경 변수가 설정되면
     인증 없이도 접근을 허용합니다.
     """
-    
+
     message = "인증이 필요합니다."
-    
+
     def has_permission(self, request: Request, view: APIView) -> bool:
         # 테스트 환경에서 인증 바이패스
         if _is_auth_disabled():
             return True
-        
+
         return bool(request.user and request.user.is_authenticated)
 
 
@@ -62,7 +66,9 @@ class IsViewer(BasePermission):
     - staff 또는 'selfhealing_viewer' 그룹 멤버
     """
 
-    message = "Self-Healing 조회 권한이 필요합니다. selfhealing_viewer 그룹에 속해야 합니다."
+    message = (
+        "Self-Healing 조회 권한이 필요합니다. selfhealing_viewer 그룹에 속해야 합니다."
+    )
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -78,7 +84,7 @@ class IsViewer(BasePermission):
         # 테스트 환경에서 인증 바이패스
         if _is_auth_disabled():
             return True
-            
+
         if not request.user or not request.user.is_authenticated:
             return False
 
@@ -125,7 +131,7 @@ class IsOperator(BasePermission):
         # 테스트 환경에서 인증 바이패스
         if _is_auth_disabled():
             return True
-            
+
         if not request.user or not request.user.is_authenticated:
             return False
 
@@ -159,7 +165,9 @@ class IsSelfHealingAdmin(BasePermission):
     - Fail-Secure: 권한 확인 실패 시 거부
     """
 
-    message = "Self-Healing 관리자 권한이 필요합니다. selfhealing_admin 그룹에 속해야 합니다."
+    message = (
+        "Self-Healing 관리자 권한이 필요합니다. selfhealing_admin 그룹에 속해야 합니다."
+    )
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -179,7 +187,7 @@ class IsSelfHealingAdmin(BasePermission):
             # 테스트 환경에서 인증 바이패스
             if _is_auth_disabled():
                 return True
-                
+
             if not request.user or not request.user.is_authenticated:
                 return False
 
@@ -226,6 +234,7 @@ class EmergencyEscalationPermission(BasePermission):
         """긴급 모드 자동 만료 시간 (Settings에서 로드)."""
         try:
             from selfhealing.settings.governance import get_governance_settings
+
             return get_governance_settings().emergency_expiry_hours
         except ImportError:
             return 4  # 기본값
@@ -321,9 +330,9 @@ class ThresholdBasedPermission(BasePermission):
     def __init__(self) -> None:
         """임계값을 런타임 설정 또는 환경변수에서 로드."""
         super().__init__()
-        self._cached_thresholds: Optional[Dict[str, float]] = None
+        self._cached_thresholds: dict[str, float] | None = None
 
-    def _get_thresholds(self) -> Dict[str, float]:
+    def _get_thresholds(self) -> dict[str, float]:
         """
         임계값을 가져옵니다.
 
@@ -338,6 +347,7 @@ class ThresholdBasedPermission(BasePermission):
         # 런타임 설정 조회 시도
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             governance = manager.get_governance_config()
             if governance:
@@ -347,11 +357,14 @@ class ThresholdBasedPermission(BasePermission):
                     "dual_approval": governance.get("threshold_dual_approval", 0.50),
                 }
         except Exception as e:
-            logger.debug(f"[RBAC] RuntimeConfigManager unavailable, using Settings: {e}")
+            logger.debug(
+                f"[RBAC] RuntimeConfigManager unavailable, using Settings: {e}"
+            )
 
         # Settings 폴백 (환경변수 대신)
         try:
             from selfhealing.settings.governance import get_governance_settings
+
             settings = get_governance_settings()
             return {
                 "operator_approve": settings.threshold_operator,
@@ -367,7 +380,7 @@ class ThresholdBasedPermission(BasePermission):
             }
 
     @property
-    def thresholds(self) -> Dict[str, float]:
+    def thresholds(self) -> dict[str, float]:
         """임계값 속성 (매 요청 시 새로 조회)."""
         return self._get_thresholds()
 
@@ -403,14 +416,21 @@ class ThresholdBasedPermission(BasePermission):
 
         # admin_approve 초과, dual_approval 이하: Admin + 경고 로그
         if discrepancy <= current_thresholds["dual_approval"]:
-            return self._check_high_risk_approval(request, view, discrepancy, current_thresholds)
+            return self._check_high_risk_approval(
+                request, view, discrepancy, current_thresholds
+            )
 
         # dual_approval 초과: 4-Eyes 듀얼 승인 강제
-        return self._check_dual_approval_required(request, view, discrepancy, current_thresholds)
+        return self._check_dual_approval_required(
+            request, view, discrepancy, current_thresholds
+        )
 
     def _check_high_risk_approval(
-        self, request: Request, view: APIView, discrepancy: float,
-        thresholds: Optional[Dict[str, float]] = None
+        self,
+        request: Request,
+        view: APIView,
+        discrepancy: float,
+        thresholds: dict[str, float] | None = None,
     ) -> bool:
         """
         고위험 작업: Admin + 경고 로그 (30% ~ 50% 구간).
@@ -437,8 +457,11 @@ class ThresholdBasedPermission(BasePermission):
         return False
 
     def _check_dual_approval_required(
-        self, request: Request, view: APIView, discrepancy: float,
-        thresholds: Optional[Dict[str, float]] = None
+        self,
+        request: Request,
+        view: APIView,
+        discrepancy: float,
+        thresholds: dict[str, float] | None = None,
     ) -> bool:
         """
         4-Eyes 듀얼 승인 강제 (50% 초과).
@@ -480,6 +503,7 @@ class ThresholdBasedPermission(BasePermission):
         # approval_id 검증
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             all_requests = manager.get_approval_requests()
 
@@ -511,7 +535,9 @@ class ThresholdBasedPermission(BasePermission):
 
             # approval_id를 찾지 못함
             self.message = f"승인 요청 '{approval_id}'을(를) 찾을 수 없습니다."
-            logger.warning(f"[RBAC] Approval request not found: approval_id={approval_id}")
+            logger.warning(
+                f"[RBAC] Approval request not found: approval_id={approval_id}"
+            )
             return False
 
         except Exception as e:
@@ -560,7 +586,7 @@ class ThresholdBasedPermission(BasePermission):
             # Best-effort: 알림 실패해도 권한 체크는 계속
             logger.warning(f"[RBAC] Failed to send dual approval notification: {e}")
 
-    def _get_client_ip(self, request: Request) -> Optional[str]:
+    def _get_client_ip(self, request: Request) -> str | None:
         """클라이언트 IP 추출."""
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
@@ -571,46 +597,46 @@ class ThresholdBasedPermission(BasePermission):
 class IsPanicRollbackAuthorized(BasePermission):
     """
     긴급 롤백(Panic Rollback) 권한.
-    
+
     Canary Rollout 긴급 전체 롤백을 위한 Break Glass 권한.
     4-Eyes 승인 없이 단일 승인자가 긴급 실행 가능.
-    
+
     허용 조건:
     - Admin 권한 보유자
     - 또는 Emergency Escalation 권한 보유자 (reason 필수)
-    
+
     강제 Audit:
     - 모든 긴급 롤백은 CanaryAudit에 기록됨
     - reason 필수 (사후 검토 보장)
-    
+
     Reference:
     - AWS Break Glass Pattern
     - docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
     """
-    
+
     message = (
         "긴급 롤백 권한이 없습니다. "
         "Admin 또는 Emergency Escalation 권한이 필요합니다."
     )
-    
+
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
         긴급 롤백 권한 체크.
-        
+
         Args:
             request: HTTP 요청 객체 (data.reason 필드 사용)
             view: 뷰 객체
-        
+
         Returns:
             bool: 권한 여부
         """
         # 테스트 환경에서 인증 바이패스
         if _is_auth_disabled():
             return True
-        
+
         if not request.user or not request.user.is_authenticated:
             return False
-        
+
         # reason 필수 검증 (강제 Audit)
         reason = request.data.get("reason", "").strip()
         if not reason:
@@ -623,7 +649,7 @@ class IsPanicRollbackAuthorized(BasePermission):
                 f"user={request.user}"
             )
             return False
-        
+
         # Admin은 항상 허용
         if IsSelfHealingAdmin().has_permission(request, view):
             logger.warning(
@@ -631,7 +657,7 @@ class IsPanicRollbackAuthorized(BasePermission):
                 f"user={request.user}, reason={reason[:50]}"
             )
             return True
-        
+
         # Operator + Emergency Escalation (Break Glass)
         if IsOperator().has_permission(request, view):
             logger.warning(
@@ -639,51 +665,51 @@ class IsPanicRollbackAuthorized(BasePermission):
                 f"user={request.user}, reason={reason[:50]}"
             )
             return True
-        
+
         return False
 
 
 class HasChaosTestPermission(BasePermission):
     """
     X-Test/Chaos 실험 API 권한 (2중 보안 장치 - 1차 Django RBAC).
-    
+
     X-Test-Mode API에 대한 Django RBAC 기반 권한 클래스.
     헤더 검증(XTestModeMixin.check_chaos_permission)과 함께 2중 보안을 구성합니다.
-    
+
     허용 조건 (OR):
     - 테스트 바이패스: DISABLE_SELFHEALING_AUTH=true
     - Django superuser
     - selfhealing_admin 그룹 멤버
     - selfhealing_chaos_tester 그룹 멤버
-    
+
     차단 조건 (무조건):
     - ENVIRONMENT == production (Fail-Secure)
-    
+
     로깅:
     - 권한 거부: WARNING (사용자, 이유)
     - 프로덕션 차단: ERROR
     - 권한 허용: DEBUG
-    
+
     보안:
     - Fail-Secure: 모든 예외는 거부로 처리
     """
-    
+
     message = (
         "X-Test/Chaos 실험 권한이 없습니다. "
         "selfhealing_admin 또는 selfhealing_chaos_tester 그룹에 속해야 합니다."
     )
-    
+
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
         X-Test/Chaos API 접근 권한 체크.
-        
+
         Args:
             request: HTTP 요청 객체
             view: 뷰 객체
-        
+
         Returns:
             bool: 권한 여부
-        
+
         Note:
             Fail-Secure: 모든 예외 발생 시 거부
         """
@@ -695,7 +721,7 @@ class HasChaosTestPermission(BasePermission):
                     f"path={getattr(request, 'path', 'unknown')}"
                 )
                 return True
-            
+
             # 2. 프로덕션 환경 무조건 차단 (Fail-Secure)
             environment = os.environ.get("ENVIRONMENT", "development").lower()
             if environment == "production":
@@ -709,7 +735,7 @@ class HasChaosTestPermission(BasePermission):
                     "보안 정책에 따라 접근이 차단되었습니다."
                 )
                 return False
-            
+
             # 3. 인증 필요
             if not request.user or not request.user.is_authenticated:
                 logger.warning(
@@ -718,7 +744,7 @@ class HasChaosTestPermission(BasePermission):
                 )
                 self.message = "X-Test/Chaos API 접근에는 인증이 필요합니다."
                 return False
-            
+
             # 4. Django superuser 자동 허용
             if request.user.is_superuser:
                 logger.debug(
@@ -726,27 +752,28 @@ class HasChaosTestPermission(BasePermission):
                     f"user={request.user}"
                 )
                 return True
-            
+
             # 5. 그룹 기반 권한 체크 (selfhealing_admin 또는 selfhealing_chaos_tester)
             allowed_groups = ["selfhealing_admin", "selfhealing_chaos_tester"]
             if request.user.groups.filter(name__in=allowed_groups).exists():
                 user_groups = list(
-                    request.user.groups.filter(name__in=allowed_groups)
-                    .values_list("name", flat=True)
+                    request.user.groups.filter(name__in=allowed_groups).values_list(
+                        "name", flat=True
+                    )
                 )
                 logger.debug(
                     f"[RBAC] X-Test permission granted (group): "
                     f"user={request.user}, groups={user_groups}"
                 )
                 return True
-            
+
             # 6. 권한 없음 - 거부
             logger.warning(
                 f"[RBAC] X-Test permission denied (no group): "
                 f"user={request.user}, required_groups={allowed_groups}"
             )
             return False
-            
+
         except Exception as e:
             # Fail-Secure: 예외 발생 시 거부
             logger.error(
@@ -755,8 +782,8 @@ class HasChaosTestPermission(BasePermission):
             )
             self.message = "권한 확인 중 오류가 발생했습니다. 접근이 거부되었습니다."
             return False
-    
-    def _get_client_ip(self, request: Request) -> Optional[str]:
+
+    def _get_client_ip(self, request: Request) -> str | None:
         """클라이언트 IP 추출."""
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:

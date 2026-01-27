@@ -21,7 +21,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Dict, Optional
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
@@ -50,18 +49,18 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
         For multi-server production, use Redis or Database adapters.
     """
 
-    _instance: Optional["InMemoryRateLimitStorage"] = None
+    _instance: InMemoryRateLimitStorage | None = None
     _instance_lock = threading.Lock()
 
     def __init__(self) -> None:
         """Initialize in-memory storage."""
-        self._data: Dict[str, Dict] = {}
+        self._data: dict[str, dict] = {}
         self._lock = threading.RLock()
         self._cleanup_counter = 0
         self._cleanup_interval = 100  # Cleanup every 100 operations
 
     @classmethod
-    def get_instance(cls) -> "InMemoryRateLimitStorage":
+    def get_instance(cls) -> InMemoryRateLimitStorage:
         """Get singleton instance for process-wide state sharing."""
         if cls._instance is None:
             with cls._instance_lock:
@@ -98,14 +97,20 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             # Consider expired if:
             # - Cooldown has passed AND counter is zero AND not updated recently
-            if cooldown_until < now and consecutive_429s == 0 and now - last_updated > 3600:  # 1 hour
+            if (
+                cooldown_until < now
+                and consecutive_429s == 0
+                and now - last_updated > 3600
+            ):  # 1 hour
                 expired_keys.append(key)
 
         for key in expired_keys:
             del self._data[key]
 
         if expired_keys:
-            logger.debug(f"[InMemoryRateLimitStorage] Cleaned up {len(expired_keys)} expired entries")
+            logger.debug(
+                f"[InMemoryRateLimitStorage] Cleaned up {len(expired_keys)} expired entries"
+            )
 
     def get_state(self, key: str) -> RateLimitState:
         """Get rate limit state from memory."""
@@ -123,7 +128,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
         self,
         key: str,
         cooldown_until: float,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """Set cooldown in memory."""
         with self._lock:
@@ -137,7 +142,10 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             self._maybe_cleanup()
 
-            logger.debug(f"[InMemoryRateLimitStorage] Set cooldown for '{key}': " f"until={cooldown_until}")
+            logger.debug(
+                f"[InMemoryRateLimitStorage] Set cooldown for '{key}': "
+                f"until={cooldown_until}"
+            )
 
     def increment_consecutive_429s(self, key: str) -> int:
         """Increment 429 counter in memory."""
@@ -147,14 +155,19 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             if key not in self._data:
                 self._data[key] = {"consecutive_429s": 0}
 
-            self._data[key]["consecutive_429s"] = self._data[key].get("consecutive_429s", 0) + 1
+            self._data[key]["consecutive_429s"] = (
+                self._data[key].get("consecutive_429s", 0) + 1
+            )
             self._data[key]["last_updated"] = now
 
             new_value = self._data[key]["consecutive_429s"]
 
             self._maybe_cleanup()
 
-            logger.debug(f"[InMemoryRateLimitStorage] Incremented 429 counter for '{key}': " f"{new_value}")
+            logger.debug(
+                f"[InMemoryRateLimitStorage] Incremented 429 counter for '{key}': "
+                f"{new_value}"
+            )
             return new_value
 
     def reset_consecutive_429s(self, key: str) -> None:

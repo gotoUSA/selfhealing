@@ -47,8 +47,8 @@ DLQ Test Endpoints:
 
 # Base utilities and Regional Scope constants
 from .base import (
-    XTestModeMixin,
     GLOBAL_SCOPE_ENDPOINT_PATTERNS,
+    XTestModeMixin,
     add_healing_event,
     add_healing_incident,
     collect_system_snapshot,
@@ -64,9 +64,17 @@ from .circuit_breaker import (
     FastFailTestView,
     InjectCBFailureView,
     ResetCBView,
+    SwitchToAutoModeView,  # New! For releasing manually_controlled state
     TriggerCBRecoveryView,
     TryRecoveryTransitionView,  # Domain-free OPEN → HALF_OPEN transition
-    SwitchToAutoModeView,  # New! For releasing manually_controlled state
+)
+
+# DLQ X-Test views
+from .dlq import (
+    DLQXTestStatusView,
+    ForceStatusView,
+    InjectDLQEntryView,
+    ResetDLQXTestView,
 )
 
 # Error Budget views
@@ -74,9 +82,31 @@ from .error_budget import (
     InjectErrorBudgetView,
 )
 
-# Snapshot views
-from .snapshot import (
-    SystemSnapshotView,
+# Idempotency X-Test views
+from .idempotency import (
+    CheckDuplicateView,
+    ClearKeysView,
+    GenerateKeyView,
+    IdempotencyStatusView,
+    RegisterKeyView,
+)
+
+# Integration X-Test views
+from .integration import (
+    FullSnapshotView,
+    ResetView,
+    RunScenarioView,
+    ScenarioStatusView,
+)
+
+# Integration Scenario utilities
+from .integration_scenarios import (
+    SCENARIO_REGISTRY,
+    IntegrationScenario,
+    ScenarioResult,
+    ScenarioStatus,
+    get_scenario_class,
+    list_available_scenarios,
 )
 
 # Observability views (Stage 51)
@@ -89,64 +119,34 @@ from .observability import (
     RecordHealingEventView,
 )
 
-# DLQ X-Test views
-from .dlq import (
-    InjectDLQEntryView,
-    DLQXTestStatusView,
-    ForceStatusView,
-    ResetDLQXTestView,
+# Rate Limit X-Test views
+from .rate_limit import (
+    RateLimitClientView,
+    RateLimitConfigXTestView,
+    RateLimitHistoryView,
+    RateLimitResetView,
+    RateLimitStatusView,
 )
 
 # Replay X-Test views
 from .replay import (
-    ReplaySingleView,
     ReplayBatchView,
-    TriggerReplayOnCBCloseView,
+    ReplaySingleView,
     ReplayStatusView,
+    TriggerReplayOnCBCloseView,
 )
 
 # Retry X-Test views
 from .retry import (
     BackoffPreviewView,
-    RetrySimulateView,
-    RetryRateLimitStatusView,
     RetryConfigView,
+    RetryRateLimitStatusView,
+    RetrySimulateView,
 )
 
-# Rate Limit X-Test views
-from .rate_limit import (
-    RateLimitStatusView,
-    RateLimitClientView,
-    RateLimitHistoryView,
-    RateLimitConfigXTestView,
-    RateLimitResetView,
-)
-
-# Idempotency X-Test views
-from .idempotency import (
-    GenerateKeyView,
-    CheckDuplicateView,
-    IdempotencyStatusView,
-    RegisterKeyView,
-    ClearKeysView,
-)
-
-# Integration X-Test views
-from .integration import (
-    RunScenarioView,
-    ScenarioStatusView,
-    FullSnapshotView,
-    ResetView,
-)
-
-# Integration Scenario utilities
-from .integration_scenarios import (
-    SCENARIO_REGISTRY,
-    IntegrationScenario,
-    ScenarioResult,
-    ScenarioStatus,
-    get_scenario_class,
-    list_available_scenarios,
+# Snapshot views
+from .snapshot import (
+    SystemSnapshotView,
 )
 
 # Legacy aliases for backward compatibility

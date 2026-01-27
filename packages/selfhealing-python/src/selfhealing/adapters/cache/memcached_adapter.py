@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import time
 import uuid
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
@@ -37,7 +36,7 @@ class MemcachedDistributedLock(DistributedLock):
         client,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
     ):
         """
         Initialize the lock.
@@ -55,7 +54,7 @@ class MemcachedDistributedLock(DistributedLock):
         self._token = str(uuid.uuid4())
         self._acquired = False
 
-    def acquire(self, blocking: bool = True, timeout: Optional[float] = None) -> bool:
+    def acquire(self, blocking: bool = True, timeout: float | None = None) -> bool:
         """
         Acquire the lock using Memcached ADD.
 
@@ -149,7 +148,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
 
     def __init__(
         self,
-        servers: Optional[list[str]] = None,
+        servers: list[str] | None = None,
         key_prefix: str = "selfhealing:",
         connect_timeout: float = 5.0,
         timeout: float = 5.0,
@@ -180,7 +179,8 @@ class MemcachedCacheAdapter(CacheProviderInterface):
                 self._pymemcache = pymemcache
             except ImportError:
                 raise ImportError(
-                    "pymemcache is required for MemcachedCacheAdapter. " "Install it with: pip install pymemcache"
+                    "pymemcache is required for MemcachedCacheAdapter. "
+                    "Install it with: pip install pymemcache"
                 )
         return self._pymemcache
 
@@ -225,7 +225,6 @@ class MemcachedCacheAdapter(CacheProviderInterface):
                 parsed_servers.append((server, 11211))
 
         from pymemcache.client.hash import HashClient
-        from pymemcache import serde
 
         # Use JSON serializer for complex objects
         return HashClient(
@@ -268,7 +267,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
     # Basic Operations
     # =========================================================================
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value by key."""
         try:
             return self.client.get(self._make_key(key))
@@ -280,7 +279,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         self,
         key: str,
         value: Any,
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         try:
@@ -376,7 +375,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             logger.error(f"[MemcachedCache] Expire failed for key '{key}': {e}")
             return False
 
-    def ttl(self, key: str) -> Optional[int]:
+    def ttl(self, key: str) -> int | None:
         """
         Get remaining TTL in seconds.
 
@@ -397,7 +396,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         self,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
     ) -> DistributedLock:
         """
         Get a distributed lock instance.
@@ -439,7 +438,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
     def mset(
         self,
         mapping: dict[str, Any],
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """Set multiple values at once."""
         try:
@@ -507,7 +506,9 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         Note: Requires Memcached 1.4.8+
         """
         try:
-            return self.client.touch(self._make_key(key), expire=int(ttl.total_seconds()))
+            return self.client.touch(
+                self._make_key(key), expire=int(ttl.total_seconds())
+            )
         except Exception as e:
             logger.error(f"[MemcachedCache] Touch failed for key '{key}': {e}")
             return False

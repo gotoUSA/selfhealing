@@ -18,7 +18,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -149,7 +148,7 @@ class AntiFlappingSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[AntiFlappingSettings] = None
+_settings: AntiFlappingSettings | None = None
 
 
 def get_anti_flapping_settings() -> AntiFlappingSettings:

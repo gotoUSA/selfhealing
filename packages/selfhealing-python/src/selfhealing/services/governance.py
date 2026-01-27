@@ -37,10 +37,11 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass, asdict, field
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional, List, Callable
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ EMERGENCY_STATE_STORAGE_KEY = "governance:emergency_state"
 
 class OperationMode(Enum):
     """운영 모드 정의."""
+
     NORMAL = "NORMAL"
     STRICT = "STRICT"
 
@@ -79,22 +81,23 @@ class EmergencyState:
         acknowledged_by: 경고 확인한 Admin
         acknowledged_at: 경고 확인 시각
     """
+
     is_active: bool = False
     mode: str = "NORMAL"
-    activated_at: Optional[str] = None
-    activated_by: Optional[str] = None
-    reason: Optional[str] = None
-    warning_sent_at: Optional[str] = None
-    final_warning_sent_at: Optional[str] = None
-    acknowledged_by: Optional[str] = None
-    acknowledged_at: Optional[str] = None
+    activated_at: str | None = None
+    activated_by: str | None = None
+    reason: str | None = None
+    warning_sent_at: str | None = None
+    final_warning_sent_at: str | None = None
+    acknowledged_by: str | None = None
+    acknowledged_at: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "EmergencyState":
+    def from_dict(cls, data: dict[str, Any]) -> EmergencyState:
         """Create from dictionary."""
         if not data:
             return cls()
@@ -135,18 +138,20 @@ class EmergencyModeTracker:
     def __init__(self):
         """Initialize EmergencyModeTracker."""
         self._lock = threading.RLock()
-        self._state: Optional[EmergencyState] = None
-        self._notification_handlers: List[Callable] = []
+        self._state: EmergencyState | None = None
+        self._notification_handlers: list[Callable] = []
 
     def _get_backend(self):
         """Get state backend (lazy import to avoid circular dependency)."""
         from selfhealing.core.state_backend import get_state_backend
+
         return get_state_backend()
 
-    def _get_governance_config(self) -> Dict[str, Any]:
+    def _get_governance_config(self) -> dict[str, Any]:
         """Get governance configuration."""
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             return manager.get_governance_config()
         except Exception as e:
@@ -191,7 +196,7 @@ class EmergencyModeTracker:
         activated_by: str,
         reason: str = "",
         mode: str = "STRICT",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Record emergency mode activation.
 
@@ -245,7 +250,7 @@ class EmergencyModeTracker:
         self,
         restored_by: str,
         reason: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Record normal mode restoration.
 
@@ -304,7 +309,7 @@ class EmergencyModeTracker:
                 "previous_mode": previous_mode,
             }
 
-    def check_expiry_status(self) -> Dict[str, Any]:
+    def check_expiry_status(self) -> dict[str, Any]:
         """
         Check emergency mode expiry status.
 
@@ -344,13 +349,12 @@ class EmergencyModeTracker:
             elapsed = now - activated_at
             hours_elapsed = elapsed.total_seconds() / 3600
             hours_remaining = max(0, expiry_hours - hours_elapsed)
-            
+
             # Calculate expiry time
             expires_at = activated_at + timedelta(hours=expiry_hours)
 
             should_warn = (
-                hours_elapsed >= warning_hours
-                and state.warning_sent_at is None
+                hours_elapsed >= warning_hours and state.warning_sent_at is None
             )
             should_final_warn = (
                 hours_elapsed >= final_warning_hours
@@ -391,7 +395,7 @@ class EmergencyModeTracker:
             self._save_state(state)
             logger.info("[Governance] Final warning notification marked as sent")
 
-    def acknowledge_warning(self, acknowledged_by: str) -> Dict[str, Any]:
+    def acknowledge_warning(self, acknowledged_by: str) -> dict[str, Any]:
         """
         Admin acknowledges the warning.
 
@@ -412,8 +416,7 @@ class EmergencyModeTracker:
             self._save_state(state)
 
             logger.info(
-                f"[Governance] Emergency warning acknowledged: "
-                f"by={acknowledged_by}"
+                f"[Governance] Emergency warning acknowledged: " f"by={acknowledged_by}"
             )
 
             return {
@@ -422,7 +425,7 @@ class EmergencyModeTracker:
                 "acknowledged_at": state.acknowledged_at,
             }
 
-    def auto_restore_to_normal(self) -> Dict[str, Any]:
+    def auto_restore_to_normal(self) -> dict[str, Any]:
         """
         Automatically restore to normal mode (called by Celery Beat task).
 
@@ -444,8 +447,8 @@ class EmergencyModeTracker:
         self,
         event_type: str,
         state: EmergencyState,
-        config: Dict[str, Any],
-        extra: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any],
+        extra: dict[str, Any] | None = None,
     ) -> None:
         """
         Send notification (to be extended with actual notification service).
@@ -479,7 +482,7 @@ class EmergencyModeTracker:
         self,
         event_type: str,
         state: EmergencyState,
-        extra: Optional[Dict[str, Any]] = None,
+        extra: dict[str, Any] | None = None,
     ) -> str:
         """Build notification message."""
         if event_type == "emergency_activated":
@@ -530,7 +533,7 @@ class EmergencyModeTracker:
 # Singleton Access
 # =============================================================================
 
-_emergency_tracker: Optional[EmergencyModeTracker] = None
+_emergency_tracker: EmergencyModeTracker | None = None
 _tracker_lock = threading.Lock()
 
 

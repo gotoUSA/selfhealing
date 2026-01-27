@@ -11,14 +11,13 @@ Replaces:
 Environment Variables:
     SELFHEALING_GOVERNANCE_THRESHOLD_OPERATOR=0.15
     SELFHEALING_GOVERNANCE_EMERGENCY_EXPIRY_HOURS=8
-    
+
     # Celery Task 재시도 설정
     SELFHEALING_GOVERNANCE_EXPIRY_CHECK_MAX_RETRIES=3
     SELFHEALING_GOVERNANCE_EXPIRY_CHECK_RETRY_DELAY=60
 """
 
 import logging
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -105,7 +104,7 @@ class GovernanceSettings(BaseSettings):
         default=True,
         description="Send notification on emergency activation",
     )
-    notify_channels: List[str] = Field(
+    notify_channels: list[str] = Field(
         default_factory=lambda: ["slack", "email"],
         description="Notification channels for governance events",
     )
@@ -113,7 +112,7 @@ class GovernanceSettings(BaseSettings):
         default="#emergency-alerts",
         description="Slack channel for emergency alerts",
     )
-    emergency_email_recipients: List[str] = Field(
+    emergency_email_recipients: list[str] = Field(
         default_factory=list,
         description="Email recipients for emergency alerts",
     )
@@ -195,7 +194,7 @@ class GovernanceSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[GovernanceSettings] = None
+_settings: GovernanceSettings | None = None
 
 
 def get_governance_settings() -> GovernanceSettings:

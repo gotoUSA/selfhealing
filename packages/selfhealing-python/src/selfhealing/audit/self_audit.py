@@ -25,11 +25,10 @@ Usage:
 import logging
 import sys
 import threading
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +82,8 @@ class SelfAuditStats:
 
     total_events: int = 0
     failure_events: int = 0
-    events_by_type: Dict[str, int] = field(default_factory=dict)
-    last_event_time: Optional[datetime] = None
+    events_by_type: dict[str, int] = field(default_factory=dict)
+    last_event_time: datetime | None = None
     uptime_seconds: float = 0.0
 
 
@@ -103,26 +102,28 @@ class SelfAuditLogger:
     _lock = threading.Lock()
 
     # 실패로 간주되는 이벤트
-    FAILURE_EVENTS = frozenset([
-        SelfAuditEvent.WAL_WRITE_FAILED,
-        SelfAuditEvent.PRIMARY_STORE_FAILED,
-        SelfAuditEvent.BATCH_FLUSH_FAILED,
-        SelfAuditEvent.FALLBACK_FAILED,
-        SelfAuditEvent.SYSLOG_FAILED,
-        SelfAuditEvent.CHECKSUM_MISMATCH,
-        SelfAuditEvent.HASH_CHAIN_BROKEN,
-        SelfAuditEvent.WAL_CORRUPTED,
-        SelfAuditEvent.HEARTBEAT_MISSED,
-        SelfAuditEvent.WATCHDOG_TIMEOUT,
-        SelfAuditEvent.RECOVERY_FAILED,
-    ])
+    FAILURE_EVENTS = frozenset(
+        [
+            SelfAuditEvent.WAL_WRITE_FAILED,
+            SelfAuditEvent.PRIMARY_STORE_FAILED,
+            SelfAuditEvent.BATCH_FLUSH_FAILED,
+            SelfAuditEvent.FALLBACK_FAILED,
+            SelfAuditEvent.SYSLOG_FAILED,
+            SelfAuditEvent.CHECKSUM_MISMATCH,
+            SelfAuditEvent.HASH_CHAIN_BROKEN,
+            SelfAuditEvent.WAL_CORRUPTED,
+            SelfAuditEvent.HEARTBEAT_MISSED,
+            SelfAuditEvent.WATCHDOG_TIMEOUT,
+            SelfAuditEvent.RECOVERY_FAILED,
+        ]
+    )
 
     def __init__(self):
         """Initialize SelfAuditLogger."""
         self._logger = logging.getLogger("audit.self")
         self._start_time = datetime.now(timezone.utc)
         self._stats = SelfAuditStats()
-        self._recent_events: List[Dict[str, Any]] = []
+        self._recent_events: list[dict[str, Any]] = []
         self._max_recent_events = self._get_max_recent_events()
         self._stats_lock = threading.Lock()
 
@@ -131,6 +132,7 @@ class SelfAuditLogger:
         """Settings에서 max_recent_events 조회."""
         try:
             from selfhealing.settings.audit_settings import get_audit_settings
+
             return get_audit_settings().self_audit_max_recent_events
         except Exception:
             return 100  # 기본값
@@ -140,6 +142,7 @@ class SelfAuditLogger:
         """Settings에서 default_limit 조회."""
         try:
             from selfhealing.settings.audit_settings import get_audit_settings
+
             return get_audit_settings().self_audit_default_limit
         except Exception:
             return 20  # 기본값
@@ -149,6 +152,7 @@ class SelfAuditLogger:
         """Settings에서 max_failure_rate 조회."""
         try:
             from selfhealing.settings.audit_settings import get_audit_settings
+
             return get_audit_settings().self_audit_max_failure_rate
         except Exception:
             return 0.1  # 기본값
@@ -172,7 +176,7 @@ class SelfAuditLogger:
         self,
         event_type: SelfAuditEvent,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         """
         Self-Audit 이벤트 기록. 항상 성공해야 함.
@@ -207,7 +211,9 @@ class SelfAuditLogger:
                 }
                 self._recent_events.append(event_record)
                 if len(self._recent_events) > self._max_recent_events:
-                    self._recent_events = self._recent_events[-self._max_recent_events:]
+                    self._recent_events = self._recent_events[
+                        -self._max_recent_events :
+                    ]
 
             # 로그 레벨 결정
             if event_type in self.FAILURE_EVENTS:
@@ -255,7 +261,7 @@ class SelfAuditLogger:
                 uptime_seconds=uptime,
             )
 
-    def get_recent_events(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_recent_events(self, limit: int | None = None) -> list[dict[str, Any]]:
         """
         최근 이벤트 조회.
 
@@ -282,7 +288,7 @@ class SelfAuditLogger:
                 return 0.0
             return self._stats.failure_events / self._stats.total_events
 
-    def is_healthy(self, max_failure_rate: Optional[float] = None) -> bool:
+    def is_healthy(self, max_failure_rate: float | None = None) -> bool:
         """
         헬스 체크.
 

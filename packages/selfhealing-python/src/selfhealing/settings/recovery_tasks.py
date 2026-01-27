@@ -21,7 +21,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -185,7 +184,7 @@ class RecoveryTasksSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[RecoveryTasksSettings] = None
+_settings: RecoveryTasksSettings | None = None
 
 
 def get_recovery_tasks_settings() -> RecoveryTasksSettings:

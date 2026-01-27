@@ -15,7 +15,7 @@ PARTIAL DEPRECATION NOTICE:
 """
 
 import logging
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Safe Default Values
 # =============================================================================
 
-SAFE_DEFAULTS: Dict[str, Dict[str, Any]] = {
+SAFE_DEFAULTS: dict[str, dict[str, Any]] = {
     # Circuit Breaker - 보수적 설정 (더 빨리 열림, 시스템 보호 우선)
     "circuit_breaker": {
         "enabled": True,  # 항상 활성화
@@ -224,7 +224,7 @@ SAFE_DEFAULTS: Dict[str, Dict[str, Any]] = {
 # =============================================================================
 
 # 설정별 유효성 검증 규칙
-VALIDATION_RULES: Dict[str, Dict[str, Tuple[Any, Any]]] = {
+VALIDATION_RULES: dict[str, dict[str, tuple[Any, Any]]] = {
     "circuit_breaker": {
         "failure_threshold": (1, 100),
         "recovery_timeout": (1, 3600),
@@ -368,7 +368,7 @@ VALID_BACKOFF_STRATEGIES = {"exponential", "linear", "constant", "decorrelated_j
 # - Circuit Breaker, DLQ 등 운영 설정은 Non-fatal (Safe Default 적용)
 # =============================================================================
 
-FATAL_CONFIGS: Dict[str, Set[str]] = {
+FATAL_CONFIGS: dict[str, set[str]] = {
     # Security: 보안 관련 핵심 설정
     "security": {
         "rate_limit_max_requests",  # Rate limit이 너무 높으면 DDoS에 취약
@@ -410,7 +410,7 @@ def is_fatal_config(config_type: str, key: str) -> bool:
     return key in fatal_keys
 
 
-def get_all_fatal_configs() -> Dict[str, Set[str]]:
+def get_all_fatal_configs() -> dict[str, set[str]]:
     """
     모든 Fatal 설정 목록 반환.
 
@@ -425,7 +425,7 @@ def get_all_fatal_configs() -> Dict[str, Set[str]]:
 # =============================================================================
 
 
-def get_safe_default(config_type: str, key: str) -> Optional[Any]:
+def get_safe_default(config_type: str, key: str) -> Any | None:
     """
     안전한 기본값 반환.
 
@@ -440,7 +440,7 @@ def get_safe_default(config_type: str, key: str) -> Optional[Any]:
     return defaults.get(key)
 
 
-def get_safe_defaults_for_type(config_type: str) -> Dict[str, Any]:
+def get_safe_defaults_for_type(config_type: str) -> dict[str, Any]:
     """
     특정 설정 유형의 모든 안전한 기본값 반환.
 
@@ -498,7 +498,9 @@ def is_valid_value(config_type: str, key: str, value: Any) -> bool:
     return True
 
 
-def validate_with_safe_fallback(config_type: str, values: Dict[str, Any], log_changes: bool = True) -> Dict[str, Any]:
+def validate_with_safe_fallback(
+    config_type: str, values: dict[str, Any], log_changes: bool = True
+) -> dict[str, Any]:
     """
     설정값 검증 후 안전한 값으로 폴백.
 
@@ -521,14 +523,16 @@ def validate_with_safe_fallback(config_type: str, values: Dict[str, Any], log_ch
             if safe_value is not None:
                 if log_changes:
                     logger.warning(
-                        f"[SafeDefault] Invalid {config_type}.{key}={value!r}, " f"using safe default: {safe_value!r}"
+                        f"[SafeDefault] Invalid {config_type}.{key}={value!r}, "
+                        f"using safe default: {safe_value!r}"
                     )
                 result[key] = safe_value
             else:
                 # Safe default가 없으면 원래 값 유지하되 경고
                 if log_changes:
                     logger.warning(
-                        f"[SafeDefault] Invalid {config_type}.{key}={value!r}, " f"no safe default available, keeping original"
+                        f"[SafeDefault] Invalid {config_type}.{key}={value!r}, "
+                        f"no safe default available, keeping original"
                     )
                 result[key] = value
         else:
@@ -538,8 +542,8 @@ def validate_with_safe_fallback(config_type: str, values: Dict[str, Any], log_ch
 
 
 def validate_all_with_safe_fallback(
-    config_dict: Dict[str, Dict[str, Any]], log_changes: bool = True
-) -> Dict[str, Dict[str, Any]]:
+    config_dict: dict[str, dict[str, Any]], log_changes: bool = True
+) -> dict[str, dict[str, Any]]:
     """
     전체 설정 딕셔너리 검증 후 안전한 값으로 폴백.
 
@@ -552,11 +556,15 @@ def validate_all_with_safe_fallback(
     """
     result = {}
     for config_type, values in config_dict.items():
-        result[config_type] = validate_with_safe_fallback(config_type, values, log_changes)
+        result[config_type] = validate_with_safe_fallback(
+            config_type, values, log_changes
+        )
     return result
 
 
-def apply_safe_defaults_to_missing(config_type: str, values: Dict[str, Any]) -> Dict[str, Any]:
+def apply_safe_defaults_to_missing(
+    config_type: str, values: dict[str, Any]
+) -> dict[str, Any]:
     """
     누락된 설정에 Safe Default 적용.
 
@@ -575,7 +583,7 @@ def apply_safe_defaults_to_missing(config_type: str, values: Dict[str, Any]) -> 
     return result
 
 
-def get_validation_errors(config_type: str, values: Dict[str, Any]) -> Dict[str, str]:
+def get_validation_errors(config_type: str, values: dict[str, Any]) -> dict[str, str]:
     """
     설정값 검증 후 오류 목록 반환.
 
@@ -607,11 +615,15 @@ def get_validation_errors(config_type: str, values: Dict[str, Any]) -> Dict[str,
 
         # 로그 레벨 검증
         if key.endswith("_log_level") and value not in VALID_LOG_LEVELS:
-            errors[key] = f"Invalid log level: {value}. Must be one of {VALID_LOG_LEVELS}"
+            errors[key] = (
+                f"Invalid log level: {value}. Must be one of {VALID_LOG_LEVELS}"
+            )
 
         # backoff 전략 검증
         if key == "backoff_strategy" and value not in VALID_BACKOFF_STRATEGIES:
-            errors[key] = f"Invalid backoff strategy: {value}. Must be one of {VALID_BACKOFF_STRATEGIES}"
+            errors[key] = (
+                f"Invalid backoff strategy: {value}. Must be one of {VALID_BACKOFF_STRATEGIES}"
+            )
 
     return errors
 
@@ -629,12 +641,16 @@ class FatalConfigError(Exception):
     CI/CD에서 Hard Block, 런타임에서 Quarantine Mode 활성화에 사용.
     """
 
-    def __init__(self, violations: Dict[str, Dict[str, str]]):
+    def __init__(self, violations: dict[str, dict[str, str]]):
         self.violations = violations
         violation_list = [
-            f"{config_type}.{key}: {msg}" for config_type, keys in violations.items() for key, msg in keys.items()
+            f"{config_type}.{key}: {msg}"
+            for config_type, keys in violations.items()
+            for key, msg in keys.items()
         ]
-        super().__init__(f"Fatal config violations detected:\n" + "\n".join(violation_list))
+        super().__init__(
+            "Fatal config violations detected:\n" + "\n".join(violation_list)
+        )
 
 
 class ConfigValidationResult:
@@ -642,8 +658,8 @@ class ConfigValidationResult:
 
     def __init__(self):
         self.changes_count: int = 0
-        self.fatal_violations: Dict[str, Dict[str, str]] = {}
-        self.non_fatal_warnings: Dict[str, Dict[str, str]] = {}
+        self.fatal_violations: dict[str, dict[str, str]] = {}
+        self.non_fatal_warnings: dict[str, dict[str, str]] = {}
 
     @property
     def has_fatal_violations(self) -> bool:
@@ -667,7 +683,7 @@ class ConfigValidationResult:
 
 
 # config_type -> config attribute 매핑 (상수)
-_CONFIG_TYPE_MAPPING: Dict[str, str] = {
+_CONFIG_TYPE_MAPPING: dict[str, str] = {
     "circuit_breaker": "circuit_breaker",
     "dlq": "dlq",
     "retry": "retry",
@@ -743,10 +759,19 @@ def _validate_single_config_value(
     error_msg = f"Invalid value {current!r}, expected safe default: {safe_value!r}"
 
     if is_fatal_config(config_type, key):
-        _handle_fatal_violation(result, config_type, key, current, error_msg, log_changes)
+        _handle_fatal_violation(
+            result, config_type, key, current, error_msg, log_changes
+        )
     else:
         _handle_non_fatal_violation(
-            result, sub_config, config_type, key, current, safe_value, error_msg, log_changes
+            result,
+            sub_config,
+            config_type,
+            key,
+            current,
+            safe_value,
+            error_msg,
+            log_changes,
         )
 
 
@@ -769,7 +794,9 @@ def _finalize_validation(
             raise FatalConfigError(result.fatal_violations)
 
 
-def validate_startup_config(config: Any, log_changes: bool = True, raise_on_fatal: bool = False) -> int:
+def validate_startup_config(
+    config: Any, log_changes: bool = True, raise_on_fatal: bool = False
+) -> int:
     """
     시작 시 설정 검증 + Safe Default 적용.
 
@@ -850,7 +877,9 @@ def validate_config_preflight(config: Any) -> ConfigValidationResult:
 
             if not is_valid_value(config_type, key, current):
                 is_fatal = is_fatal_config(config_type, key)
-                error_msg = f"Value {current!r} is invalid (safe default: {safe_value!r})"
+                error_msg = (
+                    f"Value {current!r} is invalid (safe default: {safe_value!r})"
+                )
 
                 if is_fatal:
                     if config_type not in result.fatal_violations:
@@ -869,7 +898,7 @@ def validate_config_preflight(config: Any) -> ConfigValidationResult:
 # =============================================================================
 
 
-def validate_chaos_config(values: Dict[str, Any]) -> Dict[str, Any]:
+def validate_chaos_config(values: dict[str, Any]) -> dict[str, Any]:
     """
     Chaos 설정 특별 검증.
 
@@ -887,7 +916,8 @@ def validate_chaos_config(values: Dict[str, Any]) -> Dict[str, Any]:
     if "max_blast_radius" in result:
         if result["max_blast_radius"] > 0.5:
             logger.warning(
-                f"[SafeDefault] Chaos max_blast_radius={result['max_blast_radius']} " f"exceeds 50%, clamping to 0.5"
+                f"[SafeDefault] Chaos max_blast_radius={result['max_blast_radius']} "
+                f"exceeds 50%, clamping to 0.5"
             )
             result["max_blast_radius"] = 0.5
         if result["max_blast_radius"] < 0:
@@ -896,7 +926,10 @@ def validate_chaos_config(values: Dict[str, Any]) -> Dict[str, Any]:
     # Failure Rate 강제 제한
     if "failure_rate" in result:
         if result["failure_rate"] > 0.5:
-            logger.warning(f"[SafeDefault] Chaos failure_rate={result['failure_rate']} " f"exceeds 50%, clamping to 0.5")
+            logger.warning(
+                f"[SafeDefault] Chaos failure_rate={result['failure_rate']} "
+                f"exceeds 50%, clamping to 0.5"
+            )
             result["failure_rate"] = 0.5
         if result["failure_rate"] < 0:
             result["failure_rate"] = 0.0
@@ -906,7 +939,9 @@ def validate_chaos_config(values: Dict[str, Any]) -> Dict[str, Any]:
 
     if os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith("production"):
         if not result.get("dry_run", True):
-            logger.warning("[SafeDefault] Chaos dry_run=False in production, forcing to True")
+            logger.warning(
+                "[SafeDefault] Chaos dry_run=False in production, forcing to True"
+            )
             result["dry_run"] = True
 
     return result

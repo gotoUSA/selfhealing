@@ -96,7 +96,9 @@ def check_and_report_sla_breaches(self) -> dict:
         total_breaches = sum(breaches_by_domain.values())
 
         if total_breaches > 0:
-            logger.warning(f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}")
+            logger.warning(
+                f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}"
+            )
         else:
             logger.debug("[SLA Check] No SLA breaches found")
 

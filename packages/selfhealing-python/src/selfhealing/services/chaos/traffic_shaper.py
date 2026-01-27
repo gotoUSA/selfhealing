@@ -16,13 +16,12 @@ Design Principle:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +94,10 @@ class ShapingConfig:
     distribution_strategy: DistributionStrategy = DistributionStrategy.UNIFORM
     """분배 전략."""
 
-    endpoint_weights: Dict[str, float] = field(default_factory=dict)
+    endpoint_weights: dict[str, float] = field(default_factory=dict)
     """엔드포인트별 가중치."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "mode": self.mode.value,
@@ -123,7 +122,7 @@ class ShapingStats:
     avg_latency_ms: float = 0.0
     adaptations_made: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "total_shaped": self.total_shaped,
@@ -144,7 +143,7 @@ class TrafficDistribution:
     weight: float
     request_count: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "endpoint": self.endpoint,
@@ -248,25 +247,25 @@ class TrafficShaper:
         """
         self.experiment_id = experiment_id
 
-        self._config: Optional[ShapingConfig] = None
+        self._config: ShapingConfig | None = None
         self._stats = ShapingStats()
-        self._token_bucket: Optional[TokenBucket] = None
+        self._token_bucket: TokenBucket | None = None
 
         # 동시성 추적
         self._concurrent_count = 0
         self._concurrent_lock = threading.Lock()
 
         # 적응형 모드 상태
-        self._latency_samples: List[float] = []
+        self._latency_samples: list[float] = []
         self._last_adaptation_time = 0.0
         self._current_rate_multiplier = 1.0
 
         # 분배 상태
-        self._distributions: Dict[str, TrafficDistribution] = {}
+        self._distributions: dict[str, TrafficDistribution] = {}
         self._round_robin_index = 0
 
         # 시작 시간
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         self._request_count = 0
 
     def configure(self, config: ShapingConfig) -> None:
@@ -300,7 +299,7 @@ class TrafficShaper:
             f"mode={config.mode.value}, target_rps={config.target_rps}"
         )
 
-    def should_allow(self, endpoint: Optional[str] = None) -> bool:
+    def should_allow(self, endpoint: str | None = None) -> bool:
         """
         요청 허용 여부 결정.
 
@@ -376,11 +375,11 @@ class TrafficShaper:
             self._latency_samples = self._latency_samples[-100:]
 
         if self._latency_samples:
-            self._stats.avg_latency_ms = (
-                sum(self._latency_samples) / len(self._latency_samples)
+            self._stats.avg_latency_ms = sum(self._latency_samples) / len(
+                self._latency_samples
             )
 
-    def select_endpoint(self) -> Optional[str]:
+    def select_endpoint(self) -> str | None:
         """
         분배 전략에 따라 엔드포인트 선택.
 
@@ -425,7 +424,7 @@ class TrafficShaper:
         """통계 반환."""
         return self._stats
 
-    def get_distributions(self) -> List[TrafficDistribution]:
+    def get_distributions(self) -> list[TrafficDistribution]:
         """분배 상태 반환."""
         return list(self._distributions.values())
 
@@ -487,7 +486,9 @@ class TrafficShaper:
             self._current_rate_multiplier *= 0.9
         elif avg_latency < target_latency * 0.8:
             # 레이턴시가 낮으면 레이트 증가
-            self._current_rate_multiplier = min(2.0, self._current_rate_multiplier * 1.1)
+            self._current_rate_multiplier = min(
+                2.0, self._current_rate_multiplier * 1.1
+            )
 
         # 새 레이트 적용
         new_rate = self._config.target_rps * self._current_rate_multiplier
@@ -514,7 +515,7 @@ class TrafficShaper:
 # Singleton
 # =============================================================================
 
-_shapers: Dict[str, TrafficShaper] = {}
+_shapers: dict[str, TrafficShaper] = {}
 
 
 def get_traffic_shaper(experiment_id: str) -> TrafficShaper:

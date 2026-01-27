@@ -20,20 +20,19 @@ from __future__ import annotations
 import logging
 import traceback
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 from selfhealing.interfaces.task_queue import (
+    ScheduleInfo,
+    TaskNotFoundError,
+    TaskOptions,
     TaskQueueInterface,
     TaskResult,
     TaskStatus,
-    TaskOptions,
-    TaskPriority,
-    ScheduleInfo,
-    TaskNotFoundError,
-    TaskTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,12 +50,12 @@ class TaskRecord:
     kwargs: dict
     status: TaskStatus
     result: Any = None
-    error: Optional[str] = None
-    traceback: Optional[str] = None
+    error: str | None = None
+    traceback: str | None = None
     retries: int = 0
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass
@@ -123,16 +122,16 @@ class SyncTaskAdapter(TaskQueueInterface):
 
     def task(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         bind: bool = False,
         max_retries: int = 3,
         autoretry_for: tuple[type[Exception], ...] = (),
         retry_backoff: bool = True,
         retry_backoff_max: int = 600,
         retry_jitter: bool = True,
-        rate_limit: Optional[str] = None,
-        time_limit: Optional[int] = None,
-        soft_time_limit: Optional[int] = None,
+        rate_limit: str | None = None,
+        time_limit: int | None = None,
+        soft_time_limit: int | None = None,
     ) -> Callable[[F], F]:
         """
         Decorator to register a function as a task.
@@ -161,7 +160,9 @@ class SyncTaskAdapter(TaskQueueInterface):
 
             # Add delay method for Celery compatibility
             wrapper.delay = lambda *a, **kw: self.enqueue(task_name, args=a, kwargs=kw)
-            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(task_name, args=args, kwargs=kwargs or {})
+            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(
+                task_name, args=args, kwargs=kwargs or {}
+            )
             wrapper.name = task_name
 
             return wrapper
@@ -182,8 +183,8 @@ class SyncTaskAdapter(TaskQueueInterface):
         self,
         task_name: str,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        options: Optional[TaskOptions] = None,
+        kwargs: dict | None = None,
+        options: TaskOptions | None = None,
     ) -> str:
         """
         Enqueue and immediately execute a task.
@@ -209,7 +210,11 @@ class SyncTaskAdapter(TaskQueueInterface):
         logger.debug(f"[SyncAdapter] Executing task: {task_name} ({task_id})")
 
         # Handle delayed execution (just mark as pending, don't execute)
-        if self._delay_execution or options.countdown is not None or options.eta is not None:
+        if (
+            self._delay_execution
+            or options.countdown is not None
+            or options.eta is not None
+        ):
             self._results[task_id] = record
             self._pending_queue.append(task_id)
             return task_id
@@ -252,7 +257,9 @@ class SyncTaskAdapter(TaskQueueInterface):
             if record.retries < registered.max_retries:
                 record.retries += 1
                 record.status = TaskStatus.RETRY
-                logger.debug(f"[SyncAdapter] Retrying task: {record.task_id} (attempt {record.retries})")
+                logger.debug(
+                    f"[SyncAdapter] Retrying task: {record.task_id} (attempt {record.retries})"
+                )
                 self._execute_task(record, registered)
             else:
                 record.status = TaskStatus.FAILURE
@@ -271,7 +278,7 @@ class SyncTaskAdapter(TaskQueueInterface):
     def enqueue_many(
         self,
         tasks: list[tuple[str, tuple, dict]],
-        options: Optional[TaskOptions] = None,
+        options: TaskOptions | None = None,
     ) -> list[str]:
         """Enqueue and execute multiple tasks."""
         task_ids = []
@@ -287,7 +294,7 @@ class SyncTaskAdapter(TaskQueueInterface):
     def get_result(
         self,
         task_id: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskResult:
         """
         Get task result.
@@ -335,8 +342,8 @@ class SyncTaskAdapter(TaskQueueInterface):
     def retry(
         self,
         task_id: str,
-        countdown: Optional[int] = None,
-        max_retries: Optional[int] = None,
+        countdown: int | None = None,
+        max_retries: int | None = None,
     ) -> str:
         """
         Retry a task by re-executing it.
@@ -372,8 +379,8 @@ class SyncTaskAdapter(TaskQueueInterface):
         task_name: str,
         schedule: timedelta,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        name: Optional[str] = None,
+        kwargs: dict | None = None,
+        name: str | None = None,
     ) -> str:
         """
         Register a periodic task.
@@ -402,7 +409,7 @@ class SyncTaskAdapter(TaskQueueInterface):
             return True
         return False
 
-    def get_schedule(self, schedule_id: str) -> Optional[ScheduleInfo]:
+    def get_schedule(self, schedule_id: str) -> ScheduleInfo | None:
         """Get information about a periodic schedule."""
         return self._schedules.get(schedule_id)
 
@@ -465,7 +472,7 @@ class SyncTaskAdapter(TaskQueueInterface):
     # Testing Utilities
     # =========================================================================
 
-    def fail_next(self, error_message: str = "Injected failure") -> "SyncTaskAdapter":
+    def fail_next(self, error_message: str = "Injected failure") -> SyncTaskAdapter:
         """
         Make the next task execution fail.
 
@@ -481,7 +488,7 @@ class SyncTaskAdapter(TaskQueueInterface):
         self._fail_error = error_message
         return self
 
-    def enable_delayed_execution(self) -> "SyncTaskAdapter":
+    def enable_delayed_execution(self) -> SyncTaskAdapter:
         """
         Enable delayed execution mode.
 
@@ -490,7 +497,7 @@ class SyncTaskAdapter(TaskQueueInterface):
         self._delay_execution = True
         return self
 
-    def disable_delayed_execution(self) -> "SyncTaskAdapter":
+    def disable_delayed_execution(self) -> SyncTaskAdapter:
         """Disable delayed execution mode."""
         self._delay_execution = False
         return self
@@ -510,7 +517,7 @@ class SyncTaskAdapter(TaskQueueInterface):
             executed.append(task_id)
         return executed
 
-    def reset(self) -> "SyncTaskAdapter":
+    def reset(self) -> SyncTaskAdapter:
         """Reset all state (for test cleanup)."""
         self._results.clear()
         self._pending_queue.clear()
@@ -521,7 +528,7 @@ class SyncTaskAdapter(TaskQueueInterface):
         # Keep task registrations
         return self
 
-    def clear_all(self) -> "SyncTaskAdapter":
+    def clear_all(self) -> SyncTaskAdapter:
         """Clear everything including task registrations."""
         self._tasks.clear()
         return self.reset()
@@ -532,4 +539,6 @@ class SyncTaskAdapter(TaskQueueInterface):
 
     def get_call_count(self, task_name: str) -> int:
         """Get number of times a task was called."""
-        return sum(1 for record in self._results.values() if record.task_name == task_name)
+        return sum(
+            1 for record in self._results.values() if record.task_name == task_name
+        )

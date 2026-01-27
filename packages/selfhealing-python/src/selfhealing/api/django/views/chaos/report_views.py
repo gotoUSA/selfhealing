@@ -7,12 +7,11 @@ API views for resilience reports and grade history.
 import logging
 from datetime import datetime
 
-from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.serializers.chaos import (
     DryRunAnalysisRequestSerializer,
 )
@@ -23,118 +22,129 @@ logger = logging.getLogger(__name__)
 class ReportListView(APIView):
     """
     API for resilience reports.
-    
+
     GET: List reports (Viewer)
     """
-    
+
     permission_classes = [IsViewer]
-    
+
     def get(self, request: Request) -> Response:
         """List resilience reports."""
         from selfhealing.services.chaos.reports import get_report_generator
-        
+
         generator = get_report_generator()
-        
+
         days = int(request.query_params.get("days", "30"))
         grade_filter = request.query_params.get("grade")
-        
+
         reports = generator.get_reports(days=days, grade_filter=grade_filter)
-        
-        return Response({
-            "status": "success",
-            "data": [r.to_dict() for r in reports],
-            "count": len(reports),
-        })
+
+        return Response(
+            {
+                "status": "success",
+                "data": [r.to_dict() for r in reports],
+                "count": len(reports),
+            }
+        )
 
 
 class ReportDetailView(APIView):
     """
     API for individual report.
-    
+
     GET: Get report by ID or date (Viewer)
     """
-    
+
     permission_classes = [IsViewer]
-    
+
     def get(self, request: Request, report_id: str) -> Response:
         """Get report details."""
         from rest_framework import status
+
         from selfhealing.services.chaos.reports import get_report_generator
-        
+
         generator = get_report_generator()
-        
+
         # Try as date first (YYYY-MM-DD)
         if len(report_id) == 10 and "-" in report_id:
             report = generator.get_report_by_date(report_id)
         else:
             report = generator.get_report(report_id)
-        
+
         if not report:
             return Response(
                 {"status": "error", "message": "Report not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
-        return Response({
-            "status": "success",
-            "data": report.to_dict(),
-        })
+
+        return Response(
+            {
+                "status": "success",
+                "data": report.to_dict(),
+            }
+        )
 
 
 class ReportGenerateView(APIView):
     """
     API for generating reports on demand.
-    
+
     POST: Generate report now (Admin)
     """
-    
+
     permission_classes = [IsSelfHealingAdmin]
-    
+
     def post(self, request: Request) -> Response:
         """Generate report now."""
         from selfhealing.services.chaos.reports import get_report_generator
-        
+
         generator = get_report_generator()
-        
+
         # Optional date parameter
         date_str = request.data.get("date")
         if date_str:
             report_date = datetime.fromisoformat(date_str)
         else:
             report_date = None
-        
+
         report = generator.generate_daily_report(report_date=report_date)
-        
-        logger.info(f"[ChaosAPI] Report generated: {report.report_id} by {request.user}")
-        
-        return Response({
-            "status": "success",
-            "data": report.to_dict(),
-        })
+
+        logger.info(
+            f"[ChaosAPI] Report generated: {report.report_id} by {request.user}"
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "data": report.to_dict(),
+            }
+        )
 
 
 class GradeHistoryView(APIView):
     """
     API for grade history.
-    
+
     GET: Get grade history for trending (Viewer)
     """
-    
+
     permission_classes = [IsViewer]
-    
+
     def get(self, request: Request) -> Response:
         """Get grade history."""
         from selfhealing.services.chaos.reports import get_report_generator
-        
+
         generator = get_report_generator()
         days = int(request.query_params.get("days", "30"))
-        
+
         history = generator.get_grade_history(days=days)
-        
-        return Response({
-            "status": "success",
-            "data": history,
-        })
+
+        return Response(
+            {
+                "status": "success",
+                "data": history,
+            }
+        )
 
 
 class DryRunAnalysisView(APIView):
@@ -177,9 +187,8 @@ class DryRunAnalysisView(APIView):
             }
         }
         """
-        from rest_framework import status
         from rest_framework.exceptions import ValidationError
-        
+
         serializer = DryRunAnalysisRequestSerializer(data=request.data)
         if not serializer.is_valid():
             raise ValidationError(serializer.errors)
@@ -187,10 +196,14 @@ class DryRunAnalysisView(APIView):
         target_service = serializer.validated_data["target_service"]
         experiment_type = serializer.validated_data["experiment_type"]
         config = serializer.validated_data.get("config", {})
-        include_blast_radius = serializer.validated_data.get("include_blast_radius", True)
+        include_blast_radius = serializer.validated_data.get(
+            "include_blast_radius", True
+        )
 
+        from selfhealing.services.chaos.blast_radius_analyzer import (
+            get_blast_radius_analyzer,
+        )
         from selfhealing.services.chaos.impact_predictor import get_impact_predictor
-        from selfhealing.services.chaos.blast_radius_analyzer import get_blast_radius_analyzer
 
         # 1. Impact Prediction
         predictor = get_impact_predictor()
@@ -255,10 +268,12 @@ class DryRunAnalysisView(APIView):
             "overall_risk_level": overall_risk_level,
         }
 
-        return Response({
-            "status": "success",
-            "data": response_data,
-        })
+        return Response(
+            {
+                "status": "success",
+                "data": response_data,
+            }
+        )
 
     def _calculate_risk_level(
         self,

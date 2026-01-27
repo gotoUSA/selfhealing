@@ -14,8 +14,9 @@ import asyncio
 import logging
 import random
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, TypeVar, ParamSpec
+from typing import ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ def with_jitter(
     # Settings에서 기본값 로드
     if max_delay_seconds is None or min_delay_seconds is None:
         from selfhealing.settings.jitter import get_jitter_settings
+
         settings = get_jitter_settings()
         if max_delay_seconds is None:
             max_delay_seconds = settings.max_delay_seconds
@@ -102,6 +104,7 @@ def calculate_jitter(
     """
     if max_delay_seconds is None or min_delay_seconds is None:
         from selfhealing.settings.jitter import get_jitter_settings
+
         settings = get_jitter_settings()
         if max_delay_seconds is None:
             max_delay_seconds = settings.max_delay_seconds
@@ -182,7 +185,7 @@ class JitterConfig:
         self.min_delay_seconds = min_delay_seconds
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "JitterConfig":
+    def from_settings(cls, settings=None, **overrides) -> JitterConfig:
         """
         Settings 기반 인스턴스 생성.
 
@@ -203,7 +206,7 @@ class JitterConfig:
         )
 
     @classmethod
-    def from_env(cls) -> "JitterConfig":
+    def from_env(cls) -> JitterConfig:
         """
         환경 변수에서 설정을 로드합니다.
 

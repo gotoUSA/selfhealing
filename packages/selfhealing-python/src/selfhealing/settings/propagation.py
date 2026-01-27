@@ -5,6 +5,7 @@ Propagation Settings - Cross-Cluster Configuration Propagation.
 
 Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,19 +13,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class PropagationSettings(BaseSettings):
     """
     전파 일관성 설정.
-    
+
     데이터 성격별 일관성 등급:
     - Tier 1: Audit, Governance, Emergency (1초 내 전파)
     - Tier 2: Metrics, Stats, Cache (30초 내 전파)
     """
-    
+
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_PROPAGATION_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
-    
+
     # Tier 1 SLA (즉시 전파)
     tier1_max_latency_ms: int = Field(
         default=1000,
@@ -32,7 +33,7 @@ class PropagationSettings(BaseSettings):
         ge=100,
         le=5000,
     )
-    
+
     # Tier 2 SLA (최종 일관성)
     tier2_max_latency_ms: int = Field(
         default=30000,
@@ -40,19 +41,19 @@ class PropagationSettings(BaseSettings):
         ge=1000,
         le=300000,
     )
-    
+
     # 전파 활성화
     enabled: bool = Field(
         default=True,
         description="글로벌 설정 전파 활성화 여부",
     )
-    
+
     # 자동 리스너 시작
     auto_start_listener: bool = Field(
         default=False,
         description="애플리케이션 시작 시 자동으로 전파 리스너 시작",
     )
-    
+
     # 재시도 설정
     retry_count: int = Field(
         default=3,
@@ -66,7 +67,7 @@ class PropagationSettings(BaseSettings):
         ge=100,
         le=10000,
     )
-    
+
     # Health Score 가중치
     health_score_weight: float = Field(
         default=0.3,
@@ -74,7 +75,7 @@ class PropagationSettings(BaseSettings):
         ge=0.0,
         le=1.0,
     )
-    
+
     # 감점 설정
     tier1_penalty_points: int = Field(
         default=5,

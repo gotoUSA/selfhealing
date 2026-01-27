@@ -20,13 +20,10 @@ from __future__ import annotations
 from typing import Optional
 
 # ============================================================
-# Data Models
+# Dashboard
 # ============================================================
-from .shedding_models import (
-    SheddingAuditEntry,
-    SheddingDecision,
-    SheddingState,
-    SheddingStatus,
+from .dashboard import (
+    LoadSheddingDashboard,
 )
 
 # ============================================================
@@ -51,19 +48,22 @@ from .shedding_middleware import (
 )
 
 # ============================================================
-# Dashboard
+# Data Models
 # ============================================================
-from .dashboard import (
-    LoadSheddingDashboard,
+from .shedding_models import (
+    SheddingAuditEntry,
+    SheddingDecision,
+    SheddingState,
+    SheddingStatus,
 )
 
 # ============================================================
 # Module-level Convenience Functions
 # ============================================================
 
-_manager: Optional[LoadSheddingManager] = None
-_middleware: Optional[LoadSheddingMiddleware] = None
-_dashboard: Optional[LoadSheddingDashboard] = None
+_manager: LoadSheddingManager | None = None
+_middleware: LoadSheddingMiddleware | None = None
+_dashboard: LoadSheddingDashboard | None = None
 
 
 def get_load_shedding_manager() -> LoadSheddingManager:
@@ -191,7 +191,7 @@ def set_service_error_rate(service_id: str, error_rate: float) -> None:
     get_load_shedding_manager().set_error_rate(service_id, error_rate)
 
 
-def update_shedding_state() -> Optional[SheddingAuditEntry]:
+def update_shedding_state() -> SheddingAuditEntry | None:
     """
     Shedding 상태 업데이트.
 

@@ -19,19 +19,23 @@ Features:
 from __future__ import annotations
 
 import logging
-import time
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
 
-from .config import CircuitBreakerConfig, CircuitBreakerResult, CircuitState, FallbackResult
+from .config import (
+    CircuitBreakerConfig,
+    CircuitBreakerResult,
+    CircuitState,
+    FallbackResult,
+)
 from .manual_control import ManualControlMixin
 from .protection import ProtectionMixin
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
-        CircuitBreakerStateRepository,
         CircuitBreakerStateData,
+        CircuitBreakerStateRepository,
     )
 
 logger = logging.getLogger(__name__)
@@ -74,7 +78,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     def __init__(
         self,
         config: CircuitBreakerConfig | None = None,
-        repository: "CircuitBreakerStateRepository | None" = None,
+        repository: CircuitBreakerStateRepository | None = None,
     ):
         """
         Initialize the circuit breaker service.
@@ -87,10 +91,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         self._repository = repository
 
     @property
-    def repository(self) -> "CircuitBreakerStateRepository":
+    def repository(self) -> CircuitBreakerStateRepository:
         """Get the repository using ProviderRegistry (Redis by default)."""
         if self._repository is None:
             from selfhealing.factory import ProviderRegistry
+
             self._repository = ProviderRegistry.get_circuit_breaker_repo()
         return self._repository
 
@@ -103,7 +108,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     # State Query Operations
     # =========================================================================
 
-    def get_or_create_state(self, service_name: str) -> "CircuitBreakerStateData":
+    def get_or_create_state(self, service_name: str) -> CircuitBreakerStateData:
         """
         Get or create a circuit breaker state for a service.
 
@@ -159,7 +164,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     )
                     # Audit 기록 - 자동 복구 시도 (OPEN → HALF_OPEN)
                     try:
-                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        from selfhealing.services.audit_helpers import (
+                            log_cb_state_change_audit,
+                        )
+
                         log_cb_state_change_audit(
                             cb_name=service_name,
                             old_state=CircuitState.OPEN,
@@ -177,9 +185,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     def should_allow_with_fallback(
         self,
         service_name: str,
-        cache_key: Optional[str] = None,
-        default_response: Optional[Any] = None,
-        request_data: Optional[Dict[str, Any]] = None,
+        cache_key: str | None = None,
+        default_response: Any | None = None,
+        request_data: dict[str, Any] | None = None,
     ) -> FallbackResult:
         """
         Check if requests should be allowed with fallback strategy support.
@@ -223,7 +231,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 )
                 return FallbackResult.from_cache(
                     data=cached_data,
-                    message=f"Circuit open for {service_name}, serving cached data"
+                    message=f"Circuit open for {service_name}, serving cached data",
                 )
 
         if strategy == "dlq" and request_data:
@@ -243,15 +251,13 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             )
             return FallbackResult.default_response(
                 data=default_response,
-                message=f"Circuit open for {service_name}, using default response"
+                message=f"Circuit open for {service_name}, using default response",
             )
 
         # Default: block
-        return FallbackResult.block(
-            message=f"Circuit breaker open for {service_name}"
-        )
+        return FallbackResult.block(message=f"Circuit breaker open for {service_name}")
 
-    def _get_cached_data(self, cache_key: str) -> Optional[Any]:
+    def _get_cached_data(self, cache_key: str) -> Any | None:
         """
         Get cached data from Redis.
 
@@ -263,6 +269,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         """
         try:
             from django.core.cache import cache
+
             return cache.get(cache_key)
         except Exception as e:
             logger.debug(f"[CircuitBreaker] Cache lookup failed: {e}")
@@ -271,7 +278,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     def _enqueue_to_dlq(
         self,
         service_name: str,
-        request_data: Dict[str, Any],
+        request_data: dict[str, Any],
     ) -> bool:
         """
         Enqueue a failed request to DLQ for later retry.
@@ -340,7 +347,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     # Failure/Success Recording (for automatic mode)
     # =========================================================================
 
-    def record_failure(self, service_name: str, error_context: Optional[Dict[str, Any]] = None) -> None:
+    def record_failure(
+        self, service_name: str, error_context: dict[str, Any] | None = None
+    ) -> None:
         """
         Record a failure for a service.
 
@@ -358,7 +367,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Skip if manually controlled
         if state.manually_controlled:
-            logger.debug(f"[CircuitBreaker] Skipping failure recording for '{service_name}': " "manually controlled")
+            logger.debug(
+                f"[CircuitBreaker] Skipping failure recording for '{service_name}': "
+                "manually controlled"
+            )
             return
 
         # Use repository to record failure (handles atomic update)
@@ -366,34 +378,39 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Check if threshold exceeded and circuit should open
         should_open = self._should_open_circuit(updated_state)
-        
+
         if should_open and updated_state.state == "closed":
             # Collect snapshot before opening
-            snapshot = self._collect_failure_snapshot(service_name, updated_state, error_context)
-            
+            snapshot = self._collect_failure_snapshot(
+                service_name, updated_state, error_context
+            )
+
             # Open the circuit
             self.repository.update_state(
                 service_name=service_name,
                 state="open",
                 opened_at=now(),
             )
-            
+
             # Log with snapshot
             logger.warning(
                 f"[CircuitBreaker] Circuit auto-opened for '{service_name}' "
                 f"(failures: {updated_state.failure_count}, "
                 f"total_calls: {self.get_total_calls(service_name)})"
             )
-            
+
             # Save audit log with snapshot
             self._log_circuit_open_audit(service_name, snapshot)
-            
+
             # Apply burn rate multiplier to Error Budget
             self._apply_burn_rate_multiplier(service_name)
-            
+
             # Push 이벤트 - CB 상태 변경 메트릭 기록
             try:
-                from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                from selfhealing.metrics.event_handlers import (
+                    CircuitBreakerEventHandler,
+                )
+
                 CircuitBreakerEventHandler.on_state_changed(
                     service=service_name,
                     from_state="closed",
@@ -402,7 +419,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             except ImportError:
                 pass  # Metrics not available
 
-    def _should_open_circuit(self, state: "CircuitBreakerStateData") -> bool:
+    def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
         """
         Determine if circuit should be opened based on failure threshold and minimum calls.
 
@@ -415,7 +432,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             True if circuit should open
         """
         total_calls = state.failure_count + state.success_count
-        
+
         # Check minimum_calls - prevent false positives with low traffic
         if total_calls < self.config.minimum_calls:
             logger.debug(
@@ -423,29 +440,31 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 f"total_calls ({total_calls}) < minimum_calls ({self.config.minimum_calls})"
             )
             return False
-        
+
         # Check rate-based threshold if configured
         if self.config.failure_rate_threshold > 0:
-            failure_rate = (state.failure_count / total_calls * 100) if total_calls > 0 else 0
+            failure_rate = (
+                (state.failure_count / total_calls * 100) if total_calls > 0 else 0
+            )
             if failure_rate >= self.config.failure_rate_threshold:
                 logger.info(
                     f"[CircuitBreaker] Rate threshold exceeded for '{state.service_name}': "
                     f"{failure_rate:.1f}% >= {self.config.failure_rate_threshold}%"
                 )
                 return True
-        
+
         # Check count-based threshold
         if state.failure_count >= self.config.failure_threshold:
             return True
-        
+
         return False
 
     def _collect_failure_snapshot(
         self,
         service_name: str,
-        state: "CircuitBreakerStateData",
-        error_context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        state: CircuitBreakerStateData,
+        error_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Collect a snapshot of system state when circuit opens.
 
@@ -467,8 +486,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 "success_count": state.success_count,
                 "total_calls": state.failure_count + state.success_count,
                 "failure_rate_percent": (
-                    state.failure_count / (state.failure_count + state.success_count) * 100
-                    if (state.failure_count + state.success_count) > 0 else 0
+                    state.failure_count
+                    / (state.failure_count + state.success_count)
+                    * 100
+                    if (state.failure_count + state.success_count) > 0
+                    else 0
                 ),
                 "threshold_config": {
                     "failure_threshold": self.config.failure_threshold,
@@ -478,24 +500,26 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             },
             "trigger_reason": "auto_threshold_exceeded",
         }
-        
+
         # Add system metrics if available
         try:
             import psutil
+
             snapshot["system_metrics"] = {
                 "cpu_percent": psutil.cpu_percent(interval=None),
                 "memory_percent": psutil.virtual_memory().percent,
             }
         except Exception:
             pass  # psutil not available or failed
-        
+
         # Add error context if provided
         if error_context:
             snapshot["error_context"] = error_context
-        
+
         # Add latency metrics if available
         try:
             from selfhealing.metrics.reliability_manager import get_reliability_manager
+
             manager = get_reliability_manager()
             latency_info = manager.get_effective_value("latency", service_name)
             if latency_info:
@@ -505,10 +529,12 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 }
         except Exception:
             pass  # Metrics not available
-        
+
         return snapshot
 
-    def _log_circuit_open_audit(self, service_name: str, snapshot: Dict[str, Any]) -> None:
+    def _log_circuit_open_audit(
+        self, service_name: str, snapshot: dict[str, Any]
+    ) -> None:
         """
         Log circuit open event to audit log with snapshot.
 
@@ -523,10 +549,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         """
         try:
             from selfhealing.services.audit_helpers import log_cb_state_change_audit
-            
+
             # Build reason with snapshot context
             reason = f"auto_trigger|failures={snapshot.get('failure_count', 'N/A')}|threshold={snapshot.get('threshold', 'N/A')}"
-            
+
             log_cb_state_change_audit(
                 cb_name=service_name,
                 old_state="closed",
@@ -534,7 +560,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 reason=reason,
                 request=None,  # System-triggered, no HTTP context
             )
-            
+
             # Log detailed snapshot separately for debugging
             logger.info(
                 f"[CircuitBreaker] AUTO_OPEN audit logged | service={service_name} | "
@@ -554,20 +580,20 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         """
         try:
             from selfhealing.services.emergency_mode import get_emergency_manager
-            
+
             manager = get_emergency_manager()
             multiplier = self.config.cb_open_burn_rate_multiplier
-            
+
             # Record accelerated burn event
             logger.warning(
                 f"[CircuitBreaker] Applying burn rate multiplier {multiplier}x "
                 f"for '{service_name}' (CB OPEN)"
             )
-            
+
             # Emit event for burn rate acceleration
             try:
-                from selfhealing.services.event_bus import get_event_bus, EventType
-                
+                from selfhealing.services.event_bus import EventType, get_event_bus
+
                 bus = get_event_bus()
                 bus.emit(
                     EventType.CIRCUIT_BREAKER_OPENED,
@@ -580,7 +606,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 )
             except Exception:
                 pass  # Event bus not available
-                
+
         except Exception as e:
             logger.debug(f"[CircuitBreaker] Burn rate multiplier failed: {e}")
 
@@ -601,7 +627,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Skip if manually controlled
         if state.manually_controlled:
-            logger.debug(f"[CircuitBreaker] Skipping success recording for '{service_name}': " "manually controlled")
+            logger.debug(
+                f"[CircuitBreaker] Skipping success recording for '{service_name}': "
+                "manually controlled"
+            )
             return
 
         circuit_closed = False
@@ -631,11 +660,13 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         if circuit_closed:
             logger.info(
-                f"[CircuitBreaker] Circuit auto-closed for '{service_name}' " f"(successes: {self.config.success_threshold})"
+                f"[CircuitBreaker] Circuit auto-closed for '{service_name}' "
+                f"(successes: {self.config.success_threshold})"
             )
             # Audit 기록 - 자동 복구 완료 (HALF_OPEN → CLOSED)
             try:
                 from selfhealing.services.audit_helpers import log_cb_state_change_audit
+
                 log_cb_state_change_audit(
                     cb_name=service_name,
                     old_state="half_open",
@@ -646,7 +677,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
             # Push 이벤트 - CB 상태 변경 메트릭 기록
             try:
-                from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                from selfhealing.metrics.event_handlers import (
+                    CircuitBreakerEventHandler,
+                )
+
                 CircuitBreakerEventHandler.on_state_changed(
                     service=service_name,
                     from_state="half_open",
@@ -681,7 +715,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             # Get all states and filter for OPEN, non-manually-controlled ones
             all_states = self.repository.get_all_states()
             open_states = [
-                s for s in all_states
+                s
+                for s in all_states
                 if s.state == CircuitState.OPEN and not s.manually_controlled
             ]
 
@@ -711,7 +746,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             }
 
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Error checking recovery transitions: {e}", exc_info=True)
+            logger.error(
+                f"[CircuitBreaker] Error checking recovery transitions: {e}",
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": str(e),

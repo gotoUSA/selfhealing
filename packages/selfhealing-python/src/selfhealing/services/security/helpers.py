@@ -6,12 +6,11 @@ Module-level helper functions for accessing security violation services.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from selfhealing.services.security.types import ViolationType
 from selfhealing.services.security.models import SecurityViolationResult
 from selfhealing.services.security.service import SecurityViolationService
-
+from selfhealing.services.security.types import ViolationType
 
 _security_service: SecurityViolationService | None = None
 
@@ -33,7 +32,7 @@ def reset_security_violation_service() -> None:
 def handle_security_violation(
     violation_type: str | ViolationType,
     request_info: dict[str, Any] | None = None,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
     description: str = "",
     **kwargs: Any,
 ) -> SecurityViolationResult:

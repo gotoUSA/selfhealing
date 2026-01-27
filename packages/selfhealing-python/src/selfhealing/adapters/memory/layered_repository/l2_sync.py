@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from typing import Any, Dict
+from typing import Any
 
 from selfhealing.interfaces.repositories import CircuitBreakerStateData
 
@@ -52,14 +52,19 @@ class L2SyncMixin:
 
         except FuturesTimeoutError:
             self._handle_l2_timeout("sync", service_name)
-            logger.warning(f"[LayeredRepo] L2 sync timeout for {service_name} " f"({timeout*1000:.0f}ms). L1 isolated.")
+            logger.warning(
+                f"[LayeredRepo] L2 sync timeout for {service_name} "
+                f"({timeout*1000:.0f}ms). L1 isolated."
+            )
             return False
 
         except Exception as e:
             self._handle_l2_error("sync", service_name, e, state.state)
             return False
 
-    def _sync_to_l2_async(self, service_name: str, state: CircuitBreakerStateData) -> None:
+    def _sync_to_l2_async(
+        self, service_name: str, state: CircuitBreakerStateData
+    ) -> None:
         """L2로 비동기 동기화 (백그라운드, 타임아웃 적용)."""
         if not self._l2:
             return
@@ -85,7 +90,7 @@ class L2SyncMixin:
             logger.error(f"[LayeredRepo] Force sync from L2 failed: {e}")
             return False
 
-    def force_sync_to_l2(self) -> Dict[str, Any]:
+    def force_sync_to_l2(self) -> dict[str, Any]:
         """L1의 모든 상태를 L2로 강제 동기화."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}

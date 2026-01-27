@@ -37,19 +37,20 @@ Usage:
         canary_config=canary_config,
     )
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import os
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.utils.time import utc_now
-from selfhealing.settings.namespace import get_key_prefix
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -68,11 +69,12 @@ class CanarySelectionStrategy(str, Enum):
 
     요청이 Canary 설정을 받을지 결정하는 방법.
     """
-    RANDOM = "random"              # 무작위 확률 기반
+
+    RANDOM = "random"  # 무작위 확률 기반
     USER_ID_HASH = "user_id_hash"  # 사용자 ID 해시 기반 (일관성)
     HEADER_BASED = "header_based"  # 특정 헤더 기반
-    IP_HASH = "ip_hash"            # IP 주소 해시 기반
-    WHITELIST = "whitelist"        # 화이트리스트 기반
+    IP_HASH = "ip_hash"  # IP 주소 해시 기반
+    WHITELIST = "whitelist"  # 화이트리스트 기반
 
 
 @dataclass
@@ -94,18 +96,19 @@ class CanaryFlagConfig:
         created_at: 생성 시간
         expires_at: 만료 시간 (선택)
     """
+
     config_type: str
     enabled: bool = True
     percentage: float = 10.0  # 10% 기본값
     strategy: CanarySelectionStrategy = CanarySelectionStrategy.USER_ID_HASH
-    rollout_id: Optional[str] = None
-    whitelist_user_ids: Set[str] = field(default_factory=set)
-    whitelist_ips: Set[str] = field(default_factory=set)
+    rollout_id: str | None = None
+    whitelist_user_ids: set[str] = field(default_factory=set)
+    whitelist_ips: set[str] = field(default_factory=set)
     canary_header: str = "X-Canary-Config"
-    baseline_config: Dict[str, Any] = field(default_factory=dict)
-    canary_config: Dict[str, Any] = field(default_factory=dict)
+    baseline_config: dict[str, Any] = field(default_factory=dict)
+    canary_config: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=utc_now)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
     def is_expired(self) -> bool:
         """만료 여부 확인."""
@@ -113,7 +116,7 @@ class CanaryFlagConfig:
             return False
         return utc_now() > self.expires_at
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "config_type": self.config_type,
@@ -131,7 +134,7 @@ class CanaryFlagConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CanaryFlagConfig":
+    def from_dict(cls, data: dict[str, Any]) -> CanaryFlagConfig:
         """딕셔너리에서 생성."""
         expires_at = data.get("expires_at")
         if isinstance(expires_at, str):
@@ -170,10 +173,11 @@ class CanaryDecision:
         strategy_used: 사용된 선택 전략
         effective_config: 최종 적용될 설정값
     """
+
     use_canary: bool
     reason: str
     strategy_used: str
-    effective_config: Dict[str, Any] = field(default_factory=dict)
+    effective_config: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -189,42 +193,42 @@ class RequestContextExtractor:
     """
 
     @staticmethod
-    def get_user_id(request: "HttpRequest") -> Optional[str]:
+    def get_user_id(request: HttpRequest) -> str | None:
         """요청에서 사용자 ID 추출."""
-        if hasattr(request, 'user') and request.user:
-            if hasattr(request.user, 'id') and request.user.id:
+        if hasattr(request, "user") and request.user:
+            if hasattr(request.user, "id") and request.user.id:
                 return str(request.user.id)
-            if hasattr(request.user, 'username') and request.user.username:
+            if hasattr(request.user, "username") and request.user.username:
                 return request.user.username
         return None
 
     @staticmethod
-    def get_client_ip(request: "HttpRequest") -> Optional[str]:
+    def get_client_ip(request: HttpRequest) -> str | None:
         """요청에서 클라이언트 IP 추출."""
         # X-Forwarded-For 헤더 확인 (프록시/로드밸런서 환경)
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            return x_forwarded_for.split(',')[0].strip()
+            return x_forwarded_for.split(",")[0].strip()
 
         # X-Real-IP 헤더 확인
-        x_real_ip = request.META.get('HTTP_X_REAL_IP')
+        x_real_ip = request.META.get("HTTP_X_REAL_IP")
         if x_real_ip:
             return x_real_ip
 
         # 직접 연결 IP
-        return request.META.get('REMOTE_ADDR')
+        return request.META.get("REMOTE_ADDR")
 
     @staticmethod
-    def get_header(request: "HttpRequest", header_name: str) -> Optional[str]:
+    def get_header(request: HttpRequest, header_name: str) -> str | None:
         """요청에서 특정 헤더 추출."""
         # Django에서 헤더는 HTTP_ 접두사와 대문자로 변환됨
         meta_key = f"HTTP_{header_name.upper().replace('-', '_')}"
         return request.META.get(meta_key)
 
     @staticmethod
-    def get_session_id(request: "HttpRequest") -> Optional[str]:
+    def get_session_id(request: HttpRequest) -> str | None:
         """요청에서 세션 ID 추출."""
-        if hasattr(request, 'session') and request.session:
+        if hasattr(request, "session") and request.session:
             return request.session.session_key
         return None
 
@@ -248,7 +252,7 @@ def compute_stable_hash(value: str) -> int:
         0-99 범위의 정수
     """
     hash_bytes = hashlib.md5(value.encode()).digest()
-    hash_int = int.from_bytes(hash_bytes[:4], byteorder='big')
+    hash_int = int.from_bytes(hash_bytes[:4], byteorder="big")
     return hash_int % 100
 
 
@@ -290,7 +294,7 @@ class CanaryFeatureFlag:
 
     def __init__(
         self,
-        context_extractor: Optional[RequestContextExtractor] = None,
+        context_extractor: RequestContextExtractor | None = None,
     ):
         """
         CanaryFeatureFlag 초기화.
@@ -299,7 +303,7 @@ class CanaryFeatureFlag:
             context_extractor: 요청 컨텍스트 추출기
         """
         self.context_extractor = context_extractor or RequestContextExtractor()
-        self._flags: Dict[str, CanaryFlagConfig] = {}
+        self._flags: dict[str, CanaryFlagConfig] = {}
 
     def register_flag(self, config: CanaryFlagConfig) -> None:
         """
@@ -330,17 +334,17 @@ class CanaryFeatureFlag:
             return True
         return False
 
-    def get_flag(self, config_type: str) -> Optional[CanaryFlagConfig]:
+    def get_flag(self, config_type: str) -> CanaryFlagConfig | None:
         """Canary Flag 조회."""
         return self._flags.get(config_type)
 
-    def list_flags(self) -> List[CanaryFlagConfig]:
+    def list_flags(self) -> list[CanaryFlagConfig]:
         """모든 Canary Flag 목록 반환."""
         return list(self._flags.values())
 
     def should_use_canary_config(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config_type: str,
     ) -> bool:
         """
@@ -358,11 +362,11 @@ class CanaryFeatureFlag:
 
     def get_effective_config(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config_type: str,
-        baseline_config: Optional[Dict[str, Any]] = None,
-        canary_config: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        baseline_config: dict[str, Any] | None = None,
+        canary_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         요청에 적용될 효과적인 설정 반환.
 
@@ -393,7 +397,7 @@ class CanaryFeatureFlag:
 
     def evaluate(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config_type: str,
     ) -> CanaryDecision:
         """
@@ -464,13 +468,17 @@ class CanaryFeatureFlag:
 
     def _evaluate_header_based(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         flag: CanaryFlagConfig,
     ) -> CanaryDecision:
         """헤더 기반 평가."""
         header_value = self.context_extractor.get_header(request, flag.canary_header)
 
-        use_canary = header_value is not None and header_value.lower() in ("true", "1", "yes")
+        use_canary = header_value is not None and header_value.lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         return CanaryDecision(
             use_canary=use_canary,
@@ -481,7 +489,7 @@ class CanaryFeatureFlag:
 
     def _evaluate_whitelist(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         flag: CanaryFlagConfig,
     ) -> CanaryDecision:
         """화이트리스트 기반 평가."""
@@ -514,7 +522,7 @@ class CanaryFeatureFlag:
 
     def _evaluate_user_id_hash(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         flag: CanaryFlagConfig,
     ) -> CanaryDecision:
         """사용자 ID 해시 기반 평가 (일관성 보장)."""
@@ -551,7 +559,7 @@ class CanaryFeatureFlag:
 
     def _evaluate_ip_hash(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         flag: CanaryFlagConfig,
     ) -> CanaryDecision:
         """IP 해시 기반 평가."""
@@ -650,7 +658,7 @@ class CanaryConfigMiddleware:
     def __init__(self, get_response: Callable):
         """미들웨어 초기화."""
         self.get_response = get_response
-        self._feature_flag: Optional[CanaryFeatureFlag] = None
+        self._feature_flag: CanaryFeatureFlag | None = None
 
     @property
     def feature_flag(self) -> CanaryFeatureFlag:
@@ -659,7 +667,7 @@ class CanaryConfigMiddleware:
             self._feature_flag = get_canary_feature_flag()
         return self._feature_flag
 
-    def __call__(self, request: "HttpRequest"):
+    def __call__(self, request: HttpRequest):
         """요청 처리."""
         # Canary 결정 수행
         request.canary_decisions = {}
@@ -688,7 +696,7 @@ class CanaryConfigMiddleware:
 # Singleton Accessor Functions
 # =============================================================================
 
-_canary_feature_flag: Optional[CanaryFeatureFlag] = None
+_canary_feature_flag: CanaryFeatureFlag | None = None
 
 
 def get_canary_feature_flag() -> CanaryFeatureFlag:

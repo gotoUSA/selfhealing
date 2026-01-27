@@ -7,12 +7,12 @@ Runtime configuration helpers for chaos experiments.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def _apply_chaos_config(config: Dict[str, Any]) -> None:
+def _apply_chaos_config(config: dict[str, Any]) -> None:
     """Apply chaos configuration via RuntimeConfigManager."""
     try:
         from selfhealing.services.runtime_config import get_runtime_config_manager
@@ -25,7 +25,7 @@ def _apply_chaos_config(config: Dict[str, Any]) -> None:
         )
 
 
-def _get_current_chaos_config() -> Dict[str, Any]:
+def _get_current_chaos_config() -> dict[str, Any]:
     """Get current chaos configuration."""
     try:
         from selfhealing.services.runtime_config import get_runtime_config_manager

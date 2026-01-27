@@ -6,13 +6,13 @@ Contains protocol definitions for audit recording and kill switch integration.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Protocol
+from typing import Any, Protocol
 
 
 class AuditRecorderProtocol(Protocol):
     """Protocol for audit recording."""
 
-    def record(self, event_type: str, data: Dict[str, Any]) -> None:
+    def record(self, event_type: str, data: dict[str, Any]) -> None:
         """Record an audit event."""
         ...
 

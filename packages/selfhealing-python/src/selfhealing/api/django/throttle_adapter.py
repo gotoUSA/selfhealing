@@ -6,7 +6,7 @@ self-healing throttle implementation.
 
 Usage in DRF views:
     from selfhealing.api.django.throttle_adapter import AdaptiveDRFThrottle
-    
+
     class MyView(APIView):
         throttle_classes = [AdaptiveDRFThrottle]
 """
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from selfhealing.services.throttle.adaptive import (
     AdaptiveThrottle,
@@ -29,20 +29,20 @@ logger = logging.getLogger(__name__)
 class AdaptiveDRFThrottle:
     """
     DRF-compatible Adaptive Throttle using Netflix Gradient algorithm.
-    
+
     This is a bridge between DRF's throttle interface and our
     self-healing adaptive throttle implementation.
-    
+
     Features:
     - Netflix Gradient-based adaptive rate limiting
     - SLA-aware threshold adjustments
     - Response time (RTT) tracking
     - Automatic limit adjustment based on system load
-    
+
     Usage:
         class MyView(APIView):
             throttle_classes = [AdaptiveDRFThrottle]
-    
+
     Configuration via settings.py:
         SELFHEALING_THROTTLE = {
             "initial_limit": 100,
@@ -52,13 +52,13 @@ class AdaptiveDRFThrottle:
             "sla_critical_ms": 500,
         }
     """
-    
+
     scope = "adaptive"
-    
+
     def __init__(self):
-        self._throttle: Optional[AdaptiveThrottle] = None
-        self._request_start_time: Optional[float] = None
-    
+        self._throttle: AdaptiveThrottle | None = None
+        self._request_start_time: float | None = None
+
     @property
     def throttle(self) -> AdaptiveThrottle:
         """Get the underlying adaptive throttle (lazy initialization)."""
@@ -66,59 +66,59 @@ class AdaptiveDRFThrottle:
             config = self._get_config()
             self._throttle = get_adaptive_throttle(config)
         return self._throttle
-    
+
     def _get_config(self) -> ThrottleConfig:
         """Get throttle config from Django settings."""
         try:
             from django.conf import settings
-            
+
             config_dict = getattr(settings, "SELFHEALING_THROTTLE", {})
             return ThrottleConfig.from_dict(config_dict)
         except ImportError:
             return ThrottleConfig()
-    
+
     def allow_request(self, request: Any, view: Any) -> bool:
         """
         Check if the request should be allowed.
-        
+
         This is called by DRF for each request.
         """
         self._request_start_time = time.time()
-        
+
         # Get identifier for rate limiting
         ident = self.get_ident(request)
-        
+
         # Check if allowed
         result = self.throttle.allow_request(ident)
-        
+
         if not result.allowed:
             logger.info(
                 f"[AdaptiveDRFThrottle] Request throttled: "
                 f"limit={result.limit}, count={result.current_count}"
             )
-        
+
         return result.allowed
-    
+
     def get_ident(self, request: Any) -> str:
         """
         Get unique identifier for the request.
-        
+
         Uses X-Forwarded-For, X-Real-IP, or REMOTE_ADDR.
         """
         xff = request.META.get("HTTP_X_FORWARDED_FOR")
         if xff:
             return xff.split(",")[0].strip()
-        
+
         return (
-            request.META.get("HTTP_X_REAL_IP") or
-            request.META.get("REMOTE_ADDR") or
-            "unknown"
+            request.META.get("HTTP_X_REAL_IP")
+            or request.META.get("REMOTE_ADDR")
+            or "unknown"
         )
-    
-    def wait(self) -> Optional[float]:
+
+    def wait(self) -> float | None:
         """
         Return the recommended wait time before next request.
-        
+
         Called by DRF when request is throttled.
         """
         # Calculate based on current window reset time
@@ -127,11 +127,11 @@ class AdaptiveDRFThrottle:
             wait_time = result.reset_at - time.time()
             return max(0.0, wait_time)
         return 1.0  # Default wait
-    
+
     def finalize_response(self, request: Any, response: Any) -> None:
         """
         Called after request is completed to record RTT.
-        
+
         This should be called from a DRF middleware or manually.
         """
         if self._request_start_time is not None:
@@ -143,13 +143,13 @@ class AdaptiveDRFThrottle:
 class CorruptionShieldDRFValidator:
     """
     DRF-compatible Corruption Shield validator.
-    
+
     Can be used as a DRF permission class or called manually in views.
-    
+
     Usage as permission:
         class MyView(APIView):
             permission_classes = [CorruptionShieldDRFValidator]
-    
+
     Usage in serializer:
         class MySerializer(serializers.Serializer):
             def validate(self, data):
@@ -157,10 +157,10 @@ class CorruptionShieldDRFValidator:
                 validator.validate_data(data, self.context)
                 return data
     """
-    
+
     def __init__(self):
         self._shield = None
-    
+
     @property
     def shield(self):
         """Get corruption shield instance (lazy)."""
@@ -168,40 +168,41 @@ class CorruptionShieldDRFValidator:
             from selfhealing.services.corruption_shield.shield import (
                 get_corruption_shield,
             )
+
             self._shield = get_corruption_shield()
         return self._shield
-    
+
     def has_permission(self, request: Any, view: Any) -> bool:
         """
         DRF permission check.
-        
+
         Validates request data through corruption shield.
         """
         data = self._extract_data(request)
         context = self._build_context(request, view)
-        
+
         result = self.shield.validate(data, context)
-        
+
         if not result.is_valid:
             # Store violations for error response
             request._corruption_violations = result.violations
-        
+
         return not result.blocked
-    
+
     def validate_data(
         self,
         data: dict,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> None:
         """
         Validate data and raise exception on critical violations.
-        
+
         For use in serializers or views.
         """
         from rest_framework import serializers
-        
+
         result = self.shield.validate(data, context)
-        
+
         if result.blocked:
             errors = {}
             for v in result.violations:
@@ -209,37 +210,37 @@ class CorruptionShieldDRFValidator:
                 if field not in errors:
                     errors[field] = []
                 errors[field].append(f"[{v.layer}] {v.message}")
-            
+
             raise serializers.ValidationError(errors)
-    
+
     def _extract_data(self, request: Any) -> dict:
         """Extract data from request for validation."""
         data = {}
-        
+
         # From request body
         if hasattr(request, "data") and isinstance(request.data, dict):
             data.update(request.data)
-        
+
         # From query params (selected fields)
         if hasattr(request, "query_params"):
             for key in ["amount", "order_id", "status"]:
                 if key in request.query_params:
                     data[key] = request.query_params[key]
-        
+
         return data
-    
+
     def _build_context(self, request: Any, view: Any) -> dict:
         """Build validation context from request."""
         context = {}
-        
+
         # Add user info if authenticated
         if hasattr(request, "user") and request.user.is_authenticated:
             context["user_id"] = request.user.id
-        
+
         # Add view-specific context
         if hasattr(view, "get_corruption_shield_context"):
             context.update(view.get_corruption_shield_context(request))
-        
+
         return context
 
 
@@ -247,10 +248,11 @@ class CorruptionShieldDRFValidator:
 # Helper functions for integration
 # =============================================================================
 
+
 def record_response_time(request: Any) -> None:
     """
     Record response time for adaptive throttling.
-    
+
     Call this from DRF middleware after response is generated.
     """
     if hasattr(request, "_throttle_start_time"):
@@ -262,7 +264,7 @@ def record_response_time(request: Any) -> None:
 def mark_request_start(request: Any) -> None:
     """
     Mark request start time for RTT calculation.
-    
+
     Call this from DRF middleware before view processing.
     """
     request._throttle_start_time = time.time()

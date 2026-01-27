@@ -19,11 +19,11 @@ Usage:
         CrisisMultiplierProvider,
         get_crisis_multiplier_provider,
     )
-    
+
     # 기본 Provider 사용
     provider = get_crisis_multiplier_provider()
     multiplier = provider.get_current_multiplier()
-    
+
     # 커스텀 설정
     config = CrisisMultiplierConfig(
         multipliers={EmergencyLevel.LEVEL_3: 10.0},
@@ -40,10 +40,9 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Any
+from typing import Any
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
-
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +51,12 @@ logger = logging.getLogger(__name__)
 # Settings Helpers
 # =============================================================================
 
+
 def _get_multiplier_cache_ttl() -> float:
     """ErrorBudgetSettings에서 Multiplier 캐시 TTL을 가져온다."""
     try:
         from selfhealing.settings.error_budget import get_error_budget_settings
+
         return get_error_budget_settings().multiplier_cache_ttl
     except Exception:
         return 30.0  # fallback
@@ -65,6 +66,7 @@ def _get_multiplier_max() -> float:
     """ErrorBudgetSettings에서 최대 Multiplier를 가져온다."""
     try:
         from selfhealing.settings.error_budget import get_error_budget_settings
+
         return get_error_budget_settings().multiplier_max
     except Exception:
         return 10.0  # fallback
@@ -85,8 +87,8 @@ DEFAULT_MAX_MULTIPLIER = 10.0
 # Default Multipliers
 # =============================================================================
 
-DEFAULT_CRISIS_MULTIPLIERS: Dict[EmergencyLevel, float] = {
-    EmergencyLevel.NORMAL: 1.0,   # 기본 소진율
+DEFAULT_CRISIS_MULTIPLIERS: dict[EmergencyLevel, float] = {
+    EmergencyLevel.NORMAL: 1.0,  # 기본 소진율
     EmergencyLevel.LEVEL_1: 1.5,  # 경미한 위기: 1.5배
     EmergencyLevel.LEVEL_2: 3.0,  # 중간 위기: 3배
     EmergencyLevel.LEVEL_3: 5.0,  # 심각한 위기: 5배
@@ -98,22 +100,23 @@ DEFAULT_CRISIS_MULTIPLIERS: Dict[EmergencyLevel, float] = {
 # CrisisMultiplierConfig
 # =============================================================================
 
+
 @dataclass
 class CrisisMultiplierConfig:
     """
     위기 가중치 설정.
-    
+
     Emergency Level별 Error Budget 소진 가중치를 정의합니다.
-    
+
     Attributes:
         multipliers: Level별 가중치 매핑
         enabled: 기능 활성화 여부
         max_multiplier: 최대 허용 가중치 (과도한 소진 방지)
-    
+
     Example:
         # 기본 설정
         config = CrisisMultiplierConfig()
-        
+
         # 커스텀 설정
         config = CrisisMultiplierConfig(
             multipliers={
@@ -123,45 +126,45 @@ class CrisisMultiplierConfig:
             max_multiplier=15.0,
         )
     """
-    
-    multipliers: Dict[EmergencyLevel, float] = field(
+
+    multipliers: dict[EmergencyLevel, float] = field(
         default_factory=lambda: dict(DEFAULT_CRISIS_MULTIPLIERS)
     )
     """Emergency Level별 가중치 매핑."""
-    
+
     enabled: bool = True
     """Crisis Multiplier 활성화 여부. False면 항상 1.0 반환."""
-    
+
     max_multiplier: float = field(default_factory=_get_multiplier_max)
     """최대 허용 가중치 (안전 제한). Settings에서 가져옴."""
-    
+
     def get_multiplier(self, level: EmergencyLevel) -> float:
         """
         레벨에 해당하는 가중치 반환.
-        
+
         Args:
             level: Emergency 레벨
-        
+
         Returns:
             가중치 값 (기본 1.0, max_multiplier 이하)
         """
         if not self.enabled:
             return 1.0
-        
+
         multiplier = self.multipliers.get(level, 1.0)
         return min(multiplier, self.max_multiplier)
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CrisisMultiplierConfig":
+    def from_dict(cls, data: dict[str, Any]) -> CrisisMultiplierConfig:
         """
         딕셔너리에서 CrisisMultiplierConfig 생성.
-        
+
         Args:
             data: 설정 딕셔너리
                 - multipliers: {"NORMAL": 1.0, "LEVEL_3": 5.0, ...}
                 - enabled: bool
                 - max_multiplier: float
-        
+
         Returns:
             CrisisMultiplierConfig 인스턴스
         """
@@ -175,28 +178,25 @@ class CrisisMultiplierConfig:
                     level = EmergencyLevel(level_name)
                 multipliers[level] = float(value)
             except (KeyError, ValueError):
-                logger.warning(
-                    f"[CrisisMultiplierConfig] Invalid level: {level_name}"
-                )
+                logger.warning(f"[CrisisMultiplierConfig] Invalid level: {level_name}")
                 continue
-        
+
         return cls(
             multipliers=multipliers or dict(DEFAULT_CRISIS_MULTIPLIERS),
             enabled=data.get("enabled", True),
             max_multiplier=data.get("max_multiplier", DEFAULT_MAX_MULTIPLIER),
         )
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """
         딕셔너리로 변환.
-        
+
         Returns:
             설정 딕셔너리
         """
         return {
             "multipliers": {
-                level.name: value
-                for level, value in self.multipliers.items()
+                level.name: value for level, value in self.multipliers.items()
             },
             "enabled": self.enabled,
             "max_multiplier": self.max_multiplier,
@@ -207,59 +207,62 @@ class CrisisMultiplierConfig:
 # CrisisMultiplierProvider
 # =============================================================================
 
+
 class CrisisMultiplierProvider:
     """
     위기 가중치 제공자.
-    
+
     현재 Emergency Level에 따른 Error Budget 소진 가중치를 제공합니다.
-    
+
     Features:
     - Emergency Level 기반 가중치 조회
     - 설정 가능한 가중치
     - TTL 캐시 (30초, Check on Use 패턴)
     - invalidate_cache()로 즉시 무효화 (격상 시)
-    
+
     Usage:
         provider = CrisisMultiplierProvider()
-        
+
         # 현재 가중치 조회
         multiplier = provider.get_current_multiplier()
-        
+
         # 네임스페이스 지정
         multiplier = provider.get_current_multiplier(namespace="seoul")
-        
+
         # 캐시 즉시 무효화 (Emergency 격상 시)
         provider.invalidate_cache()
-    
+
     Reference:
         docs/self_healing/middleware_system/75_CRISIS_BUDGET_MULTIPLIER.md
     """
-    
+
     def __init__(
         self,
-        config: Optional[CrisisMultiplierConfig] = None,
-        cache_ttl: Optional[float] = None,
+        config: CrisisMultiplierConfig | None = None,
+        cache_ttl: float | None = None,
     ):
         """
         CrisisMultiplierProvider 초기화.
-        
+
         Args:
             config: 가중치 설정 (None이면 기본값 사용)
             cache_ttl: 캐시 TTL (초). None이면 Settings에서 가져옴.
         """
         self.config = config or CrisisMultiplierConfig()
         self._emergency_tracker = None
-        self._cache_ttl = cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
-        
+        self._cache_ttl = (
+            cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
+        )
+
         # 캐시 상태
-        self._cached_multiplier: Optional[float] = None
-        self._cached_namespace: Optional[str] = None
+        self._cached_multiplier: float | None = None
+        self._cached_namespace: str | None = None
         self._cache_timestamp: float = 0.0
-    
+
     def _get_emergency_tracker(self):
         """
         EmergencyTracker 획득 (lazy loading).
-        
+
         Returns:
             NamespacedEmergencyTracker 인스턴스
         """
@@ -267,21 +270,22 @@ class CrisisMultiplierProvider:
             from selfhealing.services.namespace_emergency import (
                 get_namespaced_emergency_tracker,
             )
+
             self._emergency_tracker = get_namespaced_emergency_tracker()
         return self._emergency_tracker
-    
+
     def get_current_multiplier(
         self,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         bypass_cache: bool = False,
     ) -> float:
         """
         현재 Crisis Multiplier 조회.
-        
+
         Args:
             namespace: 대상 네임스페이스 (None이면 현재 인스턴스)
             bypass_cache: True면 캐시 무시하고 조회
-        
+
         Returns:
             현재 가중치 값 (1.0 ~ max_multiplier)
         """
@@ -294,7 +298,7 @@ class CrisisMultiplierProvider:
             and now - self._cache_timestamp < self._cache_ttl
         ):
             return self._cached_multiplier
-        
+
         # Emergency Level 조회
         try:
             tracker = self._get_emergency_tracker()
@@ -306,35 +310,35 @@ class CrisisMultiplierProvider:
                 f"using NORMAL: {e}"
             )
             level = EmergencyLevel.NORMAL
-        
+
         # 가중치 조회
         multiplier = self.config.get_multiplier(level)
-        
+
         # 캐시 저장
         self._cached_multiplier = multiplier
         self._cached_namespace = namespace
         self._cache_timestamp = now
-        
+
         logger.debug(
             f"[CrisisMultiplier] Level={level.name}, "
             f"multiplier={multiplier}x, namespace={namespace}"
         )
-        
+
         return multiplier
-    
+
     def invalidate_cache(self) -> None:
         """
         캐시 무효화.
-        
+
         Emergency 격상 시 이벤트 버스를 통해 호출되어
         30초 캐시 대기 없이 즉시 새 가중치를 적용합니다.
         """
         self._cached_multiplier = None
         self._cached_namespace = None
         self._cache_timestamp = 0.0
-        
+
         logger.debug("[CrisisMultiplier] Cache invalidated")
-    
+
     def set_multiplier_override(
         self,
         level: EmergencyLevel,
@@ -342,7 +346,7 @@ class CrisisMultiplierProvider:
     ) -> None:
         """
         특정 레벨의 가중치 오버라이드 (런타임 설정).
-        
+
         Args:
             level: 대상 레벨
             multiplier: 새 가중치 (max_multiplier 이하로 제한됨)
@@ -350,57 +354,56 @@ class CrisisMultiplierProvider:
         capped_multiplier = min(multiplier, self.config.max_multiplier)
         self.config.multipliers[level] = capped_multiplier
         self.invalidate_cache()
-        
+
         logger.info(
             f"[CrisisMultiplier] Override set: "
             f"level={level.name}, multiplier={capped_multiplier}"
         )
-    
+
     def get_config(self) -> CrisisMultiplierConfig:
         """
         현재 설정 반환.
-        
+
         Returns:
             CrisisMultiplierConfig 인스턴스
         """
         return self.config
-    
-    def get_all_multipliers(self) -> Dict[str, float]:
+
+    def get_all_multipliers(self) -> dict[str, float]:
         """
         모든 레벨의 가중치 반환.
-        
+
         Returns:
             레벨명 -> 가중치 매핑
         """
         return {
-            level.name: self.config.get_multiplier(level)
-            for level in EmergencyLevel
+            level.name: self.config.get_multiplier(level) for level in EmergencyLevel
         }
-    
+
     def get_combined_multiplier(
         self,
-        error_code: Optional[Any] = None,
-        namespace: Optional[str] = None,
+        error_code: Any | None = None,
+        namespace: str | None = None,
         bypass_cache: bool = False,
     ) -> float:
         """
         EmergencyLevel 가중치와 ErrorCode 가중치를 결합한 최종 가중치 반환.
-        
+
         136_EXCEPTION_HANDLER_6_ENHANCEMENTS.md Q12 보완 구현.
-        
+
         결합 정책 (settings/error_budget.py의 weight_combine_policy):
         - MAX: 최댓값 (권장, 기본값)
         - SUM: 합산
         - MULTIPLY: 곱셈 (비권장)
-        
+
         Args:
             error_code: ErrorCode enum 또는 문자열 (None이면 ErrorCode 가중치 미적용)
             namespace: 대상 네임스페이스 (None이면 현재 인스턴스)
             bypass_cache: True면 캐시 무시하고 조회
-        
+
         Returns:
             결합된 가중치 (max_multiplier 이하)
-        
+
         Example:
             # LEVEL_3(5.0x) + SERVICE_TIMEOUT(0.5x) with MAX policy → 5.0
             provider = get_crisis_multiplier_provider()
@@ -414,7 +417,7 @@ class CrisisMultiplierProvider:
             namespace=namespace,
             bypass_cache=bypass_cache,
         )
-        
+
         # 2. ErrorCode 가중치 조회 (옵션)
         error_weight = 1.0
         if error_code is not None:
@@ -422,20 +425,20 @@ class CrisisMultiplierProvider:
                 from selfhealing.services.error_budget.exception_weights import (
                     get_weight_for_error_code,
                 )
+
                 error_weight = get_weight_for_error_code(error_code)
             except ImportError:
-                logger.warning(
-                    "[CrisisMultiplier] exception_weights not available"
-                )
-        
+                logger.warning("[CrisisMultiplier] exception_weights not available")
+
         # 3. 결합 정책 조회
         try:
             from selfhealing.services.error_budget.exception_weights import (
-                get_weight_combine_policy,
                 combine_weights,
+                get_weight_combine_policy,
             )
+
             policy = get_weight_combine_policy()
-            
+
             # 4. 결합 및 상한 적용
             combined = combine_weights(
                 emergency_weight=emergency_weight,
@@ -446,13 +449,13 @@ class CrisisMultiplierProvider:
         except ImportError:
             # exception_weights 모듈 없으면 EmergencyLevel 가중치만 반환
             combined = emergency_weight
-        
+
         logger.debug(
             f"[CrisisMultiplier] Combined: "
             f"emergency={emergency_weight}, error={error_weight}, "
             f"combined={combined}x, error_code={error_code}"
         )
-        
+
         return combined
 
 
@@ -460,7 +463,7 @@ class CrisisMultiplierProvider:
 # Singleton
 # =============================================================================
 
-_multiplier_provider: Optional[CrisisMultiplierProvider] = None
+_multiplier_provider: CrisisMultiplierProvider | None = None
 _provider_lock = None
 
 
@@ -469,6 +472,7 @@ def _get_lock():
     global _provider_lock
     if _provider_lock is None:
         import threading
+
         _provider_lock = threading.Lock()
     return _provider_lock
 
@@ -476,7 +480,7 @@ def _get_lock():
 def get_crisis_multiplier_provider() -> CrisisMultiplierProvider:
     """
     CrisisMultiplierProvider 싱글톤 반환.
-    
+
     Returns:
         CrisisMultiplierProvider 인스턴스
     """
@@ -489,16 +493,16 @@ def get_crisis_multiplier_provider() -> CrisisMultiplierProvider:
 
 
 def configure_crisis_multiplier_provider(
-    config: Optional[CrisisMultiplierConfig] = None,
+    config: CrisisMultiplierConfig | None = None,
     cache_ttl: float = DEFAULT_CACHE_TTL_SECONDS,
 ) -> CrisisMultiplierProvider:
     """
     CrisisMultiplierProvider 싱글톤 설정.
-    
+
     Args:
         config: 가중치 설정
         cache_ttl: 캐시 TTL (초)
-    
+
     Returns:
         설정된 CrisisMultiplierProvider 인스턴스
     """

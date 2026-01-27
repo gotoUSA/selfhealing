@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,7 +48,7 @@ class NotificationSettings(BaseSettings):
         default=True,
         description="Enable notification system",
     )
-    channels: List[str] = Field(
+    channels: list[str] = Field(
         default_factory=lambda: ["email"],
         description="Notification channels (email, slack, etc.)",
     )
@@ -118,7 +117,7 @@ class NotificationSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[NotificationSettings] = None
+_settings: NotificationSettings | None = None
 
 
 def get_notification_settings() -> NotificationSettings:

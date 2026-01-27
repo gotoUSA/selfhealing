@@ -19,9 +19,8 @@ Environment Variables:
 
 import logging
 from enum import Enum
-from typing import Dict, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -30,21 +29,22 @@ logger = logging.getLogger(__name__)
 class DeploymentEnvironment(str, Enum):
     """
     배포 환경 유형.
-    
+
     Worker Pool 설정을 환경에 따라 자동 조정합니다.
     """
+
     MINIMAL = "MINIMAL"
     """최소 리소스 환경 (개발, 테스트)"""
-    
+
     STANDARD = "STANDARD"
     """표준 운영 환경"""
-    
+
     HIGH_AVAILABILITY = "HIGH_AVAILABILITY"
     """고가용성 환경 (중요 서비스)"""
-    
+
     BURST = "BURST"
     """버스트 대응 환경 (트래픽 급증 대비)"""
-    
+
     ENTERPRISE = "ENTERPRISE"
     """엔터프라이즈 환경 (대규모 트래픽)"""
 
@@ -314,19 +314,19 @@ class CriticalWorkerSettings(BaseSettings):
         return v
 
     def get_pool_config_for_env(
-        self, env: Optional[DeploymentEnvironment] = None
-    ) -> Dict[str, int]:
+        self, env: DeploymentEnvironment | None = None
+    ) -> dict[str, int]:
         """
         환경에 따른 Worker Pool 설정 반환.
-        
+
         Args:
             env: 배포 환경 (기본값: self.deployment_env)
-        
+
         Returns:
             {"worker_count": N, "concurrency": N, "prefetch_multiplier": N}
         """
         env = env or self.deployment_env
-        
+
         pool_configs = {
             DeploymentEnvironment.MINIMAL: {
                 "worker_count": self.pool_minimal_worker_count,
@@ -354,7 +354,7 @@ class CriticalWorkerSettings(BaseSettings):
                 "prefetch_multiplier": self.pool_enterprise_prefetch_multiplier,
             },
         }
-        
+
         return pool_configs.get(env, pool_configs[DeploymentEnvironment.STANDARD])
 
 
@@ -362,7 +362,7 @@ class CriticalWorkerSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[CriticalWorkerSettings] = None
+_settings: CriticalWorkerSettings | None = None
 
 
 def get_critical_worker_settings() -> CriticalWorkerSettings:

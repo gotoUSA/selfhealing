@@ -15,7 +15,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ class XTestSessionMetadata:
     created_at: datetime
     ttl_hours: int
     user: str
-    components: List[str] = field(default_factory=list)
-    artifacts: List[str] = field(default_factory=list)
+    components: list[str] = field(default_factory=list)
+    artifacts: list[str] = field(default_factory=list)
 
     @property
     def expires_at(self) -> datetime:
@@ -41,7 +41,7 @@ class XTestSessionMetadata:
         """세션 만료 여부."""
         return datetime.now(timezone.utc) > self.expires_at
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """직렬화용 딕셔너리 변환."""
         return {
             "session_id": self.session_id,
@@ -55,7 +55,7 @@ class XTestSessionMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "XTestSessionMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> XTestSessionMetadata:
         """딕셔너리에서 인스턴스 생성."""
         created_at = data.get("created_at")
         if isinstance(created_at, str):
@@ -80,7 +80,7 @@ class XTestSessionManager:
     Redis를 사용하여 X-Test 세션의 생성, 조회, 만료 감지, 아티팩트 등록을 처리합니다.
     """
 
-    def __init__(self, redis_client: Optional[Any] = None):
+    def __init__(self, redis_client: Any | None = None):
         """
         Args:
             redis_client: Redis 클라이언트 (None이면 자동 생성)
@@ -93,6 +93,7 @@ class XTestSessionManager:
         """설정 lazy loading."""
         if self._settings is None:
             from selfhealing.settings.xtest_cleanup import get_xtest_cleanup_settings
+
             self._settings = get_xtest_cleanup_settings()
         return self._settings
 
@@ -102,6 +103,7 @@ class XTestSessionManager:
         if self._redis is None:
             try:
                 from selfhealing.adapters.redis import get_redis_client
+
                 self._redis = get_redis_client()
             except ImportError:
                 logger.warning("[XTestSession] Redis adapter not available")
@@ -120,7 +122,7 @@ class XTestSessionManager:
         self,
         session_id: str,
         user: str = "anonymous",
-        ttl_hours: Optional[int] = None,
+        ttl_hours: int | None = None,
     ) -> XTestSessionMetadata:
         """
         새 X-Test 세션 생성.
@@ -177,7 +179,7 @@ class XTestSessionManager:
 
         return metadata
 
-    def get_session(self, session_id: str) -> Optional[XTestSessionMetadata]:
+    def get_session(self, session_id: str) -> XTestSessionMetadata | None:
         """
         세션 메타데이터 조회.
 
@@ -220,8 +222,8 @@ class XTestSessionManager:
     def update_session(
         self,
         session_id: str,
-        components: Optional[List[str]] = None,
-        artifacts: Optional[List[str]] = None,
+        components: list[str] | None = None,
+        artifacts: list[str] | None = None,
     ) -> bool:
         """
         세션 메타데이터 업데이트.
@@ -290,7 +292,7 @@ class XTestSessionManager:
             artifacts=artifacts,
         )
 
-    def get_active_sessions(self) -> List[str]:
+    def get_active_sessions(self) -> list[str]:
         """
         활성 세션 ID 목록 조회.
 
@@ -304,15 +306,14 @@ class XTestSessionManager:
             active_key = self._get_active_sessions_key()
             session_ids = self.redis.smembers(active_key)
             return [
-                sid.decode() if isinstance(sid, bytes) else sid
-                for sid in session_ids
+                sid.decode() if isinstance(sid, bytes) else sid for sid in session_ids
             ]
 
         except Exception as e:
             logger.error(f"[XTestSession] Failed to get active sessions: {e}")
             return []
 
-    def get_expired_sessions(self) -> List[XTestSessionMetadata]:
+    def get_expired_sessions(self) -> list[XTestSessionMetadata]:
         """
         만료된 세션 목록 조회.
 
@@ -373,7 +374,7 @@ class XTestSessionManager:
 # Factory Function
 # =============================================================================
 
-_xtest_session_manager: Optional[XTestSessionManager] = None
+_xtest_session_manager: XTestSessionManager | None = None
 
 
 def get_xtest_session_manager() -> XTestSessionManager:

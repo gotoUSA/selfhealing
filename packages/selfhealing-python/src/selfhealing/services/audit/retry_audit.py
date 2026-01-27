@@ -14,9 +14,9 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
-from selfhealing.services.audit.base import _write_to_wal, _try_add_to_buffer
+from selfhealing.services.audit.base import _try_add_to_buffer, _write_to_wal
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +26,18 @@ def log_retry_audit(
     attempt: int,
     max_attempts: int,
     success: bool,
-    error_type: Optional[str] = None,
-    error_message: Optional[str] = None,
-    wait_time: Optional[float] = None,
+    error_type: str | None = None,
+    error_message: str | None = None,
+    wait_time: float | None = None,
     rate_limited: bool = False,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
     request: Any = None,
-) -> Optional[int]:
+) -> int | None:
     """
     재시도 이벤트를 Audit 로그에 기록.
-    
+
     WAL 기반 누락 0 보장.
-    
+
     Args:
         domain: 비즈니스 도메인 (payment, point 등)
         attempt: 현재 시도 횟수
@@ -49,14 +49,14 @@ def log_retry_audit(
         rate_limited: 레이트 리밋으로 인한 대기 여부
         context: 추가 컨텍스트 (order_id, payment_id 등)
         request: Django HttpRequest 객체 (있으면 버퍼에 적재)
-        
+
     Returns:
         WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
     """
     # 이벤트 타입 결정: 마지막 시도 실패면 EXHAUSTED, 아니면 ATTEMPTED
     is_exhausted = not success and attempt >= max_attempts
     event_type_str = "RETRY_EXHAUSTED" if is_exhausted else "RETRY_ATTEMPTED"
-    
+
     details = {
         "domain": domain,
         "attempt": attempt,
@@ -67,7 +67,7 @@ def log_retry_audit(
         "rate_limited": rate_limited,
         **(context or {}),
     }
-    
+
     # === Step 1: WAL에 먼저 기록 (누락 0 보장) ===
     wal_seq = _write_to_wal(
         event_type=event_type_str,
@@ -77,17 +77,18 @@ def log_retry_audit(
         error_message=error_message if not success else None,
         domain=domain,
     )
-    
+
     # === Step 2: 하이브리드 로직 - request 있으면 버퍼에 적재 ===
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             audit_event_type = (
-                AuditEventType.RETRY_EXHAUSTED if is_exhausted 
+                AuditEventType.RETRY_EXHAUSTED
+                if is_exhausted
                 else AuditEventType.RETRY_ATTEMPTED
             )
-            
+
             added = _try_add_to_buffer(
                 request=request,
                 event_type=audit_event_type,
@@ -101,7 +102,7 @@ def log_retry_audit(
                 return wal_seq
         except ImportError:
             pass
-    
+
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     status = "SUCCESS" if success else ("EXHAUSTED" if is_exhausted else "RETRY")
     logger.info(
@@ -114,17 +115,17 @@ def log_retry_audit(
 def log_system_control_audit(
     action: str,
     actor: str,
-    old_state: Optional[Dict[str, Any]] = None,
-    new_state: Optional[Dict[str, Any]] = None,
-    reason: Optional[str] = None,
+    old_state: dict[str, Any] | None = None,
+    new_state: dict[str, Any] | None = None,
+    reason: str | None = None,
     request: Any = None,
-) -> Optional[int]:
+) -> int | None:
     """
     시스템 제어 변경을 Audit 로그에 기록.
-    
+
     Kill Switch 활성화/비활성화, Dry Run 모드 변경 등을 기록합니다.
     WAL 기반 누락 0 보장.
-    
+
     Args:
         action: 수행된 액션 (enable, disable, enable_dry_run, disable_dry_run, reset)
         actor: 액션 수행자 (admin, system 등)
@@ -132,7 +133,7 @@ def log_system_control_audit(
         new_state: 변경 후 상태
         reason: 변경 사유
         request: Django HttpRequest 객체 (있으면 버퍼에 적재)
-        
+
     Returns:
         WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
     """
@@ -143,7 +144,7 @@ def log_system_control_audit(
         "new_state": new_state,
         "reason": reason,
     }
-    
+
     # === Step 1: WAL에 먼저 기록 (누락 0 보장) ===
     wal_seq = _write_to_wal(
         event_type="SYSTEM_CONTROL_CHANGED",
@@ -151,12 +152,12 @@ def log_system_control_audit(
         details=details,
         success=True,
     )
-    
+
     # === Step 2: 하이브리드 로직 - request 있으면 버퍼에 적재 ===
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             added = _try_add_to_buffer(
                 request=request,
                 event_type=AuditEventType.SYSTEM_CONTROL_CHANGED,
@@ -168,7 +169,7 @@ def log_system_control_audit(
                 return wal_seq
         except ImportError:
             pass
-    
+
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     logger.info(
         f"[SystemControlAudit] {action.upper()} | actor={actor} | reason={reason or 'N/A'}"
@@ -181,20 +182,20 @@ def log_rollback_audit(
     stage_name: str,
     state: str,
     triggered_by: str,
-    reason: Optional[str] = None,
-    source_version: Optional[str] = None,
-    target_version: Optional[str] = None,
-    affected_components: Optional[list] = None,
-    errors: Optional[list] = None,
-    duration_seconds: Optional[float] = None,
+    reason: str | None = None,
+    source_version: str | None = None,
+    target_version: str | None = None,
+    affected_components: list | None = None,
+    errors: list | None = None,
+    duration_seconds: float | None = None,
     request: Any = None,
-) -> Optional[int]:
+) -> int | None:
     """
     롤백 이벤트를 Audit 로그에 기록.
-    
+
     롤백 요청, 실행 시작, 완료, 실패 등을 기록합니다.
     WAL 기반 누락 0 보장.
-    
+
     Args:
         request_id: 롤백 요청 ID
         stage_name: 대상 Stage 이름
@@ -207,12 +208,12 @@ def log_rollback_audit(
         errors: 발생한 에러 목록
         duration_seconds: 롤백 소요 시간
         request: Django HttpRequest 객체 (있으면 버퍼에 적재)
-        
+
     Returns:
         WAL 시퀀스 번호 (WAL 기록 성공 시), None (실패 시)
     """
     success = state in ("completed", "pending", "in_progress")
-    
+
     details = {
         "request_id": request_id,
         "stage_name": stage_name,
@@ -225,7 +226,7 @@ def log_rollback_audit(
         "errors": errors,
         "duration_seconds": duration_seconds,
     }
-    
+
     # === Step 1: WAL에 먼저 기록 (누락 0 보장) ===
     error_msg = "; ".join(errors) if errors else None
     wal_seq = _write_to_wal(
@@ -236,12 +237,12 @@ def log_rollback_audit(
         error_message=error_msg,
         target_id=request_id,
     )
-    
+
     # === Step 2: 하이브리드 로직 - request 있으면 버퍼에 적재 ===
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             added = _try_add_to_buffer(
                 request=request,
                 event_type=AuditEventType.ROLLBACK_PERFORMED,
@@ -255,7 +256,7 @@ def log_rollback_audit(
                 return wal_seq
         except ImportError:
             pass
-    
+
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     logger.info(
         f"[RollbackAudit] {state.upper()} | request={request_id} | "

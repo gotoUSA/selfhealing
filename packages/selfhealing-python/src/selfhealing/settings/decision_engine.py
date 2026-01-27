@@ -23,7 +23,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -247,7 +246,7 @@ class DecisionEngineSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[DecisionEngineSettings] = None
+_settings: DecisionEngineSettings | None = None
 
 
 def get_decision_engine_settings() -> DecisionEngineSettings:

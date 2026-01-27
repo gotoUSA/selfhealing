@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -165,7 +164,7 @@ class SecuritySettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[SecuritySettings] = None
+_settings: SecuritySettings | None = None
 
 
 def get_security_settings() -> SecuritySettings:

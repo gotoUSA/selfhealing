@@ -18,7 +18,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -126,7 +125,7 @@ class AuditSyncSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[AuditSyncSettings] = None
+_settings: AuditSyncSettings | None = None
 
 
 def get_audit_sync_settings() -> AuditSyncSettings:

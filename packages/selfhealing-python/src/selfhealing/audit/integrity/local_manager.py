@@ -12,10 +12,9 @@ import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.audit.integrity.models import compute_hash
-
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class HashChainManager:
 
     GENESIS_HASH = "GENESIS"
 
-    def __init__(self, state_file: Optional[Path] = None):
+    def __init__(self, state_file: Path | None = None):
         """
         Initialize hash chain manager.
 
@@ -72,7 +71,7 @@ class HashChainManager:
             except Exception as e:
                 logger.warning(f"[HashChain] Failed to save state: {e}")
 
-    def add_integrity(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+    def add_integrity(self, entry: dict[str, Any]) -> dict[str, Any]:
         """
         Add integrity fields to a log entry.
 
@@ -105,12 +104,16 @@ class HashChainManager:
 
             return entry
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Get current chain state."""
         with self._lock:
             return {
                 "sequence": self._sequence,
-                "previous_hash": self._previous_hash[:16] + "..." if len(self._previous_hash) > 16 else self._previous_hash,
+                "previous_hash": (
+                    self._previous_hash[:16] + "..."
+                    if len(self._previous_hash) > 16
+                    else self._previous_hash
+                ),
             }
 
     def reset(self) -> None:

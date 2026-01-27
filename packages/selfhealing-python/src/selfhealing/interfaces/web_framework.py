@@ -14,9 +14,10 @@ Design Principles:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -83,18 +84,18 @@ class RequestContext:
     headers: dict[str, str] = field(default_factory=dict)
     query_params: dict[str, Any] = field(default_factory=dict)
     path_params: dict[str, Any] = field(default_factory=dict)
-    body: Optional[bytes] = None
-    json_body: Optional[dict] = None
-    user: Optional[Any] = None
+    body: bytes | None = None
+    json_body: dict | None = None
+    user: Any | None = None
     is_authenticated: bool = False
 
     # Request metadata
-    client_ip: Optional[str] = None
-    user_agent: Optional[str] = None
-    request_id: Optional[str] = None
-    content_type: Optional[str] = None
+    client_ip: str | None = None
+    user_agent: str | None = None
+    request_id: str | None = None
+    content_type: str | None = None
 
-    def get_header(self, name: str, default: Optional[str] = None) -> Optional[str]:
+    def get_header(self, name: str, default: str | None = None) -> str | None:
         """
         Get header value (case-insensitive).
 
@@ -173,8 +174,8 @@ class ResponseContext:
         cls,
         data: Any,
         status_code: int = 200,
-        headers: Optional[dict[str, str]] = None,
-    ) -> "ResponseContext":
+        headers: dict[str, str] | None = None,
+    ) -> ResponseContext:
         """
         Create JSON response.
 
@@ -198,9 +199,9 @@ class ResponseContext:
         cls,
         message: str,
         status_code: int = 400,
-        error_code: Optional[str] = None,
-        details: Optional[dict] = None,
-    ) -> "ResponseContext":
+        error_code: str | None = None,
+        details: dict | None = None,
+    ) -> ResponseContext:
         """
         Create error response.
 
@@ -228,9 +229,9 @@ class ResponseContext:
     def success(
         cls,
         data: Any = None,
-        message: Optional[str] = None,
+        message: str | None = None,
         status_code: int = 200,
-    ) -> "ResponseContext":
+    ) -> ResponseContext:
         """
         Create success response.
 
@@ -251,7 +252,7 @@ class ResponseContext:
         return cls(status_code=status_code, body=body)
 
     @classmethod
-    def created(cls, data: Any, location: Optional[str] = None) -> "ResponseContext":
+    def created(cls, data: Any, location: str | None = None) -> ResponseContext:
         """
         Create 201 Created response.
 
@@ -268,7 +269,7 @@ class ResponseContext:
         return cls(status_code=201, body=data, headers=headers)
 
     @classmethod
-    def no_content(cls) -> "ResponseContext":
+    def no_content(cls) -> ResponseContext:
         """
         Create 204 No Content response.
 
@@ -278,7 +279,7 @@ class ResponseContext:
         return cls(status_code=204, body=None)
 
     @classmethod
-    def not_found(cls, message: str = "Resource not found") -> "ResponseContext":
+    def not_found(cls, message: str = "Resource not found") -> ResponseContext:
         """
         Create 404 Not Found response.
 
@@ -291,7 +292,9 @@ class ResponseContext:
         return cls.error(message, status_code=404, error_code="NOT_FOUND")
 
     @classmethod
-    def unauthorized(cls, message: str = "Authentication required") -> "ResponseContext":
+    def unauthorized(
+        cls, message: str = "Authentication required"
+    ) -> ResponseContext:
         """
         Create 401 Unauthorized response.
 
@@ -304,7 +307,7 @@ class ResponseContext:
         return cls.error(message, status_code=401, error_code="UNAUTHORIZED")
 
     @classmethod
-    def forbidden(cls, message: str = "Permission denied") -> "ResponseContext":
+    def forbidden(cls, message: str = "Permission denied") -> ResponseContext:
         """
         Create 403 Forbidden response.
 
@@ -320,8 +323,8 @@ class ResponseContext:
     def bad_request(
         cls,
         message: str = "Bad request",
-        errors: Optional[dict] = None,
-    ) -> "ResponseContext":
+        errors: dict | None = None,
+    ) -> ResponseContext:
         """
         Create 400 Bad Request response.
 
@@ -340,7 +343,7 @@ class ResponseContext:
         )
 
     @classmethod
-    def server_error(cls, message: str = "Internal server error") -> "ResponseContext":
+    def server_error(cls, message: str = "Internal server error") -> ResponseContext:
         """
         Create 500 Internal Server Error response.
 
@@ -357,7 +360,7 @@ class ResponseContext:
         cls,
         url: str,
         permanent: bool = False,
-    ) -> "ResponseContext":
+    ) -> ResponseContext:
         """
         Create redirect response.
 
@@ -462,7 +465,7 @@ class WebFrameworkInterface(ABC):
     def create_router(
         self,
         prefix: str = "",
-        tags: Optional[list[str]] = None,
+        tags: list[str] | None = None,
     ) -> Any:
         """
         Create a router/blueprint for grouping routes.
@@ -489,11 +492,11 @@ class WebFrameworkInterface(ABC):
         path: str,
         method: HttpMethod,
         handler: HandlerFunc,
-        response_model: Optional[Type] = None,
-        summary: Optional[str] = None,
-        description: Optional[str] = None,
+        response_model: type | None = None,
+        summary: str | None = None,
+        description: str | None = None,
         auth_required: bool = True,
-        permissions: Optional[list[str]] = None,
+        permissions: list[str] | None = None,
         deprecated: bool = False,
     ) -> None:
         """
@@ -602,7 +605,7 @@ class WebFrameworkInterface(ABC):
     def add_middleware(
         self,
         app: Any,
-        middleware_class: Type,
+        middleware_class: type,
         **options,
     ) -> None:
         """
@@ -625,7 +628,7 @@ class WebFrameworkInterface(ABC):
     def add_exception_handler(
         self,
         app: Any,
-        exception_class: Type[Exception],
+        exception_class: type[Exception],
         handler: Callable[[Any, Exception], ResponseContext],
     ) -> None:
         """
@@ -643,7 +646,7 @@ class WebFrameworkInterface(ABC):
     # =========================================================================
 
     @abstractmethod
-    def get_current_user(self, request: Any) -> Optional[Any]:
+    def get_current_user(self, request: Any) -> Any | None:
         """
         Get authenticated user from request.
 
@@ -749,7 +752,9 @@ class WebFrameworkInterface(ABC):
         Returns:
             Application instance
         """
-        raise NotImplementedError(f"{self.framework_name} adapter does not support create_app")
+        raise NotImplementedError(
+            f"{self.framework_name} adapter does not support create_app"
+        )
 
     def run_server(
         self,
@@ -770,4 +775,6 @@ class WebFrameworkInterface(ABC):
         Note:
             For development only. Use proper WSGI/ASGI server in production.
         """
-        raise NotImplementedError(f"{self.framework_name} adapter does not support run_server")
+        raise NotImplementedError(
+            f"{self.framework_name} adapter does not support run_server"
+        )

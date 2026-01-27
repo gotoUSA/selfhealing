@@ -22,7 +22,6 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
-from typing import Optional
 
 
 class ExecutionModeType(str, Enum):
@@ -81,7 +80,7 @@ class ExecutionMode:
         return not self.execute_actions
 
     @classmethod
-    def active(cls) -> "ExecutionMode":
+    def active(cls) -> ExecutionMode:
         """Create active mode configuration."""
         return cls(
             mode=ExecutionModeType.ACTIVE,
@@ -91,7 +90,7 @@ class ExecutionMode:
         )
 
     @classmethod
-    def shadow(cls) -> "ExecutionMode":
+    def shadow(cls) -> ExecutionMode:
         """Create shadow mode configuration."""
         return cls(
             mode=ExecutionModeType.SHADOW,
@@ -101,7 +100,7 @@ class ExecutionMode:
         )
 
     @classmethod
-    def evaluation(cls) -> "ExecutionMode":
+    def evaluation(cls) -> ExecutionMode:
         """Create evaluation mode configuration."""
         return cls(
             mode=ExecutionModeType.EVALUATION,
@@ -115,7 +114,7 @@ class ExecutionMode:
 # Global Mode Access
 # =============================================================================
 
-_override_mode: Optional[ExecutionMode] = None
+_override_mode: ExecutionMode | None = None
 
 
 def set_execution_mode(mode: ExecutionMode) -> None:

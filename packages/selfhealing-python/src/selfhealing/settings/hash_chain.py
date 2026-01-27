@@ -16,7 +16,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -110,7 +109,7 @@ class HashChainSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[HashChainSettings] = None
+_settings: HashChainSettings | None = None
 
 
 def get_hash_chain_settings() -> HashChainSettings:

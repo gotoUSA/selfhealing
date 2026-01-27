@@ -16,7 +16,7 @@ WORM (Write Once Read Many) Storage Adapters.
 사용법:
     # 직접 사용 (권장하지 않음 - 고객이 구현해야 함)
     adapter = S3ObjectLockAdapter(bucket="audit-logs", region="ap-northeast-2")
-    
+
     # 또는 사이드카 패턴 (권장)
     # 메인 앱은 FileAuditLogAdapter 사용, 별도 프로세스가 S3로 전송
 """
@@ -25,13 +25,14 @@ from __future__ import annotations
 
 import json
 import logging
-import urllib.request
 import urllib.error
+import urllib.request
 from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Callable
+from typing import Any
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
 
@@ -54,8 +55,8 @@ class S3Config:
     retention_days: int = 2555  # 7년 (PCI-DSS)
 
     # 인증 (AWS SDK 없이 사용 시)
-    access_key_id: Optional[str] = None
-    secret_access_key: Optional[str] = None
+    access_key_id: str | None = None
+    secret_access_key: str | None = None
 
     # 또는 IAM Role 사용 (권장)
     use_iam_role: bool = True
@@ -66,8 +67,8 @@ class LokiConfig:
     """Grafana Loki 설정."""
 
     endpoint: str = "http://loki:3100/loki/api/v1/push"
-    tenant_id: Optional[str] = None
-    labels: Dict[str, str] = None
+    tenant_id: str | None = None
+    labels: dict[str, str] = None
     timeout_seconds: float = 5.0
     batch_size: int = 100
 
@@ -103,8 +104,8 @@ class WORMAdapter(AuditLogAdapter):
 
     def __init__(
         self,
-        fallback_path: Optional[Path] = None,
-        on_error: Optional[Callable[[Exception, AuditEntry], None]] = None,
+        fallback_path: Path | None = None,
+        on_error: Callable[[Exception, AuditEntry], None] | None = None,
     ):
         """
         Initialize WORM adapter.
@@ -113,7 +114,9 @@ class WORMAdapter(AuditLogAdapter):
             fallback_path: 장애 시 로컬 저장 경로
             on_error: 에러 발생 시 콜백 (모니터링용)
         """
-        self._fallback_path = fallback_path or Path("/var/log/audit/worm_fallback.jsonl")
+        self._fallback_path = fallback_path or Path(
+            "/var/log/audit/worm_fallback.jsonl"
+        )
         self._on_error = on_error
         self._fallback_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -122,7 +125,9 @@ class WORMAdapter(AuditLogAdapter):
         try:
             self._write_to_worm(entry)
         except Exception as e:
-            logger.warning(f"[WORM] Failed to write to WORM storage: {e}, using fallback")
+            logger.warning(
+                f"[WORM] Failed to write to WORM storage: {e}, using fallback"
+            )
             self._write_to_fallback(entry)
             if self._on_error:
                 self._on_error(e, entry)
@@ -142,11 +147,11 @@ class WORMAdapter(AuditLogAdapter):
 
     def query(
         self,
-        action: Optional[Any] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        start_time: Optional[Any] = None,
-        end_time: Optional[Any] = None,
+        action: Any | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        start_time: Any | None = None,
+        end_time: Any | None = None,
         limit: int = 100,
     ) -> list:
         """WORM 저장소는 일반적으로 쿼리를 지원하지 않음."""
@@ -194,7 +199,7 @@ class S3ObjectLockAdapter(WORMAdapter):
     def __init__(
         self,
         config: S3Config,
-        s3_client: Optional[Any] = None,  # boto3.client('s3')
+        s3_client: Any | None = None,  # boto3.client('s3')
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -216,8 +221,9 @@ class S3ObjectLockAdapter(WORMAdapter):
 
         # Object key with timestamp and unique ID
         import uuid
+
         timestamp = datetime.now(timezone.utc).strftime("%Y/%m/%d/%H%M%S")
-        unique_id = getattr(entry, 'audit_id', None) or str(uuid.uuid4())[:8]
+        unique_id = getattr(entry, "audit_id", None) or str(uuid.uuid4())[:8]
         key = f"{self._config.prefix}{timestamp}_{unique_id}.json"
 
         # Object Lock retention
@@ -256,7 +262,7 @@ class LokiAdapter(WORMAdapter):
         )
     """
 
-    def __init__(self, config: Optional[LokiConfig] = None, **kwargs):
+    def __init__(self, config: LokiConfig | None = None, **kwargs):
         super().__init__(**kwargs)
         self._config = config or LokiConfig()
         self._batch: list[AuditEntry] = []
@@ -307,10 +313,10 @@ class LokiAdapter(WORMAdapter):
     def query(
         self,
         query: str,
-        start: Optional[datetime] = None,
-        end: Optional[datetime] = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
         limit: int = 100,
-    ) -> list[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query logs from Loki.
 
@@ -351,7 +357,7 @@ class HTTPWebhookAdapter(WORMAdapter):
     def __init__(
         self,
         endpoint: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         timeout_seconds: float = 5.0,
         **kwargs,
     ):
@@ -412,8 +418,8 @@ class SidecarFileWatcher:
         self,
         config: SidecarConfig,
         target_adapter: AuditLogAdapter,
-        on_success: Optional[Callable[[Path], None]] = None,
-        on_error: Optional[Callable[[Path, Exception], None]] = None,
+        on_success: Callable[[Path], None] | None = None,
+        on_error: Callable[[Path, Exception], None] | None = None,
     ):
         self._config = config
         self._target = target_adapter
@@ -459,19 +465,19 @@ class SidecarFileWatcher:
 
     def _process_file(self, file_path: Path) -> None:
         """Process a single JSONL file."""
-        from selfhealing.interfaces.audit_adapter import AuditEntry, AuditAction
+        from selfhealing.interfaces.audit_adapter import AuditEntry
 
         # Mark as processing
         processing_path = file_path.with_suffix(".processing")
         file_path.rename(processing_path)
 
         try:
-            with open(processing_path, "r", encoding="utf-8") as f:
+            with open(processing_path, encoding="utf-8") as f:
                 for line in f:
                     if not line.strip():
                         continue
                     entry_dict = json.loads(line)
-                    
+
                     # AuditEntry 직접 생성
                     action = entry_dict.get("action", "config_change")
                     entry = AuditEntry(
@@ -508,7 +514,7 @@ class SidecarFileWatcher:
 
 def create_worm_adapter(
     adapter_type: str,
-    config: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
     **kwargs,
 ) -> WORMAdapter:
     """

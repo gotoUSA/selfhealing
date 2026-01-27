@@ -15,8 +15,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import timedelta
-from typing import Any, Optional
-
+from typing import Any
 
 # ============================================================================
 # Distributed Lock Interface
@@ -46,7 +45,7 @@ class DistributedLock(ABC):
     def acquire(
         self,
         blocking: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> bool:
         """
         Acquire the lock.
@@ -110,7 +109,7 @@ class DistributedLock(ABC):
         """
         return False
 
-    def __enter__(self) -> "DistributedLock":
+    def __enter__(self) -> DistributedLock:
         """Enter context manager, acquiring the lock."""
         acquired = self.acquire()
         if not acquired:
@@ -185,7 +184,7 @@ class CacheProviderInterface(ABC):
     # =========================================================================
 
     @abstractmethod
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """
         Get value by key.
 
@@ -202,7 +201,7 @@ class CacheProviderInterface(ABC):
         self,
         key: str,
         value: Any,
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """
         Set value with optional TTL.
@@ -247,7 +246,7 @@ class CacheProviderInterface(ABC):
         self,
         key: str,
         default_factory: callable,
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> Any:
         """
         Get value or compute and cache it if missing.
@@ -317,7 +316,7 @@ class CacheProviderInterface(ABC):
         pass
 
     @abstractmethod
-    def ttl(self, key: str) -> Optional[int]:
+    def ttl(self, key: str) -> int | None:
         """
         Get remaining TTL in seconds.
 
@@ -331,7 +330,7 @@ class CacheProviderInterface(ABC):
         """
         pass
 
-    def setnx(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
+    def setnx(self, key: str, value: Any, ttl: timedelta | None = None) -> bool:
         """
         Set value only if key does not exist (SET if Not eXists).
 
@@ -356,7 +355,7 @@ class CacheProviderInterface(ABC):
         self,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
     ) -> DistributedLock:
         """
         Get a distributed lock instance.
@@ -402,7 +401,7 @@ class CacheProviderInterface(ABC):
     def mset(
         self,
         mapping: dict[str, Any],
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """
         Set multiple values at once.
@@ -436,7 +435,7 @@ class CacheProviderInterface(ABC):
     # Hash Operations (for structured data)
     # =========================================================================
 
-    def hget(self, name: str, key: str) -> Optional[Any]:
+    def hget(self, name: str, key: str) -> Any | None:
         """
         Get a field from a hash.
 

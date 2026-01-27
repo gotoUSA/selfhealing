@@ -11,8 +11,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +41,10 @@ class CircuitBreakerState:
     state: CircuitState = CircuitState.CLOSED
     failure_count: int = 0
     success_count: int = 0
-    last_failure_time: Optional[datetime] = None
-    last_state_change: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_failure_time: datetime | None = None
+    last_state_change: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     total_failures: int = 0
     total_successes: int = 0
 
@@ -76,7 +77,7 @@ class CircuitBreaker:
     def __init__(
         self,
         name: str,
-        config: Optional[CircuitBreakerConfig] = None,
+        config: CircuitBreakerConfig | None = None,
     ):
         """
         Initialize circuit breaker.
@@ -180,7 +181,7 @@ class CircuitBreaker:
             self._transition_to(CircuitState.OPEN)
             logger.warning(f"[CircuitBreaker:{self.name}] Manually opened")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get circuit breaker statistics."""
         with self._lock:
             return {
@@ -211,15 +212,15 @@ class CircuitBreakerRegistry:
     Provides centralized access to all audit backend circuit breakers.
     """
 
-    _instance: Optional["CircuitBreakerRegistry"] = None
+    _instance: CircuitBreakerRegistry | None = None
     _lock = threading.Lock()
 
     def __init__(self):
-        self._breakers: Dict[str, CircuitBreaker] = {}
+        self._breakers: dict[str, CircuitBreaker] = {}
         self._registry_lock = threading.RLock()
 
     @classmethod
-    def get_instance(cls) -> "CircuitBreakerRegistry":
+    def get_instance(cls) -> CircuitBreakerRegistry:
         """Get singleton instance."""
         if cls._instance is None:
             with cls._lock:
@@ -230,7 +231,7 @@ class CircuitBreakerRegistry:
     def get_or_create(
         self,
         name: str,
-        config: Optional[CircuitBreakerConfig] = None,
+        config: CircuitBreakerConfig | None = None,
     ) -> CircuitBreaker:
         """Get existing or create new circuit breaker."""
         with self._registry_lock:
@@ -238,12 +239,12 @@ class CircuitBreakerRegistry:
                 self._breakers[name] = CircuitBreaker(name, config)
             return self._breakers[name]
 
-    def get(self, name: str) -> Optional[CircuitBreaker]:
+    def get(self, name: str) -> CircuitBreaker | None:
         """Get circuit breaker by name."""
         with self._registry_lock:
             return self._breakers.get(name)
 
-    def get_all_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_stats(self) -> dict[str, dict[str, Any]]:
         """Get statistics for all circuit breakers."""
         with self._registry_lock:
             return {name: cb.get_stats() for name, cb in self._breakers.items()}
@@ -254,7 +255,7 @@ class CircuitBreakerRegistry:
             for cb in self._breakers.values():
                 cb.reset()
 
-    def get_open_circuits(self) -> List[str]:
+    def get_open_circuits(self) -> list[str]:
         """Get names of all open circuits."""
         with self._registry_lock:
             return [

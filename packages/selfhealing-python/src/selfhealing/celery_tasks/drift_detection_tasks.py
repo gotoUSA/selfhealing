@@ -7,7 +7,7 @@ These tasks use dependency injection for Django model access.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
@@ -23,31 +23,37 @@ logger = get_task_logger(__name__)
 def _get_sla_thresholds():
     """Get SLA thresholds from configuration."""
     from selfhealing.services import get_sla_thresholds
+
     return get_sla_thresholds()
 
 
 def _get_failed_operations_factory():
     """
     Get a factory function for querying failed operations.
-    
+
     This uses late binding to avoid import errors when Django isn't configured.
     Host applications can override this via selfhealing configuration.
     """
+
     def query_fn(**kwargs):
         try:
             # Try Django ORM first
             from django.apps import apps
+
             if apps.ready:
-                from selfhealing.adapters.django.models import get_failed_operation_model
+                from selfhealing.adapters.django.models import (
+                    get_failed_operation_model,
+                )
+
                 model = get_failed_operation_model()
                 if model:
                     return model.objects.filter(**kwargs)
         except Exception:
             pass
-        
+
         # Fallback: return empty list
         return []
-    
+
     return query_fn
 
 
@@ -55,6 +61,7 @@ def _record_sla_breach(domain: str):
     """Record SLA breach metric."""
     try:
         from selfhealing.services.metrics.recorders import record_sla_breach
+
         record_sla_breach(domain)
     except Exception:
         pass
@@ -63,14 +70,19 @@ def _record_sla_breach(domain: str):
 def _resolve_expired_chaos_experiments() -> int:
     """
     Resolve expired chaos experiments.
-    
+
     Uses late binding for Django model access.
     """
     try:
-        from selfhealing.adapters.django.chaos_cleanup import resolve_expired_chaos_experiments
+        from selfhealing.adapters.django.chaos_cleanup import (
+            resolve_expired_chaos_experiments,
+        )
+
         return resolve_expired_chaos_experiments()
     except ImportError:
-        logger.debug("[DriftDetection] Django adapter not available, skipping chaos cleanup")
+        logger.debug(
+            "[DriftDetection] Django adapter not available, skipping chaos cleanup"
+        )
         return 0
 
 
@@ -105,7 +117,7 @@ def check_sla_drift(self) -> dict[str, Any]:
     from selfhealing.tasks.drift_detection import SLADriftDetector
 
     task_id = self.request.id
-    
+
     try:
         detector = SLADriftDetector(
             get_sla_thresholds=_get_sla_thresholds,
@@ -114,11 +126,11 @@ def check_sla_drift(self) -> dict[str, Any]:
         )
 
         result = detector.check_drift()
-        
+
         # Audit logging (optional)
         try:
             from selfhealing.services.audit_helpers import log_drift_detection_audit
-            
+
             log_drift_detection_audit(
                 check_type="sla_drift",
                 status=result.get("status", "completed"),
@@ -129,14 +141,14 @@ def check_sla_drift(self) -> dict[str, Any]:
             )
         except Exception as audit_error:
             logger.debug(f"[DriftDetection] Audit logging failed: {audit_error}")
-        
+
         return result
-        
+
     except Exception as e:
         # Audit logging (failure)
         try:
             from selfhealing.services.audit_helpers import log_drift_detection_audit
-            
+
             log_drift_detection_audit(
                 check_type="sla_drift",
                 status="error",
@@ -170,18 +182,18 @@ def cleanup_expired_chaos_experiments(self) -> dict[str, Any]:
     from selfhealing.tasks.drift_detection import ChaosExperimentCleaner
 
     task_id = self.request.id
-    
+
     try:
         cleaner = ChaosExperimentCleaner(
             resolve_expired_experiments=_resolve_expired_chaos_experiments,
         )
 
         result = cleaner.cleanup()
-        
+
         # Audit logging (optional)
         try:
             from selfhealing.services.audit_helpers import log_drift_detection_audit
-            
+
             log_drift_detection_audit(
                 check_type="chaos_cleanup",
                 status=result.get("status", "completed"),
@@ -192,14 +204,14 @@ def cleanup_expired_chaos_experiments(self) -> dict[str, Any]:
             )
         except Exception as audit_error:
             logger.debug(f"[DriftDetection] Audit logging failed: {audit_error}")
-        
+
         return result
-        
+
     except Exception as e:
         # Audit logging (failure)
         try:
             from selfhealing.services.audit_helpers import log_drift_detection_audit
-            
+
             log_drift_detection_audit(
                 check_type="chaos_cleanup",
                 status="error",

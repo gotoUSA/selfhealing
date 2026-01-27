@@ -17,7 +17,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -37,7 +37,6 @@ from selfhealing.api.django.tiering.enums import (
     OverrideIdentifierType,
     PatternType,
 )
-from selfhealing.api.django.tiering.validator import TierConfigValidator
 from selfhealing.api.django.tiering.models import (
     TierDefinition,
     TierMapping,
@@ -149,7 +148,9 @@ class TierOverrideSerializer(serializers.Serializer):
     )
 
     def create(self, validated_data) -> TierOverride:
-        validated_data["identifier_type"] = OverrideIdentifierType(validated_data["identifier_type"])
+        validated_data["identifier_type"] = OverrideIdentifierType(
+            validated_data["identifier_type"]
+        )
         return TierOverride(**validated_data)
 
 
@@ -201,7 +202,9 @@ class TierDefinitionsView(APIView):
     def put(self, request: Request) -> Response:
         """Update tier definitions."""
         # Exception은 exception handler가 처리
-        serializer = TierDefinitionSerializer(data=request.data.get("tiers", []), many=True)
+        serializer = TierDefinitionSerializer(
+            data=request.data.get("tiers", []), many=True
+        )
         if not serializer.is_valid():
             return Response(
                 {"status": "error", "errors": serializer.errors},
@@ -281,7 +284,9 @@ class TierMappingsView(APIView):
 
     def put(self, request: Request) -> Response:
         """Update tier mappings."""
-        serializer = TierMappingSerializer(data=request.data.get("mappings", []), many=True)
+        serializer = TierMappingSerializer(
+            data=request.data.get("mappings", []), many=True
+        )
         if not serializer.is_valid():
             raise ValidationError(serializer.errors)
 
@@ -356,7 +361,9 @@ class TierOverridesView(APIView):
     def put(self, request: Request) -> Response:
         """Update tier overrides."""
         # Exception은 exception handler가 처리
-        serializer = TierOverrideSerializer(data=request.data.get("overrides", []), many=True)
+        serializer = TierOverrideSerializer(
+            data=request.data.get("overrides", []), many=True
+        )
         if not serializer.is_valid():
             return Response(
                 {"status": "error", "errors": serializer.errors},

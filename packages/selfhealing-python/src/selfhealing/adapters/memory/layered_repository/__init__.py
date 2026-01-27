@@ -19,15 +19,16 @@ from selfhealing.interfaces.repositories import (
     CircuitBreakerStateRepository,
 )
 
+from .audit_helpers import AuditHelpersMixin
+
 # Import base and mixins
 from .base import LayeredRepositoryBase
-from .l2_load import L2LoadMixin
-from .error_handling import ErrorHandlingMixin
 from .drift_operations import DriftOperationsMixin
+from .error_handling import ErrorHandlingMixin
+from .l2_load import L2LoadMixin
 from .l2_sync import L2SyncMixin
-from .repository_operations import RepositoryOperationsMixin
 from .monitoring import MonitoringMixin
-from .audit_helpers import AuditHelpersMixin
+from .repository_operations import RepositoryOperationsMixin
 
 
 class LayeredCircuitBreakerStateRepository(
@@ -60,6 +61,7 @@ class LayeredCircuitBreakerStateRepository(
             sync_interval_seconds=5,
         )
     """
+
     pass
 
 

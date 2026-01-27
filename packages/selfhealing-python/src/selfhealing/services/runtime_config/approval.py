@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from .constants import STORAGE_KEYS
 
@@ -23,7 +23,9 @@ class ApprovalMixin:
     # 4-Eyes Approval Workflow
     # =========================================================================
 
-    def get_approval_requests(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_approval_requests(
+        self, status: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get all approval requests.
 
@@ -48,9 +50,9 @@ class ApprovalMixin:
         request_type: str,
         description: str,
         requested_by: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         expiry_hours: int = 24,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a new approval request (4-Eyes Principle).
 
@@ -84,14 +86,16 @@ class ApprovalMixin:
 
             requests.append(request)
             self._backend.set(storage_key, requests)
-            logger.info(f"[RuntimeConfig] Created approval request: {request['id']} by {requested_by}")
+            logger.info(
+                f"[RuntimeConfig] Created approval request: {request['id']} by {requested_by}"
+            )
             return request
 
     def approve_request(
         self,
         request_id: str,
         approved_by: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Approve an approval request.
 
@@ -109,12 +113,16 @@ class ApprovalMixin:
             for request in requests:
                 if request["id"] == request_id:
                     if request["status"] != "PENDING":
-                        logger.warning(f"[RuntimeConfig] Request {request_id} is not PENDING")
+                        logger.warning(
+                            f"[RuntimeConfig] Request {request_id} is not PENDING"
+                        )
                         return None
 
                     # 4-Eyes: Approver must be different from requester
                     if request["requested_by"] == approved_by:
-                        logger.warning(f"[RuntimeConfig] Self-approval not allowed: {approved_by}")
+                        logger.warning(
+                            f"[RuntimeConfig] Self-approval not allowed: {approved_by}"
+                        )
                         return None
 
                     # Check expiry
@@ -122,7 +130,9 @@ class ApprovalMixin:
                     if datetime.now(timezone.utc) > expires_at:
                         request["status"] = "EXPIRED"
                         self._backend.set(storage_key, requests)
-                        logger.warning(f"[RuntimeConfig] Request {request_id} has expired")
+                        logger.warning(
+                            f"[RuntimeConfig] Request {request_id} has expired"
+                        )
                         return None
 
                     request["status"] = "APPROVED"
@@ -130,7 +140,9 @@ class ApprovalMixin:
                     request["approved_at"] = datetime.now(timezone.utc).isoformat()
 
                     self._backend.set(storage_key, requests)
-                    logger.info(f"[RuntimeConfig] Approved request {request_id} by {approved_by}")
+                    logger.info(
+                        f"[RuntimeConfig] Approved request {request_id} by {approved_by}"
+                    )
                     return request
 
             return None
@@ -140,7 +152,7 @@ class ApprovalMixin:
         request_id: str,
         rejected_by: str,
         reason: str = "",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Reject an approval request.
 
@@ -159,16 +171,22 @@ class ApprovalMixin:
             for request in requests:
                 if request["id"] == request_id:
                     if request["status"] != "PENDING":
-                        logger.warning(f"[RuntimeConfig] Request {request_id} is not PENDING")
+                        logger.warning(
+                            f"[RuntimeConfig] Request {request_id} is not PENDING"
+                        )
                         return None
 
                     request["status"] = "REJECTED"
-                    request["approved_by"] = rejected_by  # Using same field for rejector
+                    request["approved_by"] = (
+                        rejected_by  # Using same field for rejector
+                    )
                     request["approved_at"] = datetime.now(timezone.utc).isoformat()
                     request["rejection_reason"] = reason
 
                     self._backend.set(storage_key, requests)
-                    logger.info(f"[RuntimeConfig] Rejected request {request_id} by {rejected_by}")
+                    logger.info(
+                        f"[RuntimeConfig] Rejected request {request_id} by {rejected_by}"
+                    )
                     return request
 
             return None
@@ -195,11 +213,13 @@ class ApprovalMixin:
 
             if expired_count > 0:
                 self._backend.set(storage_key, requests)
-                logger.info(f"[RuntimeConfig] Expired {expired_count} approval requests")
+                logger.info(
+                    f"[RuntimeConfig] Expired {expired_count} approval requests"
+                )
 
             return expired_count
 
-    def get_pending_requests_for_user(self, username: str) -> List[Dict[str, Any]]:
+    def get_pending_requests_for_user(self, username: str) -> list[dict[str, Any]]:
         """
         Get pending requests that a user can approve.
 

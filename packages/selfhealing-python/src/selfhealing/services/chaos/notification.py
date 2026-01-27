@@ -13,7 +13,7 @@ Principle:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def send_chaos_experiment_alert(
     experiment_type: str,
     target_service: str,
     event_type: str,  # "started" | "stopped" | "failed"
-    details: Dict[str, Any],
+    details: dict[str, Any],
 ) -> bool:
     """
     카오스 실험 알림 발송.
@@ -42,14 +42,14 @@ def send_chaos_experiment_alert(
         bool: 발송 성공 여부
     """
     try:
-        from selfhealing.services.unified_notification import (
-            get_unified_notification_manager,
-            NotificationPayload,
-            NotificationPriority,
-            NotificationCategory,
-        )
         from selfhealing.services.chaos.actionable_alert_urls import (
             get_chaos_actionable_alert_url_builder,
+        )
+        from selfhealing.services.unified_notification import (
+            NotificationCategory,
+            NotificationPayload,
+            NotificationPriority,
+            get_unified_notification_manager,
         )
 
         # Actionable URL 생성 (Admin Deep Link)
@@ -95,9 +95,7 @@ def send_chaos_experiment_alert(
             )
         )
 
-        logger.info(
-            f"[ChaosNotification] Sent {event_type} alert for {experiment_id}"
-        )
+        logger.info(f"[ChaosNotification] Sent {event_type} alert for {experiment_id}")
         return True
 
     except Exception as e:

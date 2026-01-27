@@ -12,7 +12,7 @@ Usage in CELERY_BEAT_SCHEDULE:
     },
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
@@ -32,8 +32,8 @@ logger = get_task_logger(__name__)
 def replay_single_dlq_entry(
     self,
     dlq_id: int,
-    actor_info: Optional[dict[str, Any]] = None,  # RBAC 역할 전달
-    trace_info: Optional[dict[str, Any]] = None,  # trace_id 전파
+    actor_info: dict[str, Any] | None = None,  # RBAC 역할 전달
+    trace_info: dict[str, Any] | None = None,  # trace_id 전파
 ) -> dict:
     """
     Replay a single DLQ entry.
@@ -45,7 +45,7 @@ def replay_single_dlq_entry(
 
     actor_info를 통해 수동 호출자의 RBAC 역할 정보가 전달됩니다.
     trace_info를 통해 원본 요청의 trace_id가 전파됩니다.
-    
+
     - actor_info가 None이면 자동(Beat) 호출로 간주하여 SYSTEM_ACTOR가 사용됩니다.
     - trace_info가 None이면 INTERNAL_BEAT_xxx 형식의 trace_id가 자동 생성됩니다.
 
@@ -79,7 +79,9 @@ def replay_single_dlq_entry(
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Replay Task] Unexpected error replaying DLQ entry {dlq_id}: {e}")
+        logger.error(
+            f"[DLQ Replay Task] Unexpected error replaying DLQ entry {dlq_id}: {e}"
+        )
         return {
             "success": False,
             "dlq_id": dlq_id,
@@ -100,8 +102,8 @@ def replay_batch_by_domain(
     self,
     domain: str,
     max_items: int = 100,
-    actor_info: Optional[dict[str, Any]] = None,  # RBAC 역할 전달
-    trace_info: Optional[dict[str, Any]] = None,  # trace_id 전파
+    actor_info: dict[str, Any] | None = None,  # RBAC 역할 전달
+    trace_info: dict[str, Any] | None = None,  # trace_id 전파
 ) -> dict:
     """
     Replay all pending DLQ entries for a specific domain.

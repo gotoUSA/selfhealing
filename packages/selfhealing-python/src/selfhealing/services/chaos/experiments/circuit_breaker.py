@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict
+from typing import Any
 
 from selfhealing.core.timezone import now
 from selfhealing.services.chaos.base import (
@@ -21,16 +21,15 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     CB_OPEN_HYPOTHESIS,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
 class CircuitBreakerOpenExperiment(ChaosExperiment):
     """
     Force Circuit Breaker to OPEN state.
-    
+
     Tests fast-fail behavior, fallback strategies, and canary recovery.
-    
+
     ┌─────────────────────────────────────────────────────────────┐
     │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
     ├─────────────────────────────────────────────────────────────┤
@@ -41,38 +40,38 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
     │ LearningService 연동:                                        │
     │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
     └─────────────────────────────────────────────────────────────┘
-    
+
     Config parameters:
         - trigger_canary: Whether to wait for canary recovery (default: True)
         - fallback_type: Expected fallback type (cache, dlq, default)
     """
-    
+
     experiment_type = ExperimentType.CIRCUIT_BREAKER_OPEN.value
     requires_approval = True  # High risk - blocks real traffic
-    
+
     # 복구 기대 가설 (클래스 레벨)
     failure_hypothesis = CB_OPEN_HYPOTHESIS
-    
+
     @property
     def trigger_canary(self) -> bool:
         return self.config.parameters.get("trigger_canary", True)
-    
+
     @property
     def fallback_type(self) -> str:
         return self.config.parameters.get("fallback_type", "default")
-    
+
     def inject_chaos(self) -> bool:
         """Force CB to OPEN state."""
         logger.info(
             f"[CBOpenInjection] Forcing CB OPEN for {self.config.target_service} "
             f"(TTL: {self._effective_ttl}s)"
         )
-        
+
         try:
             from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
-            
+
             # CB 강제 OPEN
             cb_service = get_circuit_breaker_service()
             result = cb_service.force_open(
@@ -80,41 +79,47 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 reason=f"Chaos Experiment: {self.experiment_id}",
                 controlled_by="chaos_engine",
             )
-            
+
             if not result.success:
                 logger.error(f"[CBOpenInjection] Failed to open CB: {result.message}")
                 return False
-            
+
             # 설정 저장 (TTL 및 rollback용)
-            _apply_chaos_config({
-                "circuit_breaker_open": {
-                    "enabled": True,
-                    "target_service": self.config.target_service,
-                    "trigger_canary": self.trigger_canary,
-                    "experiment_id": self.experiment_id,
-                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
-                    "ttl_seconds": self._effective_ttl,
+            _apply_chaos_config(
+                {
+                    "circuit_breaker_open": {
+                        "enabled": True,
+                        "target_service": self.config.target_service,
+                        "trigger_canary": self.trigger_canary,
+                        "experiment_id": self.experiment_id,
+                        "expires_at": (
+                            self._expires_at.isoformat() if self._expires_at else ""
+                        ),
+                        "ttl_seconds": self._effective_ttl,
+                    }
                 }
-            })
+            )
             return True
         except Exception as e:
             logger.error(f"[CBOpenInjection] Failed to inject: {e}")
             return False
-    
+
     def rollback(self) -> None:
         """Force CB back to CLOSED state."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info(f"[CBOpenInjection] Rollback already completed for {self.experiment_id}")
+                logger.info(
+                    f"[CBOpenInjection] Rollback already completed for {self.experiment_id}"
+                )
                 return
-            
+
             logger.info(f"[CBOpenInjection] Rolling back {self.experiment_id}")
-            
+
             try:
                 from selfhealing.services.circuit_breaker import (
                     get_circuit_breaker_service,
                 )
-                
+
                 cb_service = get_circuit_breaker_service()
                 cb_service.force_close(
                     service_name=self.config.target_service,
@@ -122,26 +127,28 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                     controlled_by="chaos_engine",
                     trigger_replay=False,  # 실험이므로 리플레이 안 함
                 )
-                
-                _apply_chaos_config({
-                    "circuit_breaker_open": {
-                        "enabled": False,
-                        "target_service": self.config.target_service,
-                        "experiment_id": self.experiment_id,
+
+                _apply_chaos_config(
+                    {
+                        "circuit_breaker_open": {
+                            "enabled": False,
+                            "target_service": self.config.target_service,
+                            "experiment_id": self.experiment_id,
+                        }
                     }
-                })
+                )
                 self._rollback_completed = True
             except Exception as e:
                 logger.error(f"[CBOpenInjection] Rollback failed: {e}")
-    
+
     # =========================================================================
     # Canary Recovery 검증
     # =========================================================================
-    
-    def _verify_canary_recovery(self) -> Dict[str, Any]:
+
+    def _verify_canary_recovery(self) -> dict[str, Any]:
         """
         Canary 복구 단계 검증.
-        
+
         Returns:
             Dict with:
                 - canary_state: 현재 Canary 상태 (e.g., "canary_1")
@@ -152,15 +159,15 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         """
         try:
             from selfhealing.services.circuit_breaker.canary_recovery import (
-                get_canary_recovery_manager,
                 CanaryState,
+                get_canary_recovery_manager,
             )
-            
+
             manager = get_canary_recovery_manager()
             target = self.config.target_service
-            
+
             state = manager.get_recovery_state(target)
-            
+
             if state is None:
                 return {
                     "canary_state": CanaryState.NOT_IN_CANARY.value,
@@ -169,13 +176,17 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                     "success_rate": None,
                     "stage_started_at": None,
                 }
-            
+
             return {
                 "canary_state": state.current_stage.value,
                 "traffic_percent": state.traffic_percent,
                 "in_canary": state.is_in_canary(),
                 "success_rate": state.success_rate,
-                "stage_started_at": state.stage_started_at.isoformat() if state.stage_started_at else None,
+                "stage_started_at": (
+                    state.stage_started_at.isoformat()
+                    if state.stage_started_at
+                    else None
+                ),
             }
         except Exception as e:
             logger.warning(f"[CBOpenExperiment] Canary verification failed: {e}")
@@ -186,22 +197,22 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 "success_rate": None,
                 "error": str(e),
             }
-    
+
     def _check_canary_started(self, timeout_seconds: float = 30.0) -> bool:
         """
         Canary 복구 시작 확인 (비동기 폴링용).
-        
+
         Args:
             timeout_seconds: 대기 시간 (초)
-            
+
         Returns:
             True if canary started within timeout
         """
         start_time = now()
-        
+
         while (now() - start_time).total_seconds() < timeout_seconds:
             status = self._verify_canary_recovery()
-            
+
             if status.get("in_canary", False):
                 logger.info(
                     f"[CBOpenExperiment] Canary recovery started: "
@@ -209,38 +220,38 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                     f"traffic={status.get('traffic_percent')}%"
                 )
                 return True
-            
+
             time.sleep(1.0)  # 1초마다 체크
-        
+
         logger.warning(
             f"[CBOpenExperiment] Canary recovery did not start within {timeout_seconds}s"
         )
         return False
-    
-    def get_canary_verification_result(self) -> Dict[str, Any]:
+
+    def get_canary_verification_result(self) -> dict[str, Any]:
         """
         실험 결과에 포함할 Canary 검증 결과.
-        
+
         Returns:
             Dict containing canary recovery verification data
         """
         canary_status = self._verify_canary_recovery()
-        
+
         # FailureHypothesis 검증
-        if hasattr(self, 'failure_hypothesis') and self.failure_hypothesis:
+        if hasattr(self, "failure_hypothesis") and self.failure_hypothesis:
             actual_canary_stage = canary_status.get("canary_state")
             hypothesis_canary_match = (
                 actual_canary_stage == self.failure_hypothesis.expected_canary_stage
             )
         else:
             hypothesis_canary_match = None
-        
+
         return {
             "canary_status": canary_status,
             "hypothesis_canary_match": hypothesis_canary_match,
             "expected_canary_stage": (
                 self.failure_hypothesis.expected_canary_stage
-                if hasattr(self, 'failure_hypothesis') and self.failure_hypothesis
+                if hasattr(self, "failure_hypothesis") and self.failure_hypothesis
                 else None
             ),
         }

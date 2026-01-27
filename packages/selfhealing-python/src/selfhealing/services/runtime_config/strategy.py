@@ -7,7 +7,7 @@ Manages IMMEDIATE, DELAYED, and GRACEFUL apply strategies for configuration chan
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.core.apply_strategy import (
     ApplyStrategy,
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class StrategyMixin:
     """Mixin providing apply strategy functionality."""
 
-    def get_default_strategy(self, config_type: str) -> Dict[str, Any]:
+    def get_default_strategy(self, config_type: str) -> dict[str, Any]:
         """Get the default apply strategy for a config type."""
         default = get_default_apply_config(config_type)
         return {
@@ -34,13 +34,13 @@ class StrategyMixin:
     def update_with_strategy(
         self,
         config_type: str,
-        changes: Dict[str, Any],
+        changes: dict[str, Any],
         changed_by: str = "system",
         reason: str = "",
-        strategy: Optional[str] = None,
-        delay_seconds: Optional[int] = None,
-        grace_timeout_seconds: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        strategy: str | None = None,
+        delay_seconds: int | None = None,
+        grace_timeout_seconds: int | None = None,
+    ) -> dict[str, Any]:
         """
         Update configuration with specified apply strategy.
 
@@ -74,7 +74,9 @@ class StrategyMixin:
 
         # Filter changes to only valid fields
         current = self._get_config(config_type)
-        valid_changes = {k: v for k, v in changes.items() if k in current and v is not None}
+        valid_changes = {
+            k: v for k, v in changes.items() if k in current and v is not None
+        }
 
         if not valid_changes:
             return {
@@ -86,10 +88,7 @@ class StrategyMixin:
         if apply_options.strategy == ApplyStrategy.IMMEDIATE:
             # Apply immediately
             new_config = self._update_config(
-                config_type,
-                changed_by=changed_by,
-                reason=reason,
-                **valid_changes
+                config_type, changed_by=changed_by, reason=reason, **valid_changes
             )
             return {
                 "status": "applied",
@@ -139,13 +138,14 @@ class StrategyMixin:
                 "grace_timeout_seconds": apply_options.grace_timeout_seconds,
                 "config_preview": {**current, **valid_changes},
                 "applied_strategy": "graceful",
-                "warning_message": default_config.warning_message or "Waiting for in-progress operations to complete",
+                "warning_message": default_config.warning_message
+                or "Waiting for in-progress operations to complete",
                 "cancel_available": True,
             }
 
         return {"status": "error", "error": "Unknown strategy"}
 
-    def apply_pending_change(self, pending_id: str) -> Dict[str, Any]:
+    def apply_pending_change(self, pending_id: str) -> dict[str, Any]:
         """
         Apply a pending configuration change.
 
@@ -157,10 +157,16 @@ class StrategyMixin:
         pending_change = pending_service.get_pending_change(pending_id)
 
         if not pending_change:
-            return {"status": "error", "error": f"Pending change {pending_id} not found"}
+            return {
+                "status": "error",
+                "error": f"Pending change {pending_id} not found",
+            }
 
         if pending_change.status != "pending":
-            return {"status": "error", "error": f"Change {pending_id} is not pending (status: {pending_change.status})"}
+            return {
+                "status": "error",
+                "error": f"Change {pending_id} is not pending (status: {pending_change.status})",
+            }
 
         try:
             # Apply the changes
@@ -168,7 +174,7 @@ class StrategyMixin:
                 pending_change.config_type,
                 changed_by="pending_config_worker",
                 reason=f"Pending change {pending_id} applied",
-                **pending_change.changes
+                **pending_change.changes,
             )
 
             # Mark as applied
@@ -182,14 +188,18 @@ class StrategyMixin:
             }
         except Exception as e:
             pending_service.mark_failed(pending_id, str(e))
-            logger.error(f"[RuntimeConfig] Failed to apply pending change {pending_id}: {e}")
+            logger.error(
+                f"[RuntimeConfig] Failed to apply pending change {pending_id}: {e}"
+            )
             return {
                 "status": "error",
                 "pending_id": pending_id,
                 "error": str(e),
             }
 
-    def cancel_pending_change(self, pending_id: str, cancelled_by: Optional[str] = None) -> Dict[str, Any]:
+    def cancel_pending_change(
+        self, pending_id: str, cancelled_by: str | None = None
+    ) -> dict[str, Any]:
         """Cancel a pending configuration change."""
         from selfhealing.services.pending_config import get_pending_config_service
 
@@ -208,13 +218,16 @@ class StrategyMixin:
                 "error": f"Pending change {pending_id} not found or already processed",
             }
 
-    def get_pending_changes(self, config_type: Optional[str] = None) -> list:
+    def get_pending_changes(self, config_type: str | None = None) -> list:
         """Get all pending configuration changes."""
         from selfhealing.services.pending_config import get_pending_config_service
 
         pending_service = get_pending_config_service()
 
         if config_type:
-            return [c.to_dict() for c in pending_service.get_pending_changes_for_config(config_type)]
+            return [
+                c.to_dict()
+                for c in pending_service.get_pending_changes_for_config(config_type)
+            ]
         else:
             return [c.to_dict() for c in pending_service.get_all_pending_changes()]

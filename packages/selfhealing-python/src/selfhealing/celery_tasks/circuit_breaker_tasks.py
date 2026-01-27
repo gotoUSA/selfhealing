@@ -133,7 +133,9 @@ def force_open_circuit_breaker(
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
+    logger.warning(
+        f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}"
+    )
 
     try:
         service = get_circuit_breaker_service()
@@ -144,7 +146,9 @@ def force_open_circuit_breaker(
         )
 
         if result.success:
-            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
+            logger.warning(
+                f"[Circuit Breaker] Successfully opened circuit for '{service_name}'"
+            )
             return {
                 "success": True,
                 "service_name": service_name,
@@ -199,7 +203,9 @@ def force_close_circuit_breaker(
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
+    logger.info(
+        f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}"
+    )
 
     try:
         service = get_circuit_breaker_service()
@@ -211,7 +217,9 @@ def force_close_circuit_breaker(
         )
 
         if result.success:
-            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
+            logger.info(
+                f"[Circuit Breaker] Successfully closed circuit for '{service_name}'"
+            )
             return {
                 "success": True,
                 "service_name": service_name,

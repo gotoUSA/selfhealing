@@ -45,44 +45,37 @@ DLQ Test Endpoints:
 """
 
 # Re-export all from xtest package for backward compatibility
-from .xtest import (
-    # Base utilities
+from .xtest import (  # Base utilities; Circuit Breaker views; Error Budget views; Snapshot views; Observability views (Stage 51); DLQ X-Test views; Legacy aliases
+    BlastRadiusTestView,
+    CBStatusDetailView,
+    DLQXTestStatusView,
+    FastFailTestView,
+    ForceStatusView,
+    GetHealingIncidentsView,
+    HealingTimelineView,
+    InjectCBFailureView,
+    InjectDLQEntryView,
+    InjectErrorBudgetView,
+    MultiServiceBlastRadiusView,
+    PostmortemGeneratorView,
+    RecordHealingEventView,
+    ResetCBView,
+    ResetDLQXTestView,
+    SwitchToAutoModeView,  # New! For releasing manually_controlled state
+    SystemSnapshotView,
+    TriggerCBRecoveryView,
+    TryRecoveryTransitionView,  # Domain-free OPEN → HALF_OPEN transition
     XTestModeMixin,
-    collect_system_snapshot,
+    _add_healing_event,
+    _add_healing_incident,
+    _collect_system_snapshot,
     add_healing_event,
     add_healing_incident,
+    collect_system_snapshot,
     get_healing_events,
     get_healing_events_count,
     get_healing_incidents,
     get_healing_incidents_count,
-    # Circuit Breaker views
-    InjectCBFailureView,
-    ResetCBView,
-    CBStatusDetailView,
-    FastFailTestView,
-    TriggerCBRecoveryView,
-    TryRecoveryTransitionView,  # Domain-free OPEN → HALF_OPEN transition
-    SwitchToAutoModeView,  # New! For releasing manually_controlled state
-    # Error Budget views
-    InjectErrorBudgetView,
-    # Snapshot views
-    SystemSnapshotView,
-    # Observability views (Stage 51)
-    HealingTimelineView,
-    BlastRadiusTestView,
-    MultiServiceBlastRadiusView,
-    PostmortemGeneratorView,
-    RecordHealingEventView,
-    GetHealingIncidentsView,
-    # DLQ X-Test views
-    InjectDLQEntryView,
-    DLQXTestStatusView,
-    ForceStatusView,
-    ResetDLQXTestView,
-    # Legacy aliases
-    _collect_system_snapshot,
-    _add_healing_event,
-    _add_healing_incident,
 )
 
 __all__ = [

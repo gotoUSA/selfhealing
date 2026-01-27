@@ -19,11 +19,10 @@ Reference:
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
 from selfhealing.settings.dashboard import get_dashboard_settings
@@ -64,8 +63,8 @@ class RecentActivity:
 class Distribution:
     """Distribution data by domain and failure type."""
 
-    by_domain: List[Dict[str, Any]] = field(default_factory=list)
-    by_failure_type: List[Dict[str, Any]] = field(default_factory=list)
+    by_domain: list[dict[str, Any]] = field(default_factory=list)
+    by_failure_type: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -87,11 +86,11 @@ class DashboardSummary:
     distribution: Distribution
     alerts: AlertInfo
     resolution_rate_percent: float = 0.0
-    recommendations: List[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
     # Recovery Coordinator 통합 (77_RECOVERY_COORDINATOR.md#10.2.4.13)
-    recovery_summary: Optional[Dict[str, Any]] = None
+    recovery_summary: dict[str, Any] | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API response."""
         result = {
             "timestamp": self.timestamp,
@@ -134,12 +133,14 @@ class DashboardSummary:
 def _get_statistics_repo():
     """Get statistics repository via ProviderRegistry."""
     from selfhealing.factory import ProviderRegistry
+
     return ProviderRegistry.get_statistics_repo()
 
 
 def _has_statistics_adapter() -> bool:
     """Check if statistics adapter is registered."""
     from selfhealing.factory import ProviderRegistry
+
     return ProviderRegistry.has_statistics_adapter()
 
 
@@ -161,12 +162,12 @@ class DashboardService:
 
         # Force fresh data (bypass cache)
         summary = service.get_summary(skip_cache=True)
-    
+
     Reference:
         92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [18] DashboardSettings 참조.
     """
 
-    def __init__(self, cache: "CacheProviderInterface | None" = None):
+    def __init__(self, cache: CacheProviderInterface | None = None):
         """Initialize DashboardService with optional cache provider."""
         self._stats_repo = None
         self._cache = cache
@@ -200,18 +201,19 @@ class DashboardService:
         return self._stats_repo
 
     @property
-    def cache(self) -> "CacheProviderInterface | None":
+    def cache(self) -> CacheProviderInterface | None:
         """Get cache provider, creating default if needed."""
         if self._cache is None:
             try:
                 from selfhealing.factory import ProviderRegistry
+
                 self._cache = ProviderRegistry.get_cache()
             except (ImportError, ValueError):
                 # Cache not available, will skip caching
                 pass
         return self._cache
 
-    def _get_cached(self, key: str) -> Optional[Dict[str, Any]]:
+    def _get_cached(self, key: str) -> dict[str, Any] | None:
         """Get cached value by key."""
         if not self.cache:
             return None
@@ -225,7 +227,9 @@ class DashboardService:
             logger.warning(f"[Dashboard] Cache read error: {e}")
         return None
 
-    def _set_cached(self, key: str, value: Dict[str, Any], ttl_seconds: int = None) -> None:
+    def _set_cached(
+        self, key: str, value: dict[str, Any], ttl_seconds: int = None
+    ) -> None:
         """Set cached value with TTL."""
         if not self.cache:
             return
@@ -297,7 +301,7 @@ class DashboardService:
 
         return summary
 
-    def _dict_to_summary(self, data: Dict[str, Any]) -> DashboardSummary:
+    def _dict_to_summary(self, data: dict[str, Any]) -> DashboardSummary:
         """Convert cached dictionary back to DashboardSummary."""
         overview = data.get("overview", {})
         recent = data.get("recent_activity", {})
@@ -333,7 +337,7 @@ class DashboardService:
             recovery_summary=data.get("recovery"),
         )
 
-    def _get_recovery_summary(self) -> Optional[Dict[str, Any]]:
+    def _get_recovery_summary(self) -> dict[str, Any] | None:
         """
         Get recovery system summary.
 
@@ -350,6 +354,7 @@ class DashboardService:
             from selfhealing.services.coordination.recovery_dashboard import (
                 get_recovery_dashboard_service,
             )
+
             recovery_service = get_recovery_dashboard_service()
             return recovery_service.get_recovery_summary()
         except ImportError:
@@ -422,12 +427,9 @@ class DashboardService:
         try:
             domain_dist = self.stats_repo.get_domain_distribution(limit=limit)
             failure_dist = self.stats_repo.get_failure_type_distribution(limit=limit)
-            
+
             return Distribution(
-                by_domain=[
-                    {"domain": d.domain, "count": d.count}
-                    for d in domain_dist
-                ],
+                by_domain=[{"domain": d.domain, "count": d.count} for d in domain_dist],
                 by_failure_type=[
                     {"failure_type": f.failure_type, "count": f.count}
                     for f in failure_dist
@@ -451,14 +453,14 @@ class DashboardService:
         """
         try:
             avg_retry = self.stats_repo.get_avg_retry_count()
-            
+
             # High retry count items - need to check via list_entries or custom query
             # For now, estimate based on average
             high_retry_count = 0
             if avg_retry > high_retry_threshold:
                 # If average is above threshold, there are likely high retry items
                 high_retry_count = int(avg_retry)
-            
+
             return AlertInfo(
                 high_retry_count=high_retry_count,
                 avg_retry_count=round(avg_retry, 2),
@@ -514,10 +516,12 @@ class DashboardService:
 # Singleton Instance
 # =============================================================================
 
-_dashboard_service: Optional[DashboardService] = None
+_dashboard_service: DashboardService | None = None
 
 
-def get_dashboard_service(cache: "CacheProviderInterface | None" = None) -> DashboardService:
+def get_dashboard_service(
+    cache: CacheProviderInterface | None = None,
+) -> DashboardService:
     """
     Get the singleton DashboardService instance.
 

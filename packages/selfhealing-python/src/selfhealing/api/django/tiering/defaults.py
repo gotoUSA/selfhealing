@@ -6,22 +6,21 @@ Best practice defaults for tier definitions, mappings, and overrides.
 
 from __future__ import annotations
 
-from typing import List
-
-from .enums import PatternType, OverrideIdentifierType
+from .enums import OverrideIdentifierType, PatternType
 from .models import TierDefinition, TierMapping, TierOverride
-
 
 # =============================================================================
 # L1: Static Critical Paths (Defense-in-Depth - Last Line of Defense)
 # =============================================================================
 
 # Immutable set - requires code deployment to change
-STATIC_CRITICAL_PATHS = frozenset([
-    "/api/self-healing/control/",
-    "/api/self-healing/emergency/",
-    "/api/auth/token/",
-])
+STATIC_CRITICAL_PATHS = frozenset(
+    [
+        "/api/self-healing/control/",
+        "/api/self-healing/emergency/",
+        "/api/auth/token/",
+    ]
+)
 
 # Prefix matching optimization (tuple for startswith)
 STATIC_CRITICAL_PREFIXES = (
@@ -35,7 +34,7 @@ STATIC_CRITICAL_PREFIXES = (
 # =============================================================================
 
 
-DEFAULT_TIER_DEFINITIONS: List[TierDefinition] = [
+DEFAULT_TIER_DEFINITIONS: list[TierDefinition] = [
     TierDefinition(
         id="critical",
         name="Mission Critical",
@@ -63,7 +62,7 @@ DEFAULT_TIER_DEFINITIONS: List[TierDefinition] = [
 ]
 
 
-DEFAULT_TIER_MAPPINGS: List[TierMapping] = [
+DEFAULT_TIER_MAPPINGS: list[TierMapping] = [
     # Critical (Tier 1) - Self-healing control actions
     TierMapping(
         pattern="/api/self-healing/control/",
@@ -93,7 +92,6 @@ DEFAULT_TIER_MAPPINGS: List[TierMapping] = [
         priority=95,
         description="킬 스위치 등 시스템 제어",
     ),
-    
     # Standard (Tier 2) - Operational tasks
     TierMapping(
         pattern="/api/self-healing/config/*",
@@ -123,7 +121,6 @@ DEFAULT_TIER_MAPPINGS: List[TierMapping] = [
         priority=50,
         description="상태 조회",
     ),
-    
     # Non-Essential (Tier 3) - Dashboard, metrics
     TierMapping(
         pattern="/api/self-healing/dashboard/*",
@@ -149,7 +146,7 @@ DEFAULT_TIER_MAPPINGS: List[TierMapping] = [
 ]
 
 
-DEFAULT_TIER_OVERRIDES: List[TierOverride] = [
+DEFAULT_TIER_OVERRIDES: list[TierOverride] = [
     TierOverride(
         identifier="10.0.0.0/8",
         identifier_type=OverrideIdentifierType.IP,

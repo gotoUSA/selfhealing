@@ -42,15 +42,6 @@ Usage:
 from __future__ import annotations
 
 # ============================================================
-# Async Persistence Tasks
-# ============================================================
-from .persistence import (
-    async_persist_batch,
-    async_persist_dlq_entry,
-    link_audit_to_dlq,
-)
-
-# ============================================================
 # Circuit Breaker Tasks
 # ============================================================
 from .circuit_breaker import (
@@ -78,6 +69,15 @@ from .monitoring import (
     collect_self_healing_metrics,
     emit_selfhealing_heartbeat,
     notify_failsafe_recovery,
+)
+
+# ============================================================
+# Async Persistence Tasks
+# ============================================================
+from .persistence import (
+    async_persist_batch,
+    async_persist_dlq_entry,
+    link_audit_to_dlq,
 )
 
 # ============================================================

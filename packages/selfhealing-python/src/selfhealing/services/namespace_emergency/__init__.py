@@ -21,30 +21,25 @@ Reference:
     docs/self_healing/middleware_system/73_NAMESPACE_AWARE_EMERGENCY.md
 """
 
+# ScopedEmergencyState는 coordination/models.py에서 재export
+from selfhealing.services.coordination.models import ScopedEmergencyState
+
 # Phase 1: 안전 기반
 from selfhealing.services.namespace_emergency.atomic_query import (
     AtomicStateQuery,
     get_atomic_state_query,
 )
-from selfhealing.services.namespace_emergency.escalation_audit import (
-    EscalationAuditTrail,
-    EscalationDecisionType,
-    EscalationAuditEntry,
-    get_escalation_audit_trail,
-)
-
-# Phase 2: 핵심 기능
-from selfhealing.services.namespace_emergency.tracker import (
-    NamespacedEmergencyTracker,
-    get_namespaced_emergency_tracker,
-    reset_namespaced_emergency_tracker,
-    GLOBAL_NAMESPACE,
-)
 from selfhealing.services.namespace_emergency.cascade_detector import (
-    RegionalCascadeDetector,
     CascadeEvent,
+    RegionalCascadeDetector,
     get_cascade_detector,
     reset_cascade_detector,
+)
+from selfhealing.services.namespace_emergency.escalation_audit import (
+    EscalationAuditEntry,
+    EscalationAuditTrail,
+    EscalationDecisionType,
+    get_escalation_audit_trail,
 )
 
 # Phase 3: 고급 기능
@@ -57,14 +52,19 @@ from selfhealing.services.namespace_emergency.health_penalty import (
 from selfhealing.services.namespace_emergency.partition_reconciliation import (
     PartitionReconciliationService,
     PartitionStatus,
-    ReconciliationResult,
     ReconciliationAction,
+    ReconciliationResult,
     get_partition_reconciliation_service,
     reset_partition_reconciliation_service,
 )
 
-# ScopedEmergencyState는 coordination/models.py에서 재export
-from selfhealing.services.coordination.models import ScopedEmergencyState
+# Phase 2: 핵심 기능
+from selfhealing.services.namespace_emergency.tracker import (
+    GLOBAL_NAMESPACE,
+    NamespacedEmergencyTracker,
+    get_namespaced_emergency_tracker,
+    reset_namespaced_emergency_tracker,
+)
 
 __all__ = [
     # Phase 1

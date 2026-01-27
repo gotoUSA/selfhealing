@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -133,7 +132,7 @@ class ChaosExperimentSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[ChaosExperimentSettings] = None
+_settings: ChaosExperimentSettings | None = None
 
 
 def get_chaos_experiment_settings() -> ChaosExperimentSettings:

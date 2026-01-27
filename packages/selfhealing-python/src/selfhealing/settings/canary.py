@@ -17,7 +17,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -123,7 +122,7 @@ class CanarySettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[CanarySettings] = None
+_settings: CanarySettings | None = None
 
 
 def get_canary_settings() -> CanarySettings:

@@ -20,7 +20,6 @@ Reference:
 """
 
 import logging
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -139,12 +138,12 @@ class ChaosBlastRadiusSettings(BaseSettings):
     # ==========================================================================
     # Safety Limits (from blast_radius.py#L104-107)
     # ==========================================================================
-    excluded_services: List[str] = Field(
+    excluded_services: list[str] = Field(
         default_factory=list,
         description="실험 대상에서 제외할 서비스 목록",
     )
 
-    excluded_domains: List[str] = Field(
+    excluded_domains: list[str] = Field(
         default_factory=list,
         description="실험 대상에서 제외할 도메인 목록",
     )
@@ -173,7 +172,7 @@ class ChaosBlastRadiusSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[ChaosBlastRadiusSettings] = None
+_settings: ChaosBlastRadiusSettings | None = None
 
 
 def get_chaos_blast_radius_settings() -> ChaosBlastRadiusSettings:

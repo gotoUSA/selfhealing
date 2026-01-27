@@ -21,10 +21,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from selfhealing.core.timezone import now
 from selfhealing.services.governance_checks import GovernanceCheckMixin
 
 logger = logging.getLogger(__name__)
@@ -42,7 +40,7 @@ class ExpiryCheckResult:
     is_active: bool
     """비상 모드 활성화 여부."""
 
-    actions_taken: List[Dict[str, Any]] = field(default_factory=list)
+    actions_taken: list[dict[str, Any]] = field(default_factory=list)
     """수행된 액션 목록."""
 
     hours_elapsed: float = 0.0
@@ -51,7 +49,7 @@ class ExpiryCheckResult:
     hours_remaining: float = 8.0
     """자동 복구까지 남은 시간."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "is_active": self.is_active,
@@ -66,8 +64,8 @@ class NotificationResult:
     """알림 발송 결과."""
 
     sent: bool
-    channels: List[str] = field(default_factory=list)
-    error: Optional[str] = None
+    channels: list[str] = field(default_factory=list)
+    error: str | None = None
 
 
 # =============================================================================
@@ -94,7 +92,7 @@ class GovernanceService(GovernanceCheckMixin):
         service.deactivate_emergency(actor="admin")
     """
 
-    _instance: Optional["GovernanceService"] = None
+    _instance: GovernanceService | None = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -109,7 +107,7 @@ class GovernanceService(GovernanceCheckMixin):
         self._config = self._load_governance_config()
         self._initialized = True
 
-    def _load_governance_config(self) -> Dict[str, Any]:
+    def _load_governance_config(self) -> dict[str, Any]:
         """거버넌스 설정 로드."""
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
@@ -120,7 +118,7 @@ class GovernanceService(GovernanceCheckMixin):
             logger.warning(f"[GovernanceService] Could not load config: {e}")
             return self._get_default_config()
 
-    def _get_default_config(self) -> Dict[str, Any]:
+    def _get_default_config(self) -> dict[str, Any]:
         """기본 거버넌스 설정."""
         return {
             "emergency_expiry_hours": 8,
@@ -193,7 +191,9 @@ class GovernanceService(GovernanceCheckMixin):
 
         # Action 2: Final warning (6시간)
         if status.get("should_final_warn", False):
-            logger.warning(f"[GovernanceService] Final warning: 2 hours until auto-restore")
+            logger.warning(
+                "[GovernanceService] Final warning: 2 hours until auto-restore"
+            )
             tracker.mark_final_warning_sent()
             result.actions_taken.append(
                 {
@@ -210,7 +210,9 @@ class GovernanceService(GovernanceCheckMixin):
 
         # Action 3: Warning (4시간)
         if status.get("should_warn", False):
-            logger.warning(f"[GovernanceService] Warning: {result.hours_elapsed:.1f} hours in emergency mode")
+            logger.warning(
+                f"[GovernanceService] Warning: {result.hours_elapsed:.1f} hours in emergency mode"
+            )
             tracker.mark_warning_sent()
             result.actions_taken.append(
                 {
@@ -236,7 +238,7 @@ class GovernanceService(GovernanceCheckMixin):
         level: int,
         reason: str,
         actor: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         비상 모드 활성화.
 
@@ -261,7 +263,10 @@ class GovernanceService(GovernanceCheckMixin):
                 activated_by=actor,
             )
 
-            logger.warning(f"[GovernanceService] Emergency mode activated: " f"level={level}, reason={reason}, actor={actor}")
+            logger.warning(
+                f"[GovernanceService] Emergency mode activated: "
+                f"level={level}, reason={reason}, actor={actor}"
+            )
 
             # 알림 발송
             self._send_notification(
@@ -288,7 +293,7 @@ class GovernanceService(GovernanceCheckMixin):
         self,
         actor: str,
         reason: str = "Manual deactivation",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         비상 모드 해제.
 
@@ -308,7 +313,10 @@ class GovernanceService(GovernanceCheckMixin):
                 deactivated_by=actor,
             )
 
-            logger.info(f"[GovernanceService] Emergency mode deactivated: " f"actor={actor}, reason={reason}")
+            logger.info(
+                f"[GovernanceService] Emergency mode deactivated: "
+                f"actor={actor}, reason={reason}"
+            )
 
             # 알림 발송
             self._send_notification(
@@ -334,7 +342,7 @@ class GovernanceService(GovernanceCheckMixin):
     # Notification Helpers
     # =========================================================================
 
-    def _build_warning_message(self, status: Dict[str, Any]) -> str:
+    def _build_warning_message(self, status: dict[str, Any]) -> str:
         """4시간 경고 메시지 생성."""
         return (
             f"긴급 모드가 {status.get('hours_elapsed', 0):.1f}시간 동안 유지되고 있습니다.\n"
@@ -343,7 +351,7 @@ class GovernanceService(GovernanceCheckMixin):
             f"Admin 확인이 필요합니다."
         )
 
-    def _build_final_warning_message(self, status: Dict[str, Any]) -> str:
+    def _build_final_warning_message(self, status: dict[str, Any]) -> str:
         """6시간 최종 경고 메시지 생성."""
         return (
             f"2시간 후 자동으로 NORMAL 모드로 복귀합니다.\n"
@@ -352,7 +360,7 @@ class GovernanceService(GovernanceCheckMixin):
             f"즉시 조치가 필요합니다."
         )
 
-    def _build_auto_restore_message(self, status: Dict[str, Any]) -> str:
+    def _build_auto_restore_message(self, status: dict[str, Any]) -> str:
         """자동 복구 메시지 생성."""
         return (
             f"긴급 모드가 만료되어 자동으로 NORMAL 모드로 복귀했습니다.\n"
@@ -366,7 +374,7 @@ class GovernanceService(GovernanceCheckMixin):
         event_type: str,
         title: str,
         message: str,
-        status: Dict[str, Any],
+        status: dict[str, Any],
     ) -> NotificationResult:
         """
         알림 발송.
@@ -376,7 +384,10 @@ class GovernanceService(GovernanceCheckMixin):
         try:
             channels = self._config.get("notify_channels", ["slack", "email"])
 
-            logger.info(f"[GovernanceService] Notification: " f"event={event_type}, title={title}, channels={channels}")
+            logger.info(
+                f"[GovernanceService] Notification: "
+                f"event={event_type}, title={title}, channels={channels}"
+            )
 
             # TODO: 실제 알림 서비스 연동
             # from selfhealing.services.notification import send_notification
@@ -399,7 +410,7 @@ class GovernanceService(GovernanceCheckMixin):
 # =============================================================================
 
 
-_governance_service_instance: Optional[GovernanceService] = None
+_governance_service_instance: GovernanceService | None = None
 
 
 def get_governance_service() -> GovernanceService:

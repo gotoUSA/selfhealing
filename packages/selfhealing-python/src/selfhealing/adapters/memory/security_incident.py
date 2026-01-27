@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.adapters.memory.base import _now
 from selfhealing.interfaces.repositories import (
-    SecurityIncidentRepository,
     SecurityIncidentData,
+    SecurityIncidentRepository,
     SecurityIncidentStatus,
 )
 
@@ -26,7 +26,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
     """
 
     def __init__(self):
-        self._storage: Dict[int, SecurityIncidentData] = {}
+        self._storage: dict[int, SecurityIncidentData] = {}
         self._next_id = 1
         self._lock = threading.RLock()  # RLock for reentrant calls
 
@@ -35,11 +35,11 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
         incident_type: str,
         severity: str,
         description: str = "",
-        source_ip: Optional[str] = None,
+        source_ip: str | None = None,
         user_agent: str = "",
-        user_id: Optional[int] = None,
-        entity_refs: Optional[dict[str, int]] = None,
-        raw_payload: Optional[dict[str, Any]] = None,
+        user_id: int | None = None,
+        entity_refs: dict[str, int] | None = None,
+        raw_payload: dict[str, Any] | None = None,
     ) -> SecurityIncidentData:
         """Create a new security incident (domain-neutral)."""
         refs = entity_refs or {}
@@ -63,7 +63,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
             self._next_id += 1
             return incident
 
-    def get_by_id(self, id: int) -> Optional[SecurityIncidentData]:
+    def get_by_id(self, id: int) -> SecurityIncidentData | None:
         """Get a security incident by ID."""
         with self._lock:
             return self._storage.get(id)
@@ -73,7 +73,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
         id: int,
         status: str,
         investigation_notes: str = "",
-        assigned_to_id: Optional[int] = None,
+        assigned_to_id: int | None = None,
     ) -> bool:
         """Update incident status."""
         with self._lock:
@@ -94,7 +94,11 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
                 raw_payload=entry.raw_payload,
                 assigned_to_id=assigned_to_id or entry.assigned_to_id,
                 investigation_notes=investigation_notes or entry.investigation_notes,
-                resolved_at=_now() if status == SecurityIncidentStatus.RESOLVED.value else entry.resolved_at,
+                resolved_at=(
+                    _now()
+                    if status == SecurityIncidentStatus.RESOLVED.value
+                    else entry.resolved_at
+                ),
                 created_at=entry.created_at,
                 updated_at=_now(),
             )
@@ -104,9 +108,9 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
     def find_by_type(
         self,
         incident_type: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 100,
-    ) -> List[SecurityIncidentData]:
+    ) -> list[SecurityIncidentData]:
         """Find incidents by type."""
         with self._lock:
             results = []
@@ -123,8 +127,8 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
     def find_by_source_ip(
         self,
         source_ip: str,
-        since: Optional[datetime] = None,
-    ) -> List[SecurityIncidentData]:
+        since: datetime | None = None,
+    ) -> list[SecurityIncidentData]:
         """Find incidents by source IP."""
         with self._lock:
             results = []
@@ -144,30 +148,40 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
         """Count incidents by source IP since a given time."""
         return len(self.find_by_source_ip(source_ip, since))
 
-    def get_open_incidents(self, limit: int = 100) -> List[SecurityIncidentData]:
+    def get_open_incidents(self, limit: int = 100) -> list[SecurityIncidentData]:
         """Get all open incidents."""
         with self._lock:
-            results = [entry for entry in self._storage.values() if entry.status == SecurityIncidentStatus.OPEN.value]
+            results = [
+                entry
+                for entry in self._storage.values()
+                if entry.status == SecurityIncidentStatus.OPEN.value
+            ]
             return results[:limit]
 
     def get_by_type(
         self,
         incident_type: str,
         limit: int = 100,
-    ) -> List[SecurityIncidentData]:
+    ) -> list[SecurityIncidentData]:
         """Get incidents by type."""
         with self._lock:
-            results = [entry for entry in self._storage.values() if entry.incident_type == incident_type]
+            results = [
+                entry
+                for entry in self._storage.values()
+                if entry.incident_type == incident_type
+            ]
             return results[:limit]
 
     def get_by_severity(
         self,
         severity: str,
         limit: int = 100,
-    ) -> List[SecurityIncidentData]:
+    ) -> list[SecurityIncidentData]:
         """Get incidents by severity."""
         with self._lock:
-            results = [entry for entry in self._storage.values() if entry.severity == severity]
+            results = [
+                entry for entry in self._storage.values() if entry.severity == severity
+            ]
             return results[:limit]
 
     def mark_as_resolved(
@@ -187,7 +201,7 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
         source_ip: str,
         hours: int = 24,
         limit: int = 100,
-    ) -> List[SecurityIncidentData]:
+    ) -> list[SecurityIncidentData]:
         """Get recent incidents from a specific IP."""
         since = _now() - timedelta(hours=hours)
         with self._lock:
@@ -227,9 +241,15 @@ class InMemorySecurityIncidentRepository(SecurityIncidentRepository):
                 "by_status": {},
             }
             for entry in self._storage.values():
-                stats["by_type"][entry.incident_type] = stats["by_type"].get(entry.incident_type, 0) + 1
-                stats["by_severity"][entry.severity] = stats["by_severity"].get(entry.severity, 0) + 1
-                stats["by_status"][entry.status] = stats["by_status"].get(entry.status, 0) + 1
+                stats["by_type"][entry.incident_type] = (
+                    stats["by_type"].get(entry.incident_type, 0) + 1
+                )
+                stats["by_severity"][entry.severity] = (
+                    stats["by_severity"].get(entry.severity, 0) + 1
+                )
+                stats["by_status"][entry.status] = (
+                    stats["by_status"].get(entry.status, 0) + 1
+                )
             return stats
 
     def clear(self) -> None:

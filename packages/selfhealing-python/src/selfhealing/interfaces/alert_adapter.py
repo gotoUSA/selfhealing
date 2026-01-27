@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -78,20 +78,20 @@ class Alert:
 
     # Source information
     source: str = "selfhealing"  # Component that generated alert
-    service_name: Optional[str] = None
-    domain: Optional[str] = None
+    service_name: str | None = None
+    domain: str | None = None
 
     # SLO context (if SLO violation)
-    slo_name: Optional[str] = None
-    slo_target: Optional[float] = None
-    slo_current: Optional[float] = None
+    slo_name: str | None = None
+    slo_target: float | None = None
+    slo_current: float | None = None
 
     # Additional context
     details: dict[str, Any] = field(default_factory=dict)
-    runbook_url: Optional[str] = None
+    runbook_url: str | None = None
 
     # Deduplication
-    alert_key: Optional[str] = None  # For grouping/deduping alerts
+    alert_key: str | None = None  # For grouping/deduping alerts
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -222,13 +222,15 @@ class AlertAdapter(ABC):
         slo_name: str,
         target: float,
         current: float,
-        service_name: Optional[str] = None,
+        service_name: str | None = None,
     ) -> None:
         """Convenience method for SLO violation alert."""
         self.send(
             Alert(
                 title=f"SLO Violation: {slo_name}",
-                description=(f"SLO '{slo_name}' is violated. Target: {target:.2%}, Current: {current:.2%}"),
+                description=(
+                    f"SLO '{slo_name}' is violated. Target: {target:.2%}, Current: {current:.2%}"
+                ),
                 severity=AlertSeverity.CRITICAL,
                 category=AlertCategory.SLO_VIOLATION,
                 service_name=service_name,
@@ -249,7 +251,10 @@ class AlertAdapter(ABC):
         self.send(
             Alert(
                 title=f"High Error Rate: {service_name}",
-                description=(f"Error rate for {service_name} is {error_rate:.1%}, " f"exceeding threshold of {threshold:.1%}"),
+                description=(
+                    f"Error rate for {service_name} is {error_rate:.1%}, "
+                    f"exceeding threshold of {threshold:.1%}"
+                ),
                 severity=AlertSeverity.WARNING,
                 category=AlertCategory.ERROR_RATE,
                 service_name=service_name,

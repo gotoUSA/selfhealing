@@ -12,6 +12,86 @@ Replaces:
 - core/safe_defaults.py (SAFE_DEFAULTS, VALIDATION_RULES)
 """
 
+from selfhealing.settings.anti_flapping import (
+    AntiFlappingSettings,
+    get_anti_flapping_settings,
+    reset_anti_flapping_settings,
+)
+
+# API Rate Limit (106_HARDCODED_CONFIG_API_REFACTORING.md Step 1)
+from selfhealing.settings.api_rate_limit import (
+    ApiRateLimitSettings,
+    get_api_rate_limit_settings,
+    reset_api_rate_limit_settings,
+)
+from selfhealing.settings.api_view import (
+    ApiViewSettings,
+    get_api_view_settings,
+    reset_api_view_settings,
+)
+from selfhealing.settings.apply_strategy import (
+    ApplyStrategySettings,
+    get_apply_strategy_settings,
+    reset_apply_strategy_settings,
+)
+from selfhealing.settings.audit_integrity import (
+    AuditIntegritySettings,
+    get_audit_integrity_settings,
+    reset_audit_integrity_settings,
+)
+from selfhealing.settings.audit_settings import (
+    AuditSettings,
+    get_audit_settings,
+    reset_audit_settings,
+)
+from selfhealing.settings.audit_sync import (
+    AuditSyncSettings,
+    get_audit_sync_settings,
+    reset_audit_sync_settings,
+)
+from selfhealing.settings.audit_watchdog import (
+    AuditWatchdogSettings,
+    get_audit_watchdog_settings,
+    reset_audit_watchdog_settings,
+)
+from selfhealing.settings.auto_rollback import (
+    AutoRollbackSettings,
+    get_auto_rollback_settings,
+    reset_auto_rollback_settings,
+)
+from selfhealing.settings.batch import (
+    BatchSettings,
+    get_batch_settings,
+    reset_batch_settings,
+)
+from selfhealing.settings.cascade_retention import (
+    CascadeRetentionSettings,
+    get_cascade_retention_settings,
+    reset_cascade_retention_settings,
+)
+from selfhealing.settings.celery_task import (
+    CeleryTaskSettings,
+    get_celery_task_settings,
+    reset_celery_task_settings,
+)
+from selfhealing.settings.chaos import (
+    ChaosSettings,
+    get_chaos_settings,
+    reset_chaos_settings,
+)
+from selfhealing.settings.chaos_blast_radius import (
+    ChaosBlastRadiusSettings,
+    get_chaos_blast_radius_settings,
+    reset_chaos_blast_radius_settings,
+)
+
+# Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.chaos_experiment import (
+    ChaosExperimentSettings,
+    get_chaos_experiment_settings,
+    reset_chaos_experiment_settings,
+)
+
 # 핵심 설정 (5)
 from selfhealing.settings.circuit_breaker import (
     CircuitBreakerSettings,
@@ -23,47 +103,117 @@ from selfhealing.settings.circuit_breaker_advanced import (
     get_circuit_breaker_advanced_settings,
     reset_circuit_breaker_advanced_settings,
 )
+
+# Cleanup Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
+from selfhealing.settings.cleanup import (
+    CleanupSettings,
+    get_cleanup_settings,
+    reset_cleanup_settings,
+)
+from selfhealing.settings.corruption_shield import (
+    CorruptionShieldSettings,
+    get_corruption_shield_settings,
+    reset_corruption_shield_settings,
+)
+from selfhealing.settings.critical_worker import (
+    CriticalWorkerSettings,
+    DeploymentEnvironment,
+    get_critical_worker_settings,
+    reset_critical_worker_settings,
+)
+
+# Daily Report Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
+from selfhealing.settings.daily_report import (
+    DailyReportSettings,
+    get_daily_report_settings,
+    reset_daily_report_settings,
+)
+
+# Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.dashboard import (
+    DashboardSettings,
+    get_dashboard_settings,
+    reset_dashboard_settings,
+)
+from selfhealing.settings.decision_engine import (
+    DecisionEngineSettings,
+    get_decision_engine_settings,
+    reset_decision_engine_settings,
+)
+from selfhealing.settings.distributed_lock import (
+    DistributedLockSettings,
+    get_distributed_lock_settings,
+    reset_distributed_lock_settings,
+)
 from selfhealing.settings.dlq import (
     DLQSettings,
     get_dlq_settings,
     reset_dlq_settings,
 )
-from selfhealing.settings.retry import (
-    RetrySettings,
-    get_retry_settings,
-    reset_retry_settings,
+from selfhealing.settings.domain_sensitivity import (
+    DomainSensitivitySettings,
+    get_domain_sensitivity_settings,
+    reset_domain_sensitivity_settings,
 )
-from selfhealing.settings.rate_limit import (
-    RateLimitSettings,
-    get_rate_limit_settings,
-    reset_rate_limit_settings,
+from selfhealing.settings.drift_threshold import (
+    DriftThresholdSettings,
+    get_drift_threshold_settings,
+    reset_drift_threshold_settings,
 )
-from selfhealing.settings.security import (
-    SecuritySettings,
-    get_security_settings,
-    reset_security_settings,
+from selfhealing.settings.error_budget import (
+    ErrorBudgetSettings,
+    get_error_budget_settings,
+    reset_error_budget_settings,
 )
 
-# 확장 설정 (12)
-from selfhealing.settings.sla import (
-    SLASettings,
-    get_sla_settings,
-    reset_sla_settings,
+# Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+from selfhealing.settings.error_budget_propagation import (
+    ErrorBudgetPropagationSettings,
+    get_error_budget_propagation_settings,
+    reset_error_budget_propagation_settings,
 )
-from selfhealing.settings.slo import (
-    SLOSettings,
-    get_slo_settings,
-    reset_slo_settings,
+from selfhealing.settings.forensic import (
+    ForensicSettings,
+    get_forensic_settings,
+    reset_forensic_settings,
+)
+from selfhealing.settings.governance import (
+    GovernanceSettings,
+    get_governance_settings,
+    reset_governance_settings,
+)
+
+# Audit Module Settings (105_HARDCODED_CONFIG_AUDIT_REFACTORING.md Step 2)
+from selfhealing.settings.hash_chain import (
+    HashChainSettings,
+    get_hash_chain_settings,
+    reset_hash_chain_settings,
 )
 from selfhealing.settings.idempotency import (
     IdempotencySettings,
     get_idempotency_settings,
     reset_idempotency_settings,
 )
-from selfhealing.settings.forensic import (
-    ForensicSettings,
-    get_forensic_settings,
-    reset_forensic_settings,
+from selfhealing.settings.l2_storage import (
+    L2StorageSettings,
+    get_l2_storage_settings,
+    reset_l2_storage_settings,
+)
+
+# 고급 기능
+from selfhealing.settings.layered_provider import (
+    RequestOverrideContext,
+    clear_request_overrides,
+    detect_config_source,
+    get_all_request_overrides,
+    get_circuit_breaker_layered,
+    get_config_with_sources,
+    get_dlq_layered,
+    get_layered_settings,
+    get_rate_limit_layered,
+    get_request_override,
+    get_retry_layered,
+    set_request_override,
 )
 from selfhealing.settings.logging_config import (
     LoggingSettings,
@@ -80,35 +230,15 @@ from selfhealing.settings.notification import (
     get_notification_settings,
     reset_notification_settings,
 )
-from selfhealing.settings.error_budget import (
-    ErrorBudgetSettings,
-    get_error_budget_settings,
-    reset_error_budget_settings,
+from selfhealing.settings.notification_channel import (
+    NotificationChannelSettings,
+    get_notification_channel_settings,
+    reset_notification_channel_settings,
 )
-from selfhealing.settings.governance import (
-    GovernanceSettings,
-    get_governance_settings,
-    reset_governance_settings,
-)
-from selfhealing.settings.chaos import (
-    ChaosSettings,
-    get_chaos_settings,
-    reset_chaos_settings,
-)
-from selfhealing.settings.drift_threshold import (
-    DriftThresholdSettings,
-    get_drift_threshold_settings,
-    reset_drift_threshold_settings,
-)
-from selfhealing.settings.l2_storage import (
-    L2StorageSettings,
-    get_l2_storage_settings,
-    reset_l2_storage_settings,
-)
-from selfhealing.settings.replay_automation import (
-    ReplayAutomationSettings,
-    get_replay_automation_settings,
-    reset_replay_automation_settings,
+from selfhealing.settings.rate_limit import (
+    RateLimitSettings,
+    get_rate_limit_settings,
+    reset_rate_limit_settings,
 )
 
 # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
@@ -117,131 +247,15 @@ from selfhealing.settings.recovery_circuit_breaker import (
     get_recovery_circuit_breaker_settings,
     reset_recovery_circuit_breaker_settings,
 )
-from selfhealing.settings.redis_key_guard import (
-    RedisKeyGuardSettings,
-    get_redis_key_guard_settings,
-    reset_redis_key_guard_settings,
+from selfhealing.settings.recovery_coordinator import (
+    RecoveryCoordinatorSettings,
+    get_recovery_coordinator_settings,
+    reset_recovery_coordinator_settings,
 )
 from selfhealing.settings.recovery_shutdown import (
     RecoveryShutdownSettings,
     get_recovery_shutdown_settings,
     reset_recovery_shutdown_settings,
-)
-from selfhealing.settings.resilient_recorder import (
-    ResilientRecorderSettings,
-    get_resilient_recorder_settings,
-    reset_resilient_recorder_settings,
-)
-
-# Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
-from selfhealing.settings.error_budget_propagation import (
-    ErrorBudgetPropagationSettings,
-    get_error_budget_propagation_settings,
-    reset_error_budget_propagation_settings,
-)
-from selfhealing.settings.anti_flapping import (
-    AntiFlappingSettings,
-    get_anti_flapping_settings,
-    reset_anti_flapping_settings,
-)
-from selfhealing.settings.throttle import (
-    ThrottleSettings,
-    get_throttle_settings,
-    reset_throttle_settings,
-)
-from selfhealing.settings.critical_worker import (
-    CriticalWorkerSettings,
-    get_critical_worker_settings,
-    reset_critical_worker_settings,
-)
-
-# Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
-from selfhealing.settings.chaos_experiment import (
-    ChaosExperimentSettings,
-    get_chaos_experiment_settings,
-    reset_chaos_experiment_settings,
-)
-from selfhealing.settings.chaos_blast_radius import (
-    ChaosBlastRadiusSettings,
-    get_chaos_blast_radius_settings,
-    reset_chaos_blast_radius_settings,
-)
-from selfhealing.settings.corruption_shield import (
-    CorruptionShieldSettings,
-    get_corruption_shield_settings,
-    reset_corruption_shield_settings,
-)
-from selfhealing.settings.notification_channel import (
-    NotificationChannelSettings,
-    get_notification_channel_settings,
-    reset_notification_channel_settings,
-)
-from selfhealing.settings.cascade_retention import (
-    CascadeRetentionSettings,
-    get_cascade_retention_settings,
-    reset_cascade_retention_settings,
-)
-from selfhealing.settings.distributed_lock import (
-    DistributedLockSettings,
-    get_distributed_lock_settings,
-    reset_distributed_lock_settings,
-)
-
-# Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
-from selfhealing.settings.dashboard import (
-    DashboardSettings,
-    get_dashboard_settings,
-    reset_dashboard_settings,
-)
-from selfhealing.settings.batch import (
-    BatchSettings,
-    get_batch_settings,
-    reset_batch_settings,
-)
-from selfhealing.settings.audit_settings import (
-    AuditSettings,
-    get_audit_settings,
-    reset_audit_settings,
-)
-from selfhealing.settings.celery_task import (
-    CeleryTaskSettings,
-    get_celery_task_settings,
-    reset_celery_task_settings,
-)
-from selfhealing.settings.api_view import (
-    ApiViewSettings,
-    get_api_view_settings,
-    reset_api_view_settings,
-)
-from selfhealing.settings.domain_sensitivity import (
-    DomainSensitivitySettings,
-    get_domain_sensitivity_settings,
-    reset_domain_sensitivity_settings,
-)
-from selfhealing.settings.slack_channel import (
-    SlackChannelSettings,
-    get_slack_channel_settings,
-    reset_slack_channel_settings,
-)
-from selfhealing.settings.audit_integrity import (
-    AuditIntegritySettings,
-    get_audit_integrity_settings,
-    reset_audit_integrity_settings,
-)
-from selfhealing.settings.audit_sync import (
-    AuditSyncSettings,
-    get_audit_sync_settings,
-    reset_audit_sync_settings,
-)
-from selfhealing.settings.audit_watchdog import (
-    AuditWatchdogSettings,
-    get_audit_watchdog_settings,
-    reset_audit_watchdog_settings,
-)
-from selfhealing.settings.regional_recovery_policy import (
-    RegionalRecoveryPolicySettings,
-    get_regional_recovery_policy_settings,
-    reset_regional_recovery_policy_settings,
 )
 
 # Coordination Settings (104_HARDCODED_CONFIG_COORDINATION_REFACTORING.md Step 1)
@@ -250,74 +264,25 @@ from selfhealing.settings.recovery_tasks import (
     get_recovery_tasks_settings,
     reset_recovery_tasks_settings,
 )
-from selfhealing.settings.recovery_coordinator import (
-    RecoveryCoordinatorSettings,
-    get_recovery_coordinator_settings,
-    reset_recovery_coordinator_settings,
+from selfhealing.settings.redis_key_guard import (
+    RedisKeyGuardSettings,
+    get_redis_key_guard_settings,
+    reset_redis_key_guard_settings,
 )
-from selfhealing.settings.critical_worker import (
-    DeploymentEnvironment,
+from selfhealing.settings.regional_recovery_policy import (
+    RegionalRecoveryPolicySettings,
+    get_regional_recovery_policy_settings,
+    reset_regional_recovery_policy_settings,
 )
-
-# Core Module Settings (103_HARDCODED_CONFIG_CORE_REFACTORING.md Step 1, 2)
-from selfhealing.settings.runtime_feedback import (
-    RuntimeFeedbackSettings,
-    get_runtime_feedback_settings,
-    reset_runtime_feedback_settings,
+from selfhealing.settings.replay_automation import (
+    ReplayAutomationSettings,
+    get_replay_automation_settings,
+    reset_replay_automation_settings,
 )
-from selfhealing.settings.auto_rollback import (
-    AutoRollbackSettings,
-    get_auto_rollback_settings,
-    reset_auto_rollback_settings,
-)
-from selfhealing.settings.safety_bounds import (
-    SafetyBoundsSettings,
-    ParameterBoundConfig,
-    get_safety_bounds_settings,
-    reset_safety_bounds_settings,
-)
-from selfhealing.settings.state_cache import (
-    StateCacheSettings,
-    get_state_cache_settings,
-    reset_state_cache_settings,
-)
-from selfhealing.settings.apply_strategy import (
-    ApplyStrategySettings,
-    get_apply_strategy_settings,
-    reset_apply_strategy_settings,
-)
-from selfhealing.settings.decision_engine import (
-    DecisionEngineSettings,
-    get_decision_engine_settings,
-    reset_decision_engine_settings,
-)
-
-# Audit Module Settings (105_HARDCODED_CONFIG_AUDIT_REFACTORING.md Step 2)
-from selfhealing.settings.hash_chain import (
-    HashChainSettings,
-    get_hash_chain_settings,
-    reset_hash_chain_settings,
-)
-
-# API Rate Limit (106_HARDCODED_CONFIG_API_REFACTORING.md Step 1)
-from selfhealing.settings.api_rate_limit import (
-    ApiRateLimitSettings,
-    get_api_rate_limit_settings,
-    reset_api_rate_limit_settings,
-)
-
-# Daily Report Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
-from selfhealing.settings.daily_report import (
-    DailyReportSettings,
-    get_daily_report_settings,
-    reset_daily_report_settings,
-)
-
-# Cleanup Task Settings (108_HARDCODED_CONFIG_REFACTORING_PART1_CELERY_TASKS.md)
-from selfhealing.settings.cleanup import (
-    CleanupSettings,
-    get_cleanup_settings,
-    reset_cleanup_settings,
+from selfhealing.settings.resilient_recorder import (
+    ResilientRecorderSettings,
+    get_resilient_recorder_settings,
+    reset_resilient_recorder_settings,
 )
 
 # X-Test Resource Guard Settings (143_XTEST_RESOURCE_AWARE_INTERLOCK.md)
@@ -326,51 +291,83 @@ from selfhealing.settings.resource_guard import (
     get_resource_guard_settings,
     reset_resource_guard_settings,
 )
+from selfhealing.settings.retry import (
+    RetrySettings,
+    get_retry_settings,
+    reset_retry_settings,
+)
 
-# 고급 기능
-from selfhealing.settings.layered_provider import (
-    get_layered_settings,
-    set_request_override,
-    get_request_override,
-    clear_request_overrides,
-    get_all_request_overrides,
-    detect_config_source,
-    get_config_with_sources,
-    RequestOverrideContext,
-    get_circuit_breaker_layered,
-    get_retry_layered,
-    get_dlq_layered,
-    get_rate_limit_layered,
+# Root Settings (SelfHealingSettings)
+from selfhealing.settings.root import (  # Convenience getters; Legacy function aliases
+    SelfHealingSettings,
+    configure,
+    get_circuit_breaker_config,
+    get_config,
+    get_dlq_config,
+    get_dlq_settings,
+    get_forensic_config,
+    get_forensic_settings,
+    get_notification_config,
+    get_notification_settings,
+    get_rate_limit_config,
+    get_rate_limit_settings,
+    get_retry_config,
+    get_retry_settings,
+    get_security_thresholds,
+    get_sla_thresholds,
+    reload_config,
+    reset_config,
+    set_config,
+)
+
+# Core Module Settings (103_HARDCODED_CONFIG_CORE_REFACTORING.md Step 1, 2)
+from selfhealing.settings.runtime_feedback import (
+    RuntimeFeedbackSettings,
+    get_runtime_feedback_settings,
+    reset_runtime_feedback_settings,
+)
+from selfhealing.settings.safety_bounds import (
+    ParameterBoundConfig,
+    SafetyBoundsSettings,
+    get_safety_bounds_settings,
+    reset_safety_bounds_settings,
 )
 from selfhealing.settings.secrets import (
     SecretsSettings,
     get_secrets,
     reset_secrets,
 )
+from selfhealing.settings.security import (
+    SecuritySettings,
+    get_security_settings,
+    reset_security_settings,
+)
 
-# Root Settings (SelfHealingSettings)
-from selfhealing.settings.root import (
-    SelfHealingSettings,
-    get_config,
-    set_config,
-    reset_config,
-    reload_config,
-    configure,
-    # Convenience getters
-    get_circuit_breaker_config,
-    get_dlq_config,
-    get_retry_config,
-    get_sla_thresholds,
-    get_security_thresholds,
-    get_forensic_config,
-    get_notification_config,
-    get_rate_limit_config,
-    # Legacy function aliases
-    get_dlq_settings,
-    get_retry_settings,
-    get_forensic_settings,
-    get_notification_settings,
-    get_rate_limit_settings,
+# 확장 설정 (12)
+from selfhealing.settings.sla import (
+    SLASettings,
+    get_sla_settings,
+    reset_sla_settings,
+)
+from selfhealing.settings.slack_channel import (
+    SlackChannelSettings,
+    get_slack_channel_settings,
+    reset_slack_channel_settings,
+)
+from selfhealing.settings.slo import (
+    SLOSettings,
+    get_slo_settings,
+    reset_slo_settings,
+)
+from selfhealing.settings.state_cache import (
+    StateCacheSettings,
+    get_state_cache_settings,
+    reset_state_cache_settings,
+)
+from selfhealing.settings.throttle import (
+    ThrottleSettings,
+    get_throttle_settings,
+    reset_throttle_settings,
 )
 
 __all__ = [

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
 from selfhealing.tasks.base import BaseNotifyingTask
 from selfhealing.tasks.notification_policy import (
@@ -33,17 +33,17 @@ logger = logging.getLogger(__name__)
 class RunComplianceCheckTask(BaseNotifyingTask):
     """
     규정 준수 상태 점검.
-    
+
     모든 등록된 규정 검사를 실행하고 위반 사항을 리포트합니다.
-    
+
     스케줄: 매일 07:00
     큐: compliance
     알림: 위반 있을 때만 (임계값 기반)
-    
+
     Args:
         check_type: 검사 유형 ("all", "critical", "dora", "soc2", "pci_dss")
         stage_name: 특정 Stage만 검사 (None이면 전체)
-    
+
     Returns:
         dict: {
             "success": bool,
@@ -56,7 +56,7 @@ class RunComplianceCheckTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.run_compliance_check"
-    
+
     notification_policy = NotificationPolicy(
         timing=NotificationTiming.AFTER,
         threshold=0,  # 위반 있을 때만 (0 초과 시)
@@ -66,48 +66,52 @@ class RunComplianceCheckTask(BaseNotifyingTask):
     )
 
     def run(
-        self, 
+        self,
         check_type: str = "all",
         stage_name: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """규정 준수 점검 태스크 실행."""
         logger.info(
             f"[RunComplianceCheck] Starting compliance check - "
             f"type={check_type}, stage={stage_name or 'all'}"
         )
-        
+
         try:
             from selfhealing.services.compliance import get_compliance_service
-            
+
             service = get_compliance_service()
-            
+
             # 검사 유형에 따른 표준 결정
             standards = self._get_standards_for_type(check_type)
-            
+
             # 전체 검사 실행
             report = service.run_all_checks(
                 stage_name=stage_name or "default",
                 standards=standards if standards else None,
             )
-            
+
             # 결과 구조화
             violations = [
                 {
                     "id": v.violation_id,
                     "check_id": v.check_id,
-                    "severity": v.severity.value if hasattr(v.severity, 'value') else str(v.severity),
+                    "severity": (
+                        v.severity.value
+                        if hasattr(v.severity, "value")
+                        else str(v.severity)
+                    ),
                     "message": v.message,
                     "details": v.details,
                 }
                 for v in report.violations
             ]
-            
+
             logger.info(
                 f"[RunComplianceCheck] Completed - "
                 f"total={report.total_checks}, passed={report.passed_checks}, "
                 f"failed={report.failed_checks}"
             )
-            
+
             return {
                 "success": True,
                 "check_type": check_type,
@@ -117,7 +121,7 @@ class RunComplianceCheckTask(BaseNotifyingTask):
                 "violations": violations,
                 "compliance_score": report.compliance_score,
             }
-            
+
         except Exception as e:
             logger.error(f"[RunComplianceCheck] Failed: {e}", exc_info=True)
             return {
@@ -131,7 +135,7 @@ class RunComplianceCheckTask(BaseNotifyingTask):
         """검사 유형에 따른 표준 목록 반환."""
         try:
             from selfhealing.services.compliance.service import ComplianceStandard
-            
+
             type_mapping = {
                 "dora": [ComplianceStandard.DORA_2025],
                 "soc2": [ComplianceStandard.SOC2],
@@ -141,13 +145,13 @@ class RunComplianceCheckTask(BaseNotifyingTask):
                     ComplianceStandard.PCI_DSS,
                 ],
             }
-            
+
             return type_mapping.get(check_type)  # None for "all"
-            
+
         except ImportError:
             return None
 
-    def _get_severity(self, result: Dict[str, Any]) -> str:
+    def _get_severity(self, result: dict[str, Any]) -> str:
         """위반 수에 따른 심각도 결정."""
         count = result.get("violation_count", 0)
         if count > 10:
@@ -156,17 +160,16 @@ class RunComplianceCheckTask(BaseNotifyingTask):
             return "warning"
         return "info"
 
-    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+    def _get_summary_message(self, result: dict[str, Any]) -> str:
         """알림 메시지 생성."""
         if result.get("error"):
             return f"❌ 규정 준수 점검 실패: {result['error']}"
-        
+
         if result.get("violation_count", 0) == 0:
             return (
-                f"✅ 규정 준수 점검 완료: "
-                f"{result['total_checks']}개 항목 모두 통과"
+                f"✅ 규정 준수 점검 완료: " f"{result['total_checks']}개 항목 모두 통과"
             )
-        
+
         return (
             f"⚠️ 규정 준수 점검 결과\n"
             f"• 총 점검: {result['total_checks']}건\n"
@@ -184,17 +187,17 @@ class RunComplianceCheckTask(BaseNotifyingTask):
 class GenerateFinOpsReportTask(BaseNotifyingTask):
     """
     FinOps 비용 분석 리포트 생성.
-    
+
     Self-Healing 운영 비용을 분석하고 리포트를 생성합니다.
-    
+
     스케줄: 매주 월요일 08:00
     큐: reports
     알림: 즉시 발송 (Slack + Email)
-    
+
     Args:
         period: 리포트 기간 ("daily", "weekly", "monthly")
         stage_name: 특정 Stage만 (None이면 전체)
-    
+
     Returns:
         dict: {
             "success": bool,
@@ -206,7 +209,7 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.generate_finops_report"
-    
+
     notification_policy = NotificationPolicy(
         timing=NotificationTiming.AFTER,
         aggregate=False,  # 매주 1회라 즉시 발송
@@ -215,35 +218,35 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
     )
 
     def run(
-        self, 
+        self,
         period: str = "weekly",
         stage_name: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """FinOps 리포트 생성 태스크 실행."""
         logger.info(
             f"[GenerateFinOpsReport] Generating {period} report"
             f"{f' for {stage_name}' if stage_name else ''}"
         )
-        
+
         try:
             from selfhealing.services.finops import get_finops_service
-            
+
             service = get_finops_service()
-            
+
             # 리포트 생성
             report = service.generate_report(
                 period=period,
                 stage_name=stage_name,
             )
-            
+
             # 비용 절감 계산 (이전 기간 대비)
             savings = self._calculate_savings(service, period, stage_name)
-            
+
             logger.info(
                 f"[GenerateFinOpsReport] Generated report - "
                 f"total_cost=${report.total_cost}, records={report.record_count}"
             )
-            
+
             return {
                 "success": True,
                 "report_id": f"finops-{period}-{datetime.now(timezone.utc):%Y%m%d}",
@@ -255,7 +258,7 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
                 "by_stage": {k: float(v) for k, v in report.by_stage.items()},
                 "by_operation": {k: float(v) for k, v in report.by_operation.items()},
             }
-            
+
         except Exception as e:
             logger.error(f"[GenerateFinOpsReport] Failed: {e}", exc_info=True)
             return {
@@ -265,7 +268,7 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
             }
 
     def _calculate_savings(
-        self, 
+        self,
         service,
         period: str,
         stage_name: str | None,
@@ -277,11 +280,11 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
         except Exception:
             return 0.0
 
-    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+    def _get_summary_message(self, result: dict[str, Any]) -> str:
         """알림 메시지 생성."""
         if result.get("error"):
             return f"❌ FinOps 리포트 생성 실패: {result['error']}"
-        
+
         return (
             f"💰 FinOps 리포트 생성 완료\n"
             f"• 기간: {result['period']}\n"
@@ -299,13 +302,13 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
 class CollectSelfHealingMetricsTask(BaseNotifyingTask):
     """
     Self-Healing 메트릭 수집.
-    
+
     시스템 전반의 Self-Healing 메트릭을 수집하고 저장합니다.
-    
+
     스케줄: 30분마다
     큐: metrics
     알림: 로그만 (알림 없음)
-    
+
     Returns:
         dict: {
             "success": bool,
@@ -315,66 +318,69 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
     """
 
     name = "selfhealing.collect_self_healing_metrics"
-    
+
     notification_policy = NotificationPolicy(
         timing=NotificationTiming.AGGREGATED,
         aggregate=True,
-        threshold=float('inf'),  # 실질적으로 알림 없음
+        threshold=float("inf"),  # 실질적으로 알림 없음
         threshold_field="always_skip",
         default_severity="info",
     )
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """메트릭 수집 태스크 실행."""
         logger.info("[CollectSelfHealingMetrics] Starting metrics collection")
-        
+
         try:
             metrics_collected = 0
-            
+
             # Circuit Breaker 메트릭
             try:
                 from selfhealing.core.circuit_breaker import (
                     get_circuit_breaker_registry,
                 )
+
                 registry = get_circuit_breaker_registry()
                 if registry:
                     cb_count = len(registry.list_all())
                     metrics_collected += cb_count
             except Exception as e:
                 logger.debug(f"CB metrics not available: {e}")
-            
+
             # DLQ 메트릭
             try:
                 from selfhealing.services.dlq_service import get_dlq_service
+
                 service = get_dlq_service()
                 # 서비스 상태 확인 (실제 메트릭 수집은 구현 필요)
                 metrics_collected += 1
             except Exception as e:
                 logger.debug(f"DLQ metrics not available: {e}")
-            
+
             # Emergency Mode 메트릭
             try:
                 from selfhealing.core.emergency_mode import (
                     get_emergency_mode_manager,
                 )
+
                 manager = get_emergency_mode_manager()
                 current_level = manager.get_current_level()
                 metrics_collected += 1
             except Exception as e:
                 logger.debug(f"Emergency mode metrics not available: {e}")
-            
+
             timestamp = datetime.now(timezone.utc).isoformat()
-            
+
             logger.info(
                 f"[CollectSelfHealingMetrics] Collected {metrics_collected} metrics"
             )
-            
+
             return {
                 "success": True,
                 "metrics_collected": metrics_collected,
                 "timestamp": timestamp,
             }
-            
+
         except Exception as e:
             logger.error(f"[CollectSelfHealingMetrics] Failed: {e}", exc_info=True)
             return {
@@ -383,7 +389,7 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
                 "metrics_collected": 0,
             }
 
-    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+    def _get_summary_message(self, result: dict[str, Any]) -> str:
         """알림 메시지 생성 (실제로는 사용되지 않음)."""
         return f"📊 메트릭 수집: {result.get('metrics_collected', 0)}개"
 
@@ -415,13 +421,13 @@ COMPLIANCE_TASKS = [
 def register_compliance_tasks_with_celery(app):
     """
     Celery app에 증명 레인 태스크 등록.
-    
+
     Usage:
         from celery import Celery
         from selfhealing.tasks.compliance_tasks import (
             register_compliance_tasks_with_celery,
         )
-        
+
         app = Celery('myproject')
         register_compliance_tasks_with_celery(app)
     """
@@ -443,15 +449,15 @@ def register_compliance_tasks_with_celery(app):
 # =============================================================================
 
 
-def get_compliance_beat_schedule() -> Dict[str, Any]:
+def get_compliance_beat_schedule() -> dict[str, Any]:
     """
     증명 레인 Beat Schedule 반환.
-    
+
     Returns:
         dict: Celery Beat Schedule 설정
     """
     from celery.schedules import crontab
-    
+
     return {
         # 매일 07:00 - 규정 준수 점검
         "run-compliance-check": {

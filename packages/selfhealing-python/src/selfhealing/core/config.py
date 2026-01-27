@@ -8,48 +8,52 @@ Data models like ApprovalRequest remain here as they are not configuration.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
+from typing import Any
 
 # Re-export from settings for backward compatibility
+from selfhealing.settings import ChaosSettings as ChaosConfig
 from selfhealing.settings import (
-    SelfHealingSettings as SelfHealingConfig,
-    CircuitBreakerSettings as CircuitBreakerConfig,
     CircuitBreakerAdvancedSettings as CircuitBreakerAdvancedConfig,
-    DLQSettings as DLQConfig,
-    RetrySettings as RetryConfig,
-    SLASettings as SLAConfig,
-    RateLimitSettings as RateLimitConfig,
-    SecuritySettings as SecurityConfig,
-    IdempotencySettings as IdempotencyConfig,
-    ForensicSettings as ForensicConfig,
-    MetricsSettings as MetricsConfig,
-    NotificationSettings as NotificationConfig,
-    GovernanceSettings as GovernanceConfig,
-    ErrorBudgetSettings as ErrorBudgetConfig,
-    ChaosSettings as ChaosConfig,
-    DriftThresholdSettings as DriftThresholdConfig,
-    L2StorageSettings as L2StorageConfig,
-    LoggingSettings as LoggingConfig,
-    ReplayAutomationSettings as ReplayAutomationConfig,
-    get_config,
-    set_config,
-    reset_config,
-    reload_config,
+)
+from selfhealing.settings import CircuitBreakerSettings as CircuitBreakerConfig
+from selfhealing.settings import DLQSettings as DLQConfig
+from selfhealing.settings import DriftThresholdSettings as DriftThresholdConfig
+from selfhealing.settings import ErrorBudgetSettings as ErrorBudgetConfig
+from selfhealing.settings import ForensicSettings as ForensicConfig
+from selfhealing.settings import GovernanceSettings as GovernanceConfig
+from selfhealing.settings import IdempotencySettings as IdempotencyConfig
+from selfhealing.settings import L2StorageSettings as L2StorageConfig
+from selfhealing.settings import LoggingSettings as LoggingConfig
+from selfhealing.settings import MetricsSettings as MetricsConfig
+from selfhealing.settings import NotificationSettings as NotificationConfig
+from selfhealing.settings import RateLimitSettings as RateLimitConfig
+from selfhealing.settings import ReplayAutomationSettings as ReplayAutomationConfig
+from selfhealing.settings import RetrySettings as RetryConfig
+from selfhealing.settings import SecuritySettings as SecurityConfig
+from selfhealing.settings import SelfHealingSettings as SelfHealingConfig
+from selfhealing.settings import SLASettings as SLAConfig
+from selfhealing.settings import (
     configure,
-    get_sla_thresholds,
-    get_security_thresholds,
+    get_circuit_breaker_advanced_settings,
+    get_config,
+    get_dlq_settings,
     get_forensic_settings,
     get_notification_settings,
-    get_dlq_settings,
     get_retry_settings,
-    get_circuit_breaker_config as get_circuit_breaker_settings,
-    get_circuit_breaker_advanced_settings,
+    get_security_thresholds,
+    get_sla_thresholds,
+    reload_config,
+    reset_config,
+    set_config,
 )
-
+from selfhealing.settings import (
+    get_circuit_breaker_config as get_circuit_breaker_settings,
+)
 
 # =============================================================================
 # Data Models (not configuration, so kept here)
 # =============================================================================
+
 
 @dataclass
 class ApprovalRequest:
@@ -84,7 +88,7 @@ class ApprovalRequest:
     status: str = "PENDING"
 
     # 요청 데이터
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
 
     # 만료 시간 (기본 24시간)
     expires_at: str = ""  # ISO format

@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -72,7 +71,7 @@ class IdempotencySettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[IdempotencySettings] = None
+_settings: IdempotencySettings | None = None
 
 
 def get_idempotency_settings() -> IdempotencySettings:

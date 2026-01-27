@@ -7,7 +7,6 @@ These are Django REST Framework serializers for the REST API endpoints.
 
 from rest_framework import serializers
 
-
 # =============================================================================
 # Constants
 # =============================================================================
@@ -29,7 +28,10 @@ class ControlAPIActions:
         (OVERRIDE, "Override - Temporarily bypass rules"),
         (RESET, "Reset - Revert to default configuration"),
         (INJECT_FAILURE, "Inject Failure - Simulate failures (non-ops only)"),
-        (INJECT_SUCCESS, "Inject Success - Record successes for CB recovery (test only)"),
+        (
+            INJECT_SUCCESS,
+            "Inject Success - Record successes for CB recovery (test only)",
+        ),
     ]
 
     ALL = [ALLOW, BLOCK, OVERRIDE, RESET, INJECT_FAILURE, INJECT_SUCCESS]
@@ -117,7 +119,10 @@ class ControlRequestSerializer(serializers.Serializer):
         ttl_minutes = data.get("ttl_minutes")
 
         # Rule 1: inject_failure forbidden in ops
-        if action == ControlAPIActions.INJECT_FAILURE and environment == ControlAPIEnvironments.OPS:
+        if (
+            action == ControlAPIActions.INJECT_FAILURE
+            and environment == ControlAPIEnvironments.OPS
+        ):
             raise serializers.ValidationError(
                 {
                     "action": "inject_failure is FORBIDDEN in ops environment",
@@ -126,7 +131,10 @@ class ControlRequestSerializer(serializers.Serializer):
             )
 
         # Rule 2: override in ops requires TTL (max 60 minutes)
-        if action == ControlAPIActions.OVERRIDE and environment == ControlAPIEnvironments.OPS:
+        if (
+            action == ControlAPIActions.OVERRIDE
+            and environment == ControlAPIEnvironments.OPS
+        ):
             if not ttl_minutes:
                 raise serializers.ValidationError(
                     {

@@ -19,7 +19,9 @@ logger = get_task_logger(__name__)
     soft_time_limit=290,
     acks_late=True,
 )
-def conditional_replay_on_circuit_close(self, service_name: str, max_items: int = 50) -> dict:
+def conditional_replay_on_circuit_close(
+    self, service_name: str, max_items: int = 50
+) -> dict:
     """
     Trigger conditional replay when a circuit breaker closes.
 
@@ -37,7 +39,9 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     """
     from selfhealing.services import get_replay_service
 
-    logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', max_items={max_items}")
+    logger.info(
+        f"[Circuit Recovery] Starting conditional replay for '{service_name}', max_items={max_items}"
+    )
 
     try:
         service = get_replay_service()
@@ -110,7 +114,9 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
                 "data": result.data,
             }
         else:
-            logger.warning(f"[DLQ Replay] Failed to replay DLQ entry {dlq_id}: {result.error}")
+            logger.warning(
+                f"[DLQ Replay] Failed to replay DLQ entry {dlq_id}: {result.error}"
+            )
             return {
                 "success": False,
                 "dlq_id": dlq_id,
@@ -154,7 +160,9 @@ def replay_batch_by_failure_type(
     """
     from selfhealing.services import get_replay_service
 
-    logger.info(f"[DLQ Batch Replay] Starting batch replay for failure_type={failure_type}, max_items={max_items}")
+    logger.info(
+        f"[DLQ Batch Replay] Starting batch replay for failure_type={failure_type}, max_items={max_items}"
+    )
 
     try:
         service = get_replay_service()
@@ -212,7 +220,9 @@ def replay_batch_by_domain(
     """
     from selfhealing.services import get_replay_service
 
-    logger.info(f"[DLQ Batch Replay] Starting batch replay for domain={domain}, max_items={max_items}")
+    logger.info(
+        f"[DLQ Batch Replay] Starting batch replay for domain={domain}, max_items={max_items}"
+    )
 
     try:
         service = get_replay_service()

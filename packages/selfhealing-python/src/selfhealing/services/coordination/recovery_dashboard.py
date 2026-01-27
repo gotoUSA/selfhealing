@@ -23,14 +23,14 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .enums import RecoveryStatus
 
 if TYPE_CHECKING:
-    from .recovery_coordinator import RecoveryCoordinator
-    from .recovery_circuit_breaker import RecoveryCircuitBreaker
     from .pending_recovery_approval import PendingRecoveryApprovalManager
+    from .recovery_circuit_breaker import RecoveryCircuitBreaker
+    from .recovery_coordinator import RecoveryCoordinator
     from .regional_recovery_policy import RegionalRecoveryPolicyEngine
 
 
@@ -46,6 +46,7 @@ def _get_stale_threshold_minutes() -> int:
     """DashboardSettings에서 방치 기준 시간을 가져온다."""
     try:
         from selfhealing.settings.dashboard import get_dashboard_settings
+
         return get_dashboard_settings().stale_threshold_minutes
     except Exception:
         return 30  # fallback
@@ -55,6 +56,7 @@ def _get_max_regional_status() -> int:
     """DashboardSettings에서 최대 리전 표시 수를 가져온다."""
     try:
         from selfhealing.settings.dashboard import get_dashboard_settings
+
         return get_dashboard_settings().max_regional_status
     except Exception:
         return 5  # fallback
@@ -72,7 +74,7 @@ class RecoverySessionProgress:
     percent: int = 0
     """완료 비율 (0-100)."""
 
-    current_step: Optional[str] = None
+    current_step: str | None = None
     """현재 진행 중인 단계 이름."""
 
     completed_steps: int = 0
@@ -81,7 +83,7 @@ class RecoverySessionProgress:
     total_steps: int = 0
     """전체 단계 수."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "percent": self.percent,
@@ -104,10 +106,10 @@ class ActiveSessionInfo:
     namespace: str = ""
     """네임스페이스."""
 
-    started_at: Optional[str] = None
+    started_at: str | None = None
     """시작 시각 (ISO format)."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "session_id": self.session_id,
@@ -130,7 +132,7 @@ class PendingApprovalsInfo:
     urgent: bool = False
     """긴급 여부 (방치된 요청 존재 시 True)."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "count": self.count,
@@ -158,7 +160,7 @@ class RecoveryStats:
     aborted: int = 0
     """중단된 수."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "total_recoveries": self.total_recoveries,
@@ -185,7 +187,7 @@ class RegionalStatusInfo:
     priority: int = 0
     """우선순위."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "namespace": self.namespace,
@@ -211,7 +213,7 @@ class RecoveryAction:
     urgent: bool = False
     """긴급 여부."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "action": self.action,
@@ -234,31 +236,35 @@ class RecoveryWidgetData:
     status_color: str = "gray"
     """상태 색상."""
 
-    active_session: Optional[ActiveSessionInfo] = None
+    active_session: ActiveSessionInfo | None = None
     """활성 세션 정보."""
 
-    pending_approvals: PendingApprovalsInfo = field(default_factory=PendingApprovalsInfo)
+    pending_approvals: PendingApprovalsInfo = field(
+        default_factory=PendingApprovalsInfo
+    )
     """대기 중인 승인 정보."""
 
     stats: RecoveryStats = field(default_factory=RecoveryStats)
     """복구 통계."""
 
-    regional_status: List[RegionalStatusInfo] = field(default_factory=list)
+    regional_status: list[RegionalStatusInfo] = field(default_factory=list)
     """리전별 상태 목록."""
 
-    actions: List[RecoveryAction] = field(default_factory=list)
+    actions: list[RecoveryAction] = field(default_factory=list)
     """사용 가능한 액션 목록."""
 
     timestamp: str = ""
     """데이터 생성 시각."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "status": self.status,
             "status_display": self.status_display,
             "status_color": self.status_color,
-            "active_session": self.active_session.to_dict() if self.active_session else None,
+            "active_session": (
+                self.active_session.to_dict() if self.active_session else None
+            ),
             "pending_approvals": self.pending_approvals.to_dict(),
             "stats": self.stats.to_dict(),
             "regional_status": [r.to_dict() for r in self.regional_status],
@@ -273,7 +279,7 @@ class RecoveryWidgetData:
 
 
 # 상태별 표시 문자열
-STATUS_DISPLAY_MAP: Dict[RecoveryStatus, str] = {
+STATUS_DISPLAY_MAP: dict[RecoveryStatus, str] = {
     RecoveryStatus.NOT_STARTED: "대기",
     RecoveryStatus.IN_PROGRESS: "진행 중",
     RecoveryStatus.HEALTH_CHECK: "건강 확인 중",
@@ -284,7 +290,7 @@ STATUS_DISPLAY_MAP: Dict[RecoveryStatus, str] = {
 }
 
 # 상태별 색상
-STATUS_COLOR_MAP: Dict[RecoveryStatus, str] = {
+STATUS_COLOR_MAP: dict[RecoveryStatus, str] = {
     RecoveryStatus.NOT_STARTED: "gray",
     RecoveryStatus.IN_PROGRESS: "yellow",
     RecoveryStatus.HEALTH_CHECK: "blue",
@@ -318,10 +324,10 @@ class RecoveryDashboardService:
 
     Usage:
         service = get_recovery_dashboard_service()
-        
+
         # 위젯 데이터 조회
         widget_data = service.get_widget_data(namespace="global")
-        
+
         # 리전별 상태 조회
         regional = service.get_regional_status(limit=5)
 
@@ -335,12 +341,12 @@ class RecoveryDashboardService:
 
     def __init__(
         self,
-        coordinator: Optional["RecoveryCoordinator"] = None,
-        circuit_breaker: Optional["RecoveryCircuitBreaker"] = None,
-        approval_manager: Optional["PendingRecoveryApprovalManager"] = None,
-        policy_engine: Optional["RegionalRecoveryPolicyEngine"] = None,
-        stale_threshold_minutes: Optional[int] = None,
-        max_regional_status: Optional[int] = None,
+        coordinator: RecoveryCoordinator | None = None,
+        circuit_breaker: RecoveryCircuitBreaker | None = None,
+        approval_manager: PendingRecoveryApprovalManager | None = None,
+        policy_engine: RegionalRecoveryPolicyEngine | None = None,
+        stale_threshold_minutes: int | None = None,
+        max_regional_status: int | None = None,
     ):
         """
         Args:
@@ -356,41 +362,47 @@ class RecoveryDashboardService:
         self._approval_manager = approval_manager
         self._policy_engine = policy_engine
         self._stale_threshold_minutes = (
-            stale_threshold_minutes if stale_threshold_minutes is not None 
+            stale_threshold_minutes
+            if stale_threshold_minutes is not None
             else _get_stale_threshold_minutes()
         )
         self._max_regional_status = (
-            max_regional_status if max_regional_status is not None 
+            max_regional_status
+            if max_regional_status is not None
             else _get_max_regional_status()
         )
         self._lock = threading.RLock()
 
-    def _get_coordinator(self) -> "RecoveryCoordinator":
+    def _get_coordinator(self) -> RecoveryCoordinator:
         """RecoveryCoordinator 획득."""
         if self._coordinator is not None:
             return self._coordinator
         from .recovery_coordinator import get_recovery_coordinator
+
         return get_recovery_coordinator()
 
-    def _get_circuit_breaker(self) -> "RecoveryCircuitBreaker":
+    def _get_circuit_breaker(self) -> RecoveryCircuitBreaker:
         """RecoveryCircuitBreaker 획득."""
         if self._circuit_breaker is not None:
             return self._circuit_breaker
         from .recovery_circuit_breaker import get_recovery_circuit_breaker
+
         return get_recovery_circuit_breaker()
 
-    def _get_approval_manager(self) -> "PendingRecoveryApprovalManager":
+    def _get_approval_manager(self) -> PendingRecoveryApprovalManager:
         """PendingRecoveryApprovalManager 획득."""
         if self._approval_manager is not None:
             return self._approval_manager
         from .pending_recovery_approval import get_pending_recovery_approval_manager
+
         return get_pending_recovery_approval_manager()
 
-    def _get_policy_engine(self) -> "RegionalRecoveryPolicyEngine":
+    def _get_policy_engine(self) -> RegionalRecoveryPolicyEngine:
         """RegionalRecoveryPolicyEngine 획득."""
         if self._policy_engine is not None:
             return self._policy_engine
         from .regional_recovery_policy import get_regional_recovery_policy_engine
+
         return get_regional_recovery_policy_engine()
 
     def get_widget_data(self, namespace: str = "global") -> RecoveryWidgetData:
@@ -420,9 +432,7 @@ class RecoveryDashboardService:
             stats = self._get_recovery_stats()
 
             # 리전별 상태 (Settings에서 가져온 max_regional_status 사용)
-            regional_status = self.get_regional_status(
-                limit=self._max_regional_status
-            )
+            regional_status = self.get_regional_status(limit=self._max_regional_status)
 
             # 사용 가능한 액션
             actions = self._get_available_actions(
@@ -444,7 +454,7 @@ class RecoveryDashboardService:
                 timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
-    def get_regional_status(self, limit: int = 5) -> List[RegionalStatusInfo]:
+    def get_regional_status(self, limit: int = 5) -> list[RegionalStatusInfo]:
         """
         리전별 상태 조회.
 
@@ -465,16 +475,18 @@ class RecoveryDashboardService:
         for ns in namespaces[:limit]:
             cb_status = circuit_breaker.get_status(ns)
             config = policy_engine.get_config(ns)
-            regional_status.append(RegionalStatusInfo(
-                namespace=ns,
-                circuit_breaker_state=cb_status.get("state", "unknown"),
-                require_manual_approval=config.require_manual_approval,
-                priority=config.priority,
-            ))
+            regional_status.append(
+                RegionalStatusInfo(
+                    namespace=ns,
+                    circuit_breaker_state=cb_status.get("state", "unknown"),
+                    require_manual_approval=config.require_manual_approval,
+                    priority=config.priority,
+                )
+            )
 
         return regional_status
 
-    def get_recovery_summary(self) -> Dict[str, Any]:
+    def get_recovery_summary(self) -> dict[str, Any]:
         """
         복구 시스템 전체 요약 조회.
 
@@ -527,7 +539,7 @@ class RecoveryDashboardService:
             logger.warning(f"[RecoveryDashboard] Failed to get status: {e}")
             return RecoveryStatus.NOT_STARTED
 
-    def _get_active_session_info(self, namespace: str) -> Optional[ActiveSessionInfo]:
+    def _get_active_session_info(self, namespace: str) -> ActiveSessionInfo | None:
         """활성 세션 정보 조회."""
         try:
             coordinator = self._get_coordinator()
@@ -536,7 +548,11 @@ class RecoveryDashboardService:
                 return None
 
             # 진행 상태 계산
-            completed = sum(1 for s in session.steps if hasattr(s, 'status') and s.status == RecoveryStatus.COMPLETED)
+            completed = sum(
+                1
+                for s in session.steps
+                if hasattr(s, "status") and s.status == RecoveryStatus.COMPLETED
+            )
             total = len(session.steps)
             current_step = None
             if session.current_step_index < total:
@@ -553,7 +569,9 @@ class RecoveryDashboardService:
                 session_id=session.id,
                 progress=progress,
                 namespace=session.namespace,
-                started_at=session.started_at if hasattr(session, 'started_at') else None,
+                started_at=(
+                    session.started_at if hasattr(session, "started_at") else None
+                ),
             )
         except Exception as e:
             logger.warning(f"[RecoveryDashboard] Failed to get session: {e}")
@@ -600,37 +618,43 @@ class RecoveryDashboardService:
         has_active_session: bool,
         pending_count: int,
         stale_count: int,
-    ) -> List[RecoveryAction]:
+    ) -> list[RecoveryAction]:
         """사용 가능한 액션 목록 생성."""
         actions = []
 
         # 복구 시작 가능 (세션 없을 때)
         if not has_active_session and status == RecoveryStatus.NOT_STARTED:
-            actions.append(RecoveryAction(
-                action="start_recovery",
-                label="복구 시작",
-                enabled=True,
-            ))
+            actions.append(
+                RecoveryAction(
+                    action="start_recovery",
+                    label="복구 시작",
+                    enabled=True,
+                )
+            )
 
         # 복구 중단 가능 (세션 있을 때)
         if has_active_session and status in (
             RecoveryStatus.IN_PROGRESS,
             RecoveryStatus.HEALTH_CHECK,
         ):
-            actions.append(RecoveryAction(
-                action="abort_recovery",
-                label="복구 중단",
-                enabled=True,
-            ))
+            actions.append(
+                RecoveryAction(
+                    action="abort_recovery",
+                    label="복구 중단",
+                    enabled=True,
+                )
+            )
 
         # 승인 대기 중
         if pending_count > 0:
-            actions.append(RecoveryAction(
-                action="approve_recovery",
-                label=f"승인 대기 ({pending_count}건)",
-                enabled=True,
-                urgent=stale_count > 0,
-            ))
+            actions.append(
+                RecoveryAction(
+                    action="approve_recovery",
+                    label=f"승인 대기 ({pending_count}건)",
+                    enabled=True,
+                    urgent=stale_count > 0,
+                )
+            )
 
         return actions
 
@@ -660,7 +684,7 @@ class RecoveryDashboardService:
 # =============================================================================
 
 
-_recovery_dashboard_service: Optional[RecoveryDashboardService] = None
+_recovery_dashboard_service: RecoveryDashboardService | None = None
 _service_lock = threading.Lock()
 
 

@@ -18,6 +18,10 @@ Tasks are grouped by domain:
 - drift_detection_tasks: SLA drift detection
 """
 
+from selfhealing.celery_tasks.chaos_tasks import (
+    check_recovery_monitoring_experiments,
+    hunt_zombie_experiments,
+)
 from selfhealing.celery_tasks.circuit_breaker_tasks import (
     check_circuit_breaker_recovery,
     expire_manual_overrides,
@@ -31,17 +35,13 @@ from selfhealing.celery_tasks.dlq_tasks import (
     replay_batch_by_failure_type,
     replay_single_dlq_entry,
 )
-from selfhealing.celery_tasks.chaos_tasks import (
-    check_recovery_monitoring_experiments,
-    hunt_zombie_experiments,
+from selfhealing.celery_tasks.drift_detection_tasks import (
+    check_sla_drift,
+    cleanup_expired_chaos_experiments,
 )
 from selfhealing.celery_tasks.metrics_tasks import (
     check_and_report_sla_breaches,
     collect_self_healing_metrics,
-)
-from selfhealing.celery_tasks.drift_detection_tasks import (
-    check_sla_drift,
-    cleanup_expired_chaos_experiments,
 )
 
 __all__ = [

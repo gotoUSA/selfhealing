@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 def generate_daily_autonomous_report(
-    date: Optional[datetime] = None,
-    channels: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    date: datetime | None = None,
+    channels: list[str] | None = None,
+) -> dict[str, Any]:
     """
     Generate and send daily autonomous operations report.
 
@@ -52,6 +52,7 @@ def generate_daily_autonomous_report(
 
 try:
     from celery import shared_task
+
     from selfhealing.settings.daily_report import get_daily_report_settings
 
     # 모듈 로드 시점에 설정값 캐싱
@@ -64,9 +65,9 @@ try:
         default_retry_delay=_daily_report_settings.retry_delay,
     )
     def generate_daily_autonomous_report_task(
-        date_str: Optional[str] = None,
-        channels: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        date_str: str | None = None,
+        channels: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Celery task wrapper for daily report generation.
 
@@ -89,7 +90,7 @@ except ImportError:
 # =============================================================================
 
 
-def get_daily_report_beat_schedule() -> Dict[str, Dict[str, Any]]:
+def get_daily_report_beat_schedule() -> dict[str, dict[str, Any]]:
     """
     Get Celery Beat schedule for daily report task.
 
@@ -131,6 +132,7 @@ def __getattr__(name: str):
     }
     if name in _lazy_imports:
         from selfhealing.services import daily_report as dr_module
+
         return getattr(dr_module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -140,7 +142,7 @@ class _LegacyTaskWrapper:
 
     name = "selfhealing.generate_daily_autonomous_report"
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """Run via service delegation."""
         return generate_daily_autonomous_report()
 

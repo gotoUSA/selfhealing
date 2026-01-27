@@ -12,21 +12,20 @@ Endpoints:
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any
 
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.services.runtime_config import get_runtime_config_manager
 
 logger = logging.getLogger(__name__)
 
 
-def _get_threshold_percent_display(config: Dict[str, Any]) -> Dict[str, str]:
+def _get_threshold_percent_display(config: dict[str, Any]) -> dict[str, str]:
     """임계값을 퍼센트 문자열로 반환."""
     return {
         "warning": f"{config.get('warning_threshold', 0.05) * 100:.1f}%",
@@ -106,7 +105,7 @@ class DriftThresholdConfigView(APIView):
         new_config = manager.update_drift_threshold_config(
             changed_by=actor_id,
             reason=f"API update: {list(update_fields.keys())}",
-            **update_fields
+            **update_fields,
         )
 
         # Audit 로깅

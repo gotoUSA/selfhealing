@@ -13,7 +13,7 @@ Design Principles:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -56,9 +56,7 @@ class AirGapStorageAdapter(Protocol):
         ...         return True
     """
 
-    def write_summary(
-        self, key: str, value: Any, ttl: Optional[int] = None
-    ) -> bool:
+    def write_summary(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """
         요약 상태를 Air-Gap 저장소에 기록.
 
@@ -100,7 +98,7 @@ class AirGapStorageAdapter(Protocol):
         """
         ...
 
-    def read_many(self, keys: List[str]) -> Dict[str, Any]:
+    def read_many(self, keys: list[str]) -> dict[str, Any]:
         """
         여러 키의 값을 한 번에 조회.
 
@@ -156,9 +154,7 @@ class BaseAirGapAdapter(ABC):
     """
 
     @abstractmethod
-    def write_summary(
-        self, key: str, value: Any, ttl: Optional[int] = None
-    ) -> bool:
+    def write_summary(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """요약 상태를 Air-Gap 저장소에 기록."""
         raise NotImplementedError
 
@@ -172,7 +168,7 @@ class BaseAirGapAdapter(ABC):
         """Air-Gap 저장소에서 요약 상태 삭제."""
         raise NotImplementedError
 
-    def read_many(self, keys: List[str]) -> Dict[str, Any]:
+    def read_many(self, keys: list[str]) -> dict[str, Any]:
         """여러 키의 값을 한 번에 조회. 기본 구현은 개별 조회."""
         return {key: self.read_summary(key) for key in keys}
 

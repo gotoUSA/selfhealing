@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -110,7 +109,7 @@ class AutoRollbackSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[AutoRollbackSettings] = None
+_settings: AutoRollbackSettings | None = None
 
 
 def get_auto_rollback_settings() -> AutoRollbackSettings:

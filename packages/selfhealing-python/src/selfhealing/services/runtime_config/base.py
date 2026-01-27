@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import is_dataclass, asdict as dataclass_asdict, fields
-from typing import Any, Dict, Optional
-
-from pydantic import BaseModel
+from dataclasses import asdict as dataclass_asdict
+from dataclasses import fields, is_dataclass
+from typing import Any
 
 from selfhealing.core.state_backend import get_state_backend
 
-from .constants import STORAGE_KEYS, CONFIG_CLASSES, DEFAULT_SLO_CONFIG
+from .constants import CONFIG_CLASSES, DEFAULT_SLO_CONFIG, STORAGE_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ def get_field_names(config_class: type) -> set:
         raise TypeError(f"Cannot get fields from {config_class}")
 
 
-def to_dict(obj: Any) -> Dict[str, Any]:
+def to_dict(obj: Any) -> dict[str, Any]:
     """Convert config object to dict, handling both Pydantic and dataclass."""
     if hasattr(obj, "model_dump"):
         # Pydantic v2
@@ -61,7 +60,7 @@ class BaseConfigManager:
         """Initialize BaseConfigManager."""
         self._lock = threading.RLock()
         self._backend = get_state_backend()
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._load_all_configs()
 
     def _load_all_configs(self) -> None:
@@ -80,21 +79,21 @@ class BaseConfigManager:
                         # SLO는 별도 기본값 사용
                         self._cache[config_type] = DEFAULT_SLO_CONFIG.copy()
 
-    def _save_config(self, config_type: str, config_dict: Dict[str, Any]) -> None:
+    def _save_config(self, config_type: str, config_dict: dict[str, Any]) -> None:
         """Save config to storage."""
         storage_key = STORAGE_KEYS[config_type]
         self._backend.set(storage_key, config_dict)
         self._cache[config_type] = config_dict
 
-    def _get_config(self, config_type: str) -> Dict[str, Any]:
+    def _get_config(self, config_type: str) -> dict[str, Any]:
         """
         Get config by type.
-        
+
         새 필드가 추가되었을 경우, 저장된 설정과 기본값을 병합하여 반환합니다.
         """
         with self._lock:
             config_class = CONFIG_CLASSES.get(config_type)
-            
+
             # Get defaults
             if config_class is not None:
                 defaults = to_dict(config_class())
@@ -102,7 +101,7 @@ class BaseConfigManager:
                 defaults = DEFAULT_SLO_CONFIG.copy()
             else:
                 defaults = {}
-            
+
             if config_type not in self._cache:
                 self._cache[config_type] = defaults.copy()
             else:
@@ -111,24 +110,20 @@ class BaseConfigManager:
                 merged = defaults.copy()
                 merged.update(self._cache[config_type])
                 self._cache[config_type] = merged
-            
+
             return self._cache[config_type].copy()
 
     def _update_config(
-        self,
-        config_type: str,
-        changed_by: str = "system",
-        reason: str = "",
-        **kwargs
-    ) -> Dict[str, Any]:
+        self, config_type: str, changed_by: str = "system", reason: str = "", **kwargs
+    ) -> dict[str, Any]:
         """Update config fields with history tracking.
-        
+
         Args:
             config_type: Type of config (e.g., "circuit_breaker")
             changed_by: User or system that made the change
             reason: Reason for the change
             **kwargs: Config fields to update
-            
+
         Returns:
             Updated config values
         """
@@ -136,7 +131,7 @@ class BaseConfigManager:
             current = self._get_config(config_type)
             previous = current.copy()  # Snapshot before changes
             config_class = CONFIG_CLASSES.get(config_type)
-            
+
             # Get valid field names from config class (if available)
             if config_class is not None:
                 valid_fields = get_field_names(config_class)
@@ -150,7 +145,11 @@ class BaseConfigManager:
             for key, value in kwargs.items():
                 if key in valid_fields:
                     # Check if Safe Default should be applied
-                    from selfhealing.core.safe_defaults import is_valid_value, get_safe_default
+                    from selfhealing.core.safe_defaults import (
+                        get_safe_default,
+                        is_valid_value,
+                    )
+
                     if not is_valid_value(config_type, key, value):
                         safe_value = get_safe_default(config_type, key)
                         if safe_value is not None:
@@ -175,9 +174,7 @@ class BaseConfigManager:
 
             # Diff-Aware: Only save if there are actual changes
             if previous == current:
-                logger.debug(
-                    f"[RuntimeConfig] No changes detected for {config_type}"
-                )
+                logger.debug(f"[RuntimeConfig] No changes detected for {config_type}")
                 return current.copy()
 
             # Compute diff for audit
@@ -215,27 +212,27 @@ class BaseConfigManager:
 
     def _compute_diff(
         self,
-        old: Dict[str, Any],
-        new: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+        old: dict[str, Any],
+        new: dict[str, Any],
+    ) -> dict[str, Any] | None:
         """
         변경된 필드만 추출.
-        
+
         Args:
             old: 이전 설정 딕셔너리
             new: 새 설정 딕셔너리
-            
+
         Returns:
             {"old": {changed_fields}, "new": {changed_fields}} 또는 None
         """
         old_diff = {}
         new_diff = {}
-        
+
         for key in set(old.keys()) | set(new.keys()):
             if old.get(key) != new.get(key):
                 old_diff[key] = old.get(key)
                 new_diff[key] = new.get(key)
-        
+
         if old_diff:
             return {"old": old_diff, "new": new_diff}
         return None
@@ -245,14 +242,14 @@ class BaseConfigManager:
         config_type: str,
         changed_by: str,
         reason: str,
-        old_values: Dict[str, Any],
-        new_values: Dict[str, Any],
+        old_values: dict[str, Any],
+        new_values: dict[str, Any],
     ) -> None:
         """
         AuditEventType.CONFIG_CHANGE 발행.
-        
+
         Best-effort: 실패해도 설정 업데이트에 영향 없음.
-        
+
         Args:
             config_type: 설정 타입
             changed_by: 변경자
@@ -262,7 +259,7 @@ class BaseConfigManager:
         """
         try:
             from selfhealing.audit import log_config_change
-            
+
             # 각 변경된 필드에 대해 audit 로그 기록
             for key in new_values:
                 log_config_change(
@@ -273,7 +270,7 @@ class BaseConfigManager:
                     user=changed_by,
                     reason=reason,
                 )
-            
+
             logger.info(
                 f"[RuntimeConfig] Audit logged: {config_type} "
                 f"changed by {changed_by}, fields: {list(new_values.keys())}"
@@ -285,15 +282,15 @@ class BaseConfigManager:
     def _save_to_history(
         self,
         config_type: str,
-        values: Dict[str, Any],
+        values: dict[str, Any],
         changed_by: str,
         reason: str,
     ) -> None:
         """Save config version to history (best-effort).
-        
+
         This method never raises exceptions - history saving failure
         should not break config updates.
-        
+
         Args:
             config_type: Type of config
             values: Current config values
@@ -302,6 +299,7 @@ class BaseConfigManager:
         """
         try:
             from selfhealing.services.config_history import get_config_history_service
+
             history_service = get_config_history_service()
             history_service.save_version(
                 config_type=config_type,
@@ -316,12 +314,15 @@ class BaseConfigManager:
             # Graceful degradation - history save failure should not break config update
             logger.warning(f"[RuntimeConfig] Failed to save history: {e}")
 
-    def get_all_config(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_config(self) -> dict[str, dict[str, Any]]:
         """Get all configuration."""
         with self._lock:
-            return {config_type: self._get_config(config_type) for config_type in STORAGE_KEYS.keys()}
+            return {
+                config_type: self._get_config(config_type)
+                for config_type in STORAGE_KEYS.keys()
+            }
 
-    def reset_to_defaults(self) -> Dict[str, Dict[str, Any]]:
+    def reset_to_defaults(self) -> dict[str, dict[str, Any]]:
         """Reset all configuration to defaults."""
         with self._lock:
             for config_type, config_class in CONFIG_CLASSES.items():

@@ -13,23 +13,11 @@ Design Philosophy:
 - 엔드포인트 파편화 방지
 """
 
-# Service Layer
-from selfhealing.services.governance_api_service import (
-    GovernanceApiService,
-    get_governance_api_service,
-    reset_governance_api_service,
-)
-
-# Status Views (Observability)
-from selfhealing.api.django.views.governance.status_views import (
-    MetricStatusView,
-    GovernanceRBACStatusView,
-)
-
-# Control Views
-from selfhealing.api.django.views.governance.control_views import (
-    GovernanceReconcileView,
-    GovernanceModeView,
+# Approval Views (4-Eyes)
+from selfhealing.api.django.views.governance.approval_views import (
+    ApprovalRequestApproveView,
+    ApprovalRequestListView,
+    ApprovalRequestRejectView,
 )
 
 # Config Views
@@ -38,13 +26,24 @@ from selfhealing.api.django.views.governance.config_views import (
     L2StorageConfigManagedView,
 )
 
-# Approval Views (4-Eyes)
-from selfhealing.api.django.views.governance.approval_views import (
-    ApprovalRequestListView,
-    ApprovalRequestApproveView,
-    ApprovalRequestRejectView,
+# Control Views
+from selfhealing.api.django.views.governance.control_views import (
+    GovernanceModeView,
+    GovernanceReconcileView,
 )
 
+# Status Views (Observability)
+from selfhealing.api.django.views.governance.status_views import (
+    GovernanceRBACStatusView,
+    MetricStatusView,
+)
+
+# Service Layer
+from selfhealing.services.governance_api_service import (
+    GovernanceApiService,
+    get_governance_api_service,
+    reset_governance_api_service,
+)
 
 __all__ = [
     # Service

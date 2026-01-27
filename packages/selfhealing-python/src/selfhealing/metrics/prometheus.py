@@ -4,11 +4,9 @@ Prometheus metrics for the self-healing system.
 This module provides Prometheus metric definitions and collection utilities.
 """
 
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
-from contextlib import contextmanager
-from functools import wraps
 import logging
+from contextlib import contextmanager
+from datetime import datetime, timezone
 
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
@@ -315,7 +313,9 @@ class SelfHealingMetrics:
         try:
             self.dlq_items_total.labels(domain=domain, failure_type=failure_type).inc()
             self.dlq_created_total.labels(domain=domain).inc()
-            logger.debug(f"[Metrics] DLQ item created: domain={domain}, type={failure_type}")
+            logger.debug(
+                f"[Metrics] DLQ item created: domain={domain}, type={failure_type}"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record DLQ creation metric: {e}")
 
@@ -354,18 +354,24 @@ class SelfHealingMetrics:
     # Retry Recording Methods
     # =========================================================================
 
-    def record_retry_attempt(self, domain: str, attempt_count: int, outcome: str) -> None:
+    def record_retry_attempt(
+        self, domain: str, attempt_count: int, outcome: str
+    ) -> None:
         """Record a retry attempt outcome."""
         if not self._initialized:
             return
         try:
             self.retry_attempts_histogram.labels(domain=domain).observe(attempt_count)
             self.retry_outcomes_total.labels(domain=domain, outcome=outcome).inc()
-            logger.debug(f"[Metrics] Retry recorded: domain={domain}, attempts={attempt_count}, outcome={outcome}")
+            logger.debug(
+                f"[Metrics] Retry recorded: domain={domain}, attempts={attempt_count}, outcome={outcome}"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record retry metric: {e}")
 
-    def record_retry(self, domain: str, success: bool, delay: Optional[float] = None) -> None:
+    def record_retry(
+        self, domain: str, success: bool, delay: float | None = None
+    ) -> None:
         """Record a retry attempt with optional delay."""
         if not self._initialized:
             return
@@ -405,8 +411,12 @@ class SelfHealingMetrics:
             return
         try:
             duration = (resolved_at - created_at).total_seconds()
-            self.recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
-            logger.debug(f"[Metrics] Recovery time recorded: domain={domain}, type={resolution_type}, duration={duration}s")
+            self.recovery_time_seconds.labels(
+                domain=domain, resolution_type=resolution_type
+            ).observe(duration)
+            logger.debug(
+                f"[Metrics] Recovery time recorded: domain={domain}, type={resolution_type}, duration={duration}s"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record recovery time metric: {e}")
 
@@ -473,17 +483,25 @@ class SelfHealingMetrics:
                 to_state=to_state,
             ).inc()
 
-            logger.info(f"[Metrics] Circuit breaker transition: {service_name} {from_state} -> {to_state}")
+            logger.info(
+                f"[Metrics] Circuit breaker transition: {service_name} {from_state} -> {to_state}"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record circuit breaker metric: {e}")
 
-    def record_circuit_breaker_open_duration(self, service_name: str, duration_seconds: float) -> None:
+    def record_circuit_breaker_open_duration(
+        self, service_name: str, duration_seconds: float
+    ) -> None:
         """Record how long a circuit breaker was in open state."""
         if not self._initialized:
             return
         try:
-            self.circuit_breaker_open_duration.labels(service_name=service_name).observe(duration_seconds)
-            logger.debug(f"[Metrics] CB open duration recorded: {service_name}={duration_seconds}s")
+            self.circuit_breaker_open_duration.labels(
+                service_name=service_name
+            ).observe(duration_seconds)
+            logger.debug(
+                f"[Metrics] CB open duration recorded: {service_name}={duration_seconds}s"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record CB duration metric: {e}")
 
@@ -491,19 +509,27 @@ class SelfHealingMetrics:
     # Replay Recording Methods
     # =========================================================================
 
-    def record_replay_attempt(self, domain: str, replay_type: str, success: bool) -> None:
+    def record_replay_attempt(
+        self, domain: str, replay_type: str, success: bool
+    ) -> None:
         """Record a replay attempt."""
         if not self._initialized:
             return
         try:
-            self.replay_attempts_total.labels(domain=domain, replay_type=replay_type).inc()
+            self.replay_attempts_total.labels(
+                domain=domain, replay_type=replay_type
+            ).inc()
             outcome = "success" if success else "failure"
             self.replay_outcomes_total.labels(domain=domain, outcome=outcome).inc()
-            logger.debug(f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, success={success}")
+            logger.debug(
+                f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, success={success}"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record replay metric: {e}")
 
-    def record_replay(self, domain: str, result: str, duration: Optional[float] = None) -> None:
+    def record_replay(
+        self, domain: str, result: str, duration: float | None = None
+    ) -> None:
         """Record a replay operation."""
         if not self._initialized:
             return
@@ -524,7 +550,9 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            self.security_incidents.labels(incident_type=incident_type, severity=severity).inc()
+            self.security_incidents.labels(
+                incident_type=incident_type, severity=severity
+            ).inc()
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record security incident: {e}")
 
@@ -593,7 +621,9 @@ class SelfHealingMetrics:
                 endpoint=endpoint,
                 error_type=error_type,
             ).inc()
-            logger.debug(f"[Metrics] HTTP error: {method} {endpoint} error={error_type}")
+            logger.debug(
+                f"[Metrics] HTTP error: {method} {endpoint} error={error_type}"
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to record HTTP error: {e}")
 
@@ -650,8 +680,12 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            safe_count = clamp_non_negative(count, f"active_connections[{connection_type}]")
-            self.active_connections.labels(connection_type=connection_type).set(safe_count)
+            safe_count = clamp_non_negative(
+                count, f"active_connections[{connection_type}]"
+            )
+            self.active_connections.labels(connection_type=connection_type).set(
+                safe_count
+            )
         except Exception as e:
             logger.warning(f"[Metrics] Failed to set active connections: {e}")
 
@@ -737,7 +771,7 @@ class SelfHealingMetrics:
     # Info and Utility Methods
     # =========================================================================
 
-    def set_info(self, info_dict: Dict[str, str]) -> None:
+    def set_info(self, info_dict: dict[str, str]) -> None:
         """Set the info metric."""
         if not self._initialized:
             return
@@ -760,7 +794,7 @@ class SelfHealingMetrics:
 
 
 # Global metrics instance
-_metrics: Optional[SelfHealingMetrics] = None
+_metrics: SelfHealingMetrics | None = None
 
 
 def get_metrics(prefix: str = "selfhealing") -> SelfHealingMetrics:
@@ -813,10 +847,14 @@ def record_circuit_breaker_state_change(
     to_state: str,
 ) -> None:
     """Record a circuit breaker state transition."""
-    get_metrics().record_circuit_breaker_state_change(service_name, from_state, to_state)
+    get_metrics().record_circuit_breaker_state_change(
+        service_name, from_state, to_state
+    )
 
 
-def record_circuit_breaker_open_duration(service_name: str, duration_seconds: float) -> None:
+def record_circuit_breaker_open_duration(
+    service_name: str, duration_seconds: float
+) -> None:
     """Record how long a circuit breaker was in open state."""
     get_metrics().record_circuit_breaker_open_duration(service_name, duration_seconds)
 
@@ -866,7 +904,9 @@ def set_active_connections(connection_type: str, count: int) -> None:
     get_metrics().set_active_connections(connection_type, count)
 
 
-def set_latency_percentile(endpoint: str, percentile: str, value_seconds: float) -> None:
+def set_latency_percentile(
+    endpoint: str, percentile: str, value_seconds: float
+) -> None:
     """Set request latency percentile (Latency)."""
     get_metrics().set_latency_percentile(endpoint, percentile, value_seconds)
 

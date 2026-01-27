@@ -28,7 +28,7 @@ class FailSecureIsAuthenticated:
     - Log all failures for security monitoring
     """
 
-    def has_permission(self, request: "HttpRequest", view: Any) -> bool:
+    def has_permission(self, request: HttpRequest, view: Any) -> bool:
         """Check if user is authenticated with fail-secure logic."""
         try:
             # Standard authentication check
@@ -65,7 +65,7 @@ class FailSecureIsAdminUser:
     - Log all denials for security monitoring
     """
 
-    def has_permission(self, request: "HttpRequest", view: Any) -> bool:
+    def has_permission(self, request: HttpRequest, view: Any) -> bool:
         """Check if user is admin with fail-secure logic."""
         try:
             # Must be authenticated first

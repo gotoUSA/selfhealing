@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 from .rate_limit_tracker import get_rate_limit_tracker
 
 if TYPE_CHECKING:
+    from selfhealing.services.circuit_breaker_service import CircuitBreakerResult
+
     from .config import CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,7 @@ class ProtectionMixin:
     """
 
     # These will be provided by the main service class
-    config: "CircuitBreakerConfig"
+    config: CircuitBreakerConfig
     is_enabled: bool
     should_allow: callable
     get_state: callable
@@ -39,7 +41,7 @@ class ProtectionMixin:
     # Rate Limit Cascade Detection
     # =========================================================================
 
-    def record_rate_limit_response(self, service_name: str) -> "CircuitBreakerResult | None":
+    def record_rate_limit_response(self, service_name: str) -> CircuitBreakerResult | None:
         """
         Record a 429 rate limit response and check for cascade.
 

@@ -16,7 +16,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -141,7 +140,7 @@ class ApiRateLimitSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[ApiRateLimitSettings] = None
+_settings: ApiRateLimitSettings | None = None
 
 
 def get_api_rate_limit_settings() -> ApiRateLimitSettings:

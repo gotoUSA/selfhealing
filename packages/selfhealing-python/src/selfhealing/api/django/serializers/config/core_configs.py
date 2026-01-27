@@ -7,30 +7,51 @@ Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
+
 from .base import ApplyStrategyMixin
 
 
 class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Circuit Breaker configuration.
-    
+
     Safe Default 폴백 적용.
     """
 
     _config_type = "circuit_breaker"
 
     enabled = serializers.BooleanField(required=False, default=True)
-    failure_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
-    recovery_timeout = serializers.IntegerField(required=False, min_value=1, max_value=3600)
-    success_threshold = serializers.IntegerField(required=False, min_value=1, max_value=100)
-    half_open_max_calls = serializers.IntegerField(required=False, min_value=1, max_value=100)
-    half_open_request_limit = serializers.IntegerField(required=False, min_value=1, max_value=1000)
-    rate_limit_cascade_threshold = serializers.IntegerField(required=False, min_value=1, max_value=1000)
-    rate_limit_cascade_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    failure_threshold = serializers.IntegerField(
+        required=False, min_value=1, max_value=100
+    )
+    recovery_timeout = serializers.IntegerField(
+        required=False, min_value=1, max_value=3600
+    )
+    success_threshold = serializers.IntegerField(
+        required=False, min_value=1, max_value=100
+    )
+    half_open_max_calls = serializers.IntegerField(
+        required=False, min_value=1, max_value=100
+    )
+    half_open_request_limit = serializers.IntegerField(
+        required=False, min_value=1, max_value=1000
+    )
+    rate_limit_cascade_threshold = serializers.IntegerField(
+        required=False, min_value=1, max_value=1000
+    )
+    rate_limit_cascade_window_seconds = serializers.IntegerField(
+        required=False, min_value=1, max_value=3600
+    )
     self_ddos_protection_enabled = serializers.BooleanField(required=False)
-    self_ddos_request_threshold = serializers.IntegerField(required=False, min_value=1, max_value=10000)
-    self_ddos_window_seconds = serializers.IntegerField(required=False, min_value=1, max_value=300)
-    self_ddos_backoff_multiplier = serializers.FloatField(required=False, min_value=1.0, max_value=10.0)
+    self_ddos_request_threshold = serializers.IntegerField(
+        required=False, min_value=1, max_value=10000
+    )
+    self_ddos_window_seconds = serializers.IntegerField(
+        required=False, min_value=1, max_value=300
+    )
+    self_ddos_backoff_multiplier = serializers.FloatField(
+        required=False, min_value=1.0, max_value=10.0
+    )
 
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""
@@ -41,7 +62,7 @@ class CircuitBreakerConfigSerializer(ApplyStrategyMixin):
 class DLQConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for DLQ configuration.
-    
+
     Safe Default 폴백 적용.
     """
 
@@ -51,9 +72,13 @@ class DLQConfigSerializer(ApplyStrategyMixin):
     max_retries = serializers.IntegerField(required=False, min_value=1, max_value=20)
     retry_delay = serializers.IntegerField(required=False, min_value=1, max_value=3600)
     expiry_hours = serializers.IntegerField(required=False, min_value=1, max_value=720)
-    retention_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
+    retention_days = serializers.IntegerField(
+        required=False, min_value=1, max_value=365
+    )
     batch_size = serializers.IntegerField(required=False, min_value=1, max_value=1000)
-    max_replay_attempts = serializers.IntegerField(required=False, min_value=1, max_value=10)
+    max_replay_attempts = serializers.IntegerField(
+        required=False, min_value=1, max_value=10
+    )
 
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""
@@ -64,7 +89,7 @@ class DLQConfigSerializer(ApplyStrategyMixin):
 class RetryConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Retry configuration.
-    
+
     Safe Default 폴백 적용.
     """
 
@@ -80,7 +105,9 @@ class RetryConfigSerializer(ApplyStrategyMixin):
     max_delay = serializers.FloatField(required=False, min_value=1.0, max_value=3600.0)
     min_delay = serializers.IntegerField(required=False, min_value=1, max_value=60)
     jitter = serializers.BooleanField(required=False)
-    jitter_percent = serializers.IntegerField(required=False, min_value=0, max_value=100)
+    jitter_percent = serializers.IntegerField(
+        required=False, min_value=0, max_value=100
+    )
 
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""
@@ -91,7 +118,7 @@ class RetryConfigSerializer(ApplyStrategyMixin):
 class RateLimitConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Rate Limit configuration.
-    
+
     Safe Default 폴백 적용.
     """
 
@@ -99,9 +126,15 @@ class RateLimitConfigSerializer(ApplyStrategyMixin):
 
     base_delay = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
     max_delay = serializers.FloatField(required=False, min_value=1.0, max_value=300.0)
-    jitter_percent = serializers.FloatField(required=False, min_value=0.0, max_value=100.0)
-    default_retry_after = serializers.FloatField(required=False, min_value=0.1, max_value=60.0)
-    backoff_multiplier = serializers.FloatField(required=False, min_value=1.0, max_value=10.0)
+    jitter_percent = serializers.FloatField(
+        required=False, min_value=0.0, max_value=100.0
+    )
+    default_retry_after = serializers.FloatField(
+        required=False, min_value=0.1, max_value=60.0
+    )
+    backoff_multiplier = serializers.FloatField(
+        required=False, min_value=1.0, max_value=10.0
+    )
 
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""
@@ -112,16 +145,24 @@ class RateLimitConfigSerializer(ApplyStrategyMixin):
 class IdempotencyConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Idempotency configuration.
-    
+
     Safe Default 폴백 적용.
     """
 
     _config_type = "idempotency"
 
-    default_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=3600)
-    extended_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=86400)
-    short_cache_ttl = serializers.IntegerField(required=False, min_value=1, max_value=300)
-    clock_skew_tolerance_seconds = serializers.FloatField(required=False, min_value=0.0, max_value=60.0)
+    default_cache_ttl = serializers.IntegerField(
+        required=False, min_value=1, max_value=3600
+    )
+    extended_cache_ttl = serializers.IntegerField(
+        required=False, min_value=1, max_value=86400
+    )
+    short_cache_ttl = serializers.IntegerField(
+        required=False, min_value=1, max_value=300
+    )
+    clock_skew_tolerance_seconds = serializers.FloatField(
+        required=False, min_value=0.0, max_value=60.0
+    )
 
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""

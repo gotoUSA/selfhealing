@@ -19,7 +19,7 @@ Usage:
     # Returns: "Jitter Delay Threshold: 60.0s → 5.0s"
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 # =============================================================================
 # Configuration Field Descriptions
@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Format: "field_name": ("Business-Friendly Label", "unit")
 # Units: "bool", "seconds", "hours", "percent", "count", "multiplier", "dict", "list", "text"
 
-CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
+CONFIG_DESCRIPTIONS: dict[str, tuple[str, str]] = {
     # =========================================================================
     # Circuit Breaker - Fault Isolation
     # =========================================================================
@@ -39,12 +39,14 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "half_open_request_limit": ("Half-Open Request Limit", "count"),
     "excluded_exceptions": ("Excluded Exception Types", "list"),
     "rate_limit_cascade_threshold": ("Rate Limit Cascade Detection Threshold", "count"),
-    "rate_limit_cascade_window_seconds": ("Rate Limit Cascade Detection Window", "seconds"),
+    "rate_limit_cascade_window_seconds": (
+        "Rate Limit Cascade Detection Window",
+        "seconds",
+    ),
     "self_ddos_protection_enabled": ("Self-DDoS Protection Toggle", "bool"),
     "self_ddos_request_threshold": ("Self-DDoS Request Threshold", "count"),
     "self_ddos_window_seconds": ("Self-DDoS Detection Window", "seconds"),
     "self_ddos_backoff_multiplier": ("Self-DDoS Backoff Multiplier", "multiplier"),
-
     # =========================================================================
     # DLQ - Dead Letter Queue
     # =========================================================================
@@ -54,7 +56,6 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "retention_days": ("Data Retention Period", "days"),
     "batch_size": ("Batch Processing Size", "count"),
     "max_replay_attempts": ("Maximum Replay Attempts", "count"),
-
     # =========================================================================
     # Retry - Backoff Strategy
     # =========================================================================
@@ -66,19 +67,16 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "min_delay": ("Minimum Delay Floor", "seconds"),
     "jitter": ("Jitter Randomization Toggle", "bool"),
     "jitter_percent": ("Jitter Randomization Range", "percent"),
-
     # =========================================================================
     # SLA - Service Level Agreement
     # =========================================================================
     "default_hours": ("Default SLA Resolution Time", "hours"),
     "thresholds_by_domain": ("Domain-Specific SLA Thresholds", "dict"),
-
     # =========================================================================
     # Rate Limit Coordination
     # =========================================================================
     "default_retry_after": ("Default Retry-After Duration", "seconds"),
     "backoff_multiplier": ("Backoff Multiplier", "multiplier"),
-
     # =========================================================================
     # Idempotency
     # =========================================================================
@@ -86,7 +84,6 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "extended_cache_ttl": ("Extended Cache TTL", "seconds"),
     "short_cache_ttl": ("Short Cache TTL", "seconds"),
     "clock_skew_tolerance_seconds": ("Clock Skew Tolerance", "seconds"),
-
     # =========================================================================
     # Security Thresholds
     # =========================================================================
@@ -99,14 +96,12 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "failed_login_threshold": ("Failed Login Threshold", "count"),
     "suspicious_ip_cache_prefix": ("Suspicious IP Cache Key Prefix", "text"),
     "banned_ip_cache_prefix": ("Banned IP Cache Key Prefix", "text"),
-
     # =========================================================================
     # Forensic Context Limits
     # =========================================================================
     "error_message_max_length": ("Error Message Max Length", "count"),
     "response_body_max_length": ("Response Body Max Length", "count"),
     "user_agent_max_length": ("User-Agent Max Length", "count"),
-
     # =========================================================================
     # Metrics Collection (Infrastructure Protection)
     # =========================================================================
@@ -115,7 +110,6 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "export_prometheus": ("Prometheus Export Toggle", "bool"),
     "jitter_enabled": ("Infrastructure Protection (Jitter)", "bool"),
     "jitter_max_delay_seconds": ("Jitter Delay Threshold", "seconds"),
-
     # =========================================================================
     # Notifications
     # =========================================================================
@@ -130,7 +124,6 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "critical_channel": ("Critical Alert Channel", "text"),
     "high_channel": ("High Priority Alert Channel", "text"),
     "medium_channel": ("Medium Priority Alert Channel", "text"),
-
     # =========================================================================
     # Error Budget - SRE Governance
     # =========================================================================
@@ -152,7 +145,6 @@ CONFIG_DESCRIPTIONS: Dict[str, Tuple[str, str]] = {
     "escalation_enabled": ("Override Escalation Toggle", "bool"),
     "escalation_channel": ("Escalation Channel", "text"),
     "escalation_mention": ("Escalation Mention Targets", "text"),
-
     # =========================================================================
     # SLO Runtime Configuration
     # =========================================================================
@@ -208,10 +200,14 @@ def _format_value_with_unit(value: Any, unit: str) -> str:
 
     # Collection formatting
     if unit == "dict":
-        return _format_collection(value, "{}") if isinstance(value, dict) else str(value)
+        return (
+            _format_collection(value, "{}") if isinstance(value, dict) else str(value)
+        )
 
     if unit == "list":
-        return _format_collection(value, "[]") if isinstance(value, list) else str(value)
+        return (
+            _format_collection(value, "[]") if isinstance(value, list) else str(value)
+        )
 
     # Text formatting
     if unit == "text":
@@ -224,6 +220,7 @@ def _format_value_with_unit(value: Any, unit: str) -> str:
 # =============================================================================
 # Public API
 # =============================================================================
+
 
 def get_field_description(field_name: str) -> str:
     """
@@ -290,9 +287,9 @@ def format_value_change(
 
 
 def format_changes_log(
-    changes: Dict[str, Any],
-    previous_config: Optional[Dict[str, Any]] = None,
-) -> List[str]:
+    changes: dict[str, Any],
+    previous_config: dict[str, Any] | None = None,
+) -> list[str]:
     """
     Format multiple configuration changes for audit logging.
 
@@ -313,8 +310,8 @@ def format_changes_log(
 
 
 def format_changes_summary(
-    changes: Dict[str, Any],
-    previous_config: Optional[Dict[str, Any]] = None,
+    changes: dict[str, Any],
+    previous_config: dict[str, Any] | None = None,
 ) -> str:
     """
     Format changes as a single summary string for logging.

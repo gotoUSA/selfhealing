@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
 from rest_framework import status
 from rest_framework.request import Request
@@ -89,8 +88,8 @@ class GovernanceRBACStatusView(APIView):
 
     def get(self, request: Request) -> Response:
         """거버넌스 RBAC 상태 조회."""
-        from selfhealing.services.runtime_config import get_runtime_config_manager
         from selfhealing.services.governance import get_emergency_tracker
+        from selfhealing.services.runtime_config import get_runtime_config_manager
 
         manager = get_runtime_config_manager()
         tracker = get_emergency_tracker()
@@ -119,27 +118,45 @@ class GovernanceRBACStatusView(APIView):
                 "time_remaining_hours": expiry_status.get("time_remaining_hours"),
                 # 임계값 (Risk-Based Access Control)
                 "thresholds": {
-                    "operator_approve": governance_config.get("threshold_operator", 0.15),
+                    "operator_approve": governance_config.get(
+                        "threshold_operator", 0.15
+                    ),
                     "admin_approve": governance_config.get("threshold_admin", 0.30),
                 },
                 # 긴급 모드 상태
                 "emergency_active": emergency_state.is_active,
                 "emergency_reason": emergency_state.reason,
                 "emergency_warning_sent": emergency_state.warning_sent_at is not None,
-                "emergency_final_warning_sent": emergency_state.final_warning_sent_at is not None,
-                "pending_admin_acknowledgement": (emergency_state.is_active and emergency_state.acknowledged_by is None),
+                "emergency_final_warning_sent": emergency_state.final_warning_sent_at
+                is not None,
+                "pending_admin_acknowledgement": (
+                    emergency_state.is_active
+                    and emergency_state.acknowledged_by is None
+                ),
                 # 경고 상태
                 "should_warn": expiry_status.get("should_warn", False),
                 "should_final_warn": expiry_status.get("should_final_warn", False),
                 "should_auto_restore": expiry_status.get("should_auto_restore", False),
                 # 설정 상세
                 "config": {
-                    "emergency_expiry_hours": governance_config.get("emergency_expiry_hours", 8),
-                    "emergency_warning_hours": governance_config.get("emergency_warning_hours", 4),
-                    "emergency_final_warning_hours": governance_config.get("emergency_final_warning_hours", 6),
-                    "notify_on_emergency": governance_config.get("notify_on_emergency", True),
-                    "notify_channels": governance_config.get("notify_channels", ["slack", "email"]),
-                    "four_eyes_enabled": governance_config.get("four_eyes_enabled", False),
+                    "emergency_expiry_hours": governance_config.get(
+                        "emergency_expiry_hours", 8
+                    ),
+                    "emergency_warning_hours": governance_config.get(
+                        "emergency_warning_hours", 4
+                    ),
+                    "emergency_final_warning_hours": governance_config.get(
+                        "emergency_final_warning_hours", 6
+                    ),
+                    "notify_on_emergency": governance_config.get(
+                        "notify_on_emergency", True
+                    ),
+                    "notify_channels": governance_config.get(
+                        "notify_channels", ["slack", "email"]
+                    ),
+                    "four_eyes_enabled": governance_config.get(
+                        "four_eyes_enabled", False
+                    ),
                 },
             },
             "timestamp": datetime.now(timezone.utc).isoformat(),

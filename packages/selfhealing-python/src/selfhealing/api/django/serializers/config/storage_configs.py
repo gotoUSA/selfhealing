@@ -5,6 +5,7 @@ L2StorageConfig, L2StorageStatus, ShadowLog, ReplayAutomation serializers.
 """
 
 from rest_framework import serializers
+
 from .base import ApplyStrategyMixin
 
 
@@ -78,14 +79,14 @@ class L2StorageConfigSerializer(ApplyStrategyMixin):
         # Jitter min <= max 검증
         jitter_min = data.get("reconciliation_jitter_min_seconds")
         jitter_max = data.get("reconciliation_jitter_max_seconds")
-        
+
         if jitter_min is not None and jitter_max is not None:
             if jitter_min > jitter_max:
                 raise serializers.ValidationError(
                     "reconciliation_jitter_min_seconds는 "
                     "reconciliation_jitter_max_seconds보다 작거나 같아야 합니다."
                 )
-        
+
         return data
 
 
@@ -136,7 +137,7 @@ class ShadowLogStatsSerializer(serializers.Serializer):
 class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Replay Automation configuration.
-    
+
     Manages DLQ Replay automation settings including:
     - Track 1: Event-driven replay on CB recovery
     - Track 2: Scheduled batch replay
@@ -220,28 +221,28 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
     domain_max_retries = serializers.DictField(
         required=False,
         child=serializers.IntegerField(min_value=1, max_value=20),
-        help_text="Domain-specific max_retries override. Example: {\"payment\": 10, \"notification\": 3}",
+        help_text='Domain-specific max_retries override. Example: {"payment": 10, "notification": 3}',
     )
     domain_on_circuit_close = serializers.DictField(
         required=False,
         child=serializers.BooleanField(),
-        help_text="Domain-specific Track 1 trigger setting. Example: {\"payment\": true, \"analytics\": false}",
+        help_text='Domain-specific Track 1 trigger setting. Example: {"payment": true, "analytics": false}',
     )
 
     def validate(self, attrs):
         """검증 + Safe Default 폴백."""
         validated = super().validate(attrs)
-        
+
         # adaptive_min <= adaptive_max 검증
         adaptive_min = validated.get("adaptive_min_items")
         adaptive_max = validated.get("adaptive_max_items")
-        
+
         if adaptive_min is not None and adaptive_max is not None:
             if adaptive_min > adaptive_max:
                 raise serializers.ValidationError(
                     "adaptive_min_items must be less than or equal to adaptive_max_items"
                 )
-        
+
         # domain_priorities 값 검증 (이미 ChoiceField로 검증되지만 추가 확인)
         domain_priorities = validated.get("domain_priorities", {})
         valid_priorities = {"critical", "normal", "low"}
@@ -251,5 +252,5 @@ class ReplayAutomationConfigSerializer(ApplyStrategyMixin):
                     f"Invalid priority '{priority}' for domain '{domain}'. "
                     f"Must be one of: {valid_priorities}"
                 )
-        
+
         return self.validate_with_safe_fallback(validated)

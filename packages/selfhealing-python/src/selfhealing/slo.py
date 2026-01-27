@@ -30,9 +30,9 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +84,13 @@ class SLO:
     target: float  # Target value (e.g., 0.999 for 99.9%)
     window_days: int = 30  # Rolling window in days
 
-    description: Optional[str] = None
-    service_name: Optional[str] = None
-    domain: Optional[str] = None
+    description: str | None = None
+    service_name: str | None = None
+    domain: str | None = None
 
     # Thresholds for alerting
-    warning_threshold: Optional[float] = None  # Alert when dropping below this
-    critical_threshold: Optional[float] = None  # Critical alert threshold
+    warning_threshold: float | None = None  # Alert when dropping below this
+    critical_threshold: float | None = None  # Critical alert threshold
 
     # Error budget burn rate thresholds - Settings에서 기본값 사용
     fast_burn_rate: float = field(default_factory=lambda: _get_default_fast_burn_rate())
@@ -99,7 +99,9 @@ class SLO:
     def __post_init__(self) -> None:
         if self.warning_threshold is None:
             # Default: warn when 50% of error budget consumed
-            self.warning_threshold = (1 + self.target) / 2  # midpoint between target and 1.0
+            self.warning_threshold = (
+                1 + self.target
+            ) / 2  # midpoint between target and 1.0
 
         if self.critical_threshold is None:
             # Default: critical when approaching SLO target
@@ -148,6 +150,7 @@ def _get_default_fast_burn_rate() -> float:
     """Settings에서 default_fast_burn_rate 조회."""
     try:
         from selfhealing.settings.slo import get_slo_settings
+
         return get_slo_settings().default_fast_burn_rate
     except Exception:
         return 14.4  # Google SRE 기본값
@@ -157,6 +160,7 @@ def _get_default_slow_burn_rate() -> float:
     """Settings에서 default_slow_burn_rate 조회."""
     try:
         from selfhealing.settings.slo import get_slo_settings
+
         return get_slo_settings().default_slow_burn_rate
     except Exception:
         return 3.0  # Google SRE 기본값
@@ -175,8 +179,8 @@ class SLOStatus:
     measured_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Error budget status
-    budget_remaining: Optional[float] = None  # Remaining as decimal (1.0 = 100%)
-    burn_rate: Optional[float] = None  # Current burn rate
+    budget_remaining: float | None = None  # Remaining as decimal (1.0 = 100%)
+    burn_rate: float | None = None  # Current burn rate
 
     # Historical
     sample_count: int = 0  # Number of data points
@@ -196,7 +200,10 @@ class SLOStatus:
         """Check if in warning state."""
         if not self.is_meeting_target:
             return True
-        if self.slo.warning_threshold and self.current_value < self.slo.warning_threshold:
+        if (
+            self.slo.warning_threshold
+            and self.current_value < self.slo.warning_threshold
+        ):
             return True
         if self.budget_remaining is not None and self.budget_remaining < 0.5:
             return True
@@ -205,7 +212,10 @@ class SLOStatus:
     @property
     def is_critical(self) -> bool:
         """Check if in critical state."""
-        if self.slo.critical_threshold and self.current_value < self.slo.critical_threshold:
+        if (
+            self.slo.critical_threshold
+            and self.current_value < self.slo.critical_threshold
+        ):
             return True
         if self.budget_remaining is not None and self.budget_remaining < 0.1:
             return True
@@ -250,7 +260,7 @@ class SLOConfig:
     default_window_days: int = 30
 
     @classmethod
-    def default_config(cls, service_name: Optional[str] = None) -> SLOConfig:
+    def default_config(cls, service_name: str | None = None) -> SLOConfig:
         """
         Create default SLO configuration.
 
@@ -288,7 +298,7 @@ class SLOConfig:
             ],
         )
 
-    def get_slo(self, name: str) -> Optional[SLO]:
+    def get_slo(self, name: str) -> SLO | None:
         """Get SLO by name."""
         for slo in self.slos:
             if slo.name == name:

@@ -11,7 +11,7 @@ PostgreSQL 영속성 저장소용 Django Abstract 모델.
 사용법:
     # Django 프로젝트의 models.py에서:
     from selfhealing.models import AbstractCascadeEventArchive
-    
+
     class CascadeEventArchive(AbstractCascadeEventArchive):
         class Meta(AbstractCascadeEventArchive.Meta):
             abstract = False
@@ -24,11 +24,12 @@ Reference:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 try:
     from django.db import models
     from django.utils import timezone
+
     DJANGO_AVAILABLE = True
 except ImportError:
     DJANGO_AVAILABLE = False
@@ -37,37 +38,38 @@ except ImportError:
 
 
 if TYPE_CHECKING:
-    from django.db import models as models_type
+    pass
 
 
 class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
     """
     Cascade Event Archive를 위한 Abstract Django 모델.
-    
+
     특징:
     - 인과관계 체인(causation_chain) 저장
     - Hash Chain 무결성 정보 보관
     - 월별 파티셔닝 지원 (PostgreSQL)
     - JSONB 인덱스 지원
-    
+
     스키마 설계 근거:
     - cascade_id: Cascade Event 고유 ID
     - causation_chain: 인과관계 이벤트 ID 목록 (JSONB)
     - effects: 연쇄 효과 목록 (JSONB)
     - current_hash, previous_hash: Hash Chain 무결성
     """
-    
+
     if not DJANGO_AVAILABLE:
         raise ImportError(
             "Django is required to use AbstractCascadeEventArchive. "
             "Install it with: pip install django"
         )
-    
+
     # ========================================
     # Trigger Type Choices
     # ========================================
     class TriggerType(models.TextChoices):
         """Cascade 트리거 유형."""
+
         EMERGENCY_LEVEL_CHANGED = "EMERGENCY_LEVEL_CHANGED", "Emergency Level Changed"
         MANUAL_INTERVENTION = "MANUAL_INTERVENTION", "Manual Intervention"
         MANUAL_ACTIVATION = "MANUAL_ACTIVATION", "Manual Activation"
@@ -77,7 +79,7 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         ERROR_BUDGET_EXHAUSTED = "ERROR_BUDGET_EXHAUSTED", "Error Budget Exhausted"
         RECOVERY_STARTED = "RECOVERY_STARTED", "Recovery Started"
         DEESCALATION = "DEESCALATION", "De-escalation"
-    
+
     # ========================================
     # Primary Key & Identifiers
     # ========================================
@@ -87,14 +89,14 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Cascade ID",
         help_text="Cascade Event 고유 ID (예: cascade-evt-abc123)",
     )
-    
+
     namespace = models.CharField(
         max_length=100,
         db_index=True,
         verbose_name="Namespace",
         help_text="이벤트가 발생한 네임스페이스 (예: seoul, global)",
     )
-    
+
     # ========================================
     # Trigger Information
     # ========================================
@@ -105,13 +107,13 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Trigger Type",
         help_text="Cascade를 시작한 트리거 유형",
     )
-    
+
     trigger_details = models.JSONField(
         default=dict,
         verbose_name="Trigger Details",
         help_text="트리거 상세 정보 (old_level, new_level 등)",
     )
-    
+
     # ========================================
     # Effects & Causation Chain
     # ========================================
@@ -120,13 +122,13 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Effects",
         help_text="연쇄 효과 목록 (각 효과의 action_type, success, caused_by 포함)",
     )
-    
+
     causation_chain = models.JSONField(
         default=list,
         verbose_name="Causation Chain",
         help_text="인과관계 이벤트 ID 체인 [trigger_id, effect_1_id, effect_2_id, ...]",
     )
-    
+
     # ========================================
     # Hash Chain (Integrity)
     # ========================================
@@ -137,14 +139,14 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Previous Hash",
         help_text="이전 Cascade Event의 해시 (체인 연결)",
     )
-    
+
     current_hash = models.CharField(
         max_length=64,
         db_index=True,
         verbose_name="Current Hash",
         help_text="현재 Cascade Event의 SHA-256 해시",
     )
-    
+
     # ========================================
     # Statistics
     # ========================================
@@ -153,19 +155,19 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Total Effects",
         help_text="총 효과 수",
     )
-    
+
     success_count = models.PositiveIntegerField(
         default=0,
         verbose_name="Success Count",
         help_text="성공한 효과 수",
     )
-    
+
     failure_count = models.PositiveIntegerField(
         default=0,
         verbose_name="Failure Count",
         help_text="실패한 효과 수",
     )
-    
+
     # ========================================
     # Timestamps
     # ========================================
@@ -174,13 +176,13 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Event Timestamp",
         help_text="Cascade Event 발생 시각",
     )
-    
+
     archived_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Archived At",
         help_text="Redis에서 PostgreSQL로 아카이브된 시각",
     )
-    
+
     # ========================================
     # External Trace Context (Optional)
     # ========================================
@@ -191,7 +193,7 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="External Trace Context",
         help_text="W3C Trace Context / OpenTelemetry 연동 정보",
     )
-    
+
     # ========================================
     # Version
     # ========================================
@@ -201,7 +203,7 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         verbose_name="Schema Version",
         help_text="데이터 스키마 버전",
     )
-    
+
     class Meta:
         abstract = True
         ordering = ["-timestamp"]
@@ -224,25 +226,25 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
                 name="idx_cascade_hash",
             ),
         ]
-    
+
     def __str__(self) -> str:
         return f"CascadeEvent({self.cascade_id}, {self.trigger_type})"
-    
+
     def get_causation_chain_display(self) -> str:
         """인과관계 체인을 보기 좋게 포맷팅."""
         if not self.causation_chain:
             return "No chain"
         return " → ".join(self.causation_chain)
-    
+
     def verify_hash_integrity(self) -> bool:
         """
         해시 무결성 검증.
-        
+
         저장된 current_hash와 재계산된 해시를 비교합니다.
         """
         import hashlib
         import json
-        
+
         content = {
             "id": self.cascade_id,
             "trigger": {
@@ -256,30 +258,28 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         }
         content_str = json.dumps(content, sort_keys=True)
         computed_hash = hashlib.sha256(content_str.encode()).hexdigest()
-        
+
         return computed_hash == self.current_hash
-    
+
     @classmethod
-    def from_cascade_event(cls, event: Any) -> "AbstractCascadeEventArchive":
+    def from_cascade_event(cls, event: Any) -> AbstractCascadeEventArchive:
         """
         CascadeEvent 객체에서 Archive 모델 인스턴스 생성.
-        
+
         Args:
             event: CascadeEvent 인스턴스
-        
+
         Returns:
             AbstractCascadeEventArchive 인스턴스 (저장 전)
         """
         from datetime import datetime
-        
+
         # timestamp 파싱
         if isinstance(event.timestamp, str):
-            timestamp = datetime.fromisoformat(
-                event.timestamp.replace('Z', '+00:00')
-            )
+            timestamp = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00"))
         else:
             timestamp = event.timestamp
-        
+
         return cls(
             cascade_id=event.id,
             namespace=event.namespace,
@@ -293,8 +293,10 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
             success_count=event.success_count,
             failure_count=event.failure_count,
             timestamp=timestamp,
-            external_trace=event.external_trace.to_dict() if event.external_trace else None,
-            version=getattr(event, 'version', '1.0'),
+            external_trace=(
+                event.external_trace.to_dict() if event.external_trace else None
+            ),
+            version=getattr(event, "version", "1.0"),
         )
 
 
@@ -304,28 +306,31 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
 
 # Django 환경이 아닌 경우를 위한 기본 클래스
 if DJANGO_AVAILABLE:
+
     class CascadeEventArchive(AbstractCascadeEventArchive):
         """
         Cascade Event Archive 구체 모델.
-        
+
         Django 프로젝트에서 직접 사용하거나,
         상속하여 커스터마이징할 수 있습니다.
-        
+
         테이블명: selfhealing_cascade_events
-        
+
         PostgreSQL 파티셔닝 적용 시:
-            CREATE TABLE selfhealing_cascade_events_2026_01 
+            CREATE TABLE selfhealing_cascade_events_2026_01
                 PARTITION OF selfhealing_cascade_events
                 FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
         """
-        
+
         class Meta(AbstractCascadeEventArchive.Meta):
             abstract = False
             db_table = "selfhealing_cascade_events"
             app_label = "selfhealing"  # 명시적 app_label (테스트 환경용)
             # PostgreSQL 파티셔닝은 Migration에서 직접 처리
+
 else:
     # Django 없는 환경에서는 빈 클래스
     class CascadeEventArchive:  # type: ignore
         """Django 없는 환경에서의 Placeholder."""
+
         pass

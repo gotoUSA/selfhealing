@@ -11,7 +11,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -69,7 +68,7 @@ class RuntimeFeedbackSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[RuntimeFeedbackSettings] = None
+_settings: RuntimeFeedbackSettings | None = None
 
 
 def get_runtime_feedback_settings() -> RuntimeFeedbackSettings:

@@ -7,9 +7,7 @@ Provides the base DLQService class with initialization and common utilities.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
-
-from selfhealing.core.timezone import now
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationRepository
@@ -27,8 +25,8 @@ class DLQServiceBase:
 
     def __init__(
         self,
-        config: "DLQConfig | None" = None,
-        repository: "FailedOperationRepository | None" = None,
+        config: DLQConfig | None = None,
+        repository: FailedOperationRepository | None = None,
     ):
         """
         Initialize the DLQ service.
@@ -38,14 +36,16 @@ class DLQServiceBase:
             repository: Optional repository for DI, uses Django adapter if None
         """
         from selfhealing.services.dlq_models import DLQConfig
+
         self.config = config or DLQConfig.from_settings()
         self._repository = repository
 
     @property
-    def repository(self) -> "FailedOperationRepository":
+    def repository(self) -> FailedOperationRepository:
         """Get the repository using ProviderRegistry (Redis by default)."""
         if self._repository is None:
             from selfhealing.factory import ProviderRegistry
+
             self._repository = ProviderRegistry.get_failed_operation_repo()
         return self._repository
 
@@ -62,16 +62,16 @@ class DLQServiceBase:
         failure_type: str = "",
         error_message: str = "",
         success: bool = True,
-        actor_id: Optional[str] = None,
+        actor_id: str | None = None,
         request: Any = None,
     ) -> None:
         """
         DLQ 작업을 Audit 로그에 기록.
-        
+
         하이브리드 로직:
         - request가 있으면 → RequestAuditBuffer에 적재 (AuditMiddleware에서 일괄 기록)
         - request가 없으면 → 직접 adapter 호출 (Celery 등 비동기 컨텍스트)
-        
+
         Args:
             action: 작업 유형 (store, replay, resolve 등)
             dlq_id: DLQ 엔트리 ID
@@ -84,10 +84,10 @@ class DLQServiceBase:
         """
         try:
             from selfhealing.services.audit_helpers import (
-                log_dlq_store_audit,
                 log_dlq_replay_audit,
+                log_dlq_store_audit,
             )
-            
+
             if action == "store":
                 log_dlq_store_audit(
                     dlq_id=dlq_id,

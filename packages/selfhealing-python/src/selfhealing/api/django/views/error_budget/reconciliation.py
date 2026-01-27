@@ -24,13 +24,11 @@ import logging
 from datetime import datetime
 
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +49,9 @@ class ReconciliationStatusView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         service = get_reconciliation_service()
         status_data = service.get_status()
@@ -90,7 +90,11 @@ class FailSafePeriodsView(APIView):
                 "data": {
                     "periods": [p.to_dict() for p in periods],
                     "count": len(periods),
-                    "active_period": tracker.get_active_period().to_dict() if tracker.get_active_period() else None,
+                    "active_period": (
+                        tracker.get_active_period().to_dict()
+                        if tracker.get_active_period()
+                        else None
+                    ),
                 },
                 "timestamp": timezone.now().isoformat(),
             }
@@ -117,10 +121,14 @@ class ShadowBudgetsView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         limit = int(request.query_params.get("limit", 50))
-        pending_only = request.query_params.get("pending_only", "false").lower() == "true"
+        pending_only = (
+            request.query_params.get("pending_only", "false").lower() == "true"
+        )
 
         service = get_reconciliation_service()
 
@@ -141,7 +149,9 @@ class ShadowBudgetsView(APIView):
         )
 
     def post(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         period_id = request.data.get("period_id")
         if not period_id:
@@ -172,13 +182,16 @@ class ShadowBudgetDetailView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request, calculation_id: str) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         service = get_reconciliation_service()
         shadow = service.get_shadow_budget(calculation_id)
 
         if not shadow:
             from django.http import Http404
+
             raise Http404(f"Shadow budget {calculation_id} not found")
 
         return Response(
@@ -202,7 +215,9 @@ class ShadowBudgetApproveView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request, calculation_id: str) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         justification = request.data.get("justification", "")
         if not justification:
@@ -240,7 +255,9 @@ class ShadowBudgetRejectView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def post(self, request: Request, calculation_id: str) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         reason = request.data.get("reason", "")
         if not reason:
@@ -290,7 +307,9 @@ class ExcludedPeriodsView(APIView):
     permission_classes = [IsViewer]
 
     def get(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         limit = int(request.query_params.get("limit", 50))
         service = get_reconciliation_service()
@@ -308,7 +327,9 @@ class ExcludedPeriodsView(APIView):
         )
 
     def post(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         start_str = request.data.get("start")
         end_str = request.data.get("end")
@@ -353,13 +374,16 @@ class ExcludedPeriodDetailView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def delete(self, request: Request, exclusion_id: str) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         service = get_reconciliation_service()
         success = service.remove_exclusion(exclusion_id)
 
         if not success:
             from django.http import Http404
+
             raise Http404(f"Exclusion {exclusion_id} not found")
 
         return Response(
@@ -390,7 +414,9 @@ class ReconciliationConfigView(APIView):
     permission_classes = [IsSelfHealingAdmin]
 
     def get(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         service = get_reconciliation_service()
         config = service.get_config()
@@ -404,7 +430,9 @@ class ReconciliationConfigView(APIView):
         )
 
     def put(self, request: Request) -> Response:
-        from selfhealing.services.error_budget.reconciliation import get_reconciliation_service
+        from selfhealing.services.error_budget.reconciliation import (
+            get_reconciliation_service,
+        )
 
         service = get_reconciliation_service()
         config = service.update_config(**request.data)

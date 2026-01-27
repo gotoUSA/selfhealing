@@ -18,7 +18,7 @@ Security:
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.utils import timezone
 from rest_framework import status
@@ -90,16 +90,27 @@ class BackoffPreviewView(XTestModeMixin, APIView):
             )
 
         # 기본값 로드 (설정에서)
-        from selfhealing.services.backoff_calculator import BackoffCalculator, BackoffConfig
+        from selfhealing.services.backoff_calculator import (
+            BackoffCalculator,
+            BackoffConfig,
+        )
         from selfhealing.services.retry_handler import RetryConfig
 
         default_config = RetryConfig.from_settings()
 
         # 요청 파라미터로 오버라이드
-        final_max_attempts = max_attempts if max_attempts > 0 else default_config.max_attempts
-        final_backoff_base = backoff_base if backoff_base > 0 else default_config.backoff_base
-        final_backoff_max = backoff_max if backoff_max > 0 else default_config.backoff_max
-        final_jitter_percent = jitter_percent if jitter_percent >= 0 else default_config.jitter_percent
+        final_max_attempts = (
+            max_attempts if max_attempts > 0 else default_config.max_attempts
+        )
+        final_backoff_base = (
+            backoff_base if backoff_base > 0 else default_config.backoff_base
+        )
+        final_backoff_max = (
+            backoff_max if backoff_max > 0 else default_config.backoff_max
+        )
+        final_jitter_percent = (
+            jitter_percent if jitter_percent >= 0 else default_config.jitter_percent
+        )
 
         # BackoffCalculator 생성
         config = BackoffConfig(
@@ -119,12 +130,14 @@ class BackoffPreviewView(XTestModeMixin, APIView):
             jitter_factor = final_jitter_percent / 100.0
             min_delay = max(1, int(base_delay * (1 - jitter_factor)))
             max_delay = int(base_delay * (1 + jitter_factor))
-            delays_with_jitter.append({
-                "attempt": attempt,
-                "base": base_delay,
-                "min": min_delay,
-                "max": max_delay,
-            })
+            delays_with_jitter.append(
+                {
+                    "attempt": attempt,
+                    "base": base_delay,
+                    "min": min_delay,
+                    "max": max_delay,
+                }
+            )
 
         total_max_delay = sum(delays)
 
@@ -154,7 +167,10 @@ class BackoffPreviewView(XTestModeMixin, APIView):
             request=request,
             action="backoff_preview",
             component="retry",
-            details={"max_attempts": final_max_attempts, "total_max_delay": total_max_delay},
+            details={
+                "max_attempts": final_max_attempts,
+                "total_max_delay": total_max_delay,
+            },
             result="success",
         )
 
@@ -166,7 +182,7 @@ class BackoffPreviewView(XTestModeMixin, APIView):
 # =============================================================================
 
 
-def _validate_failure_count(failure_count: Any) -> tuple[Optional[int], Optional[str]]:
+def _validate_failure_count(failure_count: Any) -> tuple[int | None, str | None]:
     """failure_count 유효성 검증. (값, 에러메시지) 반환."""
     if failure_count is None:
         return None, "failure_count is required"
@@ -183,16 +199,16 @@ def _build_retry_sequence(
     failure_count: int,
     config,
     calculator,
-) -> tuple[List[Dict[str, Any]], int, str]:
+) -> tuple[list[dict[str, Any]], int, str]:
     """
     재시도 시퀀스 구성.
-    
+
     Returns:
         tuple: (retry_sequence, total_attempts, final_action)
     """
     from selfhealing.services.retry_handler import RetryAction
-    
-    retry_sequence: List[Dict[str, Any]] = []
+
+    retry_sequence: list[dict[str, Any]] = []
     total_attempts = 0
     final_action = RetryAction.SUCCESS.value
 
@@ -205,25 +221,31 @@ def _build_retry_sequence(
 
             if attempt < config.max_attempts:
                 delay = calculator.calculate(attempt, with_jitter=False)
-                retry_sequence.append({
-                    "attempt": attempt,
-                    "result": result,
-                    "delay_before_next": delay,
-                })
+                retry_sequence.append(
+                    {
+                        "attempt": attempt,
+                        "result": result,
+                        "delay_before_next": delay,
+                    }
+                )
             else:
-                retry_sequence.append({
-                    "attempt": attempt,
-                    "result": result,
-                    "delay_before_next": None,
-                })
+                retry_sequence.append(
+                    {
+                        "attempt": attempt,
+                        "result": result,
+                        "delay_before_next": None,
+                    }
+                )
                 final_action = RetryAction.DLQ.value
         else:
             # 성공 시뮬레이션
-            retry_sequence.append({
-                "attempt": attempt,
-                "result": "SUCCESS",
-                "delay_before_next": None,
-            })
+            retry_sequence.append(
+                {
+                    "attempt": attempt,
+                    "result": "SUCCESS",
+                    "delay_before_next": None,
+                }
+            )
             final_action = RetryAction.SUCCESS.value
             break
 
@@ -231,25 +253,25 @@ def _build_retry_sequence(
 
 
 def _determine_final_action(
-    retry_sequence: List[Dict[str, Any]],
+    retry_sequence: list[dict[str, Any]],
     config,
 ) -> tuple[str, bool]:
     """
     최종 액션 결정.
-    
+
     Returns:
         tuple: (final_action, dlq_routed)
     """
     from selfhealing.services.retry_handler import RetryAction
-    
+
     last_attempt_failed = retry_sequence[-1]["result"] == "FAILURE"
     dlq_routed = last_attempt_failed and config.enable_dlq
-    
+
     if last_attempt_failed:
         final_action = RetryAction.DLQ.value if dlq_routed else RetryAction.ABORT.value
     else:
         final_action = RetryAction.SUCCESS.value
-    
+
     return final_action, dlq_routed
 
 
@@ -294,9 +316,15 @@ class RetrySimulateView(XTestModeMixin, APIView):
             return denied
 
         # 요청 파라미터 파싱 및 검증
-        failure_count, error_msg = _validate_failure_count(request.data.get("failure_count"))
+        failure_count, error_msg = _validate_failure_count(
+            request.data.get("failure_count")
+        )
         if error_msg:
-            error_type = "missing_required_field" if failure_count is None and "required" in error_msg else "invalid_failure_count"
+            error_type = (
+                "missing_required_field"
+                if failure_count is None and "required" in error_msg
+                else "invalid_failure_count"
+            )
             return Response(
                 {"status": "error", "error": error_type, "message": error_msg},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -307,8 +335,11 @@ class RetrySimulateView(XTestModeMixin, APIView):
         simulate_dlq = request.data.get("simulate_dlq", False)
 
         # 설정 로드
+        from selfhealing.services.backoff_calculator import (
+            BackoffCalculator,
+            BackoffConfig,
+        )
         from selfhealing.services.retry_handler import RetryConfig
-        from selfhealing.services.backoff_calculator import BackoffCalculator, BackoffConfig
 
         config = RetryConfig.from_settings(domain)
         if max_attempts is not None:
@@ -326,15 +357,19 @@ class RetrySimulateView(XTestModeMixin, APIView):
         calculator = BackoffCalculator(backoff_config)
 
         # 시뮬레이션 실행
-        retry_sequence, total_attempts, _ = _build_retry_sequence(failure_count, config, calculator)
-        
+        retry_sequence, total_attempts, _ = _build_retry_sequence(
+            failure_count, config, calculator
+        )
+
         # 최종 액션 결정
         final_action, dlq_routed = _determine_final_action(retry_sequence, config)
 
         # DLQ 시뮬레이션
         dlq_id = None
         if dlq_routed and simulate_dlq:
-            dlq_id = self._simulate_dlq_entry(domain, failure_count, config.max_attempts)
+            dlq_id = self._simulate_dlq_entry(
+                domain, failure_count, config.max_attempts
+            )
 
         snapshot = collect_system_snapshot()
 
@@ -365,7 +400,11 @@ class RetrySimulateView(XTestModeMixin, APIView):
             request=request,
             action="simulate",
             component="retry",
-            details={"failure_count": failure_count, "total_attempts": total_attempts, "final_action": final_action},
+            details={
+                "failure_count": failure_count,
+                "total_attempts": total_attempts,
+                "final_action": final_action,
+            },
             result="success",
         )
 
@@ -373,7 +412,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
 
     def _simulate_dlq_entry(
         self, domain: str, failure_count: int, max_attempts: int
-    ) -> Optional[int]:
+    ) -> int | None:
         """DLQ 테스트 항목 생성 (X-Test-Mode 마커 포함)."""
         try:
             from selfhealing.services.dlq_service import store_to_dlq
@@ -443,8 +482,8 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
 
         try:
             from selfhealing.services.rate_limit_coordinator import (
-                get_rate_limit_coordinator,
                 RateLimitCoordinatorConfig,
+                get_rate_limit_coordinator,
             )
 
             coordinator = get_rate_limit_coordinator()
@@ -456,10 +495,15 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
                 "consecutive_429s": state.consecutive_429s,
                 "is_in_cooldown": state.is_in_cooldown,
                 "cooldown_until": (
-                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(state.cooldown_until))
-                    if state.cooldown_until else None
+                    time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(state.cooldown_until)
+                    )
+                    if state.cooldown_until
+                    else None
                 ),
-                "remaining_cooldown": state.remaining_cooldown if state.is_in_cooldown else 0,
+                "remaining_cooldown": (
+                    state.remaining_cooldown if state.is_in_cooldown else 0
+                ),
             }
 
             # 권장 대기 시간 계산
@@ -469,7 +513,8 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
             elif state.consecutive_429s > 0:
                 # 연속 429가 있으면 다음 예상 백오프 계산
                 recommended_delay = min(
-                    config.base_delay * (config.backoff_multiplier ** state.consecutive_429s),
+                    config.base_delay
+                    * (config.backoff_multiplier**state.consecutive_429s),
                     config.max_delay,
                 )
 
@@ -570,11 +615,12 @@ class RetryConfigView(XTestModeMixin, APIView):
 
         # 설정 소스 확인 및 로드
         source = "default"
-        domain_overrides: Dict[str, Any] = {}
+        domain_overrides: dict[str, Any] = {}
 
         try:
             # RuntimeConfigManager 시도
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             retry_config = manager.get_retry_config()
             if retry_config:
@@ -586,10 +632,11 @@ class RetryConfigView(XTestModeMixin, APIView):
             try:
                 # core config 시도
                 from selfhealing.settings import get_config
+
                 core_config = get_config()
                 if hasattr(core_config, "retry"):
                     source = "settings"
-                    
+
                 # 도메인별 오버라이드 확인
                 if hasattr(core_config, "domain_configs"):
                     domain_overrides = core_config.domain_configs

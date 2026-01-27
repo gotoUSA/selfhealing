@@ -18,26 +18,23 @@ Note: Admin/Dashboard operations (cleanup, archive, purge, list, entry managemen
 
 from __future__ import annotations
 
+from selfhealing.services.dlq import (  # Main service class; Models; Module-level convenience functions; Base and mixins (for extension)
+    DLQBatchReplayStats,
+    DLQConfig,
+    DLQEntryResult,
+    DLQService,
+    DLQServiceBase,
+    QueryOperationsMixin,
+    ReplayOperationsMixin,
+    StoreOperationsMixin,
+    get_dlq_service,
+    store_to_dlq,
+)
+
 # =============================================================================
 # Re-export everything from dlq package for backward compatibility
 # =============================================================================
 
-from selfhealing.services.dlq import (
-    # Main service class
-    DLQService,
-    # Models
-    DLQConfig,
-    DLQEntryResult,
-    DLQBatchReplayStats,
-    # Module-level convenience functions
-    get_dlq_service,
-    store_to_dlq,
-    # Base and mixins (for extension)
-    DLQServiceBase,
-    StoreOperationsMixin,
-    QueryOperationsMixin,
-    ReplayOperationsMixin,
-)
 
 # Alias for backward compatibility
 enqueue_failed_operation = store_to_dlq

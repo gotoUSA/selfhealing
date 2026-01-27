@@ -17,7 +17,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -98,7 +97,7 @@ class NamespaceEmergencySettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[NamespaceEmergencySettings] = None
+_settings: NamespaceEmergencySettings | None = None
 
 
 def get_namespace_emergency_settings() -> NamespaceEmergencySettings:

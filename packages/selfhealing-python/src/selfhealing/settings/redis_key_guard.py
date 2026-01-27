@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -105,9 +104,7 @@ class RedisKeyGuardSettings(BaseSettings):
 
     @field_validator("memory_critical_threshold")
     @classmethod
-    def validate_critical_gt_warning(
-        cls, v: float, info
-    ) -> float:
+    def validate_critical_gt_warning(cls, v: float, info) -> float:
         """Ensure critical threshold > warning threshold."""
         # info.data는 이미 검증된 필드들을 포함
         warning = info.data.get("memory_warning_threshold", 80.0)
@@ -123,7 +120,7 @@ class RedisKeyGuardSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[RedisKeyGuardSettings] = None
+_settings: RedisKeyGuardSettings | None = None
 
 
 def get_redis_key_guard_settings() -> RedisKeyGuardSettings:

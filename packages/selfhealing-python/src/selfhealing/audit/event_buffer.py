@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -239,19 +239,19 @@ class AuditEvent:
     event_type: AuditEventType
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     source: str = "unknown"
-    details: Dict[str, Any] = field(default_factory=dict)
-    actor_id: Optional[str] = None
+    details: dict[str, Any] = field(default_factory=dict)
+    actor_id: str | None = None
     actor_type: str = "system"
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     # 추가 메타데이터
-    target_type: Optional[str] = None
-    target_id: Optional[str] = None
-    domain: Optional[str] = None
-    reason: Optional[str] = None
+    target_type: str | None = None
+    target_id: str | None = None
+    domain: str | None = None
+    reason: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """직렬화를 위한 딕셔너리 변환."""
         return {
             "event_type": self.event_type.value,
@@ -300,41 +300,39 @@ class RequestAuditBuffer:
 
     # request.META에 저장될 키
     META_KEY = "X-AUDIT-EVENTS"
-    
+
     # 단일 요청당 최대 이벤트 수 (메모리 폭발 방지)
     # 환경변수 SELFHEALING_MAX_EVENTS_PER_REQUEST로 설정 가능
     DEFAULT_MAX_EVENTS = 100
 
-    def __init__(self, max_events: Optional[int] = None):
-        self.events: List[AuditEvent] = []
-        self.request_id: Optional[str] = None
+    def __init__(self, max_events: int | None = None):
+        self.events: list[AuditEvent] = []
+        self.request_id: str | None = None
         self.start_time: datetime = datetime.now(timezone.utc)
 
         # 요청 메타데이터
-        self._path: Optional[str] = None
-        self._method: Optional[str] = None
-        self._user_id: Optional[str] = None
-        
+        self._path: str | None = None
+        self._method: str | None = None
+        self._user_id: str | None = None
+
         # 이벤트 개수 제한 (메모리 폭발 방지)
         import os
+
         if max_events is not None:
             self._max_events = max_events
         else:
-            self._max_events = int(os.environ.get(
-                "SELFHEALING_MAX_EVENTS_PER_REQUEST",
-                str(self.DEFAULT_MAX_EVENTS)
-            ))
-        
+            self._max_events = int(os.environ.get("SELFHEALING_MAX_EVENTS_PER_REQUEST", str(self.DEFAULT_MAX_EVENTS)))
+
         # 제한 초과로 버려진 이벤트 카운터
         self._truncated_count: int = 0
 
     def add_event(self, event: AuditEvent) -> bool:
         """
         이벤트 직접 추가.
-        
+
         Args:
             event: 추가할 AuditEvent
-            
+
         Returns:
             True: 정상 추가됨
             False: max_events 초과로 버려짐 (truncated)
@@ -343,19 +341,19 @@ class RequestAuditBuffer:
             self._truncated_count += 1
             self._mark_last_event_truncated()
             return False
-        
+
         self.events.append(event)
         return True
-    
+
     def _mark_last_event_truncated(self) -> None:
         """
         마지막 이벤트에 truncation 메타데이터 추가.
-        
+
         후속 이벤트가 버려지고 있음을 마지막 이벤트에 기록합니다.
         """
         if not self.events:
             return
-        
+
         last_event = self.events[-1]
         last_event.details["_truncated"] = True
         last_event.details["_truncated_count"] = self._truncated_count
@@ -364,19 +362,19 @@ class RequestAuditBuffer:
         self,
         event_type: AuditEventType,
         source: str,
-        details: Optional[Dict[str, Any]] = None,
-        actor_id: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        actor_id: str | None = None,
         actor_type: str = "system",
         success: bool = True,
-        error_message: Optional[str] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        domain: Optional[str] = None,
-        reason: Optional[str] = None,
-    ) -> Optional[AuditEvent]:
+        error_message: str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        domain: str | None = None,
+        reason: str | None = None,
+    ) -> AuditEvent | None:
         """
         편의 메서드: 이벤트 생성 및 추가.
-        
+
         max_events 초과 시 이벤트가 버려지고 None 반환됩니다.
         버려진 이벤트 수는 마지막 이벤트의 details._truncated_count에 기록됩니다.
 
@@ -421,15 +419,15 @@ class RequestAuditBuffer:
             domain=domain,
             reason=reason,
         )
-        
+
         # max_events 제한 적용 (add_event 호출)
         if not self.add_event(event):
             # 한도 초과로 버려짐
             return None
-        
+
         return event
 
-    def get_events(self) -> List[AuditEvent]:
+    def get_events(self) -> list[AuditEvent]:
         """모든 이벤트 반환 (복사본)."""
         return self.events.copy()
 
@@ -441,11 +439,11 @@ class RequestAuditBuffer:
         """이벤트 개수."""
         return len(self.events)
 
-    def get_events_by_type(self, event_type: AuditEventType) -> List[AuditEvent]:
+    def get_events_by_type(self, event_type: AuditEventType) -> list[AuditEvent]:
         """특정 유형의 이벤트만 반환."""
         return [e for e in self.events if e.event_type == event_type]
 
-    def get_failed_events(self) -> List[AuditEvent]:
+    def get_failed_events(self) -> list[AuditEvent]:
         """실패 이벤트만 반환."""
         return [e for e in self.events if not e.success]
 
@@ -466,9 +464,9 @@ class RequestAuditBuffer:
 
     def set_request_metadata(
         self,
-        path: Optional[str] = None,
-        method: Optional[str] = None,
-        user_id: Optional[str] = None,
+        path: str | None = None,
+        method: str | None = None,
+        user_id: str | None = None,
     ) -> None:
         """요청 메타데이터 설정."""
         if path is not None:
@@ -486,18 +484,18 @@ class RequestAuditBuffer:
     def max_events(self) -> int:
         """설정된 최대 이벤트 수."""
         return self._max_events
-    
+
     @property
     def truncated_count(self) -> int:
         """한도 초과로 버려진 이벤트 수."""
         return self._truncated_count
-    
+
     @property
     def is_truncated(self) -> bool:
         """이벤트가 버려졌는지 여부."""
         return self._truncated_count > 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """버퍼 전체를 딕셔너리로 변환."""
         result = {
             "request_id": self.request_id,
@@ -509,13 +507,13 @@ class RequestAuditBuffer:
             "event_count": len(self.events),
             "events": [e.to_dict() for e in self.events],
         }
-        
+
         # 이벤트가 버려진 경우 truncation 정보 추가
         if self._truncated_count > 0:
             result["truncated"] = True
             result["truncated_count"] = self._truncated_count
             result["max_events"] = self._max_events
-        
+
         return result
 
     def clear(self) -> None:
@@ -528,7 +526,7 @@ class RequestAuditBuffer:
     # =========================================================================
 
     @classmethod
-    def get_or_create(cls, request: "HttpRequest") -> "RequestAuditBuffer":
+    def get_or_create(cls, request: HttpRequest) -> RequestAuditBuffer:
         """
         request에서 버퍼 가져오거나 새로 생성.
 
@@ -552,7 +550,7 @@ class RequestAuditBuffer:
         return request.META[cls.META_KEY]
 
     @classmethod
-    def get(cls, request: "HttpRequest") -> Optional["RequestAuditBuffer"]:
+    def get(cls, request: HttpRequest) -> RequestAuditBuffer | None:
         """
         request에서 기존 버퍼 가져오기 (없으면 None).
 
@@ -567,7 +565,7 @@ class RequestAuditBuffer:
         return request.META.get(cls.META_KEY)
 
     @classmethod
-    def exists(cls, request: "HttpRequest") -> bool:
+    def exists(cls, request: HttpRequest) -> bool:
         """request에 버퍼가 존재하는지 확인."""
         if not hasattr(request, "META"):
             return False
@@ -580,12 +578,12 @@ class RequestAuditBuffer:
 
 
 def add_audit_event(
-    request: "HttpRequest",
+    request: HttpRequest,
     event_type: AuditEventType,
     source: str,
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
     **kwargs,
-) -> Optional[AuditEvent]:
+) -> AuditEvent | None:
     """
     요청에 Audit 이벤트 추가 (편의 함수).
 

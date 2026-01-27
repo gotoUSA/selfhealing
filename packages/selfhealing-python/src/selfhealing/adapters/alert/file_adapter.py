@@ -11,7 +11,6 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from selfhealing.interfaces.alert_adapter import Alert, AlertAdapter
 
@@ -59,10 +58,10 @@ class FileAlertAdapter(AlertAdapter):
         """Load active alerts from file."""
         if self.active_alerts_path.exists():
             try:
-                with open(self.active_alerts_path, "r", encoding="utf-8") as f:
+                with open(self.active_alerts_path, encoding="utf-8") as f:
                     data = json.load(f)
                     # Note: We just track keys, not full Alert objects
-                    self._active_alerts = {k: None for k in data.get("keys", [])}
+                    self._active_alerts = dict.fromkeys(data.get("keys", []))
             except Exception as e:
                 logger.warning(f"[FileAlertAdapter] Error loading active alerts: {e}")
 
@@ -127,8 +126,8 @@ class FileAlertAdapter(AlertAdapter):
     def get_history(
         self,
         limit: int = 100,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> list[dict]:
         """
         Get alert history.
@@ -147,7 +146,7 @@ class FileAlertAdapter(AlertAdapter):
             return entries
 
         try:
-            with open(self.history_path, "r", encoding="utf-8") as f:
+            with open(self.history_path, encoding="utf-8") as f:
                 for line in f:
                     if len(entries) >= limit:
                         break
@@ -157,7 +156,9 @@ class FileAlertAdapter(AlertAdapter):
 
                         # Filter by time if specified
                         if start_time or end_time:
-                            entry_time = datetime.fromisoformat(entry.get("timestamp", "").replace("Z", "+00:00"))
+                            entry_time = datetime.fromisoformat(
+                                entry.get("timestamp", "").replace("Z", "+00:00")
+                            )
                             if start_time and entry_time < start_time:
                                 continue
                             if end_time and entry_time > end_time:

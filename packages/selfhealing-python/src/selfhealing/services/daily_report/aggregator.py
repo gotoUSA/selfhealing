@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.settings.daily_report import get_daily_report_settings
 
@@ -27,12 +27,12 @@ class DailyReportCollector:
     """
 
     def __init__(self):
-        self._memory_storage: Dict[str, List[TaskResultEntry]] = {}
+        self._memory_storage: dict[str, list[TaskResultEntry]] = {}
 
     def add_result(
         self,
         task_name: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         severity: str = "info",
     ) -> None:
         """Add a task result to today's report."""
@@ -75,7 +75,7 @@ class DailyReportCollector:
                 self._memory_storage[date_key] = []
             self._memory_storage[date_key].append(entry)
 
-    def get_report(self, date: Optional[datetime] = None) -> DailyAutonomousReport:
+    def get_report(self, date: datetime | None = None) -> DailyAutonomousReport:
         """Get aggregated report for a specific date (default: yesterday)."""
         from selfhealing.core.timezone import now
 
@@ -139,7 +139,7 @@ class DailyReportCollector:
 
 
 # Module-level singleton
-_collector: Optional[DailyReportCollector] = None
+_collector: DailyReportCollector | None = None
 
 
 def get_daily_report_collector() -> DailyReportCollector:
@@ -157,7 +157,7 @@ def reset_daily_report_collector() -> None:
 
 
 def aggregate_daily_results(
-    date: Optional[datetime] = None,
+    date: datetime | None = None,
 ) -> DailyAutonomousReport:
     """
     Aggregate cached task results into a daily report.

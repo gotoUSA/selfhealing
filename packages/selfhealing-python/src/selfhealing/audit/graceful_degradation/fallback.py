@@ -13,10 +13,9 @@ import logging
 import os
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.audit.graceful_degradation.enums import FallbackConfig
-
 
 logger = logging.getLogger(__name__)
 
@@ -24,34 +23,34 @@ logger = logging.getLogger(__name__)
 class HashChainFallbackChain:
     """
     Multi-tier fallback chain for hash chain operations.
-    
+
     Fallback order:
     1. Redis Primary - Full distributed functionality
     2. Redis Replica - Read-only, degraded writes to local
     3. Local File - Persistent but not distributed
     4. Memory Buffer - Last resort, volatile
-    
+
     Each fallback level marks entries as degraded for later reconciliation.
-    
+
     Pattern source:
         adapters/resilient/backend.py#L183-230
-    
+
     Usage:
         fallback = HashChainFallbackChain(redis_primary, config)
         entry = fallback.add_integrity(entry)  # Auto-fallback on failure
     """
-    
+
     GENESIS_HASH = "GENESIS"
-    
+
     def __init__(
         self,
-        redis_primary: Optional[Any] = None,
-        redis_replica: Optional[Any] = None,
-        config: Optional[FallbackConfig] = None,
+        redis_primary: Any | None = None,
+        redis_replica: Any | None = None,
+        config: FallbackConfig | None = None,
     ):
         """
         Initialize fallback chain.
-        
+
         Args:
             redis_primary: Primary Redis client
             redis_replica: Replica Redis client (optional)
@@ -61,21 +60,21 @@ class HashChainFallbackChain:
         self._redis_replica = redis_replica
         self._config = config or FallbackConfig()
         self._lock = threading.RLock()
-        
+
         # Local fallback state
         self._local_sequence = 0
         self._local_previous_hash = self.GENESIS_HASH
         self._local_file_handle = None
-        
+
         # Memory buffer (last resort)
-        self._memory_buffer: List[Dict[str, Any]] = []
+        self._memory_buffer: list[dict[str, Any]] = []
         self._memory_sequence = 0
         self._memory_previous_hash = self.GENESIS_HASH
-        
+
         # Current tier tracking
         self._current_tier = "redis_primary" if redis_primary else "local"
         self._tier_switch_count = 0
-        
+
         # Stats
         self._stats = {
             "primary_writes": 0,
@@ -84,17 +83,17 @@ class HashChainFallbackChain:
             "memory_writes": 0,
             "fallback_events": 0,
         }
-    
-    def add_integrity(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+
+    def add_integrity(self, entry: dict[str, Any]) -> dict[str, Any]:
         """
         Add integrity fields with automatic fallback.
-        
+
         Tries each tier in order until one succeeds.
         Failed attempts are logged and the entry is marked as degraded.
-        
+
         Args:
             entry: Log entry dictionary
-        
+
         Returns:
             Entry with integrity fields added
         """
@@ -108,7 +107,7 @@ class HashChainFallbackChain:
             except Exception as e:
                 logger.warning(f"[FallbackChain] Primary failed: {e}")
                 self._stats["fallback_events"] += 1
-        
+
         # Try Redis Replica (read state, write locally)
         if self._redis_replica:
             try:
@@ -119,7 +118,7 @@ class HashChainFallbackChain:
             except Exception as e:
                 logger.warning(f"[FallbackChain] Replica failed: {e}")
                 self._stats["fallback_events"] += 1
-        
+
         # Try Local File
         try:
             result = self._add_integrity_local(entry)
@@ -129,35 +128,35 @@ class HashChainFallbackChain:
         except Exception as e:
             logger.warning(f"[FallbackChain] Local failed: {e}")
             self._stats["fallback_events"] += 1
-        
+
         # Last resort: Memory Buffer
         result = self._add_integrity_memory(entry)
         self._current_tier = "memory"
         self._stats["memory_writes"] += 1
         return result
-    
-    def _add_integrity_redis_primary(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _add_integrity_redis_primary(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Add integrity using Redis primary."""
         from selfhealing.adapters.cache.redis_adapter import RedisDistributedLock
-        
+
         seq_key = f"{self._config.key_prefix}audit:hash_chain:seq"
         state_key = f"{self._config.key_prefix}audit:hash_chain:state"
         lock_key = f"{self._config.key_prefix}audit:hash_chain:lock"
-        
+
         lock = RedisDistributedLock(
             redis_client=self._redis_primary,
             name=lock_key,
             timeout=timedelta(seconds=self._config.redis_timeout_seconds),
             blocking_timeout=self._config.redis_timeout_seconds,
         )
-        
+
         if not lock.acquire(blocking=True):
             raise RuntimeError("Failed to acquire distributed lock")
-        
+
         try:
             # Atomic sequence increment
             sequence = self._redis_primary.incr(seq_key)
-            
+
             # Get previous hash
             previous_hash = self._redis_primary.hget(state_key, "previous_hash")
             if previous_hash:
@@ -165,11 +164,11 @@ class HashChainFallbackChain:
                     previous_hash = previous_hash.decode("utf-8")
             else:
                 previous_hash = self.GENESIS_HASH
-            
+
             # Add integrity fields
             timestamp = datetime.now(timezone.utc).isoformat()
             pod_id = os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown"))
-            
+
             entry["integrity"] = {
                 "sequence": sequence,
                 "previous_hash": previous_hash,
@@ -177,52 +176,57 @@ class HashChainFallbackChain:
                 "pod_id": pod_id,
                 "tier": "redis_primary",
             }
-            
+
             # Compute current hash
             current_hash = self._compute_hash(entry)
             entry["integrity"]["current_hash"] = current_hash
-            
+
             # Save state for next entry
-            self._redis_primary.hset(state_key, mapping={
-                "previous_hash": current_hash,
-                "sequence": str(sequence),
-                "updated_at": timestamp,
-            })
-            
+            self._redis_primary.hset(
+                state_key,
+                mapping={
+                    "previous_hash": current_hash,
+                    "sequence": str(sequence),
+                    "updated_at": timestamp,
+                },
+            )
+
             return entry
-            
+
         finally:
             lock.release()
-    
-    def _add_integrity_with_replica(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _add_integrity_with_replica(self, entry: dict[str, Any]) -> dict[str, Any]:
         """
         Add integrity reading from replica, marking as degraded.
-        
+
         Replica is read-only, so we read state but can't update.
         Entry is marked degraded for later reconciliation.
         """
         state_key = f"{self._config.key_prefix}audit:hash_chain:state"
-        
+
         # Read current state from replica
         state = self._redis_replica.hgetall(state_key)
-        
+
         if state:
             sequence = int(state.get(b"sequence", state.get("sequence", 0)))
-            previous_hash = state.get(b"previous_hash", state.get("previous_hash", self.GENESIS_HASH))
+            previous_hash = state.get(
+                b"previous_hash", state.get("previous_hash", self.GENESIS_HASH)
+            )
             if isinstance(previous_hash, bytes):
                 previous_hash = previous_hash.decode("utf-8")
         else:
             sequence = 0
             previous_hash = self.GENESIS_HASH
-        
+
         # Add integrity fields (sequence is temporary, will be reassigned on reconciliation)
         with self._lock:
             self._local_sequence = max(self._local_sequence, sequence) + 1
             local_seq = self._local_sequence
-        
+
         timestamp = datetime.now(timezone.utc).isoformat()
         pod_id = os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown"))
-        
+
         entry["integrity"] = {
             "sequence": local_seq,
             "previous_hash": previous_hash,
@@ -233,26 +237,26 @@ class HashChainFallbackChain:
             "degraded_reason": "redis_primary_unavailable",
             "degraded_at": timestamp,
         }
-        
+
         current_hash = self._compute_hash(entry)
         entry["integrity"]["current_hash"] = current_hash
-        
+
         # Update local state for chain continuity
         with self._lock:
             self._local_previous_hash = current_hash
-        
+
         return entry
-    
-    def _add_integrity_local(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _add_integrity_local(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Add integrity using local file fallback."""
         with self._lock:
             self._local_sequence += 1
             sequence = self._local_sequence
             previous_hash = self._local_previous_hash
-            
+
             timestamp = datetime.now(timezone.utc).isoformat()
             pod_id = os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown"))
-            
+
             entry["integrity"] = {
                 "sequence": sequence,
                 "previous_hash": previous_hash,
@@ -263,27 +267,27 @@ class HashChainFallbackChain:
                 "degraded_reason": "redis_unavailable",
                 "degraded_at": timestamp,
             }
-            
+
             current_hash = self._compute_hash(entry)
             entry["integrity"]["current_hash"] = current_hash
             self._local_previous_hash = current_hash
-            
+
             # Write to local file if configured
             if self._config.local_file_path:
                 self._write_to_local_file(entry)
-            
+
             return entry
-    
-    def _add_integrity_memory(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _add_integrity_memory(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Add integrity using memory buffer (last resort)."""
         with self._lock:
             self._memory_sequence += 1
             sequence = self._memory_sequence
             previous_hash = self._memory_previous_hash
-            
+
             timestamp = datetime.now(timezone.utc).isoformat()
             pod_id = os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown"))
-            
+
             entry["integrity"] = {
                 "sequence": sequence,
                 "previous_hash": previous_hash,
@@ -295,11 +299,11 @@ class HashChainFallbackChain:
                 "degraded_at": timestamp,
                 "volatile": True,  # Warning: will be lost on restart
             }
-            
+
             current_hash = self._compute_hash(entry)
             entry["integrity"]["current_hash"] = current_hash
             self._memory_previous_hash = current_hash
-            
+
             # Add to memory buffer (with size limit)
             self._memory_buffer.append(entry.copy())
             if len(self._memory_buffer) > self._config.memory_max_entries:
@@ -308,10 +312,10 @@ class HashChainFallbackChain:
                 logger.warning(
                     f"[FallbackChain] Memory buffer full, dropped entry seq={removed.get('integrity', {}).get('sequence')}"
                 )
-            
+
             return entry
-    
-    def _write_to_local_file(self, entry: Dict[str, Any]) -> None:
+
+    def _write_to_local_file(self, entry: dict[str, Any]) -> None:
         """Write entry to local fallback file."""
         try:
             if self._local_file_handle is None:
@@ -319,46 +323,48 @@ class HashChainFallbackChain:
                 self._local_file_handle = open(
                     self._config.local_file_path, "a", encoding="utf-8"
                 )
-            
+
             line = json.dumps(entry, default=str, ensure_ascii=False)
             self._local_file_handle.write(line + "\n")
             self._local_file_handle.flush()
-            
+
         except Exception as e:
             logger.error(f"[FallbackChain] Local file write failed: {e}")
-    
-    def _compute_hash(self, entry: Dict[str, Any]) -> str:
+
+    def _compute_hash(self, entry: dict[str, Any]) -> str:
         """Compute SHA-256 hash of entry."""
         entry_copy = json.loads(json.dumps(entry, default=str))
         if "integrity" in entry_copy and "current_hash" in entry_copy["integrity"]:
             del entry_copy["integrity"]["current_hash"]
         json_str = json.dumps(entry_copy, sort_keys=True, default=str)
         return hashlib.sha256(json_str.encode()).hexdigest()
-    
-    def get_degraded_entries(self) -> List[Dict[str, Any]]:
+
+    def get_degraded_entries(self) -> list[dict[str, Any]]:
         """Get all degraded entries from memory buffer."""
         with self._lock:
-            return [e for e in self._memory_buffer if e.get("integrity", {}).get("degraded")]
-    
+            return [
+                e for e in self._memory_buffer if e.get("integrity", {}).get("degraded")
+            ]
+
     def clear_memory_buffer(self) -> int:
         """Clear memory buffer after successful reconciliation."""
         with self._lock:
             count = len(self._memory_buffer)
             self._memory_buffer.clear()
             return count
-    
+
     def close(self) -> None:
         """Close file handles."""
         if self._local_file_handle:
             self._local_file_handle.close()
             self._local_file_handle = None
-    
+
     @property
     def current_tier(self) -> str:
         """Get current active tier."""
         return self._current_tier
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """Get fallback chain statistics."""
         return {
             **self._stats,

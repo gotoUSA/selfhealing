@@ -7,7 +7,7 @@ Contains SafetyConfig and SafetyCheckResult dataclasses.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 from selfhealing.core.timezone import now
 
@@ -15,41 +15,41 @@ from selfhealing.core.timezone import now
 @dataclass
 class SafetyConfig:
     """Configuration for safety guard checks."""
-    
+
     # Error budget thresholds
     error_budget_min_percent: float = 20.0
     """Minimum error budget % required (default: 20%)."""
-    
+
     error_budget_warning_percent: float = 50.0
     """Error budget % that triggers warning (default: 50%)."""
-    
+
     # Cooldown between experiments
     experiment_cooldown_minutes: int = 30
     """Minimum minutes between experiments (default: 30)."""
-    
+
     # Health check requirements
     require_healthy_system: bool = True
     """Require system health checks to pass."""
-    
+
     require_no_active_incidents: bool = True
     """Require no active incidents."""
-    
+
     require_no_deployment_freeze: bool = True
     """Require no active deployment freeze."""
-    
+
     # CB Freeze Mode 체크
     require_no_freeze_mode: bool = True
     """Require CB Freeze Mode to be inactive for chaos experiments."""
-    
+
     # Fail-safe behavior
     fail_safe_on_error: bool = True
     """Block experiments if safety checks fail (fail-closed)."""
-    
+
     # Skip conditions
     skip_in_test_environment: bool = True
     """Skip safety checks in test environment."""
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "error_budget_min_percent": self.error_budget_min_percent,
@@ -67,54 +67,54 @@ class SafetyConfig:
 @dataclass
 class SafetyCheckResult:
     """Result of a safety check evaluation."""
-    
+
     status: str
     """Overall status: safe, warning, blocked, error."""
-    
+
     allowed: bool
     """Whether the experiment is allowed to proceed."""
-    
+
     # Check details
-    checks_performed: List[str] = field(default_factory=list)
-    checks_passed: List[str] = field(default_factory=list)
-    checks_failed: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    
+    checks_performed: list[str] = field(default_factory=list)
+    checks_passed: list[str] = field(default_factory=list)
+    checks_failed: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
     # Block reason (if blocked)
     block_reason: str = ""
     block_message: str = ""
-    
+
     # Error budget details
     error_budget_remaining_percent: float = 100.0
     error_budget_threshold: float = 20.0
-    
+
     # System state
     system_healthy: bool = True
     active_incidents: int = 0
     deployment_freeze_active: bool = False
     kill_switch_active: bool = False
-    
+
     # Emergency mode
     emergency_mode_active: bool = False
     emergency_level: str = "NORMAL"
-    
+
     # Panic threshold
     panic_threshold_triggered: bool = False
     panic_open_rate: float = 0.0
-    panic_open_circuits: List[str] = field(default_factory=list)
-    
+    panic_open_circuits: list[str] = field(default_factory=list)
+
     # CB Freeze Mode
     freeze_mode_active: bool = False
     """CB Freeze Mode 활성화 여부."""
-    
+
     # Timing
     last_experiment_at: str = ""
     cooldown_remaining_minutes: int = 0
-    
+
     # Metadata
     checked_at: str = field(default_factory=lambda: now().isoformat())
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "status": self.status,

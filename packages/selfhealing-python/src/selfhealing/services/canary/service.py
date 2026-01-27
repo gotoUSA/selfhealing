@@ -16,9 +16,9 @@ Reference:
 
 Usage:
     from selfhealing.services.canary import get_canary_rollout_service
-    
+
     service = get_canary_rollout_service()
-    
+
     # 롤아웃 생성
     rollout = service.create_rollout(
         config_type="circuit_breaker",
@@ -30,32 +30,35 @@ Usage:
         created_by="admin@example.com",
         reason="Reduce failure threshold",
     )
-    
+
     # 롤아웃 시작
     service.start_rollout(rollout.id)
-    
+
     # 프로모션 (다음 단계)
     service.promote(rollout.id)
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import uuid
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
-from selfhealing.utils.time import utc_now
-
+from selfhealing.services.canary.audit import log_canary_action
+from selfhealing.services.canary.chaos_guard import (
+    CanaryChaosGuard,
+)
+from selfhealing.services.canary.locking import CanaryConfigLock, ConfigLockError
 from selfhealing.services.canary.models import (
+    CanaryMetrics,
     CanaryRollout,
     CanaryStage,
     CanaryState,
-    CanaryMetrics,
 )
-from selfhealing.services.canary.locking import CanaryConfigLock, ConfigLockError
-from selfhealing.services.canary.chaos_guard import CanaryChaosGuard, ChaosConflictPolicy
-from selfhealing.services.canary.audit import log_canary_action, log_canary_error
 from selfhealing.settings.namespace import get_key_prefix
+from selfhealing.utils.time import utc_now
 
 if TYPE_CHECKING:
     from selfhealing.services.config_history import ConfigVersion
@@ -66,9 +69,9 @@ logger = logging.getLogger(__name__)
 class CanaryRolloutService:
     """
     Canary Rollout 관리 서비스.
-    
+
     설정 변경을 단계적으로 배포하고, 문제 발생 시 자동 롤백합니다.
-    
+
     Features:
         - 단계별 롤아웃 생성
         - 동시성 제어 (Config Lock)
@@ -76,10 +79,10 @@ class CanaryRolloutService:
         - 메트릭 기반 자동 프로모션/롤백
         - 클러스터별 상태 추적
         - Audit 로깅
-    
+
     Example:
         service = get_canary_rollout_service()
-        
+
         # 롤아웃 생성
         rollout = service.create_rollout(
             config_type="circuit_breaker",
@@ -87,7 +90,7 @@ class CanaryRolloutService:
             stages=[...],
             created_by="admin@example.com",
         )
-        
+
         # 시작 → 프로모션 → 완료
         service.start_rollout(rollout.id)
         service.promote(rollout.id)  # 다음 단계
@@ -105,7 +108,7 @@ class CanaryRolloutService:
         self._config_history = None
         self._config_lock = None
         self._chaos_guard = None
-        self._rollout_ttl_days: Optional[int] = None
+        self._rollout_ttl_days: int | None = None
 
     # =========================================================================
     # Properties (Lazy Loading)
@@ -117,6 +120,7 @@ class CanaryRolloutService:
         if self._rollout_ttl_days is None:
             try:
                 from selfhealing.settings.canary import get_canary_settings
+
                 self._rollout_ttl_days = get_canary_settings().rollout_ttl_days
             except ImportError:
                 self._rollout_ttl_days = 7  # 기본값
@@ -128,7 +132,8 @@ class CanaryRolloutService:
         if self._redis_client is None:
             try:
                 from django.core.cache import caches
-                cache = caches.get('default')
+
+                cache = caches.get("default")
                 if cache:
                     self._redis_client = cache.client.get_client()
             except Exception as e:
@@ -140,6 +145,7 @@ class CanaryRolloutService:
         """ConfigHistoryService (Lazy loading)."""
         if self._config_history is None:
             from selfhealing.services.config_history import get_config_history_service
+
             self._config_history = get_config_history_service()
         return self._config_history
 
@@ -164,15 +170,15 @@ class CanaryRolloutService:
     def create_rollout(
         self,
         config_type: str,
-        new_values: Dict[str, Any],
-        stages: List[CanaryStage],
+        new_values: dict[str, Any],
+        stages: list[CanaryStage],
         created_by: str,
         reason: str = "",
         force_during_chaos: bool = False,
     ) -> CanaryRollout:
         """
         새 Canary 롤아웃 생성.
-        
+
         Args:
             config_type: 설정 유형 (circuit_breaker, dlq, retry 등)
             new_values: 새 설정값
@@ -180,44 +186,43 @@ class CanaryRolloutService:
             created_by: 생성자 (이메일 또는 사용자명)
             reason: 변경 사유
             force_during_chaos: 카오스 실험 중에도 강제 진행
-        
+
         Returns:
             생성된 CanaryRollout
-        
+
         Raises:
             ConfigLockError: 동일 config_type에 대해 롤아웃 진행 중일 때
             ValueError: stages가 비어있을 때
         """
         if not stages:
             raise ValueError("At least one stage is required")
-        
+
         # 1. 락 확인
         if self.config_lock and self.config_lock.is_locked(config_type):
             current_owner = self.config_lock.get_lock_owner(config_type)
             raise ConfigLockError(
-                f"Config '{config_type}' is already in rollout. "
-                f"Current rollout: {current_owner}",
+                f"Config '{config_type}' is already in rollout. " f"Current rollout: {current_owner}",
                 config_type=config_type,
                 current_owner=current_owner,
             )
-        
+
         # 2. 현재 설정 가져오기
         current_version = self._get_current_config(config_type)
         previous_values = current_version.values if current_version else {}
-        
+
         # 3. 카오스 충돌 검사 (사전 경고용)
         all_clusters = []
         for stage in stages:
             all_clusters.extend(stage.clusters)
-        
+
         chaos_result = self.chaos_guard.check_conflict(
             target_clusters=all_clusters,
             force_during_chaos=force_during_chaos,
         )
-        
+
         if not chaos_result.can_proceed:
             raise ValueError(chaos_result.warning_message)
-        
+
         # 4. 롤아웃 생성
         rollout = CanaryRollout(
             id=str(uuid.uuid4())[:8],
@@ -228,7 +233,7 @@ class CanaryRolloutService:
             created_by=created_by,
             reason=reason,
         )
-        
+
         # 5. 락 획득
         if self.config_lock:
             if not self.config_lock.acquire(config_type, rollout.id):
@@ -236,11 +241,11 @@ class CanaryRolloutService:
                     f"Failed to acquire lock for {config_type}",
                     config_type=config_type,
                 )
-        
+
         # 6. Redis에 저장
         self._save_rollout(rollout)
         self._add_to_active(rollout.id)
-        
+
         # 7. Audit 로그
         log_canary_action(
             action="create",
@@ -250,12 +255,9 @@ class CanaryRolloutService:
                 "chaos_warning": chaos_result.warning_message,
             },
         )
-        
-        logger.info(
-            f"[CanaryRollout] Created: id={rollout.id}, "
-            f"config={config_type}, stages={len(stages)}"
-        )
-        
+
+        logger.info(f"[CanaryRollout] Created: id={rollout.id}, " f"config={config_type}, stages={len(stages)}")
+
         return rollout
 
     def start_rollout(
@@ -265,11 +267,11 @@ class CanaryRolloutService:
     ) -> bool:
         """
         Canary 롤아웃 시작 (첫 번째 단계 적용).
-        
+
         Args:
             rollout_id: 롤아웃 ID
             force_during_chaos: 카오스 실험 중에도 강제 진행
-        
+
         Returns:
             성공 여부
         """
@@ -277,34 +279,29 @@ class CanaryRolloutService:
         if not rollout:
             logger.warning(f"[CanaryRollout] Not found: {rollout_id}")
             return False
-        
+
         if rollout.state != CanaryState.CREATED:
-            logger.warning(
-                f"[CanaryRollout] Cannot start: state={rollout.state}"
-            )
+            logger.warning(f"[CanaryRollout] Cannot start: state={rollout.state}")
             return False
-        
+
         # 카오스 충돌 검사
         first_stage = rollout.stages[0]
         chaos_result = self.chaos_guard.check_conflict(
             target_clusters=first_stage.clusters,
             force_during_chaos=force_during_chaos,
         )
-        
+
         if not chaos_result.can_proceed:
-            logger.warning(
-                f"[CanaryRollout] Start blocked by chaos guard: "
-                f"{chaos_result.warning_message}"
-            )
+            logger.warning(f"[CanaryRollout] Start blocked by chaos guard: " f"{chaos_result.warning_message}")
             return False
-        
+
         # 첫 번째 단계 클러스터에 적용 (안전한 클러스터만)
         self._apply_to_clusters(rollout, chaos_result.safe_clusters)
-        
+
         rollout.state = CanaryState.CANARY
         rollout.current_stage_index = 0
         self._save_rollout(rollout)
-        
+
         # Audit 로그
         log_canary_action(
             action="start",
@@ -314,12 +311,11 @@ class CanaryRolloutService:
                 "applied_clusters": chaos_result.safe_clusters,
             },
         )
-        
+
         logger.info(
-            f"[CanaryRollout] Started: id={rollout_id}, "
-            f"stage={first_stage.name}, clusters={chaos_result.safe_clusters}"
+            f"[CanaryRollout] Started: id={rollout_id}, " f"stage={first_stage.name}, clusters={chaos_result.safe_clusters}"
         )
-        
+
         return True
 
     def promote(
@@ -329,24 +325,22 @@ class CanaryRolloutService:
     ) -> bool:
         """
         다음 단계로 프로모션.
-        
+
         Args:
             rollout_id: 롤아웃 ID
             force: 메트릭 검증 무시
-        
+
         Returns:
             성공 여부
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout:
             return False
-        
+
         if rollout.state not in (CanaryState.CANARY, CanaryState.PAUSED):
-            logger.warning(
-                f"[CanaryRollout] Cannot promote: state={rollout.state}"
-            )
+            logger.warning(f"[CanaryRollout] Cannot promote: state={rollout.state}")
             return False
-        
+
         # 현재 단계 메트릭 검증 (force가 아니면)
         if not force:
             metrics = self._collect_stage_metrics(rollout)
@@ -354,26 +348,24 @@ class CanaryRolloutService:
                 rollout.current_stage,
                 metrics,
             )
-            
+
             if not is_healthy:
-                logger.warning(
-                    f"[CanaryRollout] Promotion blocked: {failure_reason}"
-                )
+                logger.warning(f"[CanaryRollout] Promotion blocked: {failure_reason}")
                 return False
-        
+
         # 다음 단계로 이동
         next_index = rollout.current_stage_index + 1
-        
+
         if next_index >= len(rollout.stages):
             # 모든 단계 완료
             rollout.state = CanaryState.COMPLETED
             rollout.completed_at = utc_now()
             self._remove_from_active(rollout.id)
-            
+
             # 락 해제
             if self.config_lock:
                 self.config_lock.release(rollout.config_type, rollout.id)
-            
+
             action = "complete"
         else:
             # 다음 단계 적용
@@ -382,17 +374,14 @@ class CanaryRolloutService:
             rollout.current_stage_index = next_index
             rollout.state = CanaryState.CANARY
             action = "force_promote" if force else "promote"
-        
+
         self._save_rollout(rollout)
-        
+
         # Audit 로그
         log_canary_action(action=action, rollout=rollout)
-        
-        logger.info(
-            f"[CanaryRollout] Promoted: id={rollout_id}, "
-            f"stage_index={rollout.current_stage_index}"
-        )
-        
+
+        logger.info(f"[CanaryRollout] Promoted: id={rollout_id}, " f"stage_index={rollout.current_stage_index}")
+
         return True
 
     def rollback(
@@ -402,27 +391,24 @@ class CanaryRolloutService:
     ) -> bool:
         """
         롤백 수행.
-        
+
         적용된 모든 클러스터를 이전 설정으로 복원합니다.
-        
+
         Args:
             rollout_id: 롤아웃 ID
             reason: 롤백 사유
-        
+
         Returns:
             성공 여부
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout:
             return False
-        
+
         if rollout.is_terminal:
-            logger.warning(
-                f"[CanaryRollout] Cannot rollback terminal state: "
-                f"{rollout.state}"
-            )
+            logger.warning(f"[CanaryRollout] Cannot rollback terminal state: " f"{rollout.state}")
             return False
-        
+
         # 적용된 모든 클러스터에 이전 설정 복원
         for cluster in rollout.affected_clusters:
             self._apply_config_to_cluster(
@@ -430,111 +416,107 @@ class CanaryRolloutService:
                 rollout.config_type,
                 rollout.previous_values,
             )
-        
+
         rollout.state = CanaryState.ROLLED_BACK
         rollout.rollback_reason = reason
         rollout.completed_at = utc_now()
         self._save_rollout(rollout)
         self._remove_from_active(rollout.id)
-        
+
         # 락 해제
         if self.config_lock:
             self.config_lock.release(rollout.config_type, rollout.id)
-        
+
         # Audit 로그
         log_canary_action(
             action="rollback",
             rollout=rollout,
             additional_context={"rollback_reason": reason},
         )
-        
-        logger.warning(
-            f"[CanaryRollout] Rolled back: id={rollout_id}, reason={reason}"
-        )
-        
+
+        logger.warning(f"[CanaryRollout] Rolled back: id={rollout_id}, reason={reason}")
+
         return True
 
     def pause(self, rollout_id: str) -> bool:
         """
         롤아웃 일시 중지.
-        
+
         Args:
             rollout_id: 롤아웃 ID
-        
+
         Returns:
             성공 여부
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout or rollout.state != CanaryState.CANARY:
             return False
-        
+
         rollout.state = CanaryState.PAUSED
         self._save_rollout(rollout)
-        
+
         log_canary_action(action="pause", rollout=rollout)
-        
+
         logger.info(f"[CanaryRollout] Paused: id={rollout_id}")
         return True
 
     def resume(self, rollout_id: str) -> bool:
         """
         일시 중지된 롤아웃 재개.
-        
+
         Args:
             rollout_id: 롤아웃 ID
-        
+
         Returns:
             성공 여부
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout or rollout.state != CanaryState.PAUSED:
             return False
-        
+
         rollout.state = CanaryState.CANARY
         self._save_rollout(rollout)
-        
+
         log_canary_action(action="resume", rollout=rollout)
-        
+
         logger.info(f"[CanaryRollout] Resumed: id={rollout_id}")
         return True
 
     def cancel(self, rollout_id: str, reason: str = "") -> bool:
         """
         롤아웃 취소 (시작 전 상태에서만).
-        
+
         Args:
             rollout_id: 롤아웃 ID
             reason: 취소 사유
-        
+
         Returns:
             성공 여부
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout:
             return False
-        
+
         if rollout.state != CanaryState.CREATED:
-            logger.warning(
-                f"[CanaryRollout] Cannot cancel after start: state={rollout.state}"
-            )
+            logger.warning(f"[CanaryRollout] Cannot cancel after start: state={rollout.state}")
             return False
-        
+
         rollout.state = CanaryState.CANCELLED
         rollout.rollback_reason = reason
         rollout.completed_at = utc_now()
         self._save_rollout(rollout)
         self._remove_from_active(rollout.id)
-        
+
         # 락 해제
         if self.config_lock:
             self.config_lock.release(rollout.config_type, rollout.id)
-        
+
         log_canary_action(
             action="cancel",
             rollout=rollout,
             additional_context={"cancel_reason": reason},
         )
-        
+
         logger.info(f"[CanaryRollout] Cancelled: id={rollout_id}")
         return True
 
@@ -542,58 +524,58 @@ class CanaryRolloutService:
     # Public Methods - Query
     # =========================================================================
 
-    def get_rollout(self, rollout_id: str) -> Optional[CanaryRollout]:
+    def get_rollout(self, rollout_id: str) -> CanaryRollout | None:
         """
         롤아웃 조회.
-        
+
         Args:
             rollout_id: 롤아웃 ID
-        
+
         Returns:
             CanaryRollout 또는 None
         """
         if not self.redis_client:
             return None
-        
+
         key = self._make_rollout_key(rollout_id)
         data = self.redis_client.get(key)
-        
+
         if data:
             if isinstance(data, bytes):
-                data = data.decode('utf-8')
+                data = data.decode("utf-8")
             return self._deserialize_rollout(json.loads(data))
         return None
 
-    def get_active_rollouts(self) -> List[CanaryRollout]:
+    def get_active_rollouts(self) -> list[CanaryRollout]:
         """
         활성 롤아웃 목록 조회.
-        
+
         Returns:
             활성 상태의 CanaryRollout 목록
         """
         if not self.redis_client:
             return []
-        
+
         key = self.ACTIVE_ROLLOUTS_KEY.format(prefix=get_key_prefix())
         rollout_ids = self.redis_client.smembers(key)
-        
+
         rollouts = []
         for rid in rollout_ids:
             if isinstance(rid, bytes):
-                rid = rid.decode('utf-8')
+                rid = rid.decode("utf-8")
             rollout = self.get_rollout(rid)
             if rollout:
                 rollouts.append(rollout)
-        
+
         return rollouts
 
-    def get_rollout_for_config(self, config_type: str) -> Optional[CanaryRollout]:
+    def get_rollout_for_config(self, config_type: str) -> CanaryRollout | None:
         """
         특정 config_type의 활성 롤아웃 조회.
-        
+
         Args:
             config_type: 설정 유형
-        
+
         Returns:
             활성 롤아웃 또는 None
         """
@@ -602,77 +584,77 @@ class CanaryRolloutService:
                 return rollout
         return None
 
-    def get_completed_rollouts(self, limit: int = 20) -> List[CanaryRollout]:
+    def get_completed_rollouts(self, limit: int = 20) -> list[CanaryRollout]:
         """
         완료된 롤아웃 목록 조회.
-        
+
         완료/롤백/실패/취소된 롤아웃을 최근 순으로 반환합니다.
-        
+
         Args:
             limit: 최대 조회 개수 (기본 20)
-        
+
         Returns:
             완료된 CanaryRollout 목록
         """
         if not self.redis_client:
             return []
-        
+
         # 모든 롤아웃 키 패턴 검색
         pattern = self.ROLLOUT_KEY.format(
             prefix=get_key_prefix(),
             rollout_id="*",
         )
-        
+
         completed_rollouts = []
-        
+
         try:
             # SCAN 사용 (KEYS보다 안전)
             cursor = 0
             while True:
                 cursor, keys = self.redis_client.scan(cursor, match=pattern, count=100)
-                
+
                 for key in keys:
                     if isinstance(key, bytes):
-                        key = key.decode('utf-8')
-                    
+                        key = key.decode("utf-8")
+
                     data = self.redis_client.get(key)
                     if data:
                         if isinstance(data, bytes):
-                            data = data.decode('utf-8')
+                            data = data.decode("utf-8")
                         rollout = self._deserialize_rollout(json.loads(data))
-                        
+
                         # 완료 상태만 포함
                         if rollout.is_terminal:
                             completed_rollouts.append(rollout)
-                
+
                 if cursor == 0:
                     break
         except Exception as e:
             logger.warning(f"[CanaryRollout] Failed to scan completed rollouts: {e}")
             return []
-        
+
         # 완료 시간 역순 정렬
         completed_rollouts.sort(
             key=lambda r: r.completed_at or r.created_at,
             reverse=True,
         )
-        
+
         return completed_rollouts[:limit]
 
-    def collect_metrics(self, rollout_id: str) -> List[CanaryMetrics]:
+    def collect_metrics(self, rollout_id: str) -> list[CanaryMetrics]:
         """
         롤아웃 메트릭 수집 (Public API).
-        
+
         Args:
             rollout_id: 롤아웃 ID
-        
+
         Returns:
             CanaryMetrics 목록
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout:
             return []
-        
+
         return self._collect_stage_metrics(rollout)
 
     # =========================================================================
@@ -690,7 +672,7 @@ class CanaryRolloutService:
         """롤아웃 저장."""
         if not self.redis_client:
             return
-        
+
         key = self._make_rollout_key(rollout.id)
         data = self._serialize_rollout(rollout)
         ttl = 86400 * self.rollout_ttl_days
@@ -700,7 +682,7 @@ class CanaryRolloutService:
         """활성 목록에 추가."""
         if not self.redis_client:
             return
-        
+
         key = self.ACTIVE_ROLLOUTS_KEY.format(prefix=get_key_prefix())
         self.redis_client.sadd(key, rollout_id)
 
@@ -708,7 +690,7 @@ class CanaryRolloutService:
         """활성 목록에서 제거."""
         if not self.redis_client:
             return
-        
+
         key = self.ACTIVE_ROLLOUTS_KEY.format(prefix=get_key_prefix())
         self.redis_client.srem(key, rollout_id)
 
@@ -716,7 +698,7 @@ class CanaryRolloutService:
     # Private Methods - Config Operations
     # =========================================================================
 
-    def _get_current_config(self, config_type: str) -> Optional["ConfigVersion"]:
+    def _get_current_config(self, config_type: str) -> ConfigVersion | None:
         """현재 설정 버전 조회."""
         try:
             return self.config_history.get_current_version(config_type)
@@ -727,7 +709,7 @@ class CanaryRolloutService:
     def _apply_to_clusters(
         self,
         rollout: CanaryRollout,
-        clusters: List[str],
+        clusters: list[str],
     ) -> None:
         """클러스터들에 설정 적용."""
         for cluster in clusters:
@@ -741,38 +723,34 @@ class CanaryRolloutService:
         self,
         cluster: str,
         config_type: str,
-        values: Dict[str, Any],
+        values: dict[str, Any],
     ) -> None:
         """
         특정 클러스터에 설정 적용.
-        
+
         실제 구현은 클러스터 동기화 방식에 따라 달라짐:
         - 같은 Redis: 네임스페이스 기반 키에 저장
         - 별도 Redis: 클러스터별 Redis에 연결하여 저장
         - API 기반: 클러스터 API 호출
         """
         if not self.redis_client:
-            logger.warning(
-                f"[CanaryRollout] Redis not available, skipping apply to {cluster}"
-            )
+            logger.warning(f"[CanaryRollout] Redis not available, skipping apply to {cluster}")
             return
-        
+
         # 클러스터별 설정 키에 저장
         key = self.CLUSTER_CONFIG_KEY.format(
             prefix=get_key_prefix(),
             cluster_id=cluster,
             config_type=config_type,
         )
-        
+
         self.redis_client.set(
             key,
             json.dumps(values),
             ex=86400 * self.rollout_ttl_days,
         )
-        
-        logger.info(
-            f"[CanaryRollout] Applied to cluster={cluster}, config={config_type}"
-        )
+
+        logger.info(f"[CanaryRollout] Applied to cluster={cluster}, config={config_type}")
 
     # =========================================================================
     # Private Methods - Metrics & Health
@@ -781,10 +759,10 @@ class CanaryRolloutService:
     def _collect_stage_metrics(
         self,
         rollout: CanaryRollout,
-    ) -> List[CanaryMetrics]:
+    ) -> list[CanaryMetrics]:
         """
         현재 단계의 메트릭 수집.
-        
+
         TODO: Prometheus/메트릭 시스템 연동
         """
         # 현재는 빈 목록 반환 (메트릭 시스템 연동 필요)
@@ -792,35 +770,35 @@ class CanaryRolloutService:
 
     def _is_stage_healthy(
         self,
-        stage: Optional[CanaryStage],
-        metrics: List[CanaryMetrics],
-    ) -> tuple[bool, Optional[str]]:
+        stage: CanaryStage | None,
+        metrics: list[CanaryMetrics],
+    ) -> tuple[bool, str | None]:
         """
         단계 건강 상태 판정.
-        
+
         Returns:
             (건강 여부, 실패 사유)
         """
         if not stage:
             return True, None
-        
+
         if not metrics:
             # 메트릭 없으면 통과 (샘플 부족)
             return True, None
-        
+
         # PassCriteria 사용
         for m in metrics:
             passed, reason = stage.pass_criteria.evaluate(m)
             if not passed:
                 return False, reason
-        
+
         return True, None
 
     # =========================================================================
     # Private Methods - Serialization
     # =========================================================================
 
-    def _serialize_rollout(self, rollout: CanaryRollout) -> Dict[str, Any]:
+    def _serialize_rollout(self, rollout: CanaryRollout) -> dict[str, Any]:
         """CanaryRollout을 딕셔너리로 직렬화."""
         return {
             "id": rollout.id,
@@ -844,14 +822,11 @@ class CanaryRolloutService:
             "created_by": rollout.created_by,
             "created_at": rollout.created_at.isoformat(),
             "reason": rollout.reason,
-            "completed_at": (
-                rollout.completed_at.isoformat()
-                if rollout.completed_at else None
-            ),
+            "completed_at": (rollout.completed_at.isoformat() if rollout.completed_at else None),
             "rollback_reason": rollout.rollback_reason,
         }
 
-    def _deserialize_rollout(self, data: Dict[str, Any]) -> CanaryRollout:
+    def _deserialize_rollout(self, data: dict[str, Any]) -> CanaryRollout:
         """딕셔너리에서 CanaryRollout 복원."""
         return CanaryRollout(
             id=data["id"],
@@ -875,10 +850,7 @@ class CanaryRolloutService:
             created_by=data["created_by"],
             created_at=datetime.fromisoformat(data["created_at"]),
             reason=data["reason"],
-            completed_at=(
-                datetime.fromisoformat(data["completed_at"])
-                if data.get("completed_at") else None
-            ),
+            completed_at=(datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None),
             rollback_reason=data.get("rollback_reason"),
         )
 
@@ -887,13 +859,13 @@ class CanaryRolloutService:
 # Singleton & Factory
 # =============================================================================
 
-_service: Optional[CanaryRolloutService] = None
+_service: CanaryRolloutService | None = None
 
 
 def get_canary_rollout_service() -> CanaryRolloutService:
     """
     CanaryRolloutService 싱글톤 반환.
-    
+
     Returns:
         CanaryRolloutService 인스턴스
     """
@@ -906,7 +878,7 @@ def get_canary_rollout_service() -> CanaryRolloutService:
 def reset_canary_rollout_service() -> None:
     """
     싱글톤 리셋 (테스트용).
-    
+
     Warning:
         프로덕션에서는 사용하지 마세요.
     """

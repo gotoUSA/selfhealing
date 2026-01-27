@@ -11,10 +11,9 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from selfhealing.audit.integrity.models import compute_hash
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class HashChainVerifier:
 
     GENESIS_HASH = "GENESIS"
 
-    def verify_chain(self, entries: List[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
+    def verify_chain(self, entries: list[dict[str, Any]]) -> tuple[bool, str | None]:
         """
         Verify the integrity of an audit log chain.
 
@@ -51,7 +50,10 @@ class HashChainVerifier:
             # Check sequence continuity
             seq = entry.get("integrity", {}).get("sequence", 0)
             if seq != expected_sequence:
-                return False, f"Missing entry: expected sequence {expected_sequence}, found {seq}"
+                return (
+                    False,
+                    f"Missing entry: expected sequence {expected_sequence}, found {seq}",
+                )
 
             # Check previous hash linkage
             prev_hash = entry.get("integrity", {}).get("previous_hash", "")
@@ -71,14 +73,14 @@ class HashChainVerifier:
 
         return True, None
 
-    def _remove_current_hash(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+    def _remove_current_hash(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Remove current_hash from entry for hash verification."""
         entry_copy = json.loads(json.dumps(entry))  # Deep copy
         if "integrity" in entry_copy and "current_hash" in entry_copy["integrity"]:
             del entry_copy["integrity"]["current_hash"]
         return entry_copy
 
-    def find_tampering(self, entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def find_tampering(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Find all tampered or missing entries in a chain.
 
@@ -142,7 +144,7 @@ class HashChainVerifier:
         return issues
 
 
-def verify_audit_log_integrity(log_file: Path) -> Tuple[bool, List[Dict[str, Any]]]:
+def verify_audit_log_integrity(log_file: Path) -> tuple[bool, list[dict[str, Any]]]:
     """
     Verify the integrity of an audit log file.
 
@@ -157,7 +159,7 @@ def verify_audit_log_integrity(log_file: Path) -> Tuple[bool, List[Dict[str, Any
 
     entries = []
     try:
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             for line in f:
                 line = line.strip()
                 if line:

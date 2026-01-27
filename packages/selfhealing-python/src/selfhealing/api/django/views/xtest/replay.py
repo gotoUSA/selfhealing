@@ -17,7 +17,7 @@ Security:
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.utils import timezone
 from rest_framework import status
@@ -118,7 +118,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
             # dry_run 모드: 실제 실행 없이 검증만 수행
             snapshot = collect_system_snapshot()
             validation_result = self._validate_replay(dlq_id)
-            
+
             return Response(
                 {
                     "status": "dry_run",
@@ -168,7 +168,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    def _check_governance(self, skip: bool) -> Dict[str, Any]:
+    def _check_governance(self, skip: bool) -> dict[str, Any]:
         """거버넌스 체크 수행."""
         if skip:
             return {
@@ -213,7 +213,9 @@ class ReplaySingleView(XTestModeMixin, APIView):
                 "allowed": result.allowed,
                 "checks_passed": checks_passed,
                 "checks_failed": checks_failed,
-                "block_reason": result.block_reason.value if result.block_reason else None,
+                "block_reason": (
+                    result.block_reason.value if result.block_reason else None
+                ),
                 "block_message": result.block_message if not result.allowed else None,
             }
         except Exception as e:
@@ -227,7 +229,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
                 "error": str(e),
             }
 
-    def _validate_replay(self, dlq_id: int) -> Dict[str, Any]:
+    def _validate_replay(self, dlq_id: int) -> dict[str, Any]:
         """재생 가능 여부 검증 (dry_run용)."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -274,7 +276,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
                 "reason": "validation_error",
             }
 
-    def _execute_replay(self, dlq_id: int) -> Dict[str, Any]:
+    def _execute_replay(self, dlq_id: int) -> dict[str, Any]:
         """실제 재생 수행."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -284,7 +286,8 @@ class ReplaySingleView(XTestModeMixin, APIView):
 
             return {
                 "success": result.success,
-                "message": result.message or ("Replay completed" if result.success else "Replay failed"),
+                "message": result.message
+                or ("Replay completed" if result.success else "Replay failed"),
                 "error": result.error,
                 "data": result.data,
             }
@@ -404,13 +407,19 @@ class ReplayBatchView(XTestModeMixin, APIView):
             request=request,
             action="replay_batch",
             component="replay",
-            details={"total": result["total"], "success_count": result["success_count"], "failed_count": result["failed_count"]},
+            details={
+                "total": result["total"],
+                "success_count": result["success_count"],
+                "failed_count": result["failed_count"],
+            },
             result="success" if result["failed_count"] == 0 else "partial",
         )
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    def _get_eligible_entries(self, domain: Optional[str], limit: int) -> Dict[str, Any]:
+    def _get_eligible_entries(
+        self, domain: str | None, limit: int
+    ) -> dict[str, Any]:
         """재생 가능한 항목 목록 조회."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -441,13 +450,13 @@ class ReplayBatchView(XTestModeMixin, APIView):
             logger.warning(f"[X-Test-Mode] Failed to get eligible entries: {e}")
             return {"count": 0, "entries": [], "error": str(e)}
 
-    def _get_governance_status(self) -> Dict[str, Any]:
+    def _get_governance_status(self) -> dict[str, Any]:
         """현재 거버넌스 상태 조회."""
         try:
             from selfhealing.services.governance_checks import (
-                is_system_enabled,
                 is_emergency_blocking,
                 is_error_budget_blocking,
+                is_system_enabled,
             )
 
             system_enabled = is_system_enabled()
@@ -465,8 +474,8 @@ class ReplayBatchView(XTestModeMixin, APIView):
             return {"error": str(e)}
 
     def _execute_batch_replay(
-        self, domain: Optional[str], batch_size: int
-    ) -> Dict[str, Any]:
+        self, domain: str | None, batch_size: int
+    ) -> dict[str, Any]:
         """배치 재생 실행."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -601,7 +610,11 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
             request=request,
             action="trigger_cb_close_replay",
             component="replay",
-            details={"service_name": service_name, "eligible_count": eligible_count, "replayed_count": replay_result.get("success_count", 0)},
+            details={
+                "service_name": service_name,
+                "eligible_count": eligible_count,
+                "replayed_count": replay_result.get("success_count", 0),
+            },
             result="success",
         )
 
@@ -610,7 +623,9 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
     def _get_cb_state(self, service_name: str) -> str:
         """CB 상태 조회."""
         try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
 
             cb_service = get_circuit_breaker_service()
             status = cb_service.get_status(service_name)
@@ -622,7 +637,9 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
     def _simulate_cb_close(self, service_name: str) -> bool:
         """CB CLOSE 시뮬레이션."""
         try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
 
             cb_service = get_circuit_breaker_service()
             # force_close 메서드가 있으면 사용
@@ -657,7 +674,7 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
 
     def _execute_conditional_replay(
         self, service_name: str, max_items: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """조건부 재생 실행."""
         try:
             from selfhealing.services.replay_service import get_replay_service
@@ -762,7 +779,7 @@ class ReplayStatusView(XTestModeMixin, APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
-    def _get_pending_stats(self, domain: Optional[str]) -> Dict[str, Any]:
+    def _get_pending_stats(self, domain: str | None) -> dict[str, Any]:
         """대기 중인 DLQ 항목 통계 조회."""
         try:
             from selfhealing.services.dlq import get_dlq_service
@@ -790,13 +807,13 @@ class ReplayStatusView(XTestModeMixin, APIView):
             logger.warning(f"[X-Test-Mode] Failed to get pending stats: {e}")
             return {"total": 0, "by_domain": {}, "error": str(e)}
 
-    def _get_governance_status(self) -> Dict[str, Any]:
+    def _get_governance_status(self) -> dict[str, Any]:
         """거버넌스 상태 조회."""
         try:
             from selfhealing.services.governance_checks import (
-                is_system_enabled,
                 is_emergency_blocking,
                 is_error_budget_blocking,
+                is_system_enabled,
             )
 
             system_enabled = is_system_enabled()
@@ -809,15 +826,19 @@ class ReplayStatusView(XTestModeMixin, APIView):
                 "emergency_level": emergency_level,
                 "error_budget_blocking": budget_blocked,
                 "error_budget_percent": budget_pct,
-                "replay_allowed": system_enabled and not emergency_blocked and not budget_blocked,
+                "replay_allowed": system_enabled
+                and not emergency_blocked
+                and not budget_blocked,
             }
         except Exception as e:
             return {"error": str(e), "replay_allowed": True}
 
-    def _get_cb_states(self) -> Dict[str, str]:
+    def _get_cb_states(self) -> dict[str, str]:
         """등록된 CB 상태 목록 조회."""
         try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
 
             cb_service = get_circuit_breaker_service()
             # get_all_status 메서드가 있으면 사용

@@ -18,7 +18,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -118,7 +117,7 @@ class GracefulDegradationSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[GracefulDegradationSettings] = None
+_settings: GracefulDegradationSettings | None = None
 
 
 def get_graceful_degradation_settings() -> GracefulDegradationSettings:

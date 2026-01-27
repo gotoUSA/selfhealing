@@ -9,13 +9,16 @@ import contextvars
 import logging
 import threading
 import uuid
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Context variable for async-safe trace ID storage
-_trace_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("trace_id", default=None)
+_trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "trace_id", default=None
+)
 
 # Thread-local fallback for non-async code
 _thread_local = threading.local()
@@ -30,30 +33,31 @@ def generate_trace_id(include_cluster_prefix: bool = True) -> str:
 
     Format with cluster prefix: "req-{cluster_prefix}-{uuid4_short}"
     Example: "req-seop-a1b2c3d4" (seoul + production)
-    
+
     Format without cluster prefix: "req-{uuid4_short}"
     Example: "req-a1b2c3d4"
-    
+
     The cluster prefix includes:
     - First 3 characters of region (or "unk" if not set)
     - First character of environment (or "u" if not set)
-    
+
     This ensures trace IDs from different clusters are distinguishable,
     reducing collision probability in multi-cluster environments.
 
     Args:
         include_cluster_prefix: Whether to include cluster prefix (default: True)
-        
+
     Returns:
         New unique trace ID
     """
     uuid_part = uuid.uuid4().hex[:8]
-    
+
     if not include_cluster_prefix or not _cluster_prefix_enabled:
         return f"req-{uuid_part}"
-    
+
     try:
         from selfhealing.core.cluster_identity import get_cluster_identity
+
         identity = get_cluster_identity(skip_validation=True)
         prefix = identity.trace_id_prefix
         return f"req-{prefix}-{uuid_part}"
@@ -65,7 +69,7 @@ def generate_trace_id(include_cluster_prefix: bool = True) -> str:
 def set_cluster_prefix_enabled(enabled: bool) -> None:
     """
     Enable or disable cluster prefix in trace IDs.
-    
+
     Args:
         enabled: True to include cluster prefix, False to disable
     """
@@ -76,7 +80,7 @@ def set_cluster_prefix_enabled(enabled: bool) -> None:
 def get_cluster_prefix_enabled() -> bool:
     """
     Check if cluster prefix is enabled in trace IDs.
-    
+
     Returns:
         True if cluster prefix is enabled, False otherwise
     """
@@ -130,7 +134,7 @@ def clear_trace_id() -> None:
     _thread_local.trace_id = None
 
 
-def extract_trace_id_from_request(request) -> Optional[str]:
+def extract_trace_id_from_request(request) -> str | None:
     """
     Extract trace ID from a Django request.
 
@@ -192,7 +196,7 @@ class TraceContext:
             print(f"Using trace: {trace_id}")
     """
 
-    def __init__(self, trace_id: Optional[str] = None):
+    def __init__(self, trace_id: str | None = None):
         """
         Initialize trace context.
 
@@ -200,7 +204,7 @@ class TraceContext:
             trace_id: Optional trace ID to use (auto-generated if not provided)
         """
         self.trace_id = trace_id or generate_trace_id()
-        self._previous_trace_id: Optional[str] = None
+        self._previous_trace_id: str | None = None
 
     def __enter__(self) -> str:
         """Enter context and set trace ID."""
@@ -261,7 +265,7 @@ def trace_id_middleware(get_response):
 # =============================================================================
 
 # Celery 컨텍스트 저장용 변수
-_celery_context_var: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar(
+_celery_context_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
     "celery_context", default=None
 )
 
@@ -269,20 +273,20 @@ _celery_context_var: contextvars.ContextVar[Optional[dict]] = contextvars.Contex
 def generate_celery_trace_id(task_id: str) -> str:
     """
     Celery Task ID를 기반으로 trace_id를 생성합니다.
-    
+
     Format: "CELERY_{task_id}"
-    
+
     이 형식을 사용하면:
     - Flower UI에서 task_id로 직접 검색 가능
     - 재시도 시에도 동일한 trace_id 유지
     - Audit 로그에서 Celery Task와 1:1 매칭
-    
+
     Args:
         task_id: Celery Task ID (예: "7483abc-1234-...")
-        
+
     Returns:
         str: "CELERY_{task_id}" 형식의 trace_id
-        
+
     Example:
         >>> generate_celery_trace_id("7483abc-1234-5678-90ab-cdef12345678")
         "CELERY_7483abc-1234-5678-90ab-cdef12345678"
@@ -300,9 +304,9 @@ def set_celery_context(
 ) -> None:
     """
     현재 Celery Task 컨텍스트를 설정합니다.
-    
+
     task_prerun 시그널에서 호출되어 Task 실행 동안 유지됩니다.
-    
+
     Args:
         task_id: Celery Task ID
         task_name: Celery Task 이름 (예: "selfhealing.adapters.celery.tasks.replay_single_dlq_entry")
@@ -314,16 +318,16 @@ def set_celery_context(
         "retries": retries,
     }
     _celery_context_var.set(context)
-    
+
     # trace_id도 함께 설정
     trace_id = generate_celery_trace_id(task_id)
     set_trace_id(trace_id)
 
 
-def get_celery_context() -> Optional[dict]:
+def get_celery_context() -> dict | None:
     """
     현재 Celery Task 컨텍스트를 반환합니다.
-    
+
     Returns:
         dict: {"task_id": ..., "task_name": ..., "retries": ...} 또는 None
     """
@@ -333,7 +337,7 @@ def get_celery_context() -> Optional[dict]:
 def clear_celery_context() -> None:
     """
     Celery Task 컨텍스트를 정리합니다.
-    
+
     task_postrun 시그널에서 호출되어 Worker 재사용 시 이전 컨텍스트 잔존을 방지합니다.
     """
     _celery_context_var.set(None)
@@ -343,7 +347,7 @@ def clear_celery_context() -> None:
 def is_celery_task() -> bool:
     """
     현재 실행 컨텍스트가 Celery Task 내부인지 확인합니다.
-    
+
     Returns:
         bool: Celery Task 내부이면 True
     """
@@ -353,24 +357,24 @@ def is_celery_task() -> bool:
 def get_trace_for_celery() -> dict[str, Any]:
     """
     Celery Task에 전달할 trace 정보를 반환합니다.
-    
+
     HTTP 요청 컨텍스트에서 호출 시 현재 trace_id를 포함하여 반환합니다.
     Celery Task 내에서 restore_trace_from_celery()로 복원할 수 있습니다.
-    
+
     Returns:
         dict: trace_id와 source 정보를 담은 딕셔너리
-        
+
     Example:
         # View에서 Task 호출 시
         from selfhealing.audit.trace import get_trace_for_celery
-        
+
         replay_single_dlq_entry.delay(
             dlq_id=pk,
             trace_info=get_trace_for_celery(),
         )
     """
     current_trace_id = _trace_id_var.get() or getattr(_thread_local, "trace_id", None)
-    
+
     return {
         "trace_id": current_trace_id,
         "source": "celery_propagated",
@@ -379,27 +383,27 @@ def get_trace_for_celery() -> dict[str, Any]:
 
 @contextmanager
 def restore_trace_from_celery(
-    trace_info: Optional[dict[str, Any]] = None,
-    celery_task_id: Optional[str] = None,
-    celery_task_name: Optional[str] = None,
+    trace_info: dict[str, Any] | None = None,
+    celery_task_id: str | None = None,
+    celery_task_name: str | None = None,
 ) -> Generator[str, None, None]:
     """
     Celery Task에서 trace 컨텍스트를 복원하거나 자체 생성합니다.
-    
+
     우선순위:
     1. trace_info에 trace_id가 있으면 사용 (HTTP → Celery 전파)
     2. celery_task_id가 있으면 CELERY_{task_id} 생성
     3. 둘 다 없으면 CELERY_{uuid} 생성 (Fallback)
-    
+
     Note:
         task_prerun 시그널이 활성화되면 이 함수는 더 이상 수동 호출 불필요.
         하위 호환성을 위해 유지됨.
-    
+
     Args:
         trace_info: HTTP 요청에서 전파된 trace 정보 (optional)
         celery_task_id: Celery Task ID (optional, self.request.id)
         celery_task_name: Celery Task 이름 (optional)
-        
+
     Yields:
         str: 현재 사용 중인 trace_id
     """
@@ -412,7 +416,7 @@ def restore_trace_from_celery(
     else:
         # Fallback: UUID 기반 생성
         trace_id = f"CELERY_{generate_trace_id()}"
-    
+
     # Celery 컨텍스트 설정 (있는 경우)
     if celery_task_id:
         set_celery_context(
@@ -420,7 +424,7 @@ def restore_trace_from_celery(
             task_name=celery_task_name or "unknown",
             retries=0,
         )
-    
+
     try:
         with TraceContext(trace_id) as active_trace_id:
             yield active_trace_id

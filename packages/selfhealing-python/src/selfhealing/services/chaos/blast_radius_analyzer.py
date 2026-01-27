@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class DependencyNode:
     dependency_type: str = "downstream"  # "upstream" | "downstream"
     impact_score: float = 0.0  # 0.0 ~ 1.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "service_name": self.service_name,
@@ -86,18 +86,18 @@ class BlastRadiusAnalysisResult:
     level: BlastRadiusLevel = BlastRadiusLevel.CONTAINED
 
     # 영향받는 서비스
-    affected_services: List[DependencyNode] = field(default_factory=list)
+    affected_services: list[DependencyNode] = field(default_factory=list)
     total_affected_count: int = 0
 
     # 핵심 서비스 포함 여부
     includes_critical_services: bool = False
-    critical_services: List[str] = field(default_factory=list)
+    critical_services: list[str] = field(default_factory=list)
 
     # 위험 점수 (0.0 ~ 1.0)
     risk_score: float = 0.0
 
     # 권장 사항
-    recommendations: List[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
     # 승인 요구사항
     requires_approval: bool = False
@@ -105,9 +105,9 @@ class BlastRadiusAnalysisResult:
 
     # 실험 가능 여부
     experiment_allowed: bool = True
-    blocking_reasons: List[str] = field(default_factory=list)
+    blocking_reasons: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "target_service": self.target_service,
@@ -186,7 +186,7 @@ class BlastRadiusAnalyzer:
     def __init__(
         self,
         max_depth: int = 3,
-        critical_services: Optional[Set[str]] = None,
+        critical_services: set[str] | None = None,
     ):
         """
         Args:
@@ -200,7 +200,7 @@ class BlastRadiusAnalyzer:
         self,
         target_service: str,
         experiment_type: str,
-        blast_radius_level: Optional[str] = None,
+        blast_radius_level: str | None = None,
     ) -> BlastRadiusAnalysisResult:
         """
         폭발 반경 분석 수행.
@@ -287,7 +287,7 @@ class BlastRadiusAnalyzer:
     def analyze_affected_services(
         self,
         target_service: str,
-    ) -> List[DependencyNode]:
+    ) -> list[DependencyNode]:
         """
         영향받는 서비스 목록 조회.
 
@@ -303,8 +303,8 @@ class BlastRadiusAnalyzer:
         self,
         target_service: str,
         current_depth: int = 0,
-        visited: Optional[Set[str]] = None,
-    ) -> List[DependencyNode]:
+        visited: set[str] | None = None,
+    ) -> list[DependencyNode]:
         """의존성 그래프 탐색 (BFS)."""
         if visited is None:
             visited = set()
@@ -342,14 +342,10 @@ class BlastRadiusAnalyzer:
 
     def _find_critical_services(
         self,
-        affected_services: List[DependencyNode],
-    ) -> List[str]:
+        affected_services: list[DependencyNode],
+    ) -> list[str]:
         """영향받는 서비스 중 핵심 서비스 필터링."""
-        return [
-            node.service_name
-            for node in affected_services
-            if node.is_critical
-        ]
+        return [node.service_name for node in affected_services if node.is_critical]
 
     def _calculate_blast_radius_level(
         self,
@@ -371,7 +367,7 @@ class BlastRadiusAnalyzer:
 
     def _calculate_risk_score(
         self,
-        affected_services: List[DependencyNode],
+        affected_services: list[DependencyNode],
         includes_critical: bool,
         experiment_type: str,
     ) -> float:
@@ -421,10 +417,10 @@ class BlastRadiusAnalyzer:
     def _generate_recommendations(
         self,
         level: BlastRadiusLevel,
-        affected_services: List[DependencyNode],
+        affected_services: list[DependencyNode],
         includes_critical: bool,
         experiment_type: str,
-    ) -> List[str]:
+    ) -> list[str]:
         """권장 사항 생성."""
         recommendations = []
 
@@ -454,9 +450,7 @@ class BlastRadiusAnalyzer:
             )
 
         if not recommendations:
-            recommendations.append(
-                "영향 범위가 제한적입니다. 실험 진행이 안전합니다."
-            )
+            recommendations.append("영향 범위가 제한적입니다. 실험 진행이 안전합니다.")
 
         return recommendations
 
@@ -466,15 +460,15 @@ class BlastRadiusAnalyzer:
         experiment_type: str,
         level: BlastRadiusLevel,
         includes_critical: bool,
-    ) -> tuple[bool, List[str]]:
+    ) -> tuple[bool, list[str]]:
         """실험 가능 여부 확인."""
         blocking_reasons = []
 
         # BlastRadiusManager와 연동하여 확인
         try:
             from selfhealing.services.chaos.blast_radius import (
-                get_blast_radius_manager,
                 BlastRadius,
+                get_blast_radius_manager,
             )
 
             manager = get_blast_radius_manager()
@@ -507,7 +501,7 @@ class BlastRadiusAnalyzer:
 # Singleton
 # =============================================================================
 
-_instance: Optional[BlastRadiusAnalyzer] = None
+_instance: BlastRadiusAnalyzer | None = None
 
 
 def get_blast_radius_analyzer() -> BlastRadiusAnalyzer:

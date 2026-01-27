@@ -11,8 +11,7 @@ Note:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
 
 
 def utc_now() -> datetime:
@@ -52,7 +51,7 @@ def ensure_aware(dt: datetime) -> datetime:
     return dt
 
 
-def to_iso_string(dt: Optional[datetime]) -> Optional[str]:
+def to_iso_string(dt: datetime | None) -> str | None:
     """
     datetime을 ISO 8601 문자열로 변환합니다.
 
@@ -90,7 +89,7 @@ def from_iso_string(iso_str: str) -> datetime:
     return ensure_aware(dt)
 
 
-def elapsed_seconds(start: datetime, end: Optional[datetime] = None) -> float:
+def elapsed_seconds(start: datetime, end: datetime | None = None) -> float:
     """
     두 시간 사이의 경과 시간을 초 단위로 반환합니다.
 

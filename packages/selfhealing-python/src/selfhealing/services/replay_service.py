@@ -22,22 +22,25 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Callable
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
-from selfhealing.settings import get_config
-from selfhealing.services.governance_checks import (
-    check_all_governance,
-    GovernanceCheckResult,
-)
 from selfhealing.services.audit_helpers import log_dlq_replay_audit
+from selfhealing.services.governance_checks import (
+    GovernanceCheckResult,
+    check_all_governance,
+)
+from selfhealing.settings import get_config
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
-        FailedOperationRepository,
         FailedOperationData,
+        FailedOperationRepository,
     )
-    from selfhealing.services.adaptive_replay import AdaptiveReplayManager
+    from selfhealing.services.adaptive_replay import (
+        AdaptiveReplayConfig,
+        AdaptiveReplayManager,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -58,17 +61,17 @@ class ReplayResult:
     data: dict[str, Any] | None = None
 
     @classmethod
-    def succeeded(cls, dlq_id: int, message: str = "", data: dict | None = None) -> "ReplayResult":
+    def succeeded(cls, dlq_id: int, message: str = "", data: dict | None = None) -> ReplayResult:
         """Factory for successful replay."""
         return cls(success=True, dlq_id=dlq_id, message=message, data=data)
 
     @classmethod
-    def failed(cls, dlq_id: int, error: str) -> "ReplayResult":
+    def failed(cls, dlq_id: int, error: str) -> ReplayResult:
         """Factory for failed replay."""
         return cls(success=False, dlq_id=dlq_id, error=error)
-    
+
     @classmethod
-    def blocked(cls, dlq_id: int, governance_result: GovernanceCheckResult) -> "ReplayResult":
+    def blocked(cls, dlq_id: int, governance_result: GovernanceCheckResult) -> ReplayResult:
         """Factory for governance-blocked replay."""
         return cls(
             success=False,
@@ -76,7 +79,7 @@ class ReplayResult:
             error=governance_result.block_message,
             data={
                 "blocked": True,
-                "block_reason": governance_result.block_reason.value if governance_result.block_reason else None,
+                "block_reason": (governance_result.block_reason.value if governance_result.block_reason else None),
             },
         )
 
@@ -121,7 +124,7 @@ class ReplayHandler(ABC):
         pass
 
     @abstractmethod
-    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
+    def replay(self, failed_op: FailedOperationData) -> ReplayResult:
         """
         Execute replay for a single failed operation.
 
@@ -134,7 +137,7 @@ class ReplayHandler(ABC):
         pass
 
     @abstractmethod
-    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
+    def can_replay(self, failed_op: FailedOperationData) -> tuple[bool, str]:
         """
         Check if the operation can be replayed.
 
@@ -162,10 +165,10 @@ class DefaultReplayHandler(ReplayHandler):
     def domain(self) -> str:
         return self._domain
 
-    def can_replay(self, failed_op: "FailedOperationData") -> tuple[bool, str]:
+    def can_replay(self, failed_op: FailedOperationData) -> tuple[bool, str]:
         return False, f"No replay handler registered for domain '{self._domain}'"
 
-    def replay(self, failed_op: "FailedOperationData") -> ReplayResult:
+    def replay(self, failed_op: FailedOperationData) -> ReplayResult:
         return ReplayResult.failed(
             failed_op.id,
             f"No replay handler registered for domain '{self._domain}'. "
@@ -270,7 +273,7 @@ class ReplayService:
         service = ReplayService(repository=mock_repo)
     """
 
-    def __init__(self, repository: "FailedOperationRepository | None" = None):
+    def __init__(self, repository: FailedOperationRepository | None = None):
         """
         Initialize the replay service.
 
@@ -281,7 +284,7 @@ class ReplayService:
         self._repository = repository
 
     @property
-    def repository(self) -> "FailedOperationRepository":
+    def repository(self) -> FailedOperationRepository:
         """Get the repository, creating InMemory adapter if needed."""
         if self._repository is None:
             # Try to use ProviderRegistry from selfhealing package first
@@ -291,7 +294,9 @@ class ReplayService:
                 self._repository = ProviderRegistry.get_failed_operation_repo()
             except (ImportError, ValueError):
                 # Fallback to in-memory adapter
-                from selfhealing.adapters.memory import InMemoryFailedOperationRepository
+                from selfhealing.adapters.memory import (
+                    InMemoryFailedOperationRepository,
+                )
 
                 self._repository = InMemoryFailedOperationRepository()
         return self._repository
@@ -342,10 +347,7 @@ class ReplayService:
         )
 
         if not governance.allowed:
-            logger.warning(
-                f"[ReplayService] replay_single blocked: {governance.block_message}. "
-                f"dlq_id={dlq_id}"
-            )
+            logger.warning(f"[ReplayService] replay_single blocked: {governance.block_message}. " f"dlq_id={dlq_id}")
             return ReplayResult.blocked(dlq_id, governance)
 
         # Atomically try to acquire the entry for replay
@@ -372,7 +374,10 @@ class ReplayService:
             result = handler.replay(failed_op_data)
         except Exception as e:
             # Handler raised an unexpected exception - escalate to REQUIRES_REVIEW
-            logger.error(f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}", exc_info=True)
+            logger.error(
+                f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}",
+                exc_info=True,
+            )
             self.repository.complete_replay(
                 id=dlq_id,
                 success=False,
@@ -391,7 +396,7 @@ class ReplayService:
             id=dlq_id,
             success=result.success,
             resolution_type="auto_replay" if result.success else "",
-            note=result.message if result.success else (result.error or "Replay failed"),
+            note=(result.message if result.success else (result.error or "Replay failed")),
         )
 
         if result.success:
@@ -538,18 +543,15 @@ class ReplayService:
                 failures=batch_result.failed_count,
             )
             logger.debug(
-                f"[ReplayService] Adaptive batch recorded: "
-                f"next_max_items={adaptive_manager.get_current_max_items()}"
+                f"[ReplayService] Adaptive batch recorded: " f"next_max_items={adaptive_manager.get_current_max_items()}"
             )
 
         logger.info(
             f"[ReplayService] Batch replay completed: "
             f"total={batch_result.total}, success={batch_result.success_count}, "
             f"failed={batch_result.failed_count}"
-            + (f", adaptive_max_items={adaptive_manager.get_current_max_items()}" 
-               if adaptive_manager else "")
-            + (f", priority_mode=True, domains={domains_processed}"
-               if priority_used else "")
+            + (f", adaptive_max_items={adaptive_manager.get_current_max_items()}" if adaptive_manager else "")
+            + (f", priority_mode=True, domains={domains_processed}" if priority_used else "")
         )
 
         return batch_result
@@ -558,7 +560,7 @@ class ReplayService:
         self,
         max_items: int,
         use_adaptive: bool | None,
-    ) -> tuple[int, "AdaptiveReplayManager | None"]:
+    ) -> tuple[int, AdaptiveReplayManager | None]:
         """
         Determine effective max_items based on adaptive mode.
 
@@ -571,7 +573,6 @@ class ReplayService:
         """
         from selfhealing.services.adaptive_replay import (
             get_adaptive_replay_manager,
-            AdaptiveReplayConfig,
         )
 
         # Check RuntimeConfig for adaptive mode
@@ -591,10 +592,7 @@ class ReplayService:
 
         effective_max_items = manager.get_current_max_items()
 
-        logger.debug(
-            f"[ReplayService] Adaptive mode: "
-            f"requested={max_items}, effective={effective_max_items}"
-        )
+        logger.debug(f"[ReplayService] Adaptive mode: " f"requested={max_items}, effective={effective_max_items}")
 
         return effective_max_items, manager
 
@@ -652,7 +650,7 @@ class ReplayService:
         failure_type: str | None,
         max_replays: int,
         limit: int,
-    ) -> tuple[list["FailedOperationData"], list[str]]:
+    ) -> tuple[list[FailedOperationData], list[str]]:
         """
         Get DLQ entries sorted by domain priority.
 
@@ -679,7 +677,7 @@ class ReplayService:
             if priority in priority_groups:
                 priority_groups[priority].append(domain)
 
-        all_entries: list["FailedOperationData"] = []
+        all_entries: list[FailedOperationData] = []
         domains_processed: list[str] = []
         remaining = limit
 
@@ -709,8 +707,7 @@ class ReplayService:
                     remaining -= len(entries)
 
                     logger.debug(
-                        f"[ReplayService] Priority fetch: domain={domain}, "
-                        f"priority={priority}, count={len(entries)}"
+                        f"[ReplayService] Priority fetch: domain={domain}, " f"priority={priority}, count={len(entries)}"
                     )
 
         # If still have capacity, get entries from unconfigured domains
@@ -735,13 +732,12 @@ class ReplayService:
                     remaining -= 1
 
         logger.info(
-            f"[ReplayService] Priority-based fetch complete: "
-            f"total={len(all_entries)}, domains={domains_processed}"
+            f"[ReplayService] Priority-based fetch complete: " f"total={len(all_entries)}, domains={domains_processed}"
         )
 
         return all_entries, domains_processed
 
-    def _get_adaptive_config(self) -> "AdaptiveReplayConfig":
+    def _get_adaptive_config(self) -> AdaptiveReplayConfig:
         """Load AdaptiveReplayConfig from RuntimeConfig."""
         from selfhealing.services.adaptive_replay import AdaptiveReplayConfig
 
@@ -764,7 +760,7 @@ class ReplayService:
     def _replay_single_internal(self, dlq_id: int) -> ReplayResult:
         """
         Internal replay without governance check.
-        
+
         Used by replay_batch to avoid redundant governance checks.
         """
         config_max = self.config["max_replay_attempts"]
@@ -785,7 +781,10 @@ class ReplayService:
         try:
             result = handler.replay(failed_op_data)
         except Exception as e:
-            logger.error(f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}", exc_info=True)
+            logger.error(
+                f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}",
+                exc_info=True,
+            )
             self.repository.complete_replay(
                 id=dlq_id,
                 success=False,
@@ -803,7 +802,7 @@ class ReplayService:
             id=dlq_id,
             success=result.success,
             resolution_type="auto_replay" if result.success else "",
-            note=result.message if result.success else (result.error or "Replay failed"),
+            note=(result.message if result.success else (result.error or "Replay failed")),
         )
 
         if result.success:
@@ -884,7 +883,8 @@ class ReplayService:
                     current_entry = self.repository.get_by_id(entry.id)
                     if current_entry and current_entry.status == "pending":
                         self.repository.mark_as_requires_review(
-                            entry.id, note=f"Conditional replay failed after circuit close for {service_name}: {result.error}"
+                            entry.id,
+                            note=f"Conditional replay failed after circuit close for {service_name}: {result.error}",
                         )
                         logger.warning(
                             f"[ReplayService] Escalated DLQ {entry.id} to REQUIRES_REVIEW " f"after conditional replay failure"

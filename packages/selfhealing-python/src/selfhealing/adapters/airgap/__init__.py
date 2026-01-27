@@ -25,12 +25,12 @@ from selfhealing.adapters.airgap.base import (
     AirGapStorageAdapter,
     BaseAirGapAdapter,
 )
-from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
 from selfhealing.adapters.airgap.factory import (
-    get_airgap_adapter,
     configure_airgap_adapter,
+    get_airgap_adapter,
     reset_airgap_adapter,
 )
+from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
 
 __all__ = [
     "AirGapStorageAdapter",

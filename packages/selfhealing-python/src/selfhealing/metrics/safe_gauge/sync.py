@@ -10,7 +10,6 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +28,14 @@ class SyncInfo:
     """메트릭 동기화 정보."""
 
     status: SyncStatus = SyncStatus.UNKNOWN
-    last_sync_time: Optional[float] = None  # Unix timestamp
+    last_sync_time: float | None = None  # Unix timestamp
     last_sync_source: str = "none"  # "push", "hydration", "manual", "snapshot"
     staleness_threshold: float = 300.0  # 5분 (초)
-    stabilization_start: Optional[float] = None  # 복구 시작 시간
+    stabilization_start: float | None = None  # 복구 시작 시간
     stabilization_duration: float = 60.0  # 안정화 기간 (초)
 
     @property
-    def age_seconds(self) -> Optional[float]:
+    def age_seconds(self) -> float | None:
         """마지막 동기화 이후 경과 시간 (초)."""
         if self.last_sync_time is None:
             return None

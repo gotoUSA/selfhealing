@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
-from selfhealing.interfaces.audit_adapter import AuditAction, AuditEntry, AuditLogAdapter
+from selfhealing.interfaces.audit_adapter import (
+    AuditAction,
+    AuditEntry,
+    AuditLogAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ class FileAuditLogAdapter(AuditLogAdapter):
         self,
         file_path: str | Path,
         rotate_daily: bool = False,
-        max_file_size_mb: Optional[int] = None,
+        max_file_size_mb: int | None = None,
     ):
         """
         Initialize file audit adapter.
@@ -87,14 +89,16 @@ class FileAuditLogAdapter(AuditLogAdapter):
     def _entry_matches_filters(
         self,
         entry: AuditEntry,
-        action: Optional[AuditAction | str],
-        target_type: Optional[str],
-        target_id: Optional[str],
-        start_time: Optional[datetime],
-        end_time: Optional[datetime],
+        action: AuditAction | str | None,
+        target_type: str | None,
+        target_id: str | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
     ) -> bool:
         """Check if entry matches all provided filters."""
-        if action and self._get_action_value(entry.action) != self._get_action_value(action):
+        if action and self._get_action_value(entry.action) != self._get_action_value(
+            action
+        ):
             return False
         if target_type and entry.target_type != target_type:
             return False
@@ -109,25 +113,27 @@ class FileAuditLogAdapter(AuditLogAdapter):
     def _parse_entries_from_file(
         self,
         log_file: Path,
-        action: Optional[AuditAction | str],
-        target_type: Optional[str],
-        target_id: Optional[str],
-        start_time: Optional[datetime],
-        end_time: Optional[datetime],
+        action: AuditAction | str | None,
+        target_type: str | None,
+        target_id: str | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
         limit: int,
         current_count: int,
     ) -> list[AuditEntry]:
         """Parse and filter entries from a single log file."""
         entries: list[AuditEntry] = []
         try:
-            with open(log_file, "r", encoding="utf-8") as f:
+            with open(log_file, encoding="utf-8") as f:
                 for line in f:
                     if current_count + len(entries) >= limit:
                         break
                     try:
                         data = json.loads(line.strip())
                         entry = self._dict_to_entry(data)
-                        if self._entry_matches_filters(entry, action, target_type, target_id, start_time, end_time):
+                        if self._entry_matches_filters(
+                            entry, action, target_type, target_id, start_time, end_time
+                        ):
                             entries.append(entry)
                     except json.JSONDecodeError:
                         continue
@@ -137,11 +143,11 @@ class FileAuditLogAdapter(AuditLogAdapter):
 
     def query(
         self,
-        action: Optional[AuditAction | str] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        action: AuditAction | str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
     ) -> list[AuditEntry]:
         """
@@ -157,7 +163,14 @@ class FileAuditLogAdapter(AuditLogAdapter):
             if len(entries) >= limit:
                 break
             file_entries = self._parse_entries_from_file(
-                log_file, action, target_type, target_id, start_time, end_time, limit, len(entries)
+                log_file,
+                action,
+                target_type,
+                target_id,
+                start_time,
+                end_time,
+                limit,
+                len(entries),
             )
             entries.extend(file_entries)
 

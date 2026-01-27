@@ -21,11 +21,11 @@ Reference:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from selfhealing.metrics.reliability_manager import MetricReliabilityManager
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +38,19 @@ class GovernanceApiService:
     """
 
     def __init__(self):
-        self._startup_time: Optional[float] = None
-        self._next_scheduled_sync: Optional[float] = None
+        self._startup_time: float | None = None
+        self._next_scheduled_sync: float | None = None
 
     def set_startup_info(
         self,
         startup_time: float,
-        next_scheduled_sync: Optional[float] = None,
+        next_scheduled_sync: float | None = None,
     ) -> None:
         """서버 시작 정보 설정 (Startup Hydration에서 호출)."""
         self._startup_time = startup_time
         self._next_scheduled_sync = next_scheduled_sync
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         통합 메트릭 상태 조회.
 
@@ -92,7 +92,11 @@ class GovernanceApiService:
 
         return {
             "generated_at": now.isoformat(),
-            "operating_mode": operating_mode.value if hasattr(operating_mode, "value") else str(operating_mode),
+            "operating_mode": (
+                operating_mode.value
+                if hasattr(operating_mode, "value")
+                else str(operating_mode)
+            ),
             "overall_health": overall_health,
             "sync_status": sync_status,
             "snapshot_health": snapshot_health,
@@ -103,11 +107,11 @@ class GovernanceApiService:
 
     def reconcile(
         self,
-        domains: Optional[List[str]] = None,
+        domains: list[str] | None = None,
         dry_run: bool = False,
         actor: str = "unknown",
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """
         정합성 조정 수행 (sync → reconcile 용어 변경).
 
@@ -137,8 +141,8 @@ class GovernanceApiService:
         self,
         mode: str,
         actor: str = "unknown",
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """
         운영 모드 강제 전환.
 
@@ -155,8 +159,8 @@ class GovernanceApiService:
             전환 결과 (expires_at 포함)
         """
         from selfhealing.metrics.reliability_manager import (
-            get_reliability_manager,
             OperatingMode,
+            get_reliability_manager,
         )
 
         valid_modes = ["NORMAL", "CAUTIOUS", "STRICT", "EMERGENCY"]
@@ -175,7 +179,9 @@ class GovernanceApiService:
         manager.force_global_mode(target_mode, reason=reason or f"Forced by {actor}")
 
         # EmergencyModeTracker 연동 (자동 만료 기능)
-        tracker_result = self._sync_emergency_tracker(mode_upper, actor, reason, old_mode)
+        tracker_result = self._sync_emergency_tracker(
+            mode_upper, actor, reason, old_mode
+        )
 
         # Audit 로깅
         self._log_mode_change(actor, old_mode, target_mode, reason)
@@ -184,7 +190,9 @@ class GovernanceApiService:
             "status": "mode_changed",
             "changed_at": datetime.now(timezone.utc).isoformat(),
             "actor": actor,
-            "previous_mode": old_mode.value if hasattr(old_mode, "value") else str(old_mode),
+            "previous_mode": (
+                old_mode.value if hasattr(old_mode, "value") else str(old_mode)
+            ),
             "current_mode": target_mode.value,
             "reason": reason,
             "warning": self._get_mode_warning(target_mode),
@@ -201,9 +209,9 @@ class GovernanceApiService:
         self,
         mode: str,
         actor: str,
-        reason: Optional[str],
+        reason: str | None,
         old_mode,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         EmergencyModeTracker와 동기화 (자동 만료 기능).
 
@@ -224,7 +232,9 @@ class GovernanceApiService:
 
             tracker = get_emergency_tracker()
 
-            old_mode_str = old_mode.value if hasattr(old_mode, "value") else str(old_mode)
+            old_mode_str = (
+                old_mode.value if hasattr(old_mode, "value") else str(old_mode)
+            )
 
             if mode == "STRICT":
                 # 긴급 모드 활성화 (자동 만료 추적 시작)
@@ -234,7 +244,8 @@ class GovernanceApiService:
                     mode="STRICT",
                 )
                 logger.info(
-                    f"[Governance] Emergency tracker activated: " f"actor={actor}, expires_at={result.get('expiry_hours', 8)}h"
+                    f"[Governance] Emergency tracker activated: "
+                    f"actor={actor}, expires_at={result.get('expiry_hours', 8)}h"
                 )
 
                 # 만료 시각 계산
@@ -250,7 +261,9 @@ class GovernanceApiService:
                     restored_by=actor,
                     reason=reason or "Mode restored to NORMAL",
                 )
-                logger.info(f"[Governance] Emergency tracker deactivated: actor={actor}")
+                logger.info(
+                    f"[Governance] Emergency tracker deactivated: actor={actor}"
+                )
                 return result
 
         except ImportError:
@@ -260,7 +273,7 @@ class GovernanceApiService:
 
         return None
 
-    def _get_reliability_states(self) -> Dict[str, Any]:
+    def _get_reliability_states(self) -> dict[str, Any]:
         """ReliabilityManager에서 모든 도메인 상태 조회."""
         try:
             from selfhealing.metrics.reliability_manager import get_reliability_manager
@@ -274,7 +287,9 @@ class GovernanceApiService:
             logger.warning(f"[Governance] Failed to get reliability states: {e}")
             return {}
 
-    def _build_domains_status(self, reliability_states: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def _build_domains_status(
+        self, reliability_states: dict[str, Any]
+    ) -> dict[str, dict[str, Any]]:
         """도메인별 상태 빌드."""
         domains = {}
 
@@ -286,9 +301,13 @@ class GovernanceApiService:
                     "operating_mode": getattr(state, "operating_mode", "unknown"),
                     "last_sync_time": getattr(state, "last_sync_time", None),
                     "last_sync_source": getattr(state, "last_sync_source", "none"),
-                    "consecutive_syncs": getattr(state, "consecutive_successful_syncs", 0),
+                    "consecutive_syncs": getattr(
+                        state, "consecutive_successful_syncs", 0
+                    ),
                     "is_data_fresh": getattr(state, "is_data_fresh", False),
-                    "stabilization_progress": getattr(state, "stabilization_progress", 0.0),
+                    "stabilization_progress": getattr(
+                        state, "stabilization_progress", 0.0
+                    ),
                     "dlq_pending": {
                         "value": getattr(state, "current_value", 0),
                         "is_synced": getattr(state, "is_data_fresh", False),
@@ -304,7 +323,7 @@ class GovernanceApiService:
 
         return domains
 
-    def _get_global_operating_mode(self, reliability_states: Dict[str, Any]) -> str:
+    def _get_global_operating_mode(self, reliability_states: dict[str, Any]) -> str:
         """전역 운영 모드 결정."""
         try:
             from selfhealing.metrics.reliability_manager import get_reliability_manager
@@ -324,10 +343,19 @@ class GovernanceApiService:
 
             # 가장 엄격한 모드 반환
             mode_priority = {"EMERGENCY": 0, "STRICT": 1, "CAUTIOUS": 2, "NORMAL": 3}
-            sorted_modes = sorted(modes, key=lambda m: mode_priority.get(m.value if hasattr(m, "value") else str(m), 3))
-            return sorted_modes[0].value if hasattr(sorted_modes[0], "value") else str(sorted_modes[0])
+            sorted_modes = sorted(
+                modes,
+                key=lambda m: mode_priority.get(
+                    m.value if hasattr(m, "value") else str(m), 3
+                ),
+            )
+            return (
+                sorted_modes[0].value
+                if hasattr(sorted_modes[0], "value")
+                else str(sorted_modes[0])
+            )
 
-    def _classify_overall_health(self, reliability_states: Dict[str, Any]) -> str:
+    def _classify_overall_health(self, reliability_states: dict[str, Any]) -> str:
         """전반적 건강 상태 분류."""
         if not reliability_states:
             return "unknown"
@@ -354,7 +382,7 @@ class GovernanceApiService:
             return "degraded"
         return "healthy"
 
-    def _get_sync_status(self, reliability_states: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_sync_status(self, reliability_states: dict[str, Any]) -> dict[str, Any]:
         """동기화 상태 요약."""
         last_sync_time = None
         last_sync_actor = "unknown"
@@ -371,16 +399,22 @@ class GovernanceApiService:
                 is_stale = False
 
             if hasattr(state, "consecutive_successful_syncs"):
-                total_consecutive = max(total_consecutive, state.consecutive_successful_syncs)
+                total_consecutive = max(
+                    total_consecutive, state.consecutive_successful_syncs
+                )
 
         return {
-            "last_sync_at": datetime.fromtimestamp(last_sync_time, tz=timezone.utc).isoformat() if last_sync_time else None,
+            "last_sync_at": (
+                datetime.fromtimestamp(last_sync_time, tz=timezone.utc).isoformat()
+                if last_sync_time
+                else None
+            ),
             "last_sync_actor": last_sync_actor,
             "is_stale": is_stale,
             "consecutive_syncs": total_consecutive,
         }
 
-    def _get_snapshot_health(self) -> Dict[str, Any]:
+    def _get_snapshot_health(self) -> dict[str, Any]:
         """스냅샷 건강도 조회."""
         try:
             from selfhealing.metrics.snapshot_storage import get_snapshot_storage
@@ -400,9 +434,14 @@ class GovernanceApiService:
             return {"age_seconds": None, "is_valid": False, "path": None}
         except Exception as e:
             logger.warning(f"[Governance] Snapshot health check failed: {e}")
-            return {"age_seconds": None, "is_valid": False, "path": None, "error": str(e)}
+            return {
+                "age_seconds": None,
+                "is_valid": False,
+                "path": None,
+                "error": str(e),
+            }
 
-    def _get_drift_summary(self) -> Dict[str, Any]:
+    def _get_drift_summary(self) -> dict[str, Any]:
         """Drift 요약 조회."""
         try:
             from selfhealing.services.metric_sync_service import get_metric_sync_service
@@ -433,14 +472,16 @@ class GovernanceApiService:
             logger.warning(f"[Governance] Drift summary failed: {e}")
             return {"total_drifts": 0, "critical_drifts": 0, "domains_with_drift": []}
 
-    def _get_next_sync_expected_at(self) -> Optional[str]:
+    def _get_next_sync_expected_at(self) -> str | None:
         """
         다음 예상 동기화 시간 (피드백 반영).
 
         Startup Hydration의 Jitter가 적용된 경우 그 시간을 반환.
         """
         if self._next_scheduled_sync:
-            return datetime.fromtimestamp(self._next_scheduled_sync, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(
+                self._next_scheduled_sync, tz=timezone.utc
+            ).isoformat()
         return None
 
     def _log_mode_change(
@@ -448,19 +489,27 @@ class GovernanceApiService:
         actor: str,
         old_mode: Any,
         new_mode: Any,
-        reason: Optional[str],
+        reason: str | None,
     ) -> None:
         """모드 변경 Audit 로깅."""
         try:
-            from selfhealing.audit.logger import AuditLogger, ConfigChangeEvent, AuditAction
+            from selfhealing.audit.logger import (
+                AuditAction,
+                AuditLogger,
+                ConfigChangeEvent,
+            )
 
             audit_logger = AuditLogger.get_instance()
             event = ConfigChangeEvent(
                 config_type="governance",
                 config_key="operating_mode",
                 action=AuditAction.OVERRIDE,
-                old_value=old_mode.value if hasattr(old_mode, "value") else str(old_mode),
-                new_value=new_mode.value if hasattr(new_mode, "value") else str(new_mode),
+                old_value=(
+                    old_mode.value if hasattr(old_mode, "value") else str(old_mode)
+                ),
+                new_value=(
+                    new_mode.value if hasattr(new_mode, "value") else str(new_mode)
+                ),
                 reason=reason or "Manual mode change",
                 user=actor,
                 source="api",
@@ -470,7 +519,7 @@ class GovernanceApiService:
         except Exception as e:
             logger.warning(f"[Governance] Audit logging failed: {e}")
 
-    def _get_mode_warning(self, mode: Any) -> Optional[str]:
+    def _get_mode_warning(self, mode: Any) -> str | None:
         """모드별 경고 메시지."""
         mode_str = mode.value if hasattr(mode, "value") else str(mode)
         mode_upper = mode_str.upper()
@@ -488,7 +537,7 @@ class GovernanceApiService:
 # =============================================================================
 
 
-_governance_api_service: Optional[GovernanceApiService] = None
+_governance_api_service: GovernanceApiService | None = None
 
 
 def get_governance_api_service() -> GovernanceApiService:

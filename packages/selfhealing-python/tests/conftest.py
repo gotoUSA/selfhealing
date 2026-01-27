@@ -96,6 +96,43 @@ def _reset_all_audit_settings():
     except (ImportError, AttributeError):
         pass
 
+    # Error Budget Weight Map 리셋
+    try:
+        from selfhealing.services.error_budget.exception_weights import (
+            reset_exception_weight_map,
+        )
+
+        reset_exception_weight_map()
+    except (ImportError, AttributeError):
+        pass
+
+    # ClusterIdentity 싱글톤 리셋
+    try:
+        from selfhealing.core import cluster_identity as ci_module
+
+        ci_module._identity = None
+        ci_module._quarantine_mode = False
+    except (ImportError, AttributeError):
+        pass
+
+    # Service Factory 싱글톤 리셋
+    try:
+        from selfhealing.services.factory.singleton import reset_service_singletons
+
+        reset_service_singletons()
+    except (ImportError, AttributeError):
+        pass
+
+    # RecoveryCoordinator 싱글톤 리셋
+    try:
+        from selfhealing.services.coordination.recovery_coordinator import (
+            reset_recovery_coordinator,
+        )
+
+        reset_recovery_coordinator()
+    except (ImportError, AttributeError):
+        pass
+
 
 # =============================================================================
 # Singleton Reset Fixtures (테스트 격리용)

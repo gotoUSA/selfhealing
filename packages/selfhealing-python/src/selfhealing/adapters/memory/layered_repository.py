@@ -15,9 +15,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.adapters.memory.base import _now
 from selfhealing.adapters.memory.drift_reconciliation import (
@@ -25,15 +26,15 @@ from selfhealing.adapters.memory.drift_reconciliation import (
     DriftReconciliationResult,
     get_drift_reconciler,
 )
-from selfhealing.adapters.memory.shadow_logger import get_shadow_logger, ShadowLogger
+from selfhealing.adapters.memory.shadow_logger import get_shadow_logger
 from selfhealing.interfaces.repositories import (
-    CircuitBreakerStateRepository,
     CircuitBreakerStateData,
+    CircuitBreakerStateRepository,
 )
 
 # Avoid circular import - import InMemoryCircuitBreakerStateRepository lazily
 if TYPE_CHECKING:
-    from selfhealing.adapters.memory.circuit_breaker import InMemoryCircuitBreakerStateRepository
+    pass
 
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
 
     # ThreadPoolExecutor for async L2 operations with timeout
-    _executor: Optional[ThreadPoolExecutor] = None
+    _executor: ThreadPoolExecutor | None = None
     _executor_lock = threading.Lock()
 
     @classmethod
@@ -70,15 +71,17 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if cls._executor is None:
             with cls._executor_lock:
                 if cls._executor is None:
-                    cls._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="l2_sync")
+                    cls._executor = ThreadPoolExecutor(
+                        max_workers=4, thread_name_prefix="l2_sync"
+                    )
         return cls._executor
 
     def __init__(
         self,
-        l2_repo: Optional[CircuitBreakerStateRepository] = None,
+        l2_repo: CircuitBreakerStateRepository | None = None,
         sync_interval_seconds: float = 5.0,
         adapter_type: str = "unknown",
-        drift_reconciler: Optional[DriftReconciler] = None,
+        drift_reconciler: DriftReconciler | None = None,
     ):
         """
         Args:
@@ -88,20 +91,22 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             drift_reconciler: 드리프트 복구 인스턴스. None이면 기본 인스턴스 사용.
         """
         # Lazy import to avoid circular dependency
-        from selfhealing.adapters.memory.circuit_breaker import InMemoryCircuitBreakerStateRepository
+        from selfhealing.adapters.memory.circuit_breaker import (
+            InMemoryCircuitBreakerStateRepository,
+        )
 
         self._l1 = InMemoryCircuitBreakerStateRepository()
         self._l2 = l2_repo
         self._sync_interval = sync_interval_seconds
         self._adapter_type = adapter_type
-        self._last_sync_time: Optional[datetime] = None
+        self._last_sync_time: datetime | None = None
         self._lock = threading.RLock()
         self._shadow_logger = get_shadow_logger()
         self._drift_reconciler = drift_reconciler or get_drift_reconciler()
 
         # L2 연결 상태 추적
         self._l2_healthy = True
-        self._l2_last_error_time: Optional[datetime] = None
+        self._l2_last_error_time: datetime | None = None
         self._l2_consecutive_failures = 0
         self._l2_was_unhealthy = False  # L2 복구 감지용
 
@@ -174,14 +179,23 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._metrics["l2_latency_total_ms"] += elapsed_ms
             self._metrics["l2_latency_count"] += 1
 
-            logger.info(f"[LayeredRepo] L2 initial load completed: " f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms")
+            logger.info(
+                f"[LayeredRepo] L2 initial load completed: "
+                f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms"
+            )
 
         except FuturesTimeoutError:
             self._handle_l2_timeout("initial_load", None)
-            logger.warning(f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). " f"Starting with empty L1.")
+            logger.warning(
+                f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). "
+                f"Starting with empty L1."
+            )
         except Exception as e:
             self._handle_l2_error("initial_load", None, e)
-            logger.warning(f"[LayeredRepo] L2 initial load failed: {e}. " f"Starting with empty L1.")
+            logger.warning(
+                f"[LayeredRepo] L2 initial load failed: {e}. "
+                f"Starting with empty L1."
+            )
 
     def _load_from_l2(self) -> None:
         """L2에서 L1으로 초기 데이터 로드 (레거시, 타임아웃 없음)."""
@@ -191,7 +205,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     # L2 Error Handling
     # =========================================================================
 
-    def _handle_l2_timeout(self, operation: str, service_name: Optional[str]) -> None:
+    def _handle_l2_timeout(self, operation: str, service_name: str | None) -> None:
         """L2 타임아웃 처리."""
         self._metrics["l2_timeout_count"] += 1
         self._l2_consecutive_failures += 1
@@ -200,7 +214,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if self._l2_consecutive_failures >= 3:
             self._l2_healthy = False
             self._l2_was_unhealthy = True
-            
+
             # Audit 기록: L2 장애 발생
             self._log_l2_failure_audit(
                 operation=operation,
@@ -208,7 +222,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 error_type="timeout",
                 error_message=f"L2 timeout after {self._l2_consecutive_failures} consecutive failures",
             )
-            
+
             # 알림 발송: 연속 실패 시
             self._send_l2_failure_notification(
                 failure_type="timeout",
@@ -225,7 +239,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def _handle_l2_error(
         self,
         operation: str,
-        service_name: Optional[str],
+        service_name: str | None,
         error: Exception,
         intended_state: str = "",
     ) -> None:
@@ -237,7 +251,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if self._l2_consecutive_failures >= 3:
             self._l2_healthy = False
             self._l2_was_unhealthy = True
-            
+
             # Audit 기록: L2 장애 발생
             self._log_l2_failure_audit(
                 operation=operation,
@@ -245,7 +259,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 error_type=type(error).__name__,
                 error_message=str(error)[:500],
             )
-            
+
             # 알림 발송: 연속 실패 시
             self._send_l2_failure_notification(
                 failure_type="error",
@@ -286,13 +300,13 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 f"{self._metrics.get('l2_sync_failure_count', 0)} failures. "
                 f"Initiating drift reconciliation."
             )
-            
+
             # Audit 기록: L2 복구
             self._log_l2_recovery_audit()
-            
+
             # 알림 발송: L2 복구 완료
             self._send_l2_recovery_notification()
-            
+
             self._schedule_drift_reconciliation()
 
         try:
@@ -327,9 +341,11 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             executor = self._get_executor()
             executor.submit(_run_reconciliation)
         except Exception as e:
-            logger.warning(f"[LayeredRepo] Failed to schedule drift reconciliation: {e}")
+            logger.warning(
+                f"[LayeredRepo] Failed to schedule drift reconciliation: {e}"
+            )
 
-    def _reconcile_all_drift(self) -> Dict[str, Any]:
+    def _reconcile_all_drift(self) -> dict[str, Any]:
         """모든 서비스의 L1/L2 드리프트 해결."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
@@ -345,12 +361,17 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             try:
                 timeout = self._get_timeout_seconds()
                 executor = self._get_executor()
-                future = executor.submit(self._l2.get_by_service_name, l1_state.service_name)
+                future = executor.submit(
+                    self._l2.get_by_service_name, l1_state.service_name
+                )
 
                 try:
                     l2_state = future.result(timeout=timeout)
                 except FuturesTimeoutError:
-                    logger.warning(f"[LayeredRepo] Drift reconciliation timeout for " f"{l1_state.service_name}, skipping")
+                    logger.warning(
+                        f"[LayeredRepo] Drift reconciliation timeout for "
+                        f"{l1_state.service_name}, skipping"
+                    )
                     continue
 
                 if l2_state is None:
@@ -395,13 +416,16 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                         "error": str(e),
                     }
                 )
-                logger.warning(f"[LayeredRepo] Drift reconciliation error for " f"{l1_state.service_name}: {e}")
+                logger.warning(
+                    f"[LayeredRepo] Drift reconciliation error for "
+                    f"{l1_state.service_name}: {e}"
+                )
 
         self._metrics["drift_reconciliation_count"] += reconciled_count
 
         if reconciled_count > 0:
             self._shadow_logger.mark_all_as_synced()
-            
+
             # Audit 기록: 드리프트 복구 완료
             self._log_drift_reconciliation_audit(
                 total_checked=len(l1_states),
@@ -464,14 +488,19 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
         except FuturesTimeoutError:
             self._handle_l2_timeout("sync", service_name)
-            logger.warning(f"[LayeredRepo] L2 sync timeout for {service_name} " f"({timeout*1000:.0f}ms). L1 isolated.")
+            logger.warning(
+                f"[LayeredRepo] L2 sync timeout for {service_name} "
+                f"({timeout*1000:.0f}ms). L1 isolated."
+            )
             return False
 
         except Exception as e:
             self._handle_l2_error("sync", service_name, e, state.state)
             return False
 
-    def _sync_to_l2_async(self, service_name: str, state: CircuitBreakerStateData) -> None:
+    def _sync_to_l2_async(
+        self, service_name: str, state: CircuitBreakerStateData
+    ) -> None:
         """L2로 비동기 동기화 (백그라운드, 타임아웃 적용)."""
         if not self._l2:
             return
@@ -495,7 +524,9 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     # CircuitBreakerStateRepository Interface Implementation (L1 Priority)
     # =========================================================================
 
-    def get_by_service_name(self, service_name: str) -> Optional[CircuitBreakerStateData]:
+    def get_by_service_name(
+        self, service_name: str
+    ) -> CircuitBreakerStateData | None:
         """L1에서 조회. L1에 없으면 L2 확인 후 L1에 캐시."""
         result = self._l1.get_by_service_name(service_name)
 
@@ -538,9 +569,9 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         state: str,
-        failure_count: Optional[int] = None,
-        success_count: Optional[int] = None,
-        opened_at: Optional[datetime] = None,
+        failure_count: int | None = None,
+        success_count: int | None = None,
+        opened_at: datetime | None = None,
     ) -> bool:
         """L1 업데이트 후 L2 비동기 동기화."""
         result = self._l1.update_state(
@@ -557,7 +588,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def increment_failure_count(
         self,
         service_name: str,
-        last_failure_at: Optional[datetime] = None,
+        last_failure_at: datetime | None = None,
     ) -> int:
         """L1에서 카운트 증가 후 L2 동기화."""
         result = self._l1.increment_failure_count(service_name, last_failure_at)
@@ -581,7 +612,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def set_open(
         self,
         service_name: str,
-        opened_at: Optional[datetime] = None,
+        opened_at: datetime | None = None,
     ) -> bool:
         """L1에서 open 설정 후 L2 동기화."""
         result = self._l1.set_open(service_name, opened_at)
@@ -589,18 +620,18 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._sync_state_after_l1_change(service_name)
         return result
 
-    def set_closed(self, service_name: str, reason: Optional[str] = None) -> tuple:
+    def set_closed(self, service_name: str, reason: str | None = None) -> tuple:
         """L1에서 closed 설정 후 L2 동기화."""
         result = self._l1.set_closed(service_name, reason)
         if result[0]:
             self._sync_state_after_l1_change(service_name)
         return result
 
-    def get_all_open(self) -> List[CircuitBreakerStateData]:
+    def get_all_open(self) -> list[CircuitBreakerStateData]:
         """L1에서 open 상태 조회."""
         return self._l1.get_all_open()
 
-    def get_all(self) -> List[CircuitBreakerStateData]:
+    def get_all(self) -> list[CircuitBreakerStateData]:
         """L1에서 전체 조회."""
         return self._l1.get_all()
 
@@ -636,7 +667,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self._sync_to_l2_async(service_name, result)
         return result
 
-    def get_all_states(self) -> List[CircuitBreakerStateData]:
+    def get_all_states(self) -> list[CircuitBreakerStateData]:
         """L1에서 전체 상태 조회."""
         return self._l1.get_all_states()
 
@@ -651,11 +682,13 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         ttl_minutes: int = 90,
     ) -> tuple:
         """L1에서 강제 open 후 L2 동기화."""
-        result = self._l1.atomic_force_open(service_name, reason, controlled_by_id, ttl_minutes)
+        result = self._l1.atomic_force_open(
+            service_name, reason, controlled_by_id, ttl_minutes
+        )
         if result[0]:
             self._sync_state_after_l1_change(service_name)
         return result
@@ -664,7 +697,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple:
         """L1에서 강제 close 후 L2 동기화."""
         result = self._l1.atomic_force_close(service_name, reason, controlled_by_id)
@@ -676,7 +709,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple:
         """L1에서 리셋 후 L2 동기화."""
         result = self._l1.atomic_reset(service_name, reason, controlled_by_id)
@@ -687,12 +720,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def set_manual_control(
         self,
         service_name: str,
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         reason: str = "",
         ttl_minutes: int = 90,
     ) -> bool:
         """L1에서 수동 제어 설정 후 L2 동기화."""
-        result = self._l1.set_manual_control(service_name, controlled_by_id, reason, ttl_minutes)
+        result = self._l1.set_manual_control(
+            service_name, controlled_by_id, reason, ttl_minutes
+        )
         if result:
             self._sync_state_after_l1_change(service_name)
         return result
@@ -708,11 +743,13 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     # Management & Monitoring Methods
     # =========================================================================
 
-    def get_storage_info(self) -> Dict[str, Any]:
+    def get_storage_info(self) -> dict[str, Any]:
         """저장소 정보 조회 (L2 상태 및 메트릭 포함)."""
         avg_latency_ms = 0.0
         if self._metrics["l2_latency_count"] > 0:
-            avg_latency_ms = self._metrics["l2_latency_total_ms"] / self._metrics["l2_latency_count"]
+            avg_latency_ms = (
+                self._metrics["l2_latency_total_ms"] / self._metrics["l2_latency_count"]
+            )
 
         return {
             "l1_type": "memory",
@@ -723,28 +760,40 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "l2_healthy": self._l2_healthy,
             "l2_was_unhealthy": self._l2_was_unhealthy,
             "l2_consecutive_failures": self._l2_consecutive_failures,
-            "l2_last_error_time": (self._l2_last_error_time.isoformat() if self._l2_last_error_time else None),
+            "l2_last_error_time": (
+                self._l2_last_error_time.isoformat()
+                if self._l2_last_error_time
+                else None
+            ),
             "sync_interval_seconds": self._sync_interval,
-            "last_sync_time": (self._last_sync_time.isoformat() if self._last_sync_time else None),
+            "last_sync_time": (
+                self._last_sync_time.isoformat() if self._last_sync_time else None
+            ),
             "timeout_ms": self._get_timeout_seconds() * 1000,
             "metrics": {
                 "timeout_count": self._metrics["l2_timeout_count"],
                 "sync_failure_count": self._metrics["l2_sync_failure_count"],
                 "sync_success_count": self._metrics["l2_sync_success_count"],
-                "drift_reconciliation_count": self._metrics["drift_reconciliation_count"],
+                "drift_reconciliation_count": self._metrics[
+                    "drift_reconciliation_count"
+                ],
                 "avg_latency_ms": round(avg_latency_ms, 2),
             },
             "shadow_log": self._shadow_logger.get_stats(),
             "drift_reconciler": self._drift_reconciler.get_stats(),
         }
 
-    def get_l2_health(self) -> Dict[str, Any]:
+    def get_l2_health(self) -> dict[str, Any]:
         """L2 헬스 상태 조회."""
         return {
             "healthy": self._l2_healthy,
             "was_unhealthy": self._l2_was_unhealthy,
             "consecutive_failures": self._l2_consecutive_failures,
-            "last_error_time": (self._l2_last_error_time.isoformat() if self._l2_last_error_time else None),
+            "last_error_time": (
+                self._l2_last_error_time.isoformat()
+                if self._l2_last_error_time
+                else None
+            ),
             "adapter_type": self._adapter_type,
             "timeout_ms": self._get_timeout_seconds() * 1000,
         }
@@ -757,7 +806,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self._l2_last_error_time = None
         logger.info("[LayeredRepo] L2 health status reset manually")
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """내부 메트릭 조회."""
         return dict(self._metrics)
 
@@ -784,7 +833,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             logger.error(f"[LayeredRepo] Force sync from L2 failed: {e}")
             return False
 
-    def force_sync_to_l2(self) -> Dict[str, Any]:
+    def force_sync_to_l2(self) -> dict[str, Any]:
         """L1의 모든 상태를 L2로 강제 동기화."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
@@ -809,7 +858,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "failed": failure_count,
         }
 
-    def force_drift_reconciliation(self) -> Dict[str, Any]:
+    def force_drift_reconciliation(self) -> dict[str, Any]:
         """수동으로 드리프트 복구 트리거."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
@@ -817,11 +866,11 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         logger.info("[LayeredRepo] Manual drift reconciliation triggered")
         return self._reconcile_all_drift()
 
-    def get_drift_reconciler_stats(self) -> Dict[str, Any]:
+    def get_drift_reconciler_stats(self) -> dict[str, Any]:
         """드리프트 복구 통계 조회."""
         return self._drift_reconciler.get_stats()
 
-    def get_drift_reconciliation_history(self) -> List[Dict[str, Any]]:
+    def get_drift_reconciliation_history(self) -> list[dict[str, Any]]:
         """드리프트 복구 기록 조회."""
         history = self._drift_reconciler.get_history()
         return [
@@ -829,8 +878,12 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 "service_name": r.service_name,
                 "l1_state": r.l1_state,
                 "l2_state": r.l2_state,
-                "l1_updated_at": r.l1_updated_at.isoformat() if r.l1_updated_at else None,
-                "l2_updated_at": r.l2_updated_at.isoformat() if r.l2_updated_at else None,
+                "l1_updated_at": (
+                    r.l1_updated_at.isoformat() if r.l1_updated_at else None
+                ),
+                "l2_updated_at": (
+                    r.l2_updated_at.isoformat() if r.l2_updated_at else None
+                ),
                 "winner": r.winner,
                 "result": r.result.value,
                 "reconciled_at": r.reconciled_at.isoformat(),
@@ -839,7 +892,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             for r in history
         ]
 
-    def reconcile_single_service(self, service_name: str) -> Dict[str, Any]:
+    def reconcile_single_service(self, service_name: str) -> dict[str, Any]:
         """특정 서비스의 드리프트만 복구."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
@@ -918,14 +971,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def _log_l2_failure_audit(
         self,
         operation: str,
-        service_name: Optional[str],
+        service_name: str | None,
         error_type: str,
         error_message: str,
     ) -> None:
         """L2 장애 발생 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
             from selfhealing.services.audit_helpers import log_storage_failure_audit
-            
+
             log_storage_failure_audit(
                 storage_type="l2",
                 adapter_type=self._adapter_type,
@@ -943,7 +996,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """L2 복구 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
             from selfhealing.services.audit_helpers import log_storage_recovery_audit
-            
+
             log_storage_recovery_audit(
                 storage_type="l2",
                 adapter_type=self._adapter_type,
@@ -958,12 +1011,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         reconciled: int,
         l1_wins: int,
         l2_wins: int,
-        errors: List[Dict[str, Any]],
+        errors: list[dict[str, Any]],
     ) -> None:
         """드리프트 복구 완료 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.audit_helpers import log_drift_reconciliation_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_drift_reconciliation_audit,
+            )
+
             log_drift_reconciliation_audit(
                 adapter_type=self._adapter_type,
                 total_checked=total_checked,
@@ -983,8 +1038,10 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     ) -> None:
         """L2 연속 장애 시 알림 발송. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.unified_notification import get_notification_service
-            
+            from selfhealing.services.unified_notification import (
+                get_notification_service,
+            )
+
             notification_service = get_notification_service()
             notification_service.send(
                 level="warning",
@@ -1007,8 +1064,10 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def _send_l2_recovery_notification(self) -> None:
         """L2 복구 완료 시 알림 발송. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.unified_notification import get_notification_service
-            
+            from selfhealing.services.unified_notification import (
+                get_notification_service,
+            )
+
             notification_service = get_notification_service()
             notification_service.send(
                 level="info",

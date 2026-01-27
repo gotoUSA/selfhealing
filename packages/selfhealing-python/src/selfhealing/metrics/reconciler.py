@@ -10,15 +10,17 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from selfhealing.adapters.metrics.base import MetricSourceAdapter, NullMetricSourceAdapter
+from selfhealing.adapters.metrics.base import (
+    MetricSourceAdapter,
+)
 from selfhealing.adapters.metrics.factory import get_metric_adapter
-from selfhealing.utils.jitter import with_jitter, JitterConfig
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
+from selfhealing.utils.jitter import with_jitter
 
 if TYPE_CHECKING:
-    from selfhealing.services.security import SecurityViolationService
+    from selfhealing.models.drift_config import DriftThresholdConfig
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ class DriftSeverity:
 class DriftResult:
     """Drift 계산 결과."""
 
-    details: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    details: dict[str, dict[str, Any]] = field(default_factory=dict)
     max_drift_percent: float = 0.0
     calculated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     severity: str = DriftSeverity.NORMAL
@@ -47,10 +49,10 @@ class SyncResult:
     """동기화 결과."""
 
     synced_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    dlq_pending: Dict[str, int] = field(default_factory=dict)
-    circuit_breaker_states: Dict[str, str] = field(default_factory=dict)
-    retry_success_rates: Dict[str, float] = field(default_factory=dict)
-    drift: Optional[DriftResult] = None
+    dlq_pending: dict[str, int] = field(default_factory=dict)
+    circuit_breaker_states: dict[str, str] = field(default_factory=dict)
+    retry_success_rates: dict[str, float] = field(default_factory=dict)
+    drift: DriftResult | None = None
 
 
 class MetricReconciler:
@@ -74,11 +76,11 @@ class MetricReconciler:
 
     def __init__(
         self,
-        adapter: Optional[MetricSourceAdapter] = None,
-        domains: Optional[List[str]] = None,
-        services: Optional[List[str]] = None,
-        drift_config: Optional["DriftThresholdConfig"] = None,
-        incident_service: Optional[Any] = None,
+        adapter: MetricSourceAdapter | None = None,
+        domains: list[str] | None = None,
+        services: list[str] | None = None,
+        drift_config: DriftThresholdConfig | None = None,
+        incident_service: Any | None = None,
     ):
         """
         Initialize MetricReconciler.
@@ -95,10 +97,10 @@ class MetricReconciler:
         self._services = services  # Domain-free: 설정에서 로드하거나 명시적으로 전달
         self._drift_config = drift_config
         self.incident_service = incident_service
-        self._last_sync: Optional[datetime] = None
-        self._last_sync_result: Optional[SyncResult] = None
+        self._last_sync: datetime | None = None
+        self._last_sync_result: SyncResult | None = None
 
-    def _get_domains(self) -> List[str]:
+    def _get_domains(self) -> list[str]:
         """도메인 목록 반환."""
         if self._domains:
             return self._domains
@@ -109,7 +111,7 @@ class MetricReconciler:
         except ImportError:
             return ["external_service", "internal_process", "async_task"]
 
-    def _get_services(self) -> List[str]:
+    def _get_services(self) -> list[str]:
         """
         서비스 목록 반환 (Circuit Breaker용).
 
@@ -204,7 +206,7 @@ class MetricReconciler:
         """
         return self.sync_all_gauges()
 
-    def sync_domain_gauges(self, domain: str) -> Dict[str, Any]:
+    def sync_domain_gauges(self, domain: str) -> dict[str, Any]:
         """
         특정 도메인의 Gauge만 동기화.
 
@@ -255,9 +257,9 @@ class MetricReconciler:
 
         return result
 
-    def _capture_current_gauges(self) -> Dict[str, Dict[str, Any]]:
+    def _capture_current_gauges(self) -> dict[str, dict[str, Any]]:
         """현재 Gauge 값 캡처 (Drift 계산용)."""
-        result: Dict[str, Dict[str, Any]] = {"dlq_pending": {}}
+        result: dict[str, dict[str, Any]] = {"dlq_pending": {}}
         metrics = self._get_metrics()
 
         if metrics and hasattr(metrics, "dlq_pending_gauge"):
@@ -278,11 +280,11 @@ class MetricReconciler:
 
     def _calculate_drift(
         self,
-        before: Dict[str, Dict[str, Any]],
-        after: Dict[str, Dict[str, Any]],
+        before: dict[str, dict[str, Any]],
+        after: dict[str, dict[str, Any]],
     ) -> DriftResult:
         """Drift 계산."""
-        drift_details: Dict[str, Dict[str, Any]] = {}
+        drift_details: dict[str, dict[str, Any]] = {}
         max_drift_percent = 0.0
 
         for key in after.get("dlq_pending", {}):
@@ -309,14 +311,14 @@ class MetricReconciler:
             max_drift_percent=round(max_drift_percent, 2),
         )
 
-    def _get_drift_config(self) -> "DriftThresholdConfig":
+    def _get_drift_config(self) -> DriftThresholdConfig:
         """동적으로 저장된 Drift 설정 로드."""
         if self._drift_config:
             return self._drift_config
 
         try:
-            from selfhealing.models.drift_config import DriftThresholdConfig
             from selfhealing.core.state_backend import get_state_backend
+            from selfhealing.models.drift_config import DriftThresholdConfig
 
             backend = get_state_backend()
             data = backend.get("drift_threshold_config")
@@ -380,17 +382,17 @@ class MetricReconciler:
         # 구체적인 구현은 프로젝트에 따라 다름
 
     @property
-    def last_sync_time(self) -> Optional[datetime]:
+    def last_sync_time(self) -> datetime | None:
         """마지막 동기화 시간."""
         return self._last_sync
 
 
 # 싱글톤 인스턴스
-_reconciler_instance: Optional[MetricReconciler] = None
+_reconciler_instance: MetricReconciler | None = None
 
 
 def get_reconciler(
-    adapter: Optional[MetricSourceAdapter] = None,
+    adapter: MetricSourceAdapter | None = None,
 ) -> MetricReconciler:
     """
     MetricReconciler 싱글톤 인스턴스를 반환합니다.

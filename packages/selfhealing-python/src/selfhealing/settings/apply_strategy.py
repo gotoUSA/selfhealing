@@ -18,7 +18,7 @@ Environment Variables:
     SELFHEALING_APPLY_SECURITY_DELAY=60
     SELFHEALING_APPLY_ERROR_BUDGET_DELAY=30
     SELFHEALING_APPLY_DEFAULT_GRACE_TIMEOUT=60
-    
+
     # Celery Task 재시도 설정
     SELFHEALING_APPLY_PENDING_MAX_RETRIES=3
     SELFHEALING_APPLY_PENDING_RETRY_DELAY=10
@@ -28,7 +28,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -216,7 +215,7 @@ class ApplyStrategySettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[ApplyStrategySettings] = None
+_settings: ApplyStrategySettings | None = None
 
 
 def get_apply_strategy_settings() -> ApplyStrategySettings:

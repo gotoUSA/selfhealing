@@ -21,17 +21,15 @@ FAIL-SAFE DESIGN:
 import logging
 
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 from selfhealing.services.error_budget_service import (
+    OverrideType,
     get_error_budget_service,
     get_failsafe_verdict_response,
-    OverrideType,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,7 +109,9 @@ class DeploymentFreezeAcknowledgeView(APIView):
         justification = request.data.get("justification", "")
 
         if not justification:
-            raise ValueError("justification is required: 동결 확정 사유를 입력해주세요.")
+            raise ValueError(
+                "justification is required: 동결 확정 사유를 입력해주세요."
+            )
 
         service = get_error_budget_service()
         decided_by = getattr(request.user, "username", str(request.user))
@@ -121,7 +121,9 @@ class DeploymentFreezeAcknowledgeView(APIView):
             justification=justification,
         )
 
-        logger.info(f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}")
+        logger.info(
+            f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}"
+        )
 
         return Response(
             {
@@ -167,12 +169,16 @@ class DeploymentOverrideView(APIView):
             raise ValueError("justification is required: Override 사유를 입력해주세요.")
 
         if not override_type_str:
-            raise ValueError(f"override_type is required: Override 유형을 선택해주세요. valid_types={[t.value for t in OverrideType]}")
+            raise ValueError(
+                f"override_type is required: Override 유형을 선택해주세요. valid_types={[t.value for t in OverrideType]}"
+            )
 
         try:
             override_type = OverrideType(override_type_str)
         except ValueError:
-            raise ValueError(f"Invalid override_type: {override_type_str}, valid_types={[t.value for t in OverrideType]}")
+            raise ValueError(
+                f"Invalid override_type: {override_type_str}, valid_types={[t.value for t in OverrideType]}"
+            )
 
         service = get_error_budget_service()
         decided_by = getattr(request.user, "username", str(request.user))
@@ -223,7 +229,9 @@ class DeploymentFreezeLiftView(APIView):
         justification = request.data.get("justification", "")
 
         if not justification:
-            raise ValueError("justification is required: 동결 해제 사유를 입력해주세요.")
+            raise ValueError(
+                "justification is required: 동결 해제 사유를 입력해주세요."
+            )
 
         service = get_error_budget_service()
         decided_by = getattr(request.user, "username", str(request.user))
@@ -233,7 +241,9 @@ class DeploymentFreezeLiftView(APIView):
             justification=justification,
         )
 
-        logger.info(f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}")
+        logger.info(
+            f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}"
+        )
 
         return Response(
             {

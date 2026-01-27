@@ -297,7 +297,9 @@ def notify_failsafe_recovery(
                     "[Recovery] Alert adapter does not support recovery notifications"
                 )
         except Exception as adapter_error:
-            logger.warning(f"[Recovery] Could not send alert via adapter: {adapter_error}")
+            logger.warning(
+                f"[Recovery] Could not send alert via adapter: {adapter_error}"
+            )
 
         return {
             "success": True,
@@ -308,7 +310,9 @@ def notify_failsafe_recovery(
         }
 
     except Exception as e:
-        logger.error(f"[Recovery] Failed to send recovery notification: {e}", exc_info=True)
+        logger.error(
+            f"[Recovery] Failed to send recovery notification: {e}", exc_info=True
+        )
         return {
             "success": False,
             "component": component,

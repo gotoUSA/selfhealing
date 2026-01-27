@@ -10,11 +10,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from selfhealing.services.security.policies import (
-    ActionPolicy,
-    ACTION_POLICY_PRIORITY,
-)
 from selfhealing.services.security.models import ProtectionResult
+from selfhealing.services.security.policies import (
+    ACTION_POLICY_PRIORITY,
+    ActionPolicy,
+)
 
 if TYPE_CHECKING:
     from selfhealing.services.security.service import SecurityViolationService
@@ -39,7 +39,7 @@ class ProtectionOrchestrator:
     Reference: Architect Review - "가장 강력한 정책 우선 성공 보장"
     """
 
-    def __init__(self, security_service: "SecurityViolationService"):
+    def __init__(self, security_service: SecurityViolationService):
         self._service = security_service
         self._policy_executors: dict[ActionPolicy, Any] = {
             ActionPolicy.EMERGENCY_LEVEL_3: self._execute_emergency_3,
@@ -144,7 +144,7 @@ class ProtectionOrchestrator:
     def _execute_emergency_3(self, context: dict[str, Any]) -> None:
         """Emergency Level 3 선포."""
         try:
-            from selfhealing.services.event_bus import get_event_bus, EventType
+            from selfhealing.services.event_bus import EventType, get_event_bus
 
             bus = get_event_bus()
             bus.emit(
@@ -167,7 +167,7 @@ class ProtectionOrchestrator:
     def _execute_emergency_2(self, context: dict[str, Any]) -> None:
         """Emergency Level 2 선포."""
         try:
-            from selfhealing.services.event_bus import get_event_bus, EventType
+            from selfhealing.services.event_bus import EventType, get_event_bus
 
             bus = get_event_bus()
             bus.emit(
@@ -190,7 +190,7 @@ class ProtectionOrchestrator:
     def _execute_emergency_1(self, context: dict[str, Any]) -> None:
         """Emergency Level 1 선포."""
         try:
-            from selfhealing.services.event_bus import get_event_bus, EventType
+            from selfhealing.services.event_bus import EventType, get_event_bus
 
             bus = get_event_bus()
             bus.emit(
@@ -283,9 +283,7 @@ class ProtectionOrchestrator:
         """계정 동결 해제."""
         user_id = context.get("user_id")
         if user_id:
-            logger.info(
-                f"[ProtectionOrchestrator] Account unfrozen: user_id={user_id}"
-            )
+            logger.info(f"[ProtectionOrchestrator] Account unfrozen: user_id={user_id}")
 
     def _rollback_ip_ban(self, context: dict[str, Any]) -> None:
         """IP 차단 해제."""

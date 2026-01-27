@@ -13,7 +13,7 @@ Environment Variables:
     SELFHEALING_CLEANUP_EXPIRED_CONFIG_HOURS=24
     SELFHEALING_CLEANUP_APPROVAL_EXPIRY_HOURS=72
     SELFHEALING_CLEANUP_PURGE_OLDER_THAN_DAYS=90
-    
+
     # Celery Task 재시도 설정
     SELFHEALING_CLEANUP_ARCHIVE_DLQ_MAX_RETRIES=2
     SELFHEALING_CLEANUP_ARCHIVE_DLQ_RETRY_DELAY=300
@@ -26,7 +26,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -192,7 +191,7 @@ class CleanupSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[CleanupSettings] = None
+_settings: CleanupSettings | None = None
 
 
 def get_cleanup_settings() -> CleanupSettings:

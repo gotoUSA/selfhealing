@@ -11,16 +11,14 @@ Endpoints:
 """
 
 import logging
-from typing import List
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.views.l2_storage_utils import get_layered_repository
 
 logger = logging.getLogger(__name__)
@@ -38,7 +36,7 @@ class L2StorageStatusView(APIView):
     def get(self, request: Request) -> Response:
         """Get L2 storage status including metrics."""
         repo = get_layered_repository()
-        
+
         if repo is None:
             return Response(
                 {
@@ -49,9 +47,9 @@ class L2StorageStatusView(APIView):
                 },
                 status=status.HTTP_200_OK,
             )
-        
+
         storage_info = repo.get_storage_info()
-        
+
         return Response(
             {
                 "status": "success",
@@ -75,7 +73,7 @@ class L2StorageHealthView(APIView):
     def get(self, request: Request) -> Response:
         """Get L2 health status."""
         repo = get_layered_repository()
-        
+
         if repo is None:
             return Response(
                 {
@@ -88,9 +86,9 @@ class L2StorageHealthView(APIView):
                 },
                 status=status.HTTP_200_OK,
             )
-        
+
         health = repo.get_l2_health()
-        
+
         return Response(
             {
                 "status": "success",
@@ -114,14 +112,14 @@ class L2StorageHealthResetView(APIView):
     def post(self, request: Request) -> Response:
         """Reset L2 health status (mark as healthy)."""
         repo = get_layered_repository()
-        
+
         if repo is None:
             raise ValueError("Layered storage not configured")
-        
+
         repo.reset_l2_health()
-        
+
         logger.info(f"[L2StorageAPI] L2 health reset by {request.user}")
-        
+
         return Response(
             {
                 "status": "success",
@@ -146,15 +144,15 @@ class L2StorageSyncFromL2View(APIView):
     def post(self, request: Request) -> Response:
         """Force sync from L2 to L1."""
         repo = get_layered_repository()
-        
+
         if repo is None:
             raise ValueError("Layered storage not configured")
-        
+
         success = repo.force_sync_from_l2()
-        
+
         if not success:
             raise RuntimeError("Sync from L2 failed")
-        
+
         logger.info(f"[L2StorageAPI] Force sync from L2 by {request.user}")
         return Response(
             {
@@ -180,16 +178,14 @@ class L2StorageSyncToL2View(APIView):
     def post(self, request: Request) -> Response:
         """Force sync from L1 to L2."""
         repo = get_layered_repository()
-        
+
         if repo is None:
             raise ValueError("Layered storage not configured")
-        
+
         result = repo.force_sync_to_l2()
-        
-        logger.info(
-            f"[L2StorageAPI] Force sync to L2 by {request.user}: {result}"
-        )
-        
+
+        logger.info(f"[L2StorageAPI] Force sync to L2 by {request.user}: {result}")
+
         return Response(
             {
                 "status": "success" if result["success"] else "partial",
@@ -214,7 +210,7 @@ class L2StorageMetricsView(APIView):
     def get(self, request: Request) -> Response:
         """Get L2 storage metrics."""
         repo = get_layered_repository()
-        
+
         if repo is None:
             return Response(
                 {
@@ -225,9 +221,9 @@ class L2StorageMetricsView(APIView):
                 },
                 status=status.HTTP_200_OK,
             )
-        
+
         metrics = repo.get_metrics()
-        
+
         # Calculate derived metrics
         if metrics.get("l2_latency_count", 0) > 0:
             metrics["avg_latency_ms"] = round(
@@ -236,7 +232,7 @@ class L2StorageMetricsView(APIView):
             )
         else:
             metrics["avg_latency_ms"] = 0.0
-        
+
         return Response(
             {
                 "status": "success",

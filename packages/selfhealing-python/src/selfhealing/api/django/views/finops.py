@@ -4,16 +4,15 @@ FinOps DNA API Views
 FinOps DNA 서비스의 REST API 엔드포인트
 """
 
-from decimal import Decimal
 import logging
-from typing import List
+from decimal import Decimal
 
 from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class FinOpsBudgetView(APIView):
     DELETE /api/self-healing/finops/budget/<stage_name>/ - 예산 리셋 (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
@@ -163,7 +162,7 @@ class FinOpsAlertsView(APIView):
     POST /api/self-healing/finops/alerts/<alert_index>/  - 알림 확인 처리 (Operator)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsOperator()]

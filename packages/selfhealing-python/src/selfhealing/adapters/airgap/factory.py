@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 from selfhealing.adapters.airgap.base import AirGapStorageAdapter
 from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 # Singleton adapter instance
-_adapter_instance: Optional[AirGapStorageAdapter] = None
+_adapter_instance: AirGapStorageAdapter | None = None
 _adapter_configured: bool = False
 
 
@@ -81,7 +80,7 @@ def configure_airgap_adapter(adapter: AirGapStorageAdapter) -> None:
         >>> import redis
         >>> from selfhealing.adapters.airgap import configure_airgap_adapter
         >>> from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
-        >>> 
+        >>>
         >>> client = redis.from_url("redis://localhost:6379/0")
         >>> adapter = RedisAirGapAdapter(client)
         >>> configure_airgap_adapter(adapter)
@@ -103,7 +102,7 @@ def reset_airgap_adapter() -> None:
     logger.debug("[AirGap] Adapter reset")
 
 
-def _create_redis_adapter() -> Optional[AirGapStorageAdapter]:
+def _create_redis_adapter() -> AirGapStorageAdapter | None:
     """Create Redis-based Air-Gap adapter."""
     redis_url = os.environ.get("SELFHEALING_AIRGAP_REDIS_URL")
 
@@ -141,7 +140,7 @@ def _create_redis_adapter() -> Optional[AirGapStorageAdapter]:
         return None
 
 
-def _get_redis_url_from_django() -> Optional[str]:
+def _get_redis_url_from_django() -> str | None:
     """Try to get Redis URL from Django settings."""
     try:
         from django.conf import settings

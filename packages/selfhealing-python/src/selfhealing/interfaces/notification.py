@@ -13,12 +13,12 @@ Design Philosophy:
 Usage:
     # Register your notification adapter
     from selfhealing.services.notification import register_notification_adapter
-    
+
     class SlackNotificationAdapter(NotificationAdapter):
         def send(self, notification: Notification) -> bool:
             # Your Slack webhook implementation
             return True
-    
+
     register_notification_adapter(SlackNotificationAdapter())
 
 Environment Variables:
@@ -29,11 +29,10 @@ Environment Variables:
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -45,32 +44,32 @@ logger = logging.getLogger(__name__)
 
 class NotificationSeverity(str, Enum):
     """Notification urgency levels."""
-    
+
     CRITICAL = "critical"  # Immediate action required (pages on-call)
-    HIGH = "high"          # Urgent but not page-worthy
-    MEDIUM = "medium"      # Should be addressed soon
-    LOW = "low"            # Informational
-    INFO = "info"          # FYI only
+    HIGH = "high"  # Urgent but not page-worthy
+    MEDIUM = "medium"  # Should be addressed soon
+    LOW = "low"  # Informational
+    INFO = "info"  # FYI only
 
 
 class NotificationChannel(str, Enum):
     """Notification delivery channels."""
-    
+
     SLACK = "slack"
     TEAMS = "teams"
     PAGERDUTY = "pagerduty"
     EMAIL = "email"
     WEBHOOK = "webhook"
     SMS = "sms"
-    STDOUT = "stdout"      # Default: print to console
-    FILE = "file"          # Log to file
+    STDOUT = "stdout"  # Default: print to console
+    FILE = "file"  # Log to file
 
 
 @dataclass
 class Notification:
     """
     Notification payload.
-    
+
     Attributes:
         title: Short summary (for subject/title)
         message: Full message body
@@ -79,16 +78,16 @@ class Notification:
         source: Component that generated the notification
         metadata: Additional context (e.g., service_name, incident_id)
     """
-    
+
     title: str
     message: str
     severity: NotificationSeverity = NotificationSeverity.MEDIUM
-    channel: Optional[NotificationChannel] = None
+    channel: NotificationChannel | None = None
     source: str = "selfhealing"
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "title": self.title,
@@ -110,9 +109,9 @@ class Notification:
 class NotificationAdapter(Protocol):
     """
     Protocol for notification adapters.
-    
+
     Implement this protocol to send notifications to your preferred channel.
-    
+
     Example:
         class SlackNotificationAdapter:
             def send(self, notification: Notification) -> bool:
@@ -121,33 +120,33 @@ class NotificationAdapter(Protocol):
                     json={"text": f"*{notification.title}*\n{notification.message}"}
                 )
                 return response.ok
-            
+
             def send_batch(self, notifications: List[Notification]) -> int:
                 return sum(1 for n in notifications if self.send(n))
-            
+
             @property
             def channel(self) -> NotificationChannel:
                 return NotificationChannel.SLACK
     """
-    
+
     def send(self, notification: Notification) -> bool:
         """
         Send a single notification.
-        
+
         Returns:
             True if sent successfully, False otherwise
         """
         ...
-    
-    def send_batch(self, notifications: List[Notification]) -> int:
+
+    def send_batch(self, notifications: list[Notification]) -> int:
         """
         Send multiple notifications.
-        
+
         Returns:
             Number of successfully sent notifications
         """
         ...
-    
+
     @property
     def channel(self) -> NotificationChannel:
         """Return the channel this adapter handles."""
@@ -161,17 +160,17 @@ class NotificationAdapter(Protocol):
 
 class StdoutNotificationAdapter:
     """Default adapter that prints to stdout."""
-    
+
     def send(self, notification: Notification) -> bool:
         print(
             f"[{notification.severity.value.upper()}] "
             f"{notification.title}: {notification.message}"
         )
         return True
-    
-    def send_batch(self, notifications: List[Notification]) -> int:
+
+    def send_batch(self, notifications: list[Notification]) -> int:
         return sum(1 for n in notifications if self.send(n))
-    
+
     @property
     def channel(self) -> NotificationChannel:
         return NotificationChannel.STDOUT
@@ -179,10 +178,10 @@ class StdoutNotificationAdapter:
 
 class LoggingNotificationAdapter:
     """Adapter that logs notifications."""
-    
+
     def __init__(self, logger_name: str = "selfhealing.notifications"):
         self._logger = logging.getLogger(logger_name)
-    
+
     def send(self, notification: Notification) -> bool:
         level = {
             NotificationSeverity.CRITICAL: logging.CRITICAL,
@@ -191,17 +190,17 @@ class LoggingNotificationAdapter:
             NotificationSeverity.LOW: logging.INFO,
             NotificationSeverity.INFO: logging.DEBUG,
         }.get(notification.severity, logging.INFO)
-        
+
         self._logger.log(
             level,
             f"[{notification.source}] {notification.title}: {notification.message}",
             extra={"notification": notification.to_dict()},
         )
         return True
-    
-    def send_batch(self, notifications: List[Notification]) -> int:
+
+    def send_batch(self, notifications: list[Notification]) -> int:
         return sum(1 for n in notifications if self.send(n))
-    
+
     @property
     def channel(self) -> NotificationChannel:
         return NotificationChannel.FILE
@@ -212,23 +211,27 @@ class LoggingNotificationAdapter:
 # =============================================================================
 
 
-_notification_adapters: Dict[NotificationChannel, NotificationAdapter] = {}
+_notification_adapters: dict[NotificationChannel, NotificationAdapter] = {}
 _default_adapter: NotificationAdapter = LoggingNotificationAdapter()
 
 
 def register_notification_adapter(adapter: NotificationAdapter) -> None:
     """Register a notification adapter for its channel."""
     _notification_adapters[adapter.channel] = adapter
-    logger.info(f"[Notification] Registered adapter for channel: {adapter.channel.value}")
+    logger.info(
+        f"[Notification] Registered adapter for channel: {adapter.channel.value}"
+    )
 
 
-def get_notification_adapter(channel: Optional[NotificationChannel] = None) -> NotificationAdapter:
+def get_notification_adapter(
+    channel: NotificationChannel | None = None,
+) -> NotificationAdapter:
     """
     Get the notification adapter for a channel.
-    
+
     Args:
         channel: Target channel, or None for default
-        
+
     Returns:
         NotificationAdapter instance
     """
@@ -241,19 +244,19 @@ def send_notification(
     title: str,
     message: str,
     severity: NotificationSeverity = NotificationSeverity.MEDIUM,
-    channel: Optional[NotificationChannel] = None,
+    channel: NotificationChannel | None = None,
     **metadata,
 ) -> bool:
     """
     Convenience function to send a notification.
-    
+
     Args:
         title: Notification title
         message: Notification body
         severity: Urgency level
         channel: Target channel (uses default if None)
         **metadata: Additional context
-        
+
     Returns:
         True if sent successfully
     """
@@ -275,12 +278,12 @@ def send_notification(
 
 def send_pending_approval_alert(
     pending_count: int,
-    schedules: Optional[List[Any]] = None,
-    blast_radius: Optional[List[Any]] = None,
+    schedules: list[Any] | None = None,
+    blast_radius: list[Any] | None = None,
 ) -> bool:
     """
     Send alert for pending chaos experiment approvals.
-    
+
     Called by chaos_scheduler.check_and_alert_pending_approvals().
     """
     message = f"{pending_count} chaos experiments are pending approval."
@@ -288,7 +291,7 @@ def send_pending_approval_alert(
         message += f"\n- Scheduled: {len(schedules)}"
     if blast_radius:
         message += f"\n- Blast radius: {len(blast_radius)}"
-    
+
     return send_notification(
         title="Chaos Experiments Pending Approval",
         message=message,

@@ -16,7 +16,6 @@ SLA 일괄 설정 및 도메인별 임계값 관리.
 
 import logging
 from datetime import timedelta
-from typing import Dict, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -55,7 +54,7 @@ class SLASettings(BaseSettings):
 
     # Domain-specific thresholds (configured by adapters)
     # Example: {"payment": 1, "order": 2, "notification": 24}
-    thresholds_by_domain: Dict[str, int] = Field(
+    thresholds_by_domain: dict[str, int] = Field(
         default_factory=dict,
         description="Domain-specific SLA thresholds in hours",
     )
@@ -76,7 +75,7 @@ class SLASettings(BaseSettings):
         hours = self.thresholds_by_domain.get(domain.lower(), self.default_hours)
         return timedelta(hours=hours)
 
-    def get_all_thresholds(self) -> Dict[str, timedelta]:
+    def get_all_thresholds(self) -> dict[str, timedelta]:
         """Get all configured SLA thresholds as a dictionary."""
         result = {
             domain: timedelta(hours=hours)
@@ -88,7 +87,7 @@ class SLASettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[SLASettings] = None
+_settings: SLASettings | None = None
 
 
 def get_sla_settings() -> SLASettings:

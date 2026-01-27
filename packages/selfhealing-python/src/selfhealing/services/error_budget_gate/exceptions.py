@@ -9,20 +9,20 @@ Reference:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class AutomationBlockedError(Exception):
     """
     자동화가 에러 예산 게이트에 의해 차단됨.
-    
+
     이 예외가 발생하면 수동 처리로 전환해야 합니다.
     """
-    
+
     def __init__(
         self,
         message: str,
-        error_budget_percent: Optional[float] = None,
+        error_budget_percent: float | None = None,
         threshold_percent: float = 10.0,
         action: str = "",
     ):
@@ -31,8 +31,8 @@ class AutomationBlockedError(Exception):
         self.error_budget_percent = error_budget_percent
         self.threshold_percent = threshold_percent
         self.action = action
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "error": "AutomationBlockedError",
             "message": self.message,

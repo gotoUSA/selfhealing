@@ -9,7 +9,7 @@ Consolidates all autonomous task schedules from 3 lanes:
 Usage:
     # In your celery.py or Django settings:
     from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
-    
+
     CELERY_BEAT_SCHEDULE = {
         # ... your existing schedules
         **get_selfhealing_beat_schedule(),
@@ -19,7 +19,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,6 @@ SELFHEALING_QUEUE_CONFIG = {
         "routing_key": "critical_maintenance",
         "priority": 8,  # 높은 우선순위
     },
-    
     # 🧠 지능 레인 큐
     "analysis": {
         "exchange": "selfhealing",
@@ -52,7 +51,6 @@ SELFHEALING_QUEUE_CONFIG = {
         "routing_key": "realtime",
         "priority": 9,  # 최고 우선순위
     },
-    
     # 📋 증명 레인 큐
     "compliance": {
         "exchange": "selfhealing",
@@ -86,10 +84,10 @@ def get_selfhealing_beat_schedule(
     include_governance: bool = True,
     include_xtest_cleanup: bool = True,
     include_legacy: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get consolidated Celery Beat schedule for all self-healing tasks.
-    
+
     Args:
         include_cleanup: Include 🧹 청소부 레인 tasks
         include_intelligence: Include 🧠 지능 레인 tasks
@@ -99,91 +97,108 @@ def get_selfhealing_beat_schedule(
         include_governance: Include 🛡️ Governance tasks (emergency mode expiry)
         include_xtest_cleanup: Include 🧪 X-Test Artifact Cleanup tasks
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
-    
+
     Returns:
         Dict[str, Any]: Complete Celery Beat schedule configuration
-        
+
     Usage:
         from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
-        
+
         CELERY_BEAT_SCHEDULE = {
             **get_selfhealing_beat_schedule(),
             # ... your custom schedules
         }
     """
-    schedule: Dict[str, Any] = {}
-    
+    schedule: dict[str, Any] = {}
+
     if include_cleanup:
         try:
             from selfhealing.tasks.cleanup_tasks import get_cleanup_beat_schedule
+
             schedule.update(get_cleanup_beat_schedule())
             logger.debug("[BeatSchedule] Added cleanup lane schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load cleanup tasks: {e}")
-    
+
     if include_intelligence:
         try:
-            from selfhealing.tasks.intelligence_tasks import get_intelligence_beat_schedule
+            from selfhealing.tasks.intelligence_tasks import (
+                get_intelligence_beat_schedule,
+            )
+
             schedule.update(get_intelligence_beat_schedule())
             logger.debug("[BeatSchedule] Added intelligence lane schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load intelligence tasks: {e}")
-    
+
     if include_compliance:
         try:
             from selfhealing.tasks.compliance_tasks import get_compliance_beat_schedule
+
             schedule.update(get_compliance_beat_schedule())
             logger.debug("[BeatSchedule] Added compliance lane schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load compliance tasks: {e}")
-    
+
     if include_traffic_aware:
         try:
-            from selfhealing.tasks.traffic_aware_replay import get_traffic_aware_beat_schedule
+            from selfhealing.tasks.traffic_aware_replay import (
+                get_traffic_aware_beat_schedule,
+            )
+
             schedule.update(get_traffic_aware_beat_schedule())
             logger.debug("[BeatSchedule] Added traffic-aware replay schedule (Track 3)")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load traffic-aware tasks: {e}")
-    
+
     if include_canary_watchdog:
         try:
-            from selfhealing.tasks.canary_watchdog import get_canary_watchdog_beat_schedule
+            from selfhealing.tasks.canary_watchdog import (
+                get_canary_watchdog_beat_schedule,
+            )
+
             schedule.update(get_canary_watchdog_beat_schedule())
             logger.debug("[BeatSchedule] Added canary watchdog schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load canary watchdog tasks: {e}")
-    
+
     if include_governance:
         try:
             from selfhealing.tasks.governance import get_governance_beat_schedule
+
             schedule.update(get_governance_beat_schedule())
-            logger.debug("[BeatSchedule] Added governance schedules (emergency mode expiry)")
+            logger.debug(
+                "[BeatSchedule] Added governance schedules (emergency mode expiry)"
+            )
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load governance tasks: {e}")
-    
+
     if include_xtest_cleanup:
         try:
-            from selfhealing.tasks.xtest_cleanup_tasks import get_xtest_cleanup_beat_schedule
+            from selfhealing.tasks.xtest_cleanup_tasks import (
+                get_xtest_cleanup_beat_schedule,
+            )
+
             schedule.update(get_xtest_cleanup_beat_schedule())
             logger.debug("[BeatSchedule] Added X-Test cleanup schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load X-Test cleanup tasks: {e}")
-    
+
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())
         logger.debug("[BeatSchedule] Added legacy schedules")
-    
+
     return schedule
 
 
-def _get_legacy_beat_schedule() -> Dict[str, Any]:
+def _get_legacy_beat_schedule() -> dict[str, Any]:
     """
     Legacy tasks from existing adapters/celery/tasks.py.
-    
+
     These will be gradually migrated to lane-based tasks.
     """
     from celery.schedules import crontab
-    
+
     return {
         # DLQ Replay - 5분마다
         "replay-failed-operations": {
@@ -212,14 +227,14 @@ def _get_legacy_beat_schedule() -> Dict[str, Any]:
 # =============================================================================
 
 
-def get_schedule_summary() -> Dict[str, Any]:
+def get_schedule_summary() -> dict[str, Any]:
     """
     Get human-readable summary of all scheduled tasks.
-    
+
     Useful for documentation and debugging.
     """
     schedule = get_selfhealing_beat_schedule()
-    
+
     summary = {
         "total_tasks": len(schedule),
         "by_lane": {
@@ -230,21 +245,21 @@ def get_schedule_summary() -> Dict[str, Any]:
         },
         "by_queue": {},
     }
-    
+
     lane_prefixes = {
         "cleanup": ["cleanup-", "archive-", "expire-", "purge-"],
         "intelligence": ["check-sla", "analyze-", "check-recovery"],
         "compliance": ["run-compliance", "generate-", "collect-self-healing"],
     }
-    
+
     for name, config in schedule.items():
         queue = config.get("options", {}).get("queue", "default")
-        
+
         # Count by queue
         if queue not in summary["by_queue"]:
             summary["by_queue"][queue] = []
         summary["by_queue"][queue].append(name)
-        
+
         # Categorize by lane
         categorized = False
         for lane, prefixes in lane_prefixes.items():
@@ -252,37 +267,42 @@ def get_schedule_summary() -> Dict[str, Any]:
                 summary["by_lane"][lane].append(name)
                 categorized = True
                 break
-        
+
         if not categorized:
             summary["by_lane"]["legacy"].append(name)
-    
+
     return summary
 
 
-def validate_schedule() -> Dict[str, Any]:
+def validate_schedule() -> dict[str, Any]:
     """
     Validate schedule configuration.
-    
+
     Returns:
         Dict with validation results
     """
     schedule = get_selfhealing_beat_schedule()
     errors = []
     warnings = []
-    
+
     for name, config in schedule.items():
         # Check required fields
         if "task" not in config:
             errors.append(f"{name}: missing 'task' field")
-        
+
         if "schedule" not in config:
             errors.append(f"{name}: missing 'schedule' field")
-        
+
         # Check queue exists
         queue = config.get("options", {}).get("queue")
-        if queue and queue not in SELFHEALING_QUEUE_CONFIG and queue != "default" and queue != "dlq":
+        if (
+            queue
+            and queue not in SELFHEALING_QUEUE_CONFIG
+            and queue != "default"
+            and queue != "dlq"
+        ):
             warnings.append(f"{name}: queue '{queue}' not in SELFHEALING_QUEUE_CONFIG")
-    
+
     return {
         "valid": len(errors) == 0,
         "errors": errors,
@@ -299,20 +319,24 @@ def validate_schedule() -> Dict[str, Any]:
 def register_all_tasks_with_celery(app) -> None:
     """
     Register all self-healing tasks with a Celery application.
-    
+
     Args:
         app: Celery application instance
     """
     from selfhealing.tasks.cleanup_tasks import register_cleanup_tasks_with_celery
-    from selfhealing.tasks.intelligence_tasks import register_intelligence_tasks_with_celery
     from selfhealing.tasks.compliance_tasks import register_compliance_tasks_with_celery
-    from selfhealing.tasks.traffic_aware_replay import register_traffic_aware_tasks_with_celery
-    
+    from selfhealing.tasks.intelligence_tasks import (
+        register_intelligence_tasks_with_celery,
+    )
+    from selfhealing.tasks.traffic_aware_replay import (
+        register_traffic_aware_tasks_with_celery,
+    )
+
     register_cleanup_tasks_with_celery(app)
     register_intelligence_tasks_with_celery(app)
     register_compliance_tasks_with_celery(app)
     register_traffic_aware_tasks_with_celery(app)
-    
+
     logger.info("[BeatSchedule] All self-healing tasks registered (including Track 3)")
 
 

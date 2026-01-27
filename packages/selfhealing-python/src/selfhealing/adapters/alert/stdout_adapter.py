@@ -92,6 +92,8 @@ class StdoutAlertAdapter(AlertAdapter):
         parts.append(f"- {alert.description}")
 
         if alert.slo_name:
-            parts.append(f"SLO: {alert.slo_name} target={alert.slo_target} current={alert.slo_current}")
+            parts.append(
+                f"SLO: {alert.slo_name} target={alert.slo_target} current={alert.slo_current}"
+            )
 
         return " ".join(parts)

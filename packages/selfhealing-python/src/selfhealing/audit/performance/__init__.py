@@ -14,7 +14,7 @@ Provides high-performance features for distributed hash chain operations:
 Usage:
     # Recommended: Use the main facade
     from selfhealing.audit.performance import HashChainPerformanceManager
-    
+
     # Advanced: Direct access to specific components
     from selfhealing.audit.performance.lua_atomic import LuaAtomicHashChain
     from selfhealing.audit.performance.sampling import SamplingVerifier
@@ -36,19 +36,37 @@ from selfhealing.audit.performance.manager import HashChainPerformanceManager
 # Mapping of symbol names to their module paths
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # lua_atomic.py
-    "LuaAtomicHashChain": ("selfhealing.audit.performance.lua_atomic", "LuaAtomicHashChain"),
+    "LuaAtomicHashChain": (
+        "selfhealing.audit.performance.lua_atomic",
+        "LuaAtomicHashChain",
+    ),
     # batch_query.py
-    "PipelineBatchQuery": ("selfhealing.audit.performance.batch_query", "PipelineBatchQuery"),
+    "PipelineBatchQuery": (
+        "selfhealing.audit.performance.batch_query",
+        "PipelineBatchQuery",
+    ),
     # batch_writer.py
-    "BatchFlushConfig": ("selfhealing.audit.performance.batch_writer", "BatchFlushConfig"),
-    "BatchFlushWriter": ("selfhealing.audit.performance.batch_writer", "BatchFlushWriter"),
+    "BatchFlushConfig": (
+        "selfhealing.audit.performance.batch_writer",
+        "BatchFlushConfig",
+    ),
+    "BatchFlushWriter": (
+        "selfhealing.audit.performance.batch_writer",
+        "BatchFlushWriter",
+    ),
     # async_writer.py
-    "AsyncAuditWriter": ("selfhealing.audit.performance.async_writer", "AsyncAuditWriter"),
+    "AsyncAuditWriter": (
+        "selfhealing.audit.performance.async_writer",
+        "AsyncAuditWriter",
+    ),
     # sampling.py
     "SamplingConfig": ("selfhealing.audit.performance.sampling", "SamplingConfig"),
     "SamplingVerifier": ("selfhealing.audit.performance.sampling", "SamplingVerifier"),
     # watchdog.py
-    "PendingSequenceWatchdog": ("selfhealing.audit.performance.watchdog", "PendingSequenceWatchdog"),
+    "PendingSequenceWatchdog": (
+        "selfhealing.audit.performance.watchdog",
+        "PendingSequenceWatchdog",
+    ),
 }
 
 # Cache for lazily loaded modules
@@ -57,24 +75,27 @@ _loaded_symbols: dict[str, object] = {}
 
 def __getattr__(name: str) -> object:
     """Lazy import for backward compatibility.
-    
+
     This allows:
         from selfhealing.audit.performance import LuaAtomicHashChain
-    
+
     Without loading all modules at package import time.
     """
     if name in _loaded_symbols:
         return _loaded_symbols[name]
-    
+
     if name in _LAZY_IMPORTS:
         module_path, attr_name = _LAZY_IMPORTS[name]
         import importlib
+
         module = importlib.import_module(module_path)
         symbol = getattr(module, attr_name)
         _loaded_symbols[name] = symbol
         return symbol
-    
-    raise AttributeError(f"module 'selfhealing.audit.performance' has no attribute '{name}'")
+
+    raise AttributeError(
+        f"module 'selfhealing.audit.performance' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:
@@ -84,10 +105,13 @@ def __dir__() -> list[str]:
 
 # TYPE_CHECKING block for IDE support without runtime import
 if TYPE_CHECKING:
-    from selfhealing.audit.performance.lua_atomic import LuaAtomicHashChain
-    from selfhealing.audit.performance.batch_query import PipelineBatchQuery
-    from selfhealing.audit.performance.batch_writer import BatchFlushConfig, BatchFlushWriter
     from selfhealing.audit.performance.async_writer import AsyncAuditWriter
+    from selfhealing.audit.performance.batch_query import PipelineBatchQuery
+    from selfhealing.audit.performance.batch_writer import (
+        BatchFlushConfig,
+        BatchFlushWriter,
+    )
+    from selfhealing.audit.performance.lua_atomic import LuaAtomicHashChain
     from selfhealing.audit.performance.sampling import SamplingConfig, SamplingVerifier
     from selfhealing.audit.performance.watchdog import PendingSequenceWatchdog
 

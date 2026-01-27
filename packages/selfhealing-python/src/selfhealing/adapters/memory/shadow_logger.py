@@ -11,19 +11,20 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
-        record_shadow_log_sync_failure,
-        update_shadow_log_unsynced_count,
         record_shadow_log_recovered,
+        record_shadow_log_sync_failure,
         update_shadow_log_affected_services,
         update_shadow_log_oldest_unsynced_age,
+        update_shadow_log_unsynced_count,
     )
+
     HAS_DRIFT_METRICS = True
 except ImportError:
     HAS_DRIFT_METRICS = False
@@ -49,7 +50,7 @@ class L2SyncFailureRecord:
     adapter_type: str = "unknown"
     operation: str = "sync"  # sync, update, delete
     synced_after_recovery: bool = False
-    recovery_time: Optional[datetime] = None
+    recovery_time: datetime | None = None
 
 
 class ShadowLogger:
@@ -62,10 +63,10 @@ class ShadowLogger:
     Thread-safe 구현으로 동시 접근에 안전합니다.
     """
 
-    _instance: Optional["ShadowLogger"] = None
+    _instance: ShadowLogger | None = None
     _lock_class = None
 
-    def __new__(cls) -> "ShadowLogger":
+    def __new__(cls) -> ShadowLogger:
         """Singleton pattern."""
         if cls._instance is None:
             cls._lock_class = threading.Lock()
@@ -78,7 +79,7 @@ class ShadowLogger:
 
     def _init(self) -> None:
         """Initialize shadow logger."""
-        self._failure_log: List[L2SyncFailureRecord] = []
+        self._failure_log: list[L2SyncFailureRecord] = []
         self._lock = threading.RLock()
         self._max_entries = 1000  # 기본값, 런타임에 변경 가능
 
@@ -122,7 +123,7 @@ class ShadowLogger:
 
             # Trim old entries if over limit
             if len(self._failure_log) > self._max_entries:
-                self._failure_log = self._failure_log[-self._max_entries:]
+                self._failure_log = self._failure_log[-self._max_entries :]
 
             # Drift Detection 메트릭 기록
             if HAS_DRIFT_METRICS:
@@ -146,12 +147,12 @@ class ShadowLogger:
                 f"state={intended_state} adapter={adapter_type} error={error}"
             )
 
-    def get_unsynced_records(self) -> List[L2SyncFailureRecord]:
+    def get_unsynced_records(self) -> list[L2SyncFailureRecord]:
         """아직 동기화되지 않은 기록 조회."""
         with self._lock:
             return [r for r in self._failure_log if not r.synced_after_recovery]
 
-    def get_all_records(self) -> List[L2SyncFailureRecord]:
+    def get_all_records(self) -> list[L2SyncFailureRecord]:
         """모든 기록 조회."""
         with self._lock:
             return list(self._failure_log)
@@ -170,7 +171,10 @@ class ShadowLogger:
         recovery_time = datetime.now(timezone.utc)
         with self._lock:
             for record in self._failure_log:
-                if record.service_name == service_name and not record.synced_after_recovery:
+                if (
+                    record.service_name == service_name
+                    and not record.synced_after_recovery
+                ):
                     record.synced_after_recovery = True
                     record.recovery_time = recovery_time
                     count += 1
@@ -189,7 +193,9 @@ class ShadowLogger:
                     "recovery_time": recovery_time.isoformat(),
                 },
             )
-            logger.info(f"[ShadowLog] Marked {count} records as synced for {service_name}")
+            logger.info(
+                f"[ShadowLog] Marked {count} records as synced for {service_name}"
+            )
         return count
 
     def mark_all_as_synced(self) -> int:
@@ -212,21 +218,21 @@ class ShadowLogger:
     def _update_drift_metrics(self) -> None:
         """
         Drift Detection 메트릭 업데이트.
-        
+
         Note: 이 메서드는 _lock이 이미 획득된 상태에서 호출되어야 함.
         """
         if not HAS_DRIFT_METRICS:
             return
-        
+
         unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
         services = set(r.service_name for r in self._failure_log)
-        
+
         # 미동기화 레코드 수
         update_shadow_log_unsynced_count(len(unsynced))
-        
+
         # 영향받은 서비스 수
         update_shadow_log_affected_services(len(services))
-        
+
         # 가장 오래된 미동기화 레코드 age
         if unsynced:
             oldest = min(r.failure_time for r in unsynced)
@@ -235,16 +241,16 @@ class ShadowLogger:
         else:
             update_shadow_log_oldest_unsynced_age(0)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Shadow Log 통계 조회."""
         with self._lock:
             unsynced = [r for r in self._failure_log if not r.synced_after_recovery]
             services = set(r.service_name for r in self._failure_log)
-            
+
             # Drift Detection 메트릭 업데이트
             if HAS_DRIFT_METRICS:
                 self._update_drift_metrics()
-            
+
             return {
                 "total_records": len(self._failure_log),
                 "unsynced_count": len(unsynced),
@@ -252,11 +258,13 @@ class ShadowLogger:
                 "max_entries": self._max_entries,
                 "oldest_record": (
                     self._failure_log[0].failure_time.isoformat()
-                    if self._failure_log else None
+                    if self._failure_log
+                    else None
                 ),
                 "newest_record": (
                     self._failure_log[-1].failure_time.isoformat()
-                    if self._failure_log else None
+                    if self._failure_log
+                    else None
                 ),
             }
 
@@ -265,7 +273,7 @@ class ShadowLogger:
         with self._lock:
             self._failure_log.clear()
 
-    def analyze_l2_failures(self) -> Dict[str, Any]:
+    def analyze_l2_failures(self) -> dict[str, Any]:
         """
         L2 장애 기간 동안의 상태 변화 분석.
 
@@ -309,12 +317,12 @@ class ShadowLogger:
         ]
 
         # 어댑터별 통계
-        by_adapter: Dict[str, int] = {}
+        by_adapter: dict[str, int] = {}
         for r in all_records:
             by_adapter[r.adapter_type] = by_adapter.get(r.adapter_type, 0) + 1
 
         # 작업별 통계
-        by_operation: Dict[str, int] = {}
+        by_operation: dict[str, int] = {}
         for r in all_records:
             by_operation[r.operation] = by_operation.get(r.operation, 0) + 1
 
@@ -350,10 +358,10 @@ class ShadowLogger:
     def _generate_recommendations(
         self,
         unsynced_count: int,
-        affected_services: List[str],
-        by_adapter: Dict[str, int],
+        affected_services: list[str],
+        by_adapter: dict[str, int],
         total_records: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """권장 조치 생성."""
         recommendations = []
 
@@ -388,7 +396,7 @@ class ShadowLogger:
 
         return recommendations
 
-    def get_records_by_service(self, service_name: str) -> List[L2SyncFailureRecord]:
+    def get_records_by_service(self, service_name: str) -> list[L2SyncFailureRecord]:
         """특정 서비스의 실패 기록 조회."""
         with self._lock:
             return [r for r in self._failure_log if r.service_name == service_name]
@@ -397,30 +405,29 @@ class ShadowLogger:
         self,
         start_time: datetime,
         end_time: datetime,
-    ) -> List[L2SyncFailureRecord]:
+    ) -> list[L2SyncFailureRecord]:
         """시간 범위 내 실패 기록 조회."""
         with self._lock:
             return [
-                r for r in self._failure_log
-                if start_time <= r.failure_time <= end_time
+                r for r in self._failure_log if start_time <= r.failure_time <= end_time
             ]
 
     def _record_audit_event(
         self,
         event_type: str,
         service_name: str,
-        details: Dict[str, Any],
+        details: dict[str, Any],
     ) -> None:
         """
         Audit 이벤트 기록.
-        
+
         Audit 통합 개선:
         - _write_to_wal() 직접 호출로 ActorContext/TraceContext 자동 결합
         - "L2 장애 중 어떤 운영자의 어떤 작업에서 동기화 실패 발생" 추적 가능
         """
         try:
             from selfhealing.services.audit.base import _write_to_wal
-            
+
             _write_to_wal(
                 event_type=event_type,
                 source="ShadowLogger",
@@ -432,7 +439,9 @@ class ShadowLogger:
             # 자동으로 actor_id, actor_roles, trace_id가 포함됨
         except ImportError:
             # _write_to_wal 미사용 환경: 로거로 폴백
-            logger.debug(f"[ShadowLogger] Audit recording skipped: _write_to_wal not available")
+            logger.debug(
+                "[ShadowLogger] Audit recording skipped: _write_to_wal not available"
+            )
         except Exception as e:
             # Audit 실패가 메인 로직을 방해하면 안됨
             logger.debug(f"[ShadowLogger] Audit recording failed: {e}")

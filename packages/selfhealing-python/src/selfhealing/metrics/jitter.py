@@ -12,11 +12,11 @@ import warnings
 
 # Re-export from new location for backward compatibility
 from selfhealing.utils.jitter import (
-    with_jitter,
+    JitterConfig,
+    async_sleep_with_jitter,
     calculate_jitter,
     sleep_with_jitter,
-    async_sleep_with_jitter,
-    JitterConfig,
+    with_jitter,
 )
 
 # Emit deprecation warning on import
@@ -24,7 +24,7 @@ warnings.warn(
     "selfhealing.metrics.jitter is deprecated. "
     "Use selfhealing.utils.jitter instead.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 __all__ = [

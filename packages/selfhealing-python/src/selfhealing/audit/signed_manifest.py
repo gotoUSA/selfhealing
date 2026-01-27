@@ -37,13 +37,12 @@ import base64
 import hashlib
 import json
 import logging
-import os
-import urllib.request
 import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +68,8 @@ class MerkleTree:
 
     def __init__(self, hash_func: str = "sha256"):
         self._hash_func = hash_func
-        self._leaves: List[bytes] = []
-        self._tree: List[List[bytes]] = []
+        self._leaves: list[bytes] = []
+        self._tree: list[list[bytes]] = []
 
     def add_leaf(self, data: bytes) -> None:
         """리프 노드 추가."""
@@ -114,7 +113,7 @@ class MerkleTree:
         """머클 루트 (16진수)."""
         return self.compute_root().hex()
 
-    def get_proof(self, index: int) -> List[Tuple[bytes, str]]:
+    def get_proof(self, index: int) -> list[tuple[bytes, str]]:
         """
         특정 리프의 Merkle Proof 생성.
 
@@ -146,7 +145,7 @@ class MerkleTree:
     def verify_proof(
         self,
         leaf_hash: bytes,
-        proof: List[Tuple[bytes, str]],
+        proof: list[tuple[bytes, str]],
         root: bytes,
     ) -> bool:
         """Merkle Proof 검증."""
@@ -210,13 +209,13 @@ class RFC3161Client:
 
     def __init__(
         self,
-        tsa_url: Optional[str] = None,
+        tsa_url: str | None = None,
         timeout_seconds: float = 10.0,
     ):
         self._tsa_url = tsa_url or self.DEFAULT_TSA_URLS[0]
         self._timeout = timeout_seconds
 
-    def get_timestamp(self, data_hash: bytes) -> Optional[RFC3161Timestamp]:
+    def get_timestamp(self, data_hash: bytes) -> RFC3161Timestamp | None:
         """
         RFC 3161 타임스탬프 발급 요청.
 
@@ -273,7 +272,7 @@ class RFC3161Client:
 
     def _parse_timestamp_response(
         self, response_data: bytes, original_hash: bytes
-    ) -> Optional[RFC3161Timestamp]:
+    ) -> RFC3161Timestamp | None:
         """
         RFC 3161 TimeStampResp 파싱 (간소화 버전).
 
@@ -302,8 +301,8 @@ class ManifestEntry:
     file_path: str
     file_hash: str  # SHA-256 hex
     entry_count: int
-    first_timestamp: Optional[str] = None
-    last_timestamp: Optional[str] = None
+    first_timestamp: str | None = None
+    last_timestamp: str | None = None
 
 
 @dataclass
@@ -313,9 +312,9 @@ class SignedManifestData:
     version: str = "1.0"
     created_at: str = ""
     merkle_root: str = ""
-    entries: List[ManifestEntry] = field(default_factory=list)
-    rfc3161_timestamp: Optional[Dict[str, Any]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    entries: list[ManifestEntry] = field(default_factory=list)
+    rfc3161_timestamp: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class SignedManifest:
@@ -341,14 +340,14 @@ class SignedManifest:
 
     def __init__(
         self,
-        tsa_url: Optional[str] = None,
+        tsa_url: str | None = None,
         enable_timestamp: bool = True,
     ):
         self._merkle_tree = MerkleTree()
-        self._entries: List[ManifestEntry] = []
+        self._entries: list[ManifestEntry] = []
         self._tsa_client = RFC3161Client(tsa_url) if enable_timestamp else None
-        self._merkle_root: Optional[str] = None
-        self._timestamp: Optional[RFC3161Timestamp] = None
+        self._merkle_root: str | None = None
+        self._timestamp: RFC3161Timestamp | None = None
 
     def add_log_file(self, file_path: str | Path) -> ManifestEntry:
         """
@@ -372,7 +371,7 @@ class SignedManifest:
         last_ts = None
         file_hasher = hashlib.sha256()
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
                     continue
@@ -415,7 +414,7 @@ class SignedManifest:
         self,
         dir_path: str | Path,
         pattern: str = "*.jsonl",
-    ) -> List[ManifestEntry]:
+    ) -> list[ManifestEntry]:
         """
         디렉토리의 모든 로그 파일 추가.
 
@@ -448,8 +447,8 @@ class SignedManifest:
 
     def get_rfc3161_timestamp(
         self,
-        data: Optional[bytes] = None,
-    ) -> Optional[RFC3161Timestamp]:
+        data: bytes | None = None,
+    ) -> RFC3161Timestamp | None:
         """
         RFC 3161 타임스탬프 발급.
 
@@ -471,7 +470,7 @@ class SignedManifest:
         self._timestamp = self._tsa_client.get_timestamp(data)
         return self._timestamp
 
-    def compute_and_timestamp(self) -> Tuple[str, Optional[RFC3161Timestamp]]:
+    def compute_and_timestamp(self) -> tuple[str, RFC3161Timestamp | None]:
         """
         머클 루트 계산 및 타임스탬프 발급 (원스텝).
 
@@ -482,7 +481,7 @@ class SignedManifest:
         timestamp = self.get_rfc3161_timestamp()
         return root, timestamp
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """매니페스트를 딕셔너리로 변환."""
         if self._merkle_root is None:
             self.compute_merkle_root()
@@ -543,7 +542,7 @@ class SignedManifest:
         logger.info(f"Saved manifest to {output_path}")
 
     @classmethod
-    def load(cls, manifest_path: str | Path) -> "SignedManifest":
+    def load(cls, manifest_path: str | Path) -> SignedManifest:
         """
         매니페스트 로드.
 
@@ -553,14 +552,12 @@ class SignedManifest:
         Returns:
             SignedManifest instance
         """
-        with open(manifest_path, "r", encoding="utf-8") as f:
+        with open(manifest_path, encoding="utf-8") as f:
             data = json.load(f)
 
         manifest = cls(enable_timestamp=False)
         manifest._merkle_root = data["merkle_root"]
-        manifest._entries = [
-            ManifestEntry(**entry) for entry in data["entries"]
-        ]
+        manifest._entries = [ManifestEntry(**entry) for entry in data["entries"]]
 
         return manifest
 
@@ -583,7 +580,7 @@ class SignedManifest:
                 logger.error(f"File not found: {file_path}")
                 return False
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         tree.add_leaf(line.strip().encode("utf-8"))

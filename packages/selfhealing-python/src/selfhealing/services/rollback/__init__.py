@@ -8,7 +8,6 @@ Rollback DNA Service - 안전한 자동 롤백
 - Zero-Downtime 롤백
 """
 
-from .service import RollbackService
 from .models import (
     RollbackPolicy,
     RollbackRequest,
@@ -16,6 +15,7 @@ from .models import (
     RollbackState,
     RollbackStrategy,
 )
+from .service import RollbackService
 
 __all__ = [
     "RollbackService",

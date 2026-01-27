@@ -7,11 +7,11 @@ Can be run as scheduled task to alert before expiry.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Callable, Dict
-from enum import Enum
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,10 @@ class CertificateInfo:
     @property
     def needs_attention(self) -> bool:
         """True if certificate needs attention (expiring soon or critical)."""
-        return self.status in {CertificateStatus.EXPIRING_SOON, CertificateStatus.CRITICAL}
+        return self.status in {
+            CertificateStatus.EXPIRING_SOON,
+            CertificateStatus.CRITICAL,
+        }
 
     @property
     def is_urgent(self) -> bool:
@@ -61,7 +64,7 @@ class CertificateExpiryMonitor:
         self,
         warning_days: int = 30,
         critical_days: int = 7,
-        alert_callback: Optional[Callable[[CertificateInfo], None]] = None,
+        alert_callback: Callable[[CertificateInfo], None] | None = None,
     ):
         """
         Initialize certificate expiry monitor.
@@ -74,7 +77,7 @@ class CertificateExpiryMonitor:
         self._warning_days = warning_days
         self._critical_days = critical_days
         self._alert_callback = alert_callback
-        self._monitored_endpoints: Dict[str, CertificateInfo] = {}
+        self._monitored_endpoints: dict[str, CertificateInfo] = {}
 
     @property
     def warning_days(self) -> int:
@@ -92,7 +95,7 @@ class CertificateExpiryMonitor:
         endpoint: str = "",
         subject: str = "",
         issuer: str = "",
-        not_before: Optional[datetime] = None,
+        not_before: datetime | None = None,
     ) -> CertificateInfo:
         """
         Check certificate expiry status.
@@ -172,14 +175,14 @@ class CertificateExpiryMonitor:
         else:
             return f"OK: Certificate for {endpoint_display} valid for {cert_info.days_remaining} days"
 
-    def get_all_monitored(self) -> Dict[str, CertificateInfo]:
+    def get_all_monitored(self) -> dict[str, CertificateInfo]:
         """Get all monitored endpoints and their certificate info."""
         return dict(self._monitored_endpoints)
 
     def get_expiring_certificates(
         self,
-        within_days: Optional[int] = None,
-    ) -> List[CertificateInfo]:
+        within_days: int | None = None,
+    ) -> list[CertificateInfo]:
         """
         Get certificates expiring within specified days.
 
@@ -191,7 +194,11 @@ class CertificateExpiryMonitor:
         """
         threshold = within_days if within_days is not None else self._warning_days
 
-        return [info for info in self._monitored_endpoints.values() if info.days_remaining <= threshold]
+        return [
+            info
+            for info in self._monitored_endpoints.values()
+            if info.days_remaining <= threshold
+        ]
 
     def clear_monitoring(self) -> None:
         """Clear all monitored endpoints."""
@@ -227,7 +234,7 @@ class CertificateAlertManager:
             alert_interval_hours: Minimum hours between repeated alerts for same endpoint
         """
         self._alert_interval = timedelta(hours=alert_interval_hours)
-        self._last_alerts: Dict[str, datetime] = {}
+        self._last_alerts: dict[str, datetime] = {}
 
     def should_alert(self, endpoint: str) -> bool:
         """

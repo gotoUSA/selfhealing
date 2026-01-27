@@ -16,9 +16,8 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -100,7 +99,7 @@ class PoolMonitorSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[PoolMonitorSettings] = None
+_settings: PoolMonitorSettings | None = None
 
 
 def get_pool_monitor_settings() -> PoolMonitorSettings:

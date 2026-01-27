@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ class ContextType(str, Enum):
     UNKNOWN = "unknown"  # 알 수 없음 (폴백)
 
 
-def _get_default_actor() -> tuple[Optional[str], str, list[str]]:
+def _get_default_actor() -> tuple[str | None, str, list[str]]:
     """
     Get default actor from ActorContext if available.
 
@@ -160,7 +160,7 @@ class AuditEntry:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Actor information - 자동으로 ActorContext에서 가져옴
-    actor_id: Optional[str] = field(default=None)
+    actor_id: str | None = field(default=None)
     actor_type: str = field(default="system")
     actor_roles: list[str] = field(default_factory=list)
 
@@ -168,18 +168,18 @@ class AuditEntry:
     context_type: ContextType = field(default=ContextType.UNKNOWN)
 
     # Target information
-    target_type: Optional[str] = None  # circuit_breaker, dlq_entry, etc.
-    target_id: Optional[str] = None
+    target_type: str | None = None  # circuit_breaker, dlq_entry, etc.
+    target_id: str | None = None
 
     # Context
-    service_name: Optional[str] = None
-    domain: Optional[str] = None
-    reason: Optional[str] = None
+    service_name: str | None = None
+    domain: str | None = None
+    reason: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
     # Result
     success: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def __post_init__(self) -> None:
         """
@@ -213,12 +213,20 @@ class AuditEntry:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "action": self.action.value if isinstance(self.action, AuditAction) else self.action,
+            "action": (
+                self.action.value
+                if isinstance(self.action, AuditAction)
+                else self.action
+            ),
             "timestamp": self.timestamp.isoformat(),
             "actor_id": self.actor_id,
             "actor_type": self.actor_type,
             "actor_roles": self.actor_roles,
-            "context_type": self.context_type.value if isinstance(self.context_type, ContextType) else self.context_type,
+            "context_type": (
+                self.context_type.value
+                if isinstance(self.context_type, ContextType)
+                else self.context_type
+            ),
             "target_type": self.target_type,
             "target_id": self.target_id,
             "service_name": self.service_name,
@@ -259,11 +267,11 @@ class AuditLogAdapter(ABC):
     @abstractmethod
     def query(
         self,
-        action: Optional[AuditAction | str] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        action: AuditAction | str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
     ) -> list[AuditEntry]:
         """
@@ -286,13 +294,15 @@ class AuditLogAdapter(ABC):
         self,
         service_name: str,
         reason: str,
-        actor_id: Optional[str] = None,
+        actor_id: str | None = None,
         is_manual: bool = True,
     ) -> None:
         """Convenience method for Circuit Breaker open."""
         self.log(
             AuditEntry(
-                action=AuditAction.CB_FORCE_OPEN if is_manual else AuditAction.CB_AUTO_OPEN,
+                action=(
+                    AuditAction.CB_FORCE_OPEN if is_manual else AuditAction.CB_AUTO_OPEN
+                ),
                 service_name=service_name,
                 target_type="circuit_breaker",
                 target_id=service_name,
@@ -306,14 +316,18 @@ class AuditLogAdapter(ABC):
         self,
         service_name: str,
         reason: str,
-        actor_id: Optional[str] = None,
+        actor_id: str | None = None,
         is_manual: bool = True,
         trigger_replay: bool = False,
     ) -> None:
         """Convenience method for Circuit Breaker close."""
         self.log(
             AuditEntry(
-                action=AuditAction.CB_FORCE_CLOSE if is_manual else AuditAction.CB_AUTO_CLOSE,
+                action=(
+                    AuditAction.CB_FORCE_CLOSE
+                    if is_manual
+                    else AuditAction.CB_AUTO_CLOSE
+                ),
                 service_name=service_name,
                 target_type="circuit_breaker",
                 target_id=service_name,
@@ -329,7 +343,7 @@ class AuditLogAdapter(ABC):
         dlq_id: int,
         domain: str,
         failure_type: str,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """Convenience method for DLQ storage."""
         self.log(
@@ -350,13 +364,17 @@ class AuditLogAdapter(ABC):
         dlq_id: int,
         domain: str,
         success: bool,
-        actor_id: Optional[str] = None,
-        error_message: Optional[str] = None,
+        actor_id: str | None = None,
+        error_message: str | None = None,
     ) -> None:
         """Convenience method for DLQ replay."""
         self.log(
             AuditEntry(
-                action=AuditAction.DLQ_REPLAY_SUCCESS if success else AuditAction.DLQ_REPLAY_FAILED,
+                action=(
+                    AuditAction.DLQ_REPLAY_SUCCESS
+                    if success
+                    else AuditAction.DLQ_REPLAY_FAILED
+                ),
                 domain=domain,
                 target_type="dlq_entry",
                 target_id=str(dlq_id),
@@ -374,7 +392,7 @@ class AuditLogAdapter(ABC):
         attempt: int,
         max_attempts: int,
         success: bool,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """Convenience method for retry attempts."""
         if success:
@@ -403,9 +421,9 @@ class AuditLogAdapter(ABC):
         self,
         block_reason: str,
         operation_name: str,
-        details: Optional[dict[str, Any]] = None,
-        service_name: Optional[str] = None,
-        domain: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        service_name: str | None = None,
+        domain: str | None = None,
     ) -> None:
         """
         거버넌스에 의해 자동화가 차단된 경우 기록.

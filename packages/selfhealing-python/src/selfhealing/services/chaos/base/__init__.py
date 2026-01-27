@@ -27,14 +27,14 @@ Structure:
 - utils.py: _apply_chaos_config, _get_current_chaos_config
 """
 
+from .enums import ExperimentStatus, ExperimentType, TrafficType
+from .experiment import ChaosExperiment
+from .models import ExperimentConfig, ExperimentResult, SteadyStateHypothesis
+
 # Import from separate modules
 from .protocols import AuditRecorderProtocol, KillSwitchProtocol
-from .enums import ExperimentStatus, ExperimentType, TrafficType
-from .models import ExperimentConfig, ExperimentResult, SteadyStateHypothesis
 from .ttl_helper import MonotonicTTLHelper
-from .experiment import ChaosExperiment
 from .utils import _apply_chaos_config, _get_current_chaos_config
-
 
 __all__ = [
     # Protocols

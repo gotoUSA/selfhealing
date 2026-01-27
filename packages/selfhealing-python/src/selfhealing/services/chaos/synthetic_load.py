@@ -15,13 +15,13 @@ Design Principle:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 from selfhealing.core.timezone import now
 
@@ -93,13 +93,13 @@ class SyntheticRequest:
 
     experiment_id: str
     target_service: str
-    original_headers: Dict[str, str]
-    synthetic_headers: Dict[str, str]
+    original_headers: dict[str, str]
+    synthetic_headers: dict[str, str]
     excluded_from_sla: bool = True
     request_id: str = ""
     created_at: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "experiment_id": self.experiment_id,
@@ -144,7 +144,7 @@ class LoadConfig:
     max_concurrent: int = 50
     """최대 동시 요청 수."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "target_rps": self.target_rps,
@@ -171,7 +171,7 @@ class GeneratorStats:
     min_latency_ms: float = 0.0
     elapsed_seconds: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "total_requests": self.total_requests,
@@ -216,7 +216,7 @@ class SyntheticTrafficGenerator:
     def create_synthetic_request(
         self,
         target_service: str,
-        original_headers: Optional[Dict[str, str]] = None,
+        original_headers: dict[str, str] | None = None,
     ) -> SyntheticRequest:
         """
         합성 요청 생성.
@@ -228,7 +228,6 @@ class SyntheticTrafficGenerator:
         Returns:
             SyntheticRequest: 합성 요청 정보
         """
-        import uuid
 
         original = original_headers or {}
 
@@ -261,7 +260,7 @@ class SyntheticTrafficGenerator:
         )
 
     @staticmethod
-    def is_synthetic_request(headers: Dict[str, str]) -> bool:
+    def is_synthetic_request(headers: dict[str, str]) -> bool:
         """
         요청이 합성 트래픽인지 확인.
 
@@ -275,7 +274,7 @@ class SyntheticTrafficGenerator:
         """
         return headers.get(SYNTHETIC_HEADER) == SYNTHETIC_VALUE
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """생성 통계 반환."""
         return {
             "experiment_id": self.experiment_id,
@@ -326,20 +325,20 @@ class SyntheticLoadGenerator:
         self.target_service = target_service
 
         self._state = GeneratorState.IDLE
-        self._config: Optional[LoadConfig] = None
+        self._config: LoadConfig | None = None
         self._stats = GeneratorStats()
         self._traffic_generator = SyntheticTrafficGenerator(experiment_id)
 
         # 실행 제어
         self._stop_event = threading.Event()
-        self._worker_thread: Optional[threading.Thread] = None
-        self._start_time: Optional[float] = None
+        self._worker_thread: threading.Thread | None = None
+        self._start_time: float | None = None
 
         # 콜백
-        self._request_handler: Optional[Callable[[SyntheticRequest], bool]] = None
+        self._request_handler: Callable[[SyntheticRequest], bool] | None = None
 
         # 레이턴시 추적
-        self._latencies: List[float] = []
+        self._latencies: list[float] = []
 
     @property
     def state(self) -> GeneratorState:
@@ -354,7 +353,7 @@ class SyntheticLoadGenerator:
     def start(
         self,
         config: LoadConfig,
-        request_handler: Optional[Callable[[SyntheticRequest], bool]] = None,
+        request_handler: Callable[[SyntheticRequest], bool] | None = None,
     ) -> bool:
         """
         부하 생성 시작.
@@ -555,7 +554,7 @@ class SyntheticLoadGenerator:
 # Singleton
 # =============================================================================
 
-_generators: Dict[str, SyntheticLoadGenerator] = {}
+_generators: dict[str, SyntheticLoadGenerator] = {}
 
 
 def get_synthetic_load_generator(

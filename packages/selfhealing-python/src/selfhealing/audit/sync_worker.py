@@ -11,13 +11,13 @@ ADR-005 (Fail-Open + WAL 기반 누락 0 보장) 구현의 핵심 컴포넌트.
 
 Usage:
     from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
-    
+
     worker = AuditSyncWorker(
         wal=wal_instance,
         central_adapter=adapter,
     )
     worker.start()
-    
+
     # 종료 시
     worker.stop()
 """
@@ -25,12 +25,11 @@ Usage:
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.settings.audit_sync import AuditSyncSettings
@@ -41,31 +40,31 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SyncWorkerConfig:
     """Sync Worker 설정."""
-    
+
     # 동기화 주기 (초)
     sync_interval_seconds: float = 1.0
-    
+
     # 배치 크기
     batch_size: int = 100
-    
+
     # 재시도 설정
     max_retries: int = 3
     retry_delay_seconds: float = 1.0
     retry_backoff_multiplier: float = 2.0
     max_retry_delay_seconds: float = 30.0
-    
+
     # 오래된 엔트리 정리 기준 (초)
     cleanup_after_seconds: float = 3600.0  # 1시간
-    
+
     # 메트릭 리포팅 주기 (초)
     metrics_interval_seconds: float = 60.0
 
     @classmethod
     def from_settings(
         cls,
-        settings: "AuditSyncSettings | None" = None,
+        settings: AuditSyncSettings | None = None,
         **overrides,
-    ) -> "SyncWorkerConfig":
+    ) -> SyncWorkerConfig:
         """
         Settings에서 SyncWorkerConfig 인스턴스 생성.
 
@@ -101,16 +100,17 @@ class SyncWorkerConfig:
                 "metrics_interval_seconds", s.metrics_interval_seconds
             ),
         )
-    
+
     @classmethod
-    def from_env(cls) -> "SyncWorkerConfig":
+    def from_env(cls) -> SyncWorkerConfig:
         """
         환경변수에서 설정 로드.
-        
+
         .. deprecated::
             Use `from_settings()` instead for Pydantic v2 Settings support.
         """
         import warnings
+
         warnings.warn(
             "from_env() is deprecated, use from_settings() instead",
             DeprecationWarning,
@@ -122,28 +122,30 @@ class SyncWorkerConfig:
 @dataclass
 class SyncStats:
     """동기화 통계."""
-    
+
     total_synced: int = 0
     total_failed: int = 0
     total_retries: int = 0
-    last_sync_time: Optional[float] = None
+    last_sync_time: float | None = None
     last_sync_count: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
     current_lag_entries: int = 0
-    
+
     # 성능 통계
     avg_sync_duration_ms: float = 0.0
-    _sync_durations: List[float] = field(default_factory=list)
-    
+    _sync_durations: list[float] = field(default_factory=list)
+
     def record_sync_duration(self, duration_ms: float) -> None:
         """동기화 소요 시간 기록."""
         self._sync_durations.append(duration_ms)
         # 최근 100개만 유지
         if len(self._sync_durations) > 100:
             self._sync_durations = self._sync_durations[-100:]
-        self.avg_sync_duration_ms = sum(self._sync_durations) / len(self._sync_durations)
-    
-    def to_dict(self) -> Dict[str, Any]:
+        self.avg_sync_duration_ms = sum(self._sync_durations) / len(
+            self._sync_durations
+        )
+
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리 변환."""
         return {
             "total_synced": self.total_synced,
@@ -160,26 +162,26 @@ class SyncStats:
 class AuditSyncWorker:
     """
     Background Sync Worker.
-    
+
     WAL에 기록된 audit 이벤트를 중앙 저장소로 동기화하는 백그라운드 워커.
-    
+
     Thread-safe하며, 단일 인스턴스로 운영.
     """
-    
-    _instance: Optional["AuditSyncWorker"] = None
+
+    _instance: AuditSyncWorker | None = None
     _instance_lock = threading.Lock()
-    
+
     def __init__(
         self,
         wal: Any = None,
         central_adapter: Any = None,
-        config: Optional[SyncWorkerConfig] = None,
-        on_sync_complete: Optional[Callable[[int, int], None]] = None,
-        on_sync_error: Optional[Callable[[Exception], None]] = None,
+        config: SyncWorkerConfig | None = None,
+        on_sync_complete: Callable[[int, int], None] | None = None,
+        on_sync_error: Callable[[Exception], None] | None = None,
     ):
         """
         Initialize Sync Worker.
-        
+
         Args:
             wal: WriteAheadLog 인스턴스 (None이면 audit_helpers에서 가져옴)
             central_adapter: 중앙 저장소 어댑터 (AuditLogAdapter)
@@ -192,28 +194,28 @@ class AuditSyncWorker:
         self._config = config or SyncWorkerConfig.from_env()
         self._on_sync_complete = on_sync_complete
         self._on_sync_error = on_sync_error
-        
+
         self._stats = SyncStats()
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._running = False
-        
+
         # 마지막 처리된 시퀀스 (WAL cleanup 용)
         self._last_processed_seq: int = 0
-        
+
         logger.info(
             f"[AuditSyncWorker] Initialized with interval={self._config.sync_interval_seconds}s, "
             f"batch_size={self._config.batch_size}"
         )
-    
+
     @classmethod
     def get_instance(
         cls,
         wal: Any = None,
         central_adapter: Any = None,
-        config: Optional[SyncWorkerConfig] = None,
-    ) -> "AuditSyncWorker":
+        config: SyncWorkerConfig | None = None,
+    ) -> AuditSyncWorker:
         """Get or create singleton instance."""
         if cls._instance is None:
             with cls._instance_lock:
@@ -224,7 +226,7 @@ class AuditSyncWorker:
                         config=config,
                     )
         return cls._instance
-    
+
     @classmethod
     def reset_instance(cls) -> None:
         """Reset singleton (테스트용)."""
@@ -232,37 +234,39 @@ class AuditSyncWorker:
             if cls._instance:
                 cls._instance.stop()
             cls._instance = None
-    
+
     def _get_wal(self) -> Any:
         """WAL 인스턴스 가져오기."""
         if self._wal is not None:
             return self._wal
-        
+
         # audit_helpers에서 가져오기
         try:
             from selfhealing.services.audit_helpers import _get_wal
+
             return _get_wal()
         except Exception as e:
             logger.warning(f"[AuditSyncWorker] Failed to get WAL: {e}")
             return None
-    
+
     def _get_adapter(self) -> Any:
         """중앙 저장소 어댑터 가져오기."""
         if self._central_adapter is not None:
             return self._central_adapter
-        
+
         # ProviderRegistry에서 가져오기
         try:
             from selfhealing.factory import ProviderRegistry
+
             return ProviderRegistry.get_audit_adapter()
         except Exception as e:
             logger.debug(f"[AuditSyncWorker] Adapter not available: {e}")
             return None
-    
+
     def start(self) -> bool:
         """
         워커 시작.
-        
+
         Returns:
             True: 시작 성공
             False: 이미 실행 중
@@ -270,7 +274,7 @@ class AuditSyncWorker:
         with self._lock:
             if self._running:
                 return False
-            
+
             self._stop_event.clear()
             self._running = True
             self._thread = threading.Thread(
@@ -281,48 +285,48 @@ class AuditSyncWorker:
             self._thread.start()
             logger.info("[AuditSyncWorker] Started")
             return True
-    
+
     def stop(self, timeout: float = 1.0) -> None:
         """
         워커 중지.
-        
+
         Args:
             timeout: 종료 대기 시간 (초)
         """
         with self._lock:
             if not self._running:
                 return
-            
+
             self._stop_event.set()
             self._running = False
-        
+
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
                 logger.warning("[AuditSyncWorker] Thread did not stop gracefully")
-        
+
         logger.info("[AuditSyncWorker] Stopped")
-    
+
     def _run_loop(self) -> None:
         """메인 동기화 루프."""
         last_metrics_time = time.time()
-        
+
         while not self._stop_event.is_set():
             try:
                 # 동기화 수행
                 synced, failed = self._sync_batch()
-                
+
                 if synced > 0 or failed > 0:
                     logger.debug(
                         f"[AuditSyncWorker] Synced: {synced}, Failed: {failed}"
                     )
-                
+
                 # 메트릭 리포팅
                 now = time.time()
                 if now - last_metrics_time >= self._config.metrics_interval_seconds:
                     self._report_metrics()
                     last_metrics_time = now
-                
+
             except Exception as e:
                 logger.error(f"[AuditSyncWorker] Sync loop error: {e}")
                 if self._on_sync_error:
@@ -330,62 +334,64 @@ class AuditSyncWorker:
                         self._on_sync_error(e)
                     except Exception:
                         pass
-            
+
             # 다음 사이클까지 대기
             self._stop_event.wait(timeout=self._config.sync_interval_seconds)
-    
+
     def _sync_batch(self) -> tuple[int, int]:
         """
         배치 동기화 수행.
-        
+
         Returns:
             (synced_count, failed_count)
         """
         wal = self._get_wal()
         if wal is None:
             return 0, 0
-        
+
         adapter = self._get_adapter()
-        
+
         start_time = time.time()
         synced_count = 0
         failed_count = 0
-        
+
         try:
             # 미처리 엔트리 조회
             entries = wal.recover_unprocessed(self._last_processed_seq)
-            
+
             if not entries:
                 return 0, 0
-            
+
             # 배치 크기만큼만 처리
-            batch = entries[:self._config.batch_size]
-            
+            batch = entries[: self._config.batch_size]
+
             with self._lock:
                 self._stats.current_lag_entries = len(entries)
-            
+
             for entry in batch:
                 try:
                     # 중앙 저장소에 기록
                     if adapter:
                         self._sync_entry_to_adapter(adapter, entry)
-                    
+
                     synced_count += 1
-                    self._last_processed_seq = max(self._last_processed_seq, entry.sequence)
-                    
+                    self._last_processed_seq = max(
+                        self._last_processed_seq, entry.sequence
+                    )
+
                 except Exception as e:
                     failed_count += 1
                     logger.warning(
                         f"[AuditSyncWorker] Failed to sync entry seq={entry.sequence}: {e}"
                     )
-            
+
             # 처리 완료된 엔트리 정리
             if synced_count > 0:
                 try:
                     wal.cleanup_processed(self._last_processed_seq)
                 except Exception as e:
                     logger.warning(f"[AuditSyncWorker] Failed to cleanup WAL: {e}")
-            
+
             # 통계 업데이트
             duration_ms = (time.time() - start_time) * 1000
             with self._lock:
@@ -394,43 +400,43 @@ class AuditSyncWorker:
                 self._stats.last_sync_time = time.time()
                 self._stats.last_sync_count = synced_count
                 self._stats.record_sync_duration(duration_ms)
-            
+
             # 콜백 호출
             if self._on_sync_complete and (synced_count > 0 or failed_count > 0):
                 try:
                     self._on_sync_complete(synced_count, failed_count)
                 except Exception:
                     pass
-            
+
             return synced_count, failed_count
-            
+
         except Exception as e:
             with self._lock:
                 self._stats.last_error = str(e)
             raise
-    
+
     def _sync_entry_to_adapter(self, adapter: Any, entry: Any) -> None:
         """
         단일 엔트리를 어댑터로 동기화.
-        
+
         재시도 로직 포함.
         """
         delay = self._config.retry_delay_seconds
-        last_error: Optional[Exception] = None
-        
+        last_error: Exception | None = None
+
         for attempt in range(self._config.max_retries + 1):
             try:
                 # AuditLogAdapter의 write 메서드 호출
-                if hasattr(adapter, 'write'):
+                if hasattr(adapter, "write"):
                     adapter.write(entry.data)
-                elif hasattr(adapter, 'log'):
+                elif hasattr(adapter, "log"):
                     adapter.log(entry.data)
                 else:
                     # 범용 로그
                     logger.info(f"[AuditSync] {entry.data}")
-                
+
                 return  # 성공
-                
+
             except Exception as e:
                 last_error = e
                 if attempt < self._config.max_retries:
@@ -441,54 +447,57 @@ class AuditSyncWorker:
                         delay * self._config.retry_backoff_multiplier,
                         self._config.max_retry_delay_seconds,
                     )
-        
+
         # 모든 재시도 실패
         if last_error:
             raise last_error
-    
+
     def _report_metrics(self) -> None:
         """메트릭 리포팅."""
         try:
             from selfhealing.audit.resilience import AuditMetrics
+
             metrics = AuditMetrics.get_instance()
-            
+
             with self._lock:
                 stats = self._stats.to_dict()
-            
+
             # 커스텀 메트릭 기록
-            metrics.record_write("sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"])
-            
+            metrics.record_write(
+                "sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"]
+            )
+
             logger.debug(f"[AuditSyncWorker] Metrics: {stats}")
-            
+
         except Exception as e:
             logger.debug(f"[AuditSyncWorker] Failed to report metrics: {e}")
-    
+
     def sync_now(self) -> tuple[int, int]:
         """
         즉시 동기화 수행 (테스트/디버그용).
-        
+
         Returns:
             (synced_count, failed_count)
         """
         return self._sync_batch()
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """동기화 통계 조회."""
         with self._lock:
             return self._stats.to_dict()
-    
+
     def get_lag(self) -> int:
         """현재 동기화 지연 엔트리 수."""
         wal = self._get_wal()
         if wal is None:
             return 0
-        
+
         try:
             entries = wal.recover_unprocessed(self._last_processed_seq)
             return len(entries)
         except Exception:
             return 0
-    
+
     @property
     def is_running(self) -> bool:
         """워커 실행 중 여부."""
@@ -503,11 +512,11 @@ class AuditSyncWorker:
 def start_sync_worker(
     wal: Any = None,
     central_adapter: Any = None,
-    config: Optional[SyncWorkerConfig] = None,
+    config: SyncWorkerConfig | None = None,
 ) -> AuditSyncWorker:
     """
     Sync Worker 시작 헬퍼 함수.
-    
+
     싱글톤 인스턴스를 가져오고 시작합니다.
     """
     worker = AuditSyncWorker.get_instance(
@@ -528,7 +537,7 @@ def stop_sync_worker() -> None:
         pass
 
 
-def get_sync_stats() -> Optional[Dict[str, Any]]:
+def get_sync_stats() -> dict[str, Any] | None:
     """Sync Worker 통계 조회 헬퍼 함수."""
     try:
         worker = AuditSyncWorker.get_instance()

@@ -16,8 +16,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Optional, List
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +35,12 @@ class AdaptiveReplayConfig:
     initial_items: int = 50
 
     # Adjustment ratios
-    decrease_ratio: float = 0.8      # 실패 시 20% 감소
-    increase_step: int = 5           # 성공 시 5개 증가
+    decrease_ratio: float = 0.8  # 실패 시 20% 감소
+    increase_step: int = 5  # 성공 시 5개 증가
 
     # Triggers
-    failure_threshold: float = 0.2   # 20% 이상 실패 시 감소
-    success_streak_required: int = 3 # 3연속 성공 시 증가
+    failure_threshold: float = 0.2  # 20% 이상 실패 시 감소
+    success_streak_required: int = 3  # 3연속 성공 시 증가
 
 
 @dataclass
@@ -64,10 +63,10 @@ class AdaptiveReplayManager:
 
     Usage:
         manager = get_adaptive_replay_manager()
-        
+
         # Get current recommended max_items
         max_items = manager.get_current_max_items()
-        
+
         # After batch replay
         manager.record_batch_result(total=50, success=48, failures=2)
 
@@ -77,10 +76,10 @@ class AdaptiveReplayManager:
         - Always bounded by [min_items, max_items]
     """
 
-    _instance: Optional["AdaptiveReplayManager"] = None
+    _instance: AdaptiveReplayManager | None = None
     _lock = threading.Lock()
 
-    def __new__(cls) -> "AdaptiveReplayManager":
+    def __new__(cls) -> AdaptiveReplayManager:
         """Thread-safe singleton creation."""
         if cls._instance is None:
             with cls._lock:
@@ -103,7 +102,7 @@ class AdaptiveReplayManager:
             self._config = AdaptiveReplayConfig()
             self._current_items = self._config.initial_items
             self._success_streak = 0
-            self._history: List[BatchHistoryEntry] = []
+            self._history: list[BatchHistoryEntry] = []
             self._state_lock = threading.RLock()
             self._initialized = True
 
@@ -282,7 +281,7 @@ class AdaptiveReplayManager:
 # Module-level singleton accessor
 # =============================================================================
 
-_manager: Optional[AdaptiveReplayManager] = None
+_manager: AdaptiveReplayManager | None = None
 _manager_lock = threading.Lock()
 
 

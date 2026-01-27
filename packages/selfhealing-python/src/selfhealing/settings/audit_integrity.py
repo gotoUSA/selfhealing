@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -230,7 +229,7 @@ class AuditIntegritySettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_audit_integrity_settings: Optional[AuditIntegritySettings] = None
+_audit_integrity_settings: AuditIntegritySettings | None = None
 
 
 def get_audit_integrity_settings() -> AuditIntegritySettings:

@@ -22,12 +22,12 @@ Usage:
         EmergencyLevel,
         is_emergency_active,
     )
-    
+
     # Check emergency status
     if is_emergency_active():
         level = get_emergency_manager().get_current_level()
         ...
-    
+
     # Activate emergency mode
     get_emergency_manager().activate_manual(
         level=EmergencyLevel.LEVEL_2,
@@ -35,7 +35,7 @@ Usage:
         activated_by="admin",
         duration_minutes=30,
     )
-    
+
     # Deactivate emergency mode
     get_emergency_manager().deactivate(deactivated_by="admin")
 """
@@ -45,17 +45,16 @@ from __future__ import annotations
 from typing import Optional
 
 # Enums
-from .enums import EmergencyLevel, EMERGENCY_LEVEL_RULES
-
-# Models
-from .models import RecoveryGateConfig, EmergencyState
-
-# Recovery Gate
-from .recovery_gate import RecoveryGate
+from .enums import EMERGENCY_LEVEL_RULES, EmergencyLevel
 
 # Manager
 from .manager import GracefulDegradationManager
 
+# Models
+from .models import EmergencyState, RecoveryGateConfig
+
+# Recovery Gate
+from .recovery_gate import RecoveryGate
 
 # =============================================================================
 # Singleton & Factory Functions
@@ -63,7 +62,7 @@ from .manager import GracefulDegradationManager
 
 
 # Global instance
-_emergency_manager: Optional[GracefulDegradationManager] = None
+_emergency_manager: GracefulDegradationManager | None = None
 
 
 def get_emergency_manager() -> GracefulDegradationManager:
@@ -77,7 +76,7 @@ def get_emergency_manager() -> GracefulDegradationManager:
 def is_emergency_active() -> bool:
     """
     비상 모드 활성화 여부 확인 (간편 함수).
-    
+
     Usage:
         if is_emergency_active():
             # 비상 모드 처리
@@ -89,7 +88,7 @@ def is_emergency_active() -> bool:
 def get_emergency_level() -> EmergencyLevel:
     """
     현재 비상 모드 레벨 조회 (간편 함수).
-    
+
     Usage:
         level = get_emergency_level()
         if level >= EmergencyLevel.LEVEL_2:
@@ -102,7 +101,7 @@ def get_emergency_level() -> EmergencyLevel:
 def get_tier_multiplier(tier_id: str) -> float:
     """
     현재 비상 모드에 따른 티어 배율 조회 (간편 함수).
-    
+
     Usage:
         multiplier = get_tier_multiplier("standard")
         if random.random() > multiplier:

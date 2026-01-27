@@ -19,13 +19,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +31,7 @@ logger = logging.getLogger(__name__)
 def _get_cascade_auditor():
     """CascadeEventAuditor 싱글턴 획득."""
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
+
     return get_cascade_event_auditor()
 
 
@@ -41,7 +40,7 @@ class CascadeEventListView(APIView):
     GET /api/self-healing/cascade/events/
 
     Cascade Event 목록 조회.
-    
+
     Query Parameters:
         - namespace: 네임스페이스 필터 (기본: global)
         - limit: 최대 조회 개수 (기본: 100, 최대: 1000)
@@ -82,42 +81,43 @@ class CascadeEventListView(APIView):
             namespace=namespace,
             limit=limit + offset,  # offset 고려
         )
-        
+
         # offset 적용
-        events = events[offset:offset + limit]
-        
+        events = events[offset : offset + limit]
+
         # 트리거 유형 필터
         if trigger_type:
-            events = [
-                e for e in events 
-                if e.trigger.trigger_type == trigger_type
-            ]
-        
+            events = [e for e in events if e.trigger.trigger_type == trigger_type]
+
         # 응답 형식 변환
         event_list = []
         for event in events:
-            event_list.append({
-                "id": event.id,
-                "timestamp": event.timestamp,
-                "trigger_type": event.trigger.trigger_type,
-                "trigger_details": event.trigger.details,
-                "effects_count": len(event.effects),
-                "namespace": event.namespace,
-                "has_external_trace": event.external_trace is not None,
-            })
-        
+            event_list.append(
+                {
+                    "id": event.id,
+                    "timestamp": event.timestamp,
+                    "trigger_type": event.trigger.trigger_type,
+                    "trigger_details": event.trigger.details,
+                    "effects_count": len(event.effects),
+                    "namespace": event.namespace,
+                    "has_external_trace": event.external_trace is not None,
+                }
+            )
+
         # 전체 개수 조회
         total = auditor.get_event_count(namespace)
 
-        return Response({
-            "success": True,
-            "namespace": namespace,
-            "events": event_list,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return Response(
+            {
+                "success": True,
+                "namespace": namespace,
+                "events": event_list,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class CascadeEventDetailView(APIView):
@@ -125,10 +125,10 @@ class CascadeEventDetailView(APIView):
     GET /api/self-healing/cascade/events/<cascade_id>/
 
     Cascade Event 상세 조회.
-    
+
     Path Parameters:
         - cascade_id: Cascade Event ID
-    
+
     Query Parameters:
         - namespace: 네임스페이스 (기본: global)
 
@@ -181,11 +181,12 @@ class CascadeEventDetailView(APIView):
         # Exception은 exception handler가 처리
         auditor = _get_cascade_auditor()
         event = auditor.get_cascade_event(cascade_id, namespace)
-        
+
         if not event:
             from django.http import Http404
+
             raise Http404(f"Cascade Event {cascade_id} not found")
-        
+
         # 효과 목록 변환
         effects_list = []
         for effect in event.effects:
@@ -200,34 +201,36 @@ class CascadeEventDetailView(APIView):
             if effect.error_message:
                 effect_dict["error_message"] = effect.error_message
             effects_list.append(effect_dict)
-        
+
         # 외부 추적 정보
         external_trace = None
         if event.external_trace:
             external_trace = event.external_trace.to_dict()
-        
-        return Response({
-            "success": True,
-            "event": {
-                "id": event.id,
-                "timestamp": event.timestamp,
-                "namespace": event.namespace,
-                "trigger": {
-                    "type": event.trigger.trigger_type,
-                    "event_id": event.trigger.event_id,
-                    "details": event.trigger.details,
-                    "triggered_by": event.trigger.triggered_by,
+
+        return Response(
+            {
+                "success": True,
+                "event": {
+                    "id": event.id,
+                    "timestamp": event.timestamp,
+                    "namespace": event.namespace,
+                    "trigger": {
+                        "type": event.trigger.trigger_type,
+                        "event_id": event.trigger.event_id,
+                        "details": event.trigger.details,
+                        "triggered_by": event.trigger.triggered_by,
+                    },
+                    "effects": effects_list,
+                    "causation_chain": event.get_causation_chain(),
+                    "external_trace": external_trace,
+                    "hash_chain": {
+                        "previous_hash": event.previous_hash,
+                        "current_hash": event.current_hash,
+                    },
                 },
-                "effects": effects_list,
-                "causation_chain": event.get_causation_chain(),
-                "external_trace": external_trace,
-                "hash_chain": {
-                    "previous_hash": event.previous_hash,
-                    "current_hash": event.current_hash,
-                },
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class CascadeChainVerifyView(APIView):
@@ -235,7 +238,7 @@ class CascadeChainVerifyView(APIView):
     POST /api/self-healing/cascade/verify/
 
     Hash Chain 무결성 검증.
-    
+
     Request:
         {
             "namespace": "seoul",        // 기본: global
@@ -257,7 +260,7 @@ class CascadeChainVerifyView(APIView):
             "verification_time_ms": 150,
             "errors": []
         }
-        
+
         # 무결성 위반 시:
         {
             "success": true,
@@ -284,18 +287,19 @@ class CascadeChainVerifyView(APIView):
 
         # Exception은 exception handler가 처리
         import time
+
         start_time = time.time()
-        
+
         auditor = _get_cascade_auditor()
-        
+
         # 검증 수행
         if full_verify or not from_checkpoint:
             result = auditor.verify_chain_integrity(namespace)
         else:
             result = auditor.verify_chain_integrity_from_checkpoint(namespace)
-        
+
         elapsed_ms = int((time.time() - start_time) * 1000)
-        
+
         # 체크포인트 정보
         checkpoint_info = None
         if from_checkpoint and not full_verify:
@@ -306,17 +310,19 @@ class CascadeChainVerifyView(APIView):
                     "hash": checkpoint.get("last_hash"),
                 }
 
-        return Response({
-            "success": True,
-            "valid": result.get("valid", False),
-            "namespace": namespace,
-            "verified_count": result.get("verified_count", 0),
-            "from_checkpoint": from_checkpoint and not full_verify,
-            "checkpoint": checkpoint_info,
-            "verification_time_ms": elapsed_ms,
-            "errors": result.get("errors", []),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return Response(
+            {
+                "success": True,
+                "valid": result.get("valid", False),
+                "namespace": namespace,
+                "verified_count": result.get("verified_count", 0),
+                "from_checkpoint": from_checkpoint and not full_verify,
+                "checkpoint": checkpoint_info,
+                "verification_time_ms": elapsed_ms,
+                "errors": result.get("errors", []),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class CausationTraceView(APIView):
@@ -324,10 +330,10 @@ class CausationTraceView(APIView):
     GET /api/self-healing/cascade/trace/<event_id>/
 
     특정 이벤트의 인과관계 추적.
-    
+
     Path Parameters:
         - event_id: 추적 시작 이벤트 ID (effect event_id)
-    
+
     Query Parameters:
         - namespace: 네임스페이스 (기본: global)
         - direction: 추적 방향 (ancestors | descendants | both, 기본: ancestors)
@@ -376,14 +382,15 @@ class CausationTraceView(APIView):
 
         # Exception은 exception handler가 처리
         auditor = _get_cascade_auditor()
-        
+
         # 인과관계 추적
         trace = auditor.trace_causation(event_id, namespace)
-        
+
         if not trace:
             from django.http import Http404
+
             raise Http404(f"Event {event_id} not found or no causation trace")
-        
+
         # cascade_id 추출 (첫 번째 이벤트에서)
         cascade_id = None
         if trace:
@@ -393,15 +400,17 @@ class CausationTraceView(APIView):
                     cascade_id = item["cascade_id"]
                     break
 
-        return Response({
-            "success": True,
-            "event_id": event_id,
-            "direction": direction,
-            "trace": trace,
-            "cascade_id": cascade_id,
-            "namespace": namespace,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return Response(
+            {
+                "success": True,
+                "event_id": event_id,
+                "direction": direction,
+                "trace": trace,
+                "cascade_id": cascade_id,
+                "namespace": namespace,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class CascadeCheckpointView(APIView):
@@ -410,7 +419,7 @@ class CascadeCheckpointView(APIView):
     POST /api/self-healing/cascade/checkpoint/
 
     체크포인트 조회 및 생성.
-    
+
     GET Response:
         {
             "success": true,
@@ -421,12 +430,12 @@ class CascadeCheckpointView(APIView):
                 "event_count": 1500
             }
         }
-    
+
     POST Request:
         {
             "namespace": "seoul"
         }
-    
+
     POST Response:
         {
             "success": true,
@@ -447,13 +456,15 @@ class CascadeCheckpointView(APIView):
         # Exception은 exception handler가 처리
         auditor = _get_cascade_auditor()
         checkpoint = auditor.get_checkpoint(namespace)
-        
-        return Response({
-            "success": True,
-            "namespace": namespace,
-            "checkpoint": checkpoint,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "success": True,
+                "namespace": namespace,
+                "checkpoint": checkpoint,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     def post(self, request: Request) -> Response:
         namespace = request.data.get("namespace", "global")
@@ -461,15 +472,17 @@ class CascadeCheckpointView(APIView):
         # Exception은 exception handler가 처리
         auditor = _get_cascade_auditor()
         checkpoint = auditor.create_checkpoint(namespace)
-        
+
         logger.info(f"[CascadeAPI] Checkpoint created for namespace={namespace}")
-        
-        return Response({
-            "success": True,
-            "namespace": namespace,
-            "checkpoint": checkpoint,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "success": True,
+                "namespace": namespace,
+                "checkpoint": checkpoint,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
 
 class CascadeLoadSheddingStatusView(APIView):
@@ -502,13 +515,15 @@ class CascadeLoadSheddingStatusView(APIView):
 
     def get(self, request: Request) -> Response:
         from selfhealing.audit.cascade_load_shedding import get_cascade_load_shedding
-        
+
         # Exception은 exception handler가 처리
         load_shedding = get_cascade_load_shedding()
         status_info = load_shedding.get_status()
-        
-        return Response({
-            "success": True,
-            **status_info,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+
+        return Response(
+            {
+                "success": True,
+                **status_info,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )

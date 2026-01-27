@@ -41,22 +41,23 @@ Usage:
     policy_sync = GovernancePolicySync()
     policy_sync.sync_policy(governance_policy)
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-
-from selfhealing.settings.canary import get_canary_settings
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any
 
-from selfhealing.utils.time import utc_now
+from selfhealing.settings.canary import get_canary_settings
 from selfhealing.settings.namespace import get_key_prefix
 from selfhealing.settings.slack_channel import get_slack_channel_settings
+from selfhealing.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -85,15 +86,16 @@ class ConfigChange:
         rollout_id: 관련 Canary Rollout ID (있는 경우)
         reason: 변경 사유
     """
+
     config_type: str
-    previous_value: Dict[str, Any]
-    new_value: Dict[str, Any]
+    previous_value: dict[str, Any]
+    new_value: dict[str, Any]
     changed_by: str = ""
     changed_at: datetime = field(default_factory=utc_now)
-    rollout_id: Optional[str] = None
+    rollout_id: str | None = None
     reason: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "config_type": self.config_type,
@@ -106,7 +108,7 @@ class ConfigChange:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ConfigChange":
+    def from_dict(cls, data: dict[str, Any]) -> ConfigChange:
         """딕셔너리에서 생성."""
         changed_at = data.get("changed_at")
         if isinstance(changed_at, str):
@@ -127,11 +129,12 @@ class ConfigChange:
 
 class PropagationRequestStatus(str, Enum):
     """설정 전파 요청 상태."""
+
     PENDING_APPROVAL = "pending_approval"  # 승인 대기
-    APPROVED = "approved"                  # 승인됨
-    REJECTED = "rejected"                  # 거절됨
-    EXPIRED = "expired"                    # 만료됨
-    APPLIED = "applied"                    # 적용 완료
+    APPROVED = "approved"  # 승인됨
+    REJECTED = "rejected"  # 거절됨
+    EXPIRED = "expired"  # 만료됨
+    APPLIED = "applied"  # 적용 완료
 
 
 @dataclass
@@ -141,20 +144,21 @@ class PropagationRequest:
 
     다른 클러스터에서 승인 시 설정이 적용됩니다.
     """
+
     request_id: str
     source_cluster: str
     target_cluster: str
     config_change: ConfigChange
     status: PropagationRequestStatus = PropagationRequestStatus.PENDING_APPROVAL
     created_at: datetime = field(default_factory=utc_now)
-    expires_at: Optional[datetime] = None
-    approved_by: Optional[str] = None
-    approved_at: Optional[datetime] = None
-    rejected_by: Optional[str] = None
-    rejected_at: Optional[datetime] = None
-    reject_reason: Optional[str] = None
+    expires_at: datetime | None = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    rejected_by: str | None = None
+    rejected_at: datetime | None = None
+    reject_reason: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "request_id": self.request_id,
@@ -172,7 +176,7 @@ class PropagationRequest:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PropagationRequest":
+    def from_dict(cls, data: dict[str, Any]) -> PropagationRequest:
         """딕셔너리에서 생성."""
         return cls(
             request_id=data["request_id"],
@@ -183,17 +187,20 @@ class PropagationRequest:
             created_at=datetime.fromisoformat(data["created_at"]),
             expires_at=(
                 datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at") else None
+                if data.get("expires_at")
+                else None
             ),
             approved_by=data.get("approved_by"),
             approved_at=(
                 datetime.fromisoformat(data["approved_at"])
-                if data.get("approved_at") else None
+                if data.get("approved_at")
+                else None
             ),
             rejected_by=data.get("rejected_by"),
             rejected_at=(
                 datetime.fromisoformat(data["rejected_at"])
-                if data.get("rejected_at") else None
+                if data.get("rejected_at")
+                else None
             ),
             reject_reason=data.get("reject_reason"),
         )
@@ -216,14 +223,15 @@ class GovernancePolicy:
         created_by: 생성자
         created_at: 생성 시간
     """
+
     policy_id: str
     config_type: str
-    rules: List[Dict[str, Any]] = field(default_factory=list)
+    rules: list[dict[str, Any]] = field(default_factory=list)
     version: int = 1
     created_by: str = ""
     created_at: datetime = field(default_factory=utc_now)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "policy_id": self.policy_id,
@@ -235,7 +243,7 @@ class GovernancePolicy:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "GovernancePolicy":
+    def from_dict(cls, data: dict[str, Any]) -> GovernancePolicy:
         """딕셔너리에서 생성."""
         return cls(
             policy_id=data["policy_id"],
@@ -246,7 +254,7 @@ class GovernancePolicy:
             created_at=datetime.fromisoformat(data["created_at"]),
         )
 
-    def validate_config(self, config: Dict[str, Any]) -> tuple[bool, List[str]]:
+    def validate_config(self, config: dict[str, Any]) -> tuple[bool, list[str]]:
         """
         설정값이 정책을 준수하는지 검증.
 
@@ -267,15 +275,11 @@ class GovernancePolicy:
 
             # 최대값 검사
             if "max" in rule and value > rule["max"]:
-                violations.append(
-                    f"{field_name}={value} exceeds max={rule['max']}"
-                )
+                violations.append(f"{field_name}={value} exceeds max={rule['max']}")
 
             # 최소값 검사
             if "min" in rule and value < rule["min"]:
-                violations.append(
-                    f"{field_name}={value} below min={rule['min']}"
-                )
+                violations.append(f"{field_name}={value} below min={rule['min']}")
 
             # 허용값 목록 검사
             if "allowed" in rule and value not in rule["allowed"]:
@@ -298,7 +302,7 @@ class NotificationBackend:
         self,
         channel: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
         알림 전송.
@@ -326,7 +330,7 @@ class LoggingNotificationBackend(NotificationBackend):
         self,
         channel: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """로그로 알림 기록."""
         logger.info(
@@ -343,7 +347,7 @@ class SlackNotificationBackend(NotificationBackend):
     환경변수 SLACK_WEBHOOK_URL이 설정된 경우 사용.
     """
 
-    def __init__(self, webhook_url: Optional[str] = None):
+    def __init__(self, webhook_url: str | None = None):
         """
         SlackNotificationBackend 초기화.
 
@@ -356,7 +360,7 @@ class SlackNotificationBackend(NotificationBackend):
         self,
         channel: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Slack으로 알림 전송."""
         if not self.webhook_url:
@@ -437,10 +441,10 @@ class CrossClusterNotifier:
 
     def __init__(
         self,
-        current_cluster: Optional[str] = None,
-        other_clusters: Optional[List[str]] = None,
-        notification_backend: Optional[NotificationBackend] = None,
-        default_channel: Optional[str] = None,
+        current_cluster: str | None = None,
+        other_clusters: list[str] | None = None,
+        notification_backend: NotificationBackend | None = None,
+        default_channel: str | None = None,
     ):
         """
         CrossClusterNotifier 초기화.
@@ -455,7 +459,9 @@ class CrossClusterNotifier:
             "SELFHEALING_NAMESPACE", "default"
         )
         self.other_clusters = other_clusters or []
-        self.notification_backend = notification_backend or self._create_default_backend()
+        self.notification_backend = (
+            notification_backend or self._create_default_backend()
+        )
         self.default_channel = default_channel or _get_default_slack_channel()
 
     def _create_default_backend(self) -> NotificationBackend:
@@ -469,8 +475,8 @@ class CrossClusterNotifier:
         self,
         change: ConfigChange,
         result: str = "success",
-        channel: Optional[str] = None,
-    ) -> Dict[str, bool]:
+        channel: str | None = None,
+    ) -> dict[str, bool]:
         """
         다른 클러스터 담당자에게 설정 변경 알림.
 
@@ -515,9 +521,7 @@ class CrossClusterNotifier:
                     f"config change: {change.config_type}"
                 )
             else:
-                logger.warning(
-                    f"[CrossClusterNotifier] Failed to notify {cluster}"
-                )
+                logger.warning(f"[CrossClusterNotifier] Failed to notify {cluster}")
 
         return results
 
@@ -597,10 +601,10 @@ class CrossClusterPropagationRequest:
     def __init__(
         self,
         redis_client=None,
-        notification_backend: Optional[NotificationBackend] = None,
+        notification_backend: NotificationBackend | None = None,
         default_expiry_hours: int = 24,
-        on_apply: Optional[Callable[[PropagationRequest], bool]] = None,
-        default_channel: Optional[str] = None,
+        on_apply: Callable[[PropagationRequest], bool] | None = None,
+        default_channel: str | None = None,
     ):
         """
         CrossClusterPropagationRequest 초기화.
@@ -619,7 +623,7 @@ class CrossClusterPropagationRequest:
         self.default_channel = default_channel or _get_default_slack_channel()
 
         # 메모리 저장소 (Redis 미사용 시 fallback)
-        self._memory_store: Dict[str, PropagationRequest] = {}
+        self._memory_store: dict[str, PropagationRequest] = {}
 
     @property
     def redis_client(self):
@@ -627,7 +631,8 @@ class CrossClusterPropagationRequest:
         if self._redis_client is None:
             try:
                 from django.core.cache import caches
-                cache = caches.get('default')
+
+                cache = caches.get("default")
                 if cache:
                     self._redis_client = cache.client.get_client()
             except Exception:
@@ -637,9 +642,9 @@ class CrossClusterPropagationRequest:
     def request_propagation(
         self,
         source_cluster: str,
-        target_clusters: List[str],
+        target_clusters: list[str],
         change: ConfigChange,
-        expiry_hours: Optional[int] = None,
+        expiry_hours: int | None = None,
     ) -> str:
         """
         다른 클러스터에 설정 전파 요청 생성.
@@ -695,7 +700,7 @@ class CrossClusterPropagationRequest:
         self,
         request_id: str,
         approved_by: str,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         설정 전파 요청 승인.
 
@@ -758,7 +763,7 @@ class CrossClusterPropagationRequest:
         request_id: str,
         rejected_by: str,
         reason: str = "",
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         설정 전파 요청 거절.
 
@@ -802,7 +807,7 @@ class CrossClusterPropagationRequest:
 
         return True, None
 
-    def get_request(self, request_id: str) -> Optional[PropagationRequest]:
+    def get_request(self, request_id: str) -> PropagationRequest | None:
         """요청 조회."""
         # 메모리 저장소에서 조회
         if request_id in self._memory_store:
@@ -823,7 +828,7 @@ class CrossClusterPropagationRequest:
 
         return None
 
-    def get_pending_requests(self, cluster: str) -> List[PropagationRequest]:
+    def get_pending_requests(self, cluster: str) -> list[PropagationRequest]:
         """클러스터의 대기 중인 요청 목록 조회."""
         requests = []
 
@@ -940,9 +945,9 @@ class GovernancePolicySync:
 
     def __init__(
         self,
-        clusters: Optional[List[str]] = None,
+        clusters: list[str] | None = None,
         redis_client=None,
-        notification_backend: Optional[NotificationBackend] = None,
+        notification_backend: NotificationBackend | None = None,
     ):
         """
         GovernancePolicySync 초기화.
@@ -957,7 +962,7 @@ class GovernancePolicySync:
         self.notification_backend = notification_backend or LoggingNotificationBackend()
 
         # 메모리 저장소
-        self._policy_store: Dict[str, GovernancePolicy] = {}
+        self._policy_store: dict[str, GovernancePolicy] = {}
 
     @property
     def redis_client(self):
@@ -965,14 +970,15 @@ class GovernancePolicySync:
         if self._redis_client is None:
             try:
                 from django.core.cache import caches
-                cache = caches.get('default')
+
+                cache = caches.get("default")
                 if cache:
                     self._redis_client = cache.client.get_client()
             except Exception:
                 pass
         return self._redis_client
 
-    def sync_policy(self, policy: GovernancePolicy) -> Dict[str, bool]:
+    def sync_policy(self, policy: GovernancePolicy) -> dict[str, bool]:
         """
         거버넌스 정책 동기화.
 
@@ -1001,7 +1007,7 @@ class GovernancePolicySync:
 
         return results
 
-    def get_policy(self, config_type: str) -> Optional[GovernancePolicy]:
+    def get_policy(self, config_type: str) -> GovernancePolicy | None:
         """정책 조회."""
         # 메모리 저장소에서 조회
         if config_type in self._policy_store:
@@ -1025,8 +1031,8 @@ class GovernancePolicySync:
     def validate_config_against_policy(
         self,
         config_type: str,
-        config: Dict[str, Any],
-    ) -> tuple[bool, List[str]]:
+        config: dict[str, Any],
+    ) -> tuple[bool, list[str]]:
         """
         설정값이 거버넌스 정책을 준수하는지 검증.
 
@@ -1086,9 +1092,9 @@ class GovernancePolicySync:
 # Singleton Accessor Functions
 # =============================================================================
 
-_cross_cluster_notifier: Optional[CrossClusterNotifier] = None
-_propagation_request: Optional[CrossClusterPropagationRequest] = None
-_governance_policy_sync: Optional[GovernancePolicySync] = None
+_cross_cluster_notifier: CrossClusterNotifier | None = None
+_propagation_request: CrossClusterPropagationRequest | None = None
+_governance_policy_sync: GovernancePolicySync | None = None
 
 
 def get_cross_cluster_notifier() -> CrossClusterNotifier:

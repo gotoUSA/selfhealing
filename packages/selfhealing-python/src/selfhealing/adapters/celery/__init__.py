@@ -9,41 +9,33 @@ This module provides Celery-specific implementations including:
 - **Signal hooks for automatic self-healing integration**
 """
 
-from .tasks import (
-    # Circuit Breaker Tasks
-    conditional_replay_on_circuit_close,
-    check_circuit_breaker_recovery,
-    force_open_circuit_breaker,
-    force_close_circuit_breaker,
-    expire_manual_overrides,
-    # DLQ Tasks
-    replay_single_dlq_entry,
-    replay_batch_by_domain,
-    cleanup_resolved_dlq_entries,
-    # Metrics Tasks
-    collect_self_healing_metrics,
-    check_and_report_sla_breaches,
+from .beat_schedule import (
+    SELFHEALING_QUEUE_CONFIG,
+    get_schedule_summary,
+    get_selfhealing_beat_schedule,
+    register_all_tasks_with_celery,
+    validate_schedule,
 )
-
-from .signal_hooks import (
-    # Setup functions
-    setup_selfhealing_signals,
+from .signal_hooks import (  # Setup functions; Decorator; Configuration
+    SignalHooksConfig,
     disconnect_selfhealing_signals,
+    get_signal_hooks_config,
     is_signals_connected,
     reload_signal_hooks_config,
-    get_signal_hooks_config,
-    # Decorator
     selfhealing_task,
-    # Configuration
-    SignalHooksConfig,
+    setup_selfhealing_signals,
 )
-
-from .beat_schedule import (
-    get_selfhealing_beat_schedule,
-    get_schedule_summary,
-    validate_schedule,
-    register_all_tasks_with_celery,
-    SELFHEALING_QUEUE_CONFIG,
+from .tasks import (  # Circuit Breaker Tasks; DLQ Tasks; Metrics Tasks
+    check_and_report_sla_breaches,
+    check_circuit_breaker_recovery,
+    cleanup_resolved_dlq_entries,
+    collect_self_healing_metrics,
+    conditional_replay_on_circuit_close,
+    expire_manual_overrides,
+    force_close_circuit_breaker,
+    force_open_circuit_breaker,
+    replay_batch_by_domain,
+    replay_single_dlq_entry,
 )
 
 __all__ = [

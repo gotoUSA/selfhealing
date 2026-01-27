@@ -19,7 +19,9 @@ class SMSHandlerMixin:
 
     config: NotificationConfig
 
-    def _send_sms(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
+    def _send_sms(
+        self, message: dict[str, Any], recipients: list[str]
+    ) -> NotificationResult:
         """
         Send SMS notification (critical incidents only).
 
@@ -47,11 +49,16 @@ class SMSHandlerMixin:
 
         try:
             # SMS content must be short
-            sms_body = f"[SECURITY] {message['type']}: {message['description'][:100]}. " f"IP: {message['source_ip']}"
+            sms_body = (
+                f"[SECURITY] {message['type']}: {message['description'][:100]}. "
+                f"IP: {message['source_ip']}"
+            )
 
             # Here you would integrate with your SMS provider (Twilio, AWS SNS, etc.)
             # For now, we log it
-            logger.info(f"[Security Notification] SMS would send to {recipients}: {sms_body}")
+            logger.info(
+                f"[Security Notification] SMS would send to {recipients}: {sms_body}"
+            )
 
             # Placeholder for actual SMS integration
             # Example with Twilio:
@@ -74,7 +81,9 @@ class SMSHandlerMixin:
                 error=str(e),
             )
 
-    def _send_sms_alert(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
+    def _send_sms_alert(
+        self, message: dict[str, Any], recipients: list[str]
+    ) -> NotificationResult:
         """Send SMS alert notification."""
         if self.config.dry_run:
             logger.info(f"[DRY RUN] SMS alert to {recipients}: {message['title']}")

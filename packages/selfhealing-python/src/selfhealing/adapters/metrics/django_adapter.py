@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import TYPE_CHECKING
 
 from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
 
@@ -35,8 +35,8 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
 
     def __init__(
         self,
-        dlq_model: Optional[Type["Model"]] = None,
-        circuit_breaker_model: Optional[Type["Model"]] = None,
+        dlq_model: type[Model] | None = None,
+        circuit_breaker_model: type[Model] | None = None,
         pending_status: str = "pending",
         domain_field: str = "domain",
         status_field: str = "status",
@@ -154,6 +154,7 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
 
         try:
             from datetime import datetime, timezone
+
             from django.db.models import Avg
 
             one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)

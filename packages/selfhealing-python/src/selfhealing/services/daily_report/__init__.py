@@ -12,18 +12,18 @@ Module Structure:
 - service.py: DailyReportService
 """
 
-from .models import TaskResultEntry, DailyAutonomousReport, DailyReportData
 from .aggregator import (
     DAILY_REPORT_CACHE_KEY_PREFIX,
     DailyReportCollector,
+    aggregate_daily_results,
     get_daily_report_collector,
     reset_daily_report_collector,
-    aggregate_daily_results,
 )
-from .formatters import format_report_for_slack, format_report_for_email
+from .formatters import format_report_for_email, format_report_for_slack
+from .models import DailyAutonomousReport, DailyReportData, TaskResultEntry
 from .service import (
-    ReportResult,
     DailyReportService,
+    ReportResult,
     get_daily_report_service,
     reset_daily_report_service,
 )

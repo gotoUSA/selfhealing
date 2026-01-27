@@ -14,8 +14,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Optional, TypeVar, ParamSpec, Any
+from typing import ParamSpec, TypeVar
 
 from selfhealing.metrics.event_handlers import (
     DLQMetricEventHandler,
@@ -42,7 +43,7 @@ def track_dlq_creation(domain: str) -> Callable[[Callable[P, R]], Callable[P, R]
         >>> @track_dlq_creation(domain="payment")
         ... def create_payment_dlq(failure_type: str, payload: dict):
         ...     return DLQItem.objects.create(...)
-        
+
         >>> @track_dlq_creation(domain="payment")
         ... async def async_create_dlq(failure_type: str, payload: dict):
         ...     return await DLQItem.objects.acreate(...)
@@ -85,7 +86,7 @@ def track_dlq_resolution(domain: str) -> Callable[[Callable[P, R]], Callable[P, 
         ... def resolve_payment_dlq(dlq_item, resolution_type: str = "auto_replay"):
         ...     dlq_item.status = "resolved"
         ...     dlq_item.save()
-        
+
         >>> @track_dlq_resolution(domain="payment")
         ... async def async_resolve_dlq(dlq_item, resolution_type: str = "auto_replay"):
         ...     dlq_item.status = "resolved"
@@ -144,7 +145,7 @@ def track_replay(
         ... def sync_replay(dlq_item):
         ...     process_payment(dlq_item.payload)
         ...     return True
-        
+
         >>> @track_replay(domain="payment")
         ... async def async_replay(dlq_item):
         ...     await process_payment(dlq_item.payload)
@@ -199,7 +200,7 @@ def track_replay(
 
 def track_execution_time(
     metric_name: str,
-    labels: Optional[dict[str, str]] = None,
+    labels: dict[str, str] | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     함수 실행 시간을 Histogram으로 기록하는 데코레이터.
@@ -235,7 +236,7 @@ def track_execution_time(
 
 def track_counter(
     metric_name: str,
-    labels: Optional[dict[str, str]] = None,
+    labels: dict[str, str] | None = None,
     on_success: bool = True,
     on_failure: bool = False,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:

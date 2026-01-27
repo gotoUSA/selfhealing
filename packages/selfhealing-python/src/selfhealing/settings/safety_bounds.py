@@ -12,7 +12,6 @@ Environment Variables (각 파라미터별):
 """
 
 import logging
-from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -220,7 +219,7 @@ class SafetyBoundsSettings(BaseSettings):
         description="커넥션 풀 크기 한 사이클당 최대 변경 비율",
     )
 
-    def get_bounds(self, parameter: str) -> Optional[ParameterBoundConfig]:
+    def get_bounds(self, parameter: str) -> ParameterBoundConfig | None:
         """
         파라미터명으로 한계 설정 조회.
 
@@ -251,7 +250,7 @@ class SafetyBoundsSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[SafetyBoundsSettings] = None
+_settings: SafetyBoundsSettings | None = None
 
 
 def get_safety_bounds_settings() -> SafetyBoundsSettings:

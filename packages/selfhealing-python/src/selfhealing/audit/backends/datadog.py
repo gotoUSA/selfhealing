@@ -13,7 +13,7 @@ To activate this backend:
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 
@@ -37,11 +37,11 @@ class DatadogBackend(AuditBackend):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         site: str = "datadoghq.com",
         service: str = "selfhealing",
         source: str = "python",
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
     ):
         """
         Initialize Datadog backend.
@@ -96,7 +96,7 @@ class DatadogBackend(AuditBackend):
             logger.error(f"[DatadogBackend] Failed to enable: {e}")
             return False
 
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry to Datadog.
 
@@ -147,12 +147,12 @@ class DatadogBackend(AuditBackend):
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit logs from Datadog.
 
@@ -170,7 +170,7 @@ class DatadogBackend(AuditBackend):
 
         return []
 
-    def get_configuration_template(self) -> Dict[str, Any]:
+    def get_configuration_template(self) -> dict[str, Any]:
         """Get configuration template for Datadog backend."""
         return {
             "required_packages": ["datadog-api-client"],

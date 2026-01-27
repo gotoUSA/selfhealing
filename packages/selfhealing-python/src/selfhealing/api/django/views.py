@@ -24,34 +24,18 @@ Endpoints:
 
 # Re-export all views from the views/ package for backward compatibility
 # Import from circuit_breaker module
-from selfhealing.api.django.views.circuit_breaker import (
-    # Data classes
+from selfhealing.api.django.views.circuit_breaker import (  # Data classes; Service; Control Views; Quick Action Views
+    ControlActionView,
+    ControlAPIService,
+    ControlAuditView,
     ControlRequest,
     ControlResponse,
-    # Service
-    ControlAPIService,
-    get_control_api_service,
-    # Control Views
-    ControlActionView,
     ControlStatusView,
-    ServiceStatusView,
-    ControlAuditView,
-    # Quick Action Views
     QuickAllowView,
     QuickBlockView,
     QuickResetView,
-)
-
-# Import from dlq module
-from selfhealing.api.django.views.dlq import (
-    DLQReplayView,
-    DLQCleanupStatsView,
-    DLQArchiveView,
-    DLQPurgeView,
-    DLQListView,
-    DLQDetailView,
-    DLQRetryView,
-    DLQResolveView,
+    ServiceStatusView,
+    get_control_api_service,
 )
 
 # Import from dashboard module
@@ -59,20 +43,32 @@ from selfhealing.api.django.views.dashboard import (
     DashboardSummaryView,
 )
 
+# Import from dlq module
+from selfhealing.api.django.views.dlq import (
+    DLQArchiveView,
+    DLQCleanupStatsView,
+    DLQDetailView,
+    DLQListView,
+    DLQPurgeView,
+    DLQReplayView,
+    DLQResolveView,
+    DLQRetryView,
+)
+
 # Import from health module
 from selfhealing.api.django.views.health import (
-    SelfHealingHealthView,
+    ConnectionPoolHealthView,
     LivenessView,
     ReadinessView,
-    ConnectionPoolHealthView,
-    simple_health_ping,
+    SelfHealingHealthView,
     SelfHealingMetricsView,
+    simple_health_ping,
 )
 
 # Import from metric_sync module
 from selfhealing.api.django.views.metric_sync import (
-    MetricSyncView,
     DriftReportView,
+    MetricSyncView,
 )
 
 __all__ = [

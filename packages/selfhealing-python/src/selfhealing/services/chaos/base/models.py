@@ -7,16 +7,16 @@ Contains data classes for experiment configuration, results, and hypothesis.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.services.chaos.base.enums import TrafficType
-from selfhealing.settings import get_layered_settings, ChaosExperimentSettings
+from selfhealing.settings import ChaosExperimentSettings, get_layered_settings
 
 
 def _get_experiment_defaults() -> ChaosExperimentSettings:
     """
     LayeredSettings에서 실험 기본값 가져오기.
-    
+
     92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [12] ChaosExperimentSettings 참조.
     """
     return get_layered_settings(ChaosExperimentSettings, "chaos_experiment")
@@ -29,28 +29,34 @@ class ExperimentConfig:
     # Target configuration
     target_service: str = ""
     target_domain: str = ""
-    target_instances: List[str] = field(default_factory=list)
+    target_instances: list[str] = field(default_factory=list)
 
     # Injection parameters
     injection_rate: float = 0.001  # 0.1% default
-    duration_seconds: int = field(default_factory=lambda: _get_experiment_defaults().default_duration_seconds)
+    duration_seconds: int = field(
+        default_factory=lambda: _get_experiment_defaults().default_duration_seconds
+    )
 
     # Traffic targeting
     traffic_type: str = TrafficType.SYNTHETIC.value
 
     # Rollback configuration
     auto_rollback_on_sla_breach: bool = True
-    sla_breach_threshold_percent: float = field(default_factory=lambda: _get_experiment_defaults().sla_breach_threshold_percent)
+    sla_breach_threshold_percent: float = field(
+        default_factory=lambda: _get_experiment_defaults().sla_breach_threshold_percent
+    )
 
     # Additional parameters (experiment-specific)
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
 
     # TTL (Self-Expiration) configuration
-    ttl_seconds: Optional[int] = None
+    ttl_seconds: int | None = None
     """Soft TTL: 장애 주입 종료 시간 (초). None이면 기본값 사용."""
 
     # Soft/Hard TTL 이중 구조: Soft TTL 후 Grace Period 동안 복구 모니터링
-    grace_period_seconds: int = field(default_factory=lambda: _get_experiment_defaults().grace_period_seconds)
+    grace_period_seconds: int = field(
+        default_factory=lambda: _get_experiment_defaults().grace_period_seconds
+    )
     """Grace Period: Canary 복구 대기 시간 (ChaosExperimentSettings에서 로드)."""
 
     @property
@@ -70,7 +76,7 @@ class ExperimentConfig:
     """True이면 실제 장애 주입 없이 시뮬레이션만 수행."""
 
     # Resilience Expectation: 시스템이 장애에 어떻게 반응해야 하는지 정의
-    resilience_expectation: Optional[Any] = None
+    resilience_expectation: Any | None = None
     """
     시스템이 이 장애에 대해 어떻게 반응해야 하는지 정의.
 
@@ -107,18 +113,18 @@ class ExperimentResult:
     rollback_triggered: bool = False
 
     # Steady state validation
-    steady_state_before: Dict[str, Any] = field(default_factory=dict)
-    steady_state_after: Dict[str, Any] = field(default_factory=dict)
+    steady_state_before: dict[str, Any] = field(default_factory=dict)
+    steady_state_after: dict[str, Any] = field(default_factory=dict)
     steady_state_hypothesis_passed: bool = True
 
     # Forensic analysis
-    forensic_advisory: Dict[str, Any] = field(default_factory=dict)
+    forensic_advisory: dict[str, Any] = field(default_factory=dict)
 
     # Errors
     error_message: str = ""
 
     # Audit
-    audit_record_ids: List[str] = field(default_factory=list)
+    audit_record_ids: list[str] = field(default_factory=list)
 
     # Dry Run / TTL info
     dry_run: bool = False
@@ -134,7 +140,7 @@ class ExperimentResult:
     """TTL에 의해 자동 만료되었는지 여부."""
 
     # Resilience Validation: Chaos 실험 결과로 시스템 회복력 검증
-    resilience_validation: Optional[Dict[str, Any]] = None
+    resilience_validation: dict[str, Any] | None = None
     """
     Resilience 기대값 검증 결과.
 
@@ -149,7 +155,7 @@ class ExperimentResult:
     resilience_passed: bool = True
     """Resilience 검증 통과 여부. expectation이 없으면 True."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "experiment_id": self.experiment_id,
@@ -194,9 +200,9 @@ class SteadyStateHypothesis:
     throughput_min_rps: float = 100.0
 
     # Custom metrics
-    custom_metrics: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    custom_metrics: dict[str, dict[str, float]] = field(default_factory=dict)
 
-    def validate(self, metrics: Dict[str, float]) -> tuple[bool, List[str]]:
+    def validate(self, metrics: dict[str, float]) -> tuple[bool, list[str]]:
         """
         Validate metrics against hypothesis.
 

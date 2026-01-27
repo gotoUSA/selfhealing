@@ -16,20 +16,21 @@ import json
 import logging
 import os
 import threading
+from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Iterator, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
+from selfhealing.audit.config import AuditConfig
+from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
 from selfhealing.interfaces.audit_adapter import (
     AuditAction,
     AuditEntry,
     AuditLogAdapter,
 )
-from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
-from selfhealing.audit.config import AuditConfig
 
 if TYPE_CHECKING:
-    from selfhealing.audit.wal import WriteAheadLog, WALConfig
+    from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
 logger = logging.getLogger(__name__)
 
@@ -37,26 +38,26 @@ logger = logging.getLogger(__name__)
 class ContinuousAuditRecorder:
     """
     지속적 감사 기록기.
-    
+
     특징:
     - 해시 체인으로 위변조 방지
     - 다중 스토리지 백엔드 지원
     - 규정 위반 시 즉시 알림
     - Raw data 조회/필터/익스포트 제공
     - 보고서 포맷팅 미제공 (사용자가 직접 가공)
-    
+
     FAIL-OPEN Design Policy:
     --------------------------
     감사 로그 기록 실패가 비즈니스 처리를 방해하지 않습니다.
     - 기본: Audit 실패 → 경고 로그 + fallback stdout
     - 선택: fail_open=False로 Fail-Secure 모드 가능 (PCI-DSS)
-    
+
     업계 정책:
     - Netflix Zuul: Fail-Open (가용성 우선)
     - Stripe: Fail-Open + 재시도
     - PCI-DSS: Fail-Secure 권장 (단, 가용성 예외 허용)
     - SOC2: Fail-Open 허용 (실패 기록만 있으면 됨)
-    
+
     Usage:
         config = AuditConfig.get_default()
         recorder = ContinuousAuditRecorder(
@@ -64,7 +65,7 @@ class ContinuousAuditRecorder:
             config=config,
             fail_open=True,  # 기본: Fail-Open
         )
-        
+
         recorder.record_auto_tuning(
             parameter="timeout_ms",
             old_value=5000,
@@ -75,13 +76,13 @@ class ContinuousAuditRecorder:
             safety_check={"within_bounds": True},
         )
     """
-    
+
     def __init__(
         self,
         audit_adapter: AuditLogAdapter,
-        config: Optional[AuditConfig] = None,
-        alert_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-        state_file: Optional[Path] = None,
+        config: AuditConfig | None = None,
+        alert_callback: Callable[[str, dict[str, Any]], None] | None = None,
+        state_file: Path | None = None,
         # Fail-Open 정책
         fail_open: bool = True,
         fallback_to_stdout: bool = True,
@@ -91,7 +92,7 @@ class ContinuousAuditRecorder:
     ):
         """
         Initialize ContinuousAuditRecorder.
-        
+
         Args:
             audit_adapter: 감사 로그 저장 어댑터
             config: 감사 설정 (None이면 환경변수에서 로드)
@@ -105,38 +106,40 @@ class ContinuousAuditRecorder:
         self.audit_adapter = audit_adapter
         self.config = config or AuditConfig.get_default()
         self.alert_callback = alert_callback
-        
+
         # Fail-Open 정책
         self._fail_open = fail_open
         self._fallback_to_stdout = fallback_to_stdout
         self._failed_write_count = 0
-        
+
         # 해시 체인 관리자
         self._hash_manager = HashChainManager(state_file=state_file)
         self._lock = threading.RLock()
-        
+
         # WAL 초기화 (선택적)
         self._wal_enabled = wal_enabled
-        self._wal: Optional["WriteAheadLog"] = None
-        
+        self._wal: WriteAheadLog | None = None
+
         if wal_enabled:
             try:
-                from selfhealing.audit.wal import WriteAheadLog, WALConfig as WALConfigClass
+                from selfhealing.audit.wal import WALConfig as WALConfigClass
+                from selfhealing.audit.wal import WriteAheadLog
+
                 self._wal = WriteAheadLog(config=wal_config or WALConfigClass())
                 logger.info("[ContinuousAudit] WAL enabled")
             except Exception as e:
                 logger.warning(f"[ContinuousAudit] WAL initialization failed: {e}")
                 self._wal_enabled = False
-        
+
         # 환경 정보
         self._environment = os.environ.get("ENVIRONMENT", "development")
         self._service_name = os.environ.get("SERVICE_NAME", "unknown")
         self._service_version = os.environ.get("SERVICE_VERSION", "unknown")
-    
+
     # ─────────────────────────────────────────────────────────────
     # 기록 메서드 (Auto Tuning)
     # ─────────────────────────────────────────────────────────────
-    
+
     def record_auto_tuning(
         self,
         parameter: str,
@@ -144,13 +147,13 @@ class ContinuousAuditRecorder:
         new_value: Any,
         reason: str,
         confidence: float,
-        metrics_snapshot: Dict[str, Any],
-        safety_check: Dict[str, Any],
+        metrics_snapshot: dict[str, Any],
+        safety_check: dict[str, Any],
         actor_id: str = "runtime_feedback_loop",
     ) -> str:
         """
         자율 조정 기록.
-        
+
         Args:
             parameter: 조정된 파라미터 이름
             old_value: 이전 값
@@ -160,7 +163,7 @@ class ContinuousAuditRecorder:
             metrics_snapshot: 결정 시점 메트릭
             safety_check: 안전 검사 결과
             actor_id: 조정 수행 주체
-            
+
         Returns:
             감사 로그 ID
         """
@@ -184,26 +187,29 @@ class ContinuousAuditRecorder:
                 "service_version": self._service_version,
             },
         )
-        
+
         audit_id = self._record_with_integrity(entry)
-        
+
         # 알림 발송
-        self._send_alert("auto_tuning", {
-            "parameter": parameter,
-            "old_value": old_value,
-            "new_value": new_value,
-            "reason": reason,
-        })
-        
+        self._send_alert(
+            "auto_tuning",
+            {
+                "parameter": parameter,
+                "old_value": old_value,
+                "new_value": new_value,
+                "reason": reason,
+            },
+        )
+
         return audit_id
-    
+
     def record_auto_tuning_rejected(
         self,
         parameter: str,
         requested_value: Any,
         current_value: Any,
         rejection_reason: str,
-        safety_bounds: Dict[str, Any],
+        safety_bounds: dict[str, Any],
     ) -> str:
         """안전 한계 초과로 자율 조정 거부됨."""
         entry = AuditEntry(
@@ -223,18 +229,21 @@ class ContinuousAuditRecorder:
                 "safety_bounds": safety_bounds,
             },
         )
-        
+
         audit_id = self._record_with_integrity(entry)
-        
-        self._send_alert("auto_tuning_rejected", {
-            "parameter": parameter,
-            "requested_value": requested_value,
-            "rejection_reason": rejection_reason,
-            "severity": "warning",
-        })
-        
+
+        self._send_alert(
+            "auto_tuning_rejected",
+            {
+                "parameter": parameter,
+                "requested_value": requested_value,
+                "rejection_reason": rejection_reason,
+                "severity": "warning",
+            },
+        )
+
         return audit_id
-    
+
     def record_auto_tuning_rollback(
         self,
         parameter: str,
@@ -260,24 +269,24 @@ class ContinuousAuditRecorder:
                 "recovery_strategy": strategy,
             },
         )
-        
+
         return self._record_with_integrity(entry)
-    
+
     # ─────────────────────────────────────────────────────────────
     # 기록 메서드 (DNA Drift)
     # ─────────────────────────────────────────────────────────────
-    
+
     def record_drift_detected(
         self,
         resource_id: str,
-        declared: Dict[str, Any],
-        actual: Dict[str, Any],
-        drifted_fields: List[str],
+        declared: dict[str, Any],
+        actual: dict[str, Any],
+        drifted_fields: list[str],
         severity: str,  # low, medium, high, critical
     ) -> str:
         """
         DNA Drift 감지 기록.
-        
+
         Args:
             resource_id: 드리프트가 발생한 리소스 ID
             declared: DNA에 선언된 값
@@ -302,23 +311,26 @@ class ContinuousAuditRecorder:
                 "auto_remediation": False,
             },
         )
-        
+
         audit_id = self._record_with_integrity(entry)
-        
+
         # 심각도에 따라 알림
         if severity in ("high", "critical"):
-            self._send_alert("drift_critical", {
-                "resource_id": resource_id,
-                "drifted_fields": drifted_fields,
-                "severity": severity,
-            })
-        
+            self._send_alert(
+                "drift_critical",
+                {
+                    "resource_id": resource_id,
+                    "drifted_fields": drifted_fields,
+                    "severity": severity,
+                },
+            )
+
         return audit_id
-    
+
     def record_drift_resolved(
         self,
         resource_id: str,
-        resolved_fields: List[str],
+        resolved_fields: list[str],
         resolution_method: str,  # manual, auto_sync, config_update
     ) -> str:
         """DNA Drift 해결 기록."""
@@ -335,22 +347,22 @@ class ContinuousAuditRecorder:
                 "resolution_method": resolution_method,
             },
         )
-        
+
         return self._record_with_integrity(entry)
-    
+
     # ─────────────────────────────────────────────────────────────
     # 기록 메서드 (Compliance)
     # ─────────────────────────────────────────────────────────────
-    
+
     def record_compliance_check(
         self,
-        standards_checked: List[str],
-        results: Dict[str, Any],
+        standards_checked: list[str],
+        results: dict[str, Any],
         overall_status: str,  # compliant, compliant_with_warnings, non_compliant
     ) -> str:
         """
         Compliance 검사 결과 기록.
-        
+
         Args:
             standards_checked: 검사한 규정 목록 (예: ["DORA", "PCI-DSS"])
             results: 규정별 검사 결과
@@ -372,19 +384,22 @@ class ContinuousAuditRecorder:
                 "checked_at": datetime.now(timezone.utc).isoformat(),
             },
         )
-        
+
         audit_id = self._record_with_integrity(entry)
-        
+
         # 위반 시 알림
         if overall_status == "non_compliant":
-            self._send_alert("compliance_violation", {
-                "standards_checked": standards_checked,
-                "results": results,
-                "severity": "critical",
-            })
-        
+            self._send_alert(
+                "compliance_violation",
+                {
+                    "standards_checked": standards_checked,
+                    "results": results,
+                    "severity": "critical",
+                },
+            )
+
         return audit_id
-    
+
     def record_compliance_violation(
         self,
         standard: str,
@@ -409,34 +424,37 @@ class ContinuousAuditRecorder:
                 "remediation_required": remediation_required,
             },
         )
-        
+
         audit_id = self._record_with_integrity(entry)
-        
-        self._send_alert("compliance_violation", {
-            "standard": standard,
-            "violation_type": violation_type,
-            "description": description,
-            "severity": "critical",
-        })
-        
+
+        self._send_alert(
+            "compliance_violation",
+            {
+                "standard": standard,
+                "violation_type": violation_type,
+                "description": description,
+                "severity": "critical",
+            },
+        )
+
         return audit_id
-    
+
     # ─────────────────────────────────────────────────────────────
     # 조회 메서드 (Raw Data)
     # ─────────────────────────────────────────────────────────────
-    
+
     def query(
         self,
-        action: Optional[AuditAction] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        action: AuditAction | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         감사 로그 조회 (Raw data).
-        
+
         Args:
             action: 액션 유형 필터
             target_type: 대상 유형 필터
@@ -444,7 +462,7 @@ class ContinuousAuditRecorder:
             start_time: 시작 시간
             end_time: 종료 시간
             limit: 최대 반환 개수
-            
+
         Returns:
             감사 로그 딕셔너리 목록
         """
@@ -456,25 +474,25 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=limit,
         )
-        
+
         return [e.to_dict() for e in entries]
-    
+
     def query_auto_tuning_history(
         self,
-        parameter: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        parameter: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         자율 조정 이력 조회.
-        
+
         Args:
             parameter: 파라미터 이름 필터
             start_time: 시작 시간
             end_time: 종료 시간
             limit: 최대 반환 개수
-            
+
         Returns:
             자율 조정 로그 목록
         """
@@ -486,19 +504,19 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=limit,
         )
-        
+
         return entries
-    
+
     def query_drift_history(
         self,
-        resource_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        resource_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         DNA Drift 이력 조회.
-        
+
         Returns:
             드리프트 감지/해결 로그 목록
         """
@@ -510,7 +528,7 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=limit // 2,
         )
-        
+
         resolved = self.query(
             action=AuditAction.DNA_DRIFT_RESOLVED,
             target_id=resource_id,
@@ -518,23 +536,23 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=limit // 2,
         )
-        
+
         # 시간순 정렬
         all_entries = detected + resolved
         all_entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        
+
         return all_entries[:limit]
-    
+
     def query_compliance_history(
         self,
-        standard: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        standard: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Compliance 검사 이력 조회.
-        
+
         Returns:
             규정 준수 검사 로그 목록
         """
@@ -545,22 +563,22 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=limit,
         )
-    
+
     # ─────────────────────────────────────────────────────────────
     # 익스포트 메서드 (Raw Data)
     # ─────────────────────────────────────────────────────────────
-    
+
     def export_jsonl(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        action_filter: Optional[List[AuditAction]] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        action_filter: list[AuditAction] | None = None,
     ) -> Iterator[str]:
         """
         JSON Lines 형식으로 익스포트.
-        
+
         각 조직에서 자체 형식으로 변환할 때 사용.
-        
+
         Yields:
             JSON 문자열 (한 줄씩)
         """
@@ -569,24 +587,24 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=10000,  # 대량 익스포트
         )
-        
+
         for entry in entries:
             if action_filter:
                 entry_action = entry.get("action", "")
                 if not any(a.value == entry_action for a in action_filter):
                     continue
             yield json.dumps(entry, default=str)
-    
+
     def export_csv_compatible(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         """
         CSV 변환 가능한 평탄화된 데이터 반환.
-        
+
         중첩 구조를 평탄화하여 CSV로 변환하기 쉽게 만듦.
-        
+
         Returns:
             평탄화된 딕셔너리 목록
         """
@@ -595,7 +613,7 @@ class ContinuousAuditRecorder:
             end_time=end_time,
             limit=10000,
         )
-        
+
         flattened = []
         for entry in entries:
             flat = {
@@ -609,7 +627,7 @@ class ContinuousAuditRecorder:
                 "reason": entry.get("reason"),
                 "success": entry.get("success"),
             }
-            
+
             # details 평탄화
             details = entry.get("details", {})
             for key, value in details.items():
@@ -617,32 +635,31 @@ class ContinuousAuditRecorder:
                     flat[f"details_{key}"] = json.dumps(value)
                 else:
                     flat[f"details_{key}"] = value
-            
+
             flattened.append(flat)
-        
+
         return flattened
-    
+
     # ─────────────────────────────────────────────────────────────
     # 무결성 검증
     # ─────────────────────────────────────────────────────────────
-    
-    def verify_integrity(self) -> Dict[str, Any]:
+
+    def verify_integrity(self) -> dict[str, Any]:
         """
         감사 로그 무결성 검증.
-        
+
         Returns:
             검증 결과 딕셔너리
         """
         entries = self.query(limit=10000)
-        
+
         verifier = HashChainVerifier()
-        
+
         # 엔트리에 integrity 필드가 있으면 검증
         entries_with_integrity = [
-            e for e in entries 
-            if "integrity" in e.get("details", {})
+            e for e in entries if "integrity" in e.get("details", {})
         ]
-        
+
         if not entries_with_integrity:
             return {
                 "verified": True,
@@ -650,60 +667,60 @@ class ContinuousAuditRecorder:
                 "verified_entries": 0,
                 "message": "No entries with integrity information found",
             }
-        
+
         # 무결성 정보를 최상위로 이동
         for entry in entries_with_integrity:
             entry["integrity"] = entry.get("details", {}).get("integrity", {})
-        
+
         is_valid, error_msg = verifier.verify_chain(entries_with_integrity)
         issues = verifier.find_tampering(entries_with_integrity) if not is_valid else []
-        
+
         result = {
             "verified": is_valid,
             "total_entries": len(entries),
             "verified_entries": len(entries_with_integrity),
             "chain_state": self._hash_manager.get_state(),
         }
-        
+
         if not is_valid:
             result["error"] = error_msg
             result["issues"] = issues
-        
+
         return result
-    
-    def get_chain_state(self) -> Dict[str, Any]:
+
+    def get_chain_state(self) -> dict[str, Any]:
         """현재 해시 체인 상태 반환."""
         return self._hash_manager.get_state()
-    
+
     # ─────────────────────────────────────────────────────────────
     # 내부 메서드
     # ─────────────────────────────────────────────────────────────
-    
+
     def _record_with_integrity(self, entry: AuditEntry) -> str:
         """
         해시 체인과 함께 기록.
-        
+
         FAIL-OPEN 정책:
         - 기록 실패 시에도 비즈니스 로직을 차단하지 않음
         - fallback_to_stdout 활성화 시 stdout에 최소한의 기록
         - fail_open=False로 Fail-Secure 모드 가능
-        
+
         Args:
             entry: 감사 엔트리
-            
+
         Returns:
             감사 로그 ID
         """
         with self._lock:
             # 엔트리를 딕셔너리로 변환
             entry_dict = entry.to_dict()
-            
+
             # 해시 체인 무결성 정보 추가
             entry_dict = self._hash_manager.add_integrity(entry_dict)
-            
+
             # 무결성 정보를 details에 포함
             entry.details["integrity"] = entry_dict.get("integrity", {})
-            
+
             # WAL 기록 (활성화된 경우)
             wal_seq = None
             if self._wal_enabled and self._wal:
@@ -711,47 +728,48 @@ class ContinuousAuditRecorder:
                     wal_seq = self._wal.write(entry_dict)
                 except Exception as e:
                     logger.warning(f"[ContinuousAudit] WAL write failed: {e}")
-            
+
             # Fail-Open 패턴으로 기록
             try:
                 self.audit_adapter.log(entry)
-                
+
                 # WAL 커밋 (성공 시)
                 if wal_seq is not None and self._wal:
                     try:
                         self._wal.mark_processed(wal_seq)
                     except Exception as e:
                         logger.warning(f"[ContinuousAudit] WAL commit failed: {e}")
-                        
+
             except Exception as e:
                 self._failed_write_count += 1
-                
+
                 if self._fallback_to_stdout:
                     # Fallback: stdout에 최소한의 기록
                     import sys
+
                     print(
                         f"[FALLBACK_AUDIT_LOG] {entry.action}: {entry.to_json()}",
                         file=sys.stderr,
                     )
-                
+
                 if not self._fail_open:
                     # Fail-Secure 모드: 예외 전파
                     raise
-                
+
                 logger.warning(
                     f"[ContinuousAudit] Write failed (fail-open): {e}. "
                     f"Total failures: {self._failed_write_count}"
                 )
-            
+
             # ID 생성 (timestamp + sequence)
             integrity = entry_dict.get("integrity", {})
             audit_id = f"audit-{entry.timestamp.strftime('%Y%m%d%H%M%S')}-{integrity.get('sequence', 0):06d}"
-            
+
             logger.debug(f"[ContinuousAudit] Recorded: {entry.action} (id={audit_id})")
-            
+
             return audit_id
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """감사 기록기 통계 반환."""
         return {
             "failed_write_count": self._failed_write_count,
@@ -760,15 +778,15 @@ class ContinuousAuditRecorder:
             "wal_enabled": self._wal_enabled,
             "chain_state": self._hash_manager.get_state(),
         }
-    
-    def _send_alert(self, channel: str, data: Dict[str, Any]) -> None:
+
+    def _send_alert(self, channel: str, data: dict[str, Any]) -> None:
         """알림 발송."""
         if self.alert_callback:
             try:
                 self.alert_callback(channel, data)
             except Exception as e:
                 logger.warning(f"[ContinuousAudit] Alert callback failed: {e}")
-        
+
         # 설정된 채널로 알림 (확장 가능)
         if channel in self.config.alert_channels or "all" in self.config.alert_channels:
             logger.info(f"[ContinuousAudit] Alert: {channel} - {data}")

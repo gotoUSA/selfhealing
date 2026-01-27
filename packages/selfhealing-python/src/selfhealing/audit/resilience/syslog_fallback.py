@@ -12,8 +12,7 @@ import logging
 import sys
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +30,19 @@ class SyslogFallback:
     """
 
     # Critical event types that always go to syslog
-    CRITICAL_EVENTS = frozenset([
-        "security_policy_change",
-        "authentication_config_change",
-        "encryption_key_change",
-        "admin_privilege_change",
-        "audit_config_change",
-        "circuit_breaker_open",
-        "all_backends_failed",
-    ])
+    CRITICAL_EVENTS = frozenset(
+        [
+            "security_policy_change",
+            "authentication_config_change",
+            "encryption_key_change",
+            "admin_privilege_change",
+            "audit_config_change",
+            "circuit_breaker_open",
+            "all_backends_failed",
+        ]
+    )
 
-    _instance: Optional["SyslogFallback"] = None
+    _instance: SyslogFallback | None = None
     _lock = threading.Lock()
 
     def __init__(self):
@@ -58,6 +59,7 @@ class SyslogFallback:
                 logger.debug("[SyslogFallback] Windows detected, using stderr fallback")
             else:
                 import syslog
+
                 syslog.openlog(
                     ident="selfhealing-audit",
                     logoption=syslog.LOG_PID | syslog.LOG_CONS,
@@ -70,7 +72,7 @@ class SyslogFallback:
             self._syslog_available = False
 
     @classmethod
-    def get_instance(cls) -> "SyslogFallback":
+    def get_instance(cls) -> SyslogFallback:
         """Get singleton instance."""
         if cls._instance is None:
             with cls._lock:
@@ -86,9 +88,9 @@ class SyslogFallback:
         self,
         event_type: str,
         message: str,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        config_type: str | None = None,
+        user: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> bool:
         """
         Log a critical event to syslog.
@@ -133,7 +135,10 @@ class SyslogFallback:
                 # Use appropriate priority
                 if event_type in ["security_policy_change", "all_backends_failed"]:
                     priority = syslog.LOG_CRIT
-                elif event_type in ["authentication_config_change", "encryption_key_change"]:
+                elif event_type in [
+                    "authentication_config_change",
+                    "encryption_key_change",
+                ]:
                     priority = syslog.LOG_WARNING
                 else:
                     priority = syslog.LOG_NOTICE

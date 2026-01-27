@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -50,16 +50,16 @@ class PredictedOutcome:
     patterns_used: int = 0
 
     # 유사 실험 ID 목록
-    similar_experiment_ids: List[str] = field(default_factory=list)
+    similar_experiment_ids: list[str] = field(default_factory=list)
 
     # 권장 사항
-    recommendations: List[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
     # 승인 필요 여부
     requires_approval: bool = False
     approval_reason: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "predicted_cb_state": self.predicted_cb_state,
@@ -85,9 +85,9 @@ class ServiceImpact:
     predicted_error_rate_percent: float = 0.0
     predicted_availability_drop_percent: float = 0.0
     is_direct_target: bool = False
-    dependency_chain: List[str] = field(default_factory=list)
+    dependency_chain: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "service_name": self.service_name,
@@ -132,7 +132,7 @@ class ImpactPredictor:
         self,
         experiment_type: str,
         target_service: str,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
     ) -> PredictedOutcome:
         """
         실험 결과 예측.
@@ -146,8 +146,8 @@ class ImpactPredictor:
             PredictedOutcome: 예측 결과
         """
         try:
-            from selfhealing.services.learning.service import LearningService
             from selfhealing.services.learning.models import PatternType
+            from selfhealing.services.learning.service import LearningService
 
             learning = LearningService()
 
@@ -195,8 +195,8 @@ class ImpactPredictor:
         self,
         target_service: str,
         experiment_type: str,
-        config: Optional[Dict[str, Any]] = None,
-    ) -> List[ServiceImpact]:
+        config: dict[str, Any] | None = None,
+    ) -> list[ServiceImpact]:
         """
         서비스 영향도 예측.
 
@@ -258,7 +258,7 @@ class ImpactPredictor:
         patterns: list,
         experiment_type: str,
         target_service: str,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
     ) -> PredictedOutcome:
         """패턴 기반 예측 계산."""
         if not patterns:
@@ -270,7 +270,9 @@ class ImpactPredictor:
             for p in patterns
             if p.features.get("recovery_time_seconds")
         ]
-        avg_recovery = sum(recovery_times) / len(recovery_times) if recovery_times else 30.0
+        avg_recovery = (
+            sum(recovery_times) / len(recovery_times) if recovery_times else 30.0
+        )
 
         # 에러율 평균
         error_rates = [
@@ -287,8 +289,7 @@ class ImpactPredictor:
 
         # 유사 실험 ID
         similar_ids = [
-            p.features.get("experiment_id", p.name)
-            for p in patterns[:5]  # 최대 5개
+            p.features.get("experiment_id", p.name) for p in patterns[:5]  # 최대 5개
         ]
 
         # 권장 사항 생성
@@ -323,7 +324,7 @@ class ImpactPredictor:
         self,
         experiment_type: str,
         target_service: str,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
     ) -> PredictedOutcome:
         """기본 예측 생성 (과거 패턴 없을 때)."""
         # 실험 유형별 기본값
@@ -377,8 +378,8 @@ class ImpactPredictor:
         avg_recovery: float,
         avg_error_rate: float,
         experiment_type: str,
-        config: Optional[Dict[str, Any]] = None,
-    ) -> List[str]:
+        config: dict[str, Any] | None = None,
+    ) -> list[str]:
         """권장 사항 생성."""
         recommendations = []
 
@@ -429,13 +430,15 @@ class ImpactPredictor:
         self,
         target_service: str,
         experiment_type: str,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
     ) -> ServiceImpact:
         """직접 영향 계산."""
         # 실험 유형별 영향도 계산
         if experiment_type == "latency_injection":
             latency_ms = config.get("latency_ms", 500) if config else 500
-            impact_level = "high" if latency_ms > 1000 else "medium" if latency_ms > 300 else "low"
+            impact_level = (
+                "high" if latency_ms > 1000 else "medium" if latency_ms > 300 else "low"
+            )
             return ServiceImpact(
                 service_name=target_service,
                 impact_level=impact_level,
@@ -447,10 +450,13 @@ class ImpactPredictor:
         elif experiment_type == "failure_injection":
             failure_rate = config.get("failure_rate", 100) if config else 100
             impact_level = (
-                "critical" if failure_rate > 75
-                else "high" if failure_rate > 50
-                else "medium" if failure_rate > 25
-                else "low"
+                "critical"
+                if failure_rate > 75
+                else (
+                    "high"
+                    if failure_rate > 50
+                    else "medium" if failure_rate > 25 else "low"
+                )
             )
             return ServiceImpact(
                 service_name=target_service,
@@ -478,14 +484,18 @@ class ImpactPredictor:
 
         return ServiceImpact(
             service_name=service_name,
-            impact_level="low" if direct_impact.impact_level in ["low", "medium"] else "medium",
-            predicted_latency_increase_ms=direct_impact.predicted_latency_increase_ms * dampening,
-            predicted_error_rate_percent=direct_impact.predicted_error_rate_percent * dampening,
+            impact_level=(
+                "low" if direct_impact.impact_level in ["low", "medium"] else "medium"
+            ),
+            predicted_latency_increase_ms=direct_impact.predicted_latency_increase_ms
+            * dampening,
+            predicted_error_rate_percent=direct_impact.predicted_error_rate_percent
+            * dampening,
             is_direct_target=False,
             dependency_chain=[source_service],
         )
 
-    def _get_dependent_services(self, target_service: str) -> List[str]:
+    def _get_dependent_services(self, target_service: str) -> list[str]:
         """종속 서비스 조회."""
         # TODO: ServiceDependencyGraph 연동
         # 현재는 간단한 맵 사용
@@ -502,7 +512,7 @@ class ImpactPredictor:
 # Singleton
 # =============================================================================
 
-_instance: Optional[ImpactPredictor] = None
+_instance: ImpactPredictor | None = None
 
 
 def get_impact_predictor() -> ImpactPredictor:

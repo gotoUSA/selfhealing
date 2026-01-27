@@ -6,7 +6,6 @@ Replaces:
 - core/config.py:ReplayAutomationConfig (lines 434-495)
 """
 
-from typing import Dict, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,24 +14,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ReplayAutomationSettings(BaseSettings):
     """
     DLQ Replay 자동화 설정.
-    
+
     Track 1: CB 복구 시 이벤트 기반 자동 Replay
     Track 2: Scheduled Batch (기존 5분 주기)
     Track 3: Traffic-Aware Replay (향후 구현)
     도메인별 차등 정책
-    
+
     Environment variables:
         SELFHEALING_REPLAY_TRACK1_ENABLED=true
         SELFHEALING_REPLAY_TRACK1_MAX_ITEMS=50
         ...
     """
-    
+
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_REPLAY_",
         env_file=".env",
         extra="ignore",
     )
-    
+
     # =========================================================================
     # Track 1: Event-Driven Replay (CB CLOSED 이벤트 기반)
     # =========================================================================
@@ -46,7 +45,7 @@ class ReplayAutomationSettings(BaseSettings):
         le=1000,
         description="CB 복구 시 최대 replay 건수",
     )
-    
+
     # =========================================================================
     # Track 2: Scheduled Batch Replay (기존 5분 주기 Beat)
     # =========================================================================
@@ -60,7 +59,7 @@ class ReplayAutomationSettings(BaseSettings):
         le=1000,
         description="배치당 최대 replay 건수",
     )
-    
+
     # =========================================================================
     # Track 3: Traffic-Aware Replay (향후 구현)
     # =========================================================================
@@ -74,7 +73,7 @@ class ReplayAutomationSettings(BaseSettings):
         le=1000,
         description="트래픽 정상화 시 최대 replay 건수",
     )
-    
+
     # =========================================================================
     # Adaptive Mode (동적 max_items 조정)
     # =========================================================================
@@ -100,7 +99,7 @@ class ReplayAutomationSettings(BaseSettings):
         le=1.0,
         description="실패율 임계값 (0.2 = 20%)",
     )
-    
+
     # =========================================================================
     # Domain Priority Policy (도메인별 차등 정책)
     # =========================================================================
@@ -108,15 +107,15 @@ class ReplayAutomationSettings(BaseSettings):
         default=False,
         description="우선순위 기반 배치 처리 활성화",
     )
-    domain_priorities: Dict[str, str] = Field(
+    domain_priorities: dict[str, str] = Field(
         default_factory=dict,
         description='도메인별 우선순위 {"payment": "critical", "notification": "low"}',
     )
-    domain_max_retries: Dict[str, int] = Field(
+    domain_max_retries: dict[str, int] = Field(
         default_factory=dict,
         description='도메인별 max_retries 오버라이드 {"payment": 10}',
     )
-    domain_on_circuit_close: Dict[str, bool] = Field(
+    domain_on_circuit_close: dict[str, bool] = Field(
         default_factory=dict,
         description='도메인별 Track 1 트리거 여부 {"payment": True}',
     )
@@ -125,7 +124,7 @@ class ReplayAutomationSettings(BaseSettings):
 # =============================================================================
 # Singleton pattern
 # =============================================================================
-_settings: Optional[ReplayAutomationSettings] = None
+_settings: ReplayAutomationSettings | None = None
 
 
 def get_replay_automation_settings() -> ReplayAutomationSettings:

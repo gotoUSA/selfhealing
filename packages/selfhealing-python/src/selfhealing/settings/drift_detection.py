@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -96,7 +95,7 @@ class DriftDetectionSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[DriftDetectionSettings] = None
+_settings: DriftDetectionSettings | None = None
 
 
 def get_drift_detection_settings() -> DriftDetectionSettings:

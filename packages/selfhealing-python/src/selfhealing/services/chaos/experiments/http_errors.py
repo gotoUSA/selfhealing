@@ -8,7 +8,6 @@ Simulates server errors, client errors, authentication failures, and rate limiti
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -19,16 +18,15 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     ERROR_5XX_HYPOTHESIS,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
 class Error5xxExperiment(ChaosExperiment):
     """
     Inject HTTP 5xx errors into service responses.
-    
+
     Simulates server errors, service unavailability, or backend failures.
-    
+
     ┌─────────────────────────────────────────────────────────────┐
     │ FAILURE HYPOTHESIS (복구 기대 가설)                          │
     ├─────────────────────────────────────────────────────────────┤
@@ -39,26 +37,28 @@ class Error5xxExperiment(ChaosExperiment):
     │ LearningService 연동:                                        │
     │ → 실제 결과와 비교하여 "복구 성능 저하 추세" 자동 감지        │
     └─────────────────────────────────────────────────────────────┘
-    
+
     Config parameters:
         - error_code: HTTP error code to inject (default: 503)
         - error_message: Error message (default: "Service Unavailable")
     """
-    
+
     experiment_type = ExperimentType.ERROR_5XX.value
     requires_approval = False  # Medium risk
-    
+
     # 복구 기대 가설 (클래스 레벨)
     failure_hypothesis = ERROR_5XX_HYPOTHESIS
-    
+
     @property
     def error_code(self) -> int:
         return self.config.parameters.get("error_code", 503)
-    
+
     @property
     def error_message(self) -> str:
-        return self.config.parameters.get("error_message", "Service Unavailable (Chaos Experiment)")
-    
+        return self.config.parameters.get(
+            "error_message", "Service Unavailable (Chaos Experiment)"
+        )
+
     def inject_chaos(self) -> bool:
         """Inject 5xx errors into target service with TTL."""
         logger.info(
@@ -66,43 +66,51 @@ class Error5xxExperiment(ChaosExperiment):
             f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
             f"(TTL: {self._effective_ttl}s)"
         )
-        
+
         try:
-            _apply_chaos_config({
-                "error_injection": {
-                    "enabled": True,
-                    "target_service": self.config.target_service,
-                    "error_code": self.error_code,
-                    "error_message": self.error_message,
-                    "rate": self.config.injection_rate,
-                    "traffic_type": self.config.traffic_type,
-                    "experiment_id": self.experiment_id,
-                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
-                    "ttl_seconds": self._effective_ttl,
+            _apply_chaos_config(
+                {
+                    "error_injection": {
+                        "enabled": True,
+                        "target_service": self.config.target_service,
+                        "error_code": self.error_code,
+                        "error_message": self.error_message,
+                        "rate": self.config.injection_rate,
+                        "traffic_type": self.config.traffic_type,
+                        "experiment_id": self.experiment_id,
+                        "expires_at": (
+                            self._expires_at.isoformat() if self._expires_at else ""
+                        ),
+                        "ttl_seconds": self._effective_ttl,
+                    }
                 }
-            })
+            )
             return True
         except Exception as e:
             logger.error(f"[Error5xxInjection] Failed to inject: {e}")
             return False
-    
+
     def rollback(self) -> None:
         """Remove error injection with idempotency."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info(f"[Error5xxInjection] Rollback already completed for {self.experiment_id}")
+                logger.info(
+                    f"[Error5xxInjection] Rollback already completed for {self.experiment_id}"
+                )
                 return
-            
+
             logger.info(f"[Error5xxInjection] Rolling back {self.experiment_id}")
-            
+
             try:
-                _apply_chaos_config({
-                    "error_injection": {
-                        "enabled": False,
-                        "target_service": self.config.target_service,
-                        "experiment_id": self.experiment_id,
+                _apply_chaos_config(
+                    {
+                        "error_injection": {
+                            "enabled": False,
+                            "target_service": self.config.target_service,
+                            "experiment_id": self.experiment_id,
+                        }
                     }
-                })
+                )
                 self._rollback_completed = True
             except Exception as e:
                 logger.error(f"[Error5xxInjection] Rollback failed: {e}")
@@ -111,19 +119,19 @@ class Error5xxExperiment(ChaosExperiment):
 class Error4xxExperiment(ChaosExperiment):
     """
     Inject HTTP 4xx errors into service responses.
-    
+
     Simulates client errors, authentication failures, rate limiting.
     Tests frontend error handling and throttle reaction.
-    
+
     Config parameters:
         - error_code: HTTP error code to inject (default: 400)
         - error_codes: List of codes for random selection (optional)
         - error_message: Error message (default: auto-generated based on code)
     """
-    
+
     experiment_type = ExperimentType.ERROR_4XX.value
     requires_approval = False  # Low risk
-    
+
     # Mapping of error codes to messages
     ERROR_MESSAGES = {
         400: "Bad Request (Chaos Experiment)",
@@ -132,24 +140,25 @@ class Error4xxExperiment(ChaosExperiment):
         404: "Not Found (Chaos Experiment)",
         429: "Too Many Requests (Chaos Experiment)",
     }
-    
+
     @property
     def error_code(self) -> int:
         """Get error code, optionally random from list."""
         codes = self.config.parameters.get("error_codes")
         if codes:
             import random
+
             return random.choice(codes)
         return self.config.parameters.get("error_code", 400)
-    
+
     @property
     def error_message(self) -> str:
         """Get error message for the error code."""
         return self.config.parameters.get(
-            "error_message", 
-            self.ERROR_MESSAGES.get(self.error_code, "Client Error (Chaos Experiment)")
+            "error_message",
+            self.ERROR_MESSAGES.get(self.error_code, "Client Error (Chaos Experiment)"),
         )
-    
+
     def inject_chaos(self) -> bool:
         """Inject 4xx errors into target service with TTL."""
         logger.info(
@@ -157,43 +166,51 @@ class Error4xxExperiment(ChaosExperiment):
             f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
             f"(TTL: {self._effective_ttl}s)"
         )
-        
+
         try:
-            _apply_chaos_config({
-                "error_4xx_injection": {
-                    "enabled": True,
-                    "target_service": self.config.target_service,
-                    "error_code": self.error_code,
-                    "error_message": self.error_message,
-                    "rate": self.config.injection_rate,
-                    "traffic_type": self.config.traffic_type,
-                    "experiment_id": self.experiment_id,
-                    "expires_at": self._expires_at.isoformat() if self._expires_at else "",
-                    "ttl_seconds": self._effective_ttl,
+            _apply_chaos_config(
+                {
+                    "error_4xx_injection": {
+                        "enabled": True,
+                        "target_service": self.config.target_service,
+                        "error_code": self.error_code,
+                        "error_message": self.error_message,
+                        "rate": self.config.injection_rate,
+                        "traffic_type": self.config.traffic_type,
+                        "experiment_id": self.experiment_id,
+                        "expires_at": (
+                            self._expires_at.isoformat() if self._expires_at else ""
+                        ),
+                        "ttl_seconds": self._effective_ttl,
+                    }
                 }
-            })
+            )
             return True
         except Exception as e:
             logger.error(f"[Error4xxInjection] Failed to inject: {e}")
             return False
-    
+
     def rollback(self) -> None:
         """Remove 4xx error injection with idempotency."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info(f"[Error4xxInjection] Rollback already completed for {self.experiment_id}")
+                logger.info(
+                    f"[Error4xxInjection] Rollback already completed for {self.experiment_id}"
+                )
                 return
-            
+
             logger.info(f"[Error4xxInjection] Rolling back {self.experiment_id}")
-            
+
             try:
-                _apply_chaos_config({
-                    "error_4xx_injection": {
-                        "enabled": False,
-                        "target_service": self.config.target_service,
-                        "experiment_id": self.experiment_id,
+                _apply_chaos_config(
+                    {
+                        "error_4xx_injection": {
+                            "enabled": False,
+                            "target_service": self.config.target_service,
+                            "experiment_id": self.experiment_id,
+                        }
                     }
-                })
+                )
                 self._rollback_completed = True
             except Exception as e:
                 logger.error(f"[Error4xxInjection] Rollback failed: {e}")

@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
-        FailedOperationRepository,
         CircuitBreakerStateRepository,
+        FailedOperationRepository,
         SecurityIncidentRepository,
     )
 
 
 def create_dlq_service(
-    repository: "FailedOperationRepository | None" = None,
+    repository: FailedOperationRepository | None = None,
 ):
     """
     Create a DLQService instance with optional repository injection.
@@ -35,7 +35,7 @@ def create_dlq_service(
 
 
 def create_replay_service(
-    failed_operation_repository: "FailedOperationRepository | None" = None,
+    failed_operation_repository: FailedOperationRepository | None = None,
 ):
     """
     Create a ReplayService instance with optional repository injection.
@@ -52,7 +52,7 @@ def create_replay_service(
 
 
 def create_circuit_breaker_service(
-    repository: "CircuitBreakerStateRepository | None" = None,
+    repository: CircuitBreakerStateRepository | None = None,
 ):
     """
     Create a CircuitBreakerService instance with optional repository injection.
@@ -69,7 +69,7 @@ def create_circuit_breaker_service(
 
 
 def create_security_violation_service(
-    repository: "SecurityIncidentRepository | None" = None,
+    repository: SecurityIncidentRepository | None = None,
 ):
     """
     Create a SecurityViolationService instance with optional repository injection.

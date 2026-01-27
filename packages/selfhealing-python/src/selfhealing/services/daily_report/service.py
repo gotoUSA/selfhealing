@@ -10,11 +10,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .models import DailyAutonomousReport
 from .aggregator import aggregate_daily_results
-from .formatters import format_report_for_slack, format_report_for_email
+from .formatters import format_report_for_email, format_report_for_slack
+from .models import DailyAutonomousReport
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +24,13 @@ class ReportResult:
     """Report generation result."""
 
     success: bool
-    report: Optional[DailyAutonomousReport] = None
-    channels_sent: List[str] = field(default_factory=list)
+    report: DailyAutonomousReport | None = None
+    channels_sent: list[str] = field(default_factory=list)
     skipped: bool = False
-    skip_reason: Optional[str] = None
-    error: Optional[str] = None
+    skip_reason: str | None = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {
             "success": self.success,
@@ -70,8 +70,8 @@ class DailyReportService:
 
     def generate_and_send_report(
         self,
-        date: Optional[datetime] = None,
-        channels: Optional[List[str]] = None,
+        date: datetime | None = None,
+        channels: list[str] | None = None,
     ) -> ReportResult:
         """
         일일 리포트 생성 및 전송.
@@ -83,8 +83,9 @@ class DailyReportService:
         Returns:
             ReportResult
         """
-        from selfhealing.core.timezone import now as get_now
         from datetime import timedelta
+
+        from selfhealing.core.timezone import now as get_now
 
         channels = channels or ["slack"]
 
@@ -133,9 +134,7 @@ class DailyReportService:
             logger.error(f"[DailyReportService] Generation failed: {e}", exc_info=True)
             return ReportResult(success=False, error=str(e))
 
-    def _send_to_channel(
-        self, report: DailyAutonomousReport, channel: str
-    ) -> None:
+    def _send_to_channel(self, report: DailyAutonomousReport, channel: str) -> None:
         """채널로 리포트 전송."""
         # Determine severity based on failures
         severity = "info"
@@ -206,7 +205,7 @@ class DailyReportService:
 # Singleton
 # =============================================================================
 
-_daily_report_service: Optional[DailyReportService] = None
+_daily_report_service: DailyReportService | None = None
 
 
 def get_daily_report_service() -> DailyReportService:

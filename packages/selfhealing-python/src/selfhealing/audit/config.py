@@ -5,10 +5,10 @@ Continuous Audit Configuration.
 보안에 민감한 값(해시 시드)은 반드시 환경변수로 설정.
 """
 
-import os
 import logging
+import os
 from dataclasses import dataclass, field
-from typing import Optional, List, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 class AuditConfig:
     """
     감사 로그 설정 - 환경변수 우선.
-    
+
     설정 우선순위:
     1. 환경변수 (AUDIT_*)
     2. DNA 선언 (서비스별 설정)
     3. 설정 파일
     4. 코드 기본값
-    
+
     Environment Variables:
         AUDIT_HASH_SEED: 해시 체인 시드 (필수)
         AUDIT_RETENTION_DAYS: 로그 보존 기간 (기본: 365)
@@ -32,39 +32,44 @@ class AuditConfig:
         AUDIT_S3_WORM: WORM 모드 활성화 (기본: false)
         AUDIT_ALERT_CHANNELS: 알림 채널 (쉼표 구분)
     """
-    
+
     # 해시 체인 시드 (환경변수 필수)
-    hash_seed: str = field(default_factory=lambda: os.environ.get("AUDIT_HASH_SEED", ""))
-    
+    hash_seed: str = field(
+        default_factory=lambda: os.environ.get("AUDIT_HASH_SEED", "")
+    )
+
     # 보존 기간 (규정별 다름)
     retention_days: int = field(
         default_factory=lambda: int(os.environ.get("AUDIT_RETENTION_DAYS", "365"))
     )
-    
+
     # 스토리지 백엔드: file, s3, loki
     storage_backend: str = field(
         default_factory=lambda: os.environ.get("AUDIT_STORAGE", "file")
     )
-    
+
     # S3 설정 (선택)
-    s3_bucket: Optional[str] = field(
+    s3_bucket: str | None = field(
         default_factory=lambda: os.environ.get("AUDIT_S3_BUCKET")
     )
     s3_worm_enabled: bool = field(
-        default_factory=lambda: os.environ.get("AUDIT_S3_WORM", "false").lower() == "true"
+        default_factory=lambda: os.environ.get("AUDIT_S3_WORM", "false").lower()
+        == "true"
     )
-    
+
     # 알림 채널
-    alert_channels: List[str] = field(default_factory=list)
-    
+    alert_channels: list[str] = field(default_factory=list)
+
     # 민감 데이터 마스킹
     mask_sensitive_data: bool = True
-    
+
     # 무결성 검증 주기 (초)
     integrity_check_interval: int = field(
-        default_factory=lambda: int(os.environ.get("AUDIT_INTEGRITY_CHECK_INTERVAL", "3600"))
+        default_factory=lambda: int(
+            os.environ.get("AUDIT_INTEGRITY_CHECK_INTERVAL", "3600")
+        )
     )
-    
+
     # 배치 저장 설정
     batch_size: int = field(
         default_factory=lambda: int(os.environ.get("AUDIT_BATCH_SIZE", "100"))
@@ -72,28 +77,39 @@ class AuditConfig:
     batch_flush_interval: int = field(
         default_factory=lambda: int(os.environ.get("AUDIT_BATCH_FLUSH_INTERVAL", "10"))
     )
-    
+
     # 분산 해시 체인 설정
     hash_chain_distributed: bool = field(
-        default_factory=lambda: os.environ.get("AUDIT_HASH_CHAIN_DISTRIBUTED", "false").lower() == "true"
+        default_factory=lambda: os.environ.get(
+            "AUDIT_HASH_CHAIN_DISTRIBUTED", "false"
+        ).lower()
+        == "true"
     )
-    hash_chain_redis_url: Optional[str] = field(
-        default_factory=lambda: os.environ.get("AUDIT_HASH_CHAIN_REDIS_URL", os.environ.get("REDIS_URL"))
+    hash_chain_redis_url: str | None = field(
+        default_factory=lambda: os.environ.get(
+            "AUDIT_HASH_CHAIN_REDIS_URL", os.environ.get("REDIS_URL")
+        )
     )
     hash_chain_key_prefix: str = field(
-        default_factory=lambda: os.environ.get("AUDIT_HASH_CHAIN_KEY_PREFIX", "selfhealing:")
+        default_factory=lambda: os.environ.get(
+            "AUDIT_HASH_CHAIN_KEY_PREFIX", "selfhealing:"
+        )
     )
     hash_chain_lock_timeout: float = field(
-        default_factory=lambda: float(os.environ.get("AUDIT_HASH_CHAIN_LOCK_TIMEOUT", "5.0"))
+        default_factory=lambda: float(
+            os.environ.get("AUDIT_HASH_CHAIN_LOCK_TIMEOUT", "5.0")
+        )
     )
-    
+
     def __post_init__(self) -> None:
         """환경변수에서 알림 채널 로드 및 해시 시드 검증."""
         # 알림 채널 파싱
         channels_str = os.environ.get("AUDIT_ALERT_CHANNELS", "")
         if channels_str and not self.alert_channels:
-            self.alert_channels = [ch.strip() for ch in channels_str.split(",") if ch.strip()]
-        
+            self.alert_channels = [
+                ch.strip() for ch in channels_str.split(",") if ch.strip()
+            ]
+
         # 해시 시드 검증 (프로덕션에서는 필수)
         if not self.hash_seed:
             # 개발 환경에서는 경고만, 프로덕션에서는 에러
@@ -110,45 +126,44 @@ class AuditConfig:
                     "[AuditConfig] AUDIT_HASH_SEED가 설정되지 않음. "
                     "개발용 기본값 사용 (프로덕션에서는 환경변수 설정 필수)"
                 )
-    
+
     @classmethod
     def from_dna(cls, dna_config: dict) -> "AuditConfig":
         """
         DNA 선언에서 설정 로드 (환경변수가 우선).
-        
+
         Args:
             dna_config: DNA에서 로드된 설정 딕셔너리
-            
+
         Returns:
             AuditConfig 인스턴스
         """
         return cls(
-            hash_seed=os.environ.get("AUDIT_HASH_SEED", dna_config.get("hash_seed", "")),
-            retention_days=int(os.environ.get(
-                "AUDIT_RETENTION_DAYS", 
-                dna_config.get("retention_days", 365)
-            )),
+            hash_seed=os.environ.get(
+                "AUDIT_HASH_SEED", dna_config.get("hash_seed", "")
+            ),
+            retention_days=int(
+                os.environ.get(
+                    "AUDIT_RETENTION_DAYS", dna_config.get("retention_days", 365)
+                )
+            ),
             storage_backend=os.environ.get(
-                "AUDIT_STORAGE", 
-                dna_config.get("storage", "file")
+                "AUDIT_STORAGE", dna_config.get("storage", "file")
             ),
-            s3_bucket=os.environ.get(
-                "AUDIT_S3_BUCKET", 
-                dna_config.get("s3_bucket")
-            ),
+            s3_bucket=os.environ.get("AUDIT_S3_BUCKET", dna_config.get("s3_bucket")),
             s3_worm_enabled=os.environ.get(
-                "AUDIT_S3_WORM", 
-                str(dna_config.get("s3_worm", False))
-            ).lower() == "true",
+                "AUDIT_S3_WORM", str(dna_config.get("s3_worm", False))
+            ).lower()
+            == "true",
             alert_channels=dna_config.get("alert_channels", []),
             mask_sensitive_data=dna_config.get("mask_sensitive_data", True),
         )
-    
+
     @classmethod
     def get_default(cls) -> "AuditConfig":
         """환경변수에서 기본 설정 생성."""
         return cls()
-    
+
     def to_dict(self) -> dict:
         """설정을 딕셔너리로 변환 (민감 정보 마스킹)."""
         return {
@@ -167,20 +182,21 @@ class AuditConfig:
             "hash_chain_key_prefix": self.hash_chain_key_prefix,
             "hash_chain_lock_timeout": self.hash_chain_lock_timeout,
         }
-    
-    def get_redis_client(self) -> Optional[Any]:
+
+    def get_redis_client(self) -> Any | None:
         """
         Get Redis client for distributed hash chain.
-        
+
         Returns:
             Redis client if distributed mode enabled and configured,
             None otherwise.
         """
         if not self.hash_chain_distributed or not self.hash_chain_redis_url:
             return None
-        
+
         try:
             import redis
+
             return redis.from_url(self.hash_chain_redis_url)
         except Exception as e:
             logger.warning(f"[AuditConfig] Failed to create Redis client: {e}")
@@ -189,35 +205,36 @@ class AuditConfig:
 
 # 규정별 최소 보존 기간 참조
 COMPLIANCE_RETENTION_DAYS = {
-    "DORA": 365 * 5,      # 5년
-    "PCI-DSS": 365,       # 1년
-    "SOC2": 365,          # 1년
-    "GDPR": None,         # 목적 달성 시까지 (서비스별 판단)
-    "HIPAA": 365 * 6,     # 6년
+    "DORA": 365 * 5,  # 5년
+    "PCI-DSS": 365,  # 1년
+    "SOC2": 365,  # 1년
+    "GDPR": None,  # 목적 달성 시까지 (서비스별 판단)
+    "HIPAA": 365 * 6,  # 6년
 }
 
 
 def _get_default_max_retention() -> int:
     """Get default max retention days from settings."""
     from selfhealing.settings.audit_settings import get_audit_settings
+
     return get_audit_settings().compliance_max_retention_days
 
 
-def get_recommended_retention(standards: List[str]) -> int:
+def get_recommended_retention(standards: list[str]) -> int:
     """
     규정 목록에 따른 권장 보존 기간 반환.
-    
+
     Args:
         standards: 준수해야 할 규정 목록 (예: ["DORA", "PCI-DSS"])
-        
+
     Returns:
         최대 보존 기간 (일)
     """
     max_days = _get_default_max_retention()
-    
+
     for std in standards:
         days = COMPLIANCE_RETENTION_DAYS.get(std.upper())
         if days and days > max_days:
             max_days = days
-    
+
     return max_days

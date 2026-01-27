@@ -11,7 +11,7 @@ import json
 import logging
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.settings.sampling import SamplingSettings
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SamplingConfig:
     """Configuration for sampling verification."""
+
     sample_rate: float = 0.1  # 10% sampling
     min_samples: int = 10
     max_samples: int = 1000
@@ -30,9 +31,9 @@ class SamplingConfig:
     @classmethod
     def from_settings(
         cls,
-        settings: "SamplingSettings | None" = None,
+        settings: SamplingSettings | None = None,
         **overrides,
-    ) -> "SamplingConfig":
+    ) -> SamplingConfig:
         """
         Settings에서 SamplingConfig 인스턴스 생성.
 
@@ -59,52 +60,52 @@ class SamplingConfig:
 class SamplingVerifier:
     """
     Probabilistic chain verification using sampling.
-    
+
     Problem:
         Full chain verification is O(n) for n entries.
         Millions of entries = seconds/minutes of CPU time.
-    
+
     Solution:
         Random sampling reduces to O(k) where k = n × sample_rate.
         If sample passes, chain is likely valid.
         If sample fails, fall back to full verification.
-    
+
     Pattern source:
         throttle/config.py#L26 (sample_rate concept)
         runtime_config/core_configs.py#L215 (sampling intervals)
-    
+
     Usage:
         verifier = SamplingVerifier(SamplingConfig(sample_rate=0.1))
         is_valid, issues = verifier.verify_sampled(entries)
     """
-    
+
     GENESIS_HASH = "GENESIS"
-    
-    def __init__(self, config: Optional[SamplingConfig] = None):
+
+    def __init__(self, config: SamplingConfig | None = None):
         """
         Initialize sampling verifier.
-        
+
         Args:
             config: Sampling configuration
         """
         self._config = config or SamplingConfig()
-    
+
     def verify_sampled(
         self,
-        entries: List[Dict[str, Any]],
-    ) -> Tuple[bool, List[Dict[str, Any]]]:
+        entries: list[dict[str, Any]],
+    ) -> tuple[bool, list[dict[str, Any]]]:
         """
         Verify chain using probabilistic sampling.
-        
+
         Args:
             entries: List of log entries to verify
-        
+
         Returns:
             Tuple of (is_valid, issues_found)
         """
         if not entries:
             return True, []
-        
+
         # Calculate sample size
         n = len(entries)
         sample_size = max(
@@ -114,24 +115,24 @@ class SamplingVerifier:
                 int(n * self._config.sample_rate),
             ),
         )
-        
+
         # Can't sample more than we have
         sample_size = min(sample_size, n)
-        
+
         # Select random sample indices
         if sample_size >= n:
             sample_indices = list(range(n))
         else:
             sample_indices = sorted(random.sample(range(n), sample_size))
-        
+
         logger.debug(
             f"[SamplingVerifier] Sampling {sample_size}/{n} entries "
             f"({sample_size/n*100:.1f}%)"
         )
-        
+
         # Verify sampled entries
         issues = self._verify_indices(entries, sample_indices)
-        
+
         if issues and self._config.full_verify_on_failure:
             # Sample failed - do full verification
             logger.info(
@@ -139,98 +140,106 @@ class SamplingVerifier:
                 "performing full verification"
             )
             return self._verify_full(entries)
-        
+
         return len(issues) == 0, issues
-    
+
     def _verify_indices(
         self,
-        entries: List[Dict[str, Any]],
-        indices: List[int],
-    ) -> List[Dict[str, Any]]:
+        entries: list[dict[str, Any]],
+        indices: list[int],
+    ) -> list[dict[str, Any]]:
         """Verify specific indices in the chain."""
         issues = []
-        
+
         for i in indices:
             entry = entries[i]
             integrity = entry.get("integrity", {})
-            
+
             # Verify hash computation
             stored_hash = integrity.get("current_hash", "")
             entry_copy = self._remove_current_hash(entry)
             computed_hash = self._compute_hash(entry_copy)
-            
+
             if stored_hash != computed_hash:
-                issues.append({
-                    "type": "hash_mismatch",
-                    "index": i,
-                    "sequence": integrity.get("sequence"),
-                    "stored_hash": stored_hash[:16] + "...",
-                    "computed_hash": computed_hash[:16] + "...",
-                })
-            
+                issues.append(
+                    {
+                        "type": "hash_mismatch",
+                        "index": i,
+                        "sequence": integrity.get("sequence"),
+                        "stored_hash": stored_hash[:16] + "...",
+                        "computed_hash": computed_hash[:16] + "...",
+                    }
+                )
+
             # Verify chain linkage (if not first entry)
             if i > 0:
                 prev_entry = entries[i - 1]
                 expected_prev = prev_entry.get("integrity", {}).get("current_hash", "")
                 actual_prev = integrity.get("previous_hash", "")
-                
+
                 if expected_prev and actual_prev != expected_prev:
-                    issues.append({
-                        "type": "chain_broken",
-                        "index": i,
-                        "sequence": integrity.get("sequence"),
-                        "expected_prev": expected_prev[:16] + "...",
-                        "actual_prev": actual_prev[:16] + "...",
-                    })
-        
+                    issues.append(
+                        {
+                            "type": "chain_broken",
+                            "index": i,
+                            "sequence": integrity.get("sequence"),
+                            "expected_prev": expected_prev[:16] + "...",
+                            "actual_prev": actual_prev[:16] + "...",
+                        }
+                    )
+
         return issues
-    
+
     def _verify_full(
         self,
-        entries: List[Dict[str, Any]],
-    ) -> Tuple[bool, List[Dict[str, Any]]]:
+        entries: list[dict[str, Any]],
+    ) -> tuple[bool, list[dict[str, Any]]]:
         """Full chain verification."""
         issues = []
         previous_hash = self.GENESIS_HASH
-        
+
         for i, entry in enumerate(entries):
             integrity = entry.get("integrity", {})
-            
+
             # Check previous hash linkage
             prev_hash = integrity.get("previous_hash", "")
             if prev_hash != previous_hash:
-                issues.append({
-                    "type": "chain_broken",
-                    "index": i,
-                    "sequence": integrity.get("sequence"),
-                    "expected_prev": previous_hash[:16] + "...",
-                    "actual_prev": prev_hash[:16] + "...",
-                })
-            
+                issues.append(
+                    {
+                        "type": "chain_broken",
+                        "index": i,
+                        "sequence": integrity.get("sequence"),
+                        "expected_prev": previous_hash[:16] + "...",
+                        "actual_prev": prev_hash[:16] + "...",
+                    }
+                )
+
             # Verify hash
             stored_hash = integrity.get("current_hash", "")
             entry_copy = self._remove_current_hash(entry)
             computed_hash = self._compute_hash(entry_copy)
-            
+
             if stored_hash != computed_hash:
-                issues.append({
-                    "type": "hash_mismatch",
-                    "index": i,
-                    "sequence": integrity.get("sequence"),
-                })
-            
+                issues.append(
+                    {
+                        "type": "hash_mismatch",
+                        "index": i,
+                        "sequence": integrity.get("sequence"),
+                    }
+                )
+
             previous_hash = stored_hash
-        
+
         return len(issues) == 0, issues
-    
-    def _remove_current_hash(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _remove_current_hash(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Remove current_hash for verification."""
         entry_copy = json.loads(json.dumps(entry))
         if "integrity" in entry_copy and "current_hash" in entry_copy["integrity"]:
             del entry_copy["integrity"]["current_hash"]
         return entry_copy
-    
-    def _compute_hash(self, data: Dict[str, Any]) -> str:
+
+    def _compute_hash(self, data: dict[str, Any]) -> str:
         """Compute SHA-256 hash."""
         json_str = json.dumps(data, sort_keys=True, default=str)
         return hashlib.sha256(json_str.encode()).hexdigest()

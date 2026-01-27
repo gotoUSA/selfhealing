@@ -9,7 +9,6 @@ Run: python manage.py generate_self_healing_alerts
 
 from __future__ import annotations
 
-
 ALERTING_RULES: dict = {
     # =========================================================================
     # DLQ Alerting Rules

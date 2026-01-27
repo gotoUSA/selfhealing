@@ -53,7 +53,9 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
 
         # Exception은 exception handler가 처리 (ImportError는 모듈 미설치 케이스로 별도 처리)
         try:
-            from selfhealing.services.error_budget_service import get_error_budget_service
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
         except ImportError:
             return Response(
                 {
@@ -72,7 +74,11 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
         for i in range(count):
             eb_service.record_error(
                 error_type=error_type,
-                context={"source": "x-test-mode", "injection_number": i + 1, "user": str(request.user)},
+                context={
+                    "source": "x-test-mode",
+                    "injection_number": i + 1,
+                    "user": str(request.user),
+                },
             )
 
         # 현재 상태

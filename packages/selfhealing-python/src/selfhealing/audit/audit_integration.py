@@ -32,14 +32,16 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any
 
-from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
+from selfhealing.interfaces.audit_adapter import AuditEntry
 
 if TYPE_CHECKING:
+    from selfhealing.audit.recorder import ResilientContinuousAuditRecorder
     from selfhealing.settings.batch import BatchSettings
 
 logger = logging.getLogger(__name__)
@@ -71,16 +73,14 @@ class AsyncLoggerConfig:
     batch_size: int = 5
     flush_interval_seconds: float = 2.0
     max_queue_size: int = 5000
-    immediate_severities: Set[EventSeverity] = field(
-        default_factory=lambda: {EventSeverity.CRITICAL, EventSeverity.WARNING}
-    )
+    immediate_severities: set[EventSeverity] = field(default_factory=lambda: {EventSeverity.CRITICAL, EventSeverity.WARNING})
 
     @classmethod
     def from_settings(
         cls,
-        settings: "BatchSettings | None" = None,
+        settings: BatchSettings | None = None,
         **overrides,
-    ) -> "AsyncLoggerConfig":
+    ) -> AsyncLoggerConfig:
         """
         Settings에서 AsyncLoggerConfig 인스턴스 생성.
 
@@ -96,12 +96,8 @@ class AsyncLoggerConfig:
         s = settings or get_batch_settings()
         return cls(
             batch_size=overrides.get("batch_size", s.async_logger_batch_size),
-            flush_interval_seconds=overrides.get(
-                "flush_interval_seconds", s.async_logger_flush_interval
-            ),
-            max_queue_size=overrides.get(
-                "max_queue_size", s.async_logger_max_queue_size
-            ),
+            flush_interval_seconds=overrides.get("flush_interval_seconds", s.async_logger_flush_interval),
+            max_queue_size=overrides.get("max_queue_size", s.async_logger_max_queue_size),
             immediate_severities=overrides.get(
                 "immediate_severities",
                 {EventSeverity.CRITICAL, EventSeverity.WARNING},
@@ -125,8 +121,8 @@ class AsyncLoggerAdapter:
 
     def __init__(
         self,
-        flush_callback: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
-        config: Optional[AsyncLoggerConfig] = None,
+        flush_callback: Callable[[list[dict[str, Any]]], None] | None = None,
+        config: AsyncLoggerConfig | None = None,
     ):
         """
         Initialize AsyncLoggerAdapter.
@@ -143,7 +139,7 @@ class AsyncLoggerAdapter:
 
         # Thread control
         self._running = False
-        self._worker_thread: Optional[threading.Thread] = None
+        self._worker_thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
         # Statistics
@@ -158,7 +154,7 @@ class AsyncLoggerAdapter:
 
     def configure(
         self,
-        flush_callback: Callable[[List[Dict[str, Any]]], None],
+        flush_callback: Callable[[list[dict[str, Any]]], None],
         batch_size: int = 5,
         flush_interval: float = 2.0,
         max_queue_size: int = 5000,
@@ -206,7 +202,7 @@ class AsyncLoggerAdapter:
 
     def log(
         self,
-        event: Dict[str, Any],
+        event: dict[str, Any],
         severity: EventSeverity = EventSeverity.INFO,
     ) -> bool:
         """
@@ -256,9 +252,7 @@ class AsyncLoggerAdapter:
         **kwargs,
     ) -> None:
         """Circuit Breaker 이벤트 로깅."""
-        severity = (
-            EventSeverity.CRITICAL if state in ["OPEN", "BLOCKED"] else EventSeverity.INFO
-        )
+        severity = EventSeverity.CRITICAL if state in ["OPEN", "BLOCKED"] else EventSeverity.INFO
         self.log(
             {
                 "type": "circuit_breaker",
@@ -359,7 +353,7 @@ class AsyncLoggerAdapter:
             self._flush_batch(batch)
         return len(batch)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """통계 반환."""
         return {
             **self._stats,
@@ -380,7 +374,7 @@ class AsyncLoggerAdapter:
 
     def _worker_loop(self) -> None:
         """배치 처리 워커."""
-        batch: List[Dict[str, Any]] = []
+        batch: list[dict[str, Any]] = []
         last_flush = time.time()
 
         while self._running:
@@ -414,7 +408,7 @@ class AsyncLoggerAdapter:
         if remaining:
             self._flush_batch(remaining)
 
-    def _flush_batch(self, events: List[Dict[str, Any]]) -> None:
+    def _flush_batch(self, events: list[dict[str, Any]]) -> None:
         """배치 전송."""
         if not self._flush_callback or not events:
             return
@@ -428,7 +422,7 @@ class AsyncLoggerAdapter:
             self._stats["flush_errors"] += 1
             logger.error(f"[AsyncLoggerAdapter] Flush failed: {e}")
 
-    def _flush_immediate(self, events: List[Dict[str, Any]]) -> None:
+    def _flush_immediate(self, events: list[dict[str, Any]]) -> None:
         """즉시 전송."""
         self._flush_batch(events)
 
@@ -470,7 +464,7 @@ class AuditEventData:
 
     event_type: AuditEventType
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 class AuditEventObserver:
@@ -574,7 +568,7 @@ class IntegratedAuditRecorder:
 
     def __init__(
         self,
-        resilient_recorder: "ResilientContinuousAuditRecorder",
+        resilient_recorder: ResilientContinuousAuditRecorder,
         enable_auto_async_logging: bool = True,
     ):
         """
@@ -588,11 +582,11 @@ class IntegratedAuditRecorder:
         self._enable_auto_async_logging = enable_auto_async_logging
 
         # Observer list
-        self._observers: List[AuditEventObserver] = []
+        self._observers: list[AuditEventObserver] = []
         self._observers_lock = threading.Lock()
 
         # AsyncLogger adapter (optional)
-        self._async_logger: Optional[AsyncLoggerAdapter] = None
+        self._async_logger: AsyncLoggerAdapter | None = None
 
         # Circuit state tracking
         self._last_circuit_state = None
@@ -717,7 +711,7 @@ class IntegratedAuditRecorder:
 
             raise
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         """통합 헬스 상태 반환."""
         health = self._recorder.get_health_status()
 
@@ -751,9 +745,9 @@ class IntegratedAuditRecorder:
 
 
 def configure_integration(
-    resilient_recorder: "ResilientContinuousAuditRecorder",
-    flush_callback: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
-    async_logger_config: Optional[AsyncLoggerConfig] = None,
+    resilient_recorder: ResilientContinuousAuditRecorder,
+    flush_callback: Callable[[list[dict[str, Any]]], None] | None = None,
+    async_logger_config: AsyncLoggerConfig | None = None,
 ) -> IntegratedAuditRecorder:
     """
     통합 설정 헬퍼 함수.
@@ -781,7 +775,7 @@ def configure_integration(
 def create_command_center_callback(
     endpoint: str,
     timeout_seconds: float = 5.0,
-) -> Callable[[List[Dict[str, Any]]], None]:
+) -> Callable[[list[dict[str, Any]]], None]:
     """
     Command Center 전송 콜백 생성.
 
@@ -793,10 +787,10 @@ def create_command_center_callback(
         배치 전송 콜백 함수
     """
     import json
-    import urllib.request
     import urllib.error
+    import urllib.request
 
-    def send_to_command_center(events: List[Dict[str, Any]]) -> None:
+    def send_to_command_center(events: list[dict[str, Any]]) -> None:
         """이벤트를 Command Center로 전송."""
         try:
             data = json.dumps(events).encode("utf-8")

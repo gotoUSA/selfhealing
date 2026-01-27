@@ -7,7 +7,7 @@ Provides methods for replaying DLQ entries.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationData
@@ -18,20 +18,20 @@ logger = logging.getLogger(__name__)
 class ReplayOperationsMixin:
     """Mixin providing DLQ replay operations."""
 
-    def _execute_replay(self, entry: "FailedOperationData") -> bool:
+    def _execute_replay(self, entry: FailedOperationData) -> bool:
         """
         Execute replay for a single DLQ entry using registered handler.
-        
+
         Args:
             entry: The failed operation entry to replay
-            
+
         Returns:
             True if replay succeeded, False otherwise
         """
         from selfhealing.services.replay_service import get_replay_handler
-        
+
         handler = get_replay_handler(entry.domain)
-        
+
         # Check if replay is allowed
         can_replay, reason = handler.can_replay(entry)
         if not can_replay:
@@ -39,14 +39,14 @@ class ReplayOperationsMixin:
                 f"[DLQService] Replay not allowed for entry {entry.id}: {reason}"
             )
             return False
-        
+
         # Execute replay
         result = handler.replay(entry)
         return result.success
 
     def replay(
         self,
-        domain: Optional[str] = None,
+        domain: str | None = None,
         batch_size: int = 50,
         request: Any = None,
     ):
@@ -77,7 +77,7 @@ class ReplayOperationsMixin:
                 try:
                     # Execute replay via registered handler
                     replay_success = self._execute_replay(entry)
-                    
+
                     if replay_success:
                         self.resolve_entry(entry.id, "auto_replay")
                         result.success += 1
@@ -95,7 +95,9 @@ class ReplayOperationsMixin:
                         )
                     else:
                         result.failed += 1
-                        result.errors.append(f"Entry {entry.id}: Replay handler returned failure")
+                        result.errors.append(
+                            f"Entry {entry.id}: Replay handler returned failure"
+                        )
                         # Audit 로깅: Replay 실패 (버퍼 패턴 지원)
                         self._log_dlq_audit(
                             action="replay",

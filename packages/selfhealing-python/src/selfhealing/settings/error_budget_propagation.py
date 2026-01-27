@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -164,7 +163,9 @@ class ErrorBudgetPropagationSettings(BaseSettings):
         """결합 전략 유효성 검증."""
         valid_strategies = {"max", "sum", "multiply"}
         if v not in valid_strategies:
-            raise ValueError(f"default_combine_strategy must be one of {valid_strategies}")
+            raise ValueError(
+                f"default_combine_strategy must be one of {valid_strategies}"
+            )
         if v == "multiply":
             logger.warning(
                 "[SafeDefault] 'multiply' strategy is risky, ensure multiplier caps are set"
@@ -187,7 +188,7 @@ class ErrorBudgetPropagationSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[ErrorBudgetPropagationSettings] = None
+_settings: ErrorBudgetPropagationSettings | None = None
 
 
 def get_error_budget_propagation_settings() -> ErrorBudgetPropagationSettings:

@@ -8,7 +8,6 @@ Error Rate Provider for Load Shedding.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +20,9 @@ class ErrorRateProvider:
     """
 
     def __init__(self):
-        self._error_rates: Dict[str, float] = {}
-        self._success_counts: Dict[str, int] = {}
-        self._failure_counts: Dict[str, int] = {}
+        self._error_rates: dict[str, float] = {}
+        self._success_counts: dict[str, int] = {}
+        self._failure_counts: dict[str, int] = {}
 
     def get_error_rate(self, service_id: str) -> float:
         """
@@ -67,7 +66,7 @@ class ErrorRateProvider:
         if total > 0:
             self._error_rates[service_id] = (failure / total) * 100.0
 
-    def reset(self, service_id: Optional[str] = None) -> None:
+    def reset(self, service_id: str | None = None) -> None:
         """에러율 초기화."""
         if service_id:
             self._error_rates.pop(service_id, None)

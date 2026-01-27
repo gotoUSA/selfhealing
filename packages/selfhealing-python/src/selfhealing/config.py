@@ -20,16 +20,16 @@ import os
 import threading
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, Optional
 
 # Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
-        record_config_env_changed,
-        record_config_cache_invalidated,
         record_config_cache_hit,
+        record_config_cache_invalidated,
         record_config_cache_miss,
+        record_config_env_changed,
     )
+
     HAS_DRIFT_METRICS = True
 except ImportError:
     HAS_DRIFT_METRICS = False
@@ -153,11 +153,19 @@ def get_notification_limits() -> NotificationLimits:
 
     # Fall back to environment variables or defaults
     return NotificationLimits(
-        slack_block_text_limit=int(os.environ.get("SELFHEALING_SLACK_BLOCK_TEXT_LIMIT", 3000)),
-        description_max_length=int(os.environ.get("SELFHEALING_DESCRIPTION_MAX_LENGTH", 500)),
-        action_taken_max_length=int(os.environ.get("SELFHEALING_ACTION_TAKEN_MAX_LENGTH", 200)),
+        slack_block_text_limit=int(
+            os.environ.get("SELFHEALING_SLACK_BLOCK_TEXT_LIMIT", 3000)
+        ),
+        description_max_length=int(
+            os.environ.get("SELFHEALING_DESCRIPTION_MAX_LENGTH", 500)
+        ),
+        action_taken_max_length=int(
+            os.environ.get("SELFHEALING_ACTION_TAKEN_MAX_LENGTH", 200)
+        ),
         title_max_length=int(os.environ.get("SELFHEALING_TITLE_MAX_LENGTH", 150)),
-        notification_timeout_seconds=int(os.environ.get("SELFHEALING_NOTIFICATION_TIMEOUT", 10)),
+        notification_timeout_seconds=int(
+            os.environ.get("SELFHEALING_NOTIFICATION_TIMEOUT", 10)
+        ),
     )
 
 
@@ -175,11 +183,24 @@ def get_forensic_settings() -> ForensicSettings:
     # Fall back to environment variables or defaults
     return ForensicSettings(
         max_stack_frames=int(os.environ.get("SELFHEALING_MAX_STACK_FRAMES", 50)),
-        max_stacktrace_length=int(os.environ.get("SELFHEALING_MAX_STACKTRACE_LENGTH", 10000)),
-        max_context_size_bytes=int(os.environ.get("SELFHEALING_MAX_CONTEXT_SIZE", 65536)),
-        collect_request_body=os.environ.get("SELFHEALING_COLLECT_REQUEST_BODY", "false").lower() == "true",
-        collect_response_body=os.environ.get("SELFHEALING_COLLECT_RESPONSE_BODY", "false").lower() == "true",
-        mask_sensitive_fields=os.environ.get("SELFHEALING_MASK_SENSITIVE_FIELDS", "true").lower() == "true",
+        max_stacktrace_length=int(
+            os.environ.get("SELFHEALING_MAX_STACKTRACE_LENGTH", 10000)
+        ),
+        max_context_size_bytes=int(
+            os.environ.get("SELFHEALING_MAX_CONTEXT_SIZE", 65536)
+        ),
+        collect_request_body=os.environ.get(
+            "SELFHEALING_COLLECT_REQUEST_BODY", "false"
+        ).lower()
+        == "true",
+        collect_response_body=os.environ.get(
+            "SELFHEALING_COLLECT_RESPONSE_BODY", "false"
+        ).lower()
+        == "true",
+        mask_sensitive_fields=os.environ.get(
+            "SELFHEALING_MASK_SENSITIVE_FIELDS", "true"
+        ).lower()
+        == "true",
     )
 
 
@@ -210,10 +231,10 @@ class EventLoggingConfig:
     VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
     # Singleton instance
-    _instance: "EventLoggingConfig | None" = None
+    _instance: EventLoggingConfig | None = None
     _lock = None  # Will be initialized in __new__
 
-    def __new__(cls) -> "EventLoggingConfig":
+    def __new__(cls) -> EventLoggingConfig:
         """Singleton pattern for global configuration."""
         if cls._instance is None:
             import threading
@@ -258,7 +279,9 @@ class EventLoggingConfig:
         """Validate and normalize log level."""
         level = level.upper()
         if level not in self.VALID_LEVELS:
-            raise ValueError(f"Invalid log level: {level}. " f"Valid levels: {self.VALID_LEVELS}")
+            raise ValueError(
+                f"Invalid log level: {level}. " f"Valid levels: {self.VALID_LEVELS}"
+            )
         return level
 
     def _get_value(self, key: str) -> str:
@@ -414,19 +437,47 @@ def get_metric_collection_settings() -> MetricCollectionSettings:
     Loads from environment variables with sensible defaults.
     """
     return MetricCollectionSettings(
-        sync_on_startup=os.environ.get("SELFHEALING_METRICS_SYNC_ON_STARTUP", "true").lower() == "true",
-        scheduled_sync_enabled=os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_ENABLED", "false").lower() == "true",
-        scheduled_sync_interval=int(os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_INTERVAL", "86400")),
-        jitter_enabled=os.environ.get("SELFHEALING_METRICS_JITTER_ENABLED", "true").lower() == "true",
-        jitter_max_delay_seconds=float(os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0")),
+        sync_on_startup=os.environ.get(
+            "SELFHEALING_METRICS_SYNC_ON_STARTUP", "true"
+        ).lower()
+        == "true",
+        scheduled_sync_enabled=os.environ.get(
+            "SELFHEALING_METRICS_SCHEDULED_SYNC_ENABLED", "false"
+        ).lower()
+        == "true",
+        scheduled_sync_interval=int(
+            os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_INTERVAL", "86400")
+        ),
+        jitter_enabled=os.environ.get(
+            "SELFHEALING_METRICS_JITTER_ENABLED", "true"
+        ).lower()
+        == "true",
+        jitter_max_delay_seconds=float(
+            os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0")
+        ),
         adapter_type=os.environ.get("SELFHEALING_METRICS_ADAPTER_TYPE", "null"),
         redis_prefix=os.environ.get("SELFHEALING_METRICS_REDIS_PREFIX", "sh:metrics:"),
-        drift_detection_enabled=os.environ.get("SELFHEALING_METRICS_DRIFT_DETECTION_ENABLED", "true").lower() == "true",
-        drift_warning_threshold=float(os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")),
-        drift_critical_threshold=float(os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")),
-        drift_incident_threshold=float(os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")),
-        drift_incident_enabled=os.environ.get("SELFHEALING_DRIFT_INCIDENT_ENABLED", "true").lower() == "true",
-        drift_alert_enabled=os.environ.get("SELFHEALING_DRIFT_ALERT_ENABLED", "true").lower() == "true",
+        drift_detection_enabled=os.environ.get(
+            "SELFHEALING_METRICS_DRIFT_DETECTION_ENABLED", "true"
+        ).lower()
+        == "true",
+        drift_warning_threshold=float(
+            os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")
+        ),
+        drift_critical_threshold=float(
+            os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")
+        ),
+        drift_incident_threshold=float(
+            os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")
+        ),
+        drift_incident_enabled=os.environ.get(
+            "SELFHEALING_DRIFT_INCIDENT_ENABLED", "true"
+        ).lower()
+        == "true",
+        drift_alert_enabled=os.environ.get(
+            "SELFHEALING_DRIFT_ALERT_ENABLED", "true"
+        ).lower()
+        == "true",
     )
 
 
@@ -450,17 +501,17 @@ class L2StorageConfig:
     """
 
     # 어댑터별 타임아웃 (ms)
-    redis_timeout_ms: int = 50       # Redis: 빠름, 50ms면 충분
-    database_timeout_ms: int = 200   # DB: 부하 시 느려짐, 200ms 필요
-    fallback_timeout_ms: int = 100   # 알 수 없는 어댑터
+    redis_timeout_ms: int = 50  # Redis: 빠름, 50ms면 충분
+    database_timeout_ms: int = 200  # DB: 부하 시 느려짐, 200ms 필요
+    fallback_timeout_ms: int = 100  # 알 수 없는 어댑터
 
     # Shadow Logging 설정
     shadow_log_enabled: bool = True  # Shadow Log 활성화
     shadow_log_max_entries: int = 1000  # 최대 보관 항목 수
 
     # Drift Reconciliation 설정 (Thundering Herd 방지)
-    reconciliation_jitter_min_seconds: float = 0.0   # 최소 지연
-    reconciliation_jitter_max_seconds: float = 5.0   # 최대 지연
+    reconciliation_jitter_min_seconds: float = 0.0  # 최소 지연
+    reconciliation_jitter_max_seconds: float = 5.0  # 최대 지연
 
     # L2 헬스체크 설정
     health_check_interval_seconds: float = 30.0  # 헬스체크 주기
@@ -494,10 +545,10 @@ class L2StorageRuntimeConfig:
     Singleton pattern으로 전역 설정 관리.
     """
 
-    _instance: "L2StorageRuntimeConfig | None" = None
+    _instance: L2StorageRuntimeConfig | None = None
     _lock = None
 
-    def __new__(cls) -> "L2StorageRuntimeConfig":
+    def __new__(cls) -> L2StorageRuntimeConfig:
         """Singleton pattern for global configuration."""
         if cls._instance is None:
             import threading
@@ -520,11 +571,22 @@ class L2StorageRuntimeConfig:
 
         # 환경변수 기본값
         self._env_defaults = {
-            "redis_timeout_ms": int(os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)),
-            "database_timeout_ms": int(os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)),
-            "fallback_timeout_ms": int(os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)),
-            "shadow_log_enabled": os.environ.get("SELFHEALING_L2_SHADOW_LOG_ENABLED", "true").lower() == "true",
-            "shadow_log_max_entries": int(os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)),
+            "redis_timeout_ms": int(
+                os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)
+            ),
+            "database_timeout_ms": int(
+                os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)
+            ),
+            "fallback_timeout_ms": int(
+                os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)
+            ),
+            "shadow_log_enabled": os.environ.get(
+                "SELFHEALING_L2_SHADOW_LOG_ENABLED", "true"
+            ).lower()
+            == "true",
+            "shadow_log_max_entries": int(
+                os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)
+            ),
             "reconciliation_jitter_min_seconds": float(
                 os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MIN", 0.0)
             ),
@@ -534,7 +596,9 @@ class L2StorageRuntimeConfig:
             "health_check_interval_seconds": float(
                 os.environ.get("SELFHEALING_L2_HEALTH_CHECK_INTERVAL", 30.0)
             ),
-            "health_check_timeout_ms": int(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)),
+            "health_check_timeout_ms": int(
+                os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)
+            ),
         }
 
         # 하드코딩 기본값 (업계 사례 기반)
@@ -560,16 +624,46 @@ class L2StorageRuntimeConfig:
     # Field validation rules: (min, max, error_message)
     _FIELD_VALIDATORS: dict = {
         "redis_timeout_ms": (10, 1000, "redis_timeout_ms must be between 10 and 1000"),
-        "database_timeout_ms": (50, 5000, "database_timeout_ms must be between 50 and 5000"),
-        "fallback_timeout_ms": (10, 1000, "fallback_timeout_ms must be between 10 and 1000"),
-        "shadow_log_max_entries": (100, 10000, "shadow_log_max_entries must be between 100 and 10000"),
-        "reconciliation_jitter_min_seconds": (0.0, 60.0, "reconciliation_jitter_min_seconds must be between 0 and 60"),
-        "reconciliation_jitter_max_seconds": (0.0, 60.0, "reconciliation_jitter_max_seconds must be between 0 and 60"),
-        "health_check_interval_seconds": (5.0, 300.0, "health_check_interval_seconds must be between 5 and 300"),
-        "health_check_timeout_ms": (10, 1000, "health_check_timeout_ms must be between 10 and 1000"),
+        "database_timeout_ms": (
+            50,
+            5000,
+            "database_timeout_ms must be between 50 and 5000",
+        ),
+        "fallback_timeout_ms": (
+            10,
+            1000,
+            "fallback_timeout_ms must be between 10 and 1000",
+        ),
+        "shadow_log_max_entries": (
+            100,
+            10000,
+            "shadow_log_max_entries must be between 100 and 10000",
+        ),
+        "reconciliation_jitter_min_seconds": (
+            0.0,
+            60.0,
+            "reconciliation_jitter_min_seconds must be between 0 and 60",
+        ),
+        "reconciliation_jitter_max_seconds": (
+            0.0,
+            60.0,
+            "reconciliation_jitter_max_seconds must be between 0 and 60",
+        ),
+        "health_check_interval_seconds": (
+            5.0,
+            300.0,
+            "health_check_interval_seconds must be between 5 and 300",
+        ),
+        "health_check_timeout_ms": (
+            10,
+            1000,
+            "health_check_timeout_ms must be between 10 and 1000",
+        ),
     }
 
-    def _validate_and_update_field(self, key: str, value: int | float | bool | None) -> tuple[bool, int | float | bool | None]:
+    def _validate_and_update_field(
+        self, key: str, value: int | float | bool | None
+    ) -> tuple[bool, int | float | bool | None]:
         """Validate and update a single config field. Returns (updated, value)."""
         if value is None:
             return False, None
@@ -680,7 +774,9 @@ class L2StorageRuntimeConfig:
             "database": self.get_database_timeout_ms(),
             "django": self.get_database_timeout_ms(),
         }
-        return timeouts.get(adapter_type.lower(), self.get_fallback_timeout_ms()) / 1000.0
+        return (
+            timeouts.get(adapter_type.lower(), self.get_fallback_timeout_ms()) / 1000.0
+        )
 
     def to_dict(self) -> dict:
         """Export current configuration as dict."""
@@ -690,9 +786,15 @@ class L2StorageRuntimeConfig:
             "fallback_timeout_ms": self.get_fallback_timeout_ms(),
             "shadow_log_enabled": self.get_shadow_log_enabled(),
             "shadow_log_max_entries": self.get_shadow_log_max_entries(),
-            "reconciliation_jitter_min_seconds": self._get_value("reconciliation_jitter_min_seconds"),
-            "reconciliation_jitter_max_seconds": self._get_value("reconciliation_jitter_max_seconds"),
-            "health_check_interval_seconds": self._get_value("health_check_interval_seconds"),
+            "reconciliation_jitter_min_seconds": self._get_value(
+                "reconciliation_jitter_min_seconds"
+            ),
+            "reconciliation_jitter_max_seconds": self._get_value(
+                "reconciliation_jitter_max_seconds"
+            ),
+            "health_check_interval_seconds": self._get_value(
+                "health_check_interval_seconds"
+            ),
             "health_check_timeout_ms": self._get_value("health_check_timeout_ms"),
             "last_updated": self._last_updated,
         }
@@ -708,10 +810,19 @@ def get_l2_storage_config() -> L2StorageConfig:
     """
     return L2StorageConfig(
         redis_timeout_ms=int(os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)),
-        database_timeout_ms=int(os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)),
-        fallback_timeout_ms=int(os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)),
-        shadow_log_enabled=os.environ.get("SELFHEALING_L2_SHADOW_LOG_ENABLED", "true").lower() == "true",
-        shadow_log_max_entries=int(os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)),
+        database_timeout_ms=int(
+            os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)
+        ),
+        fallback_timeout_ms=int(
+            os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)
+        ),
+        shadow_log_enabled=os.environ.get(
+            "SELFHEALING_L2_SHADOW_LOG_ENABLED", "true"
+        ).lower()
+        == "true",
+        shadow_log_max_entries=int(
+            os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)
+        ),
         reconciliation_jitter_min_seconds=float(
             os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MIN", 0.0)
         ),
@@ -721,7 +832,9 @@ def get_l2_storage_config() -> L2StorageConfig:
         health_check_interval_seconds=float(
             os.environ.get("SELFHEALING_L2_HEALTH_CHECK_INTERVAL", 30.0)
         ),
-        health_check_timeout_ms=int(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)),
+        health_check_timeout_ms=int(
+            os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)
+        ),
     )
 
 
@@ -750,27 +863,27 @@ def get_l2_storage_runtime_config() -> L2StorageRuntimeConfig:
 class ConfigDriftMonitor:
     """
     환경변수 변경 감지 및 lru_cache 무효화.
-    
+
     v6.3.0: Drift Detection 구현
-    
+
     환경변수가 변경되면 관련 lru_cache를 무효화하고
     Prometheus 메트릭을 기록합니다.
-    
+
     Usage:
         monitor = get_config_drift_monitor()
-        
+
         # 환경변수 변경 확인 후 필요시 캐시 무효화
         if monitor.check_and_invalidate("circuit_breaker", "SELFHEALING_CB_"):
             logger.info("Config changed, cache invalidated")
-        
+
         # 설정 조회 (drift 체크 포함)
         settings = get_circuit_breaker_settings_safe()
     """
-    
-    _instance: Optional["ConfigDriftMonitor"] = None
+
+    _instance: ConfigDriftMonitor | None = None
     _lock = threading.Lock()
-    
-    def __new__(cls) -> "ConfigDriftMonitor":
+
+    def __new__(cls) -> ConfigDriftMonitor:
         """Singleton pattern."""
         if cls._instance is None:
             with cls._lock:
@@ -779,81 +892,78 @@ class ConfigDriftMonitor:
                     instance._init()
                     cls._instance = instance
         return cls._instance
-    
+
     def _init(self) -> None:
         """Initialize internal state."""
-        self._env_hashes: Dict[str, str] = {}
+        self._env_hashes: dict[str, str] = {}
         self._hash_lock = threading.Lock()
-        self._cache_functions: Dict[str, callable] = {}
-    
+        self._cache_functions: dict[str, callable] = {}
+
     def register_cache_function(self, config_type: str, func: callable) -> None:
         """
         config_type에 해당하는 lru_cache 함수 등록.
-        
+
         Args:
             config_type: 설정 타입 (예: "notification_limits")
             func: lru_cache 데코레이터가 적용된 함수
         """
         with self._hash_lock:
             self._cache_functions[config_type] = func
-    
+
     def _compute_env_hash(self, prefix: str) -> str:
         """해당 prefix로 시작하는 환경변수들의 해시 계산."""
-        relevant_vars = {
-            k: v for k, v in os.environ.items() 
-            if k.startswith(prefix)
-        }
+        relevant_vars = {k: v for k, v in os.environ.items() if k.startswith(prefix)}
         content = str(sorted(relevant_vars.items()))
         return hashlib.md5(content.encode()).hexdigest()
-    
+
     def check_and_invalidate(self, config_type: str, prefix: str) -> bool:
         """
         환경변수 변경 확인 후 필요시 캐시 무효화.
-        
+
         Args:
             config_type: 설정 타입
             prefix: 환경변수 prefix (예: "SELFHEALING_CB_")
-            
+
         Returns:
             True if cache was invalidated, False otherwise
         """
         with self._hash_lock:
             current_hash = self._compute_env_hash(prefix)
             previous_hash = self._env_hashes.get(config_type)
-            
+
             if previous_hash and current_hash != previous_hash:
                 # 환경변수 변경 감지
                 record_config_env_changed(config_type)
                 self._invalidate_cache(config_type)
                 self._env_hashes[config_type] = current_hash
                 return True
-            
+
             self._env_hashes[config_type] = current_hash
             return False
-    
+
     def _invalidate_cache(self, config_type: str) -> None:
         """해당 config 타입의 lru_cache 무효화."""
         record_config_cache_invalidated(config_type)
-        
+
         # 등록된 함수가 있으면 cache_clear 호출
         func = self._cache_functions.get(config_type)
         if func and hasattr(func, "cache_clear"):
             func.cache_clear()
-    
-    def get_stats(self) -> Dict[str, str]:
+
+    def get_stats(self) -> dict[str, str]:
         """현재 저장된 해시값들 반환."""
         with self._hash_lock:
             return self._env_hashes.copy()
 
 
 # 싱글톤 인스턴스
-_config_drift_monitor: Optional[ConfigDriftMonitor] = None
+_config_drift_monitor: ConfigDriftMonitor | None = None
 
 
 def get_config_drift_monitor() -> ConfigDriftMonitor:
     """
     Get the singleton ConfigDriftMonitor instance.
-    
+
     Returns:
         ConfigDriftMonitor singleton
     """

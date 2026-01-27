@@ -16,11 +16,10 @@ import logging
 import os
 import threading
 import time
-from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from selfhealing.settings.hash_chain import get_hash_chain_settings
 
@@ -56,67 +55,68 @@ def _get_integrity_trail_max_entries() -> int:
 # Monotonic Timer for ClockSkew Protection
 # =============================================================================
 
+
 class MonotonicTimer:
     """
     Monotonic clock-based timer for ClockSkew protection.
-    
+
     Problem:
         System time can be manipulated (NTP sync, manual change, VM snapshot).
         Using datetime.now() for TTL checks can lead to:
         - Premature expiration (clock jumps forward)
         - Never expiring (clock jumps backward)
-    
+
     Solution:
         Use time.monotonic() which only moves forward and is immune
         to system time changes. This ensures consistent TTL behavior
         regardless of clock manipulation.
-    
+
     Usage:
         timer = MonotonicTimer(ttl_seconds=30)
         timer.start()
-        
+
         # Later...
         if timer.is_expired():
             handle_expiration()
     """
-    
+
     def __init__(self, ttl_seconds: float):
         """
         Initialize monotonic timer.
-        
+
         Args:
             ttl_seconds: Time-to-live in seconds
         """
         self.ttl_seconds = ttl_seconds
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         self._is_started = False
-    
+
     def start(self) -> "MonotonicTimer":
         """Start the timer using monotonic clock."""
         self._start_time = time.monotonic()
         self._is_started = True
         return self
-    
+
     def is_started(self) -> bool:
         """Check if timer has been started."""
         return self._is_started
-    
+
     def elapsed_seconds(self) -> float:
         """Get elapsed time since start in seconds."""
         if not self._is_started or self._start_time is None:
             return 0.0
         return time.monotonic() - self._start_time
-    
+
     def remaining_seconds(self) -> float:
         """Get remaining time before expiration."""
         return max(0.0, self.ttl_seconds - self.elapsed_seconds())
-    
+
     def is_expired(self) -> bool:
         """Check if timer has expired."""
         if not self._is_started:
             return False
         return self.elapsed_seconds() >= self.ttl_seconds
-    
+
     def reset(self) -> "MonotonicTimer":
         """Reset timer to start fresh."""
         self._start_time = time.monotonic()
@@ -126,37 +126,37 @@ class MonotonicTimer:
 class MonotonicTimestamp:
     """
     Generates monotonically increasing timestamps for hash chain entries.
-    
+
     Problem:
         If system clock jumps backward, entries could have earlier timestamps
         than previous entries, breaking the assumption of temporal ordering.
-    
+
     Solution:
         Track the last timestamp and ensure new timestamps are always
         greater than the previous one, even if system clock goes backward.
-    
+
     Usage:
         ts = MonotonicTimestamp()
-        
+
         entry["timestamp"] = ts.now()  # Always >= previous timestamp
     """
-    
+
     def __init__(self):
         """Initialize monotonic timestamp generator."""
-        self._last_timestamp: Optional[datetime] = None
+        self._last_timestamp: datetime | None = None
         self._monotonic_offset: float = 0.0
         self._lock = threading.Lock()
-    
+
     def now(self) -> str:
         """
         Get current timestamp, guaranteed to be >= previous timestamp.
-        
+
         Returns:
             ISO format timestamp string
         """
         with self._lock:
             current = datetime.now(timezone.utc)
-            
+
             if self._last_timestamp is not None:
                 if current <= self._last_timestamp:
                     # Clock went backward - adjust to maintain monotonicity
@@ -171,17 +171,16 @@ class MonotonicTimestamp:
                 else:
                     # Clock is normal - reset offset
                     self._monotonic_offset = 0.0
-            
+
             self._last_timestamp = current
             return current.isoformat()
-    
-    def get_stats(self) -> Dict[str, Any]:
+
+    def get_stats(self) -> dict[str, Any]:
         """Get statistics about clock adjustments."""
         return {
             "total_offset_seconds": self._monotonic_offset,
             "last_timestamp": (
-                self._last_timestamp.isoformat()
-                if self._last_timestamp else None
+                self._last_timestamp.isoformat() if self._last_timestamp else None
             ),
         }
 
@@ -190,17 +189,19 @@ class MonotonicTimestamp:
 # Hash Chain WAL Integration
 # =============================================================================
 
+
 @dataclass
 class HashChainWALEntry:
     """WAL entry for hash chain operations."""
+
     sequence: int
     operation: str  # "WRITE", "ANCHOR", "RECONCILE"
-    entry_data: Dict[str, Any]
+    entry_data: dict[str, Any]
     expected_hash: str
     timestamp: str
     status: str = "PENDING"  # "PENDING", "COMMITTED", "ABORTED"
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "seq": self.sequence,
             "op": self.operation,
@@ -209,9 +210,9 @@ class HashChainWALEntry:
             "ts": self.timestamp,
             "status": self.status,
         }
-    
+
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "HashChainWALEntry":
+    def from_dict(cls, d: dict[str, Any]) -> "HashChainWALEntry":
         return cls(
             sequence=d["seq"],
             operation=d["op"],
@@ -225,17 +226,17 @@ class HashChainWALEntry:
 class HashChainWAL:
     """
     Write-Ahead Log specifically for hash chain operations.
-    
+
     Provides zero-data-loss guarantee by:
     1. Writing to WAL before Redis/file operations
     2. Recovering uncommitted entries on startup
     3. Replaying failed operations
-    
+
     Integration with existing WAL:
         Reuses the WriteAheadLog class from audit/wal.py
         but with hash-chain specific entry format and recovery logic.
     """
-    
+
     def __init__(
         self,
         wal_dir: Path,
@@ -244,7 +245,7 @@ class HashChainWAL:
     ):
         """
         Initialize hash chain WAL.
-        
+
         Args:
             wal_dir: Directory for WAL files
             max_file_size_mb: Max size before rotation
@@ -252,29 +253,29 @@ class HashChainWAL:
         """
         self._wal_dir = Path(wal_dir)
         self._wal_dir.mkdir(parents=True, exist_ok=True)
-        self._current_file: Optional[Path] = None
+        self._current_file: Path | None = None
         self._file_handle = None
         self._lock = threading.RLock()
         self._sequence = 0
         self._max_size = max_file_size_mb * 1024 * 1024
         self._sync_on_write = sync_on_write
         self._timestamp_gen = MonotonicTimestamp()
-        
+
         # Load state
         self._load_sequence()
-    
+
     def _get_wal_file(self) -> Path:
         """Get current WAL file path."""
         return self._wal_dir / "hash_chain_wal.jsonl"
-    
+
     def _load_sequence(self) -> None:
         """Load last sequence from WAL file."""
         wal_file = self._get_wal_file()
         if not wal_file.exists():
             return
-        
+
         try:
-            with open(wal_file, "r", encoding="utf-8") as f:
+            with open(wal_file, encoding="utf-8") as f:
                 for line in f:
                     try:
                         entry = json.loads(line.strip())
@@ -285,34 +286,34 @@ class HashChainWAL:
                         continue
         except Exception as e:
             logger.warning(f"[HashChainWAL] Failed to load sequence: {e}")
-    
+
     def _ensure_file_open(self) -> None:
         """Ensure WAL file is open for writing."""
         if self._file_handle is None:
             wal_file = self._get_wal_file()
             self._file_handle = open(wal_file, "a", encoding="utf-8")
             self._current_file = wal_file
-    
+
     def write_pending(
         self,
         operation: str,
-        entry_data: Dict[str, Any],
+        entry_data: dict[str, Any],
         expected_hash: str,
     ) -> int:
         """
         Write a PENDING entry to WAL.
-        
+
         Args:
             operation: Operation type (WRITE, ANCHOR, RECONCILE)
             entry_data: The audit entry data
             expected_hash: Expected hash after operation
-        
+
         Returns:
             WAL sequence number
         """
         with self._lock:
             self._sequence += 1
-            
+
             wal_entry = HashChainWALEntry(
                 sequence=self._sequence,
                 operation=operation,
@@ -321,93 +322,93 @@ class HashChainWAL:
                 timestamp=self._timestamp_gen.now(),
                 status="PENDING",
             )
-            
+
             self._ensure_file_open()
             line = json.dumps(wal_entry.to_dict(), default=str) + "\n"
             self._file_handle.write(line)
-            
+
             if self._sync_on_write:
                 self._file_handle.flush()
                 os.fsync(self._file_handle.fileno())
-            
+
             return self._sequence
-    
+
     def mark_committed(self, sequence: int) -> bool:
         """
         Mark a WAL entry as committed.
-        
+
         Instead of modifying the entry, appends a COMMITTED marker.
         Recovery will scan for uncommitted entries.
         """
         with self._lock:
             self._ensure_file_open()
-            
+
             commit_marker = {
                 "seq": sequence,
                 "status": "COMMITTED",
                 "committed_at": self._timestamp_gen.now(),
             }
-            
+
             line = json.dumps(commit_marker) + "\n"
             self._file_handle.write(line)
-            
+
             if self._sync_on_write:
                 self._file_handle.flush()
                 os.fsync(self._file_handle.fileno())
-            
+
             return True
-    
+
     def mark_aborted(self, sequence: int, reason: str) -> bool:
         """Mark a WAL entry as aborted."""
         with self._lock:
             self._ensure_file_open()
-            
+
             abort_marker = {
                 "seq": sequence,
                 "status": "ABORTED",
                 "reason": reason,
                 "aborted_at": self._timestamp_gen.now(),
             }
-            
+
             line = json.dumps(abort_marker) + "\n"
             self._file_handle.write(line)
-            
+
             if self._sync_on_write:
                 self._file_handle.flush()
                 os.fsync(self._file_handle.fileno())
-            
+
             return True
-    
-    def get_uncommitted_entries(self) -> List[HashChainWALEntry]:
+
+    def get_uncommitted_entries(self) -> list[HashChainWALEntry]:
         """
         Get all uncommitted WAL entries for recovery.
-        
+
         Scans WAL file and returns entries that were not committed or aborted.
-        
+
         Returns:
             List of uncommitted entries, oldest first
         """
         wal_file = self._get_wal_file()
         if not wal_file.exists():
             return []
-        
+
         # Track status by sequence
-        entries: Dict[int, HashChainWALEntry] = {}
+        entries: dict[int, HashChainWALEntry] = {}
         committed_seqs: set = set()
         aborted_seqs: set = set()
-        
+
         try:
-            with open(wal_file, "r", encoding="utf-8") as f:
+            with open(wal_file, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
                         continue
-                    
+
                     try:
                         data = json.loads(line)
                         seq = data.get("seq", 0)
                         status = data.get("status", "")
-                        
+
                         if status == "COMMITTED":
                             committed_seqs.add(seq)
                         elif status == "ABORTED":
@@ -416,26 +417,26 @@ class HashChainWAL:
                             entries[seq] = HashChainWALEntry.from_dict(data)
                     except json.JSONDecodeError:
                         continue
-            
+
             # Filter uncommitted
             uncommitted = []
             for seq, entry in sorted(entries.items()):
                 if seq not in committed_seqs and seq not in aborted_seqs:
                     uncommitted.append(entry)
-            
+
             return uncommitted
-            
+
         except Exception as e:
             logger.error(f"[HashChainWAL] Failed to get uncommitted entries: {e}")
             return []
-    
+
     def compact(self, keep_sequences_after: int = 0) -> int:
         """
         Compact WAL by removing old committed/aborted entries.
-        
+
         Args:
             keep_sequences_after: Keep entries with seq > this value
-        
+
         Returns:
             Number of entries removed
         """
@@ -443,17 +444,17 @@ class HashChainWAL:
             wal_file = self._get_wal_file()
             if not wal_file.exists():
                 return 0
-            
+
             # Read and filter
             kept_lines = []
             removed_count = 0
-            
-            with open(wal_file, "r", encoding="utf-8") as f:
+
+            with open(wal_file, encoding="utf-8") as f:
                 for line in f:
                     try:
                         data = json.loads(line.strip())
                         seq = data.get("seq", 0)
-                        
+
                         if seq > keep_sequences_after:
                             kept_lines.append(line)
                         else:
@@ -461,19 +462,19 @@ class HashChainWAL:
                     except json.JSONDecodeError:
                         # Keep malformed lines for safety
                         kept_lines.append(line)
-            
+
             # Close current file
             if self._file_handle:
                 self._file_handle.close()
                 self._file_handle = None
-            
+
             # Rewrite file
             with open(wal_file, "w", encoding="utf-8") as f:
                 f.writelines(kept_lines)
-            
+
             logger.info(f"[HashChainWAL] Compacted: removed {removed_count} entries")
             return removed_count
-    
+
     def close(self) -> None:
         """Close WAL file."""
         with self._lock:
@@ -487,42 +488,43 @@ class HashChainWAL:
 # Atomic Merge Swap (Global Lock for Reconciliation)
 # =============================================================================
 
+
 class AtomicMergeSwap:
     """
     Provides atomic swap for hash chain reconciliation.
-    
+
     Problem:
         Multiple pods may attempt reconciliation simultaneously.
         Without coordination, this causes:
         - Duplicate sequence numbers
         - Chain divergence
         - Data corruption
-    
+
     Solution:
         Use a global Redis lock during the entire reconciliation process.
         Only one pod can reconcile at a time.
-    
+
     Usage:
         with AtomicMergeSwap(redis, "myprefix:") as swap:
             if swap.acquired:
                 do_reconciliation()
     """
-    
+
     LOCK_KEY = "audit:hash_chain:reconcile:global_lock"
-    
+
     # Legacy constant for backward compatibility
     DEFAULT_TIMEOUT_SECONDS = 300  # 5 minutes
-    
+
     def __init__(
         self,
         redis_client: Any,
         key_prefix: str = "selfhealing:",
-        timeout_seconds: Optional[float] = None,
-        blocking_timeout: Optional[float] = None,
+        timeout_seconds: float | None = None,
+        blocking_timeout: float | None = None,
     ):
         """
         Initialize atomic merge swap.
-        
+
         Args:
             redis_client: Redis client instance
             key_prefix: Prefix for Redis keys
@@ -531,21 +533,29 @@ class AtomicMergeSwap:
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._timeout = timeout_seconds if timeout_seconds is not None else _get_merge_swap_timeout()
-        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_merge_swap_blocking_timeout()
-        self._lock_token: Optional[str] = None
+        self._timeout = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else _get_merge_swap_timeout()
+        )
+        self._blocking_timeout = (
+            blocking_timeout
+            if blocking_timeout is not None
+            else _get_merge_swap_blocking_timeout()
+        )
+        self._lock_token: str | None = None
         self.acquired = False
-    
+
     def _get_lock_key(self) -> str:
         return f"{self._key_prefix}{self.LOCK_KEY}"
-    
+
     def __enter__(self) -> "AtomicMergeSwap":
         """Acquire global lock."""
         import uuid
-        
+
         lock_key = self._get_lock_key()
         self._lock_token = str(uuid.uuid4())
-        
+
         try:
             # Try to acquire lock with blocking
             start_time = time.monotonic()
@@ -556,33 +566,33 @@ class AtomicMergeSwap:
                     nx=True,
                     ex=int(self._timeout),
                 )
-                
+
                 if result:
                     self.acquired = True
                     logger.info("[AtomicMergeSwap] Global lock acquired")
                     return self
-                
+
                 time.sleep(0.1)
-            
+
             logger.warning(
                 "[AtomicMergeSwap] Failed to acquire global lock "
                 f"(timeout: {self._blocking_timeout}s)"
             )
             self.acquired = False
             return self
-            
+
         except Exception as e:
             logger.error(f"[AtomicMergeSwap] Lock acquisition error: {e}")
             self.acquired = False
             return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Release global lock."""
         if not self.acquired or not self._lock_token:
             return
-        
+
         lock_key = self._get_lock_key()
-        
+
         try:
             # Atomic check-and-delete using Lua script
             lua_script = """
@@ -592,17 +602,17 @@ class AtomicMergeSwap:
                 return 0
             end
             """
-            
+
             result = self._redis.eval(lua_script, 1, lock_key, self._lock_token)
-            
+
             if result:
                 logger.info("[AtomicMergeSwap] Global lock released")
             else:
                 logger.warning("[AtomicMergeSwap] Lock was already released or stolen")
-                
+
         except Exception as e:
             logger.error(f"[AtomicMergeSwap] Lock release error: {e}")
-        
+
         self.acquired = False
         self._lock_token = None
 
@@ -611,41 +621,42 @@ class AtomicMergeSwap:
 # Sharded Date Locks (Distributed Lock Contention)
 # =============================================================================
 
+
 class ShardedDateLock:
     """
     Date-sharded distributed lock for parallel reconciliation.
-    
+
     Problem:
         A single global lock prevents parallel processing of different dates.
         If reconciliation takes 5 minutes and there are 10 days of backlog,
         it takes 50 minutes sequentially.
-    
+
     Solution:
         Use date-specific locks so different pods can reconcile
         different dates in parallel.
-    
+
     Usage:
         with ShardedDateLock(redis, "2024-01-15") as lock:
             if lock.acquired:
                 reconcile_date("2024-01-15")
     """
-    
+
     LOCK_KEY_PREFIX = "audit:hash_chain:reconcile:date_lock:"
-    
+
     # Legacy constant for backward compatibility
     DEFAULT_TIMEOUT_SECONDS = 120  # 2 minutes per date
-    
+
     def __init__(
         self,
         redis_client: Any,
         date: str,
         key_prefix: str = "selfhealing:",
-        timeout_seconds: Optional[float] = None,
-        blocking_timeout: Optional[float] = None,
+        timeout_seconds: float | None = None,
+        blocking_timeout: float | None = None,
     ):
         """
         Initialize date-specific lock.
-        
+
         Args:
             redis_client: Redis client instance
             date: Date string (YYYY-MM-DD)
@@ -656,21 +667,27 @@ class ShardedDateLock:
         self._redis = redis_client
         self._date = date
         self._key_prefix = key_prefix
-        self._timeout = timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
-        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_date_lock_blocking_timeout()
-        self._lock_token: Optional[str] = None
+        self._timeout = (
+            timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
+        )
+        self._blocking_timeout = (
+            blocking_timeout
+            if blocking_timeout is not None
+            else _get_date_lock_blocking_timeout()
+        )
+        self._lock_token: str | None = None
         self.acquired = False
-    
+
     def _get_lock_key(self) -> str:
         return f"{self._key_prefix}{self.LOCK_KEY_PREFIX}{self._date}"
-    
+
     def __enter__(self) -> "ShardedDateLock":
         """Try to acquire date-specific lock."""
         import uuid
-        
+
         lock_key = self._get_lock_key()
         self._lock_token = str(uuid.uuid4())
-        
+
         try:
             start_time = time.monotonic()
             while time.monotonic() - start_time < self._blocking_timeout:
@@ -680,30 +697,30 @@ class ShardedDateLock:
                     nx=True,
                     ex=int(self._timeout),
                 )
-                
+
                 if result:
                     self.acquired = True
                     logger.debug(f"[ShardedDateLock] Lock acquired for {self._date}")
                     return self
-                
+
                 time.sleep(0.05)
-            
+
             # Don't log warning - normal for another pod to have lock
             self.acquired = False
             return self
-            
+
         except Exception as e:
             logger.error(f"[ShardedDateLock] Lock error for {self._date}: {e}")
             self.acquired = False
             return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Release date-specific lock."""
         if not self.acquired or not self._lock_token:
             return
-        
+
         lock_key = self._get_lock_key()
-        
+
         try:
             lua_script = """
             if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -714,10 +731,10 @@ class ShardedDateLock:
             """
             self._redis.eval(lua_script, 1, lock_key, self._lock_token)
             logger.debug(f"[ShardedDateLock] Lock released for {self._date}")
-            
+
         except Exception as e:
             logger.error(f"[ShardedDateLock] Release error for {self._date}: {e}")
-        
+
         self.acquired = False
         self._lock_token = None
 
@@ -726,8 +743,10 @@ class ShardedDateLock:
 # Integrity Audit Trail
 # =============================================================================
 
+
 class IntegrityEventType:
     """Types of integrity-related events."""
+
     CHAIN_VERIFIED = "chain_verified"
     CHAIN_BROKEN = "chain_broken"
     RECONCILIATION_STARTED = "reconciliation_started"
@@ -743,30 +762,30 @@ class IntegrityEventType:
 class IntegrityAuditTrail:
     """
     Records all integrity-related events for forensic analysis.
-    
+
     Stored separately from the main audit log to avoid circular dependency
     (integrity events about the audit log should not be in the log itself).
-    
+
     Events are stored in:
     1. Redis list (for recent events)
     2. Dedicated file (for permanent record)
     """
-    
+
     REDIS_KEY = "audit:hash_chain:integrity_trail"
-    
+
     # Legacy constant for backward compatibility
     MAX_REDIS_ENTRIES = 1000
-    
+
     def __init__(
         self,
-        redis_client: Optional[Any] = None,
-        log_dir: Optional[Path] = None,
+        redis_client: Any | None = None,
+        log_dir: Path | None = None,
         key_prefix: str = "selfhealing:",
-        max_redis_entries: Optional[int] = None,
+        max_redis_entries: int | None = None,
     ):
         """
         Initialize integrity audit trail.
-        
+
         Args:
             redis_client: Redis client (optional, for Redis storage)
             log_dir: Directory for file storage (optional)
@@ -776,36 +795,40 @@ class IntegrityAuditTrail:
         self._redis = redis_client
         self._log_dir = Path(log_dir) if log_dir else None
         self._key_prefix = key_prefix
-        self._max_redis_entries = max_redis_entries if max_redis_entries is not None else _get_integrity_trail_max_entries()
+        self._max_redis_entries = (
+            max_redis_entries
+            if max_redis_entries is not None
+            else _get_integrity_trail_max_entries()
+        )
         self._lock = threading.Lock()
-        
+
         if self._log_dir:
             self._log_dir.mkdir(parents=True, exist_ok=True)
-    
+
     def _get_redis_key(self) -> str:
         return f"{self._key_prefix}{self.REDIS_KEY}"
-    
+
     def _get_log_file(self) -> Path:
         if not self._log_dir:
             raise ValueError("log_dir not configured")
         return self._log_dir / "integrity_trail.jsonl"
-    
+
     def record(
         self,
         event_type: str,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
         severity: str = "INFO",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Record an integrity event.
-        
+
         Args:
             event_type: Type of event (from IntegrityEventType)
             message: Human-readable description
             details: Additional structured data
             severity: INFO, WARNING, ERROR, CRITICAL
-        
+
         Returns:
             The recorded event
         """
@@ -815,9 +838,11 @@ class IntegrityAuditTrail:
             "details": details or {},
             "severity": severity,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "hostname": os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown")),
+            "hostname": os.environ.get(
+                "HOSTNAME", os.environ.get("POD_NAME", "unknown")
+            ),
         }
-        
+
         with self._lock:
             # Write to Redis
             if self._redis:
@@ -827,7 +852,7 @@ class IntegrityAuditTrail:
                     self._redis.ltrim(redis_key, 0, self._max_redis_entries - 1)
                 except Exception as e:
                     logger.warning(f"[IntegrityTrail] Redis write failed: {e}")
-            
+
             # Write to file
             if self._log_dir:
                 try:
@@ -836,22 +861,22 @@ class IntegrityAuditTrail:
                         f.write(json.dumps(event) + "\n")
                 except Exception as e:
                     logger.warning(f"[IntegrityTrail] File write failed: {e}")
-        
+
         # Also log to standard logger
         log_method = getattr(logger, severity.lower(), logger.info)
         log_method(f"[IntegrityTrail] {event_type}: {message}")
-        
+
         return event
-    
-    def get_recent_events(self, count: int = 50) -> List[Dict[str, Any]]:
+
+    def get_recent_events(self, count: int = 50) -> list[dict[str, Any]]:
         """Get recent events from Redis."""
         if not self._redis:
             return []
-        
+
         try:
             redis_key = self._get_redis_key()
             entries = self._redis.lrange(redis_key, 0, count - 1)
-            
+
             events = []
             for entry in entries:
                 try:
@@ -859,18 +884,18 @@ class IntegrityAuditTrail:
                     events.append(json.loads(data))
                 except (json.JSONDecodeError, AttributeError):
                     continue
-            
+
             return events
-            
+
         except Exception as e:
             logger.error(f"[IntegrityTrail] Failed to get events: {e}")
             return []
-    
+
     def get_events_by_type(
         self,
         event_type: str,
         count: int = 50,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get events of a specific type."""
         all_events = self.get_recent_events(count * 2)  # Over-fetch to filter
         return [e for e in all_events if e.get("type") == event_type][:count]
@@ -880,10 +905,11 @@ class IntegrityAuditTrail:
 # Integration Helper
 # =============================================================================
 
+
 class HashChainSafetyManager:
     """
     Unified manager for hash chain safety components.
-    
+
     Provides centralized access to all safety features:
     - timestamp: MonotonicTimestamp for clock-skew-safe timestamps
     - wal: HashChainWAL for crash recovery
@@ -891,16 +917,16 @@ class HashChainSafetyManager:
     - get_atomic_swap(): Global lock for reconciliation
     - get_date_lock(): Per-date lock for parallel processing
     """
-    
+
     def __init__(
         self,
-        redis_client: Optional[Any] = None,
-        log_dir: Optional[Path] = None,
+        redis_client: Any | None = None,
+        log_dir: Path | None = None,
         key_prefix: str = "selfhealing:",
     ):
         """
         Initialize hash chain safety manager.
-        
+
         Args:
             redis_client: Redis client for distributed coordination
             log_dir: Base directory for logs and WAL
@@ -909,21 +935,21 @@ class HashChainSafetyManager:
         self._redis = redis_client
         self._log_dir = Path(log_dir) if log_dir else Path("logs/audit")
         self._key_prefix = key_prefix
-        
+
         # Initialize components
         self.timestamp = MonotonicTimestamp()
-        
+
         self.wal = HashChainWAL(
             wal_dir=self._log_dir / "hash_chain_wal",
             sync_on_write=True,
         )
-        
+
         self.audit_trail = IntegrityAuditTrail(
             redis_client=redis_client,
             log_dir=self._log_dir / "integrity",
             key_prefix=key_prefix,
         )
-    
+
     def get_atomic_swap(self, timeout_seconds: float = 300) -> AtomicMergeSwap:
         """Get atomic merge swap context manager."""
         if not self._redis:
@@ -933,7 +959,7 @@ class HashChainSafetyManager:
             key_prefix=self._key_prefix,
             timeout_seconds=timeout_seconds,
         )
-    
+
     def get_date_lock(self, date: str, timeout_seconds: float = 120) -> ShardedDateLock:
         """Get date-specific lock context manager."""
         if not self._redis:
@@ -944,7 +970,7 @@ class HashChainSafetyManager:
             key_prefix=self._key_prefix,
             timeout_seconds=timeout_seconds,
         )
-    
+
     def close(self) -> None:
         """Clean up resources."""
         self.wal.close()

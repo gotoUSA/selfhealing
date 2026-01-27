@@ -15,18 +15,18 @@ Related:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from datetime import timedelta
+from typing import Any, TypeVar
 
 from selfhealing.interfaces.task_queue import (
+    ScheduleInfo,
+    TaskNotFoundError,
+    TaskOptions,
+    TaskPriority,
     TaskQueueInterface,
     TaskResult,
     TaskStatus,
-    TaskOptions,
-    TaskPriority,
-    ScheduleInfo,
-    TaskNotFoundError,
     TaskTimeoutError,
 )
 from selfhealing.settings.celery_task import get_celery_task_settings
@@ -62,7 +62,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
     def __init__(
         self,
-        app: Optional[Any] = None,
+        app: Any | None = None,
         default_queue: str = "default",
     ) -> None:
         """
@@ -94,16 +94,16 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
     def task(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         bind: bool = False,
         max_retries: int = 3,
         autoretry_for: tuple[type[Exception], ...] = (),
         retry_backoff: bool = True,
         retry_backoff_max: int = 600,
         retry_jitter: bool = True,
-        rate_limit: Optional[str] = None,
-        time_limit: Optional[int] = None,
-        soft_time_limit: Optional[int] = None,
+        rate_limit: str | None = None,
+        time_limit: int | None = None,
+        soft_time_limit: int | None = None,
     ) -> Callable[[F], F]:
         """
         Decorator to register a function as a Celery task.
@@ -163,8 +163,8 @@ class CeleryTaskAdapter(TaskQueueInterface):
         self,
         task_name: str,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        options: Optional[TaskOptions] = None,
+        kwargs: dict | None = None,
+        options: TaskOptions | None = None,
     ) -> str:
         """
         Enqueue a task for async execution.
@@ -206,7 +206,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
     def enqueue_many(
         self,
         tasks: list[tuple[str, tuple, dict]],
-        options: Optional[TaskOptions] = None,
+        options: TaskOptions | None = None,
     ) -> list[str]:
         """
         Enqueue multiple tasks using Celery's group.
@@ -249,7 +249,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
     def get_result(
         self,
         task_id: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskResult:
         """
         Get task result from Celery result backend.
@@ -332,8 +332,8 @@ class CeleryTaskAdapter(TaskQueueInterface):
     def retry(
         self,
         task_id: str,
-        countdown: Optional[int] = None,
-        max_retries: Optional[int] = None,
+        countdown: int | None = None,
+        max_retries: int | None = None,
     ) -> str:
         """
         Retry a failed task by re-enqueueing it.
@@ -381,8 +381,8 @@ class CeleryTaskAdapter(TaskQueueInterface):
         task_name: str,
         schedule: timedelta,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        name: Optional[str] = None,
+        kwargs: dict | None = None,
+        name: str | None = None,
     ) -> str:
         """
         Schedule a periodic task.
@@ -425,7 +425,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
         return False
 
-    def get_schedule(self, schedule_id: str) -> Optional[ScheduleInfo]:
+    def get_schedule(self, schedule_id: str) -> ScheduleInfo | None:
         """Get information about a periodic schedule."""
         return self._schedules.get(schedule_id)
 

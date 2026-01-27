@@ -15,7 +15,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -123,7 +122,11 @@ class ChaosSafetyCapsSettings(BaseSettings):
         description="TLS 실패 최대 발생률 (0.0-1.0)",
     )
 
-    @field_validator("disk_io_max_failure_rate", "pool_exhaustion_max_percentage", "tls_failure_max_rate")
+    @field_validator(
+        "disk_io_max_failure_rate",
+        "pool_exhaustion_max_percentage",
+        "tls_failure_max_rate",
+    )
     @classmethod
     def validate_rate(cls, v: float) -> float:
         """비율이 합리적인지 확인."""
@@ -139,7 +142,7 @@ class ChaosSafetyCapsSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[ChaosSafetyCapsSettings] = None
+_settings: ChaosSafetyCapsSettings | None = None
 
 
 def get_chaos_safety_caps_settings() -> ChaosSafetyCapsSettings:

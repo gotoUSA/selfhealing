@@ -10,7 +10,6 @@ import logging
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime
-from typing import List, Optional
 
 from selfhealing.interfaces.repositories import CircuitBreakerStateData
 
@@ -20,7 +19,9 @@ logger = logging.getLogger(__name__)
 class RepositoryOperationsMixin:
     """Mixin providing repository interface operations."""
 
-    def get_by_service_name(self, service_name: str) -> Optional[CircuitBreakerStateData]:
+    def get_by_service_name(
+        self, service_name: str
+    ) -> CircuitBreakerStateData | None:
         """L1에서 조회. L1에 없으면 L2 확인 후 L1에 캐시."""
         result = self._l1.get_by_service_name(service_name)
 
@@ -63,9 +64,9 @@ class RepositoryOperationsMixin:
         self,
         service_name: str,
         state: str,
-        failure_count: Optional[int] = None,
-        success_count: Optional[int] = None,
-        opened_at: Optional[datetime] = None,
+        failure_count: int | None = None,
+        success_count: int | None = None,
+        opened_at: datetime | None = None,
     ) -> bool:
         """L1 업데이트 후 L2 비동기 동기화."""
         result = self._l1.update_state(
@@ -86,7 +87,7 @@ class RepositoryOperationsMixin:
     def increment_failure_count(
         self,
         service_name: str,
-        last_failure_at: Optional[datetime] = None,
+        last_failure_at: datetime | None = None,
     ) -> int:
         """L1에서 카운트 증가 후 L2 동기화."""
         result = self._l1.increment_failure_count(service_name, last_failure_at)
@@ -122,7 +123,7 @@ class RepositoryOperationsMixin:
     def set_open(
         self,
         service_name: str,
-        opened_at: Optional[datetime] = None,
+        opened_at: datetime | None = None,
     ) -> bool:
         """L1에서 open 설정 후 L2 동기화."""
         result = self._l1.set_open(service_name, opened_at)
@@ -134,7 +135,7 @@ class RepositoryOperationsMixin:
 
         return result
 
-    def set_closed(self, service_name: str, reason: Optional[str] = None) -> tuple:
+    def set_closed(self, service_name: str, reason: str | None = None) -> tuple:
         """L1에서 closed 설정 후 L2 동기화."""
         result = self._l1.set_closed(service_name, reason)
 
@@ -145,11 +146,11 @@ class RepositoryOperationsMixin:
 
         return result
 
-    def get_all_open(self) -> List[CircuitBreakerStateData]:
+    def get_all_open(self) -> list[CircuitBreakerStateData]:
         """L1에서 open 상태 조회."""
         return self._l1.get_all_open()
 
-    def get_all(self) -> List[CircuitBreakerStateData]:
+    def get_all(self) -> list[CircuitBreakerStateData]:
         """L1에서 전체 조회."""
         return self._l1.get_all()
 
@@ -181,7 +182,7 @@ class RepositoryOperationsMixin:
         self._sync_to_l2_async(service_name, result)
         return result
 
-    def get_all_states(self) -> List[CircuitBreakerStateData]:
+    def get_all_states(self) -> list[CircuitBreakerStateData]:
         """L1에서 전체 상태 조회."""
         return self._l1.get_all_states()
 
@@ -200,11 +201,13 @@ class RepositoryOperationsMixin:
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         ttl_minutes: int = 90,
     ) -> tuple:
         """L1에서 강제 open 후 L2 동기화."""
-        result = self._l1.atomic_force_open(service_name, reason, controlled_by_id, ttl_minutes)
+        result = self._l1.atomic_force_open(
+            service_name, reason, controlled_by_id, ttl_minutes
+        )
 
         if result[0]:
             updated = self._l1.get_by_service_name(service_name)
@@ -217,7 +220,7 @@ class RepositoryOperationsMixin:
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple:
         """L1에서 강제 close 후 L2 동기화."""
         result = self._l1.atomic_force_close(service_name, reason, controlled_by_id)
@@ -233,7 +236,7 @@ class RepositoryOperationsMixin:
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple:
         """L1에서 리셋 후 L2 동기화."""
         result = self._l1.atomic_reset(service_name, reason, controlled_by_id)
@@ -248,12 +251,14 @@ class RepositoryOperationsMixin:
     def set_manual_control(
         self,
         service_name: str,
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         reason: str = "",
         ttl_minutes: int = 90,
     ) -> bool:
         """L1에서 수동 제어 설정 후 L2 동기화."""
-        result = self._l1.set_manual_control(service_name, controlled_by_id, reason, ttl_minutes)
+        result = self._l1.set_manual_control(
+            service_name, controlled_by_id, reason, ttl_minutes
+        )
 
         if result:
             updated = self._l1.get_by_service_name(service_name)

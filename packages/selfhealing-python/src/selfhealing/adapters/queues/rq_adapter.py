@@ -8,15 +8,15 @@ RQ is a simple, lightweight, Python library for queueing jobs and processing the
 from __future__ import annotations
 
 import logging
-import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 from selfhealing.interfaces.task_queue import (
-    TaskQueueInterface,
-    TaskStatus,
-    TaskResult,
     TaskOptions,
+    TaskQueueInterface,
+    TaskResult,
+    TaskStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class RQTaskAdapter(TaskQueueInterface):
 
     def __init__(
         self,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
         default_queue: str = "default",
         default_timeout: int = 3600,
     ):
@@ -84,7 +84,10 @@ class RQTaskAdapter(TaskQueueInterface):
 
                 self._rq = rq
             except ImportError:
-                raise ImportError("rq is required for RQTaskAdapter. " "Install it with: pip install rq")
+                raise ImportError(
+                    "rq is required for RQTaskAdapter. "
+                    "Install it with: pip install rq"
+                )
         return self._rq
 
     @property
@@ -96,7 +99,10 @@ class RQTaskAdapter(TaskQueueInterface):
 
                 self._redis = redis
             except ImportError:
-                raise ImportError("redis is required for RQTaskAdapter. " "Install it with: pip install redis")
+                raise ImportError(
+                    "redis is required for RQTaskAdapter. "
+                    "Install it with: pip install redis"
+                )
         return self._redis
 
     @property
@@ -120,7 +126,7 @@ class RQTaskAdapter(TaskQueueInterface):
             self._connection = self.redis.from_url(redis_url)
         return self._connection
 
-    def _get_queue(self, queue_name: Optional[str] = None) -> Any:
+    def _get_queue(self, queue_name: str | None = None) -> Any:
         """Get or create an RQ Queue."""
         name = queue_name or self._default_queue
         if name not in self._queues:
@@ -138,12 +144,12 @@ class RQTaskAdapter(TaskQueueInterface):
 
     def task(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         bind: bool = False,
         max_retries: int = 3,
         autoretry_for: tuple[type[Exception], ...] = (),
         retry_backoff: bool = True,
-        rate_limit: Optional[str] = None,
+        rate_limit: str | None = None,
     ) -> Callable[[F], F]:
         """
         Decorator to register a function as an RQ task.
@@ -211,8 +217,8 @@ class RQTaskAdapter(TaskQueueInterface):
         self,
         task_name: str,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        options: Optional[TaskOptions] = None,
+        kwargs: dict | None = None,
+        options: TaskOptions | None = None,
     ) -> str:
         """
         Enqueue a task for async execution.
@@ -243,7 +249,9 @@ class RQTaskAdapter(TaskQueueInterface):
             "retry": (
                 self.rq.Retry(
                     max=task_info.get("max_retries", options.max_retries),
-                    interval=self._get_retry_intervals(options) if options.retry else None,
+                    interval=(
+                        self._get_retry_intervals(options) if options.retry else None
+                    ),
                 )
                 if options.retry
                 else None
@@ -296,7 +304,7 @@ class RQTaskAdapter(TaskQueueInterface):
     def enqueue_many(
         self,
         tasks: list[tuple[str, tuple, dict]],
-        options: Optional[TaskOptions] = None,
+        options: TaskOptions | None = None,
     ) -> list[str]:
         """
         Enqueue multiple tasks.
@@ -321,7 +329,7 @@ class RQTaskAdapter(TaskQueueInterface):
     def get_result(
         self,
         task_id: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskResult:
         """
         Get task result.
@@ -407,8 +415,8 @@ class RQTaskAdapter(TaskQueueInterface):
     def retry(
         self,
         task_id: str,
-        countdown: Optional[int] = None,
-        max_retries: Optional[int] = None,
+        countdown: int | None = None,
+        max_retries: int | None = None,
     ) -> str:
         """
         Retry a failed task.
@@ -443,8 +451,8 @@ class RQTaskAdapter(TaskQueueInterface):
         task_name: str,
         schedule: timedelta,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        name: Optional[str] = None,
+        kwargs: dict | None = None,
+        name: str | None = None,
     ) -> str:
         """
         Schedule a periodic task using RQ-scheduler.
@@ -483,7 +491,10 @@ class RQTaskAdapter(TaskQueueInterface):
             return job.id
 
         except ImportError:
-            raise ImportError("rq-scheduler is required for periodic tasks. " "Install it with: pip install rq-scheduler")
+            raise ImportError(
+                "rq-scheduler is required for periodic tasks. "
+                "Install it with: pip install rq-scheduler"
+            )
 
     def unschedule(self, schedule_id: str) -> bool:
         """
@@ -573,7 +584,7 @@ class RQAsyncResult:
         self.id = task_id
         self._adapter = adapter
 
-    def get(self, timeout: Optional[float] = None) -> Any:
+    def get(self, timeout: float | None = None) -> Any:
         """
         Get task result, blocking until complete.
 

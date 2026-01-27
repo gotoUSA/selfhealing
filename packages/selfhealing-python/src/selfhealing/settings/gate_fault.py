@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -76,7 +75,7 @@ class GateFaultSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[GateFaultSettings] = None
+_settings: GateFaultSettings | None = None
 
 
 def get_gate_fault_settings() -> GateFaultSettings:

@@ -12,7 +12,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,7 +25,7 @@ class ResourceGuardSettings(BaseSettings):
 
     시스템 CPU/메모리가 과부하 상태일 때 X-Test 요청을 차단하여
     운영 시스템 안정성을 보호합니다.
-    
+
     RecoveryGate의 cpu_threshold_percent (80%)와 일관성 유지.
     """
 
@@ -81,7 +80,7 @@ class ResourceGuardSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[ResourceGuardSettings] = None
+_settings: ResourceGuardSettings | None = None
 
 
 def get_resource_guard_settings() -> ResourceGuardSettings:

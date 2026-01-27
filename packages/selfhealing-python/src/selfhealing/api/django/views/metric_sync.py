@@ -12,7 +12,6 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from rest_framework import status
 from rest_framework.request import Request
@@ -21,14 +20,13 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin
 from selfhealing.api.django.serializers.metric_sync import (
+    DriftReportResponseSerializer,
     MetricSyncRequestSerializer,
     MetricSyncResponseSerializer,
-    DriftReportResponseSerializer,
 )
 
 # Import from services layer (not from views to avoid circular imports)
 from selfhealing.services.metric_sync_service import (
-    DriftThresholds,
     MetricSyncService,
     get_metric_sync_service,
     reset_metric_sync_service,

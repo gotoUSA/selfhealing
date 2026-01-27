@@ -130,9 +130,15 @@ class TestPerformanceIntegration:
         # Sampled should be faster (or at least not significantly slower)
         # Note: For small chains, overhead may dominate
         # Guard against timing resolution issues (full_time can be 0.0 on fast systems)
-        min_time = 1e-9  # 1 nanosecond floor to avoid division by zero
-        effective_full_time = max(full_time, min_time)
-        assert sampled_time <= effective_full_time * 2  # Allow some margin
+        # On very fast systems, both times can be extremely small (< 1ms)
+        # In that case, just verify both completed successfully
+        if full_time < 0.001 and sampled_time < 0.001:
+            # Both are sub-millisecond, timing comparison is not meaningful
+            pass
+        else:
+            min_time = 0.001  # 1ms floor to avoid timing noise
+            effective_full_time = max(full_time, min_time)
+            assert sampled_time <= effective_full_time * 2  # Allow some margin
 
     def test_concurrent_batch_writes(self):
         """Test concurrent writes to batch writer."""

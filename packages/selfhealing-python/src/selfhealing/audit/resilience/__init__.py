@@ -17,7 +17,7 @@ Usage:
         DegradedModeManager,
         InMemoryAuditBuffer,
     )
-    
+
     # Circuit Breaker
     cb = get_circuit_breaker("cloudwatch")
     if cb.can_execute():
@@ -26,19 +26,27 @@ Usage:
             cb.record_success()
         except Exception:
             cb.record_failure()
-    
+
     # Metrics
     metrics = get_audit_metrics()
     metrics.record_write("LocalFile", success=True)
 """
 
+from .buffer import (
+    InMemoryAuditBuffer,
+    get_inmemory_audit_buffer,
+)
 from .circuit_breaker import (
-    CircuitState,
-    CircuitBreakerConfig,
-    CircuitBreakerState,
     CircuitBreaker,
+    CircuitBreakerConfig,
     CircuitBreakerRegistry,
+    CircuitBreakerState,
+    CircuitState,
     get_circuit_breaker,
+)
+from .degraded_mode import (
+    DegradedModeManager,
+    get_degraded_mode_manager,
 )
 from .metrics import (
     AuditMetrics,
@@ -49,15 +57,6 @@ from .syslog_fallback import (
     get_syslog_fallback,
     log_critical_to_syslog,
 )
-from .degraded_mode import (
-    DegradedModeManager,
-    get_degraded_mode_manager,
-)
-from .buffer import (
-    InMemoryAuditBuffer,
-    get_inmemory_audit_buffer,
-)
-
 
 __all__ = [
     # Circuit Breaker

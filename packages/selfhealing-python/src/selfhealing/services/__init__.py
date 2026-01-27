@@ -44,7 +44,7 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     from selfhealing.services.control_api_service import ControlAPIService
 
 삭제된 심볼과 새 경로:
-    
+
     # Retry (→ retry_handler.py)
     RetryHandler         → from selfhealing.services.retry_handler import RetryHandler
     RetryConfig          → from selfhealing.services.retry_handler import RetryConfig
@@ -70,7 +70,7 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     should_allow_request → from selfhealing.services.circuit_breaker_service import should_allow_request
     force_open_circuit   → from selfhealing.services.circuit_breaker_service import force_open_circuit
     force_close_circuit  → from selfhealing.services.circuit_breaker_service import force_close_circuit
-    
+
     # Rate Limit (→ circuit_breaker_service.py)
     RateLimitTracker     → from selfhealing.services.circuit_breaker_service import RateLimitTracker
     get_rate_limit_tracker → from selfhealing.services.circuit_breaker_service import get_rate_limit_tracker
@@ -120,47 +120,21 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
 # PUBLIC API - 핵심 15개만 노출
 # =============================================================================
 
+# --- Configuration ---
+from ..core.config import get_sla_thresholds
+
 # --- Core Services (사용 빈도 순) ---
-from .circuit_breaker_service import (
-    get_circuit_breaker_service,
-    CircuitBreakerService,
-    # Backward compatibility - commonly used in tests
+from .circuit_breaker_service import (  # Backward compatibility - commonly used in tests; Convenience functions; Rate limit tracking
     CircuitBreakerConfig,
     CircuitBreakerResult,
+    CircuitBreakerService,
     CircuitState,
-    # Convenience functions
-    should_allow_request,
-    force_open_circuit,
-    force_close_circuit,
-    # Rate limit tracking
     RateLimitTracker,
+    force_close_circuit,
+    force_open_circuit,
+    get_circuit_breaker_service,
     get_rate_limit_tracker,
-)
-from .dlq_service import (
-    get_dlq_service,
-    DLQService,
-    # Backward compatibility - commonly used in tests
-    DLQConfig,
-    DLQEntryResult,
-    store_to_dlq,
-)
-from .replay_service import get_replay_service, ReplayService, BatchReplayResult, ReplayResult
-
-# --- Backward Compatibility - Idempotency ---
-from .idempotency_service import (
-    IdempotencyKey,
-    IdempotencyService,
-    IdempotencyDomain,
-    get_idempotency_service,
-)
-
-# --- Backward Compatibility - Retry ---
-from .retry_handler import (
-    RetryHandler,
-    RetryConfig,
-    RetryResult,
-    RetryAction,
-    MaxRetriesExceededError,
+    should_allow_request,
 )
 
 # --- Backward Compatibility - Control API ---
@@ -169,38 +143,65 @@ from .control_api_service import (
     ControlRequest,
     ControlResponse,
 )
+from .dlq_service import (  # Backward compatibility - commonly used in tests
+    DLQConfig,
+    DLQEntryResult,
+    DLQService,
+    get_dlq_service,
+    store_to_dlq,
+)
+
+# --- Backward Compatibility - Idempotency ---
+from .idempotency_service import (
+    IdempotencyDomain,
+    IdempotencyKey,
+    IdempotencyService,
+    get_idempotency_service,
+)
+from .metrics.alerting_rules import ALERTING_RULES
+
+# --- Metrics (핵심만) ---
+from .metrics.recorders import record_sla_breach
+from .metrics.registry import DEFAULT_DOMAINS
+from .metrics.updaters import collect_all_metrics
+from .replay_service import (
+    BatchReplayResult,
+    ReplayResult,
+    ReplayService,
+    get_replay_service,
+)
+
+# --- Backward Compatibility - Retry ---
+from .retry_handler import (
+    MaxRetriesExceededError,
+    RetryAction,
+    RetryConfig,
+    RetryHandler,
+    RetryResult,
+)
 
 # --- Backward Compatibility - Security ---
 from .security import (
-    SecurityViolationService,
-    SecurityViolationResult,
-    SecurityConfig,
-    ViolationType,
-    Severity,
     SEVERITY_BY_VIOLATION_TYPE,
+    SecurityConfig,
+    SecurityViolationResult,
+    SecurityViolationService,
+    Severity,
+    ViolationType,
     get_security_violation_service,
     handle_security_violation,
 )
 
 # --- Backward Compatibility - Security Notification ---
 from .security_notification import (
-    SecurityNotificationService,
-    SecurityNotificationResult,
-    NotificationConfig,
     NotificationChannel,
+    NotificationConfig,
     NotificationResult,
+    SecurityNotificationResult,
+    SecurityNotificationService,
     get_security_notification_service,
     notify_security_incident,
 )
-
-# --- Configuration ---
-from ..core.config import get_sla_thresholds
-
-# --- Metrics (핵심만) ---
-from .metrics.recorders import record_sla_breach
-from .metrics.updaters import collect_all_metrics
-from .metrics.registry import DEFAULT_DOMAINS
-from .metrics.alerting_rules import ALERTING_RULES
 
 # Alias for backward compatibility
 DOMAINS = DEFAULT_DOMAINS
@@ -213,16 +214,14 @@ DOMAINS = DEFAULT_DOMAINS
 __all__ = [
     # === Core Service Getters (가장 많이 사용) ===
     "get_circuit_breaker_service",
-    "get_dlq_service", 
+    "get_dlq_service",
     "get_replay_service",
     "get_sla_thresholds",
-    
     # === Core Service Classes ===
     "CircuitBreakerService",
     "DLQService",
     "ReplayService",
     "BatchReplayResult",
-    
     # === Backward Compatibility - Circuit Breaker ===
     "CircuitBreakerConfig",
     "CircuitBreakerResult",
@@ -232,31 +231,26 @@ __all__ = [
     "force_close_circuit",
     "RateLimitTracker",
     "get_rate_limit_tracker",
-    
     # === Backward Compatibility - DLQ ===
     "DLQConfig",
     "DLQEntryResult",
     "ReplayResult",
     "store_to_dlq",
-    
     # === Backward Compatibility - Idempotency ===
     "IdempotencyKey",
     "IdempotencyService",
     "IdempotencyDomain",
     "get_idempotency_service",
-    
     # === Backward Compatibility - Retry ===
     "RetryHandler",
     "RetryConfig",
     "RetryResult",
     "RetryAction",
     "MaxRetriesExceededError",
-    
     # === Backward Compatibility - Control API ===
     "ControlAPIService",
     "ControlRequest",
     "ControlResponse",
-    
     # === Backward Compatibility - Security ===
     "SecurityViolationService",
     "SecurityViolationResult",
@@ -266,7 +260,6 @@ __all__ = [
     "SEVERITY_BY_VIOLATION_TYPE",
     "get_security_violation_service",
     "handle_security_violation",
-    
     # === Backward Compatibility - Security Notification ===
     "SecurityNotificationService",
     "SecurityNotificationResult",
@@ -275,7 +268,6 @@ __all__ = [
     "NotificationResult",
     "get_security_notification_service",
     "notify_security_incident",
-    
     # === Metrics ===
     "record_sla_breach",
     "collect_all_metrics",

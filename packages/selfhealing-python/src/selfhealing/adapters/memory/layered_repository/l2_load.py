@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from typing import Any
 
 from selfhealing.adapters.memory.base import _now
 
@@ -50,14 +49,23 @@ class L2LoadMixin:
             self._metrics["l2_latency_total_ms"] += elapsed_ms
             self._metrics["l2_latency_count"] += 1
 
-            logger.info(f"[LayeredRepo] L2 initial load completed: " f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms")
+            logger.info(
+                f"[LayeredRepo] L2 initial load completed: "
+                f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms"
+            )
 
         except FuturesTimeoutError:
             self._handle_l2_timeout("initial_load", None)
-            logger.warning(f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). " f"Starting with empty L1.")
+            logger.warning(
+                f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). "
+                f"Starting with empty L1."
+            )
         except Exception as e:
             self._handle_l2_error("initial_load", None, e)
-            logger.warning(f"[LayeredRepo] L2 initial load failed: {e}. " f"Starting with empty L1.")
+            logger.warning(
+                f"[LayeredRepo] L2 initial load failed: {e}. "
+                f"Starting with empty L1."
+            )
 
     def _load_from_l2(self) -> None:
         """L2에서 L1으로 초기 데이터 로드 (레거시, 타임아웃 없음)."""

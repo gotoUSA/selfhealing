@@ -10,7 +10,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -69,7 +68,7 @@ class StateCacheSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[StateCacheSettings] = None
+_settings: StateCacheSettings | None = None
 
 
 def get_state_cache_settings() -> StateCacheSettings:

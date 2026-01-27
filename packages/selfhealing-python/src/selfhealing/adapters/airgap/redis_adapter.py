@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.adapters.airgap.base import BaseAirGapAdapter
 
@@ -26,6 +26,7 @@ def _get_airgap_redis_ttl() -> int:
     """AirGapSettings에서 Redis TTL을 가져온다."""
     try:
         from selfhealing.settings.airgap import get_airgap_settings
+
         return get_airgap_settings().redis_ttl
     except Exception:
         return 3600  # 1 hour fallback
@@ -35,6 +36,7 @@ def _get_airgap_key_prefix() -> str:
     """AirGapSettings에서 키 접두사를 가져온다."""
     try:
         from selfhealing.settings.airgap import get_airgap_settings
+
         return get_airgap_settings().key_prefix
     except Exception:
         return "sh:airgap:"
@@ -57,10 +59,10 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         >>> import redis
         >>> client = redis.from_url("redis://localhost:6379/0")
         >>> adapter = RedisAirGapAdapter(client)
-        >>> 
+        >>>
         >>> # Business layer writes summary
         >>> adapter.write_summary("dlq:payment:pending", 5)
-        >>> 
+        >>>
         >>> # Self-Healing engine reads
         >>> count = adapter.read_summary("dlq:payment:pending")
         >>> print(count)  # 5
@@ -71,9 +73,9 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
 
     def __init__(
         self,
-        redis_client: "redis.Redis",
-        prefix: Optional[str] = None,
-        default_ttl: Optional[int] = None,
+        redis_client: redis.Redis,
+        prefix: str | None = None,
+        default_ttl: int | None = None,
     ) -> None:
         """
         Initialize the Redis Air-Gap adapter.
@@ -85,7 +87,9 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         """
         self.redis = redis_client
         self.prefix = prefix if prefix is not None else _get_airgap_key_prefix()
-        self.default_ttl = default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
+        self.default_ttl = (
+            default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
+        )
         logger.info(f"[AirGap] RedisAirGapAdapter initialized (prefix={self.prefix})")
 
     def _make_key(self, key: str) -> str:
@@ -100,7 +104,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             return str(value)
         return json.dumps(value)
 
-    def _deserialize(self, value: Optional[bytes]) -> Any:
+    def _deserialize(self, value: bytes | None) -> Any:
         """Deserialize value from Redis storage."""
         if value is None:
             return None
@@ -114,9 +118,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             # Return as string if not valid JSON
             return str_value
 
-    def write_summary(
-        self, key: str, value: Any, ttl: Optional[int] = None
-    ) -> bool:
+    def write_summary(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """
         요약 상태를 Redis에 기록.
 
@@ -186,7 +188,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             logger.warning(f"[AirGap] Delete failed for {key}: {e}")
             return False
 
-    def read_many(self, keys: List[str]) -> Dict[str, Any]:
+    def read_many(self, keys: list[str]) -> dict[str, Any]:
         """
         여러 키의 값을 한 번에 조회 (MGET).
 
@@ -211,7 +213,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
 
         except Exception as e:
             logger.warning(f"[AirGap] Read many failed: {e}")
-            return {key: None for key in keys}
+            return dict.fromkeys(keys)
 
     def increment(self, key: str, amount: int = 1) -> int:
         """
@@ -296,7 +298,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         except Exception:
             return False
 
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self) -> dict[str, Any]:
         """
         Air-Gap 저장소 상태 확인.
 

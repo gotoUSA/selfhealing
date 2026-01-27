@@ -12,7 +12,7 @@ from rest_framework import serializers
 class ApplyStrategyMixin(serializers.Serializer):
     """
     Mixin that adds apply strategy fields to config serializers.
-    
+
     Safe Default 검증 및 폴백 기능 추가.
     """
 
@@ -54,27 +54,37 @@ class ApplyStrategyMixin(serializers.Serializer):
 
     def get_config_changes(self) -> dict:
         """Extract config changes (excluding apply strategy fields)."""
-        exclude_fields = {"apply_strategy", "delay_seconds", "grace_timeout_seconds", "reason"}
-        return {k: v for k, v in self.validated_data.items() if k not in exclude_fields and v is not None}
+        exclude_fields = {
+            "apply_strategy",
+            "delay_seconds",
+            "grace_timeout_seconds",
+            "reason",
+        }
+        return {
+            k: v
+            for k, v in self.validated_data.items()
+            if k not in exclude_fields and v is not None
+        }
 
     def validate_with_safe_fallback(self, data: dict) -> dict:
         """
         Safe Default 검증 및 폴백 적용.
-        
+
         잘못된 값은 Safe Default로 대체됩니다.
         서브클래스에서 _config_type을 설정해야 합니다.
-        
+
         Args:
             data: 검증할 데이터
-            
+
         Returns:
             Safe Default가 적용된 데이터
         """
         if not self._config_type:
             return data
-        
+
         try:
             from selfhealing.core.safe_defaults import validate_with_safe_fallback
+
             return validate_with_safe_fallback(self._config_type, data)
         except ImportError:
             return data

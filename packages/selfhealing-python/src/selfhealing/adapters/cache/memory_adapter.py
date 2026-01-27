@@ -23,26 +23,25 @@ import fnmatch
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
     DistributedLock,
-    LockAcquisitionError,
-    LockNotOwnedError,
 )
 
 # Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
-        record_cache_ttl_expired,
-        record_cache_ttl_evicted,
-        update_cache_entries_count,
         record_cache_get,
         record_cache_set,
+        record_cache_ttl_evicted,
+        record_cache_ttl_expired,
+        update_cache_entries_count,
     )
+
     HAS_DRIFT_METRICS = True
 except ImportError:
     HAS_DRIFT_METRICS = False
@@ -55,7 +54,7 @@ class CacheEntry:
     """Internal cache entry with value and expiration."""
 
     value: Any
-    expires_at: Optional[float] = None  # Unix timestamp
+    expires_at: float | None = None  # Unix timestamp
 
     def is_expired(self) -> bool:
         """Check if entry has expired."""
@@ -73,14 +72,14 @@ class InMemoryLock(DistributedLock):
     """
 
     # Class-level lock registry
-    _locks: dict[str, "InMemoryLock"] = {}
+    _locks: dict[str, InMemoryLock] = {}
     _registry_lock = threading.Lock()
 
     def __init__(
         self,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
     ) -> None:
         """
         Initialize in-memory lock.
@@ -96,12 +95,12 @@ class InMemoryLock(DistributedLock):
         self._owner_id = f"{threading.get_ident()}:{id(self)}"
         self._lock = threading.Lock()
         self._acquired = False
-        self._expires_at: Optional[float] = None
+        self._expires_at: float | None = None
 
     def acquire(
         self,
         blocking: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> bool:
         """
         Acquire the lock.
@@ -249,7 +248,11 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def _cleanup_expired(self) -> None:
         """Remove expired entries (should be called periodically)."""
         current_time = time.time()
-        expired_keys = [k for k, v in self._store.items() if v.expires_at is not None and v.expires_at < current_time]
+        expired_keys = [
+            k
+            for k, v in self._store.items()
+            if v.expires_at is not None and v.expires_at < current_time
+        ]
         for key in expired_keys:
             del self._store[key]
             # Drift Detection 메트릭 기록
@@ -268,7 +271,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     # Basic Operations
     # =========================================================================
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value by key."""
         with self._lock:
             full_key = self._make_key(key)
@@ -298,7 +301,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         self,
         key: str,
         value: Any,
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         with self._lock:
@@ -308,12 +311,12 @@ class InMemoryCacheAdapter(CacheProviderInterface):
                 expires_at = time.time() + ttl.total_seconds()
 
             self._store[full_key] = CacheEntry(value=value, expires_at=expires_at)
-            
+
             # Drift Detection 메트릭
             if HAS_DRIFT_METRICS:
                 record_cache_set(self._cache_name)
                 update_cache_entries_count(self._cache_name, len(self._store))
-            
+
             return True
 
     def delete(self, key: str) -> bool:
@@ -376,7 +379,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             entry.expires_at = time.time() + ttl.total_seconds()
             return True
 
-    def ttl(self, key: str) -> Optional[int]:
+    def ttl(self, key: str) -> int | None:
         """Get remaining TTL in seconds."""
         with self._lock:
             full_key = self._make_key(key)
@@ -395,7 +398,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             remaining = entry.expires_at - time.time()
             return max(0, int(remaining))
 
-    def setnx(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
+    def setnx(self, key: str, value: Any, ttl: timedelta | None = None) -> bool:
         """Set value only if key does not exist."""
         with self._lock:
             full_key = self._make_key(key)
@@ -419,7 +422,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         self,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
     ) -> DistributedLock:
         """Get a distributed lock instance."""
         return InMemoryLock(
@@ -446,7 +449,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
     def mset(
         self,
         mapping: dict[str, Any],
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """Set multiple values at once."""
         with self._lock:
@@ -486,7 +489,9 @@ class InMemoryCacheAdapter(CacheProviderInterface):
         """Clear all keys."""
         with self._lock:
             # Only clear keys with our prefix
-            keys_to_delete = [k for k in self._store.keys() if k.startswith(self._key_prefix)]
+            keys_to_delete = [
+                k for k in self._store.keys() if k.startswith(self._key_prefix)
+            ]
             for key in keys_to_delete:
                 del self._store[key]
             logger.info(f"[InMemoryCache] Flushed {len(keys_to_delete)} keys")

@@ -11,7 +11,7 @@ Key Features:
 from __future__ import annotations
 
 import logging
-from typing import Optional, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.metrics.safe_gauge import SafeGauge
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Lazy imports to avoid circular dependencies
 _metrics_instance = None
-_safe_gauge_cache: Dict[str, "SafeGauge"] = {}
+_safe_gauge_cache: dict[str, SafeGauge] = {}
 _logging_config = None
 
 
@@ -74,7 +74,7 @@ def _log_event(level_getter: str, message: str, **extra) -> None:
         logger.info(message, extra=extra)
 
 
-def _get_safe_pending_gauge() -> Optional["SafeGauge"]:
+def _get_safe_pending_gauge() -> SafeGauge | None:
     """
     Get or create SafeGauge wrapper for dlq_pending_gauge.
 
@@ -163,7 +163,7 @@ class DLQMetricEventHandler:
     def on_item_resolved(
         domain: str,
         resolution_type: str,
-        duration_seconds: Optional[float] = None,
+        duration_seconds: float | None = None,
     ) -> None:
         """
         DLQ 항목 해결 시 호출.
@@ -189,7 +189,9 @@ class DLQMetricEventHandler:
                 safe_gauge.labels(domain=domain).dec()
 
             # Histogram: 복구 시간 기록 (100% 정확)
-            if duration_seconds is not None and hasattr(metrics, "recovery_time_seconds"):
+            if duration_seconds is not None and hasattr(
+                metrics, "recovery_time_seconds"
+            ):
                 metrics.recovery_time_seconds.labels(
                     domain=domain,
                     resolution_type=resolution_type,
@@ -248,7 +250,8 @@ class DLQMetricEventHandler:
 
             _log_event(
                 "get_dlq_log_level",
-                f"[EventHandler] DLQ retry failed: domain={domain}, " f"type={failure_type}, attempts={attempt_count}",
+                f"[EventHandler] DLQ retry failed: domain={domain}, "
+                f"type={failure_type}, attempts={attempt_count}",
                 event_type="dlq.retry_failed",
                 domain=domain,
                 failure_type=failure_type,
@@ -326,7 +329,9 @@ class CircuitBreakerEventHandler:
             # Gauge: 현재 상태 설정
             state_value = CircuitBreakerEventHandler.STATE_VALUES.get(to_state, 0)
             if hasattr(metrics, "circuit_breaker_state"):
-                metrics.circuit_breaker_state.labels(service_name=service).set(state_value)
+                metrics.circuit_breaker_state.labels(service_name=service).set(
+                    state_value
+                )
 
             # Counter: 상태 전환 카운트
             if hasattr(metrics, "circuit_breaker_transitions"):
@@ -342,7 +347,8 @@ class CircuitBreakerEventHandler:
 
             _log_event(
                 "get_cb_log_level",
-                f"[EventHandler] CB state changed: service={service}, " f"{from_state} -> {to_state}",
+                f"[EventHandler] CB state changed: service={service}, "
+                f"{from_state} -> {to_state}",
                 event_type="circuit_breaker.state_changed",
                 service=service,
                 from_state=from_state,
@@ -447,7 +453,8 @@ class ReplayEventHandler:
 
             _log_event(
                 "get_replay_log_level",
-                f"[EventHandler] Replay completed: domain={domain}, " f"success={success}, duration={duration_seconds}s",
+                f"[EventHandler] Replay completed: domain={domain}, "
+                f"success={success}, duration={duration_seconds}s",
                 event_type="replay.completed",
                 domain=domain,
                 success=success,

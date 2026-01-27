@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -174,7 +173,7 @@ class StressTestSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[StressTestSettings] = None
+_settings: StressTestSettings | None = None
 
 
 def get_stress_test_settings() -> StressTestSettings:

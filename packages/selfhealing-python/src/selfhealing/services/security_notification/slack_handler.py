@@ -83,7 +83,9 @@ class SlackHandlerMixin:
                 error=str(e),
             )
 
-    def _format_slack_message(self, message: dict[str, Any], channel: str) -> dict[str, Any]:
+    def _format_slack_message(
+        self, message: dict[str, Any], channel: str
+    ) -> dict[str, Any]:
         """
         Format message for Slack Block Kit.
 
@@ -114,9 +116,15 @@ class SlackHandlerMixin:
                 {
                     "type": "section",
                     "fields": [
-                        {"type": "mrkdwn", "text": f"*Severity:*\n{message['severity']}"},
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Severity:*\n{message['severity']}",
+                        },
                         {"type": "mrkdwn", "text": f"*Status:*\n{message['status']}"},
-                        {"type": "mrkdwn", "text": f"*Source IP:*\n{message['source_ip']}"},
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Source IP:*\n{message['source_ip']}",
+                        },
                         {"type": "mrkdwn", "text": f"*User ID:*\n{message['user_id']}"},
                     ],
                 },
@@ -139,14 +147,17 @@ class SlackHandlerMixin:
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": f"Detected: {message['detected_at']} | " f"<{message['admin_url']}|View in Admin>",
+                            "text": f"Detected: {message['detected_at']} | "
+                            f"<{message['admin_url']}|View in Admin>",
                         }
                     ],
                 },
             ],
         }
 
-    def _send_slack_alert(self, message: dict[str, Any], channel: str) -> NotificationResult:
+    def _send_slack_alert(
+        self, message: dict[str, Any], channel: str
+    ) -> NotificationResult:
         """
         Send a Slack alert notification (general purpose).
 
@@ -203,7 +214,9 @@ class SlackHandlerMixin:
                 error=str(e),
             )
 
-    def _format_slack_alert(self, message: dict[str, Any], channel: str) -> dict[str, Any]:
+    def _format_slack_alert(
+        self, message: dict[str, Any], channel: str
+    ) -> dict[str, Any]:
         """
         Format alert message for Slack Block Kit.
 
@@ -248,11 +261,13 @@ class SlackHandlerMixin:
             if fields:
                 blocks.append({"type": "section", "fields": fields})
 
-        blocks.append({
-            "type": "context",
-            "elements": [
-                {"type": "mrkdwn", "text": f"⏰ {message['detected_at']}"}
-            ],
-        })
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": f"⏰ {message['detected_at']}"}
+                ],
+            }
+        )
 
         return {"channel": channel, "blocks": blocks}

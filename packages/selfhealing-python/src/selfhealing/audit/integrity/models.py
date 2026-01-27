@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
@@ -24,7 +24,7 @@ class IntegrityInfo:
     timestamp: str
 
 
-def compute_hash(data: Dict[str, Any]) -> str:
+def compute_hash(data: dict[str, Any]) -> str:
     """
     Compute SHA-256 hash of a dictionary.
 

@@ -12,6 +12,7 @@ Celery Task 호출 시 causation_id 자동 전파 기능을 테스트합니다.
 - task_postrun에서 causation 정리
 - 시스템 시작 태스크 (Celery Beat) causation 자동 생성
 """
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -42,10 +43,10 @@ class TestCausationContextBasic:
     def test_is_set_returns_true_inside_context(self):
         """컨텍스트 내부에서 is_set() True."""
         assert CausationContext.is_set() is False
-        
+
         with CausationContext.start_cascade():
             assert CausationContext.is_set() is True
-        
+
         assert CausationContext.is_set() is False
 
     def test_get_current_returns_info(self):
@@ -74,7 +75,7 @@ class TestStartSystemCascade:
     def test_start_system_cascade_different_sources(self):
         """다양한 source 값에 대한 이벤트 ID 생성."""
         sources = ["celery_beat", "management_cmd", "cron", "scheduler"]
-        
+
         for source in sources:
             with CausationContext.start_system_cascade(source=source) as ctx:
                 assert f"SYSTEM_ROOT_{source}_" in ctx.parent_event_id
@@ -88,7 +89,7 @@ class TestGetCausationForCelery:
         """컨텍스트 내에서 Celery 헤더 딕셔너리 반환."""
         with CausationContext.start_cascade(namespace="test") as ctx:
             headers = get_causation_for_celery()
-            
+
             assert headers[CELERY_HEADER_CASCADE_ID] == ctx.cascade_id
             assert headers[CELERY_HEADER_PARENT_EVENT] == ctx.parent_event_id
             assert headers[CELERY_HEADER_CHAIN_DEPTH] == str(ctx.chain_depth)
@@ -111,7 +112,7 @@ class TestRestoreCausationFromCelery:
             CELERY_HEADER_CHAIN_DEPTH: "2",
             CELERY_HEADER_NAMESPACE: "seoul",
         }
-        
+
         with restore_causation_from_celery(headers) as ctx:
             assert ctx is not None
             assert ctx.cascade_id == "cascade-test123"
@@ -120,7 +121,7 @@ class TestRestoreCausationFromCelery:
             assert ctx.chain_depth == 3
             assert ctx.namespace == "seoul"
             assert CausationContext.is_set() is True
-        
+
         # 컨텍스트 종료 후 정리
         assert CausationContext.is_set() is False
 
@@ -135,7 +136,7 @@ class TestRestoreCausationFromCelery:
         headers = {
             CELERY_HEADER_PARENT_EVENT: "evt-123",
         }
-        
+
         with restore_causation_from_celery(headers) as ctx:
             assert ctx is None
 
@@ -151,7 +152,7 @@ class TestContinueCascade:
             chain_depth=5,
             namespace="ns",
         )
-        
+
         with CausationContext.continue_cascade(original_info) as ctx:
             assert ctx.cascade_id == "cascade-orig"
             assert ctx.chain_depth == 6  # 5 + 1
@@ -164,7 +165,7 @@ class TestContinueCascade:
             chain_depth=5,
             namespace="ns",
         )
-        
+
         with CausationContext.continue_cascade(original_info, increment_depth=False) as ctx:
             assert ctx.chain_depth == 5
 
@@ -175,16 +176,16 @@ class TestBeforeTaskPublishHandler:
     def test_handler_injects_causation_headers(self):
         """CausationContext 설정 시 헤더 자동 주입."""
         from selfhealing.adapters.celery.signal_hooks import on_before_task_publish
-        
+
         headers = {}
-        
+
         with CausationContext.start_cascade(namespace="inject-test") as ctx:
             on_before_task_publish(
                 sender="test_task",
                 headers=headers,
                 body=None,
             )
-        
+
             # 헤더가 주입되었는지 확인
             assert headers.get(CELERY_HEADER_CASCADE_ID) == ctx.cascade_id
             assert headers.get(CELERY_HEADER_PARENT_EVENT) == ctx.parent_event_id
@@ -194,41 +195,41 @@ class TestBeforeTaskPublishHandler:
     def test_handler_skips_when_no_context(self):
         """CausationContext 미설정 시 헤더 주입 생략."""
         from selfhealing.adapters.celery.signal_hooks import on_before_task_publish
-        
+
         headers = {}
-        
+
         on_before_task_publish(
             sender="test_task",
             headers=headers,
             body=None,
         )
-        
+
         # 헤더 비어 있음
         assert CELERY_HEADER_CASCADE_ID not in headers
 
     def test_handler_does_not_overwrite_existing_headers(self):
         """이미 causation 헤더가 있으면 덮어쓰지 않음."""
         from selfhealing.adapters.celery.signal_hooks import on_before_task_publish
-        
+
         original_cascade_id = "cascade-original"
         headers = {
             CELERY_HEADER_CASCADE_ID: original_cascade_id,
         }
-        
+
         with CausationContext.start_cascade() as ctx:
             on_before_task_publish(
                 sender="test_task",
                 headers=headers,
                 body=None,
             )
-        
+
             # 원래 값 유지
             assert headers[CELERY_HEADER_CASCADE_ID] == original_cascade_id
 
     def test_handler_handles_none_headers(self):
         """headers=None일 때 예외 발생하지 않음."""
         from selfhealing.adapters.celery.signal_hooks import on_before_task_publish
-        
+
         with CausationContext.start_cascade():
             # 예외 없이 실행되어야 함
             on_before_task_publish(
@@ -243,19 +244,19 @@ class TestBeforeTaskPublishHandler:
             on_before_task_publish,
             _config,
         )
-        
+
         original_enabled = _config.enabled
         try:
             _config.enabled = False
             headers = {}
-            
+
             with CausationContext.start_cascade():
                 on_before_task_publish(
                     sender="test_task",
                     headers=headers,
                     body=None,
                 )
-            
+
             # disabled면 헤더 주입 안 됨
             assert CELERY_HEADER_CASCADE_ID not in headers
         finally:
@@ -268,7 +269,7 @@ class TestSetupCausationContext:
     def test_setup_from_headers(self):
         """헤더에서 causation 복원."""
         from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
-        
+
         # Mock sender with request containing headers
         mock_request = MagicMock()
         mock_request.headers = {
@@ -277,42 +278,44 @@ class TestSetupCausationContext:
             CELERY_HEADER_CHAIN_DEPTH: "3",
             CELERY_HEADER_NAMESPACE: "header-ns",
         }
-        
+
         mock_sender = MagicMock()
         mock_sender.request = mock_request
-        
+
         _setup_causation_context(mock_sender, "task-123", "test.task")
-        
+
         # 컨텍스트 설정 확인
         ctx = CausationContext.get_current()
         assert ctx is not None
         assert ctx.cascade_id == "cascade-fromheader"
         assert ctx.chain_depth == 4  # 3 + 1
-        
+
         # 정리
         from selfhealing.context.causation_context import _current_causation
+
         _current_causation.set(None)
 
     def test_setup_creates_system_cascade_when_no_headers(self):
         """헤더 없으면 시스템 Cascade 자동 생성."""
         from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
-        
+
         mock_request = MagicMock()
         mock_request.headers = {}
-        
+
         mock_sender = MagicMock()
         mock_sender.request = mock_request
-        
+
         _setup_causation_context(mock_sender, "task-456", "celery.beat.check")
-        
+
         ctx = CausationContext.get_current()
         assert ctx is not None
         assert ctx.cascade_id.startswith("cascade-")
         assert "SYSTEM_ROOT_" in ctx.parent_event_id
         assert ctx.metadata.get("auto_generated") is True
-        
+
         # 정리
         from selfhealing.context.causation_context import _current_causation
+
         _current_causation.set(None)
 
 
@@ -322,7 +325,7 @@ class TestDetectCausationSource:
     def test_detect_celery_beat(self):
         """beat 관련 태스크명 감지."""
         from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
-        
+
         assert _detect_causation_source("celery.beat.check") == "celery_beat"
         assert _detect_causation_source("schedule_daily_task") == "celery_beat"
         assert _detect_causation_source("periodic_cleanup") == "celery_beat"
@@ -330,7 +333,7 @@ class TestDetectCausationSource:
     def test_detect_management_cmd(self):
         """management 관련 태스크명 감지."""
         from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
-        
+
         assert _detect_causation_source("manage_users") == "management_cmd"
         assert _detect_causation_source("run_command_task") == "management_cmd"
         assert _detect_causation_source("admin_bulk_update") == "management_cmd"
@@ -338,7 +341,7 @@ class TestDetectCausationSource:
     def test_detect_scheduler(self):
         """스케줄러 관련 태스크명 감지."""
         from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
-        
+
         assert _detect_causation_source("cron_daily_report") == "scheduler"
         assert _detect_causation_source("cleanup_old_data") == "scheduler"
         assert _detect_causation_source("expire_sessions") == "scheduler"
@@ -346,6 +349,6 @@ class TestDetectCausationSource:
     def test_detect_worker_default(self):
         """기본값은 worker."""
         from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
-        
+
         assert _detect_causation_source("process_order") == "worker"
         assert _detect_causation_source("send_email") == "worker"

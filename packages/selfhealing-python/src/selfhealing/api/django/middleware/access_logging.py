@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -56,8 +57,8 @@ class AccessLogEntry:
         query_params: str,
         source_ip: str,
         user_agent: str,
-        status_code: Optional[int] = None,
-        response_time_ms: Optional[float] = None,
+        status_code: int | None = None,
+        response_time_ms: float | None = None,
     ):
         self.timestamp = timestamp
         self.user = user
@@ -157,10 +158,10 @@ class SensitiveEndpointAccessLogger:
 
     def log_if_sensitive(
         self,
-        request: "HttpRequest",
-        response: "HttpResponse",
+        request: HttpRequest,
+        response: HttpResponse,
         response_time_ms: float = 0.0,
-    ) -> Optional[AccessLogEntry]:
+    ) -> AccessLogEntry | None:
         """
         Log access if the request is to a sensitive endpoint.
 
@@ -203,7 +204,7 @@ class SensitiveEndpointAccessLogger:
 
         return entry
 
-    def _get_client_ip(self, request: "HttpRequest") -> str:
+    def _get_client_ip(self, request: HttpRequest) -> str:
         """Extract client IP from request, considering proxies."""
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
@@ -318,7 +319,7 @@ class SensitiveAccessLoggingMiddleware:
         self.get_response = get_response
         self.access_logger = SensitiveEndpointAccessLogger()
 
-    def __call__(self, request: "HttpRequest") -> "HttpResponse":
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         import time
 
         start_time = time.time()

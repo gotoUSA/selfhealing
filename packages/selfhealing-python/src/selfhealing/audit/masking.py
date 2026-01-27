@@ -16,10 +16,7 @@ RBAC 역할별 접근 가능 레벨:
 """
 
 import hashlib
-import re
 from enum import Enum
-from typing import Optional
-
 
 # =============================================================================
 # MaskingLevel Enum (RBAC 연동)
@@ -29,20 +26,20 @@ from typing import Optional
 class MaskingLevel(Enum):
     """
     마스킹 수준.
-    
+
     RBAC 역할에 따라 다른 마스킹 수준을 적용합니다.
-    
+
     - CLIENT: 클라이언트 응답용 - 완전 치환 (***REDACTED***)
     - AUDIT: 내부 감사용 - SHA-256 해시화 (동일성 확인 가능)
     - FORENSIC: 법적 조사용 - 암호화 저장 (복원 가능)
     """
-    
+
     CLIENT = "client"
     """클라이언트 응답용: 완전 치환 (복원 불가)"""
-    
+
     AUDIT = "audit"
     """내부 감사용: SHA-256 해시화 (동일성 확인만 가능)"""
-    
+
     FORENSIC = "forensic"
     """법적 조사용: 암호화 저장 (복원 가능)"""
 
@@ -50,19 +47,19 @@ class MaskingLevel(Enum):
 def mask_with_level(
     value: str,
     level: MaskingLevel,
-    salt: Optional[str] = None,
+    salt: str | None = None,
 ) -> str:
     """
     마스킹 수준에 따른 마스킹 적용.
-    
+
     Args:
         value: 마스킹할 원본 값
         level: 마스킹 수준 (CLIENT, AUDIT, FORENSIC)
         salt: 해시용 솔트 (AUDIT 레벨에서 사용)
-    
+
     Returns:
         마스킹된 문자열
-        
+
     Examples:
         >>> mask_with_level("admin@example.com", MaskingLevel.CLIENT)
         '***REDACTED***'
@@ -73,15 +70,15 @@ def mask_with_level(
     """
     if not value:
         return ""
-    
+
     if level == MaskingLevel.CLIENT:
         # 완전 치환 - 복원 불가
         return "***REDACTED***"
-    
+
     elif level == MaskingLevel.AUDIT:
         # SHA-256 해시 - 동일성 확인만 가능
         return hash_for_audit(value, salt)
-    
+
     elif level == MaskingLevel.FORENSIC:
         # 암호화 저장 - 복원 가능 (실제 암호화는 별도 구현 필요)
         # 현재는 hash_for_audit와 동일하게 처리하되 prefix만 다르게 함
@@ -89,7 +86,7 @@ def mask_with_level(
         data = f"{salt}:{value}" if salt else value
         hash_value = hashlib.sha256(data.encode()).hexdigest()
         return f"encrypted:{hash_value[:32]}"
-    
+
     # 기본값은 CLIENT 레벨
     return "***REDACTED***"
 
@@ -97,30 +94,30 @@ def mask_with_level(
 def get_masking_level_for_context() -> MaskingLevel:
     """
     현재 ActorContext의 RBAC 역할에 따른 마스킹 레벨 결정.
-    
+
     RBAC 역할별 접근 가능 레벨:
         - selfhealing_admin (우선순위 3): FORENSIC
         - selfhealing_operator (우선순위 2): AUDIT
         - selfhealing_viewer (우선순위 1): CLIENT
         - 역할 없음: CLIENT (기본값)
-    
+
     Returns:
         MaskingLevel (현재 Actor가 접근 가능한 최대 레벨)
     """
     try:
         from selfhealing.context.actor_context import (
-            ActorContext,
             RBAC_ROLE_PRIORITY,
+            ActorContext,
         )
-        
+
         actor = ActorContext.get_current_or_none()
-        
+
         if actor is None:
             return MaskingLevel.CLIENT
-        
+
         highest_role = actor.highest_role
         priority = RBAC_ROLE_PRIORITY.get(highest_role, 0)
-        
+
         # 우선순위에 따른 레벨 결정
         if priority >= 3:  # selfhealing_admin
             return MaskingLevel.FORENSIC
@@ -128,7 +125,7 @@ def get_masking_level_for_context() -> MaskingLevel:
             return MaskingLevel.AUDIT
         else:  # selfhealing_viewer 또는 역할 없음
             return MaskingLevel.CLIENT
-            
+
     except ImportError:
         return MaskingLevel.CLIENT
     except Exception:
@@ -166,7 +163,7 @@ def mask_ip(ip: str, mask_last_octets: int = 2) -> str:
     if ":" in ip:
         parts = ip.split(":")
         if len(parts) > mask_last_octets:
-            masked_parts = parts[: -mask_last_octets] + ["***"] * mask_last_octets
+            masked_parts = parts[:-mask_last_octets] + ["***"] * mask_last_octets
             return ":".join(masked_parts)
         return ip
 
@@ -175,11 +172,11 @@ def mask_ip(ip: str, mask_last_octets: int = 2) -> str:
     if len(parts) == 4:
         if mask_last_octets >= 4:
             return "***.***.***.***"
-        masked_parts = parts[: -mask_last_octets] + ["***"] * mask_last_octets
+        masked_parts = parts[:-mask_last_octets] + ["***"] * mask_last_octets
         return ".".join(masked_parts)
 
     # Unknown format, return as-is with partial masking
-    return ip[:len(ip) // 2] + "***"
+    return ip[: len(ip) // 2] + "***"
 
 
 def mask_email(email: str) -> str:
@@ -211,7 +208,7 @@ def mask_email(email: str) -> str:
     return f"{masked_local}@{domain}"
 
 
-def hash_for_audit(value: str, salt: Optional[str] = None) -> str:
+def hash_for_audit(value: str, salt: str | None = None) -> str:
     """
     Create a SHA-256 hash of a value for audit purposes.
 
@@ -240,7 +237,7 @@ def hash_for_audit(value: str, salt: Optional[str] = None) -> str:
     return f"sha256:{hash_value[:16]}"  # Truncate for readability
 
 
-def mask_sensitive_fields(data, sensitive_keys: Optional[list] = None):
+def mask_sensitive_fields(data, sensitive_keys: list | None = None):
     """
     Mask sensitive fields in a dictionary.
 
@@ -288,7 +285,12 @@ def mask_sensitive_fields(data, sensitive_keys: Optional[list] = None):
             result[key] = mask_sensitive_fields(value, sensitive_keys)
         elif isinstance(value, list):
             result[key] = [
-                mask_sensitive_fields(item, sensitive_keys) if isinstance(item, dict) else item for item in value
+                (
+                    mask_sensitive_fields(item, sensitive_keys)
+                    if isinstance(item, dict)
+                    else item
+                )
+                for item in value
             ]
         else:
             result[key] = value

@@ -33,49 +33,90 @@ Reference:
 
 from __future__ import annotations
 
-from .enums import (
-    EmergencyScope,
-    ActionType,
-    CommandPrecedence,
-    RecoveryStatus,
-)
-from .models import (
-    CoordinationAction,
-    ScopedEmergencyState,
-    OverrideTTLConfig,
-    ActionResult,
-    CoordinationResult,
-    RecoveryAccountabilityConfig,
-)
 from .anti_flapping import (
-    AntiFlappingGuard,
     EMERGENCY_LEVEL_COOLDOWN_SECONDS,
+    AntiFlappingGuard,
+)
+from .atomic_transition import (
+    ATOMIC_TRANSITION_SCRIPT,
+    AtomicLevelTransition,
 )
 from .coordinator import (
-    EmergencyCoordinator,
     DryRunAuditLogger,
+    EmergencyCoordinator,
+)
+from .crisis_multiplier import (
+    MAX_CRISIS_MULTIPLIER,
+    CrisisMultiplierRegistry,
+    DomainAwareCrisisMultiplier,
+)
+from .critical_path_fallback import (
+    CriticalPathFallback,
+)
+from .critical_worker import (
+    CriticalPathDedicatedWorkerConfig,
+    CriticalTaskPriority,
+    WorkerQueueConfig,
+    get_critical_worker_config,
+    get_task_queue,
+)
+from .enums import (
+    ActionType,
+    CommandPrecedence,
+    EmergencyScope,
+    RecoveryStatus,
+)
+
+# Phase 2.7: Idempotent Step Handlers
+from .idempotent_step_handlers import (
+    IdempotencyRecord,
+    IdempotencyStatus,
+    IdempotentBudgetResetHandler,
+    IdempotentCanaryResumeHandler,
+    IdempotentGovernanceNormalHandler,
+    IdempotentHealthCheckHandler,
+    IdempotentStepHandler,
+    IdempotentStepHandlerRegistry,
+    generate_idempotency_key,
+    get_idempotent_step_handler_registry,
+    reset_idempotent_step_handler_registry,
+)
+from .models import (
+    ActionResult,
+    CoordinationAction,
+    CoordinationResult,
+    OverrideTTLConfig,
+    RecoveryAccountabilityConfig,
+    ScopedEmergencyState,
+)
+from .optimistic_action import (
+    OptimisticActionResult,
+    OptimisticLocalActionExecutor,
+    get_optimistic_action_executor,
+    reset_optimistic_action_executor,
+)
+from .pending_recovery_approval import (
+    PendingRecoveryApprovalManager,
+    RecoveryApprovalRequest,
+    RecoveryApprovalStatus,
+    get_pending_recovery_approval_manager,
+    reset_pending_recovery_approval_manager,
 )
 from .policy_engine import (
     CoordinationPolicy,
     CoordinationPolicyEngine,
 )
-from .critical_path_fallback import (
-    CriticalPathFallback,
-)
-from .atomic_transition import (
-    AtomicLevelTransition,
-    ATOMIC_TRANSITION_SCRIPT,
-)
-from .crisis_multiplier import (
-    DomainAwareCrisisMultiplier,
-    CrisisMultiplierRegistry,
-    MAX_CRISIS_MULTIPLIER,
-)
-from .optimistic_action import (
-    OptimisticLocalActionExecutor,
-    OptimisticActionResult,
-    get_optimistic_action_executor,
-    reset_optimistic_action_executor,
+
+# Phase 5: Audit & Monitoring
+from .recovery_audit import (
+    DangerousForceRecoveryAuditEntry,
+    ForceRecoveryType,
+    RecoveryAuditEntry,
+    RecoveryAuditEventType,
+    RecoveryAuditRecorder,
+    get_recovery_audit_recorder,
+    record_dangerous_force_recovery,
+    record_recovery_event,
 )
 
 # Phase 3: Recovery Extension
@@ -87,102 +128,60 @@ from .recovery_circuit_breaker import (
     get_recovery_circuit_breaker,
     reset_recovery_circuit_breaker,
 )
-from .regional_recovery_policy import (
-    RegionalRecoveryConfig,
-    RegionalRecoveryPolicyEngine,
-    DEFAULT_REGIONAL_CONFIGS,
-    get_regional_recovery_policy_engine,
-    reset_regional_recovery_policy_engine,
-)
-from .pending_recovery_approval import (
-    RecoveryApprovalStatus,
-    RecoveryApprovalRequest,
-    PendingRecoveryApprovalManager,
-    get_pending_recovery_approval_manager,
-    reset_pending_recovery_approval_manager,
-)
-
-# Phase 5: Audit & Monitoring
-from .recovery_audit import (
-    ForceRecoveryType,
-    RecoveryAuditEventType,
-    DangerousForceRecoveryAuditEntry,
-    RecoveryAuditEntry,
-    RecoveryAuditRecorder,
-    get_recovery_audit_recorder,
-    record_dangerous_force_recovery,
-    record_recovery_event,
-)
-
-# Phase 5 Extension: Infrastructure Stability
-from .redis_key_guard import (
-    RedisKeyPriority,
-    RedisMemoryInfo,
-    KeyPatternConfig,
-    RedisKeyPriorityEviction,
-    get_redis_key_guard,
-)
-from .critical_worker import (
-    CriticalTaskPriority,
-    WorkerQueueConfig,
-    CriticalPathDedicatedWorkerConfig,
-    get_critical_worker_config,
-    get_task_queue,
-)
-from .recovery_shutdown import (
-    RecoveryAwareShutdownConfig,
-    RecoveryShutdownStats,
-    RecoveryAwareShutdownHook,
-    create_recovery_aware_shutdown_hook,
-    run_prestop_check,
-)
-
-# Phase 1.4: Recovery Session Archive
-from .recovery_session_archive import (
-    RecoveryStepArchiveData,
-    RecoverySessionArchiveData,
-    RecoverySessionArchiveService,
-    get_recovery_session_archive_service,
-    reset_recovery_session_archive_service,
-)
-
-# Phase 2.7: Idempotent Step Handlers
-from .idempotent_step_handlers import (
-    IdempotencyStatus,
-    IdempotencyRecord,
-    IdempotentStepHandler,
-    IdempotentBudgetResetHandler,
-    IdempotentHealthCheckHandler,
-    IdempotentCanaryResumeHandler,
-    IdempotentGovernanceNormalHandler,
-    IdempotentStepHandlerRegistry,
-    get_idempotent_step_handler_registry,
-    reset_idempotent_step_handler_registry,
-    generate_idempotency_key,
-)
 
 # Phase 5.5: Recovery Metrics
 from .recovery_metrics import (
+    PROMETHEUS_AVAILABLE,
     RecoveryMetricsRecorder,
     StepTimer,
     get_recovery_metrics_recorder,
     reset_recovery_metrics_recorder,
-    PROMETHEUS_AVAILABLE,
 )
 
 # Phase 5.6: Recovery Notifications
 from .recovery_notifications import (
-    recovery_started_notification,
-    recovery_completed_notification,
-    recovery_failed_notification,
     recovery_aborted_notification,
     recovery_approval_required_notification,
-    recovery_stale_approval_reminder,
     recovery_circuit_breaker_trip_notification,
-    recovery_step_progress_notification,
+    recovery_completed_notification,
     recovery_daily_summary_notification,
+    recovery_failed_notification,
+    recovery_stale_approval_reminder,
+    recovery_started_notification,
+    recovery_step_progress_notification,
 )
 
+# Phase 1.4: Recovery Session Archive
+from .recovery_session_archive import (
+    RecoverySessionArchiveData,
+    RecoverySessionArchiveService,
+    RecoveryStepArchiveData,
+    get_recovery_session_archive_service,
+    reset_recovery_session_archive_service,
+)
+from .recovery_shutdown import (
+    RecoveryAwareShutdownConfig,
+    RecoveryAwareShutdownHook,
+    RecoveryShutdownStats,
+    create_recovery_aware_shutdown_hook,
+    run_prestop_check,
+)
+
+# Phase 5 Extension: Infrastructure Stability
+from .redis_key_guard import (
+    KeyPatternConfig,
+    RedisKeyPriority,
+    RedisKeyPriorityEviction,
+    RedisMemoryInfo,
+    get_redis_key_guard,
+)
+from .regional_recovery_policy import (
+    DEFAULT_REGIONAL_CONFIGS,
+    RegionalRecoveryConfig,
+    RegionalRecoveryPolicyEngine,
+    get_regional_recovery_policy_engine,
+    reset_regional_recovery_policy_engine,
+)
 
 __all__ = [
     # Enums

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Optional
 
 from .registry import get_tier_registry
 
@@ -94,8 +93,8 @@ class TieringMiddleware:
         try:
             from selfhealing.services.emergency_mode import get_emergency_manager
             from selfhealing.services.emergency_mode.enums import (
-                EmergencyLevel,
                 EMERGENCY_LEVEL_RULES,
+                EmergencyLevel,
             )
 
             manager = get_emergency_manager()
@@ -135,14 +134,14 @@ class TieringMiddleware:
             logger.error(f"[TieringMiddleware] Error: {e}, allowing request")
             return self.get_response(request)
 
-    def _get_client_ip(self, request) -> Optional[str]:
+    def _get_client_ip(self, request) -> str | None:
         """Extract client IP from request."""
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
             return x_forwarded_for.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR")
 
-    def _get_user_id(self, request) -> Optional[int]:
+    def _get_user_id(self, request) -> int | None:
         """Extract user ID from request."""
         if hasattr(request, "user") and request.user.is_authenticated:
             return request.user.id
@@ -189,7 +188,10 @@ class TieringMiddleware:
             {
                 "error": "Service Temporarily Unavailable",
                 "code": "LOAD_SHEDDING",
-                "message": (f"시스템 부하 관리를 위해 요청이 일시적으로 제한되었습니다. " f"잠시 후 다시 시도해주세요."),
+                "message": (
+                    "시스템 부하 관리를 위해 요청이 일시적으로 제한되었습니다. "
+                    "잠시 후 다시 시도해주세요."
+                ),
                 "tier": tier_id,
                 "emergency_level": emergency_level.name,
                 "retry_after": 30,

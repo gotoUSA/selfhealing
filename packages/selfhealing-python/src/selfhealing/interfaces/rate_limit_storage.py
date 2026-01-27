@@ -20,7 +20,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class RateLimitStorageType(Enum):
@@ -115,7 +114,7 @@ class RateLimitStorageInterface(ABC):
         self,
         key: str,
         cooldown_until: float,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """
         Set the cooldown end time for a key.

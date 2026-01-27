@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, ClassVar, Dict
+from typing import Any, ClassVar
 
 from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
@@ -78,13 +78,13 @@ class BaseNotifyingTask:
     notification_policy: NotificationPolicy = NotificationPolicy()
 
     # Class-level cooldown state (shared across instances)
-    _last_alert_times: ClassVar[Dict[str, datetime]] = {}
+    _last_alert_times: ClassVar[dict[str, datetime]] = {}
 
     # Task metadata (set by Celery if used as base)
     name: str = "unknown"
     request: Any = None
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def __call__(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
         Execute task with notification handling.
 
@@ -117,7 +117,7 @@ class BaseNotifyingTask:
 
         return result
 
-    def run(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    def run(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """
         Override this method in subclass to implement task logic.
 
@@ -152,7 +152,9 @@ class BaseNotifyingTask:
         self._send_pre_notification(*args, **kwargs)
         return True
 
-    def _on_post_execute(self, result: Dict[str, Any], *args: Any, **kwargs: Any) -> None:
+    def _on_post_execute(
+        self, result: dict[str, Any], *args: Any, **kwargs: Any
+    ) -> None:
         """Post-execution hook for result notifications."""
         policy = self.notification_policy
 
@@ -173,7 +175,7 @@ class BaseNotifyingTask:
         # Record to Audit Trail
         self._record_audit_trail(result)
 
-    def _should_notify(self, result: Dict[str, Any]) -> bool:
+    def _should_notify(self, result: dict[str, Any]) -> bool:
         """
         Determine if notification should be sent.
 
@@ -184,7 +186,9 @@ class BaseNotifyingTask:
         # 1. Cooldown check
         alert_key = f"{self.name}:{self._get_alert_key(result)}"
         if not self._can_send_alert(alert_key):
-            logger.debug(f"[BaseNotifyingTask] Alert suppressed by cooldown: {alert_key}")
+            logger.debug(
+                f"[BaseNotifyingTask] Alert suppressed by cooldown: {alert_key}"
+            )
             return False
 
         # 2. Threshold check
@@ -260,7 +264,7 @@ class BaseNotifyingTask:
         """Record that an alert was sent for cooldown tracking."""
         self._last_alert_times[alert_key] = datetime.now(timezone.utc)
 
-    def _send_notification(self, result: Dict[str, Any]) -> None:
+    def _send_notification(self, result: dict[str, Any]) -> None:
         """Send notification via SecurityNotificationService."""
         try:
             from selfhealing.services.security_notification import (
@@ -288,7 +292,9 @@ class BaseNotifyingTask:
             alert_key = f"{self.name}:{self._get_alert_key(result)}"
             self._record_alert_sent(alert_key)
 
-            logger.info(f"[BaseNotifyingTask] Notification sent for {self.name}: {severity}")
+            logger.info(
+                f"[BaseNotifyingTask] Notification sent for {self.name}: {severity}"
+            )
 
         except Exception as e:
             logger.error(f"[BaseNotifyingTask] Failed to send notification: {e}")
@@ -325,7 +331,8 @@ class BaseNotifyingTask:
         Returns False to block execution until approved.
         """
         logger.warning(
-            f"[BaseNotifyingTask] Task {self.name} requires approval - " f"execution blocked. Implement approval workflow."
+            f"[BaseNotifyingTask] Task {self.name} requires approval - "
+            f"execution blocked. Implement approval workflow."
         )
 
         # Send approval request notification
@@ -338,7 +345,11 @@ class BaseNotifyingTask:
 
             service.send_alert(
                 title=f"[Self-Healing] 승인 필요: {self.name}",
-                message=(f"고위험 작업 실행 승인이 필요합니다.\n" f"작업: {self.name}\n" f"인자: {args}, {kwargs}"),
+                message=(
+                    f"고위험 작업 실행 승인이 필요합니다.\n"
+                    f"작업: {self.name}\n"
+                    f"인자: {args}, {kwargs}"
+                ),
                 severity="critical",
                 channels=self.notification_policy.channels + ["email"],
                 metadata={
@@ -355,7 +366,7 @@ class BaseNotifyingTask:
         # Block execution
         return False
 
-    def _add_to_daily_report(self, result: Dict[str, Any]) -> None:
+    def _add_to_daily_report(self, result: dict[str, Any]) -> None:
         """
         Add result to daily aggregated report.
 
@@ -364,7 +375,10 @@ class BaseNotifyingTask:
         try:
             # Store in cache/Redis for later aggregation
             # For now, just log
-            logger.info(f"[BaseNotifyingTask] Adding to daily report: " f"{self.name} -> {result}")
+            logger.info(
+                f"[BaseNotifyingTask] Adding to daily report: "
+                f"{self.name} -> {result}"
+            )
 
             # TODO: Implement actual storage (Redis or Django cache)
             # Example:
@@ -377,7 +391,7 @@ class BaseNotifyingTask:
         except Exception as e:
             logger.error(f"[BaseNotifyingTask] Failed to add to daily report: {e}")
 
-    def _record_audit_trail(self, result: Dict[str, Any]) -> None:
+    def _record_audit_trail(self, result: dict[str, Any]) -> None:
         """Record notification event in Audit Trail."""
         try:
             from selfhealing.audit import get_audit_logger
@@ -411,7 +425,7 @@ class BaseNotifyingTask:
     # Override these methods in subclass for custom behavior
     # ==========================================================================
 
-    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+    def _get_summary_message(self, result: dict[str, Any]) -> str:
         """
         Generate notification message from result.
 
@@ -436,7 +450,7 @@ class BaseNotifyingTask:
 
         return f"작업 완료: {result}"
 
-    def _get_severity(self, result: Dict[str, Any]) -> str:
+    def _get_severity(self, result: dict[str, Any]) -> str:
         """
         Determine notification severity from result.
 
@@ -462,7 +476,7 @@ class BaseNotifyingTask:
 
         return policy.default_severity
 
-    def _get_alert_key(self, result: Dict[str, Any]) -> str:
+    def _get_alert_key(self, result: dict[str, Any]) -> str:
         """
         Generate unique key for alert deduplication.
 
@@ -474,7 +488,7 @@ class BaseNotifyingTask:
                 return str(result[key])
         return "default"
 
-    def _has_meaningful_result(self, result: Dict[str, Any]) -> bool:
+    def _has_meaningful_result(self, result: dict[str, Any]) -> bool:
         """
         Check if result is meaningful enough to notify.
 
@@ -518,6 +532,9 @@ def reset_cooldowns() -> None:
     BaseNotifyingTask._last_alert_times.clear()
 
 
-def get_cooldown_status() -> Dict[str, str]:
+def get_cooldown_status() -> dict[str, str]:
     """Get current cooldown status (for debugging)."""
-    return {key: value.isoformat() for key, value in BaseNotifyingTask._last_alert_times.items()}
+    return {
+        key: value.isoformat()
+        for key, value in BaseNotifyingTask._last_alert_times.items()
+    }

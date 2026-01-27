@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.services.circuit_breaker.load_shedding.manager import (
@@ -37,12 +37,12 @@ class LoadSheddingDashboard:
     운영자가 Shedding 상태를 조회하고 제어할 수 있는 API를 제공합니다.
     """
 
-    def __init__(self, manager: Optional["LoadSheddingManager"] = None):
+    def __init__(self, manager: LoadSheddingManager | None = None):
         """초기화."""
         self._manager = manager
 
     @property
-    def manager(self) -> "LoadSheddingManager":
+    def manager(self) -> LoadSheddingManager:
         """Manager 인스턴스."""
         if self._manager is None:
             from . import (
@@ -52,7 +52,7 @@ class LoadSheddingDashboard:
             self._manager = get_load_shedding_manager()
         return self._manager
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         현재 Shedding 상태 조회.
 
@@ -61,7 +61,7 @@ class LoadSheddingDashboard:
         """
         return self.manager.get_status().to_dict()
 
-    def get_service_status(self, service_id: str) -> Dict[str, Any]:
+    def get_service_status(self, service_id: str) -> dict[str, Any]:
         """
         특정 서비스의 Shedding 상태 조회.
 
@@ -84,7 +84,7 @@ class LoadSheddingDashboard:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    def get_all_services_status(self) -> List[Dict[str, Any]]:
+    def get_all_services_status(self) -> list[dict[str, Any]]:
         """
         모든 서비스의 Shedding 상태 조회.
 
@@ -101,7 +101,7 @@ class LoadSheddingDashboard:
         level: int = 0,
         reason: str = "manual_activation",
         operator: str = "unknown",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Shedding 수동 활성화.
 
@@ -129,7 +129,7 @@ class LoadSheddingDashboard:
         self,
         reason: str = "manual_deactivation",
         operator: str = "unknown",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Shedding 수동 비활성화.
 
@@ -151,7 +151,7 @@ class LoadSheddingDashboard:
             "current_status": self.get_status(),
         }
 
-    def get_policy(self) -> Dict[str, Any]:
+    def get_policy(self) -> dict[str, Any]:
         """
         현재 정책 조회.
 

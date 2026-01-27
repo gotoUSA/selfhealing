@@ -21,7 +21,6 @@ V3 Optimization:
 """
 
 import logging
-import time
 
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -37,17 +36,19 @@ logger = logging.getLogger(__name__)
 # V3 Cache Helpers
 # =============================================================================
 
+
 def _get_cached_response(cache_key: str, compute_fn, use_cache: bool = True):
     """
     Get response with V3 multi-tier cache.
-    
+
     Falls back gracefully if precomputed_cache module not available.
     """
     if not use_cache:
         return compute_fn()
-        
+
     try:
         from selfhealing.services.precomputed_cache import get_cached_response
+
         return get_cached_response(cache_key, compute_fn)
     except ImportError:
         # Fallback if precomputed_cache not available
@@ -59,7 +60,7 @@ class SelfHealingHealthView(APIView):
     Self-Healing System Health Check.
 
     GET /api/self-healing/health/
-    
+
     V3 Optimization: Uses multi-tier cache for P95 < 10ms target.
     """
 
@@ -69,22 +70,22 @@ class SelfHealingHealthView(APIView):
         """Get self-healing system health (V3: cached)."""
         # Check if cache bypass requested
         use_cache = request.query_params.get("nocache", "").lower() != "true"
-        
+
         try:
             from selfhealing.services.precomputed_cache import (
-                get_cached_health,
                 CACHE_KEY_HEALTH,
                 compute_health_status,
+                get_cached_health,
             )
-            
+
             if use_cache:
                 data = get_cached_health()
             else:
                 data = compute_health_status()
                 data["_cache"] = {"hit": "BYPASSED"}
-                
+
             return Response(data)
-            
+
         except ImportError:
             # Fallback if precomputed_cache not available
             service = get_health_check_service()
@@ -123,7 +124,7 @@ class ReadinessView(APIView):
         """Check if application is ready to serve traffic."""
         service = get_health_check_service()
         readiness = service.get_readiness()
-        
+
         response_data = readiness.to_dict()
         del response_data["is_ready"]  # Remove internal field from response
 
@@ -148,7 +149,7 @@ class ConnectionPoolHealthView(APIView):
         """Get connection pool health status."""
         service = get_health_check_service()
         pool_health = service.get_pool_health()
-        
+
         response_data = pool_health.to_dict()
         if response_data.get("error") is None:
             del response_data["error"]  # Remove None error field
@@ -170,11 +171,11 @@ def simple_health_ping(request):
     - No service layer calls
     - No authentication
     - Target: < 1ms response time
-    
+
     Returns 'pong' - useful for load balancer checks and L3 baseline.
     """
     from django.http import JsonResponse
-    
+
     # Ultra-lightweight: just return static response
     # No imports, no computation, no DB - pure HTTP response
     return JsonResponse(
@@ -253,10 +254,12 @@ class ErrorBudgetGateConfigView(APIView):
         gate = get_error_budget_gate()
         config = gate.get_config()
 
-        return Response({
-            "status": "success",
-            "config": config.to_dict(),
-        })
+        return Response(
+            {
+                "status": "success",
+                "config": config.to_dict(),
+            }
+        )
 
     def put(self, request):
         """Update gate configuration."""
@@ -264,7 +267,7 @@ class ErrorBudgetGateConfigView(APIView):
 
         # Exception은 exception handler가 처리
         gate = get_error_budget_gate()
-        
+
         # 허용된 설정 필드
         allowed_fields = {
             "enabled",
@@ -283,22 +286,21 @@ class ErrorBudgetGateConfigView(APIView):
         }
 
         # 유효한 필드만 추출
-        updates = {
-            k: v for k, v in request.data.items()
-            if k in allowed_fields
-        }
+        updates = {k: v for k, v in request.data.items() if k in allowed_fields}
 
         if not updates:
             raise ValueError("No valid configuration fields provided")
 
         config = gate.update_config(**updates)
 
-        return Response({
-            "status": "success",
-            "message": f"Updated {len(updates)} configuration field(s)",
-            "updated_fields": list(updates.keys()),
-            "config": config.to_dict(),
-        })
+        return Response(
+            {
+                "status": "success",
+                "message": f"Updated {len(updates)} configuration field(s)",
+                "updated_fields": list(updates.keys()),
+                "config": config.to_dict(),
+            }
+        )
 
 
 class ErrorBudgetGateResetView(APIView):
@@ -318,7 +320,7 @@ class ErrorBudgetGateResetView(APIView):
 
         # Exception은 exception handler가 처리
         gate = get_error_budget_gate()
-        
+
         component = request.data.get("component", "all")
         reset_actions = []
 
@@ -342,8 +344,10 @@ class ErrorBudgetGateResetView(APIView):
         if not reset_actions:
             raise ValueError(f"Unknown component: {component}")
 
-        return Response({
-            "status": "success",
-            "message": f"Reset completed for: {', '.join(reset_actions)}",
-            "reset_components": reset_actions,
-        })
+        return Response(
+            {
+                "status": "success",
+                "message": f"Reset completed for: {', '.join(reset_actions)}",
+                "reset_components": reset_actions,
+            }
+        )

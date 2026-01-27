@@ -10,29 +10,31 @@ Manages graceful shutdown with in-flight request handling:
 Framework-agnostic design.
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from enum import Enum
-from typing import Optional, Callable, Dict, List, Any
+import logging
 import threading
 import time
-import logging
-
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class ShutdownPhase(str, Enum):
     """Shutdown process phases"""
-    RUNNING = "running"           # 정상 운영 중
-    DRAINING = "draining"         # 새 요청 거부, 기존 요청 처리 중
-    TERMINATING = "terminating"   # 강제 종료 중
-    TERMINATED = "terminated"     # 종료 완료
+
+    RUNNING = "running"  # 정상 운영 중
+    DRAINING = "draining"  # 새 요청 거부, 기존 요청 처리 중
+    TERMINATING = "terminating"  # 강제 종료 중
+    TERMINATED = "terminated"  # 종료 완료
 
 
 class RequestState(str, Enum):
     """State of an in-flight request"""
+
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     ABORTED = "aborted"
@@ -42,12 +44,13 @@ class RequestState(str, Enum):
 @dataclass
 class TrackedRequest:
     """Information about a tracked in-flight request"""
+
     request_id: str
     started_at: datetime
     endpoint: str = ""
     method: str = ""
     state: RequestState = RequestState.IN_PROGRESS
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration_seconds(self) -> float:
@@ -57,13 +60,14 @@ class TrackedRequest:
 @dataclass
 class ShutdownStats:
     """Statistics about the shutdown process"""
+
     phase: ShutdownPhase
-    shutdown_started_at: Optional[datetime]
+    shutdown_started_at: datetime | None
     in_flight_count: int
     completed_during_drain: int
     aborted_count: int
     drain_timeout_seconds: float
-    remaining_drain_time: Optional[float]
+    remaining_drain_time: float | None
 
 
 class ShutdownHandler(ABC):
@@ -80,7 +84,7 @@ class ShutdownHandler(ABC):
         pass
 
     @abstractmethod
-    def on_force_shutdown(self, pending_requests: List[TrackedRequest]) -> None:
+    def on_force_shutdown(self, pending_requests: list[TrackedRequest]) -> None:
         """Called when forced shutdown with pending requests"""
         pass
 
@@ -103,7 +107,7 @@ class RequestTracker:
     """
 
     def __init__(self, max_request_age_seconds: float = 300.0):
-        self._requests: Dict[str, TrackedRequest] = {}
+        self._requests: dict[str, TrackedRequest] = {}
         self._lock = threading.Lock()
         self._max_age = max_request_age_seconds
         self._completed_count = 0
@@ -113,7 +117,7 @@ class RequestTracker:
         request_id: str,
         endpoint: str = "",
         method: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> TrackedRequest:
         """Start tracking a request"""
         request = TrackedRequest(
@@ -135,20 +139,23 @@ class RequestTracker:
         self,
         request_id: str,
         success: bool = True,
-    ) -> Optional[TrackedRequest]:
+    ) -> TrackedRequest | None:
         """End tracking a request"""
         with self._lock:
             request = self._requests.pop(request_id, None)
             if request:
-                request.state = RequestState.COMPLETED if success else RequestState.ABORTED
+                request.state = (
+                    RequestState.COMPLETED if success else RequestState.ABORTED
+                )
                 self._completed_count += 1
             return request
 
-    def get_pending_requests(self) -> List[TrackedRequest]:
+    def get_pending_requests(self) -> list[TrackedRequest]:
         """Get all pending (in-progress) requests"""
         with self._lock:
             return [
-                r for r in self._requests.values()
+                r
+                for r in self._requests.values()
                 if r.state == RequestState.IN_PROGRESS
             ]
 
@@ -156,11 +163,12 @@ class RequestTracker:
         """Get count of pending requests"""
         with self._lock:
             return sum(
-                1 for r in self._requests.values()
+                1
+                for r in self._requests.values()
                 if r.state == RequestState.IN_PROGRESS
             )
 
-    def abort_all(self) -> List[TrackedRequest]:
+    def abort_all(self) -> list[TrackedRequest]:
         """Abort all pending requests"""
         with self._lock:
             aborted = []
@@ -174,7 +182,8 @@ class RequestTracker:
         """Remove requests older than max age"""
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._max_age)
         old_ids = [
-            rid for rid, req in self._requests.items()
+            rid
+            for rid, req in self._requests.items()
             if req.started_at < cutoff and req.state != RequestState.IN_PROGRESS
         ]
         for rid in old_ids:
@@ -211,8 +220,8 @@ class GracefulShutdownCoordinator:
         self,
         request_tracker: RequestTracker,
         drain_timeout: float = 30.0,
-        shutdown_handler: Optional[ShutdownHandler] = None,
-        on_shutdown_complete: Optional[Callable[[], None]] = None,
+        shutdown_handler: ShutdownHandler | None = None,
+        on_shutdown_complete: Callable[[], None] | None = None,
         check_interval: float = 0.5,
     ):
         self._tracker = request_tracker
@@ -222,8 +231,8 @@ class GracefulShutdownCoordinator:
         self._check_interval = check_interval
 
         self._phase = ShutdownPhase.RUNNING
-        self._shutdown_started_at: Optional[datetime] = None
-        self._shutdown_thread: Optional[threading.Thread] = None
+        self._shutdown_started_at: datetime | None = None
+        self._shutdown_thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
         # Stats
@@ -319,7 +328,9 @@ class GracefulShutdownCoordinator:
         """Get current shutdown statistics"""
         remaining = None
         if self._shutdown_started_at and self._phase == ShutdownPhase.DRAINING:
-            elapsed = (datetime.now(timezone.utc) - self._shutdown_started_at).total_seconds()
+            elapsed = (
+                datetime.now(timezone.utc) - self._shutdown_started_at
+            ).total_seconds()
             remaining = max(0, self._drain_timeout - elapsed)
 
         return ShutdownStats(
@@ -332,7 +343,7 @@ class GracefulShutdownCoordinator:
             remaining_drain_time=remaining,
         )
 
-    def wait_for_shutdown(self, timeout: Optional[float] = None) -> bool:
+    def wait_for_shutdown(self, timeout: float | None = None) -> bool:
         """Wait for shutdown to complete. Returns True if completed."""
         if self._shutdown_thread:
             self._shutdown_thread.join(timeout=timeout)

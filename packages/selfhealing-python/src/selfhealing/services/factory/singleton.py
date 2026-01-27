@@ -10,9 +10,9 @@ from __future__ import annotations
 import logging
 
 from .service import (
+    create_circuit_breaker_service,
     create_dlq_service,
     create_replay_service,
-    create_circuit_breaker_service,
     create_security_violation_service,
 )
 

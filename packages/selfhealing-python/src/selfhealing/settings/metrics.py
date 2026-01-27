@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -91,7 +90,7 @@ class MetricsSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[MetricsSettings] = None
+_settings: MetricsSettings | None = None
 
 
 def get_metrics_settings() -> MetricsSettings:

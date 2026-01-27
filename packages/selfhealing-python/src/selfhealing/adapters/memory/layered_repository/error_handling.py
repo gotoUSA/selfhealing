@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 class ErrorHandlingMixin:
     """Mixin providing L2 error handling operations."""
 
-    def _handle_l2_timeout(self, operation: str, service_name: Optional[str]) -> None:
+    def _handle_l2_timeout(self, operation: str, service_name: str | None) -> None:
         """L2 타임아웃 처리."""
         self._metrics["l2_timeout_count"] += 1
         self._l2_consecutive_failures += 1
@@ -25,7 +24,7 @@ class ErrorHandlingMixin:
         if self._l2_consecutive_failures >= 3:
             self._l2_healthy = False
             self._l2_was_unhealthy = True
-            
+
             # Audit 기록: L2 장애 발생
             self._log_l2_failure_audit(
                 operation=operation,
@@ -33,7 +32,7 @@ class ErrorHandlingMixin:
                 error_type="timeout",
                 error_message=f"L2 timeout after {self._l2_consecutive_failures} consecutive failures",
             )
-            
+
             # 알림 발송: 연속 실패 시
             self._send_l2_failure_notification(
                 failure_type="timeout",
@@ -50,7 +49,7 @@ class ErrorHandlingMixin:
     def _handle_l2_error(
         self,
         operation: str,
-        service_name: Optional[str],
+        service_name: str | None,
         error: Exception,
         intended_state: str = "",
     ) -> None:
@@ -62,7 +61,7 @@ class ErrorHandlingMixin:
         if self._l2_consecutive_failures >= 3:
             self._l2_healthy = False
             self._l2_was_unhealthy = True
-            
+
             # Audit 기록: L2 장애 발생
             self._log_l2_failure_audit(
                 operation=operation,
@@ -70,7 +69,7 @@ class ErrorHandlingMixin:
                 error_type=type(error).__name__,
                 error_message=str(error)[:500],
             )
-            
+
             # 알림 발송: 연속 실패 시
             self._send_l2_failure_notification(
                 failure_type="error",
@@ -111,13 +110,13 @@ class ErrorHandlingMixin:
                 f"{self._metrics.get('l2_sync_failure_count', 0)} failures. "
                 f"Initiating drift reconciliation."
             )
-            
+
             # Audit 기록: L2 복구
             self._log_l2_recovery_audit()
-            
+
             # 알림 발송: L2 복구 완료
             self._send_l2_recovery_notification()
-            
+
             self._schedule_drift_reconciliation()
 
         try:

@@ -8,7 +8,7 @@ Provides framework-agnostic throttling with:
 
 Usage:
     from selfhealing.services.throttle import AdaptiveThrottle, ThrottleConfig
-    
+
     throttle = AdaptiveThrottle(
         config=ThrottleConfig(
             initial_limit=100,
@@ -16,22 +16,22 @@ Usage:
             max_limit=500,
         )
     )
-    
+
     # Check if request is allowed
     allowed, info = throttle.check("user_123")
-    
+
     # Record response time for gradient calculation
     throttle.record_response(response_time_ms=45.2)
 """
 
-from selfhealing.services.throttle.config import ThrottleConfig
-from selfhealing.services.throttle.base import BaseThrottle, SlidingWindowThrottle
 from selfhealing.services.throttle.adaptive import (
     AdaptiveThrottle,
     GradientCalculator,
     get_adaptive_throttle,
     reset_adaptive_throttle,
 )
+from selfhealing.services.throttle.base import BaseThrottle, SlidingWindowThrottle
+from selfhealing.services.throttle.config import ThrottleConfig
 
 __all__ = [
     "ThrottleConfig",

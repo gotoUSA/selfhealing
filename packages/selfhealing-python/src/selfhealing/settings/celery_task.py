@@ -18,7 +18,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -177,7 +176,7 @@ class CeleryTaskSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_celery_task_settings: Optional[CeleryTaskSettings] = None
+_celery_task_settings: CeleryTaskSettings | None = None
 
 
 def get_celery_task_settings() -> CeleryTaskSettings:

@@ -25,7 +25,7 @@ Security:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.utils import timezone
 from rest_framework import status
@@ -33,16 +33,15 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from selfhealing.services.audit.xtest_audit import log_xtest_scenario_audit
+
 from .base import XTestModeMixin, collect_system_snapshot
 from .integration_scenarios import (
-    SCENARIO_REGISTRY,
-    ScenarioStatus,
+    clear_scenario_results,
     get_scenario_class,
     get_scenario_result,
     list_available_scenarios,
-    clear_scenario_results,
 )
-from selfhealing.services.audit.xtest_audit import log_xtest_scenario_audit
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +54,9 @@ logger = logging.getLogger(__name__)
 class RunScenarioView(XTestModeMixin, APIView):
     """
     통합 테스트 시나리오 실행 API.
-    
+
     POST /api/self-healing/xtest/integration/run-scenario/
-    
+
     Request:
         {
             "scenario": "cb_open_dlq_flow",  // 시나리오 식별자 (필수)
@@ -66,7 +65,7 @@ class RunScenarioView(XTestModeMixin, APIView):
                 "failure_count": 5
             }
         }
-    
+
     Response:
         {
             "status": "success",
@@ -127,7 +126,7 @@ class RunScenarioView(XTestModeMixin, APIView):
         try:
             scenario = scenario_class(service_name=service_name, config=config)
             result = scenario.run()
-            
+
             logger.info(
                 f"[X-Test Integration] Scenario {scenario_name} completed: "
                 f"status={result.status.value}, steps={len(result.steps)}"
@@ -179,9 +178,9 @@ class RunScenarioView(XTestModeMixin, APIView):
 class ScenarioStatusView(XTestModeMixin, APIView):
     """
     시나리오 실행 상태 조회 API.
-    
+
     GET /api/self-healing/xtest/integration/scenario/{scenario_id}/
-    
+
     Response:
         {
             "status": "success",
@@ -237,13 +236,13 @@ class ScenarioStatusView(XTestModeMixin, APIView):
 class FullSnapshotView(XTestModeMixin, APIView):
     """
     모든 Self-Healing 컴포넌트 상태 통합 조회 API.
-    
+
     GET /api/self-healing/xtest/integration/full-snapshot/
-    
+
     Query Parameters:
         service_name: 서비스 필터 (선택)
         include_history: 히스토리 포함 여부 (선택, 기본 false)
-    
+
     Response:
         {
             "status": "success",
@@ -263,7 +262,9 @@ class FullSnapshotView(XTestModeMixin, APIView):
             return denied
 
         service_name = request.query_params.get("service_name")
-        include_history = request.query_params.get("include_history", "false").lower() == "true"
+        include_history = (
+            request.query_params.get("include_history", "false").lower() == "true"
+        )
 
         snapshot = {
             "timestamp": timezone.now().isoformat(),
@@ -273,9 +274,12 @@ class FullSnapshotView(XTestModeMixin, APIView):
 
         # Circuit Breaker 상태
         try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
+
             cb_service = get_circuit_breaker_service()
-            
+
             if service_name:
                 state = cb_service.get_state(service_name)
                 snapshot["circuit_breakers"] = {
@@ -293,15 +297,20 @@ class FullSnapshotView(XTestModeMixin, APIView):
         # Error Budget 상태
         try:
             from selfhealing.services.error_budget import get_error_budget_service
+
             eb_service = get_error_budget_service()
-            
+
             if service_name:
                 eb_status = eb_service.get_status(service_name)
                 snapshot["error_budget"] = {
                     service_name: {
                         "remaining_percent": eb_status.remaining_percent,
                         "consumed_percent": eb_status.consumed_percent,
-                        "status": eb_status.status.value if hasattr(eb_status, 'status') else "unknown",
+                        "status": (
+                            eb_status.status.value
+                            if hasattr(eb_status, "status")
+                            else "unknown"
+                        ),
                     }
                 }
             else:
@@ -313,8 +322,9 @@ class FullSnapshotView(XTestModeMixin, APIView):
         # DLQ 상태
         try:
             from selfhealing.services.dlq import get_dlq_service
+
             dlq_service = get_dlq_service()
-            
+
             stats = dlq_service.get_stats(domain=service_name)
             snapshot["dlq"] = stats
         except Exception as e:
@@ -324,13 +334,14 @@ class FullSnapshotView(XTestModeMixin, APIView):
         # Rate Limiter 상태
         try:
             from selfhealing.api.django.rate_limit import (
-                get_redis_health_checker,
-                get_rate_limit_config,
                 RedisHealthState,
+                get_rate_limit_config,
+                get_redis_health_checker,
             )
+
             health_checker = get_redis_health_checker()
             config = get_rate_limit_config()
-            
+
             snapshot["rate_limiter"] = {
                 "redis_healthy": health_checker.state == RedisHealthState.HEALTHY,
                 "state": health_checker.state.value,
@@ -346,8 +357,9 @@ class FullSnapshotView(XTestModeMixin, APIView):
         # Idempotency 상태
         try:
             from selfhealing.services.idempotency_service import IdempotencyService
+
             idempotency_service = IdempotencyService()
-            
+
             snapshot["idempotency"] = {
                 "status": "available",
                 "cache_available": idempotency_service._cache is not None,
@@ -359,8 +371,9 @@ class FullSnapshotView(XTestModeMixin, APIView):
         # Retry 상태
         try:
             from selfhealing.services.retry_handler import RetryConfig
+
             config = RetryConfig.from_settings(domain=service_name or "default")
-            
+
             snapshot["retry"] = {
                 "max_attempts": config.max_attempts,
                 "backoff_base": config.backoff_base,
@@ -379,7 +392,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
             request=request,
             action="full_snapshot",
             component="integration",
-            details={"service_filter": service_name, "include_history": include_history},
+            details={
+                "service_filter": service_name,
+                "include_history": include_history,
+            },
             result="success",
         )
 
@@ -402,12 +418,17 @@ class FullSnapshotView(XTestModeMixin, APIView):
 # =============================================================================
 
 
-def _reset_circuit_breakers(service_name: Optional[str], xtest_only: bool) -> Dict[str, Any]:
+def _reset_circuit_breakers(
+    service_name: str | None, xtest_only: bool
+) -> dict[str, Any]:
     """Circuit Breaker 컴포넌트 초기화."""
     try:
-        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
+
         cb_service = get_circuit_breaker_service()
-        
+
         if service_name:
             cb_service.reset_circuit(service_name)
             return {"reset": True, "service": service_name}
@@ -416,17 +437,18 @@ def _reset_circuit_breakers(service_name: Optional[str], xtest_only: bool) -> Di
         return {"error": str(e)}
 
 
-def _reset_error_budget() -> Dict[str, Any]:
+def _reset_error_budget() -> dict[str, Any]:
     """Error Budget 컴포넌트 초기화."""
     return {"reset": True, "note": "EB reset is simulated in X-Test mode"}
 
 
-def _reset_dlq(xtest_only: bool) -> Dict[str, Any]:
+def _reset_dlq(xtest_only: bool) -> dict[str, Any]:
     """DLQ 컴포넌트 초기화."""
     try:
         from selfhealing.services.dlq import get_dlq_service
+
         get_dlq_service()  # 서비스 접근 확인
-        
+
         if xtest_only:
             return {"reset": True, "deleted_count": 0, "scope": "xtest_only"}
         return {"reset": True, "scope": "test_data"}
@@ -434,26 +456,27 @@ def _reset_dlq(xtest_only: bool) -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-def _reset_rate_limiter() -> Dict[str, Any]:
+def _reset_rate_limiter() -> dict[str, Any]:
     """Rate Limiter 컴포넌트 초기화."""
     try:
         from selfhealing.api.django.rate_limit import get_local_limiter
+
         local_limiter = get_local_limiter()
-        
-        if hasattr(local_limiter, 'reset'):
+
+        if hasattr(local_limiter, "reset"):
             local_limiter.reset()
-        
+
         return {"reset": True, "scope": "local_counters"}
     except Exception as e:
         return {"error": str(e)}
 
 
-def _reset_idempotency(xtest_only: bool) -> Dict[str, Any]:
+def _reset_idempotency(xtest_only: bool) -> dict[str, Any]:
     """Idempotency 컴포넌트 초기화."""
     return {"reset": True, "scope": "xtest_keys" if xtest_only else "all_keys"}
 
 
-def _reset_scenarios() -> Dict[str, Any]:
+def _reset_scenarios() -> dict[str, Any]:
     """Scenario 결과 초기화."""
     try:
         count = clear_scenario_results()
@@ -465,16 +488,16 @@ def _reset_scenarios() -> Dict[str, Any]:
 class ResetView(XTestModeMixin, APIView):
     """
     테스트 전 시스템 상태 초기화 API.
-    
+
     POST /api/self-healing/xtest/integration/reset/
-    
+
     Request:
         {
             "components": ["circuit_breakers", "dlq", "rate_limiter"],  // 선택, 기본 all
             "service_name": "test_service",  // 선택
             "xtest_only": true               // 선택, X-Test 생성 데이터만 (기본 true)
         }
-    
+
     Response:
         {
             "status": "success",
@@ -495,7 +518,7 @@ class ResetView(XTestModeMixin, APIView):
         "scenarios",
         "all",
     ]
-    
+
     # 컴포넌트별 리셋 핸들러 매핑
     RESET_HANDLERS = {
         "circuit_breakers": lambda sn, xo: _reset_circuit_breakers(sn, xo),
@@ -506,7 +529,7 @@ class ResetView(XTestModeMixin, APIView):
         "scenarios": lambda sn, xo: _reset_scenarios(),
     }
 
-    def _validate_components(self, components: List[str]) -> Optional[Response]:
+    def _validate_components(self, components: list[str]) -> Response | None:
         """컴포넌트 유효성 검증. 오류 시 Response 반환."""
         invalid = [c for c in components if c not in self.VALID_COMPONENTS]
         if invalid:
@@ -523,18 +546,18 @@ class ResetView(XTestModeMixin, APIView):
 
     def _execute_resets(
         self,
-        components: List[str],
-        service_name: Optional[str],
+        components: list[str],
+        service_name: str | None,
         xtest_only: bool,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """각 컴포넌트에 대한 리셋 실행."""
         reset_all = "all" in components
-        results: Dict[str, Any] = {}
-        
+        results: dict[str, Any] = {}
+
         for component, handler in self.RESET_HANDLERS.items():
             if reset_all or component in components:
                 results[component] = handler(service_name, xtest_only)
-        
+
         return results
 
     def post(self, request: Request) -> Response:
@@ -575,7 +598,9 @@ class ResetView(XTestModeMixin, APIView):
         self.log_xtest_cleanup(
             request=request,
             component="integration",
-            cleaned_count=len([k for k, v in reset_results.items() if v.get("reset", False)]),
+            cleaned_count=len(
+                [k for k, v in reset_results.items() if v.get("reset", False)]
+            ),
             cleaned_ids=list(reset_results.keys()),
         )
 

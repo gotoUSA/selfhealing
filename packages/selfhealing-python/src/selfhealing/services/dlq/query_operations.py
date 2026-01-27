@@ -7,7 +7,7 @@ Provides methods for querying DLQ entries.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
 
@@ -25,7 +25,7 @@ class QueryOperationsMixin:
         domain: str | None = None,
         failure_type: str | None = None,
         limit: int = 100,
-    ) -> List["FailedOperationData"]:
+    ) -> list[FailedOperationData]:
         """
         Get pending DLQ entries.
 
@@ -49,7 +49,7 @@ class QueryOperationsMixin:
         domain: str | None = None,
         failure_type: str | None = None,
         limit: int = 100,
-    ) -> List["FailedOperationData"]:
+    ) -> list[FailedOperationData]:
         """
         Get entries that can be replayed.
 
@@ -72,7 +72,7 @@ class QueryOperationsMixin:
             limit=limit,
         )
 
-    def get_sla_breached_entries(self) -> List["FailedOperationData"]:
+    def get_sla_breached_entries(self) -> list[FailedOperationData]:
         """
         Get entries that have breached their SLA.
 
@@ -93,7 +93,7 @@ class QueryOperationsMixin:
             sla_thresholds=sla_config.get_all_thresholds(),
         )
 
-    def get_expired_entries(self) -> List["FailedOperationData"]:
+    def get_expired_entries(self) -> list[FailedOperationData]:
         """
         Get entries that have passed their retention period.
 
@@ -103,7 +103,7 @@ class QueryOperationsMixin:
         current_time = now()
         return self.repository.find_expired(current_time=current_time)
 
-    def get_entry_by_id(self, dlq_id: int) -> Optional["FailedOperationData"]:
+    def get_entry_by_id(self, dlq_id: int) -> FailedOperationData | None:
         """
         Get a single DLQ entry by ID.
 

@@ -17,7 +17,7 @@ Schedule:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def cleanup_xtest_artifacts() -> Dict[str, Any]:
+def cleanup_xtest_artifacts() -> dict[str, Any]:
     """
     만료된 X-Test 세션 및 관련 아티팩트 정리.
 
@@ -77,7 +77,7 @@ def cleanup_xtest_artifacts() -> Dict[str, Any]:
         raise
 
 
-def get_xtest_cleanup_stats() -> Dict[str, Any]:
+def get_xtest_cleanup_stats() -> dict[str, Any]:
     """
     X-Test 정리 대상 통계 조회.
 
@@ -104,6 +104,7 @@ def get_xtest_cleanup_stats() -> Dict[str, Any]:
 
 try:
     from celery import shared_task
+
     from selfhealing.settings.xtest_cleanup import get_xtest_cleanup_settings
 
     # 모듈 로드 시점에 설정값 캐싱
@@ -139,7 +140,7 @@ except ImportError:
 # =============================================================================
 
 
-def get_xtest_cleanup_beat_schedule() -> Dict[str, Any]:
+def get_xtest_cleanup_beat_schedule() -> dict[str, Any]:
     """
     X-Test Cleanup Beat Schedule 반환.
 
@@ -148,6 +149,7 @@ def get_xtest_cleanup_beat_schedule() -> Dict[str, Any]:
     """
     try:
         from celery.schedules import crontab
+
         from selfhealing.settings.xtest_cleanup import get_xtest_cleanup_settings
 
         settings = get_xtest_cleanup_settings()

@@ -8,16 +8,15 @@ Endpoints:
 """
 
 import logging
-from typing import List
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import BasePermission, IsAdminUser
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.serializers.config import L2StorageConfigSerializer
 from selfhealing.config import get_l2_storage_runtime_config
 
@@ -32,7 +31,7 @@ class L2StorageConfigView(APIView):
     PUT  /api/self-healing/l2-storage/config/ - Update config (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
@@ -40,7 +39,7 @@ class L2StorageConfigView(APIView):
     def get(self, request: Request) -> Response:
         """Get current L2 storage configuration."""
         config = get_l2_storage_runtime_config()
-        
+
         return Response(
             {
                 "status": "success",
@@ -56,23 +55,21 @@ class L2StorageConfigView(APIView):
         serializer = L2StorageConfigSerializer(data=request.data)
         if not serializer.is_valid():
             raise ValueError(f"Validation failed: {serializer.errors}")
-        
+
         config = get_l2_storage_runtime_config()
         changes = serializer.get_config_changes()
-        
+
         if not changes:
             raise ValueError("No changes provided")
-        
+
         # ValueError는 exception handler가 400으로 처리
         updated_config = config.update(
             **changes,
             updated_by=str(request.user),
         )
-        
-        logger.info(
-            f"[L2StorageAPI] Config updated by {request.user}: {changes}"
-        )
-        
+
+        logger.info(f"[L2StorageAPI] Config updated by {request.user}: {changes}")
+
         return Response(
             {
                 "status": "success",
@@ -99,9 +96,9 @@ class L2StorageConfigResetView(APIView):
         """Reset L2 storage configuration to defaults."""
         config = get_l2_storage_runtime_config()
         config.reset()
-        
+
         logger.info(f"[L2StorageAPI] Config reset to defaults by {request.user}")
-        
+
         return Response(
             {
                 "status": "success",

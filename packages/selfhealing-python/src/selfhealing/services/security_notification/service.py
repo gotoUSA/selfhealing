@@ -15,20 +15,19 @@ Handles security-related notifications across multiple channels:
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from selfhealing.settings import get_config
 
+from .email_handler import EmailHandlerMixin
 from .models import (
     NotificationConfig,
-    NotificationResult,
     SecurityNotificationResult,
     _get_notification_limits,
 )
-from .slack_handler import SlackHandlerMixin
-from .email_handler import EmailHandlerMixin
-from .sms_handler import SMSHandlerMixin
 from .pagerduty_handler import PagerDutyHandlerMixin
+from .slack_handler import SlackHandlerMixin
+from .sms_handler import SMSHandlerMixin
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +66,8 @@ class SecurityNotificationService(
         incident_type: str,
         severity: str,
         description: str = "",
-        source_ip: Optional[str] = None,
-        user_id: Optional[int] = None,
+        source_ip: str | None = None,
+        user_id: int | None = None,
         action_taken: str = "",
     ) -> SecurityNotificationResult:
         """
@@ -111,25 +110,42 @@ class SecurityNotificationService(
         # Route based on severity
         if severity == "critical":
             # All channels for critical
-            result.add_result(self._send_slack(message, self.config.slack_critical_channel))
-            result.add_result(self._send_email(message, self.config.email_critical_recipients))
-            result.add_result(self._send_sms(message, self.config.sms_critical_recipients))
+            result.add_result(
+                self._send_slack(message, self.config.slack_critical_channel)
+            )
+            result.add_result(
+                self._send_email(message, self.config.email_critical_recipients)
+            )
+            result.add_result(
+                self._send_sms(message, self.config.sms_critical_recipients)
+            )
             if self.config.pagerduty_enabled:
-                result.add_result(self._trigger_pagerduty_by_data(incident_id, incident_type, description, source_ip))
+                result.add_result(
+                    self._trigger_pagerduty_by_data(
+                        incident_id, incident_type, description, source_ip
+                    )
+                )
 
         elif severity == "high":
             # Slack + Email for high
             result.add_result(self._send_slack(message, self.config.slack_high_channel))
-            result.add_result(self._send_email(message, self.config.email_high_recipients))
+            result.add_result(
+                self._send_email(message, self.config.email_high_recipients)
+            )
 
         else:  # medium and below
             # Slack only for medium
-            result.add_result(self._send_slack(message, self.config.slack_medium_channel))
+            result.add_result(
+                self._send_slack(message, self.config.slack_medium_channel)
+            )
 
         # Log results
         success_count = sum(1 for r in result.results if r.success)
         total_count = len(result.results)
-        logger.info(f"[Security Notification] Incident {incident_id}: " f"{success_count}/{total_count} notifications sent")
+        logger.info(
+            f"[Security Notification] Incident {incident_id}: "
+            f"{success_count}/{total_count} notifications sent"
+        )
 
         return result
 
@@ -169,26 +185,51 @@ class SecurityNotificationService(
         }
         return channel_map.get(severity, self.config.slack_medium_channel)
 
-    def _send_to_slack(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+    def _send_to_slack(
+        self,
+        formatted_message: dict,
+        severity: str,
+        result: SecurityNotificationResult,
+    ) -> None:
         """Send alert to Slack channel."""
         channel = self._get_slack_channel_for_severity(severity)
         result.add_result(self._send_slack_alert(formatted_message, channel))
 
-    def _send_to_email(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+    def _send_to_email(
+        self,
+        formatted_message: dict,
+        severity: str,
+        result: SecurityNotificationResult,
+    ) -> None:
         """Send alert to email recipients."""
         recipients = (
-            self.config.email_critical_recipients if severity == "critical" 
+            self.config.email_critical_recipients
+            if severity == "critical"
             else self.config.email_high_recipients
         )
         if recipients:
             result.add_result(self._send_email_alert(formatted_message, recipients))
 
-    def _send_to_sms(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+    def _send_to_sms(
+        self,
+        formatted_message: dict,
+        severity: str,
+        result: SecurityNotificationResult,
+    ) -> None:
         """Send SMS alert for critical severity."""
         if severity == "critical" and self.config.sms_critical_recipients:
-            result.add_result(self._send_sms_alert(formatted_message, self.config.sms_critical_recipients))
+            result.add_result(
+                self._send_sms_alert(
+                    formatted_message, self.config.sms_critical_recipients
+                )
+            )
 
-    def _send_to_pagerduty(self, formatted_message: dict, severity: str, result: "SecurityNotificationResult") -> None:
+    def _send_to_pagerduty(
+        self,
+        formatted_message: dict,
+        severity: str,
+        result: SecurityNotificationResult,
+    ) -> None:
         """Send PagerDuty alert for critical severity."""
         if severity == "critical" and self.config.pagerduty_enabled:
             result.add_result(self._send_pagerduty_alert(formatted_message))
@@ -228,7 +269,9 @@ class SecurityNotificationService(
         formatted_message = {
             "title": self._truncate_with_ellipsis(title, limits.title_max_length),
             "severity": severity.upper(),
-            "description": self._truncate_with_ellipsis(message, limits.description_max_length),
+            "description": self._truncate_with_ellipsis(
+                message, limits.description_max_length
+            ),
             "detected_at": now().isoformat(),
             "metadata": metadata,
         }
@@ -247,7 +290,9 @@ class SecurityNotificationService(
                 handler(formatted_message, severity, result)
 
         success_count = sum(1 for r in result.results if r.success)
-        logger.info(f"[Security Notification] Alert '{title}': {success_count}/{len(result.results)} notifications sent")
+        logger.info(
+            f"[Security Notification] Alert '{title}': {success_count}/{len(result.results)} notifications sent"
+        )
 
         return result
 
@@ -284,8 +329,8 @@ class SecurityNotificationService(
         incident_type: str,
         severity: str,
         description: str,
-        source_ip: Optional[str],
-        user_id: Optional[int],
+        source_ip: str | None,
+        user_id: int | None,
         action_taken: str,
         detected_at: Any,
     ) -> dict[str, Any]:
@@ -311,19 +356,23 @@ class SecurityNotificationService(
             Formatted message dictionary
         """
         from .models import _get_notification_limits
-        
+
         # Get notification limits from config (not deprecated constants)
         limits = _get_notification_limits()
         description_max = limits.description_max_length
         action_taken_max = limits.action_taken_max_length
         title_max = limits.title_max_length
-        
+
         config = get_config()
         admin_url = f"{config.site_url}/admin/security-incident/{incident_id}/"
 
         # Truncate fields to prevent API limit issues
         desc = self._truncate_with_ellipsis(description, description_max)
-        action = self._truncate_with_ellipsis(action_taken, action_taken_max) if action_taken else "N/A"
+        action = (
+            self._truncate_with_ellipsis(action_taken, action_taken_max)
+            if action_taken
+            else "N/A"
+        )
 
         return {
             "title": f"🚨 Security Incident: {incident_type}"[:title_max],
@@ -334,7 +383,11 @@ class SecurityNotificationService(
             "description": desc,
             "source_ip": source_ip or "N/A",
             "user_id": user_id if user_id else "N/A",
-            "detected_at": detected_at.isoformat() if hasattr(detected_at, "isoformat") else str(detected_at),
+            "detected_at": (
+                detected_at.isoformat()
+                if hasattr(detected_at, "isoformat")
+                else str(detected_at)
+            ),
             "action_taken": action,
             "admin_url": admin_url,
         }

@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -163,7 +162,7 @@ class AuditSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_audit_settings: Optional[AuditSettings] = None
+_audit_settings: AuditSettings | None = None
 
 
 def get_audit_settings() -> AuditSettings:

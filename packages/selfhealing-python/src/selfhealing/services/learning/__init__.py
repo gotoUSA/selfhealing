@@ -8,13 +8,13 @@ Self-Learning DNA Service - 자가 학습 및 최적화
 - 성능 개선 제안
 """
 
-from .service import LearningService
 from .models import (
     LearningPattern,
     LearningSession,
-    Suggestion,
     PerformanceMetric,
+    Suggestion,
 )
+from .service import LearningService
 
 __all__ = [
     "LearningService",

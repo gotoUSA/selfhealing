@@ -10,14 +10,15 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from selfhealing.core.timezone import now
 from selfhealing.core.decision_logger import DecisionLogger, ReasonCode
+from selfhealing.core.timezone import now
 
 from .config import CircuitBreakerResult, CircuitState
 
 if TYPE_CHECKING:
-    from .config import CircuitBreakerConfig
     from selfhealing.interfaces.repositories import CircuitBreakerStateRepository
+
+    from .config import CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ def _is_system_enabled() -> bool:
     """Check if self-healing system is enabled (Kill Switch not activated)."""
     try:
         from selfhealing.services.system_control import SystemControlManager
+
         manager = SystemControlManager()
         return manager.is_enabled()
     except Exception:
@@ -45,8 +47,8 @@ class ManualControlMixin:
     """
 
     # These will be provided by the main service class
-    config: "CircuitBreakerConfig"
-    repository: "CircuitBreakerStateRepository"
+    config: CircuitBreakerConfig
+    repository: CircuitBreakerStateRepository
 
     # =========================================================================
     # Manual Control Operations
@@ -59,7 +61,9 @@ class ManualControlMixin:
         if controlled_by_id is not None:
             return controlled_by_id
         if controlled_by is not None:
-            return getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
+            return getattr(controlled_by, "id", None) or getattr(
+                controlled_by, "pk", None
+            )
         return None
 
     def force_open(
@@ -89,7 +93,9 @@ class ManualControlMixin:
         Returns:
             CircuitBreakerResult with operation outcome
         """
-        controlled_by_id = self._resolve_controlled_by_id(controlled_by, controlled_by_id)
+        controlled_by_id = self._resolve_controlled_by_id(
+            controlled_by, controlled_by_id
+        )
 
         # Kill Switch 체크
         kill_switch_result = self._check_kill_switch(
@@ -106,7 +112,8 @@ class ManualControlMixin:
 
         # 행동 직전 로깅 - Circuit Breaker OPEN 전에 기록
         logger.info(
-            f"[CircuitBreaker] FORCE_OPEN service={service_name}, " f"reason={reason}, controlled_by_id={controlled_by_id}"
+            f"[CircuitBreaker] FORCE_OPEN service={service_name}, "
+            f"reason={reason}, controlled_by_id={controlled_by_id}"
         )
 
         try:
@@ -120,7 +127,9 @@ class ManualControlMixin:
 
             if success:
                 if previous_state == new_state:
-                    logger.info(f"[CircuitBreaker] Circuit '{service_name}' already open")
+                    logger.info(
+                        f"[CircuitBreaker] Circuit '{service_name}' already open"
+                    )
                     return CircuitBreakerResult.succeeded(
                         service_name=service_name,
                         previous_state=previous_state,
@@ -134,18 +143,28 @@ class ManualControlMixin:
                     )
                     # Audit 기록 - 수동 OPEN은 중요 운영 이벤트
                     try:
-                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        from selfhealing.services.audit_helpers import (
+                            log_cb_state_change_audit,
+                        )
+
                         log_cb_state_change_audit(
                             cb_name=service_name,
                             old_state=previous_state,
                             new_state=new_state,
-                            reason=f"force_open: {reason}" if reason else "force_open: manual",
+                            reason=(
+                                f"force_open: {reason}"
+                                if reason
+                                else "force_open: manual"
+                            ),
                         )
                     except Exception as e:
                         logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
                     # Push 이벤트 - CB 상태 변경 메트릭 기록
                     try:
-                        from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                        from selfhealing.metrics.event_handlers import (
+                            CircuitBreakerEventHandler,
+                        )
+
                         CircuitBreakerEventHandler.on_state_changed(
                             service=service_name,
                             from_state=previous_state,
@@ -209,7 +228,9 @@ class ManualControlMixin:
 
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
-            controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
+            controlled_by_id = getattr(controlled_by, "id", None) or getattr(
+                controlled_by, "pk", None
+            )
 
         decision_logger = DecisionLogger(service_name=service_name)
         decision_logger.intervention_evaluated(
@@ -244,7 +265,7 @@ class ManualControlMixin:
                 service_name=service_name,
                 error=str(e),
             )
-    
+
     def _check_kill_switch(
         self,
         service_name: str,
@@ -256,7 +277,7 @@ class ManualControlMixin:
         """Kill Switch 체크. 차단 시 결과 반환, 통과 시 None."""
         if _is_system_enabled():
             return None
-        
+
         if not override_kill_switch:
             logger.warning(
                 f"[CircuitBreaker] {action} blocked: Kill Switch is active. "
@@ -266,14 +287,17 @@ class ManualControlMixin:
                 service_name=service_name,
                 error="Kill Switch is active: use override_kill_switch=True for manual control",
             )
-        
+
         # Kill Switch override 시 Audit 기록
         logger.warning(
             f"[CircuitBreaker] Kill Switch override for {action}: "
             f"service={service_name}, controlled_by_id={controlled_by_id}"
         )
         try:
-            from selfhealing.services.audit_helpers import log_kill_switch_override_audit
+            from selfhealing.services.audit_helpers import (
+                log_kill_switch_override_audit,
+            )
+
             log_kill_switch_override_audit(
                 service_name=service_name,
                 action=action,
@@ -282,9 +306,9 @@ class ManualControlMixin:
             )
         except Exception as e:
             logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
-        
+
         return None
-    
+
     def _handle_force_close_success(
         self,
         service_name: str,
@@ -302,27 +326,29 @@ class ManualControlMixin:
                 new_state=new_state,
                 message="Circuit breaker already closed",
             )
-        
+
         logger.info(
             f"[CircuitBreaker] Force closed circuit for '{service_name}': "
             f"{previous_state} -> {new_state} | Reason: {reason}"
         )
-        
-        self._log_state_change_audit(service_name, previous_state, new_state, reason, "force_close")
+
+        self._log_state_change_audit(
+            service_name, previous_state, new_state, reason, "force_close"
+        )
         self._emit_state_change_metric(service_name, previous_state, new_state)
-        
+
         result = CircuitBreakerResult.succeeded(
             service_name=service_name,
             previous_state=previous_state,
             new_state=new_state,
             message=f"Circuit breaker closed for {service_name}",
         )
-        
+
         if trigger_replay:
             self._trigger_conditional_replay(service_name)
-        
+
         return result
-    
+
     def _log_state_change_audit(
         self,
         service_name: str,
@@ -334,6 +360,7 @@ class ManualControlMixin:
         """CB 상태 변경 Audit 로그 기록."""
         try:
             from selfhealing.services.audit_helpers import log_cb_state_change_audit
+
             log_cb_state_change_audit(
                 cb_name=service_name,
                 old_state=previous_state,
@@ -342,7 +369,7 @@ class ManualControlMixin:
             )
         except Exception as e:
             logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
-    
+
     def _emit_state_change_metric(
         self,
         service_name: str,
@@ -352,6 +379,7 @@ class ManualControlMixin:
         """CB 상태 변경 메트릭 기록."""
         try:
             from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+
             CircuitBreakerEventHandler.on_state_changed(
                 service=service_name,
                 from_state=previous_state,
@@ -400,7 +428,10 @@ class ManualControlMixin:
                 # Audit 기록 - reset은 상태 초기화 이벤트
                 if previous_state != new_state:
                     try:
-                        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                        from selfhealing.services.audit_helpers import (
+                            log_cb_state_change_audit,
+                        )
+
                         log_cb_state_change_audit(
                             cb_name=service_name,
                             old_state=previous_state,
@@ -412,7 +443,10 @@ class ManualControlMixin:
                 # Push 이벤트 - CB 상태 변경 메트릭 기록
                 if previous_state != new_state:
                     try:
-                        from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
+                        from selfhealing.metrics.event_handlers import (
+                            CircuitBreakerEventHandler,
+                        )
+
                         CircuitBreakerEventHandler.on_state_changed(
                             service=service_name,
                             from_state=previous_state,
@@ -478,7 +512,9 @@ class ManualControlMixin:
                     # Note: If you need to update control_reason,
                     # implement it in your repository adapter
 
-                    self.repository.clear_manual_control(state.service_name, preserve_reason=True)
+                    self.repository.clear_manual_control(
+                        state.service_name, preserve_reason=True
+                    )
 
                     expired_services.append(state.service_name)
                     logger.warning(
@@ -528,11 +564,17 @@ class ManualControlMixin:
             # Extend TTL
             current_time = now()
             if state.manual_override_expires_at:
-                new_expires_at = state.manual_override_expires_at + timedelta(minutes=additional_minutes)
+                new_expires_at = state.manual_override_expires_at + timedelta(
+                    minutes=additional_minutes
+                )
             else:
                 new_expires_at = current_time + timedelta(minutes=additional_minutes)
 
-            new_reason = f"{state.control_reason} | Extended: {reason}" if reason else state.control_reason
+            new_reason = (
+                f"{state.control_reason} | Extended: {reason}"
+                if reason
+                else state.control_reason
+            )
 
             self.repository.set_manual_control(
                 service_name=service_name,
@@ -542,7 +584,10 @@ class ManualControlMixin:
                 expires_at=new_expires_at,
             )
 
-            logger.info(f"[CircuitBreaker] Extended manual override for '{service_name}' " f"by {additional_minutes} minutes")
+            logger.info(
+                f"[CircuitBreaker] Extended manual override for '{service_name}' "
+                f"by {additional_minutes} minutes"
+            )
 
             return CircuitBreakerResult.succeeded(
                 service_name=service_name,
@@ -584,10 +629,18 @@ class ManualControlMixin:
                 kwargs={"service_name": service_name},
             )
 
-            logger.info(f"[CircuitBreaker] Triggered conditional replay for '{service_name}': " f"task_id={task_id}")
+            logger.info(
+                f"[CircuitBreaker] Triggered conditional replay for '{service_name}': "
+                f"task_id={task_id}"
+            )
         except (ImportError, ValueError):
             # Task queue not configured, log warning
-            logger.warning(f"[CircuitBreaker] Cannot trigger replay for '{service_name}': " "Task queue not available")
+            logger.warning(
+                f"[CircuitBreaker] Cannot trigger replay for '{service_name}': "
+                "Task queue not available"
+            )
         except Exception as e:
             # Non-critical error, log but don't fail
-            logger.error(f"[CircuitBreaker] Failed to trigger replay for '{service_name}': {e}")
+            logger.error(
+                f"[CircuitBreaker] Failed to trigger replay for '{service_name}': {e}"
+            )

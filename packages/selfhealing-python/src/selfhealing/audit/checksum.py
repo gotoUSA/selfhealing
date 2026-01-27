@@ -27,7 +27,7 @@ import hashlib
 import json
 import zlib
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any
 
 
 @dataclass
@@ -40,7 +40,7 @@ class ChecksumResult:
     algorithm: str
 
 
-def compute_crc32(data: Union[bytes, str, dict, Any]) -> str:
+def compute_crc32(data: bytes | str | dict | Any) -> str:
     """
     CRC32 체크섬 계산.
 
@@ -57,7 +57,7 @@ def compute_crc32(data: Union[bytes, str, dict, Any]) -> str:
     return f"{crc:08x}"
 
 
-def verify_crc32(data: Union[bytes, str, dict, Any], expected: str) -> ChecksumResult:
+def verify_crc32(data: bytes | str | dict | Any, expected: str) -> ChecksumResult:
     """
     CRC32 체크섬 검증.
 
@@ -78,8 +78,8 @@ def verify_crc32(data: Union[bytes, str, dict, Any], expected: str) -> ChecksumR
 
 
 def compute_sha256(
-    data: Union[bytes, str, dict, Any],
-    truncate: Optional[int] = None,
+    data: bytes | str | dict | Any,
+    truncate: int | None = None,
 ) -> str:
     """
     SHA256 체크섬 계산.
@@ -102,9 +102,9 @@ def compute_sha256(
 
 
 def verify_sha256(
-    data: Union[bytes, str, dict, Any],
+    data: bytes | str | dict | Any,
     expected: str,
-    truncate: Optional[int] = None,
+    truncate: int | None = None,
 ) -> ChecksumResult:
     """
     SHA256 체크섬 검증.
@@ -131,9 +131,9 @@ def verify_sha256(
 
 
 def compute_checksum(
-    data: Union[bytes, str, dict, Any],
+    data: bytes | str | dict | Any,
     algorithm: str = "crc32",
-    truncate: Optional[int] = None,
+    truncate: int | None = None,
 ) -> str:
     """
     범용 체크섬 계산.
@@ -155,7 +155,7 @@ def compute_checksum(
 
 
 def verify_checksum(
-    data: Union[bytes, str, dict, Any],
+    data: bytes | str | dict | Any,
     expected: str,
     algorithm: str = "crc32",
 ) -> ChecksumResult:
@@ -178,7 +178,7 @@ def verify_checksum(
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
 
-def _normalize_to_bytes(data: Union[bytes, str, dict, Any]) -> bytes:
+def _normalize_to_bytes(data: bytes | str | dict | Any) -> bytes:
     """
     다양한 타입의 데이터를 bytes로 정규화.
 
@@ -236,7 +236,9 @@ def checksum_file(filepath: str, algorithm: str = "sha256") -> str:
     return compute_checksum(content, algorithm)
 
 
-def verify_file_checksum(filepath: str, expected: str, algorithm: str = "sha256") -> ChecksumResult:
+def verify_file_checksum(
+    filepath: str, expected: str, algorithm: str = "sha256"
+) -> ChecksumResult:
     """
     파일 체크섬 검증.
 

@@ -18,12 +18,12 @@ Reference:
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # =============================================================================
 # Recovery Started Notification
 # =============================================================================
+
 
 def recovery_started_notification(
     session_id: str,
@@ -31,11 +31,11 @@ def recovery_started_notification(
     trigger_level: str,
     initiated_by: str,
     total_steps: int,
-    step_names: List[str],
-) -> Dict[str, Any]:
+    step_names: list[str],
+) -> dict[str, Any]:
     """
     복구 시작 알림 메시지 생성.
-    
+
     Args:
         session_id: 세션 ID
         namespace: 네임스페이스
@@ -43,7 +43,7 @@ def recovery_started_notification(
         initiated_by: 시작 주체
         total_steps: 총 단계 수
         step_names: 단계 이름 목록
-    
+
     Returns:
         알림 메시지 딕셔너리:
         - title: 제목
@@ -53,7 +53,7 @@ def recovery_started_notification(
         - actions: 가능한 액션 목록
     """
     steps_str = "\n".join([f"  {i+1}. {name}" for i, name in enumerate(step_names)])
-    
+
     return {
         "title": f"🔄 [INFO] 복구 프로세스 시작 - {namespace}",
         "severity": "info",
@@ -81,7 +81,7 @@ def recovery_started_notification(
             },
             {
                 "label": "복구 중단",
-                "url": f"/api/self-healing/recovery/abort/",
+                "url": "/api/self-healing/recovery/abort/",
                 "method": "POST",
                 "data": {"session_id": session_id},
             },
@@ -93,6 +93,7 @@ def recovery_started_notification(
 # Recovery Completed Notification
 # =============================================================================
 
+
 def recovery_completed_notification(
     session_id: str,
     namespace: str,
@@ -100,10 +101,10 @@ def recovery_completed_notification(
     duration_seconds: int,
     steps_completed: int,
     total_steps: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     복구 완료 알림 메시지 생성.
-    
+
     Args:
         session_id: 세션 ID
         namespace: 네임스페이스
@@ -111,18 +112,20 @@ def recovery_completed_notification(
         duration_seconds: 소요 시간 (초)
         steps_completed: 완료된 단계 수
         total_steps: 총 단계 수
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
     # 시간 포맷팅
     if duration_seconds >= 3600:
-        duration_str = f"{duration_seconds // 3600}시간 {(duration_seconds % 3600) // 60}분"
+        duration_str = (
+            f"{duration_seconds // 3600}시간 {(duration_seconds % 3600) // 60}분"
+        )
     elif duration_seconds >= 60:
         duration_str = f"{duration_seconds // 60}분 {duration_seconds % 60}초"
     else:
         duration_str = f"{duration_seconds}초"
-    
+
     return {
         "title": f"✅ [SUCCESS] 복구 완료 - {namespace}",
         "severity": "info",
@@ -157,6 +160,7 @@ def recovery_completed_notification(
 # Recovery Failed Notification
 # =============================================================================
 
+
 def recovery_failed_notification(
     session_id: str,
     namespace: str,
@@ -166,10 +170,10 @@ def recovery_failed_notification(
     steps_completed: int,
     total_steps: int,
     retry_count: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     복구 실패 알림 메시지 생성.
-    
+
     Args:
         session_id: 세션 ID
         namespace: 네임스페이스
@@ -179,7 +183,7 @@ def recovery_failed_notification(
         steps_completed: 완료된 단계 수
         total_steps: 총 단계 수
         retry_count: 재시도 횟수
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
@@ -215,7 +219,7 @@ def recovery_failed_notification(
             },
             {
                 "label": "수동 복구 시작",
-                "url": f"/api/self-healing/recovery/start/",
+                "url": "/api/self-healing/recovery/start/",
                 "method": "POST",
                 "data": {"namespace": namespace, "force": True},
             },
@@ -228,6 +232,7 @@ def recovery_failed_notification(
 # Recovery Aborted Notification
 # =============================================================================
 
+
 def recovery_aborted_notification(
     session_id: str,
     namespace: str,
@@ -236,10 +241,10 @@ def recovery_aborted_notification(
     aborted_by: str,
     steps_completed: int,
     total_steps: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     복구 중단 알림 메시지 생성.
-    
+
     Args:
         session_id: 세션 ID
         namespace: 네임스페이스
@@ -248,7 +253,7 @@ def recovery_aborted_notification(
         aborted_by: 중단 주체
         steps_completed: 완료된 단계 수
         total_steps: 총 단계 수
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
@@ -277,7 +282,7 @@ def recovery_aborted_notification(
         "actions": [
             {
                 "label": "복구 재시작",
-                "url": f"/api/self-healing/recovery/start/",
+                "url": "/api/self-healing/recovery/start/",
                 "method": "POST",
                 "data": {"namespace": namespace},
             },
@@ -289,17 +294,18 @@ def recovery_aborted_notification(
 # Approval Required Notification
 # =============================================================================
 
+
 def recovery_approval_required_notification(
     request_id: str,
     namespace: str,
     trigger_level: str,
     requested_by: str,
     timeout_minutes: int,
-    stability_info: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    stability_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     수동 승인 필요 알림 메시지 생성.
-    
+
     Args:
         request_id: 승인 요청 ID
         namespace: 네임스페이스
@@ -307,7 +313,7 @@ def recovery_approval_required_notification(
         requested_by: 요청 주체
         timeout_minutes: 만료 시간 (분)
         stability_info: 안정화 정보 (선택)
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
@@ -319,7 +325,7 @@ def recovery_approval_required_notification(
             f"\n**현재 에러율**: {error_rate:.1f}%\n"
             f"**안정화 지속 시간**: {stable_duration}분"
         )
-    
+
     return {
         "title": f"🔔 [ACTION REQUIRED] 복구 승인 필요 - {namespace}",
         "severity": "warning",
@@ -346,21 +352,21 @@ def recovery_approval_required_notification(
         "actions": [
             {
                 "label": "✅ 승인",
-                "url": f"/api/self-healing/recovery/approve/",
+                "url": "/api/self-healing/recovery/approve/",
                 "method": "POST",
                 "data": {"request_id": request_id},
                 "style": "primary",
             },
             {
                 "label": "❌ 거부",
-                "url": f"/api/self-healing/recovery/reject/",
+                "url": "/api/self-healing/recovery/reject/",
                 "method": "POST",
                 "data": {"request_id": request_id, "reason": "Manual rejection"},
                 "style": "danger",
             },
             {
                 "label": "상세 정보",
-                "url": f"/api/self-healing/recovery/pending-approvals/",
+                "url": "/api/self-healing/recovery/pending-approvals/",
             },
         ],
         "mention": ["@approvers", "@sre-team"],
@@ -371,28 +377,29 @@ def recovery_approval_required_notification(
 # Stale Approval Reminder
 # =============================================================================
 
+
 def recovery_stale_approval_reminder(
     request_id: str,
     namespace: str,
     waiting_minutes: int,
     timeout_minutes: int,
     reminder_count: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     방치된 승인 리마인더 메시지 생성.
-    
+
     Args:
         request_id: 승인 요청 ID
         namespace: 네임스페이스
         waiting_minutes: 대기 시간 (분)
         timeout_minutes: 만료까지 남은 시간 (분)
         reminder_count: 리마인더 횟수
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
     urgency = "🔴" if timeout_minutes < 30 else "🟡"
-    
+
     return {
         "title": f"{urgency} [REMINDER #{reminder_count}] 복구 승인 대기 중 - {namespace}",
         "severity": "warning" if timeout_minutes >= 30 else "critical",
@@ -416,7 +423,7 @@ def recovery_stale_approval_reminder(
         "actions": [
             {
                 "label": "✅ 지금 승인",
-                "url": f"/api/self-healing/recovery/approve/",
+                "url": "/api/self-healing/recovery/approve/",
                 "method": "POST",
                 "data": {"request_id": request_id},
                 "style": "primary",
@@ -430,6 +437,7 @@ def recovery_stale_approval_reminder(
 # Circuit Breaker Trip Notification
 # =============================================================================
 
+
 def recovery_circuit_breaker_trip_notification(
     namespace: str,
     trip_count: int,
@@ -437,10 +445,10 @@ def recovery_circuit_breaker_trip_notification(
     threshold: float,
     is_permanent: bool,
     should_re_escalate: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     서킷 브레이커 트립 알림 메시지 생성.
-    
+
     Args:
         namespace: 네임스페이스
         trip_count: 트립 횟수
@@ -448,23 +456,23 @@ def recovery_circuit_breaker_trip_notification(
         threshold: 임계값
         is_permanent: 영구 차단 여부
         should_re_escalate: 재에스컬레이션 필요 여부
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
     severity = "critical" if is_permanent else "warning"
     emoji = "🛑" if is_permanent else "⚡"
-    
+
     permanent_str = (
-        "\n\n🚨 **영구 차단 상태**: 수동 개입이 필요합니다."
-        if is_permanent else ""
+        "\n\n🚨 **영구 차단 상태**: 수동 개입이 필요합니다." if is_permanent else ""
     )
-    
+
     escalate_str = (
         "\n\n⬆️ **재에스컬레이션**: Emergency 모드로 재진입 권고"
-        if should_re_escalate else ""
+        if should_re_escalate
+        else ""
     )
-    
+
     return {
         "title": f"{emoji} [CIRCUIT BREAKER] 복구 서킷 브레이커 트립 - {namespace}",
         "severity": severity,
@@ -489,7 +497,7 @@ def recovery_circuit_breaker_trip_notification(
         "actions": [
             {
                 "label": "서킷 브레이커 리셋",
-                "url": f"/api/self-healing/recovery/circuit-breaker/reset/",
+                "url": "/api/self-healing/recovery/circuit-breaker/reset/",
                 "method": "POST",
                 "data": {"namespace": namespace},
             },
@@ -506,6 +514,7 @@ def recovery_circuit_breaker_trip_notification(
 # Step Progress Notification
 # =============================================================================
 
+
 def recovery_step_progress_notification(
     session_id: str,
     namespace: str,
@@ -513,11 +522,11 @@ def recovery_step_progress_notification(
     step_order: int,
     total_steps: int,
     status: str,
-    duration_seconds: Optional[float] = None,
-) -> Dict[str, Any]:
+    duration_seconds: float | None = None,
+) -> dict[str, Any]:
     """
     단계 진행 알림 메시지 생성 (디버그/상세 모드용).
-    
+
     Args:
         session_id: 세션 ID
         namespace: 네임스페이스
@@ -526,23 +535,23 @@ def recovery_step_progress_notification(
         total_steps: 총 단계 수
         status: 단계 상태
         duration_seconds: 소요 시간 (초)
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
     progress_bar = _make_progress_bar(step_order, total_steps)
-    
+
     duration_str = ""
     if duration_seconds is not None:
         duration_str = f" ({duration_seconds:.1f}s)"
-    
+
     status_emoji = {
         "started": "🔄",
         "completed": "✅",
         "failed": "❌",
         "skipped": "⏭️",
     }.get(status, "🔄")
-    
+
     return {
         "title": f"{status_emoji} 복구 단계 {step_order}/{total_steps} - {namespace}",
         "severity": "info" if status != "failed" else "warning",
@@ -569,11 +578,11 @@ def _make_progress_bar(current: int, total: int, width: int = 10) -> str:
     """진행률 막대 생성."""
     if total == 0:
         return "[" + "░" * width + "] 0%"
-    
+
     filled = int((current / total) * width)
     empty = width - filled
     percent = int((current / total) * 100)
-    
+
     return f"[{'█' * filled}{'░' * empty}] {percent}%"
 
 
@@ -581,17 +590,18 @@ def _make_progress_bar(current: int, total: int, width: int = 10) -> str:
 # Daily Summary Notification
 # =============================================================================
 
+
 def recovery_daily_summary_notification(
     date: str,
-    stats: Dict[str, Any],
-) -> Dict[str, Any]:
+    stats: dict[str, Any],
+) -> dict[str, Any]:
     """
     일일 복구 요약 알림 메시지 생성.
-    
+
     Args:
         date: 날짜 (YYYY-MM-DD)
         stats: 통계 딕셔너리
-    
+
     Returns:
         알림 메시지 딕셔너리
     """
@@ -601,13 +611,13 @@ def recovery_daily_summary_notification(
     aborted = stats.get("aborted", 0)
     avg_duration = stats.get("average_duration_seconds", 0)
     success_rate = stats.get("success_rate", 0)
-    
+
     # 시간 포맷팅
     if avg_duration >= 60:
         avg_str = f"{avg_duration // 60}분 {avg_duration % 60}초"
     else:
         avg_str = f"{avg_duration}초"
-    
+
     # 상태 이모지
     if success_rate >= 90:
         status_emoji = "🟢"
@@ -615,7 +625,7 @@ def recovery_daily_summary_notification(
         status_emoji = "🟡"
     else:
         status_emoji = "🔴"
-    
+
     return {
         "title": f"📊 일일 복구 요약 - {date}",
         "severity": "info",
@@ -636,7 +646,7 @@ def recovery_daily_summary_notification(
         "actions": [
             {
                 "label": "상세 이력 보기",
-                "url": f"/api/self-healing/recovery/history/",
+                "url": "/api/self-healing/recovery/history/",
             },
         ],
     }

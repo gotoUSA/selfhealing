@@ -18,9 +18,8 @@ Reference:
 """
 
 import logging
-from typing import Dict, List, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -161,7 +160,7 @@ class RegionalRecoveryPolicySettings(BaseSettings):
         description="자동 복구 시간 (시간)",
     )
 
-    def get_escalation_intervals(self) -> List[int]:
+    def get_escalation_intervals(self) -> list[int]:
         """에스컬레이션 간격 리스트 반환."""
         return [
             self.escalation_interval_1,
@@ -180,7 +179,7 @@ class RegionalRecoveryPolicySettings(BaseSettings):
         # 에스컬레이션 간격이 오름차순인지 확인
         intervals = self.get_escalation_intervals()
         for i in range(1, len(intervals)):
-            if intervals[i] <= intervals[i-1]:
+            if intervals[i] <= intervals[i - 1]:
                 raise ValueError(
                     f"Escalation intervals must be in ascending order: {intervals}"
                 )
@@ -190,7 +189,7 @@ class RegionalRecoveryPolicySettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_regional_recovery_policy_settings: Optional[RegionalRecoveryPolicySettings] = None
+_regional_recovery_policy_settings: RegionalRecoveryPolicySettings | None = None
 
 
 def get_regional_recovery_policy_settings() -> RegionalRecoveryPolicySettings:

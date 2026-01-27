@@ -19,36 +19,33 @@ Apply Strategies:
 """
 
 import logging
-from typing import Callable, Dict, Any, Optional
 
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.config_descriptions import format_changes_summary
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.serializers.config import (
     CircuitBreakerConfigSerializer,
     DLQConfigSerializer,
-    RetryConfigSerializer,
-    SLAConfigSerializer,
-    SLOConfigSerializer,
-    RateLimitConfigSerializer,
-    SecurityConfigSerializer,
-    IdempotencyConfigSerializer,
-    NotificationConfigSerializer,
+    ErrorBudgetConfigSerializer,
     ForensicConfigSerializer,
+    IdempotencyConfigSerializer,
     LoggingConfigSerializer,
     MetricsConfigSerializer,
-    ErrorBudgetConfigSerializer,
-    PendingConfigChangeSerializer,
+    NotificationConfigSerializer,
+    RateLimitConfigSerializer,
     ReplayAutomationConfigSerializer,
+    RetryConfigSerializer,
+    SecurityConfigSerializer,
+    SLAConfigSerializer,
+    SLOConfigSerializer,
 )
-from selfhealing.api.django.config_descriptions import format_changes_summary
 from selfhealing.services.runtime_config import get_runtime_config_manager
 
 logger = logging.getLogger(__name__)
@@ -59,7 +56,7 @@ class AllConfigView(APIView):
     All Configuration API.
 
     GET  /api/self-healing/config/ - Get all configuration with default strategies
-    
+
     Note: Read access for Viewer role, write requires Admin role.
     """
 
@@ -95,7 +92,7 @@ class ResetConfigView(APIView):
     Reset Configuration API.
 
     POST /api/self-healing/config/reset/ - Reset all to defaults
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -125,7 +122,7 @@ class PendingChangesView(APIView):
     Pending Configuration Changes API.
 
     GET /api/self-healing/config/pending/ - Get all pending changes
-    
+
     Note: Read access for Viewer role.
     """
 
@@ -154,7 +151,7 @@ class CancelPendingChangeView(APIView):
     Cancel Pending Configuration Change API.
 
     POST /api/self-healing/config/pending/<id>/cancel/ - Cancel a pending change
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -186,8 +183,8 @@ class BaseConfigView(APIView):
 
     Provides common GET/PUT handling with serializer validation.
     Supports immediate, delayed, and graceful apply strategies.
-    
-    Note: 
+
+    Note:
     - GET: Viewer role can access (read-only)
     - PUT: Admin role required (configuration changes)
     """
@@ -196,11 +193,11 @@ class BaseConfigView(APIView):
     permission_classes = [IsSelfHealingAdmin]
     serializer_class = None
     config_name = ""
-    
+
     def get_permissions(self):
         """
         Return different permissions based on HTTP method.
-        
+
         GET: IsViewer (read-only)
         PUT: IsSelfHealingAdmin (configuration changes)
         """
@@ -259,7 +256,10 @@ class BaseConfigView(APIView):
         previous_config = manager._get_config(self.config_name)
 
         # Extract reason for history tracking
-        reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
+        reason = (
+            apply_options.pop("reason", "")
+            or f"API update: {list(config_changes.keys())}"
+        )
 
         # Update with strategy (includes ConfigHistory integration)
         result = manager.update_with_strategy(

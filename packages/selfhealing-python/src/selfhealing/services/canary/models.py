@@ -14,10 +14,11 @@ State Transitions:
        ▼          ▼
     CANCELLED  FAILED
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from selfhealing.utils.time import utc_now
 
@@ -36,6 +37,7 @@ class CanaryState(str, Enum):
     - FAILED: 실패 상태
     - CANCELLED: 취소됨
     """
+
     CREATED = "created"
     CANARY = "canary"
     PROMOTING = "promoting"
@@ -56,22 +58,22 @@ class PassCriteria:
     """
 
     # 에러율 관련
-    error_rate_absolute_max: float = 0.05      # 5% 절대 한계
-    error_rate_increase_max: float = 0.01      # 1% 증가 한계
+    error_rate_absolute_max: float = 0.05  # 5% 절대 한계
+    error_rate_increase_max: float = 0.01  # 1% 증가 한계
 
     # 레이턴시 관련
-    latency_p95_delta_ms: float = 50.0         # p95 50ms 증가 한계
-    latency_p99_delta_pct: float = 0.2         # p99 20% 증가 한계
+    latency_p95_delta_ms: float = 50.0  # p95 50ms 증가 한계
+    latency_p99_delta_pct: float = 0.2  # p99 20% 증가 한계
 
     # Error Budget 관련
-    error_budget_drain_rate_max: float = 1.2   # 1.2x 소진률 한계
-    error_budget_remaining_min: float = 0.1    # 10% 이상 남아있어야 함
+    error_budget_drain_rate_max: float = 1.2  # 1.2x 소진률 한계
+    error_budget_remaining_min: float = 0.1  # 10% 이상 남아있어야 함
 
     # 평가 기간
-    min_requests_required: int = 100           # 최소 샘플 수
-    evaluation_window_seconds: int = 300       # 5분 윈도우
+    min_requests_required: int = 100  # 최소 샘플 수
+    evaluation_window_seconds: int = 300  # 5분 윈도우
 
-    def evaluate(self, metrics: "CanaryMetrics") -> Tuple[bool, Optional[str]]:
+    def evaluate(self, metrics: "CanaryMetrics") -> tuple[bool, str | None]:
         """
         메트릭 평가.
 
@@ -103,9 +105,8 @@ class PassCriteria:
         # p99 레이턴시 검사
         if metrics.latency_p99_before > 0:
             latency_pct = (
-                (metrics.latency_p99_after - metrics.latency_p99_before) /
-                metrics.latency_p99_before
-            )
+                metrics.latency_p99_after - metrics.latency_p99_before
+            ) / metrics.latency_p99_before
             if latency_pct > self.latency_p99_delta_pct:
                 return False, (
                     f"p99 latency increased by {latency_pct:.1%} "
@@ -131,18 +132,19 @@ class CanaryStage:
             duration_minutes=5,
         )
     """
-    name: str                         # 단계 이름 (예: "canary", "50%", "full")
-    clusters: List[str]               # 이 단계에 포함된 클러스터들
-    percentage: float                 # 전체 중 몇 %인지 (참고용)
-    duration_minutes: int = 5         # 이 단계 유지 시간
+
+    name: str  # 단계 이름 (예: "canary", "50%", "full")
+    clusters: list[str]  # 이 단계에 포함된 클러스터들
+    percentage: float  # 전체 중 몇 %인지 (참고용)
+    duration_minutes: int = 5  # 이 단계 유지 시간
 
     # 자동 프로모션 조건
     auto_promote: bool = True
     pass_criteria: PassCriteria = field(default_factory=PassCriteria)
 
     # 레거시 필드 (하위 호환성, pass_criteria로 대체 권장)
-    error_rate_threshold: float = 0.05        # 5% 초과 시 중단
-    latency_increase_threshold: float = 0.5   # 50% 증가 시 중단
+    error_rate_threshold: float = 0.05  # 5% 초과 시 중단
+    latency_increase_threshold: float = 0.5  # 50% 증가 시 중단
 
 
 @dataclass
@@ -152,6 +154,7 @@ class CanaryMetrics:
 
     설정 변경 전후의 메트릭을 비교하여 건강 상태를 판정합니다.
     """
+
     cluster: str
     stage_name: str
 
@@ -171,7 +174,7 @@ class CanaryMetrics:
 
     # 판정
     is_healthy: bool = True
-    unhealthy_reason: Optional[str] = None
+    unhealthy_reason: str | None = None
 
 
 @dataclass
@@ -196,19 +199,20 @@ class CanaryRollout:
             reason="Reduce failure threshold for faster detection",
         )
     """
+
     id: str
     config_type: str  # circuit_breaker, dlq, retry 등
 
     # 설정값
-    previous_values: Dict[str, Any]
-    new_values: Dict[str, Any]
+    previous_values: dict[str, Any]
+    new_values: dict[str, Any]
 
     # 상태
     state: CanaryState = CanaryState.CREATED
     current_stage_index: int = 0
 
     # 단계 정의
-    stages: List[CanaryStage] = field(default_factory=list)
+    stages: list[CanaryStage] = field(default_factory=list)
 
     # 메타데이터
     created_by: str = ""
@@ -216,18 +220,18 @@ class CanaryRollout:
     reason: str = ""
 
     # 결과
-    completed_at: Optional[datetime] = None
-    rollback_reason: Optional[str] = None
+    completed_at: datetime | None = None
+    rollback_reason: str | None = None
 
     @property
-    def current_stage(self) -> Optional[CanaryStage]:
+    def current_stage(self) -> CanaryStage | None:
         """현재 단계 반환."""
         if 0 <= self.current_stage_index < len(self.stages):
             return self.stages[self.current_stage_index]
         return None
 
     @property
-    def affected_clusters(self) -> List[str]:
+    def affected_clusters(self) -> list[str]:
         """현재까지 적용된 클러스터 목록."""
         clusters = []
         for i in range(self.current_stage_index + 1):

@@ -14,7 +14,7 @@ from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -105,7 +105,10 @@ class RingBuffer(Generic[T]):
         }
         return cls(
             capacity=overrides.get("capacity", s.capacity),
-            strategy=overrides.get("strategy", strategy_map.get(s.strategy, BackpressureStrategy.DROP_OLDEST)),
+            strategy=overrides.get(
+                "strategy",
+                strategy_map.get(s.strategy, BackpressureStrategy.DROP_OLDEST),
+            ),
         )
 
     @property
@@ -158,7 +161,7 @@ class RingBuffer(Generic[T]):
             self._buffer.append(item)
             return True
 
-    def put_many(self, items: List[T]) -> int:
+    def put_many(self, items: list[T]) -> int:
         """
         Add multiple items to buffer.
 
@@ -174,7 +177,7 @@ class RingBuffer(Generic[T]):
                 added += 1
         return added
 
-    def get(self) -> Optional[T]:
+    def get(self) -> T | None:
         """
         Get and remove single item from buffer.
 
@@ -186,7 +189,7 @@ class RingBuffer(Generic[T]):
                 return self._buffer.popleft()
             return None
 
-    def get_batch(self, max_size: int | None = None) -> List[T]:
+    def get_batch(self, max_size: int | None = None) -> list[T]:
         """
         Get and remove batch of items.
 
@@ -198,6 +201,7 @@ class RingBuffer(Generic[T]):
         """
         if max_size is None:
             from selfhealing.settings.ring_buffer import get_ring_buffer_settings
+
             max_size = get_ring_buffer_settings().batch_max_size
 
         with self._lock:
@@ -208,7 +212,7 @@ class RingBuffer(Generic[T]):
                     batch.append(self._buffer.popleft())
             return batch
 
-    def peek(self) -> Optional[T]:
+    def peek(self) -> T | None:
         """
         Peek at next item without removing.
 
@@ -220,7 +224,7 @@ class RingBuffer(Generic[T]):
                 return self._buffer[0]
             return None
 
-    def peek_batch(self, max_size: int = 100) -> List[T]:
+    def peek_batch(self, max_size: int = 100) -> list[T]:
         """
         Peek at multiple items without removing.
 

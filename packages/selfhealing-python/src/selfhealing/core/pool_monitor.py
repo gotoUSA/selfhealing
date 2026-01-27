@@ -11,26 +11,28 @@ Monitors database connection pool health:
 Framework-agnostic design - works with any pool implementation.
 """
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Optional, Dict, List, Any, Tuple
-import threading
+from typing import Any
 
 
 class PoolHealthStatus(str, Enum):
     """Connection pool health status"""
-    HEALTHY = "healthy"           # 정상
-    WARNING = "warning"           # 주의 (70% 이상 사용)
-    CRITICAL = "critical"         # 위험 (90% 이상 사용)
-    EXHAUSTED = "exhausted"       # 고갈됨
+
+    HEALTHY = "healthy"  # 정상
+    WARNING = "warning"  # 주의 (70% 이상 사용)
+    CRITICAL = "critical"  # 위험 (90% 이상 사용)
+    EXHAUSTED = "exhausted"  # 고갈됨
     LEAK_SUSPECTED = "leak_suspected"  # 누수 의심
 
 
 @dataclass
 class PoolStats:
     """Connection pool statistics"""
+
     pool_name: str
     max_connections: int
     active_connections: int
@@ -52,17 +54,19 @@ class PoolStats:
 @dataclass
 class ConnectionInfo:
     """Tracked connection information for leak detection"""
+
     connection_id: str
     acquired_at: datetime
-    stack_trace: Optional[str] = None
-    query_info: Optional[str] = None
-    thread_id: Optional[int] = None
+    stack_trace: str | None = None
+    query_info: str | None = None
+    thread_id: int | None = None
 
 
 @dataclass
 class LeakReport:
     """Connection leak detection report"""
-    suspected_leaks: List[ConnectionInfo]
+
+    suspected_leaks: list[ConnectionInfo]
     leak_threshold_seconds: float
     report_time: datetime
 
@@ -100,7 +104,7 @@ class ConnectionPoolMonitor:
 
         # Get leak report
         leaks = monitor.detect_leaks(threshold_seconds=300)
-        
+
         # Simulation override for chaos testing
         monitor.set_simulation_override(
             health_status=PoolHealthStatus.EXHAUSTED,
@@ -110,7 +114,7 @@ class ConnectionPoolMonitor:
 
     def __init__(
         self,
-        stats_provider: Optional[PoolStatsProvider] = None,
+        stats_provider: PoolStatsProvider | None = None,
         warning_threshold: float = 70.0,
         critical_threshold: float = 90.0,
         leak_threshold_seconds: float = 300.0,  # 5분
@@ -122,22 +126,22 @@ class ConnectionPoolMonitor:
         self._leak_threshold = leak_threshold_seconds
 
         # Connection tracking for leak detection
-        self._active_connections: Dict[str, ConnectionInfo] = {}
+        self._active_connections: dict[str, ConnectionInfo] = {}
         self._lock = threading.Lock()
 
         # History for trend analysis
-        self._stats_history: List[PoolStats] = []
+        self._stats_history: list[PoolStats] = []
         self._max_history = max_history
-        
+
         # Simulation override for chaos testing
-        self._simulation_override: Optional[PoolHealthStatus] = None
-        self._simulation_stats: Optional[PoolStats] = None
-        self._simulation_experiment_id: Optional[str] = None
+        self._simulation_override: PoolHealthStatus | None = None
+        self._simulation_stats: PoolStats | None = None
+        self._simulation_experiment_id: str | None = None
 
     @classmethod
     def from_settings(
         cls,
-        stats_provider: Optional[PoolStatsProvider] = None,
+        stats_provider: PoolStatsProvider | None = None,
         settings=None,
         **overrides,
     ) -> "ConnectionPoolMonitor":
@@ -158,28 +162,32 @@ class ConnectionPoolMonitor:
         return cls(
             stats_provider=stats_provider,
             warning_threshold=overrides.get("warning_threshold", s.warning_threshold),
-            critical_threshold=overrides.get("critical_threshold", s.critical_threshold),
-            leak_threshold_seconds=overrides.get("leak_threshold_seconds", s.leak_threshold_seconds),
+            critical_threshold=overrides.get(
+                "critical_threshold", s.critical_threshold
+            ),
+            leak_threshold_seconds=overrides.get(
+                "leak_threshold_seconds", s.leak_threshold_seconds
+            ),
             max_history=overrides.get("max_history", s.max_history),
         )
 
     def set_simulation_override(
         self,
-        health_status: Optional[PoolHealthStatus] = None,
-        stats: Optional[PoolStats] = None,
-        experiment_id: Optional[str] = None,
+        health_status: PoolHealthStatus | None = None,
+        stats: PoolStats | None = None,
+        experiment_id: str | None = None,
     ) -> None:
         """
         시뮬레이션 상태 오버라이드 설정.
-        
+
         실제 인프라를 변경하지 않고 모니터가 특정 상태를 보고하도록 강제.
         카오스 실험에서 알림/복구 체인 검증에 사용.
-        
+
         Args:
             health_status: 강제할 건강 상태 (None이면 해제)
             stats: 강제할 통계 (None이면 기본값 사용)
             experiment_id: 관련 카오스 실험 ID (감사 추적용)
-        
+
         Example:
             monitor.set_simulation_override(
                 health_status=PoolHealthStatus.EXHAUSTED,
@@ -190,29 +198,33 @@ class ConnectionPoolMonitor:
             self._simulation_override = health_status
             self._simulation_stats = stats
             self._simulation_experiment_id = experiment_id
-            
+
             if health_status:
                 import logging
+
                 logging.getLogger(__name__).info(
                     f"[PoolMonitor] Simulation override set: {health_status.value} "
                     f"(experiment_id={experiment_id})"
                 )
             else:
                 import logging
-                logging.getLogger(__name__).info("[PoolMonitor] Simulation override cleared")
-    
+
+                logging.getLogger(__name__).info(
+                    "[PoolMonitor] Simulation override cleared"
+                )
+
     def clear_simulation_override(self) -> None:
         """시뮬레이션 오버라이드 해제."""
         self.set_simulation_override(None, None, None)
-    
+
     def is_simulation_active(self) -> bool:
         """시뮬레이션 오버라이드가 활성화되어 있는지 확인."""
         return self._simulation_override is not None
-    
-    def get_simulation_experiment_id(self) -> Optional[str]:
+
+    def get_simulation_experiment_id(self) -> str | None:
         """현재 시뮬레이션과 연관된 실험 ID 반환."""
         return self._simulation_experiment_id
-    
+
     def _get_default_simulated_stats(self) -> PoolStats:
         """시뮬레이션용 기본 통계 생성."""
         # 오버라이드 상태에 맞는 기본 통계
@@ -253,22 +265,23 @@ class ConnectionPoolMonitor:
         """Set the pool statistics provider"""
         self._stats_provider = provider
 
-    def check_health(self) -> Tuple[PoolHealthStatus, PoolStats]:
+    def check_health(self) -> tuple[PoolHealthStatus, PoolStats]:
         """
         Check pool health status.
         Returns (status, stats)
-        
+
         시뮬레이션 오버라이드 지원
         """
         # 시뮬레이션 모드 체크
         if self._simulation_override is not None:
             import logging
+
             logging.getLogger(__name__).debug(
                 f"[PoolMonitor] Returning simulated status: {self._simulation_override.value}"
             )
             stats = self._simulation_stats or self._get_default_simulated_stats()
             return self._simulation_override, stats
-        
+
         if not self._stats_provider:
             raise ValueError("Pool stats provider not configured")
 
@@ -301,8 +314,8 @@ class ConnectionPoolMonitor:
     def on_connection_acquired(
         self,
         connection_id: str,
-        stack_trace: Optional[str] = None,
-        query_info: Optional[str] = None,
+        stack_trace: str | None = None,
+        query_info: str | None = None,
     ) -> None:
         """Track when a connection is acquired"""
         with self._lock:
@@ -319,7 +332,7 @@ class ConnectionPoolMonitor:
         with self._lock:
             self._active_connections.pop(connection_id, None)
 
-    def detect_leaks(self, threshold_seconds: Optional[float] = None) -> LeakReport:
+    def detect_leaks(self, threshold_seconds: float | None = None) -> LeakReport:
         """
         Detect potential connection leaks.
         Connections held longer than threshold are suspected leaks.
@@ -340,7 +353,7 @@ class ConnectionPoolMonitor:
             report_time=now,
         )
 
-    def get_trend(self) -> Dict[str, Any]:
+    def get_trend(self) -> dict[str, Any]:
         """Analyze pool usage trend"""
         if len(self._stats_history) < 2:
             return {"trend": "insufficient_data"}

@@ -11,14 +11,15 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
-from typing import Any, Dict, Optional
+from typing import Any
 
-from .enums import PatternType, OverrideIdentifierType, TierFallbackReason
+from .enums import OverrideIdentifierType, PatternType, TierFallbackReason
 
 
 @dataclass
 class TierResult:
     """Tier resolution result with fallback tracking."""
+
     tier_id: str
     multiplier: float
     is_fallback: bool
@@ -30,7 +31,7 @@ class TierResult:
 class TierDefinition:
     """
     Tier definition with emergency mode behavior.
-    
+
     Attributes:
         id: Unique identifier (e.g., "critical")
         name: Display name (e.g., "Mission Critical")
@@ -39,21 +40,24 @@ class TierDefinition:
         description: Description of the tier
         color: UI display color
     """
+
     id: str
     name: str
     multiplier: float  # 0.0 = blocked, 1.0 = full access
     priority: int = 0
     description: str = ""
     color: str = "#000000"
-    
+
     def __post_init__(self):
         """Validate tier definition."""
         if self.multiplier < 0 or self.multiplier > 1:
-            raise ValueError(f"Multiplier must be between 0 and 1, got {self.multiplier}")
+            raise ValueError(
+                f"Multiplier must be between 0 and 1, got {self.multiplier}"
+            )
         if not self.id:
             raise ValueError("Tier ID is required")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -63,9 +67,9 @@ class TierDefinition:
             "description": self.description,
             "color": self.color,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TierDefinition":
+    def from_dict(cls, data: dict[str, Any]) -> TierDefinition:
         """Create from dictionary."""
         return cls(
             id=data["id"],
@@ -81,7 +85,7 @@ class TierDefinition:
 class TierMapping:
     """
     API path to tier mapping.
-    
+
     Attributes:
         pattern: Path pattern (exact, wildcard, or regex)
         tier_id: Target tier ID
@@ -89,15 +93,18 @@ class TierMapping:
         priority: Mapping priority (higher = matched first)
         description: Description of the mapping
     """
+
     pattern: str
     tier_id: str
     pattern_type: PatternType = PatternType.EXACT
     priority: int = 0
     description: str = ""
-    
+
     # Compiled regex cache
-    _compiled_pattern: Optional[re.Pattern] = field(default=None, repr=False, compare=False)
-    
+    _compiled_pattern: re.Pattern | None = field(
+        default=None, repr=False, compare=False
+    )
+
     def __post_init__(self):
         """Compile regex pattern if needed."""
         if self.pattern_type == PatternType.REGEX:
@@ -105,14 +112,14 @@ class TierMapping:
                 self._compiled_pattern = re.compile(self.pattern)
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern '{self.pattern}': {e}")
-    
+
     def matches(self, path: str) -> bool:
         """
         Check if the path matches this mapping.
-        
+
         Args:
             path: API path to check
-            
+
         Returns:
             True if path matches
         """
@@ -126,7 +133,7 @@ class TierMapping:
             return bool(self._compiled_pattern.match(path))
         return False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "pattern": self.pattern,
@@ -135,9 +142,9 @@ class TierMapping:
             "priority": self.priority,
             "description": self.description,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TierMapping":
+    def from_dict(cls, data: dict[str, Any]) -> TierMapping:
         """Create from dictionary."""
         return cls(
             pattern=data["pattern"],
@@ -152,7 +159,7 @@ class TierMapping:
 class TierOverride:
     """
     Per-client tier override.
-    
+
     Attributes:
         identifier: IP, user ID, or API key
         identifier_type: Type of identifier
@@ -160,27 +167,28 @@ class TierOverride:
         reason: Reason for override
         expires_at: Optional expiration time
     """
+
     identifier: str
     identifier_type: OverrideIdentifierType
     tier_id: str
     reason: str = ""
-    expires_at: Optional[datetime] = None
-    
+    expires_at: datetime | None = None
+
     def is_expired(self) -> bool:
         """Check if override has expired."""
         if self.expires_at is None:
             return False
         return datetime.now(timezone.utc) > self.expires_at
-    
+
     def matches_ip(self, client_ip: str) -> bool:
         """
         Check if the client IP matches this override.
-        
+
         Supports both exact IP and CIDR notation.
         """
         if self.identifier_type != OverrideIdentifierType.IP:
             return False
-        
+
         try:
             client = ip_address(client_ip)
             if "/" in self.identifier:
@@ -192,21 +200,21 @@ class TierOverride:
                 return client == ip_address(self.identifier)
         except ValueError:
             return False
-    
+
     def matches(self, identifier: str, identifier_type: OverrideIdentifierType) -> bool:
         """Check if identifier matches this override."""
         if self.identifier_type != identifier_type:
             return False
-        
+
         if self.is_expired():
             return False
-        
+
         if identifier_type == OverrideIdentifierType.IP:
             return self.matches_ip(identifier)
-        
+
         return self.identifier == identifier
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "identifier": self.identifier,
@@ -215,14 +223,14 @@ class TierOverride:
             "reason": self.reason,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TierOverride":
+    def from_dict(cls, data: dict[str, Any]) -> TierOverride:
         """Create from dictionary."""
         expires_at = None
         if data.get("expires_at"):
             expires_at = datetime.fromisoformat(data["expires_at"])
-        
+
         return cls(
             identifier=data["identifier"],
             identifier_type=OverrideIdentifierType(data["identifier_type"]),

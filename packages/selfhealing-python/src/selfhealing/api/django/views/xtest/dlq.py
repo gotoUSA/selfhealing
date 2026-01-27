@@ -17,7 +17,7 @@ Security:
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.utils import timezone
 from rest_framework import status
@@ -81,7 +81,9 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
 
         entity_type = request.data.get("entity_type", "test")
         entity_id = request.data.get("entity_id", "")
-        error_message = request.data.get("error_message", "X-Test-Mode injected failure")
+        error_message = request.data.get(
+            "error_message", "X-Test-Mode injected failure"
+        )
         count = int(request.data.get("count", 1))
 
         # 최대 주입 횟수 제한 (안전 장치)
@@ -102,13 +104,17 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
 
         # X-Test-Mode 세션 식별자 생성
         xtest_session = str(uuid.uuid4())[:8]
-        user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
+        user_str = (
+            str(request.user)
+            if request.user and request.user.is_authenticated
+            else "anonymous"
+        )
 
         # DLQ 서비스를 통한 항목 생성
         from selfhealing.services.dlq import get_dlq_service
 
         dlq_service = get_dlq_service()
-        created_ids: List[int] = []
+        created_ids: list[int] = []
 
         for i in range(count):
             # X-Test-Mode 메타데이터 추가
@@ -124,7 +130,11 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
                 domain=domain,
                 failure_type=failure_type,
                 entity_type=entity_type,
-                entity_id=f"{entity_id}-{i + 1}" if entity_id else f"xtest-{xtest_session}-{i + 1}",
+                entity_id=(
+                    f"{entity_id}-{i + 1}"
+                    if entity_id
+                    else f"xtest-{xtest_session}-{i + 1}"
+                ),
                 error_code="XTEST_INJECTED",
                 error_message=error_message,
                 metadata=metadata,
@@ -211,14 +221,14 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
         stats = dlq_service.get_stats()
 
         # 필터링된 항목 목록 조회
-        filters: Dict[str, Any] = {}
+        filters: dict[str, Any] = {}
         if domain_filter:
             filters["domain"] = domain_filter
         if status_filter:
             filters["status"] = status_filter
 
         # Repository를 통한 직접 조회
-        recent_entries: List[Dict[str, Any]] = []
+        recent_entries: list[dict[str, Any]] = []
         xtest_entries_count = 0
 
         try:
@@ -237,7 +247,10 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
 
                 # X-Test-Mode 생성 항목 카운트
                 metadata = entry.get("metadata", {})
-                if isinstance(metadata, dict) and metadata.get("source") == XTEST_SOURCE:
+                if (
+                    isinstance(metadata, dict)
+                    and metadata.get("source") == XTEST_SOURCE
+                ):
                     xtest_entries_count += 1
         except Exception as e:
             logger.warning(f"[X-Test-Mode] DLQ status list failed: {e}")
@@ -267,7 +280,10 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
             request=request,
             action="query_status",
             component="dlq",
-            details={"total_count": stats.get("total", 0), "xtest_count": xtest_entries_count},
+            details={
+                "total_count": stats.get("total", 0),
+                "xtest_count": xtest_entries_count,
+            },
             result="success",
         )
 
@@ -298,7 +314,13 @@ class ForceStatusView(XTestModeMixin, APIView):
     """
 
     # 허용되는 상태 목록
-    ALLOWED_STATUSES = ["pending", "reviewing", "resolved", "rejected", "requires_review"]
+    ALLOWED_STATUSES = [
+        "pending",
+        "reviewing",
+        "resolved",
+        "rejected",
+        "requires_review",
+    ]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -369,7 +391,11 @@ class ForceStatusView(XTestModeMixin, APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
+        user_str = (
+            str(request.user)
+            if request.user and request.user.is_authenticated
+            else "anonymous"
+        )
 
         logger.info(
             f"[X-Test-Mode] DLQ force status: id={dlq_id}, "
@@ -390,7 +416,11 @@ class ForceStatusView(XTestModeMixin, APIView):
             request=request,
             action="force_status",
             component="dlq",
-            details={"dlq_id": int(dlq_id), "previous_status": previous_status, "new_status": new_status},
+            details={
+                "dlq_id": int(dlq_id),
+                "previous_status": previous_status,
+                "new_status": new_status,
+            },
             result="success",
         )
 
@@ -404,17 +434,17 @@ class ForceStatusView(XTestModeMixin, APIView):
 
 def _find_xtest_entries(
     dlq_service,
-    domain_filter: Optional[str],
+    domain_filter: str | None,
     created_by_xtest: bool,
-) -> List[int]:
+) -> list[int]:
     """X-Test 생성 DLQ 항목 ID 조회."""
-    filters: Dict[str, Any] = {}
+    filters: dict[str, Any] = {}
     if domain_filter:
         filters["domain"] = domain_filter
 
     result = dlq_service.list_entries(filters=filters, page=1, page_size=500)
-    ids_to_delete: List[int] = []
-    
+    ids_to_delete: list[int] = []
+
     for entry in result.results:
         entry_id = entry.get("id")
         if entry_id is None:
@@ -426,11 +456,11 @@ def _find_xtest_entries(
                 ids_to_delete.append(entry_id)
         else:
             ids_to_delete.append(entry_id)
-    
+
     return ids_to_delete
 
 
-def _delete_dlq_entries(dlq_service, entry_ids: List[int]) -> int:
+def _delete_dlq_entries(dlq_service, entry_ids: list[int]) -> int:
     """DLQ 항목 삭제 실행. 삭제된 개수 반환."""
     deleted_count = 0
     for entry_id in entry_ids:
@@ -472,12 +502,15 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
         created_by_xtest = request.data.get("created_by_xtest", True)
 
         from selfhealing.services.dlq import get_dlq_service
+
         dlq_service = get_dlq_service()
 
         try:
             # X-Test-Mode 생성 항목 조회
-            ids_to_delete = _find_xtest_entries(dlq_service, domain_filter, created_by_xtest)
-            
+            ids_to_delete = _find_xtest_entries(
+                dlq_service, domain_filter, created_by_xtest
+            )
+
             # 삭제 실행
             deleted_count = _delete_dlq_entries(dlq_service, ids_to_delete)
 
@@ -492,7 +525,11 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
+        user_str = (
+            str(request.user)
+            if request.user and request.user.is_authenticated
+            else "anonymous"
+        )
 
         logger.info(
             f"[X-Test-Mode] DLQ reset: deleted={deleted_count}, "

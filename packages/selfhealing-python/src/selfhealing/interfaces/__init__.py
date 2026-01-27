@@ -29,87 +29,39 @@ Usage:
 """
 
 # =============================================================================
-# Repository Interfaces
+# Alert Adapter Interface (Non-invasive alerting)
 # =============================================================================
-from selfhealing.interfaces.repositories import (
-    # Enums
-    FailedOperationDomain,
-    FailedOperationStatus,
-    CircuitBreakerStateEnum,
-    SecurityIncidentType,
-    SecuritySeverity,
-    SecurityIncidentStatus,
-    # Data Classes
-    FailedOperationData,
-    CircuitBreakerStateData,
-    SecurityIncidentData,
-    # Repository Interfaces
-    FailedOperationRepository,
-    CircuitBreakerStateRepository,
-    SecurityIncidentRepository,
+from selfhealing.interfaces.alert_adapter import (  # Enums; Data Classes; Interface
+    Alert,
+    AlertAdapter,
+    AlertCategory,
+    AlertSeverity,
+)
+
+# =============================================================================
+# Audit Log Adapter Interface (Non-invasive audit logging)
+# =============================================================================
+from selfhealing.interfaces.audit_adapter import (  # Enums; Data Classes; Interface
+    AuditAction,
+    AuditEntry,
+    AuditLogAdapter,
 )
 
 # =============================================================================
 # Cache Provider Interface
 # =============================================================================
-from selfhealing.interfaces.cache_provider import (
-    # Lock interface
+from selfhealing.interfaces.cache_provider import (  # Lock interface; Exceptions; Interface
+    CacheProviderInterface,
     DistributedLock,
-    # Exceptions
     LockAcquisitionError,
     LockNotOwnedError,
-    # Interface
-    CacheProviderInterface,
-)
-
-# =============================================================================
-# Task Queue Interface
-# =============================================================================
-from selfhealing.interfaces.task_queue import (
-    # Enums
-    TaskStatus,
-    TaskPriority,
-    # DTOs
-    TaskResult,
-    TaskOptions,
-    ScheduleInfo,
-    # Exceptions
-    TaskQueueError,
-    TaskNotFoundError,
-    TaskTimeoutError,
-    TaskRevokedError,
-    # Interface
-    TaskQueueInterface,
-)
-
-# =============================================================================
-# Web Framework Interface
-# =============================================================================
-from selfhealing.interfaces.web_framework import (
-    # Enums
-    HttpMethod,
-    ContentType,
-    # DTOs
-    RequestContext,
-    ResponseContext,
-    # Exceptions
-    WebFrameworkError,
-    RouteNotFoundError,
-    AuthenticationError,
-    PermissionDeniedError,
-    # Interface
-    WebFrameworkInterface,
-    # Type alias
-    HandlerFunc,
 )
 
 # =============================================================================
 # Configuration Provider Interface
 # =============================================================================
-from selfhealing.interfaces.config_provider import (
-    # Interface
+from selfhealing.interfaces.config_provider import (  # Interface; Default implementations
     ConfigProviderInterface,
-    # Default implementations
     DictConfigProvider,
     EnvConfigProvider,
 )
@@ -117,63 +69,80 @@ from selfhealing.interfaces.config_provider import (
 # =============================================================================
 # Rate Limit Storage Interface (Distributed Self-DDoS Prevention)
 # =============================================================================
-from selfhealing.interfaces.rate_limit_storage import (
-    # Enums
-    RateLimitStorageType,
-    # Data Classes
+from selfhealing.interfaces.rate_limit_storage import (  # Enums; Data Classes; Interface; Exceptions
     RateLimitState,
-    # Interface
-    RateLimitStorageInterface,
-    # Exceptions
     RateLimitStorageError,
+    RateLimitStorageInterface,
+    RateLimitStorageType,
     RateLimitStorageUnavailableError,
 )
 
 # =============================================================================
-# Audit Log Adapter Interface (Non-invasive audit logging)
+# Repository Interfaces
 # =============================================================================
-from selfhealing.interfaces.audit_adapter import (
-    # Enums
-    AuditAction,
-    # Data Classes
-    AuditEntry,
-    # Interface
-    AuditLogAdapter,
-)
-
-# =============================================================================
-# Alert Adapter Interface (Non-invasive alerting)
-# =============================================================================
-from selfhealing.interfaces.alert_adapter import (
-    # Enums
-    AlertSeverity,
-    AlertCategory,
-    # Data Classes
-    Alert,
-    # Interface
-    AlertAdapter,
+from selfhealing.interfaces.repositories import (  # Enums; Data Classes; Repository Interfaces
+    CircuitBreakerStateData,
+    CircuitBreakerStateEnum,
+    CircuitBreakerStateRepository,
+    FailedOperationData,
+    FailedOperationDomain,
+    FailedOperationRepository,
+    FailedOperationStatus,
+    SecurityIncidentData,
+    SecurityIncidentRepository,
+    SecurityIncidentStatus,
+    SecurityIncidentType,
+    SecuritySeverity,
 )
 
 # =============================================================================
 # Statistics Repository Interface (Hybrid Storage - v2.3.0)
 # =============================================================================
-from selfhealing.interfaces.statistics import (
-    # Data Classes
-    StatusCounts,
-    DomainDistribution,
-    FailureTypeDistribution,
-    RecentActivity,
-    CleanupStats,
-    PaginatedResult,
-    CircuitBreakerSummary,
-    CircuitBreakerInfo,
-    # Audit Trail DTOs (The Master Trail - v2.4.0)
+from selfhealing.interfaces.statistics import (  # Data Classes; Audit Trail DTOs (The Master Trail - v2.4.0); Interface
     AuditTrailEntry,
+    CircuitBreakerInfo,
+    CircuitBreakerSummary,
+    CleanupStats,
+    DomainDistribution,
     EntityAuditTrail,
-    # Interface
+    FailureTypeDistribution,
+    PaginatedResult,
+    RecentActivity,
     StatisticsRepositoryInterface,
+    StatusCounts,
 )
 
+# =============================================================================
+# Task Queue Interface
+# =============================================================================
+from selfhealing.interfaces.task_queue import (  # Enums; DTOs; Exceptions; Interface
+    ScheduleInfo,
+    TaskNotFoundError,
+    TaskOptions,
+    TaskPriority,
+    TaskQueueError,
+    TaskQueueInterface,
+    TaskResult,
+    TaskRevokedError,
+    TaskStatus,
+    TaskTimeoutError,
+)
+
+# =============================================================================
+# Web Framework Interface
+# =============================================================================
+from selfhealing.interfaces.web_framework import (  # Enums; DTOs; Exceptions; Interface; Type alias
+    AuthenticationError,
+    ContentType,
+    HandlerFunc,
+    HttpMethod,
+    PermissionDeniedError,
+    RequestContext,
+    ResponseContext,
+    RouteNotFoundError,
+    WebFrameworkError,
+    WebFrameworkInterface,
+)
 
 __all__ = [
     # =========================================================================

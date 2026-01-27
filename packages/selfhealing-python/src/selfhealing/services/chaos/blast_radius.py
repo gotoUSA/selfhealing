@@ -15,12 +15,11 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from selfhealing.core.timezone import now
-from selfhealing.settings import get_layered_settings, ChaosBlastRadiusSettings
+from selfhealing.settings import ChaosBlastRadiusSettings, get_layered_settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,20 +31,20 @@ logger = logging.getLogger(__name__)
 
 class BlastRadius(str, Enum):
     """Blast radius levels for chaos experiments."""
-    
+
     INSTANCE = "instance"
     """Single instance/pod. Lowest risk. No approval required."""
-    
+
     SERVICE = "service"
     """Entire service. Medium risk. May affect dependent services."""
-    
+
     REGION = "region"
     """Full region/AZ. Highest risk. Requires manual approval."""
 
 
 class ApprovalStatus(str, Enum):
     """Approval status for high-risk experiments."""
-    
+
     NOT_REQUIRED = "not_required"
     PENDING = "pending"
     APPROVED = "approved"
@@ -61,55 +60,55 @@ class ApprovalStatus(str, Enum):
 @dataclass
 class BlastRadiusPolicy:
     """Policy configuration for blast radius management."""
-    
+
     # Scope-based restrictions
     instance_max_concurrent: int = 5
     """Maximum concurrent experiments at INSTANCE level."""
-    
+
     service_max_concurrent: int = 2
     """Maximum concurrent experiments at SERVICE level."""
-    
+
     region_max_concurrent: int = 1
     """Maximum concurrent experiments at REGION level."""
-    
+
     # Auto-approval thresholds
     instance_auto_approve: bool = True
     """Auto-approve INSTANCE level experiments."""
-    
+
     service_auto_approve: bool = False
     """Auto-approve SERVICE level experiments."""
-    
+
     region_auto_approve: bool = False
     """REGION level NEVER auto-approves."""
-    
+
     # Time-based restrictions
     allowed_hours_start: int = 2
     """Start hour (UTC) for allowed experiment window (default: 2 AM)."""
-    
+
     allowed_hours_end: int = 6
     """End hour (UTC) for allowed experiment window (default: 6 AM)."""
-    
+
     allow_outside_window: bool = False
     """Allow experiments outside the maintenance window."""
-    
+
     # Traffic restrictions
     max_traffic_percent_instance: float = 100.0
     """Maximum traffic % affected at INSTANCE level."""
-    
+
     max_traffic_percent_service: float = 50.0
     """Maximum traffic % affected at SERVICE level."""
-    
+
     max_traffic_percent_region: float = 10.0
     """Maximum traffic % affected at REGION level."""
-    
+
     # Safety limits
-    excluded_services: List[str] = field(default_factory=list)
+    excluded_services: list[str] = field(default_factory=list)
     """Services that cannot be targeted by chaos experiments."""
-    
-    excluded_domains: List[str] = field(default_factory=list)
+
+    excluded_domains: list[str] = field(default_factory=list)
     """Domains that cannot be targeted."""
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "instance_max_concurrent": self.instance_max_concurrent,
@@ -129,18 +128,18 @@ class BlastRadiusPolicy:
         }
 
     @classmethod
-    def from_settings(cls) -> "BlastRadiusPolicy":
+    def from_settings(cls) -> BlastRadiusPolicy:
         """
         LayeredSettings에서 정책 로드.
-        
+
         92_CONFIG_IMPLEMENTATION_GUIDE.md Week 3 [13] ChaosBlastRadiusSettings 참조.
         91_CONFIG_INVENTORY.md §6.12, §12.1 참조.
-        
+
         Returns:
             Settings 기반 BlastRadiusPolicy
         """
         settings = get_layered_settings(ChaosBlastRadiusSettings, "chaos_blast_radius")
-        
+
         return cls(
             instance_max_concurrent=settings.instance_max_concurrent,
             service_max_concurrent=settings.service_max_concurrent,
@@ -159,20 +158,20 @@ class BlastRadiusPolicy:
         )
 
     @classmethod
-    def from_env(cls) -> "BlastRadiusPolicy":
+    def from_env(cls) -> BlastRadiusPolicy:
         """
         환경변수에서 정책 로드.
-        
+
         환경변수:
             CHAOS_EXCLUDED_SERVICES: 제외 서비스 (쉼표 구분)
             CHAOS_EXCLUDED_DOMAINS: 제외 도메인 (쉼표 구분)
             CHAOS_MAX_FAILURE_PERCENT: 최대 실패율 (기본: 10.0)
             CHAOS_MAX_AFFECTED_INSTANCES: 최대 영향 인스턴스 (기본: 1)
             CHAOS_ALLOW_OUTSIDE_WINDOW: 유지보수 윈도우 외 허용 (기본: false)
-        
+
         Returns:
             환경변수 기반 BlastRadiusPolicy
-        
+
         Example:
             # .env
             CHAOS_EXCLUDED_SERVICES=payment-core,toss-payment,iamport
@@ -180,11 +179,11 @@ class BlastRadiusPolicy:
             CHAOS_MAX_FAILURE_PERCENT=5.0
         """
         import os
-        
-        def parse_list(env_key: str) -> List[str]:
+
+        def parse_list(env_key: str) -> list[str]:
             raw = os.getenv(env_key, "")
             return [s.strip() for s in raw.split(",") if s.strip()]
-        
+
         def parse_bool(env_key: str, default: bool = False) -> bool:
             raw = os.getenv(env_key, "").lower()
             if raw in ("true", "1", "yes"):
@@ -192,30 +191,36 @@ class BlastRadiusPolicy:
             if raw in ("false", "0", "no"):
                 return False
             return default
-        
+
         excluded_services = parse_list("CHAOS_EXCLUDED_SERVICES")
         excluded_domains = parse_list("CHAOS_EXCLUDED_DOMAINS")
-        
+
         if excluded_services:
-            logger.info(f"[BlastRadius] Loaded excluded services from env: {excluded_services}")
+            logger.info(
+                f"[BlastRadius] Loaded excluded services from env: {excluded_services}"
+            )
         if excluded_domains:
-            logger.info(f"[BlastRadius] Loaded excluded domains from env: {excluded_domains}")
-        
+            logger.info(
+                f"[BlastRadius] Loaded excluded domains from env: {excluded_domains}"
+            )
+
         return cls(
             excluded_services=excluded_services,
             excluded_domains=excluded_domains,
-            max_traffic_percent_region=float(os.getenv("CHAOS_MAX_FAILURE_PERCENT", "10.0")),
+            max_traffic_percent_region=float(
+                os.getenv("CHAOS_MAX_FAILURE_PERCENT", "10.0")
+            ),
             region_max_concurrent=int(os.getenv("CHAOS_MAX_AFFECTED_INSTANCES", "1")),
             allow_outside_window=parse_bool("CHAOS_ALLOW_OUTSIDE_WINDOW", False),
         )
-    
+
     def is_service_allowed(self, service_name: str) -> bool:
         """
         서비스가 Chaos 실험 대상으로 허용되는지 확인.
-        
+
         Args:
             service_name: 확인할 서비스 이름
-        
+
         Returns:
             True if 서비스가 실험 대상으로 허용됨
         """
@@ -224,7 +229,7 @@ class BlastRadiusPolicy:
                 f"[BlastRadius] Service '{service_name}' is in excluded list"
             )
             return False
-        
+
         # 도메인 패턴 매칭 (서비스명에 도메인이 포함된 경우)
         for domain in self.excluded_domains:
             if domain.lower() in service_name.lower():
@@ -233,34 +238,34 @@ class BlastRadiusPolicy:
                     f"excluded domain '{domain}'"
                 )
                 return False
-        
+
         return True
 
 
 @dataclass
 class ApprovalRequest:
     """Approval request for high-risk experiments."""
-    
+
     experiment_id: str
     blast_radius: str
     target_service: str
     target_domain: str
-    
+
     # Request metadata
     requested_by: str = ""
     requested_at: str = field(default_factory=lambda: now().isoformat())
     reason: str = ""
-    
+
     # Approval metadata
     status: str = ApprovalStatus.PENDING.value
     approved_by: str = ""
     approved_at: str = ""
     denial_reason: str = ""
-    
+
     # Expiry
     expires_at: str = ""
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "experiment_id": self.experiment_id,
@@ -281,24 +286,24 @@ class ApprovalRequest:
 @dataclass
 class BlastRadiusCheckResult:
     """Result of a blast radius validation check."""
-    
+
     allowed: bool
     blast_radius: str
     requires_approval: bool
     approval_status: str
-    
+
     # Violation details
-    violations: List[str] = field(default_factory=list)
-    
+    violations: list[str] = field(default_factory=list)
+
     # Computed limits
     max_traffic_percent: float = 100.0
     max_concurrent: int = 5
     current_concurrent: int = 0
-    
+
     # Time window
     within_allowed_window: bool = True
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "allowed": self.allowed,
@@ -321,41 +326,41 @@ class BlastRadiusCheckResult:
 class BlastRadiusManager:
     """
     Manages blast radius policies and approvals for chaos experiments.
-    
+
     Responsibilities:
     1. Validate experiment scope against policy
     2. Manage approval workflow for high-risk experiments
     3. Track concurrent experiments by scope
     4. Enforce time-based restrictions
     5. Integrate with ControlAPIService for governance
-    
+
     Usage:
         manager = get_blast_radius_manager()
-        
+
         # Check if experiment is allowed
         result = manager.check(
             blast_radius=BlastRadius.SERVICE,
             target_service="payment",
             experiment_id="chaos-abc123"
         )
-        
+
         if not result.allowed:
             print(f"Blocked: {result.violations}")
         elif result.requires_approval:
             # Submit for approval
             manager.request_approval(...)
     """
-    
-    def __init__(self, policy: Optional[BlastRadiusPolicy] = None):
+
+    def __init__(self, policy: BlastRadiusPolicy | None = None):
         """Initialize BlastRadiusManager."""
         self._policy = policy or BlastRadiusPolicy()
         self._lock = threading.RLock()
-        
+
         # Tracking state
-        self._active_experiments: Dict[str, Dict[str, Any]] = {}
-        self._pending_approvals: Dict[str, ApprovalRequest] = {}
-        self._approved_experiments: Set[str] = set()
-    
+        self._active_experiments: dict[str, dict[str, Any]] = {}
+        self._pending_approvals: dict[str, ApprovalRequest] = {}
+        self._approved_experiments: set[str] = set()
+
     def _log_blast_radius_audit(
         self,
         experiment_id: str,
@@ -363,16 +368,16 @@ class BlastRadiusManager:
         target_service: str,
         action: str,
         allowed: bool = True,
-        violations: Optional[List[str]] = None,
-        approval_status: Optional[str] = None,
-        target_domain: Optional[str] = None,
-        traffic_percent: Optional[float] = None,
-        reason: Optional[str] = None,
+        violations: list[str] | None = None,
+        approval_status: str | None = None,
+        target_domain: str | None = None,
+        traffic_percent: float | None = None,
+        reason: str | None = None,
     ) -> None:
         """Audit 헬퍼를 통해 blast radius 이벤트 기록."""
         try:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
-            
+
             log_blast_radius_audit(
                 experiment_id=experiment_id,
                 blast_radius=blast_radius,
@@ -387,22 +392,22 @@ class BlastRadiusManager:
             )
         except Exception as e:
             logger.debug(f"[BlastRadiusManager] Audit logging failed: {e}")
-    
+
     # =========================================================================
     # Policy Management
     # =========================================================================
-    
+
     def get_policy(self) -> BlastRadiusPolicy:
         """Get current policy."""
         return self._policy
-    
+
     def update_policy(self, **kwargs) -> BlastRadiusPolicy:
         """
         Update policy settings.
-        
+
         Args:
             **kwargs: Policy fields to update
-            
+
         Returns:
             Updated policy
         """
@@ -411,47 +416,53 @@ class BlastRadiusManager:
                 if hasattr(self._policy, key):
                     setattr(self._policy, key, value)
                     logger.info(f"[BlastRadius] Updated policy.{key} = {value}")
-            
+
             self._persist_policy()
             return self._policy
-    
+
     def _persist_policy(self) -> None:
         """Persist policy to storage."""
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             manager.update_chaos_config(blast_radius_policy=self._policy.to_dict())
         except Exception as e:
             logger.warning(f"[BlastRadius] Could not persist policy: {e}")
-    
+
     def _load_policy(self) -> None:
         """Load policy from storage."""
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             config = manager.get_chaos_config()
             policy_data = config.get("blast_radius_policy", {})
-            
+
             if policy_data:
                 for key, value in policy_data.items():
                     if hasattr(self._policy, key):
                         setattr(self._policy, key, value)
         except Exception as e:
             logger.warning(f"[BlastRadius] Could not load policy: {e}")
-    
+
     # =========================================================================
     # Blast Radius Validation
     # =========================================================================
-    
+
     def _check_exclusions(
         self, target_service: str, target_domain: str, violations: list
     ) -> None:
         """Check if service/domain is excluded."""
         if target_service in self._policy.excluded_services:
-            violations.append(f"Service '{target_service}' is excluded from chaos experiments")
+            violations.append(
+                f"Service '{target_service}' is excluded from chaos experiments"
+            )
         if target_domain and target_domain in self._policy.excluded_domains:
-            violations.append(f"Domain '{target_domain}' is excluded from chaos experiments")
-    
+            violations.append(
+                f"Domain '{target_domain}' is excluded from chaos experiments"
+            )
+
     def _check_time_window_violation(self, violations: list) -> bool:
         """Check time window and add violation if needed. Returns within_window."""
         within_window = self._check_time_window()
@@ -461,7 +472,7 @@ class BlastRadiusManager:
                 f"({self._policy.allowed_hours_start}:00 - {self._policy.allowed_hours_end}:00 UTC)"
             )
         return within_window
-    
+
     def _check_concurrent_limit(
         self, blast_radius: BlastRadius, violations: list
     ) -> tuple[int, int]:
@@ -473,7 +484,7 @@ class BlastRadiusManager:
                 f"Concurrent experiment limit reached for {blast_radius.value}: {current}/{max_limit}"
             )
         return current, max_limit
-    
+
     def _check_traffic_limit(
         self, blast_radius: BlastRadius, traffic_percent: float, violations: list
     ) -> float:
@@ -485,7 +496,7 @@ class BlastRadiusManager:
                 f"for {blast_radius.value} level"
             )
         return max_traffic
-    
+
     def _check_approval_requirements(
         self, blast_radius: BlastRadius, experiment_id: str, violations: list
     ) -> tuple[bool, str]:
@@ -497,17 +508,23 @@ class BlastRadiusManager:
                     f"REGION level experiments require manual approval. Current status: {approval_status}"
                 )
             return True, approval_status
-        
-        if blast_radius == BlastRadius.SERVICE and not self._policy.service_auto_approve:
+
+        if (
+            blast_radius == BlastRadius.SERVICE
+            and not self._policy.service_auto_approve
+        ):
             approval_status = self._get_approval_status(experiment_id)
-            if approval_status not in (ApprovalStatus.APPROVED.value, ApprovalStatus.NOT_REQUIRED.value):
+            if approval_status not in (
+                ApprovalStatus.APPROVED.value,
+                ApprovalStatus.NOT_REQUIRED.value,
+            ):
                 violations.append(
                     f"SERVICE level experiments require approval. Current status: {approval_status}"
                 )
             return True, approval_status
-        
+
         return False, ApprovalStatus.NOT_REQUIRED.value
-    
+
     def check(
         self,
         blast_radius: BlastRadius | str,
@@ -518,31 +535,35 @@ class BlastRadiusManager:
     ) -> BlastRadiusCheckResult:
         """
         Check if an experiment is allowed under current policy.
-        
+
         Args:
             blast_radius: Requested blast radius level
             target_service: Target service name
             target_domain: Target domain (optional)
             experiment_id: Experiment ID (for approval lookup)
             traffic_percent: Percentage of traffic to affect
-            
+
         Returns:
             BlastRadiusCheckResult with validation details
         """
         if isinstance(blast_radius, str):
             blast_radius = BlastRadius(blast_radius)
-        
+
         violations = []
-        
+
         with self._lock:
             self._check_exclusions(target_service, target_domain, violations)
             within_window = self._check_time_window_violation(violations)
-            current_concurrent, max_concurrent = self._check_concurrent_limit(blast_radius, violations)
-            max_traffic = self._check_traffic_limit(blast_radius, traffic_percent, violations)
+            current_concurrent, max_concurrent = self._check_concurrent_limit(
+                blast_radius, violations
+            )
+            max_traffic = self._check_traffic_limit(
+                blast_radius, traffic_percent, violations
+            )
             requires_approval, approval_status = self._check_approval_requirements(
                 blast_radius, experiment_id, violations
             )
-        
+
         result = BlastRadiusCheckResult(
             allowed=len(violations) == 0,
             blast_radius=blast_radius.value,
@@ -554,7 +575,7 @@ class BlastRadiusManager:
             current_concurrent=current_concurrent,
             within_allowed_window=within_window,
         )
-        
+
         # Audit 로깅
         self._log_blast_radius_audit(
             experiment_id=experiment_id,
@@ -567,21 +588,21 @@ class BlastRadiusManager:
             target_domain=target_domain,
             traffic_percent=traffic_percent,
         )
-        
+
         return result
-    
+
     def _check_time_window(self) -> bool:
         """Check if current time is within allowed window."""
         current_hour = now().hour
         start = self._policy.allowed_hours_start
         end = self._policy.allowed_hours_end
-        
+
         if start <= end:
             return start <= current_hour < end
         else:
             # Window spans midnight
             return current_hour >= start or current_hour < end
-    
+
     def _get_max_concurrent(self, blast_radius: BlastRadius) -> int:
         """Get maximum concurrent experiments for blast radius level."""
         return {
@@ -589,7 +610,7 @@ class BlastRadiusManager:
             BlastRadius.SERVICE: self._policy.service_max_concurrent,
             BlastRadius.REGION: self._policy.region_max_concurrent,
         }.get(blast_radius, 1)
-    
+
     def _get_max_traffic(self, blast_radius: BlastRadius) -> float:
         """Get maximum traffic percentage for blast radius level."""
         return {
@@ -597,7 +618,7 @@ class BlastRadiusManager:
             BlastRadius.SERVICE: self._policy.max_traffic_percent_service,
             BlastRadius.REGION: self._policy.max_traffic_percent_region,
         }.get(blast_radius, 100.0)
-    
+
     def _count_concurrent(self, blast_radius: BlastRadius) -> int:
         """Count currently active experiments at given blast radius level."""
         count = 0
@@ -605,21 +626,21 @@ class BlastRadiusManager:
             if exp_data.get("blast_radius") == blast_radius.value:
                 count += 1
         return count
-    
+
     def _get_approval_status(self, experiment_id: str) -> str:
         """Get approval status for experiment."""
         if experiment_id in self._approved_experiments:
             return ApprovalStatus.APPROVED.value
-        
+
         if experiment_id in self._pending_approvals:
             return self._pending_approvals[experiment_id].status
-        
+
         return ApprovalStatus.PENDING.value
-    
+
     # =========================================================================
     # Experiment Lifecycle Tracking
     # =========================================================================
-    
+
     def register_experiment(
         self,
         experiment_id: str,
@@ -629,19 +650,19 @@ class BlastRadiusManager:
     ) -> bool:
         """
         Register an experiment as active.
-        
+
         Args:
             experiment_id: Unique experiment ID
             blast_radius: Blast radius level
             target_service: Target service
             target_domain: Target domain
-            
+
         Returns:
             True if registered successfully
         """
         if isinstance(blast_radius, str):
             blast_radius = BlastRadius(blast_radius)
-        
+
         with self._lock:
             self._active_experiments[experiment_id] = {
                 "blast_radius": blast_radius.value,
@@ -649,16 +670,18 @@ class BlastRadiusManager:
                 "target_domain": target_domain,
                 "started_at": now().isoformat(),
             }
-            logger.info(f"[BlastRadius] Registered experiment {experiment_id} at {blast_radius.value} level")
+            logger.info(
+                f"[BlastRadius] Registered experiment {experiment_id} at {blast_radius.value} level"
+            )
             return True
-    
+
     def unregister_experiment(self, experiment_id: str) -> bool:
         """
         Unregister an experiment when it completes.
-        
+
         Args:
             experiment_id: Experiment ID to unregister
-            
+
         Returns:
             True if unregistered successfully
         """
@@ -668,16 +691,16 @@ class BlastRadiusManager:
                 logger.info(f"[BlastRadius] Unregistered experiment {experiment_id}")
                 return True
             return False
-    
-    def get_active_experiments(self) -> Dict[str, Dict[str, Any]]:
+
+    def get_active_experiments(self) -> dict[str, dict[str, Any]]:
         """Get all currently active experiments."""
         with self._lock:
             return self._active_experiments.copy()
-    
+
     # =========================================================================
     # Approval Workflow
     # =========================================================================
-    
+
     def request_approval(
         self,
         experiment_id: str,
@@ -690,7 +713,7 @@ class BlastRadiusManager:
     ) -> ApprovalRequest:
         """
         Request approval for a high-risk experiment.
-        
+
         Args:
             experiment_id: Experiment ID
             blast_radius: Blast radius level
@@ -699,15 +722,15 @@ class BlastRadiusManager:
             requested_by: Requester identity
             reason: Reason for experiment
             expires_in_hours: Hours until approval expires
-            
+
         Returns:
             ApprovalRequest with current status
         """
         if isinstance(blast_radius, str):
             blast_radius = BlastRadius(blast_radius)
-        
+
         from datetime import timedelta
-        
+
         with self._lock:
             request = ApprovalRequest(
                 experiment_id=experiment_id,
@@ -719,18 +742,18 @@ class BlastRadiusManager:
                 status=ApprovalStatus.PENDING.value,
                 expires_at=(now() + timedelta(hours=expires_in_hours)).isoformat(),
             )
-            
+
             self._pending_approvals[experiment_id] = request
             logger.info(
                 f"[BlastRadius] Approval requested for {experiment_id} "
                 f"({blast_radius.value} level) by {requested_by}"
             )
-            
+
             # Send notification (best-effort)
             self._notify_approval_requested(request)
-            
+
             return request
-    
+
     def approve(
         self,
         experiment_id: str,
@@ -738,32 +761,34 @@ class BlastRadiusManager:
     ) -> ApprovalRequest:
         """
         Approve a pending experiment.
-        
+
         Args:
             experiment_id: Experiment ID to approve
             approved_by: Approver identity
-            
+
         Returns:
             Updated ApprovalRequest
         """
         with self._lock:
             if experiment_id not in self._pending_approvals:
                 raise ValueError(f"No pending approval for experiment {experiment_id}")
-            
+
             request = self._pending_approvals[experiment_id]
             request.status = ApprovalStatus.APPROVED.value
             request.approved_by = approved_by
             request.approved_at = now().isoformat()
-            
+
             self._approved_experiments.add(experiment_id)
-            
-            logger.info(f"[BlastRadius] Experiment {experiment_id} approved by {approved_by}")
-            
+
+            logger.info(
+                f"[BlastRadius] Experiment {experiment_id} approved by {approved_by}"
+            )
+
             # Audit record
             self._record_approval_decision(request)
-            
+
             return request
-    
+
     def deny(
         self,
         experiment_id: str,
@@ -772,65 +797,68 @@ class BlastRadiusManager:
     ) -> ApprovalRequest:
         """
         Deny a pending experiment.
-        
+
         Args:
             experiment_id: Experiment ID to deny
             denied_by: Denier identity
             reason: Reason for denial
-            
+
         Returns:
             Updated ApprovalRequest
         """
         with self._lock:
             if experiment_id not in self._pending_approvals:
                 raise ValueError(f"No pending approval for experiment {experiment_id}")
-            
+
             request = self._pending_approvals[experiment_id]
             request.status = ApprovalStatus.DENIED.value
             request.approved_by = denied_by
             request.approved_at = now().isoformat()
             request.denial_reason = reason
-            
-            logger.info(f"[BlastRadius] Experiment {experiment_id} denied by {denied_by}: {reason}")
-            
+
+            logger.info(
+                f"[BlastRadius] Experiment {experiment_id} denied by {denied_by}: {reason}"
+            )
+
             # Audit record
             self._record_approval_decision(request)
-            
+
             return request
-    
-    def get_pending_approvals(self) -> List[ApprovalRequest]:
+
+    def get_pending_approvals(self) -> list[ApprovalRequest]:
         """Get all pending approval requests."""
         with self._lock:
             return [
-                req for req in self._pending_approvals.values()
+                req
+                for req in self._pending_approvals.values()
                 if req.status == ApprovalStatus.PENDING.value
             ]
-    
+
     # =========================================================================
     # ControlAPIService Integration
     # =========================================================================
-    
+
     def requires_control_api_approval(self, blast_radius: BlastRadius | str) -> bool:
         """
         Check if blast radius requires ControlAPIService approval.
-        
+
         REGION level always requires RequiresManualApproval flag.
         """
         if isinstance(blast_radius, str):
             blast_radius = BlastRadius(blast_radius)
-        
+
         return blast_radius == BlastRadius.REGION
-    
-    def get_control_api_flags(self, blast_radius: BlastRadius | str) -> Dict[str, Any]:
+
+    def get_control_api_flags(self, blast_radius: BlastRadius | str) -> dict[str, Any]:
         """
         Get ControlAPIService flags for blast radius level.
-        
+
         Returns:
             Dict with flags for ControlAPIService integration
         """
         if isinstance(blast_radius, str):
             blast_radius = BlastRadius(blast_radius)
-        
+
         return {
             "requires_manual_approval": blast_radius == BlastRadius.REGION,
             "risk_level": {
@@ -840,15 +868,16 @@ class BlastRadiusManager:
             }.get(blast_radius, "warning"),
             "environment": "chaos",
         }
-    
+
     # =========================================================================
     # Internal Helpers
     # =========================================================================
-    
+
     def _notify_approval_requested(self, request: ApprovalRequest) -> None:
         """Send notification for approval request."""
         try:
             from selfhealing.adapters.alert import get_alert_adapter
+
             adapter = get_alert_adapter()
             if adapter:
                 adapter.alert(
@@ -863,7 +892,7 @@ class BlastRadiusManager:
                 )
         except Exception as e:
             logger.warning(f"[BlastRadius] Could not send approval notification: {e}")
-    
+
     def _record_approval_decision(self, request: ApprovalRequest) -> None:
         """Record approval decision to audit trail."""
         try:
@@ -882,20 +911,20 @@ class BlastRadiusManager:
 # =============================================================================
 
 
-_blast_radius_manager: Optional[BlastRadiusManager] = None
+_blast_radius_manager: BlastRadiusManager | None = None
 _manager_lock = threading.Lock()
 
 
 def get_blast_radius_manager() -> BlastRadiusManager:
     """Get the singleton BlastRadiusManager instance."""
     global _blast_radius_manager
-    
+
     if _blast_radius_manager is None:
         with _manager_lock:
             if _blast_radius_manager is None:
                 _blast_radius_manager = BlastRadiusManager()
                 _blast_radius_manager._load_policy()
-    
+
     return _blast_radius_manager
 
 

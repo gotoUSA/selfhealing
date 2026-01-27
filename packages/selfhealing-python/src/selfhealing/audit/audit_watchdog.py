@@ -45,15 +45,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 import threading
-import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.audit.self_audit import SelfAuditEvent, self_audit
 
@@ -78,7 +77,7 @@ class HeartbeatTarget:
     name: str
     url: str
     method: str = "GET"  # GET or POST
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     timeout_seconds: float = 5.0
     enabled: bool = True
 
@@ -94,22 +93,22 @@ class WatchdogConfig:
     missed_threshold: int = 3
 
     # Heartbeat 전송 대상 목록
-    targets: List[HeartbeatTarget] = field(default_factory=list)
+    targets: list[HeartbeatTarget] = field(default_factory=list)
 
     # 로컬 파일 heartbeat (외부 서비스 없이도 작동)
-    local_heartbeat_file: Optional[str] = None
+    local_heartbeat_file: str | None = None
 
     # 콜백 함수들
-    on_heartbeat_success: Optional[Callable[[], None]] = None
-    on_heartbeat_failure: Optional[Callable[[str, Exception], None]] = None
-    on_threshold_exceeded: Optional[Callable[[int], None]] = None
+    on_heartbeat_success: Callable[[], None] | None = None
+    on_heartbeat_failure: Callable[[str, Exception], None] | None = None
+    on_threshold_exceeded: Callable[[int], None] | None = None
 
     @classmethod
     def from_settings(
         cls,
-        settings: "AuditWatchdogSettings | None" = None,
+        settings: AuditWatchdogSettings | None = None,
         **overrides,
-    ) -> "WatchdogConfig":
+    ) -> WatchdogConfig:
         """
         Settings에서 WatchdogConfig 인스턴스 생성.
 
@@ -139,9 +138,7 @@ class WatchdogConfig:
             heartbeat_interval_seconds=overrides.get(
                 "heartbeat_interval_seconds", s.heartbeat_interval_seconds
             ),
-            missed_threshold=overrides.get(
-                "missed_threshold", s.missed_threshold
-            ),
+            missed_threshold=overrides.get("missed_threshold", s.missed_threshold),
             targets=targets,
             local_heartbeat_file=overrides.get(
                 "local_heartbeat_file", s.local_heartbeat_file
@@ -152,7 +149,7 @@ class WatchdogConfig:
         )
 
     @classmethod
-    def from_env(cls) -> "WatchdogConfig":
+    def from_env(cls) -> WatchdogConfig:
         """
         환경 변수에서 설정 로드.
 
@@ -160,6 +157,7 @@ class WatchdogConfig:
             Use `from_settings()` instead for Pydantic v2 Settings support.
         """
         import warnings
+
         warnings.warn(
             "from_env() is deprecated, use from_settings() instead",
             DeprecationWarning,
@@ -176,9 +174,9 @@ class WatchdogStats:
     successful_heartbeats: int = 0
     failed_heartbeats: int = 0
     consecutive_failures: int = 0
-    last_heartbeat_time: Optional[datetime] = None
-    last_failure_time: Optional[datetime] = None
-    last_failure_reason: Optional[str] = None
+    last_heartbeat_time: datetime | None = None
+    last_failure_time: datetime | None = None
+    last_failure_reason: str | None = None
     uptime_seconds: float = 0.0
 
 
@@ -196,9 +194,9 @@ class AuditWatchdog:
 
     def __init__(
         self,
-        config: Optional[WatchdogConfig] = None,
-        on_alive: Optional[Callable[[], None]] = None,
-        on_dead: Optional[Callable[[int], None]] = None,
+        config: WatchdogConfig | None = None,
+        on_alive: Callable[[], None] | None = None,
+        on_dead: Callable[[int], None] | None = None,
     ):
         """
         Initialize AuditWatchdog.
@@ -211,10 +209,10 @@ class AuditWatchdog:
         self._config = config or WatchdogConfig.from_env()
         self._state = WatchdogState.STOPPED
         self._stats = WatchdogStats()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._lock = threading.RLock()
-        self._start_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
 
         # 레거시 콜백 지원
         if on_alive and not self._config.on_heartbeat_success:
@@ -407,10 +405,12 @@ class AuditWatchdog:
         }
 
         if target.method.upper() == "POST":
-            data = json.dumps({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "source": "audit_watchdog",
-            }).encode("utf-8")
+            data = json.dumps(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "source": "audit_watchdog",
+                }
+            ).encode("utf-8")
             request = urllib.request.Request(
                 target.url,
                 data=data,
@@ -489,15 +489,15 @@ class WatchdogChecker:
         except Exception:
             return False
 
-    def read_heartbeat(self) -> Optional[Dict[str, Any]]:
+    def read_heartbeat(self) -> dict[str, Any] | None:
         """Heartbeat 파일 읽기."""
         try:
-            with open(self._heartbeat_file, "r") as f:
+            with open(self._heartbeat_file) as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return None
 
-    def get_age_seconds(self) -> Optional[float]:
+    def get_age_seconds(self) -> float | None:
         """마지막 heartbeat 이후 경과 시간."""
         try:
             heartbeat = self.read_heartbeat()
@@ -515,7 +515,7 @@ class WatchdogChecker:
 
 
 # 싱글톤 인스턴스 관리
-_watchdog_instance: Optional[AuditWatchdog] = None
+_watchdog_instance: AuditWatchdog | None = None
 _watchdog_lock = threading.Lock()
 
 
@@ -529,7 +529,7 @@ def get_watchdog() -> AuditWatchdog:
     return _watchdog_instance
 
 
-def start_watchdog(config: Optional[WatchdogConfig] = None) -> AuditWatchdog:
+def start_watchdog(config: WatchdogConfig | None = None) -> AuditWatchdog:
     """Watchdog 시작 (편의 함수)."""
     global _watchdog_instance
     with _watchdog_lock:

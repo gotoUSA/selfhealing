@@ -12,8 +12,8 @@ Usage:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone as tz
-from typing import Optional
+from datetime import datetime
+from datetime import timezone as tz
 
 try:
     from zoneinfo import ZoneInfo
@@ -95,7 +95,7 @@ def is_naive(value: datetime) -> bool:
 
 def make_aware(
     value: datetime,
-    timezone: Optional[tz] = None,
+    timezone: tz | None = None,
 ) -> datetime:
     """
     Make a naive datetime object timezone-aware.
@@ -118,7 +118,7 @@ def make_aware(
 
 def make_naive(
     value: datetime,
-    timezone: Optional[tz] = None,
+    timezone: tz | None = None,
 ) -> datetime:
     """
     Make a timezone-aware datetime object naive.
@@ -145,7 +145,9 @@ def make_naive(
     return value.replace(tzinfo=None)
 
 
-def localtime(value: Optional[datetime] = None, timezone: Optional[tz] = None) -> datetime:
+def localtime(
+    value: datetime | None = None, timezone: tz | None = None
+) -> datetime:
     """
     Convert an aware datetime to local time.
 

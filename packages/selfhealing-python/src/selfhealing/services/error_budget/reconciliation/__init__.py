@@ -18,10 +18,10 @@ Usage:
         ReconciliationStatus,
         ApplyMode,
     )
-    
+
     # Simple usage
     service = get_reconciliation_service()
-    
+
     # Full configuration
     service = configure_reconciliation_service(
         get_prometheus_errors=my_prometheus_func,
@@ -31,7 +31,8 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Dict, List, Optional
 
 # Enums
 from .enums import ApplyMode, ReconciliationStatus
@@ -74,8 +75,8 @@ __all__ = [
 # =============================================================================
 
 
-_reconciliation_service: Optional[ErrorBudgetReconciliationService] = None
-_period_tracker: Optional[FailSafePeriodTracker] = None
+_reconciliation_service: ErrorBudgetReconciliationService | None = None
+_period_tracker: FailSafePeriodTracker | None = None
 
 
 def get_period_tracker() -> FailSafePeriodTracker:
@@ -97,16 +98,16 @@ def get_reconciliation_service() -> ErrorBudgetReconciliationService:
 
 
 def configure_reconciliation_service(
-    config: Optional[ReconciliationConfig] = None,
-    get_error_logs: Optional[Callable] = None,
-    get_prometheus_errors: Optional[Callable] = None,
-    get_dlq_entries: Optional[Callable] = None,
-    get_current_budget: Optional[Callable] = None,
-    apply_adjustment: Optional[Callable] = None,
+    config: ReconciliationConfig | None = None,
+    get_error_logs: Callable | None = None,
+    get_prometheus_errors: Callable | None = None,
+    get_dlq_entries: Callable | None = None,
+    get_current_budget: Callable | None = None,
+    apply_adjustment: Callable | None = None,
 ) -> ErrorBudgetReconciliationService:
     """
     Reconciliation 서비스 설정.
-    
+
     Args:
         config: Reconciliation 설정
         get_error_logs: 애플리케이션 로그에서 에러 조회 함수
@@ -114,21 +115,21 @@ def configure_reconciliation_service(
         get_dlq_entries: DLQ 엔트리 수 조회 함수
         get_current_budget: 현재 Budget 상태 조회 함수
         apply_adjustment: Primary Budget에 조정 적용 함수
-        
+
     Returns:
         ErrorBudgetReconciliationService 인스턴스
     """
     global _reconciliation_service, _period_tracker
-    
+
     if _period_tracker is None:
         _period_tracker = FailSafePeriodTracker()
-    
+
     shadow_calculator = ShadowBudgetCalculator(
         get_error_logs=get_error_logs,
         get_prometheus_errors=get_prometheus_errors,
         get_dlq_entries=get_dlq_entries,
     )
-    
+
     _reconciliation_service = ErrorBudgetReconciliationService(
         config=config or ReconciliationConfig(),
         period_tracker=_period_tracker,
@@ -136,5 +137,5 @@ def configure_reconciliation_service(
         get_current_budget=get_current_budget,
         apply_adjustment=apply_adjustment,
     )
-    
+
     return _reconciliation_service

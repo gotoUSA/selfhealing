@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass
@@ -17,7 +17,7 @@ class TaskResultEntry:
     """Individual task result entry for aggregation."""
 
     task_name: str
-    result: Dict[str, Any]
+    result: dict[str, Any]
     timestamp: datetime
     severity: str = "info"
 
@@ -54,10 +54,10 @@ class DailyAutonomousReport:
     critical_alerts: int = 0
 
     # Custom metrics (extensible)
-    custom_counts: Dict[str, int] = field(default_factory=dict)
+    custom_counts: dict[str, int] = field(default_factory=dict)
 
     # Raw entries for detailed analysis
-    entries: List[TaskResultEntry] = field(default_factory=list)
+    entries: list[TaskResultEntry] = field(default_factory=list)
 
     def add_entry(self, entry: TaskResultEntry) -> None:
         """Add a task result entry and update counts."""
@@ -94,7 +94,7 @@ class DailyAutonomousReport:
         if entry.severity == "critical":
             self.critical_alerts += 1
 
-    def merge(self, other: "DailyAutonomousReport") -> None:
+    def merge(self, other: DailyAutonomousReport) -> None:
         """Merge another report's data into this one."""
         self.archived_count += other.archived_count
         self.expired_count += other.expired_count
@@ -113,7 +113,7 @@ class DailyAutonomousReport:
 
         self.entries.extend(other.entries)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "date": self.date.isoformat(),

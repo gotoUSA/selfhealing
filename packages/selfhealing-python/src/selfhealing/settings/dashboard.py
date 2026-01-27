@@ -19,8 +19,6 @@ Reference:
 """
 
 import logging
-from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -130,7 +128,7 @@ class DashboardSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_dashboard_settings: Optional[DashboardSettings] = None
+_dashboard_settings: DashboardSettings | None = None
 
 
 def get_dashboard_settings() -> DashboardSettings:

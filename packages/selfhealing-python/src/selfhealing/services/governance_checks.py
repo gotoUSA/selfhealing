@@ -43,14 +43,14 @@ from __future__ import annotations
 
 import functools
 import logging
-import time
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
-    from selfhealing.services.emergency_mode.enums import EmergencyLevel
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def _get_audit_adapter() -> Optional["AuditLogAdapter"]:
+def _get_audit_adapter() -> AuditLogAdapter | None:
     """
     AuditLogAdapter 인스턴스를 가져옵니다.
 
@@ -79,9 +79,9 @@ def _get_audit_adapter() -> Optional["AuditLogAdapter"]:
 def _log_governance_blocked(
     block_reason: str,
     operation_name: str,
-    details: Optional[dict] = None,
-    service_name: Optional[str] = None,
-    domain: Optional[str] = None,
+    details: dict | None = None,
+    service_name: str | None = None,
+    domain: str | None = None,
     request: Any = None,
 ) -> None:
     """
@@ -105,7 +105,10 @@ def _log_governance_blocked(
     # === 버퍼 패턴 우선 ===
     if request is not None:
         try:
-            from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+            from selfhealing.audit.event_buffer import (
+                AuditEventType,
+                RequestAuditBuffer,
+            )
 
             buffer = RequestAuditBuffer.get_or_create(request)
             buffer.add(
@@ -129,7 +132,10 @@ def _log_governance_blocked(
     adapter = _get_audit_adapter()
     if adapter is None:
         # Audit adapter not configured - just log to standard logger
-        logger.info(f"[GovernanceAudit] BLOCKED | reason={block_reason} | " f"operation={operation_name} | details={details}")
+        logger.info(
+            f"[GovernanceAudit] BLOCKED | reason={block_reason} | "
+            f"operation={operation_name} | details={details}"
+        )
         return
 
     try:
@@ -176,7 +182,7 @@ class GovernanceCheckResult:
     allowed: bool
     """실행이 허용되는지 여부."""
 
-    block_reason: Optional[BlockReason] = None
+    block_reason: BlockReason | None = None
     """차단된 경우 사유."""
 
     block_message: str = ""
@@ -188,12 +194,12 @@ class GovernanceCheckResult:
     threshold_percent: float = 0.0
 
     @classmethod
-    def allowed_result(cls) -> "GovernanceCheckResult":
+    def allowed_result(cls) -> GovernanceCheckResult:
         """허용된 결과 팩토리."""
         return cls(allowed=True)
 
     @classmethod
-    def blocked_by_kill_switch(cls) -> "GovernanceCheckResult":
+    def blocked_by_kill_switch(cls) -> GovernanceCheckResult:
         """Kill Switch에 의해 차단된 결과."""
         return cls(
             allowed=False,
@@ -206,7 +212,7 @@ class GovernanceCheckResult:
         cls,
         level_name: str,
         message: str = "",
-    ) -> "GovernanceCheckResult":
+    ) -> GovernanceCheckResult:
         """비상 모드에 의해 차단된 결과."""
         return cls(
             allowed=False,
@@ -220,7 +226,7 @@ class GovernanceCheckResult:
         cls,
         budget_percent: float,
         threshold_percent: float,
-    ) -> "GovernanceCheckResult":
+    ) -> GovernanceCheckResult:
         """에러 예산 부족으로 차단된 결과."""
         return cls(
             allowed=False,
@@ -260,11 +266,11 @@ class TTLCache:
         Args:
             default_ttl: 기본 TTL (초). 기본값 30초.
         """
-        self._cache: dict[str, Tuple[Any, float]] = {}
+        self._cache: dict[str, tuple[Any, float]] = {}
         self._lock = threading.Lock()
         self._default_ttl = default_ttl
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """캐시에서 값 조회. 만료된 경우 None 반환."""
         with self._lock:
             if key in self._cache:
@@ -275,7 +281,7 @@ class TTLCache:
                     del self._cache[key]
             return None
 
-    def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+    def set(self, key: str, value: Any, ttl: float | None = None) -> None:
         """캐시에 값 저장."""
         with self._lock:
             expires_at = time.time() + (ttl or self._default_ttl)
@@ -296,6 +302,7 @@ def _create_governance_cache() -> TTLCache:
     """거버넌스 캐시 생성. Settings에서 TTL을 가져옵니다."""
     try:
         from selfhealing.settings.governance import get_governance_settings
+
         _settings = get_governance_settings()
         return TTLCache(default_ttl=_settings.cache_ttl)
     except Exception:
@@ -348,7 +355,7 @@ def is_system_enabled() -> bool:
         return True
 
 
-def is_emergency_blocking(min_level: int | None = None) -> Tuple[bool, str]:
+def is_emergency_blocking(min_level: int | None = None) -> tuple[bool, str]:
     """
     비상 모드로 인해 작업이 차단되어야 하는지 확인.
 
@@ -360,6 +367,7 @@ def is_emergency_blocking(min_level: int | None = None) -> Tuple[bool, str]:
     """
     if min_level is None:
         from selfhealing.settings.governance import get_governance_settings
+
         min_level = get_governance_settings().emergency_min_level
 
     cache_key = f"emergency_blocking_{min_level}"
@@ -369,7 +377,6 @@ def is_emergency_blocking(min_level: int | None = None) -> Tuple[bool, str]:
 
     try:
         from selfhealing.services.emergency_mode import get_emergency_manager
-        from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
         manager = get_emergency_manager()
         level = manager.get_current_level()
@@ -384,7 +391,7 @@ def is_emergency_blocking(min_level: int | None = None) -> Tuple[bool, str]:
         return False, "UNKNOWN"
 
 
-def is_error_budget_blocking() -> Tuple[bool, float, float]:
+def is_error_budget_blocking() -> tuple[bool, float, float]:
     """
     에러 예산 부족으로 자동화가 차단되어야 하는지 확인.
 
@@ -418,8 +425,8 @@ def check_all_governance(
     emergency_min_level: int | None = None,
     check_error_budget: bool = True,
     operation_name: str = "unknown_operation",
-    service_name: Optional[str] = None,
-    domain: Optional[str] = None,
+    service_name: str | None = None,
+    domain: str | None = None,
     audit_on_block: bool = True,
 ) -> GovernanceCheckResult:
     """
@@ -449,6 +456,7 @@ def check_all_governance(
     # emergency_min_level이 None이면 Settings에서 로드
     if emergency_min_level is None:
         from selfhealing.settings.governance import get_governance_settings
+
         emergency_min_level = get_governance_settings().emergency_min_level
 
     # 1. Kill Switch
@@ -470,7 +478,9 @@ def check_all_governance(
     if check_emergency:
         is_blocked, level_name = is_emergency_blocking(min_level=emergency_min_level)
         if is_blocked:
-            logger.warning(f"[GovernanceChecks] Blocked by Emergency Mode: {level_name}")
+            logger.warning(
+                f"[GovernanceChecks] Blocked by Emergency Mode: {level_name}"
+            )
 
             if audit_on_block:
                 _log_governance_blocked(
@@ -493,7 +503,9 @@ def check_all_governance(
     if check_error_budget:
         is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
         if is_blocked:
-            logger.warning(f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%")
+            logger.warning(
+                f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%"
+            )
 
             if audit_on_block:
                 _log_governance_blocked(
@@ -539,7 +551,9 @@ def require_system_enabled(func: F) -> F:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if not is_system_enabled():
-            logger.warning(f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active")
+            logger.warning(
+                f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active"
+            )
             result = GovernanceCheckResult.blocked_by_kill_switch()
             _log_governance_blocked(
                 block_reason=result.block_reason,
@@ -573,7 +587,10 @@ def require_not_emergency(min_level: int = 2) -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             is_blocked, level_name = is_emergency_blocking(min_level=min_level)
             if is_blocked:
-                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Emergency mode {level_name}")
+                logger.warning(
+                    f"[GovernanceChecks] {func.__name__} blocked: "
+                    f"Emergency mode {level_name}"
+                )
                 result = GovernanceCheckResult.blocked_by_emergency(
                     level_name=level_name,
                     message=f"Emergency mode {level_name} blocks this operation",
@@ -613,7 +630,10 @@ def require_error_budget() -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
             if is_blocked:
-                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Error budget {budget_pct:.1f}%")
+                logger.warning(
+                    f"[GovernanceChecks] {func.__name__} blocked: "
+                    f"Error budget {budget_pct:.1f}%"
+                )
                 result = GovernanceCheckResult.blocked_by_error_budget(
                     budget_percent=budget_pct,
                     threshold_percent=threshold_pct,
@@ -640,7 +660,7 @@ def require_governance(
     check_emergency: bool = True,
     emergency_min_level: int | None = None,
     check_error_budget: bool = True,
-    operation_name: Optional[str] = None,
+    operation_name: str | None = None,
     audit_on_block: bool = True,
 ) -> Callable[[F], F]:
     """
@@ -713,8 +733,8 @@ class GovernanceCheckMixin:
     """
 
     # 서브클래스에서 오버라이드 가능
-    _governance_service_name: Optional[str] = None
-    _governance_domain: Optional[str] = None
+    _governance_service_name: str | None = None
+    _governance_domain: str | None = None
 
     def is_automation_allowed(
         self,
@@ -780,7 +800,7 @@ class GovernanceCheckMixin:
         emergency_min_level: int | None = None,
         check_error_budget: bool = True,
         operation_name: str = "require_automation",
-    ) -> Optional[GovernanceCheckResult]:
+    ) -> GovernanceCheckResult | None:
         """
         자동화가 허용되지 않으면 차단 결과 반환.
 

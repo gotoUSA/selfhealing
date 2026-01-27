@@ -43,19 +43,18 @@ from __future__ import annotations
 import threading
 from typing import Optional
 
-from .base import BaseConfigManager
-from .strategy import StrategyMixin
-from .core_configs import CoreConfigMixin
 from .advanced_configs import AdvancedConfigMixin
-from .chaos_storage import ChaosStorageMixin
 from .approval import ApprovalMixin
+from .base import BaseConfigManager
+from .chaos_storage import ChaosStorageMixin
 
 # Re-export constants for convenience
-from .constants import STORAGE_KEYS, CONFIG_CLASSES, DEFAULT_SLO_CONFIG
-
+from .constants import CONFIG_CLASSES, DEFAULT_SLO_CONFIG, STORAGE_KEYS
+from .core_configs import CoreConfigMixin
+from .strategy import StrategyMixin
 
 # Singleton instance
-_runtime_config_manager: Optional["RuntimeConfigManager"] = None
+_runtime_config_manager: RuntimeConfigManager | None = None
 _manager_lock = threading.Lock()
 
 

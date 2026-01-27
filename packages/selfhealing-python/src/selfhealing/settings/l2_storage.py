@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -158,7 +157,7 @@ class L2StorageSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[L2StorageSettings] = None
+_settings: L2StorageSettings | None = None
 
 
 def get_l2_storage_settings() -> L2StorageSettings:

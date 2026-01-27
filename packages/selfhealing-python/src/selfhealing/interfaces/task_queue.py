@@ -14,10 +14,11 @@ Design Principles:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 F = TypeVar("F", bound=Callable)
 
@@ -73,17 +74,21 @@ class TaskResult:
 
     task_id: str
     status: TaskStatus
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    traceback: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
+    traceback: str | None = None
     retries: int = 0
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     @property
     def is_finished(self) -> bool:
         """Check if task has completed (success or failure)."""
-        return self.status in (TaskStatus.SUCCESS, TaskStatus.FAILURE, TaskStatus.REVOKED)
+        return self.status in (
+            TaskStatus.SUCCESS,
+            TaskStatus.FAILURE,
+            TaskStatus.REVOKED,
+        )
 
     @property
     def is_successful(self) -> bool:
@@ -91,7 +96,7 @@ class TaskResult:
         return self.status == TaskStatus.SUCCESS
 
     @property
-    def duration(self) -> Optional[timedelta]:
+    def duration(self) -> timedelta | None:
         """Calculate task execution duration."""
         if self.started_at and self.completed_at:
             return self.completed_at - self.started_at
@@ -121,20 +126,20 @@ class TaskOptions:
         soft_timeout: Soft timeout (raises SoftTimeLimitExceeded)
     """
 
-    countdown: Optional[int] = None
-    eta: Optional[datetime] = None
-    expires: Optional[datetime] = None
+    countdown: int | None = None
+    eta: datetime | None = None
+    expires: datetime | None = None
     retry: bool = True
     max_retries: int = 3
     retry_backoff: bool = True
     retry_backoff_max: int = 600
     retry_jitter: bool = True
-    queue: Optional[str] = None
+    queue: str | None = None
     priority: TaskPriority = TaskPriority.NORMAL
-    timeout: Optional[int] = None
-    soft_timeout: Optional[int] = None
+    timeout: int | None = None
+    soft_timeout: int | None = None
 
-    def with_countdown(self, seconds: int) -> "TaskOptions":
+    def with_countdown(self, seconds: int) -> TaskOptions:
         """Create new options with countdown."""
         return TaskOptions(
             countdown=seconds,
@@ -151,7 +156,7 @@ class TaskOptions:
             soft_timeout=self.soft_timeout,
         )
 
-    def with_priority(self, priority: TaskPriority) -> "TaskOptions":
+    def with_priority(self, priority: TaskPriority) -> TaskOptions:
         """Create new options with priority."""
         return TaskOptions(
             countdown=self.countdown,
@@ -190,8 +195,8 @@ class ScheduleInfo:
     interval: timedelta
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
-    last_run: Optional[datetime] = None
-    next_run: Optional[datetime] = None
+    last_run: datetime | None = None
+    next_run: datetime | None = None
     enabled: bool = True
 
 
@@ -277,16 +282,16 @@ class TaskQueueInterface(ABC):
     @abstractmethod
     def task(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         bind: bool = False,
         max_retries: int = 3,
         autoretry_for: tuple[type[Exception], ...] = (),
         retry_backoff: bool = True,
         retry_backoff_max: int = 600,
         retry_jitter: bool = True,
-        rate_limit: Optional[str] = None,
-        time_limit: Optional[int] = None,
-        soft_time_limit: Optional[int] = None,
+        rate_limit: str | None = None,
+        time_limit: int | None = None,
+        soft_time_limit: int | None = None,
     ) -> Callable[[F], F]:
         """
         Decorator to register a function as a task.
@@ -317,7 +322,7 @@ class TaskQueueInterface(ABC):
     def register_task(
         self,
         func: Callable,
-        name: Optional[str] = None,
+        name: str | None = None,
         **options,
     ) -> str:
         """
@@ -344,8 +349,8 @@ class TaskQueueInterface(ABC):
         self,
         task_name: str,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        options: Optional[TaskOptions] = None,
+        kwargs: dict | None = None,
+        options: TaskOptions | None = None,
     ) -> str:
         """
         Enqueue a task for async execution.
@@ -375,7 +380,7 @@ class TaskQueueInterface(ABC):
     def enqueue_many(
         self,
         tasks: list[tuple[str, tuple, dict]],
-        options: Optional[TaskOptions] = None,
+        options: TaskOptions | None = None,
     ) -> list[str]:
         """
         Enqueue multiple tasks atomically.
@@ -416,9 +421,9 @@ class TaskQueueInterface(ABC):
         self,
         task_name: str,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        countdown: Optional[int] = None,
-        eta: Optional[datetime] = None,
+        kwargs: dict | None = None,
+        countdown: int | None = None,
+        eta: datetime | None = None,
         **extra_options,
     ) -> str:
         """
@@ -450,7 +455,7 @@ class TaskQueueInterface(ABC):
     def get_result(
         self,
         task_id: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskResult:
         """
         Get task result (may block if timeout provided).
@@ -497,8 +502,8 @@ class TaskQueueInterface(ABC):
     def retry(
         self,
         task_id: str,
-        countdown: Optional[int] = None,
-        max_retries: Optional[int] = None,
+        countdown: int | None = None,
+        max_retries: int | None = None,
     ) -> str:
         """
         Retry a failed task.
@@ -539,8 +544,8 @@ class TaskQueueInterface(ABC):
         task_name: str,
         schedule: timedelta,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
-        name: Optional[str] = None,
+        kwargs: dict | None = None,
+        name: str | None = None,
     ) -> str:
         """
         Schedule a periodic task.
@@ -576,7 +581,7 @@ class TaskQueueInterface(ABC):
         """
         pass
 
-    def get_schedule(self, schedule_id: str) -> Optional[ScheduleInfo]:
+    def get_schedule(self, schedule_id: str) -> ScheduleInfo | None:
         """
         Get information about a periodic schedule.
 

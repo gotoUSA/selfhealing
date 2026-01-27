@@ -22,7 +22,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -223,11 +222,17 @@ class RecoveryCoordinatorSettings(BaseSettings):
     def validate_level_consistency(self) -> "RecoveryCoordinatorSettings":
         """레벨별 설정 일관성 검증 (LEVEL_3 > LEVEL_2 > LEVEL_1)."""
         # LEVEL_3가 가장 엄격해야 함
-        if self.level3_health_check_success_threshold < self.level2_health_check_success_threshold:
+        if (
+            self.level3_health_check_success_threshold
+            < self.level2_health_check_success_threshold
+        ):
             logger.warning(
                 "[RecoveryCoordinatorSettings] LEVEL_3 success_threshold should be >= LEVEL_2"
             )
-        if self.level3_health_check_error_rate_threshold > self.level2_health_check_error_rate_threshold:
+        if (
+            self.level3_health_check_error_rate_threshold
+            > self.level2_health_check_error_rate_threshold
+        ):
             logger.warning(
                 "[RecoveryCoordinatorSettings] LEVEL_3 error_rate_threshold should be <= LEVEL_2"
             )
@@ -238,7 +243,7 @@ class RecoveryCoordinatorSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[RecoveryCoordinatorSettings] = None
+_settings: RecoveryCoordinatorSettings | None = None
 
 
 def get_recovery_coordinator_settings() -> RecoveryCoordinatorSettings:

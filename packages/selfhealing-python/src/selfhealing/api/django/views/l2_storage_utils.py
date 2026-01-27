@@ -5,7 +5,6 @@ Shared utility functions for L2 storage API views.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

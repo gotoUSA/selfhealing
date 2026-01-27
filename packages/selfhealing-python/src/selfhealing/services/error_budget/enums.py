@@ -7,12 +7,10 @@ Error Budget Enums and Constants
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from enum import Enum
-from typing import Any, Dict
+from typing import Any
 
 from selfhealing.core.timezone import now
-
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +137,9 @@ BURN_RATE_THRESHOLDS = {
 _failsafe_counter = 0
 
 
-def _send_failsafe_alert(component: str, error_message: str, fallback_action: str) -> None:
+def _send_failsafe_alert(
+    component: str, error_message: str, fallback_action: str
+) -> None:
     """
     Fail-Safe 발동 시 알림 발송.
 
@@ -185,7 +185,7 @@ def _send_failsafe_alert(component: str, error_message: str, fallback_action: st
         pass
 
 
-def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
+def get_failsafe_verdict_response(error_message: str) -> dict[str, Any]:
     """
     Error Budget 시스템 장애 시 반환할 Fail-Safe 응답.
 
@@ -213,7 +213,14 @@ def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
             "message": "⚠️ Error Budget 시스템 일시적 오류. 기본값 PROCEED 적용됨.",
             "recommendation": "Error Budget 시스템 상태를 확인하세요. 현재 배포는 허용됩니다.",
             "reasons": [],
-            "allowed_deployment_types": ["feature", "enhancement", "refactor", "hotfix", "security_patch", "rollback"],
+            "allowed_deployment_types": [
+                "feature",
+                "enhancement",
+                "refactor",
+                "hotfix",
+                "security_patch",
+                "rollback",
+            ],
         },
         "degraded_mode": True,
         "error": error_message,
@@ -223,7 +230,7 @@ def get_failsafe_verdict_response(error_message: str) -> Dict[str, Any]:
     }
 
 
-def get_failsafe_status_response(error_message: str) -> Dict[str, Any]:
+def get_failsafe_status_response(error_message: str) -> dict[str, Any]:
     """
     Error Budget 상태 조회 실패 시 Fail-Safe 응답.
 

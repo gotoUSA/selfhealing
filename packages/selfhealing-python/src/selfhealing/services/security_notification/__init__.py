@@ -36,7 +36,7 @@ from .models import (
 # 새 코드에서는 _get_notification_limits() 사용 권장
 _DEPRECATED_CONSTANT_NAMES = {
     "SLACK_BLOCK_TEXT_LIMIT",
-    "DESCRIPTION_MAX_LENGTH", 
+    "DESCRIPTION_MAX_LENGTH",
     "ACTION_TAKEN_MAX_LENGTH",
     "TITLE_MAX_LENGTH",
 }
@@ -47,14 +47,15 @@ _init_deprecated_warned: set = set()
 def __getattr__(name: str):
     """
     Deprecated 상수 접근 시 DeprecationWarning 발생.
-    
+
     .. deprecated:: 2.0.0
         Use _get_notification_limits() instead.
         These constants will be removed in version 3.0.0.
     """
     import warnings
+
     from .models import _DEPRECATED_CONSTANTS
-    
+
     if name in _DEPRECATED_CONSTANT_NAMES:
         if name not in _init_deprecated_warned:
             warnings.warn(
@@ -68,15 +69,16 @@ def __getattr__(name: str):
         return _DEPRECATED_CONSTANTS[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-# Handlers (for extension/testing)
-from .slack_handler import SlackHandlerMixin
+
 from .email_handler import EmailHandlerMixin
-from .sms_handler import SMSHandlerMixin
 from .pagerduty_handler import PagerDutyHandlerMixin
 
 # Main service
 from .service import SecurityNotificationService
 
+# Handlers (for extension/testing)
+from .slack_handler import SlackHandlerMixin
+from .sms_handler import SMSHandlerMixin
 
 # =============================================================================
 # Module-level Helper Functions

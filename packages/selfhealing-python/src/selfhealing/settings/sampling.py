@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -89,9 +88,7 @@ class SamplingSettings(BaseSettings):
     def validate_sample_rate(cls, v: float) -> float:
         """샘플링 비율 경고."""
         if v < 0.05:
-            logger.warning(
-                f"[SafeDefault] Very low sample_rate={v}, may miss issues"
-            )
+            logger.warning(f"[SafeDefault] Very low sample_rate={v}, may miss issues")
         if v > 0.5:
             logger.warning(
                 f"[SafeDefault] High sample_rate={v}, may impact performance"
@@ -103,7 +100,7 @@ class SamplingSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[SamplingSettings] = None
+_settings: SamplingSettings | None = None
 
 
 def get_sampling_settings() -> SamplingSettings:

@@ -23,8 +23,9 @@ import logging
 import random
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 from selfhealing.adapters.rate_limit import get_rate_limit_storage
 from selfhealing.interfaces.rate_limit_storage import (
@@ -55,7 +56,7 @@ class RateLimitCoordinatorConfig:
     backoff_multiplier: float = 2.0
 
     @classmethod
-    def from_settings(cls) -> "RateLimitCoordinatorConfig":
+    def from_settings(cls) -> RateLimitCoordinatorConfig:
         """Load configuration from core config."""
         rate_limit = get_config().rate_limit
 
@@ -109,13 +110,13 @@ class RateLimitCoordinator:
             return requests.post(...)
     """
 
-    _instance: Optional["RateLimitCoordinator"] = None
+    _instance: RateLimitCoordinator | None = None
     _instance_lock = threading.Lock()
 
     def __init__(
         self,
-        storage: Optional[RateLimitStorageInterface] = None,
-        config: Optional[RateLimitCoordinatorConfig] = None,
+        storage: RateLimitStorageInterface | None = None,
+        config: RateLimitCoordinatorConfig | None = None,
     ) -> None:
         """
         Initialize rate limit coordinator.
@@ -129,7 +130,7 @@ class RateLimitCoordinator:
         self._local_lock = threading.Lock()
 
     @classmethod
-    def get_instance(cls) -> "RateLimitCoordinator":
+    def get_instance(cls) -> RateLimitCoordinator:
         """Get singleton instance."""
         if cls._instance is None:
             with cls._instance_lock:
@@ -177,7 +178,8 @@ class RateLimitCoordinator:
         wait_time = state.remaining_cooldown
 
         logger.info(
-            f"[RateLimitCoordinator] Waiting {wait_time:.2f}s for '{key}' " f"(consecutive_429s={state.consecutive_429s})"
+            f"[RateLimitCoordinator] Waiting {wait_time:.2f}s for '{key}' "
+            f"(consecutive_429s={state.consecutive_429s})"
         )
 
         time.sleep(wait_time)
@@ -192,7 +194,7 @@ class RateLimitCoordinator:
     def on_rate_limited(
         self,
         key: str,
-        retry_after: Optional[float] = None,
+        retry_after: float | None = None,
         status_code: int = 429,
     ) -> float:
         """
@@ -256,7 +258,10 @@ class RateLimitCoordinator:
             # Prevents immediate flood after recovery
             self._storage.reset_consecutive_429s(key)
 
-            logger.debug(f"[RateLimitCoordinator] Success on '{key}', " f"reset consecutive 429 counter")
+            logger.debug(
+                f"[RateLimitCoordinator] Success on '{key}', "
+                f"reset consecutive 429 counter"
+            )
 
     def clear(self, key: str) -> None:
         """Clear all rate limit state for a key."""
@@ -266,8 +271,8 @@ class RateLimitCoordinator:
     def rate_limit_aware(
         self,
         key: str,
-        is_429: Optional[Callable[[Any], bool]] = None,
-        get_retry_after: Optional[Callable[[Any], Optional[float]]] = None,
+        is_429: Callable[[Any], bool] | None = None,
+        get_retry_after: Callable[[Any], float | None] | None = None,
     ) -> Callable[[Callable[..., T]], Callable[..., T]]:
         """
         Decorator to make a function rate-limit aware.
@@ -326,7 +331,7 @@ def _default_is_429(response: Any) -> bool:
     return False
 
 
-def _default_get_retry_after(response: Any) -> Optional[float]:
+def _default_get_retry_after(response: Any) -> float | None:
     """Default Retry-After extraction."""
     if hasattr(response, "headers"):
         retry_after = response.headers.get("Retry-After")

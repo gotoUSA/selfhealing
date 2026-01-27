@@ -19,9 +19,13 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
-from selfhealing.services.audit.base import _write_to_wal, _try_add_to_buffer, _get_audit_adapter
+from selfhealing.services.audit.base import (
+    _get_audit_adapter,
+    _try_add_to_buffer,
+    _write_to_wal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # Layered Storage Audit Helpers
 # ============================================================
+
 
 def log_storage_failure_audit(
     storage_type: str,
@@ -38,12 +43,12 @@ def log_storage_failure_audit(
     error_type: str,
     error_message: str,
     consecutive_failures: int,
-    trace_id: Optional[str] = None,
+    trace_id: str | None = None,
     request: Any = None,
-) -> Optional[int]:
+) -> int | None:
     """
     Layered Storage L2 장애 발생을 Audit 로그에 기록.
-    
+
     L2 저장소(Redis/Django)가 timeout이나 error로 실패할 때 호출됩니다.
     WAL 기반 누락 0 보장.
     """
@@ -58,7 +63,7 @@ def log_storage_failure_audit(
         "message": f"L2 storage failure: {error_type} during {operation} for {service_name}",
     }
     details = {k: v for k, v in details.items() if v is not None}
-    
+
     wal_seq = _write_to_wal(
         event_type="STORAGE_FAILURE",
         source="LayeredStorageRepository",
@@ -67,11 +72,11 @@ def log_storage_failure_audit(
         error_message=error_message,
         target_id=service_name,
     )
-    
+
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             added = _try_add_to_buffer(
                 request=request,
                 event_type=AuditEventType.CONFIG_CHANGE,
@@ -85,7 +90,7 @@ def log_storage_failure_audit(
                 return wal_seq
         except ImportError:
             pass
-    
+
     logger.warning(
         f"[StorageAudit] STORAGE_FAILURE | storage={storage_type} | "
         f"adapter={adapter_type} | op={operation} | service={service_name} | "
@@ -98,13 +103,13 @@ def log_storage_recovery_audit(
     storage_type: str,
     adapter_type: str,
     total_failures: int,
-    downtime_seconds: Optional[float] = None,
-    trace_id: Optional[str] = None,
+    downtime_seconds: float | None = None,
+    trace_id: str | None = None,
     request: Any = None,
-) -> Optional[int]:
+) -> int | None:
     """
     Layered Storage L2 복구를 Audit 로그에 기록.
-    
+
     L2 저장소가 장애에서 복구되었을 때 호출됩니다.
     WAL 기반 누락 0 보장.
     """
@@ -117,7 +122,7 @@ def log_storage_recovery_audit(
         "message": f"L2 storage recovered after {total_failures} failures",
     }
     details = {k: v for k, v in details.items() if v is not None}
-    
+
     wal_seq = _write_to_wal(
         event_type="STORAGE_RECOVERY",
         source="LayeredStorageRepository",
@@ -126,11 +131,11 @@ def log_storage_recovery_audit(
         error_message=None,
         target_id=adapter_type,
     )
-    
+
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             added = _try_add_to_buffer(
                 request=request,
                 event_type=AuditEventType.CONFIG_CHANGE,
@@ -144,7 +149,7 @@ def log_storage_recovery_audit(
                 return wal_seq
         except ImportError:
             pass
-    
+
     logger.info(
         f"[StorageAudit] STORAGE_RECOVERY | storage={storage_type} | "
         f"adapter={adapter_type} | total_failures={total_failures} | "
@@ -160,12 +165,12 @@ def log_drift_reconciliation_audit(
     l1_wins: int,
     l2_wins: int,
     error_count: int,
-    trace_id: Optional[str] = None,
+    trace_id: str | None = None,
     request: Any = None,
-) -> Optional[int]:
+) -> int | None:
     """
     Layered Storage Drift 복구를 Audit 로그에 기록.
-    
+
     L2 복구 시 L1과 L2 간의 데이터 불일치를 조정했을 때 호출됩니다.
     WAL 기반 누락 0 보장.
     """
@@ -180,20 +185,22 @@ def log_drift_reconciliation_audit(
         "message": f"Drift reconciliation: {reconciled}/{total_checked} items reconciled (L1:{l1_wins}, L2:{l2_wins})",
     }
     details = {k: v for k, v in details.items() if v is not None}
-    
+
     wal_seq = _write_to_wal(
         event_type="DRIFT_RECONCILIATION",
         source="DriftReconciler",
         details=details,
         success=error_count == 0,
-        error_message=f"{error_count} errors during reconciliation" if error_count > 0 else None,
+        error_message=(
+            f"{error_count} errors during reconciliation" if error_count > 0 else None
+        ),
         target_id=adapter_type,
     )
-    
+
     if request is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             added = _try_add_to_buffer(
                 request=request,
                 event_type=AuditEventType.CONFIG_CHANGE,
@@ -207,7 +214,7 @@ def log_drift_reconciliation_audit(
                 return wal_seq
         except ImportError:
             pass
-    
+
     log_level = logger.info if error_count == 0 else logger.warning
     log_level(
         f"[StorageAudit] DRIFT_RECONCILIATION | adapter={adapter_type} | "
@@ -221,19 +228,20 @@ def log_drift_reconciliation_audit(
 # Celery Task Audit Helpers
 # ============================================================
 
+
 def log_config_apply_audit(
-    pending_id: Optional[str] = None,
-    config_key: Optional[str] = None,
-    old_value: Optional[Any] = None,
-    new_value: Optional[Any] = None,
+    pending_id: str | None = None,
+    config_key: str | None = None,
+    old_value: Any | None = None,
+    new_value: Any | None = None,
     status: str = "applied",
-    error_message: Optional[str] = None,
-    task_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Optional[int]:
+    error_message: str | None = None,
+    task_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> int | None:
     """
     설정 적용(config_apply) Celery task 실행을 Audit 로그에 기록.
-    
+
     Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
     """
     audit_details = {
@@ -247,9 +255,9 @@ def log_config_apply_audit(
     if details:
         audit_details.update(details)
     audit_details = {k: v for k, v in audit_details.items() if v is not None}
-    
+
     success = status in ("applied", "success")
-    
+
     wal_seq = _write_to_wal(
         event_type="CONFIG_CHANGE",
         source="ConfigApplyTask",
@@ -258,12 +266,12 @@ def log_config_apply_audit(
         error_message=error_message,
         target_id=pending_id or config_key,
     )
-    
+
     adapter = _get_audit_adapter()
     if adapter is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             adapter.record(
                 event_type=AuditEventType.CONFIG_CHANGE,
                 source="ConfigApplyTask",
@@ -274,7 +282,7 @@ def log_config_apply_audit(
             )
         except Exception as e:
             logger.debug(f"[ConfigApplyAudit] Adapter record failed: {e}")
-    
+
     log_func = logger.info if success else logger.warning
     log_func(
         f"[ConfigApplyAudit] {status.upper()} | key={config_key} | "
@@ -284,18 +292,18 @@ def log_config_apply_audit(
 
 
 def log_chaos_scheduler_audit(
-    experiment_id: Optional[str] = None,
-    experiment_name: Optional[str] = None,
+    experiment_id: str | None = None,
+    experiment_name: str | None = None,
     action: str = "scheduled",
     status: str = "started",
-    target_service: Optional[str] = None,
-    error_message: Optional[str] = None,
-    task_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Optional[int]:
+    target_service: str | None = None,
+    error_message: str | None = None,
+    task_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> int | None:
     """
     Chaos 스케줄러(chaos_scheduler) Celery task 실행을 Audit 로그에 기록.
-    
+
     Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
     """
     if action == "cleanup":
@@ -306,7 +314,7 @@ def log_chaos_scheduler_audit(
         event_type_str = "CHAOS_EXPERIMENT_STARTED"
     else:
         event_type_str = "CHAOS_INJECTION_APPLIED"
-    
+
     audit_details = {
         "experiment_id": experiment_id,
         "experiment_name": experiment_name,
@@ -318,9 +326,9 @@ def log_chaos_scheduler_audit(
     if details:
         audit_details.update(details)
     audit_details = {k: v for k, v in audit_details.items() if v is not None}
-    
+
     success = status not in ("failed", "blocked", "error")
-    
+
     wal_seq = _write_to_wal(
         event_type=event_type_str,
         source="ChaosSchedulerTask",
@@ -330,12 +338,12 @@ def log_chaos_scheduler_audit(
         domain="chaos",
         target_id=experiment_id,
     )
-    
+
     adapter = _get_audit_adapter()
     if adapter is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             event_type_map = {
                 "CHAOS_EXPERIMENT_STARTED": AuditEventType.CHAOS_EXPERIMENT_STARTED,
                 "CHAOS_EXPERIMENT_COMPLETED": AuditEventType.CHAOS_EXPERIMENT_COMPLETED,
@@ -343,7 +351,9 @@ def log_chaos_scheduler_audit(
                 "CHAOS_ROLLBACK_TRIGGERED": AuditEventType.CHAOS_ROLLBACK_TRIGGERED,
             }
             adapter.record(
-                event_type=event_type_map.get(event_type_str, AuditEventType.CHAOS_EXPERIMENT_STARTED),
+                event_type=event_type_map.get(
+                    event_type_str, AuditEventType.CHAOS_EXPERIMENT_STARTED
+                ),
                 source="ChaosSchedulerTask",
                 details=audit_details,
                 success=success,
@@ -353,7 +363,7 @@ def log_chaos_scheduler_audit(
             )
         except Exception as e:
             logger.debug(f"[ChaosSchedulerAudit] Adapter record failed: {e}")
-    
+
     log_func = logger.info if success else logger.warning
     log_func(
         f"[ChaosSchedulerAudit] {action.upper()} | status={status} | "
@@ -364,19 +374,19 @@ def log_chaos_scheduler_audit(
 
 def log_governance_task_audit(
     action: str = "expiry_check",
-    emergency_level: Optional[int] = None,
-    previous_level: Optional[int] = None,
+    emergency_level: int | None = None,
+    previous_level: int | None = None,
     status: str = "completed",
     notification_sent: bool = False,
     auto_recovered: bool = False,
-    hours_elapsed: Optional[float] = None,
-    error_message: Optional[str] = None,
-    task_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Optional[int]:
+    hours_elapsed: float | None = None,
+    error_message: str | None = None,
+    task_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> int | None:
     """
     Governance(emergency mode expiry) Celery task 실행을 Audit 로그에 기록.
-    
+
     Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
     """
     if auto_recovered:
@@ -385,7 +395,7 @@ def log_governance_task_audit(
         event_type_str = "EMERGENCY_MODE_ACTIVATED"
     else:
         event_type_str = "EMERGENCY_MODE_DEACTIVATED"
-    
+
     audit_details = {
         "action": action,
         "emergency_level": emergency_level,
@@ -399,9 +409,9 @@ def log_governance_task_audit(
     if details:
         audit_details.update(details)
     audit_details = {k: v for k, v in audit_details.items() if v is not None}
-    
+
     success = status not in ("failed", "error")
-    
+
     wal_seq = _write_to_wal(
         event_type=event_type_str,
         source="GovernanceTask",
@@ -410,18 +420,20 @@ def log_governance_task_audit(
         error_message=error_message,
         domain="governance",
     )
-    
+
     adapter = _get_audit_adapter()
     if adapter is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             event_type_map = {
                 "EMERGENCY_MODE_ACTIVATED": AuditEventType.EMERGENCY_MODE_ACTIVATED,
                 "EMERGENCY_MODE_DEACTIVATED": AuditEventType.EMERGENCY_MODE_DEACTIVATED,
             }
             adapter.record(
-                event_type=event_type_map.get(event_type_str, AuditEventType.EMERGENCY_MODE_DEACTIVATED),
+                event_type=event_type_map.get(
+                    event_type_str, AuditEventType.EMERGENCY_MODE_DEACTIVATED
+                ),
                 source="GovernanceTask",
                 details=audit_details,
                 success=success,
@@ -430,7 +442,7 @@ def log_governance_task_audit(
             )
         except Exception as e:
             logger.debug(f"[GovernanceTaskAudit] Adapter record failed: {e}")
-    
+
     log_func = logger.info if success else logger.warning
     level_str = f"L{emergency_level}" if emergency_level is not None else "N/A"
     log_func(
@@ -441,20 +453,20 @@ def log_governance_task_audit(
 
 
 def log_traffic_aware_replay_audit(
-    domain: Optional[str] = None,
+    domain: str | None = None,
     status: str = "completed",
     total: int = 0,
     success_count: int = 0,
     failed_count: int = 0,
-    skipped_reason: Optional[str] = None,
-    health_checks: Optional[Dict[str, bool]] = None,
-    error_message: Optional[str] = None,
-    task_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Optional[int]:
+    skipped_reason: str | None = None,
+    health_checks: dict[str, bool] | None = None,
+    error_message: str | None = None,
+    task_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> int | None:
     """
     Traffic-Aware Replay Celery task 실행을 Audit 로그에 기록.
-    
+
     Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
     """
     audit_details = {
@@ -470,9 +482,9 @@ def log_traffic_aware_replay_audit(
     if details:
         audit_details.update(details)
     audit_details = {k: v for k, v in audit_details.items() if v is not None}
-    
+
     success = status in ("completed", "success") and failed_count == 0
-    
+
     wal_seq = _write_to_wal(
         event_type="DLQ_REPLAY",
         source="TrafficAwareReplayTask",
@@ -481,12 +493,12 @@ def log_traffic_aware_replay_audit(
         error_message=error_message or skipped_reason,
         domain=domain or "dlq",
     )
-    
+
     adapter = _get_audit_adapter()
     if adapter is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             adapter.record(
                 event_type=AuditEventType.DLQ_REPLAY,
                 source="TrafficAwareReplayTask",
@@ -497,7 +509,7 @@ def log_traffic_aware_replay_audit(
             )
         except Exception as e:
             logger.debug(f"[TrafficAwareReplayAudit] Adapter record failed: {e}")
-    
+
     log_func = logger.info if status == "completed" else logger.warning
     log_func(
         f"[TrafficAwareReplayAudit] {status.upper()} | domain={domain} | "
@@ -510,15 +522,15 @@ def log_drift_detection_audit(
     check_type: str = "sla_drift",
     status: str = "completed",
     drift_detected: bool = False,
-    drift_details: Optional[Dict[str, Any]] = None,
+    drift_details: dict[str, Any] | None = None,
     operations_analyzed: int = 0,
-    error_message: Optional[str] = None,
-    task_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
-) -> Optional[int]:
+    error_message: str | None = None,
+    task_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> int | None:
     """
     Drift Detection Celery task 실행을 Audit 로그에 기록.
-    
+
     Celery task는 HTTP 요청 컨텍스트가 없으므로 직접 WAL에 기록합니다.
     """
     audit_details = {
@@ -532,9 +544,9 @@ def log_drift_detection_audit(
     if details:
         audit_details.update(details)
     audit_details = {k: v for k, v in audit_details.items() if v is not None}
-    
+
     success = status not in ("error", "failed")
-    
+
     wal_seq = _write_to_wal(
         event_type="CONFIG_CHANGE",
         source="DriftDetectionTask",
@@ -543,12 +555,12 @@ def log_drift_detection_audit(
         error_message=error_message,
         domain="drift_detection",
     )
-    
+
     adapter = _get_audit_adapter()
     if adapter is not None:
         try:
             from selfhealing.audit.event_buffer import AuditEventType
-            
+
             adapter.record(
                 event_type=AuditEventType.CONFIG_CHANGE,
                 source="DriftDetectionTask",
@@ -559,7 +571,7 @@ def log_drift_detection_audit(
             )
         except Exception as e:
             logger.debug(f"[DriftDetectionAudit] Adapter record failed: {e}")
-    
+
     log_func = logger.info if success else logger.warning
     drift_str = "DRIFT_DETECTED" if drift_detected else "NO_DRIFT"
     log_func(

@@ -18,7 +18,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.core.timezone import now
 
@@ -32,35 +32,35 @@ logger = logging.getLogger(__name__)
 
 class ResilienceGrade(str, Enum):
     """Overall resilience grade."""
-    
+
     A = "A"
     """Excellent: All experiments passed, no SLA breaches."""
-    
+
     B = "B"
     """Good: Minor issues, all recovered within SLA."""
-    
+
     C = "C"
     """Acceptable: Some issues, recovery slightly delayed."""
-    
+
     D = "D"
     """Needs Improvement: Multiple failures or slow recovery."""
-    
+
     F = "F"
     """Critical: Major failures, SLA breaches."""
 
 
 class ExperimentOutcome(str, Enum):
     """Outcome of an experiment."""
-    
+
     PASSED = "passed"
     """System handled chaos gracefully."""
-    
+
     DEGRADED = "degraded"
     """System degraded but recovered."""
-    
+
     FAILED = "failed"
     """System failed to handle chaos."""
-    
+
     SKIPPED = "skipped"
     """Experiment was skipped."""
 
@@ -73,31 +73,31 @@ class ExperimentOutcome(str, Enum):
 @dataclass
 class ExperimentSummary:
     """Summary of a single experiment."""
-    
+
     experiment_id: str
     experiment_type: str
     target_service: str
-    
+
     # Outcome
     outcome: str
     status: str
-    
+
     # Timing
     started_at: str = ""
     duration_seconds: float = 0.0
     recovery_time_seconds: float = 0.0
-    
+
     # Impact
     errors_injected: int = 0
     sla_breaches: int = 0
-    
+
     # Steady state
     steady_state_passed: bool = True
-    
+
     # Forensic analysis
-    forensic_recommendations: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    forensic_recommendations: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "experiment_id": self.experiment_id,
@@ -118,46 +118,46 @@ class ExperimentSummary:
 @dataclass
 class DailyResilienceReport:
     """Daily resilience report."""
-    
+
     # Report metadata
     report_id: str = ""
     report_date: str = ""
     generated_at: str = field(default_factory=lambda: now().isoformat())
-    
+
     # Overall grade
     grade: str = ResilienceGrade.A.value
     grade_explanation: str = ""
-    
+
     # Summary statistics
     total_experiments: int = 0
     passed_experiments: int = 0
     failed_experiments: int = 0
     skipped_experiments: int = 0
-    
+
     # SLA metrics
     total_sla_breaches: int = 0
     average_recovery_time_seconds: float = 0.0
     max_recovery_time_seconds: float = 0.0
-    
+
     # Error budget impact
     error_budget_consumed_percent: float = 0.0
     error_budget_remaining_percent: float = 100.0
-    
+
     # Experiment details
-    experiments: List[ExperimentSummary] = field(default_factory=list)
-    
+    experiments: list[ExperimentSummary] = field(default_factory=list)
+
     # Trends
     grade_trend: str = ""  # "improving", "stable", "declining"
     week_over_week_change: float = 0.0
-    
+
     # Recommendations
-    recommendations: List[str] = field(default_factory=list)
-    action_items: List[Dict[str, str]] = field(default_factory=list)
-    
+    recommendations: list[str] = field(default_factory=list)
+    action_items: list[dict[str, str]] = field(default_factory=list)
+
     # Forensic insights
-    forensic_summary: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    forensic_summary: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "report_id": self.report_id,
@@ -186,25 +186,25 @@ class DailyResilienceReport:
 @dataclass
 class ReportConfig:
     """Configuration for report generation."""
-    
+
     # Grading thresholds
     grade_a_min_pass_rate: float = 100.0
     grade_b_min_pass_rate: float = 90.0
     grade_c_min_pass_rate: float = 75.0
     grade_d_min_pass_rate: float = 50.0
-    
+
     # Recovery time thresholds (seconds)
     acceptable_recovery_time_seconds: float = 60.0
     warning_recovery_time_seconds: float = 180.0
-    
+
     # Report retention
     keep_reports_days: int = 90
-    
+
     # Notification
     notify_on_grade_drop: bool = True
     notify_on_critical_grade: bool = True
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "grade_a_min_pass_rate": self.grade_a_min_pass_rate,
@@ -227,43 +227,43 @@ class ReportConfig:
 class ResilienceReportGenerator:
     """
     Generates resilience reports based on chaos experiment results.
-    
+
     Responsibilities:
     1. Collect experiment results from scheduler
     2. Calculate resilience grade
     3. Generate actionable recommendations
     4. Record to metrics and audit trail
     5. Notify stakeholders
-    
+
     Usage:
         generator = get_report_generator()
-        
+
         # Generate daily report
         report = generator.generate_daily_report()
-        
+
         # Get historical reports
         reports = generator.get_reports(days=7)
     """
-    
-    def __init__(self, config: Optional[ReportConfig] = None):
+
+    def __init__(self, config: ReportConfig | None = None):
         """Initialize ResilienceReportGenerator."""
         self._config = config or ReportConfig()
         self._lock = threading.RLock()
-        
+
         # Report storage
-        self._reports: Dict[str, DailyResilienceReport] = {}
-        
+        self._reports: dict[str, DailyResilienceReport] = {}
+
         # Load from storage
         self._load_reports()
-    
+
     # =========================================================================
     # Configuration
     # =========================================================================
-    
+
     def get_config(self) -> ReportConfig:
         """Get current configuration."""
         return self._config
-    
+
     def update_config(self, **kwargs) -> ReportConfig:
         """Update configuration."""
         with self._lock:
@@ -272,65 +272,66 @@ class ResilienceReportGenerator:
                     setattr(self._config, key, value)
             self._persist_config()
             return self._config
-    
+
     def _persist_config(self) -> None:
         """Persist configuration."""
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             manager.update_chaos_config(report_config=self._config.to_dict())
         except Exception as e:
             logger.warning(f"[ReportGenerator] Could not persist config: {e}")
-    
+
     # =========================================================================
     # Report Generation
     # =========================================================================
-    
+
     def generate_daily_report(
         self,
-        report_date: Optional[datetime] = None,
+        report_date: datetime | None = None,
     ) -> DailyResilienceReport:
         """
         Generate a daily resilience report.
-        
+
         Args:
             report_date: Date to generate report for (default: yesterday)
-            
+
         Returns:
             DailyResilienceReport
         """
         if report_date is None:
             report_date = now() - timedelta(days=1)
-        
+
         report_date_str = report_date.strftime("%Y-%m-%d")
         report_id = f"resilience-{report_date_str}"
-        
+
         logger.info(f"[ReportGenerator] Generating daily report for {report_date_str}")
-        
+
         try:
             # 1. Collect experiment results
             experiments = self._collect_experiment_results(report_date)
-            
+
             # 2. Run forensic analysis
             forensic_summary = self._run_forensic_analysis(experiments)
-            
+
             # 3. Calculate statistics
             stats = self._calculate_statistics(experiments)
-            
+
             # 4. Calculate grade
             grade, grade_explanation = self._calculate_grade(stats, experiments)
-            
+
             # 5. Get error budget status
             budget_status = self._get_error_budget_status()
-            
+
             # 6. Generate recommendations
             recommendations = self._generate_recommendations(
                 experiments, stats, forensic_summary, grade
             )
-            
+
             # 7. Calculate trends
             trend, wow_change = self._calculate_trends(report_date_str, grade)
-            
+
             # 8. Create report
             report = DailyResilienceReport(
                 report_id=report_id,
@@ -345,7 +346,9 @@ class ResilienceReportGenerator:
                 average_recovery_time_seconds=stats["avg_recovery_time"],
                 max_recovery_time_seconds=stats["max_recovery_time"],
                 error_budget_consumed_percent=budget_status.get("consumed_percent", 0),
-                error_budget_remaining_percent=budget_status.get("remaining_percent", 100),
+                error_budget_remaining_percent=budget_status.get(
+                    "remaining_percent", 100
+                ),
                 experiments=experiments,
                 grade_trend=trend,
                 week_over_week_change=wow_change,
@@ -353,31 +356,31 @@ class ResilienceReportGenerator:
                 action_items=self._generate_action_items(experiments, forensic_summary),
                 forensic_summary=forensic_summary,
             )
-            
+
             # 9. Store report
             with self._lock:
                 self._reports[report_id] = report
             self._persist_reports()
-            
+
             # 10. Record metrics
             self._record_metrics(report)
-            
+
             # 11. Record audit
             self._record_audit(report)
-            
+
             # 12. Send notifications if needed
             self._send_notifications(report, trend)
-            
+
             logger.info(
                 f"[ReportGenerator] Generated report {report_id}: "
                 f"Grade={grade}, Passed={stats['passed']}/{stats['total']}"
             )
-            
+
             return report
-            
+
         except Exception as e:
             logger.exception(f"[ReportGenerator] Error generating report: {e}")
-            
+
             # Return minimal report on error
             return DailyResilienceReport(
                 report_id=report_id,
@@ -385,24 +388,26 @@ class ResilienceReportGenerator:
                 grade=ResilienceGrade.F.value,
                 grade_explanation=f"Report generation failed: {e}",
             )
-    
+
     # =========================================================================
     # Data Collection
     # =========================================================================
-    
-    def _collect_experiment_results(self, report_date: datetime) -> List[ExperimentSummary]:
+
+    def _collect_experiment_results(
+        self, report_date: datetime
+    ) -> list[ExperimentSummary]:
         """Collect experiment results for the given date."""
         from .scheduler import get_chaos_scheduler
-        
+
         experiments = []
-        
+
         try:
             scheduler = get_chaos_scheduler()
             history = scheduler.get_execution_history(limit=500)
-            
+
             # Filter by date
             date_str = report_date.strftime("%Y-%m-%d")
-            
+
             for result in history:
                 if result.started_at.startswith(date_str):
                     # Determine outcome
@@ -414,10 +419,10 @@ class ResilienceReportGenerator:
                         outcome = ExperimentOutcome.DEGRADED.value
                     else:
                         outcome = ExperimentOutcome.FAILED.value
-                    
+
                     # Get schedule for additional info
                     schedule = scheduler.get_schedule(result.schedule_id)
-                    
+
                     summary = ExperimentSummary(
                         experiment_id=result.experiment_id,
                         experiment_type=schedule.experiment_type if schedule else "",
@@ -429,37 +434,45 @@ class ResilienceReportGenerator:
                         recovery_time_seconds=result.experiment_result.get(
                             "recovery_time_seconds", 0
                         ),
-                        errors_injected=result.experiment_result.get("errors_injected", 0),
+                        errors_injected=result.experiment_result.get(
+                            "errors_injected", 0
+                        ),
                         sla_breaches=result.experiment_result.get("sla_breaches", 0),
                         steady_state_passed=result.experiment_result.get(
                             "steady_state_hypothesis_passed", True
                         ),
                     )
                     experiments.append(summary)
-                    
+
         except Exception as e:
             logger.warning(f"[ReportGenerator] Could not collect experiments: {e}")
-        
+
         return experiments
-    
-    def _run_forensic_analysis(self, experiments: List[ExperimentSummary]) -> Dict[str, Any]:
+
+    def _run_forensic_analysis(
+        self, experiments: list[ExperimentSummary]
+    ) -> dict[str, Any]:
         """Run analysis on experiment results (stub - ForensicAdvisor removed)."""
         # ForensicAdvisor has been removed from the system.
         # This method returns empty analysis results.
         return {
             "patterns_detected": [],
             "recommendations_by_service": {},
-            "total_issues_analyzed": len([e for e in experiments if e.outcome != ExperimentOutcome.PASSED.value]),
+            "total_issues_analyzed": len(
+                [e for e in experiments if e.outcome != ExperimentOutcome.PASSED.value]
+            ),
         }
-    
-    def _get_error_budget_status(self) -> Dict[str, Any]:
+
+    def _get_error_budget_status(self) -> dict[str, Any]:
         """Get current error budget status."""
         try:
-            from selfhealing.services.error_budget_service import get_error_budget_service
-            
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
+
             service = get_error_budget_service()
             status = service.get_status()
-            
+
             return {
                 "remaining_percent": status.get("remaining_percent", 100),
                 "consumed_percent": 100 - status.get("remaining_percent", 100),
@@ -467,25 +480,32 @@ class ResilienceReportGenerator:
         except Exception as e:
             logger.warning(f"[ReportGenerator] Could not get error budget: {e}")
             return {"remaining_percent": 100, "consumed_percent": 0}
-    
+
     # =========================================================================
     # Calculations
     # =========================================================================
-    
-    def _calculate_statistics(self, experiments: List[ExperimentSummary]) -> Dict[str, Any]:
+
+    def _calculate_statistics(
+        self, experiments: list[ExperimentSummary]
+    ) -> dict[str, Any]:
         """Calculate summary statistics."""
         total = len(experiments)
-        passed = len([e for e in experiments if e.outcome == ExperimentOutcome.PASSED.value])
-        failed = len([e for e in experiments if e.outcome == ExperimentOutcome.FAILED.value])
-        skipped = len([e for e in experiments if e.outcome == ExperimentOutcome.SKIPPED.value])
-        
+        passed = len(
+            [e for e in experiments if e.outcome == ExperimentOutcome.PASSED.value]
+        )
+        failed = len(
+            [e for e in experiments if e.outcome == ExperimentOutcome.FAILED.value]
+        )
+        skipped = len(
+            [e for e in experiments if e.outcome == ExperimentOutcome.SKIPPED.value]
+        )
+
         recovery_times = [
-            e.recovery_time_seconds for e in experiments
-            if e.recovery_time_seconds > 0
+            e.recovery_time_seconds for e in experiments if e.recovery_time_seconds > 0
         ]
-        
+
         sla_breaches = sum(e.sla_breaches for e in experiments)
-        
+
         return {
             "total": total,
             "passed": passed,
@@ -493,29 +513,34 @@ class ResilienceReportGenerator:
             "skipped": skipped,
             "degraded": total - passed - failed - skipped,
             "pass_rate": (passed / total * 100) if total > 0 else 100.0,
-            "avg_recovery_time": sum(recovery_times) / len(recovery_times) if recovery_times else 0,
+            "avg_recovery_time": (
+                sum(recovery_times) / len(recovery_times) if recovery_times else 0
+            ),
             "max_recovery_time": max(recovery_times) if recovery_times else 0,
             "sla_breaches": sla_breaches,
         }
-    
+
     def _calculate_grade(
         self,
-        stats: Dict[str, Any],
-        experiments: List[ExperimentSummary],
+        stats: dict[str, Any],
+        experiments: list[ExperimentSummary],
     ) -> tuple[str, str]:
         """Calculate resilience grade."""
         pass_rate = stats["pass_rate"]
         sla_breaches = stats["sla_breaches"]
         avg_recovery = stats["avg_recovery_time"]
-        
+
         # No experiments is grade A
         if stats["total"] == 0:
             return ResilienceGrade.A.value, "No experiments executed"
-        
+
         # Critical failures automatically lower grade
         if sla_breaches > 5 or stats["failed"] > stats["total"] * 0.5:
-            return ResilienceGrade.F.value, f"Critical: {sla_breaches} SLA breaches, {stats['failed']} failures"
-        
+            return (
+                ResilienceGrade.F.value,
+                f"Critical: {sla_breaches} SLA breaches, {stats['failed']} failures",
+            )
+
         # Calculate base grade from pass rate
         if pass_rate >= self._config.grade_a_min_pass_rate:
             grade = ResilienceGrade.A
@@ -532,25 +557,27 @@ class ResilienceReportGenerator:
         else:
             grade = ResilienceGrade.F
             explanation = f"Critical: {pass_rate:.1f}% pass rate"
-        
+
         # Adjust for recovery time
         if avg_recovery > self._config.warning_recovery_time_seconds:
             if grade.value in ("A", "B"):
                 grade = ResilienceGrade.C
                 explanation += f"; Slow recovery: {avg_recovery:.1f}s avg"
-        
+
         # Adjust for SLA breaches
         if sla_breaches > 0:
             if grade == ResilienceGrade.A:
                 grade = ResilienceGrade.B
             explanation += f"; {sla_breaches} SLA breaches"
-        
+
         return grade.value, explanation
-    
-    def _calculate_trends(self, current_date: str, current_grade: str) -> tuple[str, float]:
+
+    def _calculate_trends(
+        self, current_date: str, current_grade: str
+    ) -> tuple[str, float]:
         """Calculate grade trends."""
         grade_values = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}
-        
+
         # Get last 7 days of reports
         with self._lock:
             recent_reports = sorted(
@@ -558,55 +585,55 @@ class ResilienceReportGenerator:
                 key=lambda r: r.report_date,
                 reverse=True,
             )[:7]
-        
+
         if not recent_reports:
             return "stable", 0.0
-        
+
         # Calculate average grade
         recent_grades = [grade_values.get(r.grade, 3) for r in recent_reports]
         avg_recent = sum(recent_grades) / len(recent_grades)
         current_value = grade_values.get(current_grade, 3)
-        
+
         # Determine trend
         diff = current_value - avg_recent
-        
+
         if diff > 0.5:
             trend = "improving"
         elif diff < -0.5:
             trend = "declining"
         else:
             trend = "stable"
-        
+
         # Week over week change
         if len(recent_reports) >= 7:
             week_ago_grade = grade_values.get(recent_reports[6].grade, 3)
             wow_change = current_value - week_ago_grade
         else:
             wow_change = 0.0
-        
+
         return trend, wow_change
-    
+
     # =========================================================================
     # Recommendations
     # =========================================================================
-    
+
     def _generate_recommendations(
         self,
-        experiments: List[ExperimentSummary],
-        stats: Dict[str, Any],
-        forensic_summary: Dict[str, Any],
+        experiments: list[ExperimentSummary],
+        stats: dict[str, Any],
+        forensic_summary: dict[str, Any],
         grade: str,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate actionable recommendations."""
         recommendations = []
-        
+
         # Grade-based recommendations
         if grade in ("D", "F"):
             recommendations.append(
                 "⚠️ Critical: System resilience is below acceptable levels. "
                 "Prioritize stability improvements before enabling more chaos experiments."
             )
-        
+
         # Recovery time recommendations
         if stats["avg_recovery_time"] > self._config.warning_recovery_time_seconds:
             recommendations.append(
@@ -614,17 +641,18 @@ class ResilienceReportGenerator:
                 f"threshold of {self._config.warning_recovery_time_seconds}s. "
                 "Consider implementing faster failover mechanisms."
             )
-        
+
         # SLA breach recommendations
         if stats["sla_breaches"] > 0:
             recommendations.append(
                 f"{stats['sla_breaches']} SLA breaches detected. "
                 "Review error budget consumption and consider increasing circuit breaker thresholds."
             )
-        
+
         # Failed experiment recommendations
         failed_services = set(
-            e.target_service for e in experiments
+            e.target_service
+            for e in experiments
             if e.outcome == ExperimentOutcome.FAILED.value
         )
         for service in failed_services:
@@ -632,58 +660,62 @@ class ResilienceReportGenerator:
                 f"Service '{service}' failed chaos experiments. "
                 "Investigate service resilience and retry mechanisms."
             )
-        
+
         # Forensic recommendations
         forensic_recs = forensic_summary.get("recommendations_by_service", {})
         for service, recs in forensic_recs.items():
             for rec in recs[:2]:  # Top 2 per service
                 recommendations.append(f"[{service}] {rec}")
-        
+
         return recommendations[:10]  # Limit to 10 recommendations
-    
+
     def _generate_action_items(
         self,
-        experiments: List[ExperimentSummary],
-        forensic_summary: Dict[str, Any],
-    ) -> List[Dict[str, str]]:
+        experiments: list[ExperimentSummary],
+        forensic_summary: dict[str, Any],
+    ) -> list[dict[str, str]]:
         """Generate specific action items."""
         action_items = []
-        
+
         # Failed experiments become action items
         for exp in experiments:
             if exp.outcome == ExperimentOutcome.FAILED.value:
-                action_items.append({
-                    "title": f"Investigate failure: {exp.target_service}",
-                    "description": (
-                        f"Experiment {exp.experiment_id} ({exp.experiment_type}) failed. "
-                        f"Recovery time: {exp.recovery_time_seconds:.1f}s"
-                    ),
-                    "priority": "high",
-                    "service": exp.target_service,
-                })
-        
+                action_items.append(
+                    {
+                        "title": f"Investigate failure: {exp.target_service}",
+                        "description": (
+                            f"Experiment {exp.experiment_id} ({exp.experiment_type}) failed. "
+                            f"Recovery time: {exp.recovery_time_seconds:.1f}s"
+                        ),
+                        "priority": "high",
+                        "service": exp.target_service,
+                    }
+                )
+
         # Slow recovery becomes action items
         for exp in experiments:
             if exp.recovery_time_seconds > self._config.warning_recovery_time_seconds:
-                action_items.append({
-                    "title": f"Improve recovery time: {exp.target_service}",
-                    "description": (
-                        f"Recovery took {exp.recovery_time_seconds:.1f}s, "
-                        f"exceeding threshold of {self._config.warning_recovery_time_seconds}s"
-                    ),
-                    "priority": "medium",
-                    "service": exp.target_service,
-                })
-        
+                action_items.append(
+                    {
+                        "title": f"Improve recovery time: {exp.target_service}",
+                        "description": (
+                            f"Recovery took {exp.recovery_time_seconds:.1f}s, "
+                            f"exceeding threshold of {self._config.warning_recovery_time_seconds}s"
+                        ),
+                        "priority": "medium",
+                        "service": exp.target_service,
+                    }
+                )
+
         return action_items[:20]  # Limit to 20 items
-    
+
     # =========================================================================
     # Recording & Notifications
     # =========================================================================
-    
+
     def _record_metrics(self, report: DailyResilienceReport) -> None:
         """Record report metrics to Prometheus.
-        
+
         Note: Resilience grade and chaos experiment metrics are not yet implemented.
         When needed, add record_resilience_grade and record_chaos_experiment_outcome
         to selfhealing.services.metrics.recorders module.
@@ -694,7 +726,7 @@ class ResilienceReportGenerator:
             f"[ReportGenerator] Metrics recording skipped - grade={report.grade}, "
             f"experiments={report.total_experiments}"
         )
-    
+
     def _record_audit(self, report: DailyResilienceReport) -> None:
         """Record report to audit trail."""
         logger.info(
@@ -703,18 +735,21 @@ class ResilienceReportGenerator:
             f"experiments={report.total_experiments} "
             f"passed={report.passed_experiments}"
         )
-    
+
     def _send_notifications(self, report: DailyResilienceReport, trend: str) -> None:
         """Send notifications based on report."""
         try:
             from selfhealing.adapters.alert import get_alert_adapter
-            
+
             adapter = get_alert_adapter()
             if not adapter:
                 return
-            
+
             # Notify on critical grade
-            if self._config.notify_on_critical_grade and report.grade == ResilienceGrade.F.value:
+            if (
+                self._config.notify_on_critical_grade
+                and report.grade == ResilienceGrade.F.value
+            ):
                 adapter.alert(
                     severity="critical",
                     title="Daily Resilience Report: CRITICAL",
@@ -728,7 +763,7 @@ class ResilienceReportGenerator:
                     ),
                     tags=["chaos", "resilience", "daily-report"],
                 )
-            
+
             # Notify on grade drop
             elif self._config.notify_on_grade_drop and trend == "declining":
                 adapter.alert(
@@ -738,40 +773,40 @@ class ResilienceReportGenerator:
                         f"Resilience grade is declining.\n"
                         f"Current: {report.grade}\n"
                         f"Trend: {trend}\n\n"
-                        f"Recommendations:\n" +
-                        "\n".join(f"- {r}" for r in report.recommendations[:3])
+                        f"Recommendations:\n"
+                        + "\n".join(f"- {r}" for r in report.recommendations[:3])
                     ),
                     tags=["chaos", "resilience", "daily-report"],
                 )
-                
+
         except Exception as e:
             logger.warning(f"[ReportGenerator] Could not send notification: {e}")
-    
+
     # =========================================================================
     # Report Retrieval
     # =========================================================================
-    
-    def get_report(self, report_id: str) -> Optional[DailyResilienceReport]:
+
+    def get_report(self, report_id: str) -> DailyResilienceReport | None:
         """Get a specific report by ID."""
         return self._reports.get(report_id)
-    
-    def get_report_by_date(self, date: str) -> Optional[DailyResilienceReport]:
+
+    def get_report_by_date(self, date: str) -> DailyResilienceReport | None:
         """Get report for a specific date (YYYY-MM-DD)."""
         report_id = f"resilience-{date}"
         return self._reports.get(report_id)
-    
+
     def get_reports(
         self,
         days: int = 30,
-        grade_filter: Optional[str] = None,
-    ) -> List[DailyResilienceReport]:
+        grade_filter: str | None = None,
+    ) -> list[DailyResilienceReport]:
         """
         Get historical reports.
-        
+
         Args:
             days: Number of days to retrieve
             grade_filter: Optional grade to filter by
-            
+
         Returns:
             List of reports
         """
@@ -781,33 +816,33 @@ class ResilienceReportGenerator:
                 key=lambda r: r.report_date,
                 reverse=True,
             )[:days]
-            
+
             if grade_filter:
                 reports = [r for r in reports if r.grade == grade_filter]
-            
+
             return reports
-    
-    def get_grade_history(self, days: int = 30) -> List[Dict[str, str]]:
+
+    def get_grade_history(self, days: int = 30) -> list[dict[str, str]]:
         """Get grade history for trending."""
         reports = self.get_reports(days=days)
-        return [
-            {"date": r.report_date, "grade": r.grade}
-            for r in reports
-        ]
-    
+        return [{"date": r.report_date, "grade": r.grade} for r in reports]
+
     # =========================================================================
     # Storage
     # =========================================================================
-    
+
     def _persist_reports(self) -> None:
         """Persist reports to storage."""
         try:
             from selfhealing.core.state_backend import get_state_backend
+
             backend = get_state_backend()
-            
+
             # Only keep recent reports
-            cutoff = (now() - timedelta(days=self._config.keep_reports_days)).strftime("%Y-%m-%d")
-            
+            cutoff = (now() - timedelta(days=self._config.keep_reports_days)).strftime(
+                "%Y-%m-%d"
+            )
+
             data = {
                 rid: r.to_dict()
                 for rid, r in self._reports.items()
@@ -816,13 +851,14 @@ class ResilienceReportGenerator:
             backend.set("chaos:resilience_reports", data)
         except Exception as e:
             logger.warning(f"[ReportGenerator] Could not persist reports: {e}")
-    
+
     def _load_reports(self) -> None:
         """Load reports from storage."""
         try:
             from selfhealing.core.state_backend import get_state_backend
+
             backend = get_state_backend()
-            
+
             data = backend.get("chaos:resilience_reports")
             if data:
                 for rid, rdata in data.items():
@@ -837,10 +873,18 @@ class ResilienceReportGenerator:
                         failed_experiments=rdata.get("failed_experiments", 0),
                         skipped_experiments=rdata.get("skipped_experiments", 0),
                         total_sla_breaches=rdata.get("total_sla_breaches", 0),
-                        average_recovery_time_seconds=rdata.get("average_recovery_time_seconds", 0),
-                        max_recovery_time_seconds=rdata.get("max_recovery_time_seconds", 0),
-                        error_budget_consumed_percent=rdata.get("error_budget_consumed_percent", 0),
-                        error_budget_remaining_percent=rdata.get("error_budget_remaining_percent", 100),
+                        average_recovery_time_seconds=rdata.get(
+                            "average_recovery_time_seconds", 0
+                        ),
+                        max_recovery_time_seconds=rdata.get(
+                            "max_recovery_time_seconds", 0
+                        ),
+                        error_budget_consumed_percent=rdata.get(
+                            "error_budget_consumed_percent", 0
+                        ),
+                        error_budget_remaining_percent=rdata.get(
+                            "error_budget_remaining_percent", 100
+                        ),
                         grade_trend=rdata.get("grade_trend", ""),
                         week_over_week_change=rdata.get("week_over_week_change", 0),
                         recommendations=rdata.get("recommendations", []),
@@ -856,19 +900,19 @@ class ResilienceReportGenerator:
 # =============================================================================
 
 
-_report_generator: Optional[ResilienceReportGenerator] = None
+_report_generator: ResilienceReportGenerator | None = None
 _generator_lock = threading.Lock()
 
 
 def get_report_generator() -> ResilienceReportGenerator:
     """Get the singleton ResilienceReportGenerator instance."""
     global _report_generator
-    
+
     if _report_generator is None:
         with _generator_lock:
             if _report_generator is None:
                 _report_generator = ResilienceReportGenerator()
-    
+
     return _report_generator
 
 

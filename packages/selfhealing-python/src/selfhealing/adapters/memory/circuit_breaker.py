@@ -15,29 +15,29 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 from selfhealing.adapters.memory.base import _now
-from selfhealing.interfaces.repositories import (
-    CircuitBreakerStateRepository,
-    CircuitBreakerStateData,
-    CircuitBreakerStateEnum,
-)
 
 # Re-export for backward compatibility
 from selfhealing.adapters.memory.drift_reconciliation import (
-    DriftReconciliationResult,
-    DriftReconciliationRecord,
     DriftReconciler,
+    DriftReconciliationRecord,
+    DriftReconciliationResult,
     get_drift_reconciler,
+)
+from selfhealing.adapters.memory.layered_repository import (
+    LayeredCircuitBreakerStateRepository,
 )
 from selfhealing.adapters.memory.shadow_logger import (
     L2SyncFailureRecord,
     ShadowLogger,
     get_shadow_logger,
 )
-from selfhealing.adapters.memory.layered_repository import LayeredCircuitBreakerStateRepository
-
+from selfhealing.interfaces.repositories import (
+    CircuitBreakerStateData,
+    CircuitBreakerStateEnum,
+    CircuitBreakerStateRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +50,13 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     """
 
     def __init__(self):
-        self._storage: Dict[str, CircuitBreakerStateData] = {}
+        self._storage: dict[str, CircuitBreakerStateData] = {}
         self._next_id = 1
         self._lock = threading.RLock()  # RLock for reentrant calls
 
-    def get_by_service_name(self, service_name: str) -> Optional[CircuitBreakerStateData]:
+    def get_by_service_name(
+        self, service_name: str
+    ) -> CircuitBreakerStateData | None:
         """Get circuit breaker state by service name."""
         with self._lock:
             return self._storage.get(service_name)
@@ -78,9 +80,9 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         state: str,
-        failure_count: Optional[int] = None,
-        success_count: Optional[int] = None,
-        opened_at: Optional[datetime] = None,
+        failure_count: int | None = None,
+        success_count: int | None = None,
+        opened_at: datetime | None = None,
     ) -> bool:
         """Update circuit breaker state."""
         with self._lock:
@@ -92,8 +94,12 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 id=entry.id,
                 service_name=service_name,
                 state=state,
-                failure_count=failure_count if failure_count is not None else entry.failure_count,
-                success_count=success_count if success_count is not None else entry.success_count,
+                failure_count=(
+                    failure_count if failure_count is not None else entry.failure_count
+                ),
+                success_count=(
+                    success_count if success_count is not None else entry.success_count
+                ),
                 last_failure_at=entry.last_failure_at,
                 opened_at=opened_at if opened_at is not None else entry.opened_at,
                 manually_controlled=entry.manually_controlled,
@@ -110,7 +116,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def increment_failure_count(
         self,
         service_name: str,
-        last_failure_at: Optional[datetime] = None,
+        last_failure_at: datetime | None = None,
     ) -> int:
         """Increment failure count."""
         with self._lock:
@@ -168,7 +174,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         state: str,
         controlled_by_id: int,
         reason: str = "",
-        expires_at: Optional[datetime] = None,
+        expires_at: datetime | None = None,
     ) -> bool:
         """Set manual control override."""
         with self._lock:
@@ -181,7 +187,11 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 failure_count=entry.failure_count,
                 success_count=entry.success_count,
                 last_failure_at=entry.last_failure_at,
-                opened_at=_now() if state == CircuitBreakerStateEnum.OPEN.value else entry.opened_at,
+                opened_at=(
+                    _now()
+                    if state == CircuitBreakerStateEnum.OPEN.value
+                    else entry.opened_at
+                ),
                 manually_controlled=True,
                 controlled_by_id=controlled_by_id,
                 control_reason=reason,
@@ -193,7 +203,9 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._storage[service_name] = updated
             return True
 
-    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+    def clear_manual_control(
+        self, service_name: str, preserve_reason: bool = False
+    ) -> bool:
         """Clear manual control override."""
         with self._lock:
             entry = self._storage.get(service_name)
@@ -269,7 +281,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._storage[service_name] = updated
             return updated
 
-    def get_all_states(self) -> List[CircuitBreakerStateData]:
+    def get_all_states(self) -> list[CircuitBreakerStateData]:
         """Get all circuit breaker states (alias for get_all)."""
         return self.get_all()
 
@@ -303,7 +315,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         ttl_minutes: int = 90,
     ) -> tuple[bool, str, str]:
         """Atomically force open a circuit breaker."""
@@ -311,7 +323,9 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             entry = self.get_or_create(service_name)
             previous_state = entry.state
 
-            expires_at = _now() + timedelta(minutes=ttl_minutes) if ttl_minutes > 0 else None
+            expires_at = (
+                _now() + timedelta(minutes=ttl_minutes) if ttl_minutes > 0 else None
+            )
 
             updated = CircuitBreakerStateData(
                 id=entry.id,
@@ -336,7 +350,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple[bool, str, str]:
         """Atomically force close a circuit breaker."""
         with self._lock:
@@ -366,7 +380,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple[bool, str, str]:
         """Atomically reset a circuit breaker to initial state."""
         with self._lock:
@@ -395,12 +409,16 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._storage[service_name] = updated
             return (True, previous_state, CircuitBreakerStateEnum.CLOSED.value)
 
-    def get_all_open(self) -> List[CircuitBreakerStateData]:
+    def get_all_open(self) -> list[CircuitBreakerStateData]:
         """Get all open circuit breakers."""
         with self._lock:
-            return [entry for entry in self._storage.values() if entry.state == CircuitBreakerStateEnum.OPEN.value]
+            return [
+                entry
+                for entry in self._storage.values()
+                if entry.state == CircuitBreakerStateEnum.OPEN.value
+            ]
 
-    def get_all(self) -> List[CircuitBreakerStateData]:
+    def get_all(self) -> list[CircuitBreakerStateData]:
         """Get all circuit breaker states."""
         with self._lock:
             return list(self._storage.values())

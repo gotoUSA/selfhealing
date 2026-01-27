@@ -20,18 +20,18 @@ from typing import Any, Optional
 
 # Import models from separate module
 from selfhealing.services.dlq_models import (
+    DLQBatchReplayStats,
     DLQConfig,
     DLQEntryResult,
-    DLQBatchReplayStats,
 )
 
 # Import base and mixins
 from .base import DLQServiceBase
-from .store_operations import StoreOperationsMixin
-from .query_operations import QueryOperationsMixin
-from .replay_operations import ReplayOperationsMixin
 from .entry_operations import EntryOperationsMixin
 from .list_operations import ListOperationsMixin
+from .query_operations import QueryOperationsMixin
+from .replay_operations import ReplayOperationsMixin
+from .store_operations import StoreOperationsMixin
 
 
 class DLQService(
@@ -62,6 +62,7 @@ class DLQService(
         mock_repo = Mock(spec=FailedOperationRepository)
         service = DLQService(repository=mock_repo)
     """
+
     pass
 
 
@@ -84,9 +85,9 @@ def get_dlq_service() -> DLQService:
 def store_to_dlq(
     domain: str,
     failure_type: str,
-    entity_type: Optional[str] = None,
-    entity_id: Optional[str] = None,
-    user_id: Optional[int] = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    user_id: int | None = None,
     error_code: str = "",
     error_message: str = "",
     snapshot_data: dict[str, Any] | None = None,

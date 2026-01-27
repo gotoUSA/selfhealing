@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -104,7 +103,7 @@ class DLQSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[DLQSettings] = None
+_settings: DLQSettings | None = None
 
 
 def get_dlq_settings() -> DLQSettings:

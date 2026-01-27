@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class SheddingState(str, Enum):
@@ -37,8 +37,8 @@ class SheddingDecision:
     allowed_traffic_percent: float = 100.0
     is_shed: bool = False
     reason: str = ""
-    current_level: Optional[str] = None
-    service_criticality: Optional[str] = None
+    current_level: str | None = None
+    service_criticality: str | None = None
 
 
 @dataclass
@@ -60,13 +60,13 @@ class SheddingStatus:
     current_level_index: int = -1
     current_level_description: str = ""
     critical_error_rate: float = 0.0
-    shed_services: List[str] = field(default_factory=list)
-    shed_criticality: List[str] = field(default_factory=list)
+    shed_services: list[str] = field(default_factory=list)
+    shed_criticality: list[str] = field(default_factory=list)
     traffic_limit: float = 100.0
     timestamp: str = ""
-    activated_at: Optional[str] = None
+    activated_at: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "active": self.active,
@@ -102,10 +102,10 @@ class SheddingAuditEntry:
     previous_level: int = -1
     new_level: int = -1
     critical_error_rate: float = 0.0
-    affected_services: List[str] = field(default_factory=list)
+    affected_services: list[str] = field(default_factory=list)
     reason: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "event_type": self.event_type,

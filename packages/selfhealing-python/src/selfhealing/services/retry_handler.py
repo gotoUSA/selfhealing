@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import functools
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from selfhealing.core.timezone import now
 from selfhealing.settings import get_config
@@ -37,6 +38,7 @@ def _is_system_enabled() -> bool:
     """Check if self-healing system is enabled (Kill Switch not activated)."""
     try:
         from selfhealing.services.system_control import SystemControlManager
+
         manager = SystemControlManager()
         return manager.is_enabled()
     except Exception:
@@ -77,7 +79,9 @@ class RetryConfig:
     backoff_base: int = 4
     backoff_max: int = 180
     jitter_percent: int = 25
-    retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=lambda: (Exception,))
+    retryable_exceptions: tuple[type[Exception], ...] = field(
+        default_factory=lambda: (Exception,)
+    )
     non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
     enable_dlq: bool = True
     domain: str = "default"
@@ -87,7 +91,7 @@ class RetryConfig:
     rate_limit_key: str | None = None  # Custom key, defaults to domain
 
     @classmethod
-    def from_settings(cls, domain: str = "default") -> "RetryConfig":
+    def from_settings(cls, domain: str = "default") -> RetryConfig:
         """
         Load configuration from RuntimeConfigManager (preferred) or core config.
 
@@ -100,10 +104,11 @@ class RetryConfig:
         # Try RuntimeConfigManager first (runtime-configurable)
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             retry_config = manager.get_retry_config()
             dlq_config = manager.get_dlq_config()
-            
+
             return cls(
                 max_attempts=retry_config.get("max_attempts", 3),
                 backoff_base=retry_config.get("backoff_base", 4),
@@ -114,7 +119,7 @@ class RetryConfig:
             )
         except Exception:
             pass  # Fall through to static config
-        
+
         # Fallback to static core config
         config = get_config()
         retry_settings = config.retry
@@ -179,7 +184,7 @@ class RetryHandler:
         self,
         config: RetryConfig | None = None,
         domain: str = "default",
-        rate_limit_coordinator: Optional["RateLimitCoordinator"] = None,
+        rate_limit_coordinator: RateLimitCoordinator | None = None,
     ):
         """
         Initialize the retry handler.
@@ -203,7 +208,7 @@ class RetryHandler:
         self._rate_limit_key = self.config.rate_limit_key or self.config.domain
 
     @property
-    def rate_limit_coordinator(self) -> Optional["RateLimitCoordinator"]:
+    def rate_limit_coordinator(self) -> RateLimitCoordinator | None:
         """Get rate limit coordinator, lazily initialized."""
         if self._rate_limit_coordinator is None and self.config.rate_limit_aware:
             try:
@@ -211,27 +216,29 @@ class RetryHandler:
 
                 self._rate_limit_coordinator = get_rate_limit_coordinator()
             except Exception as e:
-                logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
+                logger.warning(
+                    f"[RetryHandler] Could not initialize rate limit coordinator: {e}"
+                )
         return self._rate_limit_coordinator
 
     def _log_retry_audit(
         self,
         attempt: int,
         success: bool,
-        error_type: Optional[str] = None,
-        error_message: Optional[str] = None,
-        wait_time: Optional[float] = None,
+        error_type: str | None = None,
+        error_message: str | None = None,
+        wait_time: float | None = None,
         rate_limited: bool = False,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> None:
         """
         재시도 이벤트를 Audit 로그에 기록.
-        
+
         Fail-Open 원칙: Audit 실패가 비즈니스 로직을 중단시키지 않음.
         """
         try:
             from .audit_helpers import log_retry_audit
-            
+
             log_retry_audit(
                 domain=self.config.domain,
                 attempt=attempt,
@@ -247,15 +254,16 @@ class RetryHandler:
             # Fail-Open: Audit 실패가 재시도 로직을 중단시키지 않음
             logger.debug(f"[RetryHandler] Audit logging failed (ignored): {e}")
 
-    def _check_error_budget_gate(self) -> Optional[Any]:
+    def _check_error_budget_gate(self) -> Any | None:
         """
         Check ErrorBudgetGate before retrying.
-        
+
         Returns:
             GateCheckResult if gate is available, None otherwise
         """
         try:
             from selfhealing.services.error_budget_gate import check_automation_allowed
+
             return check_automation_allowed()
         except ImportError:
             # ErrorBudgetGate not available
@@ -288,14 +296,17 @@ class RetryHandler:
             "quota exceeded",
         ]
 
-        is_rate_limited = any(indicator in error_str or indicator in error_type for indicator in rate_limit_indicators)
+        is_rate_limited = any(
+            indicator in error_str or indicator in error_type
+            for indicator in rate_limit_indicators
+        )
 
         # Try to extract retry-after from exception
         retry_after = None
         if hasattr(exception, "retry_after"):
-            retry_after = getattr(exception, "retry_after")
+            retry_after = exception.retry_after
         elif hasattr(exception, "response"):
-            response = getattr(exception, "response")
+            response = exception.response
             if hasattr(response, "headers"):
                 retry_after_header = response.headers.get("Retry-After")
                 if retry_after_header:
@@ -337,7 +348,9 @@ class RetryHandler:
         if coordinator:
             result = coordinator.wait_if_needed(self._rate_limit_key)
             if result.waited:
-                logger.info(f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown")
+                logger.info(
+                    f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown"
+                )
 
     def _handle_rate_limit_error(self, exception: Exception) -> None:
         """Handle rate limit error by setting global cooldown."""
@@ -350,7 +363,9 @@ class RetryHandler:
                     key=self._rate_limit_key,
                     retry_after=retry_after,
                 )
-                logger.warning(f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s")
+                logger.warning(
+                    f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s"
+                )
 
     def get_next_delay(self, attempt: int) -> int:
         """
@@ -401,7 +416,9 @@ class RetryHandler:
                 success=False,
                 action=RetryAction.ABORT,
                 attempt=0,
-                error=Exception("Kill Switch is active: self-healing system is disabled"),
+                error=Exception(
+                    "Kill Switch is active: self-healing system is disabled"
+                ),
             )
 
         # ErrorBudgetGate 체크: 에러 예산이 임계치 이하면 재시도 차단
@@ -439,15 +456,17 @@ class RetryHandler:
                 if self.rate_limit_coordinator:
                     self.rate_limit_coordinator.on_success(self._rate_limit_key)
 
-                logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
-                
+                logger.debug(
+                    f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}"
+                )
+
                 # Audit 기록: 재시도 성공
                 self._log_retry_audit(
                     attempt=attempt,
                     success=True,
                     context=context,
                 )
-                
+
                 return RetryResult(
                     success=True,
                     action=RetryAction.SUCCESS,
@@ -466,17 +485,19 @@ class RetryHandler:
                     }
                 )
 
-                logger.warning(f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}")
+                logger.warning(
+                    f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}"
+                )
 
                 # Self-DDoS prevention: Handle rate limit errors
                 rate_limited, _ = self.is_rate_limit_error(e)
                 self._handle_rate_limit_error(e)
-                
+
                 # Audit 기록: 재시도 시도 (실패)
                 next_delay = None
                 if self.should_retry(e, attempt):
                     next_delay = self.get_next_delay(attempt)
-                
+
                 self._log_retry_audit(
                     attempt=attempt,
                     success=False,
@@ -490,7 +511,8 @@ class RetryHandler:
                 if self.should_retry(e, attempt):
                     delay = next_delay
                     logger.info(
-                        f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{self.config.max_attempts})"
+                        f"[RetryHandler] Will retry in {delay}s "
+                        f"(attempt {attempt + 1}/{self.config.max_attempts})"
                     )
                     # For synchronous execution, we don't actually sleep
                     # The caller (usually Celery) handles the delay
@@ -500,7 +522,8 @@ class RetryHandler:
 
         # Max retries exceeded or non-retryable error
         logger.error(
-            f"[RetryHandler] Max retries exceeded ({attempt}/{self.config.max_attempts}), " f"last error: {last_error}"
+            f"[RetryHandler] Max retries exceeded ({attempt}/{self.config.max_attempts}), "
+            f"last error: {last_error}"
         )
 
         # Move to DLQ if enabled
@@ -571,7 +594,9 @@ class RetryHandler:
                 logger.info(f"[RetryHandler] Created DLQ entry: id={result.dlq_id}")
                 return result.dlq_id
             else:
-                logger.error(f"[RetryHandler] Failed to create DLQ entry: {result.error}")
+                logger.error(
+                    f"[RetryHandler] Failed to create DLQ entry: {result.error}"
+                )
                 return None
 
         except Exception as dlq_error:

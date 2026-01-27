@@ -14,45 +14,43 @@ Reference:
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 
 class CascadeAuditError(Exception):
     """Cascade Audit 기본 예외 클래스."""
-    
+
     pass
 
 
 class CascadeChainDepthExceeded(CascadeAuditError):
     """
     체인 깊이 초과 예외.
-    
+
     Cascade 체인이 설정된 최대 깊이를 초과했을 때 발생합니다.
     이는 보통 자동화 시스템 간의 과도한 연쇄 반응을 의미합니다.
-    
+
     Attributes:
         depth: 현재 체인 깊이
         max_depth: 최대 허용 깊이
         cascade_id: Cascade Event ID
     """
-    
+
     def __init__(
         self,
         depth: int,
         max_depth: int,
         cascade_id: str,
-        message: Optional[str] = None,
+        message: str | None = None,
     ):
         self.depth = depth
         self.max_depth = max_depth
         self.cascade_id = cascade_id
-        
+
         default_message = (
             f"Cascade chain depth {depth} exceeds max {max_depth} "
             f"for cascade {cascade_id}"
         )
         super().__init__(message or default_message)
-    
+
     def to_dict(self) -> dict:
         """예외 정보를 딕셔너리로 변환."""
         return {
@@ -67,30 +65,30 @@ class CascadeChainDepthExceeded(CascadeAuditError):
 class CascadeCycleDetected(CascadeAuditError):
     """
     순환 참조 감지 예외.
-    
+
     Cascade 체인에서 순환 참조(A → B → A)가 감지되었을 때 발생합니다.
     이는 자동화 시스템 간의 무한 루프를 의미합니다.
-    
+
     Attributes:
         cycle_path: 순환 경로 (이벤트 ID 목록)
         cascade_id: Cascade Event ID
     """
-    
+
     def __init__(
         self,
-        cycle_path: List[str],
+        cycle_path: list[str],
         cascade_id: str,
-        message: Optional[str] = None,
+        message: str | None = None,
     ):
         self.cycle_path = cycle_path
         self.cascade_id = cascade_id
-        
+
         default_message = (
             f"Cascade cycle detected: {' -> '.join(cycle_path)} "
             f"in cascade {cascade_id}"
         )
         super().__init__(message or default_message)
-    
+
     def to_dict(self) -> dict:
         """예외 정보를 딕셔너리로 변환."""
         return {
@@ -104,19 +102,19 @@ class CascadeCycleDetected(CascadeAuditError):
 class CascadeEventNotFound(CascadeAuditError):
     """
     Cascade Event 미발견 예외.
-    
+
     요청한 Cascade Event를 찾을 수 없을 때 발생합니다.
     """
-    
+
     def __init__(
         self,
         cascade_id: str,
         namespace: str,
-        message: Optional[str] = None,
+        message: str | None = None,
     ):
         self.cascade_id = cascade_id
         self.namespace = namespace
-        
+
         default_message = (
             f"Cascade event '{cascade_id}' not found in namespace '{namespace}'"
         )
@@ -126,26 +124,24 @@ class CascadeEventNotFound(CascadeAuditError):
 class CascadeIntegrityError(CascadeAuditError):
     """
     Cascade 무결성 오류 예외.
-    
+
     해시 체인 무결성 검증에 실패했을 때 발생합니다.
     """
-    
+
     def __init__(
         self,
         cascade_id: str,
         error_type: str,
-        details: Optional[dict] = None,
-        message: Optional[str] = None,
+        details: dict | None = None,
+        message: str | None = None,
     ):
         self.cascade_id = cascade_id
         self.error_type = error_type
         self.details = details or {}
-        
-        default_message = (
-            f"Cascade integrity error for '{cascade_id}': {error_type}"
-        )
+
+        default_message = f"Cascade integrity error for '{cascade_id}': {error_type}"
         super().__init__(message or default_message)
-    
+
     def to_dict(self) -> dict:
         """예외 정보를 딕셔너리로 변환."""
         return {

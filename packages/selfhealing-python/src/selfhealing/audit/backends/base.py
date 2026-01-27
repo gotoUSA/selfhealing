@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class BackendStatus(Enum):
@@ -27,8 +27,8 @@ class BackendHealth:
 
     status: BackendStatus
     message: str
-    last_success: Optional[datetime] = None
-    last_error: Optional[str] = None
+    last_success: datetime | None = None
+    last_error: str | None = None
     retry_count: int = 0
 
 
@@ -52,7 +52,7 @@ class AuditBackend(ABC):
         pass
 
     @abstractmethod
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry.
 
@@ -99,12 +99,12 @@ class AuditBackend(ABC):
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit logs (optional).
 
@@ -133,7 +133,7 @@ class AsyncAuditBackend(AuditBackend):
     """
 
     @abstractmethod
-    async def write_async(self, entry: Dict[str, Any]) -> bool:
+    async def write_async(self, entry: dict[str, Any]) -> bool:
         """
         Async version of write.
 
@@ -169,11 +169,11 @@ class BufferedBackend(AuditBackend):
             buffer_size: Number of entries to buffer before auto-flush
             flush_interval_seconds: Seconds between auto-flushes
         """
-        self._buffer: List[Dict[str, Any]] = []
+        self._buffer: list[dict[str, Any]] = []
         self._buffer_size = buffer_size
         self._flush_interval = flush_interval_seconds
 
-    def _add_to_buffer(self, entry: Dict[str, Any]) -> bool:
+    def _add_to_buffer(self, entry: dict[str, Any]) -> bool:
         """Add entry to buffer, flush if needed."""
         self._buffer.append(entry)
 
@@ -183,7 +183,7 @@ class BufferedBackend(AuditBackend):
         return True
 
     @abstractmethod
-    def _flush_buffer(self, entries: List[Dict[str, Any]]) -> bool:
+    def _flush_buffer(self, entries: list[dict[str, Any]]) -> bool:
         """Flush buffered entries to storage."""
         pass
 
@@ -211,7 +211,7 @@ class CompositeBackend(AuditBackend):
 
     def __init__(
         self,
-        backends: List[AuditBackend],
+        backends: list[AuditBackend],
         require_all: bool = False,
         enable_circuit_breaker: bool = True,
         enable_metrics: bool = True,
@@ -240,6 +240,7 @@ class CompositeBackend(AuditBackend):
         """Lazy load circuit breaker registry."""
         if self._circuit_registry is None and self._enable_circuit_breaker:
             from selfhealing.audit.resilience import CircuitBreakerRegistry
+
             self._circuit_registry = CircuitBreakerRegistry.get_instance()
         return self._circuit_registry
 
@@ -247,6 +248,7 @@ class CompositeBackend(AuditBackend):
         """Lazy load metrics."""
         if self._metrics is None and self._enable_metrics:
             from selfhealing.audit.resilience import AuditMetrics
+
             self._metrics = AuditMetrics.get_instance()
         return self._metrics
 
@@ -254,6 +256,7 @@ class CompositeBackend(AuditBackend):
         """Lazy load degraded mode manager."""
         if self._degraded_manager is None:
             from selfhealing.audit.resilience import DegradedModeManager
+
             self._degraded_manager = DegradedModeManager.get_instance()
         return self._degraded_manager
 
@@ -261,6 +264,7 @@ class CompositeBackend(AuditBackend):
         """Lazy load syslog fallback."""
         if self._syslog is None:
             from selfhealing.audit.resilience import SyslogFallback
+
             self._syslog = SyslogFallback.get_instance()
         return self._syslog
 
@@ -278,7 +282,13 @@ class CompositeBackend(AuditBackend):
         cb = registry.get_or_create(backend_name)
         return cb.can_execute(), cb
 
-    def _record_metrics(self, backend_name: str, success: bool, duration_ms: float = 0, failure_type: str = None):
+    def _record_metrics(
+        self,
+        backend_name: str,
+        success: bool,
+        duration_ms: float = 0,
+        failure_type: str = None,
+    ):
         """Record metrics for a backend operation."""
         if not self._enable_metrics:
             return
@@ -308,9 +318,10 @@ class CompositeBackend(AuditBackend):
             if metrics:
                 metrics.set_circuit_state(backend_name, cb.state.value)
 
-    def _write_single_backend(self, backend, entry: Dict[str, Any]) -> bool:
+    def _write_single_backend(self, backend, entry: dict[str, Any]) -> bool:
         """Write to a single backend with circuit breaker and metrics."""
         import time
+
         backend_name = backend.name
         start_time = time.time()
 
@@ -330,11 +341,18 @@ class CompositeBackend(AuditBackend):
             self._record_metrics(backend_name, success=result, duration_ms=duration_ms)
             self._update_circuit_state(backend_name, result, cb)
             if not result:
-                self._record_metrics(backend_name, success=False, failure_type="write_failed")
+                self._record_metrics(
+                    backend_name, success=False, failure_type="write_failed"
+                )
             return result
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
-            self._record_metrics(backend_name, success=False, duration_ms=duration_ms, failure_type=type(e).__name__)
+            self._record_metrics(
+                backend_name,
+                success=False,
+                duration_ms=duration_ms,
+                failure_type=type(e).__name__,
+            )
             if self._enable_circuit_breaker:
                 registry = self._get_circuit_registry()
                 if registry:
@@ -342,21 +360,26 @@ class CompositeBackend(AuditBackend):
                     self._update_circuit_state(backend_name, False, cb)
             return False
 
-    def _handle_all_failed(self, entry: Dict[str, Any]) -> None:
+    def _handle_all_failed(self, entry: dict[str, Any]) -> None:
         """Handle the case when all backends fail."""
         syslog = self._get_syslog()
         if syslog:
             syslog.log_backend_failure("ALL", "All backends failed to write")
 
         # Write to stderr as last resort
-        import sys
         import json
+        import sys
+
         try:
-            print(f"AUDIT_FALLBACK: {json.dumps(entry, default=str)}", file=sys.stderr, flush=True)
+            print(
+                f"AUDIT_FALLBACK: {json.dumps(entry, default=str)}",
+                file=sys.stderr,
+                flush=True,
+            )
         except Exception:
             pass
 
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """Write to all backends with circuit breaker protection."""
         results = []
         all_failed = True
@@ -397,14 +420,18 @@ class CompositeBackend(AuditBackend):
                 )
 
         if active_count == len(healths):
-            return BackendHealth(status=BackendStatus.ACTIVE, message="All backends healthy")
+            return BackendHealth(
+                status=BackendStatus.ACTIVE, message="All backends healthy"
+            )
         elif active_count > 0:
             return BackendHealth(
                 status=BackendStatus.DEGRADED,
                 message=f"{active_count}/{len(healths)} backends healthy",
             )
         else:
-            return BackendHealth(status=BackendStatus.UNAVAILABLE, message="All backends unavailable")
+            return BackendHealth(
+                status=BackendStatus.UNAVAILABLE, message="All backends unavailable"
+            )
 
     def flush(self) -> bool:
         """Flush all backends."""

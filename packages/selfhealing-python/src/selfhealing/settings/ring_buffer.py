@@ -14,7 +14,7 @@ Environment Variables:
 """
 
 import logging
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -82,7 +82,7 @@ class RingBufferSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[RingBufferSettings] = None
+_settings: RingBufferSettings | None = None
 
 
 def get_ring_buffer_settings() -> RingBufferSettings:

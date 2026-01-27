@@ -9,12 +9,11 @@ Provides REST API for managing audit system resilience:
 """
 
 import logging
-from typing import Any, Dict
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 
 logger = logging.getLogger(__name__)
 
@@ -57,23 +56,28 @@ class AuditHealthView(View):
             else:
                 status = "healthy"
 
-            return JsonResponse({
-                "status": status,
-                "backend": backend_health,
-                "degraded_mode": degraded_status,
-                "circuit_breakers": {
-                    "open_count": len(open_circuits),
-                    "open_backends": open_circuits,
-                    "total_count": len(circuit_stats),
-                },
-            })
+            return JsonResponse(
+                {
+                    "status": status,
+                    "backend": backend_health,
+                    "degraded_mode": degraded_status,
+                    "circuit_breakers": {
+                        "open_count": len(open_circuits),
+                        "open_backends": open_circuits,
+                        "total_count": len(circuit_stats),
+                    },
+                }
+            )
 
         except Exception as e:
             logger.error(f"[AuditHealthView] Error: {e}")
-            return JsonResponse({
-                "status": "error",
-                "error": str(e),
-            }, status=500)
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "error": str(e),
+                },
+                status=500,
+            )
 
 
 class CircuitBreakerStatusView(View):
@@ -96,22 +100,24 @@ class CircuitBreakerStatusView(View):
             if name:
                 cb = registry.get(name)
                 if not cb:
-                    return JsonResponse({
-                        "error": f"Circuit breaker '{name}' not found"
-                    }, status=404)
+                    return JsonResponse(
+                        {"error": f"Circuit breaker '{name}' not found"}, status=404
+                    )
                 return JsonResponse(cb.get_stats())
             else:
-                return JsonResponse({
-                    "circuit_breakers": registry.get_all_stats(),
-                    "open_circuits": registry.get_open_circuits(),
-                })
+                return JsonResponse(
+                    {
+                        "circuit_breakers": registry.get_all_stats(),
+                        "open_circuits": registry.get_open_circuits(),
+                    }
+                )
 
         except Exception as e:
             logger.error(f"[CircuitBreakerStatusView] Error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class CircuitBreakerResetView(View):
     """Reset a circuit breaker."""
 
@@ -124,23 +130,25 @@ class CircuitBreakerResetView(View):
             cb = registry.get(name)
 
             if not cb:
-                return JsonResponse({
-                    "error": f"Circuit breaker '{name}' not found"
-                }, status=404)
+                return JsonResponse(
+                    {"error": f"Circuit breaker '{name}' not found"}, status=404
+                )
 
             cb.reset()
 
-            return JsonResponse({
-                "message": f"Circuit breaker '{name}' reset successfully",
-                "state": cb.get_stats(),
-            })
+            return JsonResponse(
+                {
+                    "message": f"Circuit breaker '{name}' reset successfully",
+                    "state": cb.get_stats(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[CircuitBreakerResetView] Error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class CircuitBreakerForceOpenView(View):
     """Force open a circuit breaker."""
 
@@ -153,23 +161,25 @@ class CircuitBreakerForceOpenView(View):
             cb = registry.get(name)
 
             if not cb:
-                return JsonResponse({
-                    "error": f"Circuit breaker '{name}' not found"
-                }, status=404)
+                return JsonResponse(
+                    {"error": f"Circuit breaker '{name}' not found"}, status=404
+                )
 
             cb.force_open()
 
-            return JsonResponse({
-                "message": f"Circuit breaker '{name}' forced open",
-                "state": cb.get_stats(),
-            })
+            return JsonResponse(
+                {
+                    "message": f"Circuit breaker '{name}' forced open",
+                    "state": cb.get_stats(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[CircuitBreakerForceOpenView] Error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class CircuitBreakerResetAllView(View):
     """Reset all circuit breakers."""
 
@@ -181,10 +191,12 @@ class CircuitBreakerResetAllView(View):
             registry = CircuitBreakerRegistry.get_instance()
             registry.reset_all()
 
-            return JsonResponse({
-                "message": "All circuit breakers reset",
-                "circuit_breakers": registry.get_all_stats(),
-            })
+            return JsonResponse(
+                {
+                    "message": "All circuit breakers reset",
+                    "circuit_breakers": registry.get_all_stats(),
+                }
+            )
 
         except Exception as e:
             logger.error(f"[CircuitBreakerResetAllView] Error: {e}")
@@ -213,8 +225,7 @@ class AuditMetricsView(View):
                 # Prometheus text format
                 content = metrics.get_prometheus_format()
                 return HttpResponse(
-                    content,
-                    content_type="text/plain; version=0.0.4; charset=utf-8"
+                    content, content_type="text/plain; version=0.0.4; charset=utf-8"
                 )
 
         except Exception as e:
@@ -242,7 +253,7 @@ class DegradedModeStatusView(View):
             return JsonResponse({"error": str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class DegradedModeForceView(View):
     """Force degraded mode on/off."""
 
@@ -250,6 +261,7 @@ class DegradedModeForceView(View):
         """Force degraded mode on or off."""
         try:
             import json
+
             from selfhealing.audit import get_degraded_mode_manager
 
             manager = get_degraded_mode_manager()
@@ -263,29 +275,34 @@ class DegradedModeForceView(View):
                     reason = "Manual override via API"
 
                 manager.force_degraded(reason)
-                return JsonResponse({
-                    "message": "Forced into degraded mode",
-                    "status": manager.get_status(),
-                })
+                return JsonResponse(
+                    {
+                        "message": "Forced into degraded mode",
+                        "status": manager.get_status(),
+                    }
+                )
 
             elif action == "exit":
                 manager.force_normal()
-                return JsonResponse({
-                    "message": "Forced exit from degraded mode",
-                    "status": manager.get_status(),
-                })
+                return JsonResponse(
+                    {
+                        "message": "Forced exit from degraded mode",
+                        "status": manager.get_status(),
+                    }
+                )
 
             else:
-                return JsonResponse({
-                    "error": f"Unknown action: {action}. Use 'enter' or 'exit'"
-                }, status=400)
+                return JsonResponse(
+                    {"error": f"Unknown action: {action}. Use 'enter' or 'exit'"},
+                    status=400,
+                )
 
         except Exception as e:
             logger.error(f"[DegradedModeForceView] Error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class MetricsResetView(View):
     """Reset metrics (for testing)."""
 
@@ -297,9 +314,11 @@ class MetricsResetView(View):
             metrics = get_audit_metrics()
             metrics.reset()
 
-            return JsonResponse({
-                "message": "Metrics reset successfully",
-            })
+            return JsonResponse(
+                {
+                    "message": "Metrics reset successfully",
+                }
+            )
 
         except Exception as e:
             logger.error(f"[MetricsResetView] Error: {e}")
@@ -322,14 +341,42 @@ def get_audit_resilience_urls():
     from django.urls import path
 
     return [
-        path('health', AuditHealthView.as_view(), name='audit-health'),
-        path('metrics', AuditMetricsView.as_view(), name='audit-metrics'),
-        path('metrics/reset', MetricsResetView.as_view(), name='audit-metrics-reset'),
-        path('circuit-breakers', CircuitBreakerStatusView.as_view(), name='circuit-breakers-list'),
-        path('circuit-breakers/<str:name>', CircuitBreakerStatusView.as_view(), name='circuit-breaker-detail'),
-        path('circuit-breakers/<str:name>/reset', CircuitBreakerResetView.as_view(), name='circuit-breaker-reset'),
-        path('circuit-breakers/<str:name>/force-open', CircuitBreakerForceOpenView.as_view(), name='circuit-breaker-force-open'),
-        path('circuit-breakers/reset-all', CircuitBreakerResetAllView.as_view(), name='circuit-breakers-reset-all'),
-        path('degraded-mode', DegradedModeStatusView.as_view(), name='degraded-mode-status'),
-        path('degraded-mode/<str:action>', DegradedModeForceView.as_view(), name='degraded-mode-action'),
+        path("health", AuditHealthView.as_view(), name="audit-health"),
+        path("metrics", AuditMetricsView.as_view(), name="audit-metrics"),
+        path("metrics/reset", MetricsResetView.as_view(), name="audit-metrics-reset"),
+        path(
+            "circuit-breakers",
+            CircuitBreakerStatusView.as_view(),
+            name="circuit-breakers-list",
+        ),
+        path(
+            "circuit-breakers/<str:name>",
+            CircuitBreakerStatusView.as_view(),
+            name="circuit-breaker-detail",
+        ),
+        path(
+            "circuit-breakers/<str:name>/reset",
+            CircuitBreakerResetView.as_view(),
+            name="circuit-breaker-reset",
+        ),
+        path(
+            "circuit-breakers/<str:name>/force-open",
+            CircuitBreakerForceOpenView.as_view(),
+            name="circuit-breaker-force-open",
+        ),
+        path(
+            "circuit-breakers/reset-all",
+            CircuitBreakerResetAllView.as_view(),
+            name="circuit-breakers-reset-all",
+        ),
+        path(
+            "degraded-mode",
+            DegradedModeStatusView.as_view(),
+            name="degraded-mode-status",
+        ),
+        path(
+            "degraded-mode/<str:action>",
+            DegradedModeForceView.as_view(),
+            name="degraded-mode-action",
+        ),
     ]

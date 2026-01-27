@@ -24,24 +24,23 @@ Users can implement their own adapters for:
 
 from .file_adapter import FileAuditLogAdapter
 from .null_adapter import NullAuditLogAdapter
-from .stdout_adapter import StdoutAuditLogAdapter
-from .worm_adapters import (
-    WORMAdapter,
-    S3Config,
-    S3ObjectLockAdapter,
-    LokiConfig,
-    LokiAdapter,
-    HTTPWebhookAdapter,
-    SidecarConfig,
-    SidecarFileWatcher,
-    create_worm_adapter,
-)
 from .singleton import (
     get_audit_adapter,
-    set_audit_adapter,
     reset_audit_adapter,
+    set_audit_adapter,
 )
-
+from .stdout_adapter import StdoutAuditLogAdapter
+from .worm_adapters import (
+    HTTPWebhookAdapter,
+    LokiAdapter,
+    LokiConfig,
+    S3Config,
+    S3ObjectLockAdapter,
+    SidecarConfig,
+    SidecarFileWatcher,
+    WORMAdapter,
+    create_worm_adapter,
+)
 
 __all__ = [
     # Default Adapters (Non-invasive)
@@ -75,6 +74,7 @@ def __getattr__(name: str):
     """Lazy import for optional adapters."""
     if name in ("DjangoAuditLogAdapter", "get_django_audit_adapter"):
         from .django_adapter import DjangoAuditLogAdapter, get_django_audit_adapter
+
         if name == "DjangoAuditLogAdapter":
             return DjangoAuditLogAdapter
         return get_django_audit_adapter

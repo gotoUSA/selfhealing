@@ -37,13 +37,18 @@ Usage:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Generator, Optional, TypeVar
+from typing import Any, TypeVar
 
 from selfhealing.context.actor_context import ActorContext
-from selfhealing.interfaces.audit_adapter import AuditAction, AuditEntry, AuditLogAdapter
+from selfhealing.interfaces.audit_adapter import (
+    AuditAction,
+    AuditEntry,
+    AuditLogAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +62,12 @@ class ConfigChange:
     config_key: str
     old_value: Any
     new_value: Any
-    reason: Optional[str] = None
+    reason: str | None = None
     changed_at: datetime | None = None
-    changed_by: Optional[str] = None
+    changed_by: str | None = None
     applied: bool = False
     cache_invalidated: bool = False
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,8 +115,8 @@ class ConfigChangeTracker:
         config_key: str,
         old_value: Any,
         new_value: Any,
-        reason: Optional[str] = None,
-        invalidate_cache_fn: Optional[Callable[[], None]] = None,
+        reason: str | None = None,
+        invalidate_cache_fn: Callable[[], None] | None = None,
     ) -> Generator[ConfigChange, None, None]:
         """
         Track a configuration change.
@@ -156,9 +161,13 @@ class ConfigChangeTracker:
                 try:
                     invalidate_cache_fn()
                     change.cache_invalidated = True
-                    logger.info(f"[ConfigChangeTracker] Cache invalidated for {config_key}")
+                    logger.info(
+                        f"[ConfigChangeTracker] Cache invalidated for {config_key}"
+                    )
                 except Exception as e:
-                    logger.error(f"[ConfigChangeTracker] Cache invalidation failed: {e}")
+                    logger.error(
+                        f"[ConfigChangeTracker] Cache invalidation failed: {e}"
+                    )
                     change.cache_invalidated = False
 
             # Log success
@@ -184,14 +193,17 @@ class ConfigChangeTracker:
     ) -> None:
         """
         Log configuration change to audit adapter.
-        
+
         request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
         # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
-                from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
-                
+                from selfhealing.audit.event_buffer import (
+                    AuditEventType,
+                    RequestAuditBuffer,
+                )
+
                 buffer = RequestAuditBuffer.get_or_create(request)
                 buffer.add(
                     event_type=AuditEventType.CONFIG_CHANGE,
@@ -210,7 +222,7 @@ class ConfigChangeTracker:
                 return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
             except ImportError:
                 pass  # event_buffer 사용 불가 - fallback
-        
+
         # === Fallback: 기존 방식 ===
         entry = AuditEntry(
             action=AuditAction.CONFIG_CHANGE,
@@ -240,14 +252,17 @@ class ConfigChangeTracker:
         Log a manual override action.
 
         Use this for one-off overrides that bypass normal config flow.
-        
+
         request 파라미터 추가하여 AuditMiddleware 버퍼 패턴 지원
         """
         # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
-                from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
-                
+                from selfhealing.audit.event_buffer import (
+                    AuditEventType,
+                    RequestAuditBuffer,
+                )
+
                 buffer = RequestAuditBuffer.get_or_create(request)
                 buffer.add(
                     event_type=AuditEventType.MANUAL_OVERRIDE,
@@ -268,7 +283,7 @@ class ConfigChangeTracker:
                 return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
             except ImportError:
                 pass  # event_buffer 사용 불가 - fallback
-        
+
         # === Fallback: 기존 방식 ===
         entry = AuditEntry(
             action=AuditAction.MANUAL_OVERRIDE,
@@ -282,15 +297,16 @@ class ConfigChangeTracker:
 
         self.audit_adapter.log(entry)
         logger.warning(
-            f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} " f"value={new_value} reason={reason}"
+            f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} "
+            f"value={new_value} reason={reason}"
         )
 
 
 # Singleton instance for easy use
-_default_tracker: Optional[ConfigChangeTracker] = None
+_default_tracker: ConfigChangeTracker | None = None
 
 
-def get_config_tracker() -> Optional[ConfigChangeTracker]:
+def get_config_tracker() -> ConfigChangeTracker | None:
     """Get the default config change tracker."""
     return _default_tracker
 

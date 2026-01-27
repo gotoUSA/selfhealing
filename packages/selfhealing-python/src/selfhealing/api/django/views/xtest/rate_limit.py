@@ -22,7 +22,6 @@ Security:
 """
 
 import logging
-from typing import Any, Dict
 
 from django.utils import timezone
 from rest_framework import status
@@ -77,12 +76,12 @@ class RateLimitStatusView(XTestModeMixin, APIView):
             return denied
 
         from selfhealing.api.django.rate_limit import (
-            get_redis_health_checker,
+            RedisHealthState,
+            get_client_stats,
             get_local_limiter,
             get_rate_limit_config,
             get_rate_limit_events_count,
-            get_client_stats,
-            RedisHealthState,
+            get_redis_health_checker,
         )
 
         # Redis 헬스 체커 상태 확인
@@ -101,7 +100,9 @@ class RateLimitStatusView(XTestModeMixin, APIView):
         # 전역 통계
         total_events = get_rate_limit_events_count()
         client_stats = get_client_stats()
-        exceeded_count = sum(stats.get("exceeded", 0) for stats in client_stats.values())
+        exceeded_count = sum(
+            stats.get("exceeded", 0) for stats in client_stats.values()
+        )
         active_clients = len(local_limiter.get_all_clients())
 
         # 특정 클라이언트 조회 요청 시
@@ -282,10 +283,10 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
         client_key = request.query_params.get("client_key")
 
         from selfhealing.api.django.rate_limit import (
+            get_client_stats,
             get_rate_limit_events,
             get_rate_limit_events_by_client,
             get_rate_limit_events_count,
-            get_client_stats,
         )
 
         # 이벤트 조회
@@ -297,7 +298,9 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
         # 통계 계산
         total_events = get_rate_limit_events_count()
         client_stats = get_client_stats()
-        total_exceeded = sum(stats.get("exceeded", 0) for stats in client_stats.values())
+        total_exceeded = sum(
+            stats.get("exceeded", 0) for stats in client_stats.values()
+        )
 
         logger.info(
             f"[X-Test-Mode] Rate limit history: returned={len(events)}, "
@@ -310,7 +313,11 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
             "total_exceeded": total_exceeded,
             "returned_count": len(events),
             "recent_events": events,
-            "by_client": client_stats if not client_key else {client_key: client_stats.get(client_key, {})},
+            "by_client": (
+                client_stats
+                if not client_key
+                else {client_key: client_stats.get(client_key, {})}
+            ),
         }
 
         # WAL Audit 기록
@@ -364,10 +371,10 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
             return denied
 
         from selfhealing.api.django.rate_limit import (
+            _FALLBACK_CONTROL_API_PATH_PREFIX,
+            _get_setting,
             get_rate_limit_config,
             get_redis_health_checker,
-            _get_setting,
-            _FALLBACK_CONTROL_API_PATH_PREFIX,
         )
 
         config = get_rate_limit_config()
@@ -376,6 +383,7 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
         # 설정 소스 판단
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             source = "runtime" if manager.is_initialized else "settings"
         except Exception:
@@ -384,6 +392,7 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
         # API Rate Limit Settings 로드 시도
         try:
             from selfhealing.settings.api_rate_limit import get_api_rate_limit_settings
+
             api_settings = get_api_rate_limit_settings()
             settings_available = True
         except Exception:
@@ -411,7 +420,9 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
                 "rate_limit": config["emergency_rate_limit"],
                 "window_seconds": config["emergency_window_seconds"],
             },
-            "path_prefix": _get_setting("control_api_path_prefix", _FALLBACK_CONTROL_API_PATH_PREFIX),
+            "path_prefix": _get_setting(
+                "control_api_path_prefix", _FALLBACK_CONTROL_API_PATH_PREFIX
+            ),
             "excluded_paths": excluded_paths,
             "redis_config": {
                 "ping_interval": health_checker.ping_interval,
@@ -470,8 +481,8 @@ class RateLimitResetView(XTestModeMixin, APIView):
 
         from selfhealing.api.django.rate_limit import (
             get_local_limiter,
-            reset_rate_limit_state,
             reset_rate_limit_events,
+            reset_rate_limit_state,
         )
 
         local_limiter = get_local_limiter()

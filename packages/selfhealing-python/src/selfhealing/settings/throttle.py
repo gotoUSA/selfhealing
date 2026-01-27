@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -163,9 +162,7 @@ class ThrottleSettings(BaseSettings):
         """max_limit이 min_limit보다 커야 함."""
         # 다른 필드 접근이 어려우므로 기본값과 비교
         if v < 10:  # min_limit 기본값
-            logger.warning(
-                f"[SafeDefault] max_limit={v} is very low, may cause issues"
-            )
+            logger.warning(f"[SafeDefault] max_limit={v} is very low, may cause issues")
         return v
 
     @field_validator("sla_critical_ms")
@@ -184,7 +181,7 @@ class ThrottleSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[ThrottleSettings] = None
+_settings: ThrottleSettings | None = None
 
 
 def get_throttle_settings() -> ThrottleSettings:

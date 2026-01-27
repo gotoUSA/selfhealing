@@ -27,12 +27,13 @@ Celery Beat 설정 예시:
         },
     }
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import timedelta
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.utils.time import utc_now
 
@@ -52,7 +53,7 @@ logger = logging.getLogger(__name__)
 class WatchdogConfig:
     """
     Watchdog 설정.
-    
+
     Attributes:
         zombie_threshold_minutes: 정체로 간주하는 시간 (기본 30분)
         auto_rollback_after_minutes: 자동 롤백까지 대기 시간 (기본 60분)
@@ -62,6 +63,7 @@ class WatchdogConfig:
         notification_enabled: Slack 알림 활성화
         slack_channel: 알림 Slack 채널
     """
+
     zombie_threshold_minutes: int = 30
     auto_rollback_after_minutes: int = 60
     max_stage_duration_minutes: int = 15
@@ -73,9 +75,9 @@ class WatchdogConfig:
     @classmethod
     def from_settings(
         cls,
-        settings: "CanaryWatchdogSettings | None" = None,
+        settings: CanaryWatchdogSettings | None = None,
         **overrides,
-    ) -> "WatchdogConfig":
+    ) -> WatchdogConfig:
         """
         Settings에서 WatchdogConfig 인스턴스 생성.
 
@@ -90,24 +92,12 @@ class WatchdogConfig:
 
         s = settings or get_canary_watchdog_settings()
         return cls(
-            zombie_threshold_minutes=overrides.get(
-                "zombie_threshold_minutes", s.zombie_threshold_minutes
-            ),
-            auto_rollback_after_minutes=overrides.get(
-                "auto_rollback_after_minutes", s.auto_rollback_after_minutes
-            ),
-            max_stage_duration_minutes=overrides.get(
-                "max_stage_duration_minutes", s.max_stage_duration_minutes
-            ),
-            enable_auto_promote=overrides.get(
-                "enable_auto_promote", s.enable_auto_promote
-            ),
-            enable_auto_rollback=overrides.get(
-                "enable_auto_rollback", s.enable_auto_rollback
-            ),
-            notification_enabled=overrides.get(
-                "notification_enabled", s.notification_enabled
-            ),
+            zombie_threshold_minutes=overrides.get("zombie_threshold_minutes", s.zombie_threshold_minutes),
+            auto_rollback_after_minutes=overrides.get("auto_rollback_after_minutes", s.auto_rollback_after_minutes),
+            max_stage_duration_minutes=overrides.get("max_stage_duration_minutes", s.max_stage_duration_minutes),
+            enable_auto_promote=overrides.get("enable_auto_promote", s.enable_auto_promote),
+            enable_auto_rollback=overrides.get("enable_auto_rollback", s.enable_auto_rollback),
+            notification_enabled=overrides.get("notification_enabled", s.notification_enabled),
             slack_channel=overrides.get("slack_channel", s.slack_channel),
         )
 
@@ -116,16 +106,17 @@ class WatchdogConfig:
 class ZombieRollout:
     """
     Zombie 롤아웃 정보.
-    
+
     정체 시간이 임계값을 초과한 롤아웃.
     """
+
     rollout_id: str
     config_type: str
     state: str
     stuck_since: datetime
     stuck_minutes: float
     created_by: str
-    affected_clusters: List[str]
+    affected_clusters: list[str]
     reason: str = ""
     action_taken: str = ""  # "notified", "auto_rolled_back", "none"
 
@@ -134,7 +125,7 @@ class ZombieRollout:
 class WatchdogResult:
     """
     Watchdog 실행 결과.
-    
+
     Attributes:
         success: 성공 여부
         scanned_count: 검사한 롤아웃 수
@@ -144,15 +135,16 @@ class WatchdogResult:
         zombies: Zombie 롤아웃 목록
         errors: 에러 목록
     """
+
     success: bool = True
     scanned_count: int = 0
     zombie_count: int = 0
     rollback_count: int = 0
     promote_count: int = 0
-    zombies: List[ZombieRollout] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    zombies: list[ZombieRollout] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "success": self.success,
@@ -182,137 +174,138 @@ class WatchdogResult:
 class RolloutWatchdog:
     """
     Canary Rollout Watchdog.
-    
+
     정체된(Zombie) 롤아웃을 감지하고 자동 조치를 수행합니다.
-    
+
     Zombie 판정 기준:
     - CANARY 상태에서 stage.duration_minutes의 2배 이상 경과
     - PAUSED 상태에서 zombie_threshold_minutes 이상 경과
     - PROMOTING 상태에서 5분 이상 경과 (전이 실패)
-    
+
     자동 조치:
     1. zombie_threshold 도달: Slack 알림
     2. auto_rollback_after 도달: 자동 롤백 + 알림
-    
+
     Example:
         watchdog = RolloutWatchdog()
         result = watchdog.scan_and_handle()
-        
+
         if result.zombie_count > 0:
             print(f"Found {result.zombie_count} zombie rollouts")
     """
-    
+
     def __init__(self, config: WatchdogConfig = None):
         """
         RolloutWatchdog 초기화.
-        
+
         Args:
             config: Watchdog 설정 (기본값 사용 시 None)
         """
         self.config = config or WatchdogConfig()
         self._service = None
-    
+
     @property
     def service(self):
         """CanaryRolloutService (Lazy loading)."""
         if self._service is None:
             from selfhealing.services.canary import get_canary_rollout_service
+
             self._service = get_canary_rollout_service()
         return self._service
-    
+
     def scan_and_handle(self) -> WatchdogResult:
         """
         Zombie 롤아웃 스캔 및 처리.
-        
+
         Returns:
             WatchdogResult: 스캔 및 처리 결과
         """
         result = WatchdogResult()
-        
+
         try:
             active_rollouts = self.service.get_active_rollouts()
             result.scanned_count = len(active_rollouts)
-            
+
             now = utc_now()
-            
+
             for rollout in active_rollouts:
                 zombie = self._check_zombie(rollout, now)
                 if zombie:
                     result.zombies.append(zombie)
                     result.zombie_count += 1
-                    
+
                     # 자동 조치 수행
                     action = self._handle_zombie(zombie, rollout)
                     zombie.action_taken = action
-                    
+
                     if action == "auto_rolled_back":
                         result.rollback_count += 1
-            
+
             logger.info(
                 f"[Watchdog] Scan complete: "
                 f"scanned={result.scanned_count}, "
                 f"zombies={result.zombie_count}, "
                 f"rollbacks={result.rollback_count}"
             )
-            
+
         except Exception as e:
             logger.exception("[Watchdog] Scan failed")
             result.success = False
             result.errors.append(str(e))
-        
+
         return result
-    
+
     def _check_zombie(
         self,
-        rollout: "CanaryRollout",
+        rollout: CanaryRollout,
         now: datetime,
-    ) -> Optional[ZombieRollout]:
+    ) -> ZombieRollout | None:
         """
         롤아웃이 Zombie인지 확인.
-        
+
         Args:
             rollout: 확인할 롤아웃
             now: 현재 시간
-        
+
         Returns:
             ZombieRollout 또는 None
         """
         from selfhealing.services.canary import CanaryState
-        
+
         # 상태별 체류 시간 계산
         stage = rollout.current_stage
         stage_duration = stage.duration_minutes if stage else 5
-        
+
         # 마지막 상태 변경 시간 추정 (created_at 기준)
         stuck_since = rollout.created_at
         stuck_minutes = (now - stuck_since).total_seconds() / 60
-        
+
         # Zombie 판정
         is_zombie = False
         reason = ""
-        
+
         if rollout.state == CanaryState.CANARY:
             # CANARY 상태: duration의 2배 초과
             threshold = stage_duration * 2
             if stuck_minutes > threshold:
                 is_zombie = True
                 reason = f"Stuck in CANARY for {stuck_minutes:.1f} min (threshold: {threshold})"
-                
+
         elif rollout.state == CanaryState.PAUSED:
             # PAUSED 상태: zombie_threshold 초과
             if stuck_minutes > self.config.zombie_threshold_minutes:
                 is_zombie = True
                 reason = f"Paused for {stuck_minutes:.1f} min (threshold: {self.config.zombie_threshold_minutes})"
-                
+
         elif rollout.state == CanaryState.PROMOTING:
             # PROMOTING 상태: 5분 초과 (전이 실패)
             if stuck_minutes > 5:
                 is_zombie = True
                 reason = "Stuck in PROMOTING state"
-        
+
         if not is_zombie:
             return None
-        
+
         return ZombieRollout(
             rollout_id=rollout.id,
             config_type=rollout.config_type,
@@ -323,27 +316,24 @@ class RolloutWatchdog:
             affected_clusters=rollout.affected_clusters,
             reason=reason,
         )
-    
+
     def _handle_zombie(
         self,
         zombie: ZombieRollout,
-        rollout: "CanaryRollout",
+        rollout: CanaryRollout,
     ) -> str:
         """
         Zombie 롤아웃 처리.
-        
+
         Args:
             zombie: Zombie 정보
             rollout: 롤아웃 객체
-        
+
         Returns:
             수행된 액션 ("notified", "auto_rolled_back", "none")
         """
         # 자동 롤백 조건: auto_rollback_after_minutes 초과
-        if (
-            self.config.enable_auto_rollback
-            and zombie.stuck_minutes > self.config.auto_rollback_after_minutes
-        ):
+        if self.config.enable_auto_rollback and zombie.stuck_minutes > self.config.auto_rollback_after_minutes:
             try:
                 success = self.service.rollback(
                     rollout.id,
@@ -351,25 +341,23 @@ class RolloutWatchdog:
                 )
                 if success:
                     self._send_notification(zombie, "auto_rolled_back")
-                    logger.warning(
-                        f"[Watchdog] Auto rolled back: {rollout.id} - {zombie.reason}"
-                    )
+                    logger.warning(f"[Watchdog] Auto rolled back: {rollout.id} - {zombie.reason}")
                     return "auto_rolled_back"
             except Exception as e:
                 logger.error(f"[Watchdog] Auto rollback failed: {e}")
                 return "rollback_failed"
-        
+
         # 알림만 전송
         if self.config.notification_enabled:
             self._send_notification(zombie, "zombie_detected")
             return "notified"
-        
+
         return "none"
-    
+
     def _send_notification(self, zombie: ZombieRollout, event_type: str) -> None:
         """
         Slack 알림 전송.
-        
+
         Args:
             zombie: Zombie 정보
             event_type: 이벤트 유형 ("zombie_detected", "auto_rolled_back")
@@ -378,9 +366,9 @@ class RolloutWatchdog:
             from selfhealing.services.unified_notification import (
                 get_notification_service,
             )
-            
+
             service = get_notification_service()
-            
+
             if event_type == "zombie_detected":
                 message = (
                     f"⚠️ [Canary Watchdog] Zombie Rollout Detected\n"
@@ -404,70 +392,67 @@ class RolloutWatchdog:
                 )
             else:
                 return
-            
+
             service.send_slack_message(
                 message=message,
                 channel=self.config.slack_channel,
                 severity="warning",
             )
-            
+
         except Exception as e:
             logger.warning(f"[Watchdog] Notification failed: {e}")
-    
+
     def auto_promote_eligible(self) -> WatchdogResult:
         """
         자동 프로모션 조건을 충족한 롤아웃 프로모션.
-        
+
         조건:
         - auto_promote=True인 단계
         - duration_minutes 경과
         - 메트릭 검증 통과
-        
+
         Returns:
             WatchdogResult: 프로모션 결과
         """
         result = WatchdogResult()
-        
+
         if not self.config.enable_auto_promote:
             return result
-        
+
         try:
             from selfhealing.services.canary import CanaryState
-            
+
             active_rollouts = self.service.get_active_rollouts()
             result.scanned_count = len(active_rollouts)
             now = utc_now()
-            
+
             for rollout in active_rollouts:
                 if rollout.state != CanaryState.CANARY:
                     continue
-                
+
                 stage = rollout.current_stage
                 if not stage or not stage.auto_promote:
                     continue
-                
+
                 # duration 경과 확인
                 elapsed = (now - rollout.created_at).total_seconds() / 60
                 if elapsed < stage.duration_minutes:
                     continue
-                
+
                 # 메트릭 검증 후 프로모션
                 try:
                     success = self.service.promote(rollout.id, force=False)
                     if success:
                         result.promote_count += 1
-                        logger.info(
-                            f"[Watchdog] Auto promoted: {rollout.id} "
-                            f"(stage: {stage.name})"
-                        )
+                        logger.info(f"[Watchdog] Auto promoted: {rollout.id} " f"(stage: {stage.name})")
                 except Exception as e:
                     result.errors.append(f"{rollout.id}: {e}")
-            
+
         except Exception as e:
             logger.exception("[Watchdog] Auto promote scan failed")
             result.success = False
             result.errors.append(str(e))
-        
+
         return result
 
 
@@ -476,16 +461,16 @@ class RolloutWatchdog:
 # =============================================================================
 
 
-_watchdog: Optional[RolloutWatchdog] = None
+_watchdog: RolloutWatchdog | None = None
 
 
 def get_rollout_watchdog(config: WatchdogConfig = None) -> RolloutWatchdog:
     """
     RolloutWatchdog 싱글톤 반환.
-    
+
     Args:
         config: Watchdog 설정 (첫 호출 시에만 적용)
-    
+
     Returns:
         RolloutWatchdog 인스턴스
     """
@@ -506,16 +491,16 @@ def reset_watchdog() -> None:
 # =============================================================================
 
 
-def scan_zombie_rollouts() -> Dict[str, Any]:
+def scan_zombie_rollouts() -> dict[str, Any]:
     """
     Zombie 롤아웃 스캔 및 처리.
-    
+
     정체된 Canary 롤아웃을 감지하고:
     1. Slack 알림 전송
     2. 임계값 초과 시 자동 롤백
-    
+
     Celery Beat 스케줄 권장: 5분마다
-    
+
     Returns:
         dict: {
             "success": bool,
@@ -529,22 +514,22 @@ def scan_zombie_rollouts() -> Dict[str, Any]:
         watchdog = get_rollout_watchdog()
         result = watchdog.scan_and_handle()
         return result.to_dict()
-    
+
     except Exception as e:
         logger.error(f"[CanaryWatchdog] scan_zombie_rollouts failed: {e}", exc_info=True)
         raise
 
 
-def auto_promote_eligible() -> Dict[str, Any]:
+def auto_promote_eligible() -> dict[str, Any]:
     """
     자동 프로모션 조건을 충족한 롤아웃 프로모션.
-    
+
     - auto_promote=True인 단계
     - duration_minutes 경과
     - 메트릭 검증 통과
-    
+
     Celery Beat 스케줄 권장: 1분마다
-    
+
     Returns:
         dict: {
             "success": bool,
@@ -556,18 +541,18 @@ def auto_promote_eligible() -> Dict[str, Any]:
         watchdog = get_rollout_watchdog()
         result = watchdog.auto_promote_eligible()
         return result.to_dict()
-    
+
     except Exception as e:
         logger.error(f"[CanaryWatchdog] auto_promote_eligible failed: {e}", exc_info=True)
         raise
 
 
-def collect_canary_metrics() -> Dict[str, Any]:
+def collect_canary_metrics() -> dict[str, Any]:
     """
     활성 롤아웃의 메트릭 수집.
-    
+
     TODO: Prometheus/메트릭 시스템 연동 시 구현
-    
+
     Returns:
         dict: {
             "success": bool,
@@ -577,21 +562,21 @@ def collect_canary_metrics() -> Dict[str, Any]:
     """
     try:
         from selfhealing.services.canary import get_canary_rollout_service
-        
+
         service = get_canary_rollout_service()
         active_rollouts = service.get_active_rollouts()
-        
+
         metrics_count = 0
         for rollout in active_rollouts:
             metrics = service.collect_metrics(rollout.id)
             metrics_count += len(metrics)
-        
+
         return {
             "success": True,
             "rollout_count": len(active_rollouts),
             "metrics_collected": metrics_count,
         }
-    
+
     except Exception as e:
         logger.error(f"[CanaryWatchdog] collect_canary_metrics failed: {e}", exc_info=True)
         raise
@@ -602,22 +587,22 @@ def collect_canary_metrics() -> Dict[str, Any]:
 # =============================================================================
 
 
-def get_canary_watchdog_beat_schedule() -> Dict[str, Any]:
+def get_canary_watchdog_beat_schedule() -> dict[str, Any]:
     """
     Canary Watchdog Celery Beat 스케줄 설정.
-    
+
     Returns:
         Dict[str, Any]: Celery Beat 스케줄 설정
-        
+
     Usage:
         from selfhealing.tasks.canary_watchdog import get_canary_watchdog_beat_schedule
-        
+
         CELERY_BEAT_SCHEDULE = {
             **get_canary_watchdog_beat_schedule(),
         }
     """
     from celery.schedules import crontab
-    
+
     return {
         # Zombie 롤아웃 스캔 (5분마다)
         "canary-scan-zombie-rollouts": {
@@ -628,7 +613,6 @@ def get_canary_watchdog_beat_schedule() -> Dict[str, Any]:
                 "expires": 240,  # 4분 내 처리 안되면 만료
             },
         },
-        
         # 자동 프로모션 체크 (1분마다)
         "canary-auto-promote-eligible": {
             "task": "selfhealing.tasks.canary_watchdog.auto_promote_eligible",
@@ -638,7 +622,6 @@ def get_canary_watchdog_beat_schedule() -> Dict[str, Any]:
                 "expires": 50,  # 50초 내 처리 안되면 만료
             },
         },
-        
         # 메트릭 수집 (2분마다)
         "canary-collect-metrics": {
             "task": "selfhealing.tasks.canary_watchdog.collect_canary_metrics",

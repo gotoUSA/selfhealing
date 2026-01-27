@@ -18,7 +18,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.views.l2_storage_utils import (
     get_layered_repository,
     get_shadow_logger,
@@ -39,22 +39,24 @@ class ShadowLogListView(APIView):
     def get(self, request: Request) -> Response:
         """Get shadow log entries."""
         shadow_logger = get_shadow_logger()
-        
+
         if shadow_logger is None:
             raise RuntimeError("Shadow logger not available")
-        
+
         # Query parameters
-        unsynced_only = request.query_params.get("unsynced_only", "false").lower() == "true"
+        unsynced_only = (
+            request.query_params.get("unsynced_only", "false").lower() == "true"
+        )
         limit = int(request.query_params.get("limit", 100))
-        
+
         if unsynced_only:
             records = shadow_logger.get_unsynced_records()
         else:
             records = shadow_logger.get_all_records()
-        
+
         # Apply limit
         records = records[-limit:] if len(records) > limit else records
-        
+
         # Serialize
         entries = [
             {
@@ -66,11 +68,13 @@ class ShadowLogListView(APIView):
                 "adapter_type": r.adapter_type,
                 "operation": r.operation,
                 "synced_after_recovery": r.synced_after_recovery,
-                "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
+                "recovery_time": (
+                    r.recovery_time.isoformat() if r.recovery_time else None
+                ),
             }
             for r in records
         ]
-        
+
         return Response(
             {
                 "status": "success",
@@ -95,12 +99,12 @@ class ShadowLogStatsView(APIView):
     def get(self, request: Request) -> Response:
         """Get shadow log statistics."""
         shadow_logger = get_shadow_logger()
-        
+
         if shadow_logger is None:
             raise RuntimeError("Shadow logger not available")
-        
+
         stats = shadow_logger.get_stats()
-        
+
         return Response(
             {
                 "status": "success",
@@ -124,20 +128,20 @@ class ShadowLogClearView(APIView):
     def post(self, request: Request) -> Response:
         """Clear all shadow log entries."""
         shadow_logger = get_shadow_logger()
-        
+
         if shadow_logger is None:
             raise RuntimeError("Shadow logger not available")
-        
+
         # Get stats before clearing
         stats_before = shadow_logger.get_stats()
-        
+
         shadow_logger.clear()
-        
+
         logger.warning(
             f"[L2StorageAPI] Shadow log cleared by {request.user}. "
             f"Cleared {stats_before['total_records']} entries."
         )
-        
+
         return Response(
             {
                 "status": "success",
@@ -301,7 +305,9 @@ class ShadowLogByServiceView(APIView):
                 "adapter_type": r.adapter_type,
                 "operation": r.operation,
                 "synced_after_recovery": r.synced_after_recovery,
-                "recovery_time": r.recovery_time.isoformat() if r.recovery_time else None,
+                "recovery_time": (
+                    r.recovery_time.isoformat() if r.recovery_time else None
+                ),
             }
             for r in records
         ]

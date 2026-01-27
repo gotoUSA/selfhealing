@@ -9,12 +9,11 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .circuit_breaker import CircuitBreakerRegistry
 from .metrics import AuditMetrics
 from .syslog_fallback import SyslogFallback
-
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +32,13 @@ class DegradedModeManager:
     - Metrics still collected for monitoring
     """
 
-    _instance: Optional["DegradedModeManager"] = None
+    _instance: DegradedModeManager | None = None
     _lock = threading.Lock()
 
     def __init__(self):
         self._degraded = False
-        self._degraded_since: Optional[datetime] = None
-        self._degraded_reason: Optional[str] = None
+        self._degraded_since: datetime | None = None
+        self._degraded_reason: str | None = None
         self._auto_recovery_enabled = True
         self._check_interval_seconds = 60
         self._manager_lock = threading.RLock()
@@ -49,7 +48,7 @@ class DegradedModeManager:
         self._registry = CircuitBreakerRegistry.get_instance()
 
     @classmethod
-    def get_instance(cls) -> "DegradedModeManager":
+    def get_instance(cls) -> DegradedModeManager:
         """Get singleton instance."""
         if cls._instance is None:
             with cls._lock:
@@ -73,9 +72,7 @@ class DegradedModeManager:
 
                 self._metrics.set_degraded_mode(True)
 
-                logger.warning(
-                    f"[DegradedMode] ENTERED degraded mode: {reason}"
-                )
+                logger.warning(f"[DegradedMode] ENTERED degraded mode: {reason}")
 
                 # Log to syslog
                 self._syslog.log_critical(
@@ -128,7 +125,7 @@ class DegradedModeManager:
                 if self._auto_recovery_enabled:
                     self.exit_degraded_mode()
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get degraded mode status."""
         with self._manager_lock:
             duration = None
@@ -139,7 +136,9 @@ class DegradedModeManager:
 
             return {
                 "degraded": self._degraded,
-                "since": self._degraded_since.isoformat() if self._degraded_since else None,
+                "since": (
+                    self._degraded_since.isoformat() if self._degraded_since else None
+                ),
                 "duration_seconds": duration,
                 "reason": self._degraded_reason,
                 "auto_recovery_enabled": self._auto_recovery_enabled,

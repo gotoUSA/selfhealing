@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.adapters.memory.drift_reconciliation import DriftReconciliationResult
 
@@ -40,9 +40,11 @@ class DriftOperationsMixin:
             executor = self._get_executor()
             executor.submit(_run_reconciliation)
         except Exception as e:
-            logger.warning(f"[LayeredRepo] Failed to schedule drift reconciliation: {e}")
+            logger.warning(
+                f"[LayeredRepo] Failed to schedule drift reconciliation: {e}"
+            )
 
-    def _reconcile_all_drift(self) -> Dict[str, Any]:
+    def _reconcile_all_drift(self) -> dict[str, Any]:
         """모든 서비스의 L1/L2 드리프트 해결."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
@@ -58,12 +60,17 @@ class DriftOperationsMixin:
             try:
                 timeout = self._get_timeout_seconds()
                 executor = self._get_executor()
-                future = executor.submit(self._l2.get_by_service_name, l1_state.service_name)
+                future = executor.submit(
+                    self._l2.get_by_service_name, l1_state.service_name
+                )
 
                 try:
                     l2_state = future.result(timeout=timeout)
                 except FuturesTimeoutError:
-                    logger.warning(f"[LayeredRepo] Drift reconciliation timeout for " f"{l1_state.service_name}, skipping")
+                    logger.warning(
+                        f"[LayeredRepo] Drift reconciliation timeout for "
+                        f"{l1_state.service_name}, skipping"
+                    )
                     continue
 
                 if l2_state is None:
@@ -108,13 +115,16 @@ class DriftOperationsMixin:
                         "error": str(e),
                     }
                 )
-                logger.warning(f"[LayeredRepo] Drift reconciliation error for " f"{l1_state.service_name}: {e}")
+                logger.warning(
+                    f"[LayeredRepo] Drift reconciliation error for "
+                    f"{l1_state.service_name}: {e}"
+                )
 
         self._metrics["drift_reconciliation_count"] += reconciled_count
 
         if reconciled_count > 0:
             self._shadow_logger.mark_all_as_synced()
-            
+
             # Audit 기록: 드리프트 복구 완료
             self._log_drift_reconciliation_audit(
                 total_checked=len(l1_states),
@@ -140,7 +150,7 @@ class DriftOperationsMixin:
 
         return result_dict
 
-    def force_drift_reconciliation(self) -> Dict[str, Any]:
+    def force_drift_reconciliation(self) -> dict[str, Any]:
         """수동으로 드리프트 복구 트리거."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
@@ -148,11 +158,11 @@ class DriftOperationsMixin:
         logger.info("[LayeredRepo] Manual drift reconciliation triggered")
         return self._reconcile_all_drift()
 
-    def get_drift_reconciler_stats(self) -> Dict[str, Any]:
+    def get_drift_reconciler_stats(self) -> dict[str, Any]:
         """드리프트 복구 통계 조회."""
         return self._drift_reconciler.get_stats()
 
-    def get_drift_reconciliation_history(self) -> List[Dict[str, Any]]:
+    def get_drift_reconciliation_history(self) -> list[dict[str, Any]]:
         """드리프트 복구 기록 조회."""
         history = self._drift_reconciler.get_history()
         return [
@@ -160,8 +170,12 @@ class DriftOperationsMixin:
                 "service_name": r.service_name,
                 "l1_state": r.l1_state,
                 "l2_state": r.l2_state,
-                "l1_updated_at": r.l1_updated_at.isoformat() if r.l1_updated_at else None,
-                "l2_updated_at": r.l2_updated_at.isoformat() if r.l2_updated_at else None,
+                "l1_updated_at": (
+                    r.l1_updated_at.isoformat() if r.l1_updated_at else None
+                ),
+                "l2_updated_at": (
+                    r.l2_updated_at.isoformat() if r.l2_updated_at else None
+                ),
                 "winner": r.winner,
                 "result": r.result.value,
                 "reconciled_at": r.reconciled_at.isoformat(),
@@ -170,7 +184,7 @@ class DriftOperationsMixin:
             for r in history
         ]
 
-    def reconcile_single_service(self, service_name: str) -> Dict[str, Any]:
+    def reconcile_single_service(self, service_name: str) -> dict[str, Any]:
         """특정 서비스의 드리프트만 복구."""
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}

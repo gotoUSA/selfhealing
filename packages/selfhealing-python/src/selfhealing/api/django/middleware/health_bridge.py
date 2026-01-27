@@ -15,8 +15,9 @@ Usage in settings.py:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -42,7 +43,7 @@ class HealthBridgeMiddleware:
     """
 
     # 클래스 변수: CB 스냅샷 저장 (모든 인스턴스가 공유)
-    _cb_snapshot: Dict[str, Any] = {
+    _cb_snapshot: dict[str, Any] = {
         "states": {},
         "last_updated": None,
         "update_count": 0,
@@ -65,9 +66,8 @@ class HealthBridgeMiddleware:
         if HealthBridgeMiddleware._snapshot_lock is None:
             HealthBridgeMiddleware._snapshot_lock = threading.Lock()
 
-    def __call__(self, request: "HttpRequest") -> "HttpResponse":
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         """Process request/response."""
-        from django.http import JsonResponse
 
         # === Early Return for Bridge Paths ===
         if request.path in self.BRIDGE_PATHS:
@@ -82,7 +82,7 @@ class HealthBridgeMiddleware:
 
         return response
 
-    def _serve_bridge_response(self, request: "HttpRequest") -> "HttpResponse":
+    def _serve_bridge_response(self, request: HttpRequest) -> HttpResponse:
         """
         Serve health bridge response without touching DB.
 
@@ -146,12 +146,12 @@ class HealthBridgeMiddleware:
             # Log at warning level temporarily for debugging
             logger.warning(f"CB snapshot update failed (non-critical): {e}")
 
-    def _get_snapshot(self) -> Dict[str, Any]:
+    def _get_snapshot(self) -> dict[str, Any]:
         """Thread-safe snapshot read."""
         with self._snapshot_lock:
             return dict(self._cb_snapshot)
 
-    def _calculate_snapshot_age(self, snapshot: Dict[str, Any]) -> Optional[float]:
+    def _calculate_snapshot_age(self, snapshot: dict[str, Any]) -> float | None:
         """Calculate age of snapshot in seconds."""
         last_updated = snapshot.get("last_updated")
         if not last_updated:

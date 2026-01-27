@@ -22,11 +22,15 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
     from rest_framework.response import Response
+
+    from selfhealing.api.django.exceptions.responses import StandardErrorResponse
+    from selfhealing.audit.event_buffer import AuditEventType
+    from selfhealing.core.exception_classifier import ClassifiedError
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,7 @@ def _init_metrics():
         return
 
     try:
-        from prometheus_client import Counter, REGISTRY
+        from prometheus_client import REGISTRY, Counter
 
         # 이미 등록된 메트릭이 있는지 확인
         try:
@@ -97,8 +101,8 @@ def _init_metrics():
 
 
 def _record_metrics(
-    path: Optional[str],
-    method: Optional[str],
+    path: str | None,
+    method: str | None,
     status_code: int,
     error_code: str,
     category: str,
@@ -153,8 +157,8 @@ def _is_pool_timeout(exc: Exception) -> bool:
 
 def selfhealing_exception_handler(
     exc: Exception,
-    context: Dict[str, Any],
-) -> Optional["Response"]:
+    context: dict[str, Any],
+) -> Response | None:
     """
     DRF 커스텀 예외 핸들러.
 
@@ -172,9 +176,9 @@ def selfhealing_exception_handler(
     from rest_framework.response import Response
     from rest_framework.views import exception_handler as drf_exception_handler
 
-    from .classifier import get_exception_classifier, ClassifiedError
-    from .response import StandardErrorResponse
+    from .classifier import ClassifiedError, get_exception_classifier
     from .codes import ErrorCode
+    from .response import StandardErrorResponse
 
     # 요청 정보 추출
     request = context.get("request")
@@ -190,7 +194,7 @@ def selfhealing_exception_handler(
         logger.error(f"[ExceptionHandler] Pool Timeout detected: {type(exc).__name__}: {exc}")
 
         # 표준 응답 생성 (SERVICE_UNAVAILABLE)
-        from .classifier import ExceptionCategory, ClassifiedError
+        from .classifier import ClassifiedError, ExceptionCategory
 
         pool_classified = ClassifiedError(
             category=ExceptionCategory.SERVICE,
@@ -267,38 +271,39 @@ def selfhealing_exception_handler(
     return response
 
 
-def _init_causation_context(request_id: Optional[str]) -> Optional[str]:
+def _init_causation_context(request_id: str | None) -> str | None:
     """
     CausationContext 초기화.
-    
+
     CausationContext가 미설정 시 request_id를 trigger_event_id로 사용하여
     새 Cascade를 시작합니다.
-    
+
     Args:
         request_id: 요청 추적 ID
-    
+
     Returns:
         cascade_id (CausationContext가 설정된 경우) 또는 None
     """
     try:
         from selfhealing.context.causation_context import CausationContext
-        
+
         if CausationContext.is_set():
             # 이미 설정됨 - 기존 cascade_id 반환
             return CausationContext.get_current_cascade_id()
-        
+
         # 미설정 시 새 Cascade 시작 (request_id를 trigger로 사용)
         # 컨텍스트 매니저 없이 직접 설정
+        import uuid as uuid_module
+        from datetime import datetime, timezone
+
         from selfhealing.context.causation_context import (
             CausationInfo,
             _current_causation,
         )
-        import uuid as uuid_module
-        from datetime import datetime, timezone
-        
+
         cascade_id = f"cascade-{uuid_module.uuid4().hex[:12]}"
         trigger_id = request_id or f"evt-{uuid_module.uuid4().hex[:8]}"
-        
+
         info = CausationInfo(
             cascade_id=cascade_id,
             parent_event_id=trigger_id,
@@ -310,16 +315,13 @@ def _init_causation_context(request_id: Optional[str]) -> Optional[str]:
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
         )
-        
+
         _current_causation.set(info)
-        
-        logger.debug(
-            f"[ExceptionHandler] Initialized CausationContext: "
-            f"cascade_id={cascade_id}, trigger={trigger_id}"
-        )
-        
+
+        logger.debug(f"[ExceptionHandler] Initialized CausationContext: " f"cascade_id={cascade_id}, trigger={trigger_id}")
+
         return cascade_id
-        
+
     except ImportError:
         return None
     except Exception as e:
@@ -327,7 +329,7 @@ def _init_causation_context(request_id: Optional[str]) -> Optional[str]:
         return None
 
 
-def _extract_request_id(request: Optional["Request"]) -> Optional[str]:
+def _extract_request_id(request: Request | None) -> str | None:
     """요청에서 request_id 추출 또는 생성."""
     if request is None:
         return str(uuid.uuid4())
@@ -353,14 +355,14 @@ def _extract_request_id(request: Optional["Request"]) -> Optional[str]:
     return str(uuid.uuid4())
 
 
-def _extract_path(request: Optional["Request"]) -> Optional[str]:
+def _extract_path(request: Request | None) -> str | None:
     """요청에서 경로 추출."""
     if request is None:
         return None
     return getattr(request, "path", None)
 
 
-def _extract_method(request: Optional["Request"]) -> Optional[str]:
+def _extract_method(request: Request | None) -> str | None:
     """요청에서 HTTP 메서드 추출."""
     if request is None:
         return None
@@ -368,11 +370,11 @@ def _extract_method(request: Optional["Request"]) -> Optional[str]:
 
 
 def _record_audit_event(
-    request: Optional["Request"],
+    request: Request | None,
     exc: Exception,
-    classified: "ClassifiedError",
-    response: "StandardErrorResponse",
-    causation_id: Optional[str] = None,
+    classified: ClassifiedError,
+    response: StandardErrorResponse,
+    causation_id: str | None = None,
 ) -> None:
     """
     Audit 버퍼에 예외 이벤트 적재.
@@ -380,7 +382,7 @@ def _record_audit_event(
     AuditMiddleware가 응답 반환 시 이 이벤트를 수집하여 기록합니다.
     민감정보는 RBAC 역할에 따라 차등 마스킹됩니다.
     Audit 기록 실패가 응답을 막지 않습니다 (fail-open).
-    
+
     Args:
         request: DRF Request 객체
         exc: 발생한 예외
@@ -394,7 +396,6 @@ def _record_audit_event(
     try:
         from selfhealing.audit.event_buffer import (
             RequestAuditBuffer,
-            AuditEventType,
         )
 
         buffer = RequestAuditBuffer.get_or_create(request)
@@ -403,7 +404,7 @@ def _record_audit_event(
         event_type = _get_audit_event_type(classified)
 
         # 상세 정보 구성
-        details: Dict[str, Any] = {
+        details: dict[str, Any] = {
             "error_code": classified.code.value,
             "exception_class": classified.exception_class,
             "category": classified.category.value,
@@ -439,7 +440,7 @@ def _record_audit_event(
         logger.debug(f"[ExceptionHandler] Failed to record audit event: {e}")
 
 
-def _get_audit_event_type(classified: "ClassifiedError") -> "AuditEventType":
+def _get_audit_event_type(classified: ClassifiedError) -> AuditEventType:
     """
     분류된 예외에 해당하는 AuditEventType 반환.
 
@@ -447,6 +448,7 @@ def _get_audit_event_type(classified: "ClassifiedError") -> "AuditEventType":
     ERROR_DETECTED 중복 기록을 방지합니다.
     """
     from selfhealing.audit.event_buffer import AuditEventType
+
     from .classifier import ExceptionCategory
 
     # 카테고리별 매핑 - API 예외 전용 이벤트 타입 사용
@@ -499,8 +501,13 @@ def _mask_error_message(message: str) -> str:
     except ImportError:
         # fallback - 민감 패턴 감지 시 기본 마스킹
         sensitive_patterns = [
-            "password", "token", "api_key", "apikey",
-            "secret", "authorization", "credential",
+            "password",
+            "token",
+            "api_key",
+            "apikey",
+            "secret",
+            "authorization",
+            "credential",
         ]
         message_lower = message.lower()
         if any(pattern in message_lower for pattern in sensitive_patterns):
@@ -542,8 +549,13 @@ def _mask_error_message_for_audit(message: str) -> str:
     except ImportError:
         # fallback - 민감 패턴 감지 시 기본 마스킹
         sensitive_patterns = [
-            "password", "token", "api_key", "apikey",
-            "secret", "authorization", "credential",
+            "password",
+            "token",
+            "api_key",
+            "apikey",
+            "secret",
+            "authorization",
+            "credential",
         ]
         message_lower = message.lower()
         if any(pattern in message_lower for pattern in sensitive_patterns):
@@ -555,10 +567,10 @@ def _mask_error_message_for_audit(message: str) -> str:
 
 def _log_exception(
     exc: Exception,
-    classified: "ClassifiedError",
-    request_id: Optional[str],
-    path: Optional[str],
-    method: Optional[str],
+    classified: ClassifiedError,
+    request_id: str | None,
+    path: str | None,
+    method: str | None,
 ) -> None:
     """예외 로깅."""
     log_msg = (

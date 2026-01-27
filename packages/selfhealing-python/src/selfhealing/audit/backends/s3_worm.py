@@ -12,8 +12,8 @@ To activate this backend:
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
@@ -45,9 +45,9 @@ class S3WORMBackend(AuditBackend):
         self,
         bucket: str = "selfhealing-audit-logs",
         prefix: str = "audit/",
-        retention_days: Optional[int] = None,
+        retention_days: int | None = None,
         retention_mode: str = "GOVERNANCE",  # or "COMPLIANCE"
-        region: Optional[str] = None,
+        region: str | None = None,
     ):
         """
         Initialize S3 WORM backend.
@@ -61,7 +61,11 @@ class S3WORMBackend(AuditBackend):
         """
         self._bucket = bucket
         self._prefix = prefix
-        self._retention_days = retention_days if retention_days is not None else _get_default_retention_days()
+        self._retention_days = (
+            retention_days
+            if retention_days is not None
+            else _get_default_retention_days()
+        )
         self._retention_mode = retention_mode
         self._region = region
         self._client = None
@@ -99,7 +103,7 @@ class S3WORMBackend(AuditBackend):
             logger.error(f"[S3WORMBackend] Failed to enable: {e}")
             return False
 
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry to S3 with Object Lock.
 
@@ -148,12 +152,12 @@ class S3WORMBackend(AuditBackend):
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit logs from S3.
 
@@ -164,7 +168,7 @@ class S3WORMBackend(AuditBackend):
 
         return []
 
-    def get_configuration_template(self) -> Dict[str, Any]:
+    def get_configuration_template(self) -> dict[str, Any]:
         """Get configuration template for S3 WORM backend."""
         return {
             "required_packages": ["boto3"],
@@ -216,7 +220,9 @@ resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
         Use for investigations or legal requirements.
         """
         if not self._enabled:
-            logger.warning("[S3WORMBackend] Cannot place legal hold - backend not enabled")
+            logger.warning(
+                "[S3WORMBackend] Cannot place legal hold - backend not enabled"
+            )
             return False
 
         # Actual implementation:

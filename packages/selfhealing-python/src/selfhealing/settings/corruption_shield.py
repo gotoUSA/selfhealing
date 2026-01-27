@@ -18,7 +18,6 @@ Reference:
 """
 
 import logging
-from typing import List, Optional, Set
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -65,7 +64,7 @@ class CorruptionShieldSettings(BaseSettings):
     # ==========================================================================
     # L1: Schema Validation (from corruption_shield/config.py)
     # ==========================================================================
-    required_fields: List[str] = Field(
+    required_fields: list[str] = Field(
         default_factory=lambda: ["amount", "order_id"],
         description="필수 필드 목록",
     )
@@ -94,7 +93,7 @@ class CorruptionShieldSettings(BaseSettings):
         description="최대 금액 (원, 기본 1억)",
     )
 
-    allowed_statuses: List[str] = Field(
+    allowed_statuses: list[str] = Field(
         default_factory=lambda: ["DONE", "CANCELED", "PENDING"],
         description="허용되는 상태 값 목록",
     )
@@ -170,7 +169,7 @@ class CorruptionShieldSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[CorruptionShieldSettings] = None
+_settings: CorruptionShieldSettings | None = None
 
 
 def get_corruption_shield_settings() -> CorruptionShieldSettings:

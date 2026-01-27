@@ -7,10 +7,9 @@ Data classes and configuration for DLQ operations.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 from selfhealing.settings import get_dlq_settings
-
 
 # =============================================================================
 # Configuration
@@ -30,14 +29,15 @@ class DLQConfig:
     batch_size: int = 10
 
     @classmethod
-    def from_settings(cls) -> "DLQConfig":
+    def from_settings(cls) -> DLQConfig:
         """Load configuration from RuntimeConfigManager (preferred) or DLQSettings."""
         # Try RuntimeConfigManager first (runtime-configurable)
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
+
             manager = get_runtime_config_manager()
             runtime_config = manager.get_dlq_config()
-            
+
             return cls(
                 enabled=runtime_config.get("enabled", True),
                 retention_days=runtime_config.get("retention_days", 30),
@@ -49,7 +49,7 @@ class DLQConfig:
             )
         except Exception:
             pass  # Fall through to static config
-        
+
         # Fallback to DLQSettings (Pydantic Settings)
         dlq_settings = get_dlq_settings()
         return cls(
@@ -78,17 +78,17 @@ class DLQEntryResult:
     fallback_path: str | None = None  # Local fallback 경로 (DB 실패 시)
 
     @classmethod
-    def created(cls, dlq_id: int) -> "DLQEntryResult":
+    def created(cls, dlq_id: int) -> DLQEntryResult:
         """Factory for successful creation."""
         return cls(success=True, dlq_id=dlq_id)
 
     @classmethod
-    def failed(cls, error: str) -> "DLQEntryResult":
+    def failed(cls, error: str) -> DLQEntryResult:
         """Factory for failed operation (no fallback)."""
         return cls(success=False, error=error)
 
     @classmethod
-    def fallback(cls, error: str, fallback_path: str) -> "DLQEntryResult":
+    def fallback(cls, error: str, fallback_path: str) -> DLQEntryResult:
         """Factory for fallback to local file (data preserved)."""
         return cls(success=False, error=error, fallback_path=fallback_path)
 
@@ -101,7 +101,7 @@ class DLQEntryResult:
 @dataclass
 class DLQBatchReplayStats:
     """Result of a batch replay operation (statistics).
-    
+
     Note: This is for batch DLQ replay statistics, not to be confused with
     ReplayResult in replay_service.py which is for single replay outcomes.
     """
@@ -110,7 +110,7 @@ class DLQBatchReplayStats:
     success: int = 0
     failed: int = 0
     skipped: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 # Backward compatibility alias
@@ -122,7 +122,7 @@ class CleanupStats:
     """Statistics for DLQ cleanup operations."""
 
     total: int = 0
-    by_status: Dict[str, int] = field(default_factory=dict)
+    by_status: dict[str, int] = field(default_factory=dict)
     resolved_older_than_30_days: int = 0
     archived_older_than_90_days: int = 0
 
@@ -141,7 +141,7 @@ class CleanupStats:
 class PaginatedResult:
     """Paginated result for list operations."""
 
-    results: List[Dict[str, Any]] = field(default_factory=list)
+    results: list[dict[str, Any]] = field(default_factory=list)
     page: int = 1
     page_size: int = 20
     total_pages: int = 0

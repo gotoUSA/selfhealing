@@ -13,7 +13,6 @@ Environment Variables:
 """
 
 import logging
-from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -56,7 +55,7 @@ class DailyReportSettings(BaseSettings):
     # ==========================================================================
     # 리포트 기본 설정
     # ==========================================================================
-    default_channels: List[str] = Field(
+    default_channels: list[str] = Field(
         default_factory=lambda: ["slack"],
         description="기본 알림 채널 목록",
     )
@@ -88,7 +87,7 @@ class DailyReportSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[DailyReportSettings] = None
+_settings: DailyReportSettings | None = None
 
 
 def get_daily_report_settings() -> DailyReportSettings:

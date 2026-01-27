@@ -10,9 +10,12 @@ from __future__ import annotations
 import logging
 import sys
 from datetime import datetime
-from typing import Optional
 
-from selfhealing.interfaces.audit_adapter import AuditAction, AuditEntry, AuditLogAdapter
+from selfhealing.interfaces.audit_adapter import (
+    AuditAction,
+    AuditEntry,
+    AuditLogAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,7 @@ class StdoutAuditLogAdapter(AuditLogAdapter):
         """Log an audit entry to stdout."""
         if self.pretty:
             import json
+
             output = json.dumps(entry.to_dict(), indent=2, default=str)
         else:
             output = entry.to_json()
@@ -54,11 +58,11 @@ class StdoutAuditLogAdapter(AuditLogAdapter):
 
     def query(
         self,
-        action: Optional[AuditAction | str] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        action: AuditAction | str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
     ) -> list[AuditEntry]:
         """

@@ -7,7 +7,6 @@ Documents the accuracy level of each metric type.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict
 
 
 class MetricReliability(Enum):
@@ -17,13 +16,13 @@ class MetricReliability(Enum):
     각 메트릭이 제공하는 정확도 수준을 나타냅니다.
     """
 
-    EXACT = "exact"           # 100% 정확, 원본과 동일
-    EVENTUAL = "eventual"     # ~99%, 재시작 시 동기화
-    APPROXIMATE = "approx"    # ~95%, 샘플링 또는 추정
+    EXACT = "exact"  # 100% 정확, 원본과 동일
+    EVENTUAL = "eventual"  # ~99%, 재시작 시 동기화
+    APPROXIMATE = "approx"  # ~95%, 샘플링 또는 추정
 
 
 # 메트릭별 신뢰도 매핑
-METRIC_RELIABILITY_MAP: Dict[str, MetricReliability] = {
+METRIC_RELIABILITY_MAP: dict[str, MetricReliability] = {
     # Counter: 누적값, 증가만 하므로 100% 정확
     "dlq_items_total": MetricReliability.EXACT,
     "dlq_created_total": MetricReliability.EXACT,
@@ -35,7 +34,6 @@ METRIC_RELIABILITY_MAP: Dict[str, MetricReliability] = {
     "replay_attempts_total": MetricReliability.EXACT,
     "replay_outcomes_total": MetricReliability.EXACT,
     "security_incidents_total": MetricReliability.EXACT,
-
     # Histogram: 관측 시점 기록, 100% 정확
     "recovery_time_seconds": MetricReliability.EXACT,
     "retry_attempts_distribution": MetricReliability.EXACT,
@@ -43,7 +41,6 @@ METRIC_RELIABILITY_MAP: Dict[str, MetricReliability] = {
     "human_review_queue_time_seconds": MetricReliability.EXACT,
     "circuit_breaker_open_duration_seconds": MetricReliability.EXACT,
     "replay_duration_seconds": MetricReliability.EXACT,
-
     # Gauge: 상태값, 재시작 시 동기화 (~99% 정확)
     "dlq_pending_count": MetricReliability.EVENTUAL,
     "dlq_items_by_status": MetricReliability.EVENTUAL,

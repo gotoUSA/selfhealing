@@ -13,7 +13,7 @@ To activate this backend:
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 
@@ -39,9 +39,9 @@ class CloudWatchBackend(AuditBackend):
         self,
         log_group: str = "/selfhealing/audit",
         log_stream_prefix: str = "audit",
-        region: Optional[str] = None,
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
+        region: str | None = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
     ):
         """
         Initialize CloudWatch backend.
@@ -115,7 +115,7 @@ class CloudWatchBackend(AuditBackend):
             logger.error(f"[CloudWatchBackend] Failed to enable: {e}")
             return False
 
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry to CloudWatch.
 
@@ -177,12 +177,12 @@ class CloudWatchBackend(AuditBackend):
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit logs from CloudWatch.
 
@@ -202,7 +202,7 @@ class CloudWatchBackend(AuditBackend):
 
         return []
 
-    def get_configuration_template(self) -> Dict[str, Any]:
+    def get_configuration_template(self) -> dict[str, Any]:
         """
         Get configuration template for CloudWatch backend.
 

@@ -11,16 +11,15 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 from selfhealing.audit.integrity import (
-    HashChainManager,
-    RedisHashChainManager,
-    HashChainManagerProtocol,
-    create_hash_chain_manager,
-    PendingSequenceManager,
     DailyHashAnchor,
+    HashChainManager,
+    HashChainManagerProtocol,
+    PendingSequenceManager,
+    RedisHashChainManager,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,12 +41,12 @@ class LocalFileBackend(AuditBackend):
 
     def __init__(
         self,
-        log_dir: Optional[str] = None,
-        filename_pattern: Optional[str] = None,
+        log_dir: str | None = None,
+        filename_pattern: str | None = None,
         enable_hash_chain: bool = True,
         rotate_daily: bool = True,
         distributed_hash_chain: bool = False,
-        redis_client: Optional[Any] = None,
+        redis_client: Any | None = None,
         redis_key_prefix: str = "selfhealing:",
         enable_pending_manager: bool = True,
         enable_anchor_backup: bool = True,
@@ -71,26 +70,28 @@ class LocalFileBackend(AuditBackend):
         self._enable_hash_chain = enable_hash_chain
         self._rotate_daily = rotate_daily
         self._lock = threading.RLock()
-        self._current_file: Optional[Path] = None
+        self._current_file: Path | None = None
         self._file_handle = None
-        self._last_success: Optional[datetime] = None
-        self._last_error: Optional[str] = None
+        self._last_success: datetime | None = None
+        self._last_error: str | None = None
         self._redis_client = redis_client
         self._redis_key_prefix = redis_key_prefix
         self._enable_anchor_backup = enable_anchor_backup
-        self._last_anchor_date: Optional[str] = None
+        self._last_anchor_date: str | None = None
 
         # Initialize hash chain manager
         if enable_hash_chain:
             state_file = self._log_dir / ".hash_chain_state.json"
-            
+
             if distributed_hash_chain and redis_client is not None:
                 # Distributed mode: Redis-based hash chain with local fallback
                 local_fallback = HashChainManager(state_file)
-                self._hash_chain: Optional[HashChainManagerProtocol] = RedisHashChainManager(
-                    redis_client=redis_client,
-                    key_prefix=redis_key_prefix,
-                    fallback_manager=local_fallback,
+                self._hash_chain: HashChainManagerProtocol | None = (
+                    RedisHashChainManager(
+                        redis_client=redis_client,
+                        key_prefix=redis_key_prefix,
+                        fallback_manager=local_fallback,
+                    )
                 )
                 logger.info("[LocalFileBackend] Using distributed hash chain (Redis)")
             else:
@@ -105,10 +106,16 @@ class LocalFileBackend(AuditBackend):
             self._hash_chain = None
 
         # Initialize PendingSequenceManager for atomicity (Write-Ahead Checkpoint)
-        if enable_pending_manager and distributed_hash_chain and redis_client is not None:
-            self._pending_manager: Optional[PendingSequenceManager] = PendingSequenceManager(
-                redis_client=redis_client,
-                key_prefix=redis_key_prefix,
+        if (
+            enable_pending_manager
+            and distributed_hash_chain
+            and redis_client is not None
+        ):
+            self._pending_manager: PendingSequenceManager | None = (
+                PendingSequenceManager(
+                    redis_client=redis_client,
+                    key_prefix=redis_key_prefix,
+                )
             )
             logger.info("[LocalFileBackend] PendingSequenceManager enabled")
         else:
@@ -116,7 +123,7 @@ class LocalFileBackend(AuditBackend):
 
         # Initialize DailyHashAnchor for offline backup
         if enable_anchor_backup and redis_client is not None:
-            self._anchor_manager: Optional[DailyHashAnchor] = DailyHashAnchor(
+            self._anchor_manager: DailyHashAnchor | None = DailyHashAnchor(
                 redis_client=redis_client,
                 key_prefix=redis_key_prefix,
             )
@@ -169,7 +176,7 @@ class LocalFileBackend(AuditBackend):
                 pass
             self._file_handle = None
 
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry with Write-Ahead Checkpoint pattern.
 
@@ -252,7 +259,9 @@ class LocalFileBackend(AuditBackend):
             if self._last_anchor_date is not None and self._last_anchor_date != today:
                 # Create anchor for yesterday (the day that just ended)
                 self._anchor_manager.create_anchor(date=self._last_anchor_date)
-                logger.info(f"[LocalFileBackend] Created anchor backup for {self._last_anchor_date}")
+                logger.info(
+                    f"[LocalFileBackend] Created anchor backup for {self._last_anchor_date}"
+                )
 
             self._last_anchor_date = today
 
@@ -300,7 +309,7 @@ class LocalFileBackend(AuditBackend):
             if self._hash_chain:
                 self._hash_chain._save_state()
 
-    def _parse_entry(self, line: str) -> Optional[Dict[str, Any]]:
+    def _parse_entry(self, line: str) -> dict[str, Any] | None:
         """Parse a JSON line into an entry dict. Returns None if invalid."""
         line = line.strip()
         if not line:
@@ -310,19 +319,21 @@ class LocalFileBackend(AuditBackend):
         except json.JSONDecodeError:
             return None
 
-    def _entry_matches_config_type(self, entry: Dict[str, Any], config_type: str) -> bool:
+    def _entry_matches_config_type(
+        self, entry: dict[str, Any], config_type: str
+    ) -> bool:
         """Check if entry matches config_type filter."""
         return entry.get("change", {}).get("config_type") == config_type
 
-    def _entry_matches_user(self, entry: Dict[str, Any], user: str) -> bool:
+    def _entry_matches_user(self, entry: dict[str, Any], user: str) -> bool:
         """Check if entry matches user filter."""
         return entry.get("actor", {}).get("user") == user
 
     def _entry_matches_time_range(
         self,
-        entry: Dict[str, Any],
-        start_time: Optional[datetime],
-        end_time: Optional[datetime],
+        entry: dict[str, Any],
+        start_time: datetime | None,
+        end_time: datetime | None,
     ) -> bool:
         """Check if entry matches time range filter."""
         entry_time_str = entry.get("timestamp")
@@ -341,11 +352,11 @@ class LocalFileBackend(AuditBackend):
 
     def _entry_matches_filters(
         self,
-        entry: Dict[str, Any],
-        config_type: Optional[str],
-        user: Optional[str],
-        start_time: Optional[datetime],
-        end_time: Optional[datetime],
+        entry: dict[str, Any],
+        config_type: str | None,
+        user: str | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
     ) -> bool:
         """Check if entry matches all filters."""
         if config_type and not self._entry_matches_config_type(entry, config_type):
@@ -358,12 +369,12 @@ class LocalFileBackend(AuditBackend):
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query audit logs from local files."""
         results = []
 
@@ -374,7 +385,7 @@ class LocalFileBackend(AuditBackend):
                 if len(results) >= limit:
                     break
 
-                with open(log_file, "r", encoding="utf-8") as f:
+                with open(log_file, encoding="utf-8") as f:
                     for line in f:
                         if len(results) >= limit:
                             break
@@ -383,7 +394,9 @@ class LocalFileBackend(AuditBackend):
                         if entry is None:
                             continue
 
-                        if self._entry_matches_filters(entry, config_type, user, start_time, end_time):
+                        if self._entry_matches_filters(
+                            entry, config_type, user, start_time, end_time
+                        ):
                             results.append(entry)
 
         except Exception as e:
@@ -405,7 +418,7 @@ class LocalFileBackend(AuditBackend):
 
         return len(issues) == 0, issues
 
-    def get_chain_state(self) -> Dict[str, Any]:
+    def get_chain_state(self) -> dict[str, Any]:
         """Get current hash chain state."""
         if self._hash_chain:
             return self._hash_chain.get_state()

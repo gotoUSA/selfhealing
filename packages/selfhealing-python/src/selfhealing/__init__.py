@@ -9,9 +9,9 @@ __version__ = "0.1.0"
 __author__ = "SelfHealing Contributors"
 
 from selfhealing.core.types import (
+    CircuitState,
     FailureType,
     OperationStatus,
-    CircuitState,
 )
 
 __all__ = [

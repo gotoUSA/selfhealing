@@ -15,15 +15,14 @@ Reference:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class RecoveryStepType(str, Enum):
     """
     복구 단계 유형.
-    
+
     Emergency 상황에서 정상으로 복구할 때 실행되는 단계 유형.
     역순 복구 원칙에 따라 정의됨.
     """
@@ -31,7 +30,7 @@ class RecoveryStepType(str, Enum):
     BUDGET_RESET = "budget_reset"
     """
     Budget Multiplier 리셋.
-    
+
     Crisis Multiplier를 기본값(1.0)으로 초기화.
     복구 시 가장 먼저 실행되어야 함.
     """
@@ -39,7 +38,7 @@ class RecoveryStepType(str, Enum):
     HEALTH_CHECK = "health_check"
     """
     안정화 검증.
-    
+
     지정된 시간 동안 에러율이 임계값 이하인지 확인.
     다음 단계 진행 전 시스템 안정성 보장.
     """
@@ -47,14 +46,14 @@ class RecoveryStepType(str, Enum):
     CANARY_RESUME = "canary_resume"
     """
     Canary 롤아웃 재개.
-    
+
     Emergency로 인해 일시 중지된 Canary 롤아웃 재개.
     """
 
     GOVERNANCE_NORMAL = "governance_normal"
     """
     Governance NORMAL 모드 전환.
-    
+
     STRICT 모드에서 NORMAL 모드로 전환하여 자동화 재활성화.
     복구의 마지막 단계.
     """
@@ -68,9 +67,9 @@ from .enums import RecoveryStatus
 class RecoveryStep:
     """
     복구 단계.
-    
+
     개별 복구 작업을 나타내며, 상태 추적 및 파라미터 관리.
-    
+
     Attributes:
         step_type: 단계 유형 (RecoveryStepType)
         order: 실행 순서 (1부터 시작)
@@ -94,10 +93,10 @@ class RecoveryStep:
     wait_after_seconds: int = 0
     """완료 후 대기 시간 (초). 다음 단계 실행 전 안정화 대기."""
 
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
     """
     추가 파라미터.
-    
+
     예시:
     - BUDGET_RESET: {"target_multiplier": 1.0}
     - HEALTH_CHECK: {"duration_minutes": 5, "error_rate_threshold": 0.1}
@@ -105,16 +104,16 @@ class RecoveryStep:
     - GOVERNANCE_NORMAL: {"reason": "[AUTO-RECOVERY] Stability confirmed"}
     """
 
-    started_at: Optional[str] = None
+    started_at: str | None = None
     """시작 시각 (ISO 8601 문자열)."""
 
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     """완료 시각 (ISO 8601 문자열)."""
 
-    error_message: Optional[str] = None
+    error_message: str | None = None
     """실패 시 에러 메시지."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "step_type": self.step_type.value,
@@ -128,7 +127,7 @@ class RecoveryStep:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RecoveryStep":
+    def from_dict(cls, data: dict[str, Any]) -> RecoveryStep:
         """딕셔너리에서 생성."""
         return cls(
             step_type=RecoveryStepType(data["step_type"]),
@@ -146,10 +145,10 @@ class RecoveryStep:
 class RecoverySession:
     """
     복구 세션.
-    
+
     Emergency 상황에서 정상으로 복구하는 전체 프로세스를 나타냄.
     여러 RecoveryStep으로 구성되며, 순차적으로 실행됨.
-    
+
     Attributes:
         id: 고유 세션 ID (예: "recovery-abc123def456")
         namespace: 네임스페이스 (예: "global", "seoul")
@@ -176,38 +175,38 @@ class RecoverySession:
     status: RecoveryStatus = RecoveryStatus.NOT_STARTED
     """전체 복구 상태."""
 
-    steps: List[RecoveryStep] = field(default_factory=list)
+    steps: list[RecoveryStep] = field(default_factory=list)
     """복구 단계 목록."""
 
     current_step_index: int = 0
     """현재 진행 중인 단계 인덱스 (0부터 시작)."""
 
-    started_at: Optional[str] = None
+    started_at: str | None = None
     """복구 시작 시각 (ISO 8601)."""
 
-    completed_at: Optional[str] = None
+    completed_at: str | None = None
     """복구 완료 시각 (ISO 8601)."""
 
     initiated_by: str = "system"
     """복구 시작 주체."""
 
-    abort_reason: Optional[str] = None
+    abort_reason: str | None = None
     """중단 사유."""
 
-    cascade_event_id: Optional[str] = None
+    cascade_event_id: str | None = None
     """연결된 Cascade Event ID."""
-    
-    metadata: Optional[Dict[str, Any]] = None
+
+    metadata: dict[str, Any] | None = None
     """
     추가 메타데이터.
-    
+
     Phase 3.7: requires_approval, approved_by, approved_at 등 저장.
     """
 
-    def get_current_step(self) -> Optional[RecoveryStep]:
+    def get_current_step(self) -> RecoveryStep | None:
         """
         현재 진행 중인 단계 반환.
-        
+
         Returns:
             현재 RecoveryStep 또는 None (모든 단계 완료 시)
         """
@@ -218,25 +217,22 @@ class RecoverySession:
     def is_complete(self) -> bool:
         """
         모든 단계 완료 여부 확인.
-        
+
         Returns:
             True if 모든 단계가 COMPLETED 상태
         """
-        return all(
-            step.status == RecoveryStatus.COMPLETED
-            for step in self.steps
-        )
+        return all(step.status == RecoveryStatus.COMPLETED for step in self.steps)
 
-    def get_progress(self) -> Dict[str, Any]:
+    def get_progress(self) -> dict[str, Any]:
         """
         진행 상황 요약.
-        
+
         Returns:
             진행률 및 단계별 상태 정보
         """
         completed = sum(1 for s in self.steps if s.status == RecoveryStatus.COMPLETED)
         total = len(self.steps)
-        
+
         return {
             "completed_steps": completed,
             "total_steps": total,
@@ -244,11 +240,12 @@ class RecoverySession:
             "current_step": self.current_step_index,
             "current_step_type": (
                 self.steps[self.current_step_index].step_type.value
-                if self.current_step_index < total else None
+                if self.current_step_index < total
+                else None
             ),
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "id": self.id,
@@ -266,11 +263,10 @@ class RecoverySession:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RecoverySession":
+    def from_dict(cls, data: dict[str, Any]) -> RecoverySession:
         """딕셔너리에서 생성."""
         steps = [
-            RecoveryStep.from_dict(step_data)
-            for step_data in data.get("steps", [])
+            RecoveryStep.from_dict(step_data) for step_data in data.get("steps", [])
         ]
 
         return cls(

@@ -10,7 +10,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,7 +58,7 @@ class ResourceMonitorSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[ResourceMonitorSettings] = None
+_settings: ResourceMonitorSettings | None = None
 
 
 def get_resource_monitor_settings() -> ResourceMonitorSettings:

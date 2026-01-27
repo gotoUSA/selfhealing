@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.core.timezone import now
 from selfhealing.services.error_budget.enums import (
     FreezeStatus,
     OverrideType,
-    get_error_budget_thresholds,
     get_burn_rate_thresholds,
+    get_error_budget_thresholds,
 )
 
 
@@ -72,7 +72,7 @@ class ErrorBudgetStatus:
         thresholds = get_burn_rate_thresholds()
         return self.burn_rate_6h >= thresholds["slow_warning"]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """API 응답용 딕셔너리 변환."""
         return {
             "slo": {
@@ -119,8 +119,8 @@ class DeploymentVerdict:
     recommendation: str
 
     # 상세 정보
-    reasons: List[str] = field(default_factory=list)
-    allowed_deployment_types: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+    allowed_deployment_types: list[str] = field(default_factory=list)
 
     # 타임스탬프
     evaluated_at: datetime = field(default_factory=now)
@@ -135,7 +135,7 @@ class DeploymentVerdict:
         """Override가 필요한 상태인지."""
         return self.status == FreezeStatus.FREEZE_RECOMMENDED
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """API 응답용 딕셔너리 변환."""
         return {
             "verdict": {
@@ -167,16 +167,16 @@ class FreezeDecisionRecord:
 
     # 사유
     justification: str
-    override_type: Optional[OverrideType] = None
+    override_type: OverrideType | None = None
 
     # 유효기간 (override의 경우)
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
     # 관련 배포 정보
-    deployment_id: Optional[str] = None
-    deployment_name: Optional[str] = None
+    deployment_id: str | None = None
+    deployment_name: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리 변환."""
         return {
             "decision_id": self.decision_id,

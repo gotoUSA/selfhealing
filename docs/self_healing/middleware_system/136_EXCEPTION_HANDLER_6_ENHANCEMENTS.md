@@ -1,8 +1,8 @@
 # 136. Exception Handler 6대 보완 구현 설계
 
-> **Version**: 1.0.0  
-> **Created**: 2026-01-27  
-> **Status**: Draft  
+> **Version**: 1.0.0
+> **Created**: 2026-01-27
+> **Status**: Draft
 > **Parent**: [110_EXCEPTION_HANDLER_OVERVIEW.md](110_EXCEPTION_HANDLER_OVERVIEW.md), [135_EXCEPTION_HANDLER_ENHANCEMENT.md](135_EXCEPTION_HANDLER_ENHANCEMENT.md)
 
 ## 1. 개요

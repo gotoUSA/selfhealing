@@ -17,7 +17,8 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.services.circuit_breaker.load_shedding.manager import (
@@ -39,8 +40,8 @@ class LoadSheddingMiddleware:
 
     def __init__(
         self,
-        manager: Optional["LoadSheddingManager"] = None,
-        on_shed_callback: Optional[Callable[[str, "SheddingDecision"], None]] = None,
+        manager: LoadSheddingManager | None = None,
+        on_shed_callback: Callable[[str, SheddingDecision], None] | None = None,
     ):
         """
         초기화.
@@ -53,7 +54,7 @@ class LoadSheddingMiddleware:
         self._on_shed_callback = on_shed_callback
 
     @property
-    def manager(self) -> "LoadSheddingManager":
+    def manager(self) -> LoadSheddingManager:
         """Manager 인스턴스."""
         if self._manager is None:
             from . import (
@@ -63,7 +64,7 @@ class LoadSheddingMiddleware:
             self._manager = get_load_shedding_manager()
         return self._manager
 
-    def process(self, service_id: str) -> "SheddingDecision":
+    def process(self, service_id: str) -> SheddingDecision:
         """
         요청에 대한 Shedding 결정.
 

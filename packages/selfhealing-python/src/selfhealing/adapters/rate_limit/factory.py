@@ -22,22 +22,21 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageInterface,
-    RateLimitStorageType,
 )
 
 logger = logging.getLogger(__name__)
 
 # Cached storage instance
-_storage_instance: Optional[RateLimitStorageInterface] = None
+_storage_instance: RateLimitStorageInterface | None = None
 
 
 def get_rate_limit_storage(
-    backend: Optional[Literal["redis", "database", "memory", "auto"]] = "auto",
-    redis_client: Optional[Any] = None,
+    backend: Literal["redis", "database", "memory", "auto"] | None = "auto",
+    redis_client: Any | None = None,
     force_new: bool = False,
 ) -> RateLimitStorageInterface:
     """
@@ -78,14 +77,17 @@ def get_rate_limit_storage(
     if not force_new:
         _storage_instance = storage
 
-    logger.info(f"[RateLimitStorage] Initialized storage backend: " f"{storage.storage_type.value}")
+    logger.info(
+        f"[RateLimitStorage] Initialized storage backend: "
+        f"{storage.storage_type.value}"
+    )
 
     return storage
 
 
 def _create_storage(
-    backend: Optional[str],
-    redis_client: Optional[Any],
+    backend: str | None,
+    redis_client: Any | None,
 ) -> RateLimitStorageInterface:
     """Create storage instance based on backend preference."""
 
@@ -103,7 +105,7 @@ def _create_storage(
 
 
 def _auto_detect_storage(
-    redis_client: Optional[Any],
+    redis_client: Any | None,
 ) -> RateLimitStorageInterface:
     """Auto-detect the best available storage backend."""
 
@@ -127,15 +129,16 @@ def _auto_detect_storage(
 
     # 3. Fall back to In-Memory (single process)
     logger.warning(
-        "[RateLimitStorage] Falling back to in-memory storage. " "Self-DDoS prevention will only work within this process!"
+        "[RateLimitStorage] Falling back to in-memory storage. "
+        "Self-DDoS prevention will only work within this process!"
     )
     return _create_memory_storage()
 
 
 def _create_redis_storage(
-    redis_client: Optional[Any],
+    redis_client: Any | None,
     required: bool = False,
-) -> Optional[RateLimitStorageInterface]:
+) -> RateLimitStorageInterface | None:
     """Create Redis storage backend."""
     from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
 
@@ -149,7 +152,7 @@ def _create_redis_storage(
     return RedisRateLimitStorage(client)
 
 
-def _get_default_redis_client() -> Optional[Any]:
+def _get_default_redis_client() -> Any | None:
     """Try to get Redis client from common sources."""
 
     # Try Django cache
@@ -195,7 +198,9 @@ def _get_default_redis_client() -> Optional[Any]:
 
 def _create_database_storage() -> RateLimitStorageInterface:
     """Create database storage backend."""
-    from selfhealing.adapters.rate_limit.database_adapter import DatabaseRateLimitStorage
+    from selfhealing.adapters.rate_limit.database_adapter import (
+        DatabaseRateLimitStorage,
+    )
 
     return DatabaseRateLimitStorage()
 

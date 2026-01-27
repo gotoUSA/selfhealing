@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Dict, List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -133,8 +132,14 @@ class SlackChannelSettings(BaseSettings):
         description="웹훅 요청 타임아웃 (초)",
     )
 
-    @field_validator("default_channel", "critical_channel", "emergency_channel",
-                     "recovery_channel", "audit_channel", "on_call_channel")
+    @field_validator(
+        "default_channel",
+        "critical_channel",
+        "emergency_channel",
+        "recovery_channel",
+        "audit_channel",
+        "on_call_channel",
+    )
     @classmethod
     def validate_channel_name(cls, v: str) -> str:
         """채널 이름이 # 또는 C로 시작하는지 확인."""
@@ -159,7 +164,7 @@ class SlackChannelSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_slack_channel_settings: Optional[SlackChannelSettings] = None
+_slack_channel_settings: SlackChannelSettings | None = None
 
 
 def get_slack_channel_settings() -> SlackChannelSettings:

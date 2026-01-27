@@ -36,7 +36,7 @@ Usage:
         CanaryChaosGuard,
         ChaosConflictPolicy,
     )
-    
+
     # Example: Create and start a rollout
     service = get_canary_rollout_service()
     rollout = service.create_rollout(
@@ -50,12 +50,68 @@ Usage:
     service.start_rollout(rollout.id)
 """
 
+# Audit
+from selfhealing.services.canary.audit import (
+    log_canary_action,
+    log_canary_error,
+    log_canary_metrics_check,
+)
+
+# Chaos Guard
+from selfhealing.services.canary.chaos_guard import (
+    CanaryChaosGuard,
+    ChaosConflictPolicy,
+    ChaosConflictResult,
+)
+
+# Cross-Cluster (Step 5)
+from selfhealing.services.canary.cross_cluster import (
+    ConfigChange,
+    CrossClusterNotifier,
+    CrossClusterPropagationRequest,
+    GovernancePolicy,
+    GovernancePolicySync,
+    PropagationRequest,
+    PropagationRequestStatus,
+    get_cross_cluster_notifier,
+    get_governance_policy_sync,
+    get_propagation_request_service,
+    reset_cross_cluster_services,
+)
+
+# Feature Flag (Step 6)
+from selfhealing.services.canary.feature_flag import (
+    CanaryConfigMiddleware,
+    CanaryDecision,
+    CanaryFeatureFlag,
+    CanaryFlagConfig,
+    CanarySelectionStrategy,
+    get_canary_feature_flag,
+    reset_canary_feature_flag,
+)
+
+# Safety Interlock (Step 7)
+from selfhealing.services.canary.interlock import (
+    CanarySafetyInterlock,
+    InterlockAction,
+    InterlockCheckFailure,
+    InterlockResult,
+    get_canary_safety_interlock,
+    reset_canary_safety_interlock,
+)
+
+# Locking
+from selfhealing.services.canary.locking import (
+    CanaryConfigLock,
+    ConfigLockError,
+)
+
 # Data Models
 from selfhealing.services.canary.models import (
-    CanaryState,
-    CanaryStage,
-    CanaryRollout,
     CanaryMetrics,
+    CanaryRollout,
+    CanaryStage,
+    CanaryState,
     PassCriteria,
 )
 
@@ -66,67 +122,11 @@ from selfhealing.services.canary.service import (
     reset_canary_rollout_service,
 )
 
-# Locking
-from selfhealing.services.canary.locking import (
-    CanaryConfigLock,
-    ConfigLockError,
-)
-
 # Versioning
 from selfhealing.services.canary.versioning import (
     VersionChecker,
     VersionConflictError,
     check_version_and_rollback,
-)
-
-# Chaos Guard
-from selfhealing.services.canary.chaos_guard import (
-    CanaryChaosGuard,
-    ChaosConflictPolicy,
-    ChaosConflictResult,
-)
-
-# Audit
-from selfhealing.services.canary.audit import (
-    log_canary_action,
-    log_canary_error,
-    log_canary_metrics_check,
-)
-
-# Cross-Cluster (Step 5)
-from selfhealing.services.canary.cross_cluster import (
-    ConfigChange,
-    PropagationRequest,
-    PropagationRequestStatus,
-    GovernancePolicy,
-    CrossClusterNotifier,
-    CrossClusterPropagationRequest,
-    GovernancePolicySync,
-    get_cross_cluster_notifier,
-    get_propagation_request_service,
-    get_governance_policy_sync,
-    reset_cross_cluster_services,
-)
-
-# Feature Flag (Step 6)
-from selfhealing.services.canary.feature_flag import (
-    CanarySelectionStrategy,
-    CanaryFlagConfig,
-    CanaryDecision,
-    CanaryFeatureFlag,
-    CanaryConfigMiddleware,
-    get_canary_feature_flag,
-    reset_canary_feature_flag,
-)
-
-# Safety Interlock (Step 7)
-from selfhealing.services.canary.interlock import (
-    InterlockAction,
-    InterlockCheckFailure,
-    InterlockResult,
-    CanarySafetyInterlock,
-    get_canary_safety_interlock,
-    reset_canary_safety_interlock,
 )
 
 __all__ = [

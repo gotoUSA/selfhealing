@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
@@ -30,11 +30,12 @@ from selfhealing.interfaces.rate_limit_storage import (
 # Drift Detection 메트릭
 try:
     from selfhealing.metrics.drift_metrics import (
-        record_ratelimit_redis_unavailable,
         record_ratelimit_drift,
-        set_ratelimit_fallback_mode,
         record_ratelimit_reconciliation,
+        record_ratelimit_redis_unavailable,
+        set_ratelimit_fallback_mode,
     )
+
     HAS_DRIFT_METRICS = True
 except ImportError:
     HAS_DRIFT_METRICS = False
@@ -50,6 +51,7 @@ def _get_redis_ttl() -> int:
     """RateLimitSettings에서 Redis TTL을 가져온다."""
     try:
         from selfhealing.settings.rate_limit import get_rate_limit_settings
+
         return get_rate_limit_settings().redis_ttl
     except Exception:
         return 3600  # 1 hour fallback
@@ -61,7 +63,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
 
     Uses Redis for atomic distributed rate limit state management.
     Recommended for production multi-server environments.
-    
+
     v6.3.0: Drift Detection
     - Fallback 모드 추적 및 메트릭
     - Redis 복구 시 로컬 상태와 동기화
@@ -83,7 +85,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
     KEY_PREFIX = "ratelimit"
     DEFAULT_TTL = 3600  # 하위 호환성용 레거시 상수
 
-    def __init__(self, redis_client: Any, ttl: Optional[int] = None) -> None:
+    def __init__(self, redis_client: Any, ttl: int | None = None) -> None:
         """
         Initialize Redis rate limit storage.
 
@@ -93,10 +95,10 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
         """
         self._redis = redis_client
         self._ttl = ttl if ttl is not None else _get_redis_ttl()
-        self._available: Optional[bool] = None
+        self._available: bool | None = None
         # v6.3.0: Fallback 모드 및 로컬 상태 추적
         self._fallback_mode = False
-        self._local_state: Dict[str, RateLimitState] = {}  # 폴백용 로컬 상태
+        self._local_state: dict[str, RateLimitState] = {}  # 폴백용 로컬 상태
 
     @property
     def storage_type(self) -> RateLimitStorageType:
@@ -126,19 +128,21 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             set_ratelimit_fallback_mode(True)
             self._available = False
             return False
-    
+
     def _reconcile_after_recovery(self) -> None:
         """Redis 복구 후 로컬 상태와 동기화."""
         if not self._local_state:
             return
-        
+
         for key, local_state in list(self._local_state.items()):
             try:
                 redis_state = self._get_state_from_redis(key)
                 if redis_state is not None:
                     # 로컬 상태와 Redis 상태 비교
-                    if (local_state.cooldown_until != redis_state.cooldown_until or
-                        local_state.consecutive_429s != redis_state.consecutive_429s):
+                    if (
+                        local_state.cooldown_until != redis_state.cooldown_until
+                        or local_state.consecutive_429s != redis_state.consecutive_429s
+                    ):
                         record_ratelimit_drift(key)
                         logger.info(
                             f"[RedisRateLimitStorage] Drift detected for {key}, "
@@ -149,12 +153,14 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
                         self._save_to_redis(key, merged)
                         record_ratelimit_reconciliation(success=True)
             except Exception as e:
-                logger.warning(f"[RedisRateLimitStorage] Reconciliation failed for {key}: {e}")
+                logger.warning(
+                    f"[RedisRateLimitStorage] Reconciliation failed for {key}: {e}"
+                )
                 record_ratelimit_reconciliation(success=False)
-        
+
         self._local_state.clear()
-    
-    def _get_state_from_redis(self, key: str) -> Optional[RateLimitState]:
+
+    def _get_state_from_redis(self, key: str) -> RateLimitState | None:
         """Redis에서 직접 상태 조회 (내부용)."""
         try:
             pipeline = self._redis.pipeline()
@@ -162,7 +168,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             pipeline.get(self._make_key(key, "consecutive_429s"))
             pipeline.get(self._make_key(key, "last_updated"))
             results = pipeline.execute()
-            
+
             return RateLimitState(
                 key=key,
                 cooldown_until=float(results[0]) if results[0] else 0.0,
@@ -171,10 +177,10 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
         except Exception:
             return None
-    
+
     def _merge_conservative(
-        self, 
-        local: RateLimitState, 
+        self,
+        local: RateLimitState,
         remote: RateLimitState,
     ) -> RateLimitState:
         """두 상태 중 더 보수적인 값 선택."""
@@ -187,7 +193,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             # 더 최신 타임스탬프 선택
             last_updated=max(local.last_updated, remote.last_updated),
         )
-    
+
     def _save_to_redis(self, key: str, state: RateLimitState) -> None:
         """Redis에 상태 저장 (내부용)."""
         pipeline = self._redis.pipeline()
@@ -237,7 +243,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
         self,
         key: str,
         cooldown_until: float,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """Set cooldown in Redis with TTL."""
         try:
@@ -257,7 +263,10 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
             pipeline.execute()
 
-            logger.debug(f"[RedisRateLimitStorage] Set cooldown for '{key}': " f"until={cooldown_until}, ttl={ttl}")
+            logger.debug(
+                f"[RedisRateLimitStorage] Set cooldown for '{key}': "
+                f"until={cooldown_until}, ttl={ttl}"
+            )
 
         except Exception as e:
             logger.error(f"[RedisRateLimitStorage] Failed to set cooldown: {e}")
@@ -275,7 +284,9 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             results = pipeline.execute()
 
             new_value = results[0]
-            logger.debug(f"[RedisRateLimitStorage] Incremented 429 counter for '{key}': {new_value}")
+            logger.debug(
+                f"[RedisRateLimitStorage] Incremented 429 counter for '{key}': {new_value}"
+            )
             return new_value
 
         except Exception as e:

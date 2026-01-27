@@ -8,29 +8,29 @@ All sub-settings are composed here for single-point access.
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
-from pydantic import Field, ConfigDict, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings
 
+from selfhealing.settings.chaos import ChaosSettings
 from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
 from selfhealing.settings.dlq import DLQSettings
-from selfhealing.settings.retry import RetrySettings
-from selfhealing.settings.rate_limit import RateLimitSettings
-from selfhealing.settings.security import SecuritySettings
-from selfhealing.settings.sla import SLASettings
-from selfhealing.settings.idempotency import IdempotencySettings
-from selfhealing.settings.forensic import ForensicSettings
-from selfhealing.settings.metrics import MetricsSettings
-from selfhealing.settings.notification import NotificationSettings
-from selfhealing.settings.governance import GovernanceSettings
-from selfhealing.settings.error_budget import ErrorBudgetSettings
-from selfhealing.settings.chaos import ChaosSettings
 from selfhealing.settings.drift_threshold import DriftThresholdSettings
+from selfhealing.settings.error_budget import ErrorBudgetSettings
+from selfhealing.settings.forensic import ForensicSettings
+from selfhealing.settings.governance import GovernanceSettings
+from selfhealing.settings.idempotency import IdempotencySettings
 from selfhealing.settings.l2_storage import L2StorageSettings
 from selfhealing.settings.logging_config import LoggingSettings
+from selfhealing.settings.metrics import MetricsSettings
 from selfhealing.settings.namespace import NamespaceSettings
+from selfhealing.settings.notification import NotificationSettings
 from selfhealing.settings.propagation import PropagationSettings
+from selfhealing.settings.rate_limit import RateLimitSettings
+from selfhealing.settings.retry import RetrySettings
+from selfhealing.settings.security import SecuritySettings
+from selfhealing.settings.sla import SLASettings
 
 _root_logger = logging.getLogger(__name__)
 
@@ -38,20 +38,20 @@ _root_logger = logging.getLogger(__name__)
 class SelfHealingSettings(BaseSettings):
     """
     Root configuration for the self-healing system.
-    
+
     Unified Pydantic Settings replacing legacy SelfHealingConfig dataclass.
-    
+
     Usage:
         from selfhealing.settings import get_config
         config = get_config()
         print(config.circuit_breaker.failure_threshold)
     """
-    
+
     model_config = ConfigDict(
         extra="ignore",
         validate_default=True,
     )
-    
+
     # ==========================================================================
     # Sub-settings (composed, not nested BaseSettings)
     # ==========================================================================
@@ -127,7 +127,7 @@ class SelfHealingSettings(BaseSettings):
         default_factory=PropagationSettings,
         description="Cross-cluster propagation configuration",
     )
-    
+
     # ==========================================================================
     # Multi-Cluster Configuration
     # ==========================================================================
@@ -135,7 +135,7 @@ class SelfHealingSettings(BaseSettings):
         default="default",
         description="Cluster identifier (REQUIRED for multi-cluster deployments)",
     )
-    
+
     # ==========================================================================
     # Feature flags
     # ==========================================================================
@@ -151,7 +151,7 @@ class SelfHealingSettings(BaseSettings):
         default=False,
         description="Enable debug mode",
     )
-    
+
     # ==========================================================================
     # Site configuration
     # ==========================================================================
@@ -159,11 +159,11 @@ class SelfHealingSettings(BaseSettings):
         default="http://localhost:8000",
         description="Base URL for the site",
     )
-    
+
     # ==========================================================================
     # Domain-specific overrides
     # ==========================================================================
-    domain_configs: Dict[str, Dict[str, Any]] = Field(
+    domain_configs: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description="Per-domain configuration overrides",
     )
@@ -175,11 +175,11 @@ class SelfHealingSettings(BaseSettings):
     def warn_default_cluster_id(self) -> "SelfHealingSettings":
         """
         Warn if using default cluster_id in multi-cluster mode.
-        
+
         This validator logs a warning when:
         - namespace is enabled (multi-cluster mode)
         - cluster_id is still "default"
-        
+
         This helps prevent data conflicts in multi-cluster deployments.
         """
         # Only warn if namespace is enabled and cluster_id is default
@@ -197,41 +197,47 @@ class SelfHealingSettings(BaseSettings):
     # ==========================================================================
     # Convenience methods for backward compatibility
     # ==========================================================================
-    def get_circuit_breaker_config(self, domain: Optional[str] = None) -> CircuitBreakerSettings:
+    def get_circuit_breaker_config(
+        self, domain: str | None = None
+    ) -> CircuitBreakerSettings:
         """Get circuit breaker config, with optional domain overrides."""
         if domain and domain in self.domain_configs:
             domain_cb = self.domain_configs[domain].get("circuit_breaker", {})
             if domain_cb:
-                return CircuitBreakerSettings(**{
-                    **self.circuit_breaker.model_dump(),
-                    **domain_cb,
-                })
+                return CircuitBreakerSettings(
+                    **{
+                        **self.circuit_breaker.model_dump(),
+                        **domain_cb,
+                    }
+                )
         return self.circuit_breaker
-    
-    def get_retry_config(self, domain: Optional[str] = None) -> RetrySettings:
+
+    def get_retry_config(self, domain: str | None = None) -> RetrySettings:
         """Get retry config, with optional domain overrides."""
         if domain and domain in self.domain_configs:
             domain_retry = self.domain_configs[domain].get("retry", {})
             if domain_retry:
-                return RetrySettings(**{
-                    **self.retry.model_dump(),
-                    **domain_retry,
-                })
+                return RetrySettings(
+                    **{
+                        **self.retry.model_dump(),
+                        **domain_retry,
+                    }
+                )
         return self.retry
 
 
 # =============================================================================
 # Singleton pattern
 # =============================================================================
-_settings: Optional[SelfHealingSettings] = None
+_settings: SelfHealingSettings | None = None
 
 
 def get_config() -> SelfHealingSettings:
     """
     Get the global SelfHealingSettings instance.
-    
+
     Creates a default instance if none exists.
-    
+
     Returns:
         SelfHealingSettings singleton
     """
@@ -241,10 +247,10 @@ def get_config() -> SelfHealingSettings:
     return _settings
 
 
-def set_config(config: Optional[SelfHealingSettings]) -> None:
+def set_config(config: SelfHealingSettings | None) -> None:
     """
     Set the global configuration.
-    
+
     Args:
         config: SelfHealingSettings instance or None to reset
     """
@@ -268,10 +274,10 @@ def reload_config() -> SelfHealingSettings:
 def configure(**kwargs: Any) -> SelfHealingSettings:
     """
     Configure the self-healing system with the given parameters.
-    
+
     Args:
         **kwargs: Configuration parameters
-        
+
     Returns:
         Configured SelfHealingSettings instance
     """
@@ -284,6 +290,7 @@ def configure(**kwargs: Any) -> SelfHealingSettings:
 # Convenience getters for sub-configurations
 # These provide shortcuts to access specific settings without going through get_config()
 # =============================================================================
+
 
 def get_circuit_breaker_config() -> CircuitBreakerSettings:
     """Get circuit breaker configuration."""

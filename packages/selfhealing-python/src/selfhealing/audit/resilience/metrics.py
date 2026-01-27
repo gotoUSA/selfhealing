@@ -13,8 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -35,24 +34,26 @@ class AuditMetrics:
         metrics.record_failure("CloudWatch", "timeout")
     """
 
-    _instance: Optional["AuditMetrics"] = None
+    _instance: AuditMetrics | None = None
     _lock = threading.Lock()
 
     def __init__(self):
         self._metrics_lock = threading.RLock()
 
         # Counters
-        self._write_total: Dict[str, Dict[str, int]] = {}  # {backend: {status: count}}
-        self._failure_total: Dict[str, Dict[str, int]] = {}  # {backend: {error_type: count}}
+        self._write_total: dict[str, dict[str, int]] = {}  # {backend: {status: count}}
+        self._failure_total: dict[str, dict[str, int]] = (
+            {}
+        )  # {backend: {error_type: count}}
 
         # Gauges
-        self._circuit_states: Dict[str, str] = {}  # {backend: state}
+        self._circuit_states: dict[str, str] = {}  # {backend: state}
         self._degraded_mode: bool = False
-        self._degraded_since: Optional[datetime] = None
+        self._degraded_since: datetime | None = None
 
         # Histogram-like data (simplified)
-        self._write_durations: Dict[str, List[float]] = {}  # {backend: [durations]}
-        
+        self._write_durations: dict[str, list[float]] = {}  # {backend: [durations]}
+
         # WAL 관련 메트릭 (누락 0 보장)
         self._wal_writes_total: int = 0
         self._wal_write_failures_total: int = 0
@@ -61,18 +62,18 @@ class AuditMetrics:
         self._reconcile_missing_total: int = 0
 
     @classmethod
-    def get_instance(cls) -> "AuditMetrics":
+    def get_instance(cls) -> AuditMetrics:
         """Get singleton instance."""
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = cls()
         return cls._instance
-    
+
     # =========================================================================
     # WAL 관련 메트릭 (누락 0 보장)
     # =========================================================================
-    
+
     def record_wal_write(self, success: bool = True) -> None:
         """WAL 기록 메트릭."""
         with self._metrics_lock:
@@ -80,23 +81,23 @@ class AuditMetrics:
                 self._wal_writes_total += 1
             else:
                 self._wal_write_failures_total += 1
-    
+
     def record_central_write(self, count: int = 1) -> None:
         """중앙 저장소 기록 메트릭."""
         with self._metrics_lock:
             self._central_writes_total += count
-    
+
     def set_sync_lag(self, entries: int) -> None:
         """동기화 지연 엔트리 수 설정."""
         with self._metrics_lock:
             self._sync_lag_entries = entries
-    
+
     def record_reconcile_missing(self, count: int) -> None:
         """Reconciler가 발견한 누락 수 기록."""
         with self._metrics_lock:
             self._reconcile_missing_total += count
-    
-    def get_wal_metrics(self) -> Dict[str, Any]:
+
+    def get_wal_metrics(self) -> dict[str, Any]:
         """WAL 관련 메트릭 조회."""
         with self._metrics_lock:
             return {
@@ -122,7 +123,9 @@ class AuditMetrics:
                 # Keep last 100 durations
                 self._write_durations[backend].append(duration_ms)
                 if len(self._write_durations[backend]) > 100:
-                    self._write_durations[backend] = self._write_durations[backend][-100:]
+                    self._write_durations[backend] = self._write_durations[backend][
+                        -100:
+                    ]
 
     def record_failure(self, backend: str, error_type: str) -> None:
         """Record a failure with error type."""
@@ -156,7 +159,7 @@ class AuditMetrics:
         with self._metrics_lock:
             return self._degraded_mode
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """
         Get all metrics in Prometheus-compatible format.
 
@@ -207,17 +210,23 @@ class AuditMetrics:
         lines.append("# TYPE audit_write_total counter")
         for backend, statuses in metrics["audit_write_total"].items():
             for status, count in statuses.items():
-                lines.append(f'audit_write_total{{backend="{backend}",status="{status}"}} {count}')
+                lines.append(
+                    f'audit_write_total{{backend="{backend}",status="{status}"}} {count}'
+                )
 
         # Failure totals
         lines.append("# HELP audit_failure_total Total audit failures by type")
         lines.append("# TYPE audit_failure_total counter")
         for backend, errors in metrics["audit_failure_total"].items():
             for error_type, count in errors.items():
-                lines.append(f'audit_failure_total{{backend="{backend}",error_type="{error_type}"}} {count}')
+                lines.append(
+                    f'audit_failure_total{{backend="{backend}",error_type="{error_type}"}} {count}'
+                )
 
         # Circuit states
-        lines.append("# HELP audit_circuit_state Circuit breaker state (0=closed, 1=open, 2=half_open)")
+        lines.append(
+            "# HELP audit_circuit_state Circuit breaker state (0=closed, 1=open, 2=half_open)"
+        )
         lines.append("# TYPE audit_circuit_state gauge")
         state_values = {"closed": 0, "open": 1, "half_open": 2}
         for backend, state in metrics["audit_circuit_state"].items():
@@ -228,27 +237,37 @@ class AuditMetrics:
         lines.append("# HELP audit_degraded_mode Whether audit is in degraded mode")
         lines.append("# TYPE audit_degraded_mode gauge")
         lines.append(f'audit_degraded_mode {metrics["audit_degraded_mode"]}')
-        
+
         # WAL metrics (누락 0 보장)
         lines.append("# HELP audit_wal_writes_total Total WAL writes")
         lines.append("# TYPE audit_wal_writes_total counter")
         lines.append(f'audit_wal_writes_total {metrics["audit_wal_writes_total"]}')
-        
-        lines.append("# HELP audit_wal_write_failures_total Total WAL write failures (CRITICAL)")
+
+        lines.append(
+            "# HELP audit_wal_write_failures_total Total WAL write failures (CRITICAL)"
+        )
         lines.append("# TYPE audit_wal_write_failures_total counter")
-        lines.append(f'audit_wal_write_failures_total {metrics["audit_wal_write_failures_total"]}')
-        
+        lines.append(
+            f'audit_wal_write_failures_total {metrics["audit_wal_write_failures_total"]}'
+        )
+
         lines.append("# HELP audit_central_writes_total Total central storage writes")
         lines.append("# TYPE audit_central_writes_total counter")
-        lines.append(f'audit_central_writes_total {metrics["audit_central_writes_total"]}')
-        
+        lines.append(
+            f'audit_central_writes_total {metrics["audit_central_writes_total"]}'
+        )
+
         lines.append("# HELP audit_sync_lag_entries Current WAL to central sync lag")
         lines.append("# TYPE audit_sync_lag_entries gauge")
         lines.append(f'audit_sync_lag_entries {metrics["audit_sync_lag_entries"]}')
-        
-        lines.append("# HELP audit_reconcile_missing_total Total missing entries found by reconciler")
+
+        lines.append(
+            "# HELP audit_reconcile_missing_total Total missing entries found by reconciler"
+        )
         lines.append("# TYPE audit_reconcile_missing_total counter")
-        lines.append(f'audit_reconcile_missing_total {metrics["audit_reconcile_missing_total"]}')
+        lines.append(
+            f'audit_reconcile_missing_total {metrics["audit_reconcile_missing_total"]}'
+        )
 
         return "\n".join(lines)
 

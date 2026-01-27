@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -70,17 +71,17 @@ class ReauthenticationProvider(ABC):
                 token = self._get_token(request)
                 issued_at = self._decode_issued_at(token)
                 idle_since = self._get_last_activity(request)
-                
+
                 # Check session age
                 session_age = (datetime.now() - issued_at).total_seconds() / 60
                 if session_age > config.max_session_minutes:
                     return True
-                
+
                 # Check idle time
                 idle_time = (datetime.now() - idle_since).total_seconds() / 60
                 if idle_time > config.max_idle_minutes:
                     return True
-                
+
                 return False
 
             def get_reauthentication_response(self, request, config):
@@ -94,7 +95,7 @@ class ReauthenticationProvider(ABC):
     @abstractmethod
     def check_reauthentication_required(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
     ) -> bool:
         """
@@ -112,9 +113,9 @@ class ReauthenticationProvider(ABC):
     @abstractmethod
     def get_reauthentication_response(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
-    ) -> "HttpResponse":
+    ) -> HttpResponse:
         """
         Generate the response when reauthentication is required.
 
@@ -133,7 +134,7 @@ class ReauthenticationProvider(ABC):
 
     def on_reauthentication_required(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
     ) -> None:
         """
@@ -145,8 +146,8 @@ class ReauthenticationProvider(ABC):
             request: The incoming HTTP request
             config: Reauthentication configuration
         """
-        user = getattr(request, 'user', None)
-        user_id = getattr(user, 'id', 'anonymous') if user else 'anonymous'
+        user = getattr(request, "user", None)
+        user_id = getattr(user, "id", "anonymous") if user else "anonymous"
         logger.info(
             f"[Reauth] Reauthentication required: user={user_id}, "
             f"path={request.path}, reason=idle_or_session_timeout"
@@ -168,7 +169,7 @@ class NoOpReauthenticationProvider(ReauthenticationProvider):
 
     def check_reauthentication_required(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
     ) -> bool:
         """Never requires reauthentication."""
@@ -176,11 +177,12 @@ class NoOpReauthenticationProvider(ReauthenticationProvider):
 
     def get_reauthentication_response(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
-    ) -> "HttpResponse":
+    ) -> HttpResponse:
         """Should never be called since check always returns False."""
         from django.http import JsonResponse
+
         return JsonResponse(
             {"error": "reauthentication_required", "message": config.message},
             status=config.status_code,
@@ -202,7 +204,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
     To use this provider:
         1. Configure in settings.py:
             SELFHEALING_REAUTH_PROVIDER = 'selfhealing.api.django.reauthentication.SessionBasedReauthProvider'
-        
+
         2. Update last activity on each request (in middleware):
             request.session['_last_activity'] = datetime.now().isoformat()
     """
@@ -212,14 +214,14 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
 
     def check_reauthentication_required(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
     ) -> bool:
         """Check session timestamps for idle/session timeout."""
         if not config.enabled:
             return False
 
-        if not hasattr(request, 'session'):
+        if not hasattr(request, "session"):
             # No session available, can't check
             logger.warning("[Reauth] No session available for reauthentication check")
             return False
@@ -258,9 +260,9 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
 
     def get_reauthentication_response(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         config: ReauthenticationConfig,
-    ) -> "HttpResponse":
+    ) -> HttpResponse:
         """Return JSON response with reauthentication requirement."""
         from django.http import JsonResponse
 
@@ -280,7 +282,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
 # =============================================================================
 
 
-_provider_instance: Optional[ReauthenticationProvider] = None
+_provider_instance: ReauthenticationProvider | None = None
 
 
 def get_reauthentication_provider() -> ReauthenticationProvider:
@@ -302,7 +304,7 @@ def get_reauthentication_provider() -> ReauthenticationProvider:
         from django.conf import settings
         from django.utils.module_loading import import_string
 
-        provider_path = getattr(settings, 'SELFHEALING_REAUTH_PROVIDER', None)
+        provider_path = getattr(settings, "SELFHEALING_REAUTH_PROVIDER", None)
         if provider_path:
             provider_class = import_string(provider_path)
             _provider_instance = provider_class()
@@ -330,7 +332,7 @@ def set_reauthentication_provider(provider: ReauthenticationProvider) -> None:
 # Decorator
 # =============================================================================
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def requires_reauthentication(
@@ -376,7 +378,9 @@ def requires_reauthentication(
 
     def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(request: "HttpRequest", *args: Any, **kwargs: Any) -> "HttpResponse":
+        def wrapper(
+            request: HttpRequest, *args: Any, **kwargs: Any
+        ) -> HttpResponse:
             # Skip if disabled
             if not config.enabled:
                 return func(request, *args, **kwargs)
@@ -392,8 +396,12 @@ def requires_reauthentication(
                 # FAIL-SECURE: On error checking reauth, deny access
                 logger.error(f"[Reauth] Error checking reauthentication: {e}")
                 from django.http import JsonResponse
+
                 return JsonResponse(
-                    {"error": "reauthentication_check_failed", "message": "Security check failed"},
+                    {
+                        "error": "reauthentication_check_failed",
+                        "message": "Security check failed",
+                    },
                     status=403,
                 )
 
@@ -424,15 +432,19 @@ class RequiresReauthenticationPermission:
         SELFHEALING_REAUTH_MAX_SESSION_MINUTES = 60
     """
 
-    def has_permission(self, request: "HttpRequest", view: Any) -> bool:
+    def has_permission(self, request: HttpRequest, view: Any) -> bool:
         """Check if reauthentication is satisfied."""
         try:
             from django.conf import settings
 
             config = ReauthenticationConfig(
-                max_idle_minutes=getattr(settings, 'SELFHEALING_REAUTH_MAX_IDLE_MINUTES', 15),
-                max_session_minutes=getattr(settings, 'SELFHEALING_REAUTH_MAX_SESSION_MINUTES', 60),
-                enabled=getattr(settings, 'SELFHEALING_REAUTH_ENABLED', True),
+                max_idle_minutes=getattr(
+                    settings, "SELFHEALING_REAUTH_MAX_IDLE_MINUTES", 15
+                ),
+                max_session_minutes=getattr(
+                    settings, "SELFHEALING_REAUTH_MAX_SESSION_MINUTES", 60
+                ),
+                enabled=getattr(settings, "SELFHEALING_REAUTH_ENABLED", True),
             )
 
             provider = get_reauthentication_provider()

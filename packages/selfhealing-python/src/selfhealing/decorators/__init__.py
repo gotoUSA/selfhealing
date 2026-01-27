@@ -12,12 +12,11 @@ Reference:
 """
 
 from selfhealing.decorators.domain_tag import (
-    domain_tag,
     DomainContext,
-    get_current_domain,
     clear_domain_context,
+    domain_tag,
+    get_current_domain,
 )
-
 
 __all__ = [
     "domain_tag",

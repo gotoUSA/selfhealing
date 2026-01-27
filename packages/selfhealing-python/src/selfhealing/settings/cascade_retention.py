@@ -18,7 +18,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -170,7 +169,7 @@ class CascadeRetentionSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[CascadeRetentionSettings] = None
+_settings: CascadeRetentionSettings | None = None
 
 
 def get_cascade_retention_settings() -> CascadeRetentionSettings:

@@ -19,13 +19,11 @@ import logging
 import threading
 import time
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
     DistributedLock,
-    LockAcquisitionError,
-    LockNotOwnedError,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +48,7 @@ class RedisDistributedLock(DistributedLock):
         redis_client: Any,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
         sleep_interval: float = 0.1,
     ) -> None:
         """
@@ -76,7 +74,7 @@ class RedisDistributedLock(DistributedLock):
     def acquire(
         self,
         blocking: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> bool:
         """
         Acquire the lock.
@@ -130,7 +128,9 @@ class RedisDistributedLock(DistributedLock):
             LockNotOwnedError: If lock is not owned by this instance
         """
         if not self._acquired:
-            logger.warning(f"[RedisLock] Attempting to release non-acquired lock: {self._name}")
+            logger.warning(
+                f"[RedisLock] Attempting to release non-acquired lock: {self._name}"
+            )
             return
 
         # Lua script for atomic check-and-delete
@@ -196,7 +196,9 @@ class RedisDistributedLock(DistributedLock):
         """
 
         try:
-            result = self._redis.eval(lua_script, 1, self._name, self._owner_id, additional_ms)
+            result = self._redis.eval(
+                lua_script, 1, self._name, self._owner_id, additional_ms
+            )
             return result == 1
         except Exception as e:
             logger.error(f"[RedisLock] Error extending lock: {e}")
@@ -225,10 +227,10 @@ class RedisCacheAdapter(CacheProviderInterface):
 
     def __init__(
         self,
-        url: Optional[str] = None,
-        client: Optional[Any] = None,
+        url: str | None = None,
+        client: Any | None = None,
         key_prefix: str = "selfhealing:",
-        default_ttl: Optional[timedelta] = None,
+        default_ttl: timedelta | None = None,
         socket_timeout: float = 5.0,
         socket_connect_timeout: float = 5.0,
         retry_on_timeout: bool = True,
@@ -291,7 +293,7 @@ class RedisCacheAdapter(CacheProviderInterface):
     # Basic Operations
     # =========================================================================
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value by key."""
         try:
             data = self._redis.get(self._make_key(key))
@@ -306,7 +308,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         self,
         key: str,
         value: Any,
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         try:
@@ -376,7 +378,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             logger.error(f"[RedisCache] Expire error for {key}: {e}")
             return False
 
-    def ttl(self, key: str) -> Optional[int]:
+    def ttl(self, key: str) -> int | None:
         """Get remaining TTL in seconds."""
         try:
             result = self._redis.ttl(self._make_key(key))
@@ -389,7 +391,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             logger.error(f"[RedisCache] TTL error for {key}: {e}")
             return -2
 
-    def setnx(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
+    def setnx(self, key: str, value: Any, ttl: timedelta | None = None) -> bool:
         """Set value only if key does not exist."""
         try:
             serialized = self._serialize(value)
@@ -416,7 +418,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         self,
         name: str,
         timeout: timedelta = timedelta(seconds=10),
-        blocking_timeout: Optional[float] = None,
+        blocking_timeout: float | None = None,
     ) -> DistributedLock:
         """Get a distributed lock instance."""
         return RedisDistributedLock(
@@ -451,14 +453,16 @@ class RedisCacheAdapter(CacheProviderInterface):
     def mset(
         self,
         mapping: dict[str, Any],
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ) -> bool:
         """Set multiple values at once."""
         if not mapping:
             return True
 
         try:
-            prefixed_mapping = {self._make_key(k): self._serialize(v) for k, v in mapping.items()}
+            prefixed_mapping = {
+                self._make_key(k): self._serialize(v) for k, v in mapping.items()
+            }
 
             # MSET doesn't support TTL, so we use pipeline
             if ttl:
@@ -491,7 +495,7 @@ class RedisCacheAdapter(CacheProviderInterface):
     # Hash Operations
     # =========================================================================
 
-    def hget(self, name: str, key: str) -> Optional[Any]:
+    def hget(self, name: str, key: str) -> Any | None:
         """Get a field from a hash."""
         try:
             data = self._redis.hget(self._make_key(name), key)
@@ -570,7 +574,14 @@ class RedisCacheAdapter(CacheProviderInterface):
             raw_keys = self._redis.keys(full_pattern)
             # Remove prefix from returned keys
             prefix_len = len(self._key_prefix)
-            return [k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:] for k in raw_keys]
+            return [
+                (
+                    k.decode("utf-8")[prefix_len:]
+                    if isinstance(k, bytes)
+                    else k[prefix_len:]
+                )
+                for k in raw_keys
+            ]
         except Exception as e:
             logger.error(f"[RedisCache] Keys error for {pattern}: {e}")
             return []
@@ -585,7 +596,14 @@ class RedisCacheAdapter(CacheProviderInterface):
             full_pattern = self._make_key(pattern)
             cursor, raw_keys = self._redis.scan(0, match=full_pattern, count=count)
             prefix_len = len(self._key_prefix)
-            keys = [k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:] for k in raw_keys]
+            keys = [
+                (
+                    k.decode("utf-8")[prefix_len:]
+                    if isinstance(k, bytes)
+                    else k[prefix_len:]
+                )
+                for k in raw_keys
+            ]
             return (cursor, keys)
         except Exception as e:
             logger.error(f"[RedisCache] Scan error for {pattern}: {e}")

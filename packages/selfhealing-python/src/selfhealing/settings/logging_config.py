@@ -16,7 +16,6 @@ Reference:
 """
 
 import logging
-from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -132,7 +131,7 @@ class LoggingSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[LoggingSettings] = None
+_settings: LoggingSettings | None = None
 
 
 def get_logging_settings() -> LoggingSettings:

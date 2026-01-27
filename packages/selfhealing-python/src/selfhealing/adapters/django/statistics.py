@@ -9,11 +9,11 @@ Usage:
     # In your Django app's apps.py
     from selfhealing.factory import ProviderRegistry
     from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
-    
+
     class ShoppingConfig(AppConfig):
         def ready(self):
             from shopping.models import FailedOperation
-            
+
             ProviderRegistry.register_statistics_adapter(
                 DjangoStatisticsAdapter(
                     failed_operation_model=FailedOperation,
@@ -24,21 +24,21 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Type, TYPE_CHECKING
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.interfaces.statistics import (
+    AuditTrailEntry,
+    CircuitBreakerInfo,
+    CircuitBreakerSummary,
+    CleanupStats,
+    DomainDistribution,
+    EntityAuditTrail,
+    FailureTypeDistribution,
+    PaginatedResult,
+    RecentActivity,
     StatisticsRepositoryInterface,
     StatusCounts,
-    DomainDistribution,
-    FailureTypeDistribution,
-    RecentActivity,
-    CleanupStats,
-    PaginatedResult,
-    CircuitBreakerSummary,
-    CircuitBreakerInfo,
-    AuditTrailEntry,
-    EntityAuditTrail,
 )
 
 if TYPE_CHECKING:
@@ -50,30 +50,30 @@ logger = logging.getLogger(__name__)
 class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
     """
     Django ORM implementation of StatisticsRepositoryInterface.
-    
+
     This adapter is domain-free - models are provided by the application.
     It uses Django's powerful ORM for complex aggregate queries.
-    
+
     Attributes:
         failed_operation_model: Django model for DLQ entries
         circuit_breaker_model: Django model for CB state (optional)
     """
-    
+
     def __init__(
         self,
-        failed_operation_model: Optional[Type["Model"]] = None,
-        circuit_breaker_model: Optional[Type["Model"]] = None,
+        failed_operation_model: type[Model] | None = None,
+        circuit_breaker_model: type[Model] | None = None,
     ):
         """
         Initialize Django Statistics Adapter.
-        
+
         Args:
             failed_operation_model: Django model class for FailedOperation
             circuit_breaker_model: Django model class for CircuitBreakerState (optional)
         """
         self._failed_operation_model = failed_operation_model
         self._circuit_breaker_model = circuit_breaker_model
-        
+
         if failed_operation_model:
             logger.info(
                 f"[DjangoStatisticsAdapter] Initialized with model: "
@@ -84,68 +84,67 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 "[DjangoStatisticsAdapter] No failed_operation_model provided. "
                 "Some statistics will not be available."
             )
-    
-    def _get_model(self) -> Optional[Type["Model"]]:
+
+    def _get_model(self) -> type[Model] | None:
         """Get the FailedOperation model."""
         return self._failed_operation_model
-    
+
     def _check_model(self) -> bool:
         """Check if model is available."""
         if self._failed_operation_model is None:
             logger.warning("[DjangoStatisticsAdapter] Model not configured")
             return False
         return True
-    
+
     # =========================================================================
     # DLQ Statistics
     # =========================================================================
-    
+
     def get_status_counts(self) -> StatusCounts:
         """Get count of DLQ entries by status using Django aggregation."""
         if not self._check_model():
             return StatusCounts()
-        
+
         try:
             from django.db.models import Count
-            
+
             model = self._get_model()
             queryset = model.objects.values("status").annotate(count=Count("id"))
-            
+
             counts = StatusCounts()
             for row in queryset:
                 status = row["status"]
                 count = row["count"]
                 counts.total += count
-                
+
                 if hasattr(counts, status):
                     setattr(counts, status, count)
-            
+
             return counts
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_status_counts error: {e}")
             return StatusCounts()
-    
-    def get_domain_distribution(self, limit: int = 10) -> List[DomainDistribution]:
+
+    def get_domain_distribution(self, limit: int = 10) -> list[DomainDistribution]:
         """Get distribution of DLQ entries by domain."""
         if not self._check_model():
             return []
-        
+
         try:
             from django.db.models import Count
-            
+
             model = self._get_model()
             total = model.objects.count()
-            
+
             if total == 0:
                 return []
-            
+
             queryset = (
-                model.objects
-                .values("domain")
+                model.objects.values("domain")
                 .annotate(count=Count("id"))
                 .order_by("-count")[:limit]
             )
-            
+
             return [
                 DomainDistribution(
                     domain=row["domain"] or "unknown",
@@ -155,30 +154,33 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_domain_distribution error: {e}")
+            logger.error(
+                f"[DjangoStatisticsAdapter] get_domain_distribution error: {e}"
+            )
             return []
-    
-    def get_failure_type_distribution(self, limit: int = 10) -> List[FailureTypeDistribution]:
+
+    def get_failure_type_distribution(
+        self, limit: int = 10
+    ) -> list[FailureTypeDistribution]:
         """Get distribution of DLQ entries by failure type."""
         if not self._check_model():
             return []
-        
+
         try:
             from django.db.models import Count
-            
+
             model = self._get_model()
             total = model.objects.count()
-            
+
             if total == 0:
                 return []
-            
+
             queryset = (
-                model.objects
-                .values("failure_type")
+                model.objects.values("failure_type")
                 .annotate(count=Count("id"))
                 .order_by("-count")[:limit]
             )
-            
+
             return [
                 FailureTypeDistribution(
                     failure_type=row["failure_type"] or "unknown",
@@ -188,47 +190,45 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_failure_type_distribution error: {e}")
+            logger.error(
+                f"[DjangoStatisticsAdapter] get_failure_type_distribution error: {e}"
+            )
             return []
-    
+
     def get_recent_activity(self, hours: int = 24, days: int = 7) -> RecentActivity:
         """Get recent activity statistics."""
         if not self._check_model():
             return RecentActivity()
-        
+
         try:
             from django.utils import timezone
-            
+
             model = self._get_model()
             now = timezone.now()
             hours_ago = now - timedelta(hours=hours)
             days_ago = now - timedelta(days=days)
-            
+
             # New entries
             new_in_24h = model.objects.filter(created_at__gte=hours_ago).count()
             new_in_7d = model.objects.filter(created_at__gte=days_ago).count()
-            
+
             # Resolved entries
-            resolved_in_24h = model.objects.filter(
-                resolved_at__gte=hours_ago
-            ).count()
-            resolved_in_7d = model.objects.filter(
-                resolved_at__gte=days_ago
-            ).count()
-            
+            resolved_in_24h = model.objects.filter(resolved_at__gte=hours_ago).count()
+            resolved_in_7d = model.objects.filter(resolved_at__gte=days_ago).count()
+
             # Calculate trend
             prev_week = model.objects.filter(
                 created_at__gte=days_ago - timedelta(days=7),
                 created_at__lt=days_ago,
             ).count()
-            
+
             if new_in_7d > prev_week * 1.1:
                 trend = "up"
             elif new_in_7d < prev_week * 0.9:
                 trend = "down"
             else:
                 trend = "stable"
-            
+
             return RecentActivity(
                 new_in_24h=new_in_24h,
                 resolved_in_24h=resolved_in_24h,
@@ -239,68 +239,68 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_recent_activity error: {e}")
             return RecentActivity()
-    
+
     def get_resolution_rate(self, days: int = 30) -> float:
         """Calculate resolution success rate."""
         if not self._check_model():
             return 0.0
-        
+
         try:
             from django.utils import timezone
-            
+
             model = self._get_model()
             since = timezone.now() - timedelta(days=days)
-            
+
             total = model.objects.filter(created_at__gte=since).count()
             if total == 0:
                 return 0.0
-            
+
             resolved = model.objects.filter(
                 created_at__gte=since,
                 status="resolved",
             ).count()
-            
+
             return round(resolved / total, 4)
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_resolution_rate error: {e}")
             return 0.0
-    
+
     def get_avg_retry_count(self) -> float:
         """Get average retry count across all DLQ entries."""
         if not self._check_model():
             return 0.0
-        
+
         try:
             from django.db.models import Avg
-            
+
             model = self._get_model()
             result = model.objects.aggregate(avg_retry=Avg("retry_count"))
             return round(result["avg_retry"] or 0.0, 2)
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_avg_retry_count error: {e}")
             return 0.0
-    
+
     # =========================================================================
     # DLQ List Operations (Paginated)
     # =========================================================================
-    
+
     def list_entries(
         self,
         page: int = 1,
         page_size: int = 20,
-        status: Optional[str] = None,
-        domain: Optional[str] = None,
-        failure_type: Optional[str] = None,
+        status: str | None = None,
+        domain: str | None = None,
+        failure_type: str | None = None,
         order_by: str = "-created_at",
     ) -> PaginatedResult:
         """List DLQ entries with pagination and filtering."""
         if not self._check_model():
             return PaginatedResult(page=page, page_size=page_size)
-        
+
         try:
             model = self._get_model()
             queryset = model.objects.all()
-            
+
             # Apply filters
             if status:
                 queryset = queryset.filter(status=status)
@@ -308,17 +308,17 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 queryset = queryset.filter(domain=domain)
             if failure_type:
                 queryset = queryset.filter(failure_type=failure_type)
-            
+
             # Order
             queryset = queryset.order_by(order_by)
-            
+
             # Count
             total = queryset.count()
-            
+
             # Paginate
             offset = (page - 1) * page_size
-            items = list(queryset[offset:offset + page_size].values())
-            
+            items = list(queryset[offset : offset + page_size].values())
+
             return PaginatedResult(
                 items=items,
                 total=total,
@@ -330,12 +330,12 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] list_entries error: {e}")
             return PaginatedResult(page=page, page_size=page_size)
-    
-    def get_entry_detail(self, entry_id: str) -> Optional[Dict[str, Any]]:
+
+    def get_entry_detail(self, entry_id: str) -> dict[str, Any] | None:
         """Get detailed information about a specific DLQ entry."""
         if not self._check_model():
             return None
-        
+
         try:
             model = self._get_model()
             entry = model.objects.filter(pk=entry_id).values().first()
@@ -343,35 +343,35 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_entry_detail error: {e}")
             return None
-    
+
     # =========================================================================
     # SLA Monitoring
     # =========================================================================
-    
+
     def get_sla_breaches(
         self,
         sla_threshold_hours: int = 4,
-        statuses: Optional[List[str]] = None,
-    ) -> Dict[str, int]:
+        statuses: list[str] | None = None,
+    ) -> dict[str, int]:
         """
         Get count of SLA breaches by domain.
-        
+
         Finds DLQ entries that have exceeded the SLA threshold for resolution.
         """
         if not self._check_model():
             return {}
-        
+
         try:
             from django.db.models import Count
             from django.utils import timezone
-            
+
             model = self._get_model()
-            
+
             if statuses is None:
                 statuses = ["pending", "reviewing", "requires_review"]
-            
+
             cutoff = timezone.now() - timedelta(hours=sla_threshold_hours)
-            
+
             # Find entries that have exceeded SLA
             breaches = dict(
                 model.objects.filter(
@@ -382,49 +382,48 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 .annotate(count=Count("id"))
                 .values_list("domain", "count")
             )
-            
+
             return breaches
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_sla_breaches error: {e}")
             return {}
-    
+
     # =========================================================================
     # Cleanup Operations
     # =========================================================================
-    
+
     def get_cleanup_stats(self) -> CleanupStats:
         """Get statistics for cleanup operations."""
         if not self._check_model():
             return CleanupStats()
-        
+
         try:
             from django.db.models import Count
             from django.utils import timezone
-            
+
             model = self._get_model()
-            
+
             # Count by status
             status_counts = dict(
-                model.objects
-                .values("status")
+                model.objects.values("status")
                 .annotate(count=Count("id"))
                 .values_list("status", "count")
             )
-            
+
             # Resolved older than 30 days
             thirty_days_ago = timezone.now() - timedelta(days=30)
             resolved_old = model.objects.filter(
                 status="resolved",
                 resolved_at__lt=thirty_days_ago,
             ).count()
-            
+
             # Archived older than 90 days
             ninety_days_ago = timezone.now() - timedelta(days=90)
             archived_old = model.objects.filter(
                 status="archived",
                 updated_at__lt=ninety_days_ago,
             ).count()
-            
+
             return CleanupStats(
                 total=model.objects.count(),
                 by_status=status_counts,
@@ -434,101 +433,103 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] get_cleanup_stats error: {e}")
             return CleanupStats()
-    
+
     def archive_old_entries(self, older_than_days: int = 30) -> int:
         """Archive old resolved entries."""
         if not self._check_model():
             return 0
-        
+
         try:
             from django.utils import timezone
-            
+
             model = self._get_model()
             cutoff = timezone.now() - timedelta(days=older_than_days)
-            
+
             count = model.objects.filter(
                 status="resolved",
                 resolved_at__lt=cutoff,
             ).update(status="archived")
-            
+
             logger.info(f"[DjangoStatisticsAdapter] Archived {count} entries")
             return count
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] archive_old_entries error: {e}")
             return 0
-    
+
     def purge_archived(
         self,
-        ids: Optional[List[str]] = None,
-        older_than_days: Optional[int] = None,
+        ids: list[str] | None = None,
+        older_than_days: int | None = None,
     ) -> int:
         """Permanently delete archived entries."""
         if not self._check_model():
             return 0
-        
+
         try:
             from django.utils import timezone
-            
+
             model = self._get_model()
             queryset = model.objects.filter(status="archived")
-            
+
             if ids:
                 queryset = queryset.filter(pk__in=ids)
-            
+
             if older_than_days:
                 cutoff = timezone.now() - timedelta(days=older_than_days)
                 queryset = queryset.filter(updated_at__lt=cutoff)
-            
+
             count, _ = queryset.delete()
-            
+
             logger.info(f"[DjangoStatisticsAdapter] Purged {count} entries")
             return count
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] purge_archived error: {e}")
             return 0
-    
+
     # =========================================================================
     # Circuit Breaker Statistics
     # =========================================================================
-    
+
     def get_circuit_breaker_summary(self) -> CircuitBreakerSummary:
         """Get summary of all circuit breakers."""
         if not self._circuit_breaker_model:
             # Fallback to Redis-based stats if available
             return self._get_cb_summary_from_redis()
-        
+
         try:
             from django.db.models import Count
-            
+
             model = self._circuit_breaker_model
             queryset = model.objects.values("state").annotate(count=Count("id"))
-            
+
             summary = CircuitBreakerSummary()
             for row in queryset:
                 state = row["state"]
                 count = row["count"]
                 summary.total += count
-                
+
                 if state == "closed":
                     summary.closed = count
                 elif state == "open":
                     summary.open = count
                 elif state == "half_open":
                     summary.half_open = count
-            
+
             return summary
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_circuit_breaker_summary error: {e}")
+            logger.error(
+                f"[DjangoStatisticsAdapter] get_circuit_breaker_summary error: {e}"
+            )
             return CircuitBreakerSummary()
-    
+
     def _get_cb_summary_from_redis(self) -> CircuitBreakerSummary:
         """Get CB summary from Redis runtime repository."""
         try:
             from selfhealing.factory import ProviderRegistry
-            
+
             cb_repo = ProviderRegistry.get_circuit_breaker_repo()
             states = cb_repo.get_all_states()
-            
+
             summary = CircuitBreakerSummary(total=len(states))
             for state in states.values():
                 if state.state == "closed":
@@ -537,22 +538,24 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                     summary.open += 1
                 elif state.state == "half_open":
                     summary.half_open += 1
-            
+
             return summary
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] _get_cb_summary_from_redis error: {e}")
+            logger.error(
+                f"[DjangoStatisticsAdapter] _get_cb_summary_from_redis error: {e}"
+            )
             return CircuitBreakerSummary()
-    
-    def list_circuit_breakers(self) -> List[CircuitBreakerInfo]:
+
+    def list_circuit_breakers(self) -> list[CircuitBreakerInfo]:
         """List all circuit breakers with their current state."""
         if not self._circuit_breaker_model:
             # Fallback to Redis-based list if available
             return self._list_cbs_from_redis()
-        
+
         try:
             model = self._circuit_breaker_model
             entries = model.objects.all().values()
-            
+
             return [
                 CircuitBreakerInfo(
                     service_name=entry.get("service_name", "unknown"),
@@ -567,19 +570,23 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] list_circuit_breakers error: {e}")
             return []
-    
-    def _list_cbs_from_redis(self) -> List[CircuitBreakerInfo]:
+
+    def _list_cbs_from_redis(self) -> list[CircuitBreakerInfo]:
         """List CBs from Redis runtime repository."""
         try:
             from selfhealing.factory import ProviderRegistry
-            
+
             cb_repo = ProviderRegistry.get_circuit_breaker_repo()
             states = cb_repo.get_all_states()
-            
+
             return [
                 CircuitBreakerInfo(
                     service_name=name,
-                    state=state.state.value if hasattr(state.state, 'value') else str(state.state),
+                    state=(
+                        state.state.value
+                        if hasattr(state.state, "value")
+                        else str(state.state)
+                    ),
                     failure_count=state.failure_count,
                     success_count=state.success_count,
                     last_failure_time=state.last_failure_time,
@@ -590,19 +597,19 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] _list_cbs_from_redis error: {e}")
             return []
-    
+
     # =========================================================================
     # Persistence (for hybrid storage)
     # =========================================================================
-    
-    def persist_entry(self, entry_data: Dict[str, Any]) -> Optional[str]:
+
+    def persist_entry(self, entry_data: dict[str, Any]) -> str | None:
         """Persist a DLQ entry to the statistics store."""
         if not self._check_model():
             return None
-        
+
         try:
             model = self._get_model()
-            
+
             # Create or update
             entry_id = entry_data.get("id")
             if entry_id:
@@ -612,29 +619,29 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 )
             else:
                 obj = model.objects.create(**entry_data)
-            
+
             return str(obj.pk)
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] persist_entry error: {e}")
             return None
-    
-    def sync_from_runtime(self, entries: List[Dict[str, Any]]) -> int:
+
+    def sync_from_runtime(self, entries: list[dict[str, Any]]) -> int:
         """Bulk sync entries from runtime repository."""
         if not self._check_model():
             return 0
-        
+
         synced = 0
         for entry_data in entries:
             if self.persist_entry(entry_data):
                 synced += 1
-        
+
         logger.info(f"[DjangoStatisticsAdapter] Synced {synced}/{len(entries)} entries")
         return synced
-    
+
     # =========================================================================
     # Audit Trail Integration (The Master Trail)
     # =========================================================================
-    
+
     def get_audit_trail_by_entity(
         self,
         entity_id: str,
@@ -642,8 +649,8 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
     ) -> EntityAuditTrail:
         """
         Get complete audit trail for a specific entity.
-        
-        Retrieves all audit log entries related to a DLQ entry and 
+
+        Retrieves all audit log entries related to a DLQ entry and
         verifies the hash chain integrity.
         """
         # Start with basic entity info from DLQ
@@ -653,7 +660,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             domain="unknown",
             entries=[],
         )
-        
+
         # Get DLQ entry details if available
         if self._check_model() and entity_type == "dlq_entry":
             try:
@@ -665,14 +672,16 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                     trail.resolved_at = getattr(entry, "resolved_at", None)
                     trail.current_status = getattr(entry, "status", "unknown")
             except Exception as e:
-                logger.warning(f"[DjangoStatisticsAdapter] Failed to get DLQ entry: {e}")
-        
+                logger.warning(
+                    f"[DjangoStatisticsAdapter] Failed to get DLQ entry: {e}"
+                )
+
         # Get audit log entries from the audit adapter
         try:
             from selfhealing.factory import ProviderRegistry
-            
+
             audit_adapter = ProviderRegistry.get_audit_adapter()
-            
+
             # Try to get audit entries by entity reference
             # This depends on how the audit adapter stores entity references
             if hasattr(audit_adapter, "get_entries_by_entity"):
@@ -680,37 +689,57 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                     entity_id=entity_id,
                     entity_type=entity_type,
                 )
-                
+
                 for audit_entry in audit_entries:
                     trail.entries.append(
                         AuditTrailEntry(
                             timestamp=audit_entry.timestamp,
-                            action=audit_entry.action.value if hasattr(audit_entry.action, 'value') else str(audit_entry.action),
+                            action=(
+                                audit_entry.action.value
+                                if hasattr(audit_entry.action, "value")
+                                else str(audit_entry.action)
+                            ),
                             actor_id=audit_entry.actor_id,
-                            status=audit_entry.new_value if hasattr(audit_entry, 'new_value') else None,
-                            details=audit_entry.details if hasattr(audit_entry, 'details') else None,
-                            hash_chain=audit_entry.hash if hasattr(audit_entry, 'hash') else None,
-                            previous_hash=audit_entry.previous_hash if hasattr(audit_entry, 'previous_hash') else None,
+                            status=(
+                                audit_entry.new_value
+                                if hasattr(audit_entry, "new_value")
+                                else None
+                            ),
+                            details=(
+                                audit_entry.details
+                                if hasattr(audit_entry, "details")
+                                else None
+                            ),
+                            hash_chain=(
+                                audit_entry.hash
+                                if hasattr(audit_entry, "hash")
+                                else None
+                            ),
+                            previous_hash=(
+                                audit_entry.previous_hash
+                                if hasattr(audit_entry, "previous_hash")
+                                else None
+                            ),
                         )
                     )
         except Exception as e:
             logger.debug(f"[DjangoStatisticsAdapter] Audit trail lookup skipped: {e}")
-        
+
         return trail
-    
+
     def link_audit_entry(
         self,
         entity_id: str,
         entity_type: str,
         action: str,
-        actor_id: Optional[str] = None,
-        status: Optional[str] = None,
-        details: Optional[str] = None,
-        audit_record_hash: Optional[str] = None,
+        actor_id: str | None = None,
+        status: str | None = None,
+        details: str | None = None,
+        audit_record_hash: str | None = None,
     ) -> bool:
         """
         Link an audit record to an entity.
-        
+
         Creates a mapping between DLQ entries and their audit records
         for efficient trail retrieval.
         """
@@ -718,50 +747,53 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         # added as metadata to the DLQ entry itself
         if not self._check_model():
             return False
-        
+
         try:
             model = self._get_model()
             entry = model.objects.filter(pk=entity_id).first()
             if not entry:
                 return False
-            
+
             # If the model has a metadata field, we can store audit references
             if hasattr(entry, "metadata"):
                 metadata = entry.metadata or {}
                 audit_refs = metadata.get("audit_references", [])
-                audit_refs.append({
-                    "action": action,
-                    "actor_id": actor_id,
-                    "status": status,
-                    "hash": audit_record_hash,
-                })
+                audit_refs.append(
+                    {
+                        "action": action,
+                        "actor_id": actor_id,
+                        "status": status,
+                        "hash": audit_record_hash,
+                    }
+                )
                 metadata["audit_references"] = audit_refs
                 entry.metadata = metadata
                 entry.save(update_fields=["metadata", "updated_at"])
-            
+
             return True
         except Exception as e:
             logger.error(f"[DjangoStatisticsAdapter] link_audit_entry error: {e}")
             return False
-    
+
     # =========================================================================
     # Async Persistence Configuration
     # =========================================================================
-    
+
     def should_persist_async(self) -> bool:
         """
         Check if async persistence is configured.
-        
+
         Reads from Django settings:
         SELFHEALING_ASYNC_PERSISTENCE = True
         """
         try:
             from django.conf import settings
+
             return getattr(settings, "SELFHEALING_ASYNC_PERSISTENCE", False)
         except Exception:
             return False
-    
-    def get_async_persist_task_name(self) -> Optional[str]:
+
+    def get_async_persist_task_name(self) -> str | None:
         """Get the Celery task name for async persistence."""
         if self.should_persist_async():
             return "selfhealing.adapters.celery.tasks.async_persist_dlq_entry"

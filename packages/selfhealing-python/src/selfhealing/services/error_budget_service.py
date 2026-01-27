@@ -32,32 +32,25 @@ Reference:
 from __future__ import annotations
 
 # Re-export all from error_budget package for backward compatibility
-from selfhealing.services.error_budget import (
-    # Enums
+from selfhealing.services.error_budget import (  # Enums; Thresholds; Fail-safe; Models; Classes; Factory
+    BURN_RATE_THRESHOLDS,
+    ERROR_BUDGET_THRESHOLDS,
+    DeploymentPolicyAdvisor,
+    DeploymentVerdict,
+    ErrorBudgetCalculator,
+    ErrorBudgetService,
+    ErrorBudgetStatus,
+    FreezeDecisionRecord,
+    FreezeDecisionRecorder,
     FreezeStatus,
     OverrideType,
-    # Thresholds
-    ERROR_BUDGET_THRESHOLDS,
-    BURN_RATE_THRESHOLDS,
-    get_error_budget_thresholds,
-    get_burn_rate_thresholds,
-    # Fail-safe
-    get_failsafe_verdict_response,
-    get_failsafe_status_response,
-    # Models
-    ErrorBudgetStatus,
-    DeploymentVerdict,
-    FreezeDecisionRecord,
-    # Classes
-    ErrorBudgetCalculator,
-    DeploymentPolicyAdvisor,
-    FreezeDecisionRecorder,
-    ErrorBudgetService,
-    # Factory
-    get_error_budget_service,
     configure_error_budget_service,
+    get_burn_rate_thresholds,
+    get_error_budget_service,
+    get_error_budget_thresholds,
+    get_failsafe_status_response,
+    get_failsafe_verdict_response,
 )
-
 
 __all__ = [
     # Enums

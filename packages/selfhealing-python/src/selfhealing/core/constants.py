@@ -21,7 +21,10 @@ class ControlAPIActions:
         (OVERRIDE, "Override - Temporarily bypass rules"),
         (RESET, "Reset - Revert to default configuration"),
         (INJECT_FAILURE, "Inject Failure - Simulate failures (non-ops only)"),
-        (INJECT_SUCCESS, "Inject Success - Record successes for CB recovery (test only)"),
+        (
+            INJECT_SUCCESS,
+            "Inject Success - Record successes for CB recovery (test only)",
+        ),
     ]
 
     ALL = [ALLOW, BLOCK, OVERRIDE, RESET, INJECT_FAILURE, INJECT_SUCCESS]

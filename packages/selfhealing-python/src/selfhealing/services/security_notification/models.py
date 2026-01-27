@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
 
 from selfhealing.settings import get_config
 
@@ -48,13 +47,13 @@ _deprecated_constant_warned: set = set()
 def __getattr__(name: str):
     """
     Deprecated 상수 접근 시 DeprecationWarning 발생.
-    
+
     .. deprecated:: 2.0.0
         Use _get_notification_limits() instead.
         These constants will be removed in version 3.0.0.
     """
     import warnings
-    
+
     if name in _DEPRECATED_CONSTANTS:
         if name not in _deprecated_constant_warned:
             warnings.warn(
@@ -113,19 +112,25 @@ class NotificationConfig:
     dry_run: bool = False  # For testing - log instead of send
 
     @classmethod
-    def from_settings(cls) -> "NotificationConfig":
+    def from_settings(cls) -> NotificationConfig:
         """Load configuration from settings."""
         config = get_config()
         notification = config.notification  # Use singular form
 
         return cls(
             slack_webhook_url=getattr(notification, "slack_webhook_url", ""),
-            slack_critical_channel=getattr(notification, "critical_channel", "#critical-alerts"),
+            slack_critical_channel=getattr(
+                notification, "critical_channel", "#critical-alerts"
+            ),
             slack_high_channel=getattr(notification, "high_channel", "#ops-alerts"),
             slack_medium_channel=getattr(notification, "medium_channel", "#dev-alerts"),
-            email_critical_recipients=getattr(notification, "email_critical_recipients", []),
+            email_critical_recipients=getattr(
+                notification, "email_critical_recipients", []
+            ),
             email_high_recipients=getattr(notification, "email_high_recipients", []),
-            sms_critical_recipients=getattr(notification, "sms_critical_recipients", []),
+            sms_critical_recipients=getattr(
+                notification, "sms_critical_recipients", []
+            ),
             pagerduty_service_key=getattr(notification, "pagerduty_service_key", ""),
             pagerduty_enabled=getattr(notification, "pagerduty_enabled", False),
             enabled=notification.enabled,

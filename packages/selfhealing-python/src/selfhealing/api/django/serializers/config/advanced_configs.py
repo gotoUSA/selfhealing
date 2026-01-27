@@ -7,23 +7,30 @@ Fail-Safe Default 강화 추가.
 """
 
 from rest_framework import serializers
+
 from .base import ApplyStrategyMixin
 
 
 class ForensicConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Forensic configuration.
-    
+
     Forensic 분석 및 디버깅 관련 설정.
     """
 
     _config_type = "forensic"
 
     # 기존 필드
-    error_message_max_length = serializers.IntegerField(required=False, min_value=50, max_value=5000)
-    response_body_max_length = serializers.IntegerField(required=False, min_value=100, max_value=100000)
-    user_agent_max_length = serializers.IntegerField(required=False, min_value=50, max_value=2000)
-    
+    error_message_max_length = serializers.IntegerField(
+        required=False, min_value=50, max_value=5000
+    )
+    response_body_max_length = serializers.IntegerField(
+        required=False, min_value=100, max_value=100000
+    )
+    user_agent_max_length = serializers.IntegerField(
+        required=False, min_value=50, max_value=2000
+    )
+
     # 추가 Forensic 설정 (이전 env만 노출되었던 설정들)
     max_stack_frames = serializers.IntegerField(
         required=False,
@@ -60,7 +67,7 @@ class ForensicConfigSerializer(ApplyStrategyMixin):
 class MetricsConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Metrics configuration.
-    
+
     Safe Default 폴백 적용.
     """
 
@@ -68,7 +75,9 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
 
     enabled = serializers.BooleanField(required=False)
     prefix = serializers.CharField(required=False, max_length=50)
-    collection_interval = serializers.IntegerField(required=False, min_value=1, max_value=3600)
+    collection_interval = serializers.IntegerField(
+        required=False, min_value=1, max_value=3600
+    )
     export_prometheus = serializers.BooleanField(required=False)
 
     # Jitter settings (Thundering Herd prevention)
@@ -93,7 +102,7 @@ class MetricsConfigSerializer(ApplyStrategyMixin):
 class LoggingConfigSerializer(ApplyStrategyMixin):
     """
     Serializer for Logging configuration.
-    
+
     각 Self-Healing 컴포넌트별 로깅 레벨 설정.
     이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
     """

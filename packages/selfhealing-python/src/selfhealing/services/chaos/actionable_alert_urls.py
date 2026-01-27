@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -24,10 +23,10 @@ logger = logging.getLogger(__name__)
 class ChaosActionableUrls:
     """Chaos 알림에 포함될 URL 모음."""
 
-    dashboard_url: Optional[str] = None
-    admin_stop_url: Optional[str] = None  # 중단용 Admin URL
-    admin_detail_url: Optional[str] = None  # 상세 조회용 Admin URL
-    runbook_url: Optional[str] = None
+    dashboard_url: str | None = None
+    admin_stop_url: str | None = None  # 중단용 Admin URL
+    admin_detail_url: str | None = None  # 상세 조회용 Admin URL
+    runbook_url: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -93,7 +92,7 @@ class ChaosActionableAlertUrlBuilder:
         self,
         experiment_id: str,
         target_service: str,
-        trigger_time: Optional[str] = None,
+        trigger_time: str | None = None,
     ) -> ChaosActionableUrls:
         """
         실험 알림용 URL 생성.
@@ -145,7 +144,7 @@ class ChaosActionableAlertUrlBuilder:
         )
         return f"{base_url}/control/kill-all/?{params}"
 
-    def _build_dashboard_url(self, target_service: str) -> Optional[str]:
+    def _build_dashboard_url(self, target_service: str) -> str | None:
         """대시보드 URL 생성."""
         if not self._dashboard_base_url:
             return None
@@ -177,7 +176,7 @@ class ChaosActionableAlertUrlBuilder:
     def _build_admin_detail_url(
         self,
         experiment_id: str,
-        trigger_time: Optional[str] = None,
+        trigger_time: str | None = None,
     ) -> str:
         """실험 상세 조회 Admin URL."""
         base_url = self._admin_base_url.rstrip("/")
@@ -187,7 +186,7 @@ class ChaosActionableAlertUrlBuilder:
 
         return f"{base_url}/schedules/{experiment_id}/?{urlencode(params)}"
 
-    def _build_runbook_url(self, section: Optional[str] = None) -> Optional[str]:
+    def _build_runbook_url(self, section: str | None = None) -> str | None:
         """Runbook URL 생성."""
         if not self._runbook_base_url:
             return None
@@ -201,7 +200,7 @@ class ChaosActionableAlertUrlBuilder:
 # Singleton
 # =============================================================================
 
-_instance: Optional[ChaosActionableAlertUrlBuilder] = None
+_instance: ChaosActionableAlertUrlBuilder | None = None
 
 
 def get_chaos_actionable_alert_url_builder() -> ChaosActionableAlertUrlBuilder:

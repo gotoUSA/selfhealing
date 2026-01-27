@@ -13,13 +13,12 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable, Dict, Optional
 
 from selfhealing.core.timezone import now
-from selfhealing.slo import SLO, SLOConfig, SLI
 from selfhealing.services.error_budget.models import ErrorBudgetStatus
-
+from selfhealing.slo import SLI, SLO, SLOConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +33,9 @@ class ErrorBudgetCalculator:
 
     def __init__(
         self,
-        slo_config: Optional[SLOConfig] = None,
-        get_failed_operation_stats: Optional[Callable[..., Dict]] = None,
-        get_request_stats: Optional[Callable[..., Dict]] = None,
+        slo_config: SLOConfig | None = None,
+        get_failed_operation_stats: Callable[..., dict] | None = None,
+        get_request_stats: Callable[..., dict] | None = None,
     ):
         """
         초기화.
@@ -53,9 +52,9 @@ class ErrorBudgetCalculator:
     def calculate_budget_status(
         self,
         slo_name: str = "availability",
-        window_start: Optional[datetime] = None,
-        window_end: Optional[datetime] = None,
-        exclude_chaos: Optional[bool] = None,
+        window_start: datetime | None = None,
+        window_end: datetime | None = None,
+        exclude_chaos: bool | None = None,
         exclude_synthetic: bool = True,
     ) -> ErrorBudgetStatus:
         """
@@ -68,7 +67,7 @@ class ErrorBudgetCalculator:
             exclude_chaos: (deprecated) exclude_synthetic 사용 권장.
                            None이 아니면 exclude_synthetic으로 해석됨.
             exclude_synthetic: 합성 트래픽(Chaos + X-Test) 제외 여부 (기본: True)
-                               True이면 is_chaos_experiment=True 또는 
+                               True이면 is_chaos_experiment=True 또는
                                source="x-test-mode"인 에러는 예산 소진에서 제외됨
 
         Returns:
@@ -149,7 +148,9 @@ class ErrorBudgetCalculator:
         if total_requests > 0:
             error_rate = error_count / total_requests
             allowed_error_rate = slo.error_budget
-            consumed_ratio = (error_rate / allowed_error_rate) if allowed_error_rate > 0 else 0
+            consumed_ratio = (
+                (error_rate / allowed_error_rate) if allowed_error_rate > 0 else 0
+            )
         else:
             # 요청 통계가 없으면 DLQ 건수 기반 추정
             # 예: 1000건당 1건 에러 허용 시 (99.9% SLO)
@@ -159,7 +160,9 @@ class ErrorBudgetCalculator:
         budget_consumed_minutes = budget_total_minutes * consumed_ratio
         budget_remaining_minutes = budget_total_minutes - budget_consumed_minutes
         budget_remaining_percent = (
-            (budget_remaining_minutes / budget_total_minutes * 100) if budget_total_minutes > 0 else 100.0
+            (budget_remaining_minutes / budget_total_minutes * 100)
+            if budget_total_minutes > 0
+            else 100.0
         )
 
         # Burn Rate 계산

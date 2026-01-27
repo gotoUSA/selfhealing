@@ -18,7 +18,6 @@ Usage:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -77,7 +76,7 @@ class AirGapSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_airgap_settings: Optional[AirGapSettings] = None
+_airgap_settings: AirGapSettings | None = None
 
 
 def get_airgap_settings() -> AirGapSettings:

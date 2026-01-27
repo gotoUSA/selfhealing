@@ -34,11 +34,12 @@ import glob
 import json
 import logging
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, TextIO
+from typing import Any, TextIO
 
 logger = logging.getLogger(__name__)
 
@@ -66,27 +67,27 @@ class ExportOptions:
     """내보내기 옵션."""
 
     # 입력
-    input_paths: List[str]
+    input_paths: list[str]
 
     # 필터링
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    actions: Optional[List[str]] = None
-    actor_ids: Optional[List[str]] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    actions: list[str] | None = None
+    actor_ids: list[str] | None = None
 
     # 출력
     format: ExportFormat = ExportFormat.JSONL
     target: ExportTarget = ExportTarget.STDOUT
-    output_path: Optional[str] = None
+    output_path: str | None = None
 
     # S3 옵션
-    s3_bucket: Optional[str] = None
+    s3_bucket: str | None = None
     s3_prefix: str = "audit-export/"
     s3_region: str = "ap-northeast-2"
 
     # HTTP 옵션
-    http_endpoint: Optional[str] = None
-    http_headers: Optional[Dict[str, str]] = None
+    http_endpoint: str | None = None
+    http_headers: dict[str, str] | None = None
 
     # 무결성 검증
     verify_integrity: bool = True
@@ -104,8 +105,8 @@ class ExportStats:
     filtered_entries: int = 0
     exported_entries: int = 0
     integrity_errors: int = 0
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
 
 class AuditExporter:
@@ -141,7 +142,7 @@ class AuditExporter:
         self._stats.end_time = datetime.now(timezone.utc)
         return self._stats
 
-    def _collect_input_files(self) -> List[Path]:
+    def _collect_input_files(self) -> list[Path]:
         """입력 파일 수집."""
         files = []
         for pattern in self._options.input_paths:
@@ -153,12 +154,12 @@ class AuditExporter:
         return sorted(files)
 
     def _read_and_filter_entries(
-        self, input_files: List[Path]
-    ) -> Iterator[Dict[str, Any]]:
+        self, input_files: list[Path]
+    ) -> Iterator[dict[str, Any]]:
         """엔트리 읽기 및 필터링."""
         for file_path in input_files:
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     for line in f:
                         if not line.strip():
                             continue
@@ -178,7 +179,7 @@ class AuditExporter:
             except Exception as e:
                 logger.error(f"Failed to read {file_path}: {e}")
 
-    def _matches_filters(self, entry: Dict[str, Any]) -> bool:
+    def _matches_filters(self, entry: dict[str, Any]) -> bool:
         """필터 조건 확인."""
         # 시간 필터
         if self._options.start_time or self._options.end_time:
@@ -190,7 +191,10 @@ class AuditExporter:
                         timestamp_str = timestamp_str[:-1] + "+00:00"
                     timestamp = datetime.fromisoformat(timestamp_str)
 
-                    if self._options.start_time and timestamp < self._options.start_time:
+                    if (
+                        self._options.start_time
+                        and timestamp < self._options.start_time
+                    ):
                         return False
                     if self._options.end_time and timestamp > self._options.end_time:
                         return False
@@ -212,8 +216,8 @@ class AuditExporter:
         return True
 
     def _verify_integrity(
-        self, entries: Iterator[Dict[str, Any]]
-    ) -> Iterator[Dict[str, Any]]:
+        self, entries: Iterator[dict[str, Any]]
+    ) -> Iterator[dict[str, Any]]:
         """무결성 검증 (해시 체인)."""
         prev_hash = None
 
@@ -233,7 +237,7 @@ class AuditExporter:
             prev_hash = checksum
             yield entry
 
-    def _export_entries(self, entries: Iterator[Dict[str, Any]]) -> None:
+    def _export_entries(self, entries: Iterator[dict[str, Any]]) -> None:
         """엔트리 내보내기."""
         target = self._options.target
 
@@ -246,11 +250,11 @@ class AuditExporter:
         elif target == ExportTarget.HTTP:
             self._export_to_http(entries)
 
-    def _export_to_stdout(self, entries: Iterator[Dict[str, Any]]) -> None:
+    def _export_to_stdout(self, entries: Iterator[dict[str, Any]]) -> None:
         """표준출력으로 내보내기."""
         self._write_entries(entries, sys.stdout)
 
-    def _export_to_file(self, entries: Iterator[Dict[str, Any]]) -> None:
+    def _export_to_file(self, entries: Iterator[dict[str, Any]]) -> None:
         """파일로 내보내기."""
         output_path = self._options.output_path
         if not output_path:
@@ -259,9 +263,7 @@ class AuditExporter:
         with open(output_path, "w", encoding="utf-8") as f:
             self._write_entries(entries, f)
 
-    def _write_entries(
-        self, entries: Iterator[Dict[str, Any]], output: TextIO
-    ) -> None:
+    def _write_entries(self, entries: Iterator[dict[str, Any]], output: TextIO) -> None:
         """엔트리 쓰기 (형식별)."""
         format_type = self._options.format
 
@@ -292,7 +294,9 @@ class AuditExporter:
             writer = csv.DictWriter(output, fieldnames=headers, extrasaction="ignore")
             writer.writeheader()
             for entry in entries_list:
-                writer.writerow({k: str(v) if v is not None else "" for k, v in entry.items()})
+                writer.writerow(
+                    {k: str(v) if v is not None else "" for k, v in entry.items()}
+                )
                 self._stats.exported_entries += 1
 
         elif format_type == ExportFormat.PARQUET:
@@ -302,7 +306,7 @@ class AuditExporter:
                 "Then use export_to_parquet() method directly."
             )
 
-    def _export_to_s3(self, entries: Iterator[Dict[str, Any]]) -> None:
+    def _export_to_s3(self, entries: Iterator[dict[str, Any]]) -> None:
         """S3로 내보내기."""
         if not self._options.s3_bucket:
             raise ValueError("--s3-bucket is required for S3 target")
@@ -339,10 +343,10 @@ class AuditExporter:
         s3.upload_file(file_path, self._options.s3_bucket, key)
         logger.info(f"Uploaded to s3://{self._options.s3_bucket}/{key}")
 
-    def _export_to_http(self, entries: Iterator[Dict[str, Any]]) -> None:
+    def _export_to_http(self, entries: Iterator[dict[str, Any]]) -> None:
         """HTTP로 내보내기."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         if not self._options.http_endpoint:
             raise ValueError("--http-endpoint is required for HTTP target")
@@ -372,7 +376,7 @@ class AuditExporter:
 
     def export_to_parquet(
         self,
-        input_files: List[Path],
+        input_files: list[Path],
         output_path: str,
     ) -> None:
         """
@@ -399,7 +403,7 @@ class AuditExporter:
         # 모든 엔트리 수집
         entries = []
         for file_path in self._collect_input_files():
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         entries.append(json.loads(line))
@@ -433,7 +437,7 @@ def parse_datetime(value: str) -> datetime:
     raise ValueError(f"Invalid datetime format: {value}")
 
 
-def main(args: Optional[List[str]] = None) -> int:
+def main(args: list[str] | None = None) -> int:
     """CLI 엔트리포인트."""
     parser = argparse.ArgumentParser(
         prog="selfhealing.audit.export",
@@ -568,15 +572,13 @@ Examples:
         stats = exporter.export()
 
         if parsed.verbose or parsed.target != ExportTarget.STDOUT:
-            print(f"\n=== Export Statistics ===", file=sys.stderr)
+            print("\n=== Export Statistics ===", file=sys.stderr)
             print(f"Files processed: {stats.total_files}", file=sys.stderr)
             print(f"Total entries: {stats.total_entries}", file=sys.stderr)
             print(f"Filtered entries: {stats.filtered_entries}", file=sys.stderr)
             print(f"Exported entries: {stats.exported_entries}", file=sys.stderr)
             if stats.integrity_errors > 0:
-                print(
-                    f"⚠️  Integrity errors: {stats.integrity_errors}", file=sys.stderr
-                )
+                print(f"⚠️  Integrity errors: {stats.integrity_errors}", file=sys.stderr)
 
         return 0
 

@@ -32,7 +32,9 @@ class SystemSnapshotView(XTestModeMixin, APIView):
 
         # CB 상태 추가
         try:
-            from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
 
             cb_service = get_circuit_breaker_service()
             all_states = cb_service.repository.get_all_states()
@@ -49,7 +51,9 @@ class SystemSnapshotView(XTestModeMixin, APIView):
 
         # Error Budget 상태 추가
         try:
-            from selfhealing.services.error_budget_service import get_error_budget_service
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
 
             eb_service = get_error_budget_service()
 

@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from functools import lru_cache
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from selfhealing.adapters.metrics.base import (
     MetricSourceAdapter,
@@ -17,14 +16,13 @@ from selfhealing.adapters.metrics.base import (
 )
 
 if TYPE_CHECKING:
-    from selfhealing.adapters.metrics.django_adapter import DjangoMetricSourceAdapter
-    from selfhealing.adapters.metrics.redis_adapter import RedisMetricSourceAdapter
+    pass
 
 logger = logging.getLogger(__name__)
 
 
 # Singleton adapter instance
-_adapter_instance: Optional[MetricSourceAdapter] = None
+_adapter_instance: MetricSourceAdapter | None = None
 _adapter_configured: bool = False
 
 
@@ -98,6 +96,7 @@ def _create_redis_adapter() -> MetricSourceAdapter:
     """Create Redis-based adapter."""
     try:
         import redis as redis_lib
+
         from selfhealing.adapters.metrics.redis_adapter import RedisMetricSourceAdapter
 
         redis_url = os.environ.get("SELFHEALING_REDIS_URL", "redis://localhost:6379/0")
@@ -111,17 +110,23 @@ def _create_redis_adapter() -> MetricSourceAdapter:
         return RedisMetricSourceAdapter(redis_client=client, prefix=prefix)
 
     except ImportError:
-        logger.warning("[MetricAdapter] redis package not installed, falling back to NullAdapter")
+        logger.warning(
+            "[MetricAdapter] redis package not installed, falling back to NullAdapter"
+        )
         return NullMetricSourceAdapter()
     except Exception as e:
-        logger.warning(f"[MetricAdapter] Redis connection failed: {e}, falling back to NullAdapter")
+        logger.warning(
+            f"[MetricAdapter] Redis connection failed: {e}, falling back to NullAdapter"
+        )
         return NullMetricSourceAdapter()
 
 
 def _create_django_adapter() -> MetricSourceAdapter:
     """Create Django ORM-based adapter."""
     try:
-        from selfhealing.adapters.metrics.django_adapter import DjangoMetricSourceAdapter
+        from selfhealing.adapters.metrics.django_adapter import (
+            DjangoMetricSourceAdapter,
+        )
 
         # Django 모델은 사용자가 configure_adapter()로 직접 설정해야 함
         # 여기서는 모델 없이 빈 어댑터 생성

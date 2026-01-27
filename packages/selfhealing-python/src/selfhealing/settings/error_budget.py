@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -189,7 +188,7 @@ class ErrorBudgetSettings(BaseSettings):
             "MAX: 최댓값 (권장), SUM: 합산, MULTIPLY: 곱셈 (비권장)"
         ),
     )
-    exception_weights_json: Optional[str] = Field(
+    exception_weights_json: str | None = Field(
         default=None,
         description=(
             "ErrorCode별 가중치 JSON 설정. "
@@ -212,7 +211,7 @@ class ErrorBudgetSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[ErrorBudgetSettings] = None
+_settings: ErrorBudgetSettings | None = None
 
 
 def get_error_budget_settings() -> ErrorBudgetSettings:

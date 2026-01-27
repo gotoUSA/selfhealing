@@ -27,13 +27,12 @@ Usage:
 """
 
 import logging
-import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
 from selfhealing.settings import (
@@ -46,7 +45,6 @@ from .config import AuditConfig
 from .continuous_audit import ContinuousAuditRecorder
 from .resilience import (
     AuditMetrics,
-    CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitState,
@@ -78,24 +76,24 @@ class ResilientRecorderConfig:
     circuit_timeout_seconds: float = 30.0
 
     # Fallback
-    fallback_file_path: Optional[str] = None
+    fallback_file_path: str | None = None
     enable_syslog_fallback: bool = True
 
     @classmethod
     def from_settings(
-        cls, settings: Optional[ResilientRecorderSettings] = None
+        cls, settings: ResilientRecorderSettings | None = None
     ) -> "ResilientRecorderConfig":
         """
         ResilientRecorderSettings에서 Config 생성.
-        
+
         Args:
             settings: Pydantic Settings 인스턴스 (None이면 기본값 사용)
-        
+
         Returns:
             ResilientRecorderConfig 인스턴스
         """
         s = settings or get_resilient_recorder_settings()
-        
+
         # backpressure_strategy 문자열 -> enum 변환
         strategy_map = {
             "DROP_OLDEST": BackpressureStrategy.DROP_OLDEST,
@@ -103,10 +101,9 @@ class ResilientRecorderConfig:
             "BLOCK": BackpressureStrategy.BLOCK,
         }
         strategy = strategy_map.get(
-            s.backpressure_strategy, 
-            BackpressureStrategy.DROP_OLDEST
+            s.backpressure_strategy, BackpressureStrategy.DROP_OLDEST
         )
-        
+
         return cls(
             buffer_capacity=s.buffer_capacity,
             backpressure_strategy=strategy,
@@ -145,7 +142,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         Syslog (OS-level)
             ↓ 실패
         stderr (최후)
-    
+
     비침투 원칙:
         - 고객사 DB에 직접 접근하지 않음
         - 기본값: FileAuditLogAdapter (로컬 JSONL)
@@ -155,10 +152,10 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
     def __init__(
         self,
         audit_adapter: AuditLogAdapter,
-        config: Optional[AuditConfig] = None,
-        resilient_config: Optional[ResilientRecorderConfig] = None,
-        alert_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
-        state_file: Optional[Path] = None,
+        config: AuditConfig | None = None,
+        resilient_config: ResilientRecorderConfig | None = None,
+        alert_callback: Callable[[str, dict[str, Any]], None] | None = None,
+        state_file: Path | None = None,
     ):
         """
         Initialize ResilientContinuousAuditRecorder.
@@ -198,23 +195,25 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         # ─────────────────────────────────────────────────────────
         # 신규 구성요소
         # ─────────────────────────────────────────────────────────
-        self._buffer: RingBuffer[Dict[str, Any]] = RingBuffer(
+        self._buffer: RingBuffer[dict[str, Any]] = RingBuffer(
             capacity=self._resilient_config.buffer_capacity,
             strategy=self._resilient_config.backpressure_strategy,
         )
 
         # Background flush worker
-        self._flush_thread: Optional[threading.Thread] = None
+        self._flush_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._started = False
 
         # Fallback file adapter (lazy init)
-        self._fallback_adapter: Optional[AuditLogAdapter] = None
+        self._fallback_adapter: AuditLogAdapter | None = None
         if self._resilient_config.fallback_file_path:
             self._init_fallback_adapter()
 
         # Self-audit 로깅
-        self_audit().log(SelfAuditEvent.INITIALIZED, "ResilientContinuousAuditRecorder initialized")
+        self_audit().log(
+            SelfAuditEvent.INITIALIZED, "ResilientContinuousAuditRecorder initialized"
+        )
 
         # Background flush 시작
         if self._resilient_config.enable_background_flush:
@@ -349,7 +348,9 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 processed += 1
 
         if processed > 0:
-            logger.debug(f"[ResilientRecorder] Flushed {processed}/{len(batch)} entries")
+            logger.debug(
+                f"[ResilientRecorder] Flushed {processed}/{len(batch)} entries"
+            )
 
         return processed
 
@@ -365,7 +366,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         if total > 0:
             logger.info(f"[ResilientRecorder] Final flush: {total} entries")
 
-    def _write_with_fallback(self, entry_dict: Dict[str, Any]) -> bool:
+    def _write_with_fallback(self, entry_dict: dict[str, Any]) -> bool:
         """
         Fallback 체인으로 기록.
 
@@ -438,18 +439,18 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         self._write_to_stderr(entry_dict)
         return True
 
-    def _write_to_primary(self, entry_dict: Dict[str, Any]) -> None:
+    def _write_to_primary(self, entry_dict: dict[str, Any]) -> None:
         """Primary Store에 기록."""
         entry = AuditEntry.from_dict(entry_dict)
         self.audit_adapter.log(entry)
 
-    def _write_to_fallback(self, entry_dict: Dict[str, Any]) -> None:
+    def _write_to_fallback(self, entry_dict: dict[str, Any]) -> None:
         """Fallback File에 기록."""
         if self._fallback_adapter:
             entry = AuditEntry.from_dict(entry_dict)
             self._fallback_adapter.log(entry)
 
-    def _write_to_syslog(self, entry_dict: Dict[str, Any]) -> None:
+    def _write_to_syslog(self, entry_dict: dict[str, Any]) -> None:
         """Syslog에 기록."""
         action = entry_dict.get("action", "unknown")
         audit_id = entry_dict.get("audit_id", "unknown")
@@ -459,7 +460,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
             details={"checksum": entry_dict.get("checksum")},
         )
 
-    def _write_to_stderr(self, entry_dict: Dict[str, Any]) -> None:
+    def _write_to_stderr(self, entry_dict: dict[str, Any]) -> None:
         """stderr에 기록 (최후의 수단)."""
         import json
         import sys
@@ -478,7 +479,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         """버퍼 통계 반환."""
         return self._buffer.get_stats()
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health_status(self) -> dict[str, Any]:
         """헬스 상태 반환."""
         buffer_stats = self._buffer.get_stats()
 

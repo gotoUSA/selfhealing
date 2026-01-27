@@ -8,9 +8,9 @@ Django Audit Log Adapter.
 Usage:
     from selfhealing.adapters.audit.django_adapter import DjangoAuditLogAdapter
     from shopping.models import AuditLog
-    
+
     adapter = DjangoAuditLogAdapter(model_class=AuditLog)
-    
+
     # ContinuousAuditRecorder와 연동
     from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
     recorder = ContinuousAuditRecorder(audit_adapter=adapter)
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone as dt_timezone
-from typing import TYPE_CHECKING, Any, List, Optional, Type
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.interfaces.audit_adapter import (
     AuditAction,
@@ -38,92 +38,88 @@ logger = logging.getLogger(__name__)
 class DjangoAuditLogAdapter(AuditLogAdapter):
     """
     Django ORM 기반 Audit Log Adapter.
-    
+
     특징:
     - PostgreSQL ON CONFLICT (audit_event_id) DO NOTHING 지원
     - WAL 복구 시 중복 삽입 방지 (2차 방어)
     - 해시 체인 무결성 필드 저장
     - 벌크 삽입 최적화
-    
+
     Attributes:
         model_class: AbstractAuditLog를 상속한 Django 모델 클래스
         generate_event_id: audit_event_id 자동 생성 여부
     """
-    
+
     def __init__(
         self,
-        model_class: Type["models.Model"],
+        model_class: type[models.Model],
         generate_event_id: bool = True,
     ):
         """
         Initialize DjangoAuditLogAdapter.
-        
+
         Args:
             model_class: AbstractAuditLog를 상속한 Django 모델 클래스
             generate_event_id: audit_event_id가 없을 때 자동 생성 여부
         """
         self._model_class = model_class
         self._generate_event_id = generate_event_id
-        
+
         logger.info(
             f"[DjangoAuditAdapter] Initialized with model: "
             f"{model_class._meta.db_table}"
         )
-    
+
     def log(self, entry: AuditEntry) -> None:
         """
         Log an audit entry to database.
-        
+
         Uses insert_ignore_conflict for WAL recovery deduplication.
-        
+
         Args:
             entry: The audit entry to log
         """
         # audit_event_id 생성 또는 추출
         audit_event_id = self._get_or_generate_event_id(entry)
-        
+
         # AuditEntry를 모델 필드로 변환
         fields = self._entry_to_fields(entry, audit_event_id)
-        
+
         # 중복 무시 삽입
         try:
             instance, created = self._model_class.insert_ignore_conflict(
                 audit_event_id=audit_event_id,
                 **fields,
             )
-            
+
             if created:
-                logger.debug(
-                    f"[DjangoAuditAdapter] Logged: {audit_event_id}"
-                )
+                logger.debug(f"[DjangoAuditAdapter] Logged: {audit_event_id}")
             else:
                 logger.debug(
                     f"[DjangoAuditAdapter] Duplicate skipped: {audit_event_id}"
                 )
         except Exception as e:
-            logger.error(
-                f"[DjangoAuditAdapter] Failed to log: {e}"
-            )
+            logger.error(f"[DjangoAuditAdapter] Failed to log: {e}")
             raise
-    
+
     def log_batch(
         self,
-        entries: List[AuditEntry],
+        entries: list[AuditEntry],
     ) -> tuple[int, int]:
         """
         Batch log multiple audit entries.
-        
+
         Uses bulk_insert_ignore_conflict for optimal performance.
-        
+
         Args:
             entries: List of audit entries
-        
+
         Returns:
             Tuple of (inserted_count, skipped_count)
         """
         if not entries:
             return 0, 0
-        
+
         # 각 entry를 딕셔너리로 변환
         records = []
         for entry in entries:
@@ -131,36 +127,32 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             fields = self._entry_to_fields(entry, audit_event_id)
             fields["audit_event_id"] = audit_event_id
             records.append(fields)
-        
+
         # 벌크 삽입
         try:
-            inserted, skipped = self._model_class.bulk_insert_ignore_conflict(
-                records
-            )
-            
+            inserted, skipped = self._model_class.bulk_insert_ignore_conflict(records)
+
             logger.info(
                 f"[DjangoAuditAdapter] Batch: inserted={inserted}, "
                 f"skipped={skipped}"
             )
             return inserted, skipped
         except Exception as e:
-            logger.error(
-                f"[DjangoAuditAdapter] Batch failed: {e}"
-            )
+            logger.error(f"[DjangoAuditAdapter] Batch failed: {e}")
             raise
-    
+
     def query(
         self,
-        action: Optional[AuditAction | str] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        action: AuditAction | str | None = None,
+        target_type: str | None = None,
+        target_id: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
-    ) -> List[AuditEntry]:
+    ) -> list[AuditEntry]:
         """
         Query audit logs from database.
-        
+
         Args:
             action: Filter by action type
             target_type: Filter by target type
@@ -168,58 +160,58 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             start_time: Filter from this time
             end_time: Filter until this time
             limit: Maximum entries to return
-        
+
         Returns:
             List of matching audit entries
         """
         queryset = self._model_class.objects.all()
-        
+
         if action:
             action_str = action.value if isinstance(action, AuditAction) else action
             queryset = queryset.filter(action=action_str)
-        
+
         if target_type:
             queryset = queryset.filter(target_type=target_type)
-        
+
         if target_id:
             queryset = queryset.filter(target_id=target_id)
-        
+
         if start_time:
             queryset = queryset.filter(timestamp__gte=start_time)
-        
+
         if end_time:
             queryset = queryset.filter(timestamp__lte=end_time)
-        
+
         queryset = queryset.order_by("-timestamp")[:limit]
-        
+
         return [self._model_to_entry(obj) for obj in queryset]
-    
+
     def _get_or_generate_event_id(self, entry: AuditEntry) -> str:
         """
         audit_event_id 조회 또는 생성.
-        
+
         우선순위:
         1. entry.details["audit_event_id"]
         2. entry.details["wal_sequence"] 기반 생성
         3. UUID 생성
         """
         details = entry.details or {}
-        
+
         # 1. 명시적 audit_event_id
         if "audit_event_id" in details:
             return str(details["audit_event_id"])
-        
+
         # 2. WAL sequence 기반
         if "wal_sequence" in details:
             operation = details.get("operation", "pg_insert")
             return f"wal:{details['wal_sequence']}:{operation}"
-        
+
         # 3. UUID 생성
         if self._generate_event_id:
             return f"auto:{uuid.uuid4()}"
-        
+
         raise ValueError("audit_event_id is required but not provided")
-    
+
     def _entry_to_fields(
         self,
         entry: AuditEntry,
@@ -227,7 +219,11 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
     ) -> dict[str, Any]:
         """AuditEntry를 모델 필드 딕셔너리로 변환."""
         return {
-            "action": entry.action.value if isinstance(entry.action, AuditAction) else entry.action,
+            "action": (
+                entry.action.value
+                if isinstance(entry.action, AuditAction)
+                else entry.action
+            ),
             "timestamp": entry.timestamp,
             "actor_id": entry.actor_id or "",
             "actor_type": entry.actor_type or "",
@@ -241,12 +237,18 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             "success": entry.success,
             "error_message": entry.error_message or "",
             # 해시 체인 필드 (details에서 추출)
-            "integrity_hash": (entry.details or {}).get("integrity", {}).get("hash", ""),
-            "previous_hash": (entry.details or {}).get("integrity", {}).get("previous_hash", ""),
-            "sequence_number": (entry.details or {}).get("integrity", {}).get("sequence", 0),
+            "integrity_hash": (entry.details or {})
+            .get("integrity", {})
+            .get("hash", ""),
+            "previous_hash": (entry.details or {})
+            .get("integrity", {})
+            .get("previous_hash", ""),
+            "sequence_number": (entry.details or {})
+            .get("integrity", {})
+            .get("sequence", 0),
         }
-    
-    def _model_to_entry(self, obj: "models.Model") -> AuditEntry:
+
+    def _model_to_entry(self, obj: models.Model) -> AuditEntry:
         """모델 인스턴스를 AuditEntry로 변환."""
         return AuditEntry(
             action=obj.action,
@@ -274,25 +276,25 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
 
 
 def get_django_audit_adapter(
-    model_class: Optional[Type["models.Model"]] = None,
+    model_class: type[models.Model] | None = None,
 ) -> DjangoAuditLogAdapter:
     """
     DjangoAuditLogAdapter 팩토리 함수.
-    
+
     Args:
         model_class: AbstractAuditLog 상속 모델 (None이면 shopping.models.AuditLog)
-    
+
     Returns:
         DjangoAuditLogAdapter 인스턴스
     """
     if model_class is None:
         try:
             from shopping.models import AuditLog
+
             model_class = AuditLog
         except ImportError:
             raise ImportError(
-                "shopping.models.AuditLog not found. "
-                "Provide model_class explicitly."
+                "shopping.models.AuditLog not found. " "Provide model_class explicitly."
             )
-    
+
     return DjangoAuditLogAdapter(model_class=model_class)

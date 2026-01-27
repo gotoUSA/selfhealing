@@ -16,33 +16,25 @@ All exports remain available from this module for backward compatibility.
 """
 
 # Re-export everything from refactored modules for backward compatibility
-from selfhealing.services.chaos.base import (
-    # Protocols
+from selfhealing.services.chaos.base import (  # Protocols; Enums; Data Classes; Base Class
     AuditRecorderProtocol,
-    KillSwitchProtocol,
-    # Enums
-    ExperimentStatus,
-    ExperimentType,
-    TrafficType,
-    # Data Classes
+    ChaosExperiment,
     ExperimentConfig,
     ExperimentResult,
+    ExperimentStatus,
+    ExperimentType,
+    KillSwitchProtocol,
     SteadyStateHypothesis,
-    # Base Class
-    ChaosExperiment,
+    TrafficType,
 )
-
-from selfhealing.services.chaos.experiments import (
-    # Concrete Experiments
-    LatencyInjectionExperiment,
+from selfhealing.services.chaos.experiments import (  # Concrete Experiments; Factory
     Error5xxExperiment,
+    LatencyInjectionExperiment,
     PacketLossExperiment,
-    TimeoutExperiment,
     ResourceExhaustionExperiment,
-    # Factory
+    TimeoutExperiment,
     create_experiment,
 )
-
 
 __all__ = [
     # Protocols

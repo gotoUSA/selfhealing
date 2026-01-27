@@ -14,9 +14,8 @@ Strategies:
 - 기타 config 타입별 delay...
 """
 
-from enum import Enum
 from dataclasses import dataclass
-from typing import Optional
+from enum import Enum
 
 from selfhealing.settings.apply_strategy import get_apply_strategy_settings
 
@@ -50,26 +49,32 @@ class ApplyOptions:
 # =============================================================================
 
 # Config types where changes have no operational impact
-SAFE_IMMEDIATE_CONFIGS = frozenset([
-    "sla",
-    "metrics",
-    "notification",
-    "forensic",
-])
+SAFE_IMMEDIATE_CONFIGS = frozenset(
+    [
+        "sla",
+        "metrics",
+        "notification",
+        "forensic",
+    ]
+)
 
 # Config types that control traffic/protection - need care
-CRITICAL_CONFIGS = frozenset([
-    "circuit_breaker",
-    "rate_limit",
-    "security",
-    "idempotency",
-])
+CRITICAL_CONFIGS = frozenset(
+    [
+        "circuit_breaker",
+        "rate_limit",
+        "security",
+        "idempotency",
+    ]
+)
 
 # Config types that affect processing
-PROCESSING_CONFIGS = frozenset([
-    "retry",
-    "dlq",
-])
+PROCESSING_CONFIGS = frozenset(
+    [
+        "retry",
+        "dlq",
+    ]
+)
 
 
 @dataclass
@@ -79,13 +84,13 @@ class DefaultApplyConfig:
     strategy: ApplyStrategy
     delay_seconds: int = 0
     grace_timeout_seconds: int = 60
-    warning_message: Optional[str] = None
+    warning_message: str | None = None
 
 
 def _get_default_apply_strategies() -> dict[str, DefaultApplyConfig]:
     """
     ApplyStrategySettings에서 delay 값을 로드하여 기본 전략 딕셔너리 생성.
-    
+
     환경변수로 config 타입별 delay_seconds 오버라이드 가능.
     """
     settings = get_apply_strategy_settings()
@@ -158,9 +163,9 @@ def get_default_apply_config(config_type: str) -> DefaultApplyConfig:
 
 def get_effective_apply_options(
     config_type: str,
-    strategy: Optional[str] = None,
-    delay_seconds: Optional[int] = None,
-    grace_timeout_seconds: Optional[int] = None,
+    strategy: str | None = None,
+    delay_seconds: int | None = None,
+    grace_timeout_seconds: int | None = None,
 ) -> ApplyOptions:
     """
     Get effective apply options, merging user overrides with defaults.
@@ -177,13 +182,13 @@ def get_effective_apply_options(
     default = get_default_apply_config(config_type)
 
     # Determine effective strategy
-    effective_strategy = (
-        ApplyStrategy(strategy) if strategy else default.strategy
-    )
+    effective_strategy = ApplyStrategy(strategy) if strategy else default.strategy
 
     # Determine effective delay
     if effective_strategy == ApplyStrategy.DELAYED:
-        effective_delay = delay_seconds if delay_seconds is not None else default.delay_seconds
+        effective_delay = (
+            delay_seconds if delay_seconds is not None else default.delay_seconds
+        )
         # Ensure at least 1 second for delayed
         if effective_delay <= 0:
             effective_delay = default.delay_seconds or 10
@@ -192,7 +197,8 @@ def get_effective_apply_options(
 
     # Determine effective grace timeout
     effective_grace = (
-        grace_timeout_seconds if grace_timeout_seconds is not None
+        grace_timeout_seconds
+        if grace_timeout_seconds is not None
         else default.grace_timeout_seconds
     )
 

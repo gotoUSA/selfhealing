@@ -6,7 +6,6 @@ Provides common configuration for all settings classes.
 
 from pydantic_settings import SettingsConfigDict
 
-
 # Common configuration for all settings
 COMMON_SETTINGS_CONFIG = SettingsConfigDict(
     env_file=".env",

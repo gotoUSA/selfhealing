@@ -5,14 +5,13 @@ Blast Radius DNA 서비스의 REST API 엔드포인트
 """
 
 import logging
-from typing import List
 
 from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class BlastRadiusPolicyView(APIView):
     POST /api/self-healing/blast-radius/policy/<stage_name>/ - 정책 설정 (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
@@ -95,7 +94,7 @@ class BlastRadiusDependencyView(APIView):
     POST /api/self-healing/blast-radius/dependency/                - 의존성 추가 (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
@@ -145,7 +144,7 @@ class BlastRadiusAssessmentView(APIView):
     POST /api/self-healing/blast-radius/assessment/ - 영향 평가 수행 (Operator)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsOperator()]
@@ -193,7 +192,7 @@ class BlastRadiusIsolationView(APIView):
     DELETE /api/self-healing/blast-radius/isolation/<service_name>/ - 격리 해제 (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]

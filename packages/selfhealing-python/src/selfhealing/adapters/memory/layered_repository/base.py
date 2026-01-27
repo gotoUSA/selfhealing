@@ -8,24 +8,21 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import TYPE_CHECKING
 
-from selfhealing.adapters.memory.base import _now
 from selfhealing.adapters.memory.drift_reconciliation import (
     DriftReconciler,
     get_drift_reconciler,
 )
-from selfhealing.adapters.memory.shadow_logger import get_shadow_logger, ShadowLogger
+from selfhealing.adapters.memory.shadow_logger import get_shadow_logger
 from selfhealing.interfaces.repositories import (
     CircuitBreakerStateRepository,
-    CircuitBreakerStateData,
 )
 
 if TYPE_CHECKING:
-    from selfhealing.adapters.memory.circuit_breaker import InMemoryCircuitBreakerStateRepository
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +35,7 @@ class LayeredRepositoryBase:
     """
 
     # ThreadPoolExecutor for async L2 operations with timeout
-    _executor: Optional[ThreadPoolExecutor] = None
+    _executor: ThreadPoolExecutor | None = None
     _executor_lock = threading.Lock()
 
     @classmethod
@@ -47,15 +44,17 @@ class LayeredRepositoryBase:
         if cls._executor is None:
             with cls._executor_lock:
                 if cls._executor is None:
-                    cls._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="l2_sync")
+                    cls._executor = ThreadPoolExecutor(
+                        max_workers=4, thread_name_prefix="l2_sync"
+                    )
         return cls._executor
 
     def __init__(
         self,
-        l2_repo: Optional[CircuitBreakerStateRepository] = None,
+        l2_repo: CircuitBreakerStateRepository | None = None,
         sync_interval_seconds: float = 5.0,
         adapter_type: str = "unknown",
-        drift_reconciler: Optional[DriftReconciler] = None,
+        drift_reconciler: DriftReconciler | None = None,
     ):
         """
         Args:
@@ -65,20 +64,22 @@ class LayeredRepositoryBase:
             drift_reconciler: 드리프트 복구 인스턴스. None이면 기본 인스턴스 사용.
         """
         # Lazy import to avoid circular dependency
-        from selfhealing.adapters.memory.circuit_breaker import InMemoryCircuitBreakerStateRepository
+        from selfhealing.adapters.memory.circuit_breaker import (
+            InMemoryCircuitBreakerStateRepository,
+        )
 
         self._l1 = InMemoryCircuitBreakerStateRepository()
         self._l2 = l2_repo
         self._sync_interval = sync_interval_seconds
         self._adapter_type = adapter_type
-        self._last_sync_time: Optional[datetime] = None
+        self._last_sync_time: datetime | None = None
         self._lock = threading.RLock()
         self._shadow_logger = get_shadow_logger()
         self._drift_reconciler = drift_reconciler or get_drift_reconciler()
 
         # L2 연결 상태 추적
         self._l2_healthy = True
-        self._l2_last_error_time: Optional[datetime] = None
+        self._l2_last_error_time: datetime | None = None
         self._l2_consecutive_failures = 0
         self._l2_was_unhealthy = False  # L2 복구 감지용
 

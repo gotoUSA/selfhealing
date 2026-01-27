@@ -8,7 +8,7 @@ All operations are pass-through with no side effects.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.adapters.airgap.base import BaseAirGapAdapter
 
@@ -37,9 +37,7 @@ class NullAirGapAdapter(BaseAirGapAdapter):
         """Initialize NullAirGapAdapter."""
         logger.debug("[AirGap] NullAirGapAdapter initialized (Air-Gap disabled)")
 
-    def write_summary(
-        self, key: str, value: Any, ttl: Optional[int] = None
-    ) -> bool:
+    def write_summary(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """
         쓰기 작업 무시 (no-op).
 
@@ -77,7 +75,7 @@ class NullAirGapAdapter(BaseAirGapAdapter):
         """
         return True
 
-    def read_many(self, keys: List[str]) -> Dict[str, Any]:
+    def read_many(self, keys: list[str]) -> dict[str, Any]:
         """
         모든 키에 대해 None 반환.
 
@@ -87,7 +85,7 @@ class NullAirGapAdapter(BaseAirGapAdapter):
         Returns:
             모든 값이 None인 딕셔너리
         """
-        return {key: None for key in keys}
+        return dict.fromkeys(keys)
 
     def increment(self, key: str, amount: int = 1) -> int:
         """

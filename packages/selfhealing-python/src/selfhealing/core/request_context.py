@@ -5,9 +5,10 @@ Provides context manager and utilities for request tracking.
 Framework adapters can use this for integration.
 """
 
-from contextlib import contextmanager
-from typing import Optional, Generator, Any, Dict
 import uuid
+from collections.abc import Generator
+from contextlib import contextmanager
+from typing import Any
 
 from .shutdown_coordinator import RequestTracker, TrackedRequest
 
@@ -28,17 +29,17 @@ class RequestContext:
     def __init__(
         self,
         tracker: RequestTracker,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
         endpoint: str = "",
         method: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         self._tracker = tracker
         self._request_id = request_id or str(uuid.uuid4())
         self._endpoint = endpoint
         self._method = method
         self._metadata = metadata or {}
-        self._tracked: Optional[TrackedRequest] = None
+        self._tracked: TrackedRequest | None = None
         self._success = True
 
     @property
@@ -77,7 +78,7 @@ class RequestContext:
 @contextmanager
 def track_request(
     tracker: RequestTracker,
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
     endpoint: str = "",
     method: str = "",
 ) -> Generator[RequestContext, None, None]:

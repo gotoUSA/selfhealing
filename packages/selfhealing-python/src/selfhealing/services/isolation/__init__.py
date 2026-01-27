@@ -5,8 +5,8 @@ Provides region-level traffic isolation for multi-cluster environments.
 """
 
 from selfhealing.services.isolation.regional_gate import (
-    RegionalIsolationGate,
     IsolationInfo,
+    RegionalIsolationGate,
     get_regional_isolation_gate,
     reset_regional_isolation_gate,
 )

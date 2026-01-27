@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -121,7 +120,7 @@ class RetrySettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[RetrySettings] = None
+_settings: RetrySettings | None = None
 
 
 def get_retry_settings() -> RetrySettings:

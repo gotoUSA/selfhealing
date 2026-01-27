@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class MonotonicTTLHelper:
         self._start_time = time.monotonic()
         logger.debug(f"[MonotonicTTL] Timer reset at {self._start_time:.2f}")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """직렬화용 딕셔너리 반환."""
         return {
             "ttl_seconds": self.ttl_seconds,

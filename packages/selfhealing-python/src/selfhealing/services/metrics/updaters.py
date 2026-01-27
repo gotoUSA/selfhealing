@@ -8,28 +8,27 @@ context managers for instrumentation, and alerting rule definitions.
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from functools import wraps
-from typing import TYPE_CHECKING, Callable, Generator
+from typing import TYPE_CHECKING
 
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
 from .definitions import (
-    dlq_pending_gauge,
-    dlq_by_status_gauge,
     circuit_breaker_state,
-    retry_success_rate,
+    dlq_by_status_gauge,
+    dlq_pending_gauge,
     recovery_time_seconds,
+    retry_success_rate,
     shadow_log_unsynced_count,
 )
 from .registry import get_registered_domains
-from .recorders import record_replay_attempt
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
-        FailedOperationRepository,
         CircuitBreakerStateRepository,
+        FailedOperationRepository,
     )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +57,7 @@ def update_shadow_log_metrics() -> None:
 
 
 def update_dlq_pending_gauges(
-    repository: "FailedOperationRepository | None" = None,
+    repository: FailedOperationRepository | None = None,
 ) -> dict[str, int]:
     """
     Update DLQ pending gauges from database.
@@ -93,7 +92,7 @@ def update_dlq_pending_gauges(
 
 
 def update_dlq_status_gauges(
-    repository: "FailedOperationRepository | None" = None,
+    repository: FailedOperationRepository | None = None,
 ) -> dict[str, int]:
     """
     Update DLQ status distribution gauges.
@@ -131,7 +130,7 @@ def update_dlq_status_gauges(
 
 
 def update_circuit_breaker_gauges(
-    repository: "CircuitBreakerStateRepository | None" = None,
+    repository: CircuitBreakerStateRepository | None = None,
 ) -> dict[str, str]:
     """
     Update circuit breaker state gauges from database.
@@ -164,7 +163,7 @@ def update_circuit_breaker_gauges(
 
 
 def update_retry_success_rates(
-    repository: "FailedOperationRepository | None" = None,
+    repository: FailedOperationRepository | None = None,
 ) -> dict[str, float]:
     """
     Calculate and update retry success rate gauges.
@@ -247,14 +246,16 @@ def track_replay(replay_type: str = "single"):
         def batch_replay(...)
     """
     import warnings
+
     warnings.warn(
         "track_replay from selfhealing.services.metrics.updaters is deprecated. "
         "Use selfhealing.metrics.decorators.track_replay instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     # Re-export from the canonical location
     from selfhealing.metrics.decorators import track_replay as _track_replay
+
     return _track_replay(replay_type=replay_type)
 
 

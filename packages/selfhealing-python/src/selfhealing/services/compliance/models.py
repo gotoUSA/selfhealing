@@ -5,22 +5,23 @@ Compliance DNA Models - 규정 준수 관련 데이터 모델
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
 
 
 class ComplianceStandard(Enum):
     """규정 표준"""
-    DORA_2025 = "DORA_2025"       # 디지털 운영 복원력 법
-    PCI_DSS = "PCI-DSS"          # 결제 카드 산업 데이터 보안 표준
-    SOC2 = "SOC2"                # 서비스 조직 통제
-    GDPR = "GDPR"                # 일반 데이터 보호 규정
-    HIPAA = "HIPAA"              # 건강보험 이동성 및 책임법
-    ISO27001 = "ISO27001"        # 정보보안 관리
-    CUSTOM = "CUSTOM"            # 사용자 정의
+
+    DORA_2025 = "DORA_2025"  # 디지털 운영 복원력 법
+    PCI_DSS = "PCI-DSS"  # 결제 카드 산업 데이터 보안 표준
+    SOC2 = "SOC2"  # 서비스 조직 통제
+    GDPR = "GDPR"  # 일반 데이터 보호 규정
+    HIPAA = "HIPAA"  # 건강보험 이동성 및 책임법
+    ISO27001 = "ISO27001"  # 정보보안 관리
+    CUSTOM = "CUSTOM"  # 사용자 정의
 
 
 class ViolationSeverity(Enum):
     """위반 심각도"""
+
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -31,6 +32,7 @@ class ViolationSeverity(Enum):
 @dataclass
 class ComplianceCheck:
     """규정 준수 검사 항목"""
+
     check_id: str
     name: str
     description: str
@@ -38,10 +40,10 @@ class ComplianceCheck:
     category: str = "general"
     required: bool = True
     enabled: bool = True
-    check_function: Optional[str] = None  # 검사 함수 이름
-    parameters: Dict = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict:
+    check_function: str | None = None  # 검사 함수 이름
+    parameters: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
         return {
             "check_id": self.check_id,
             "name": self.name,
@@ -58,6 +60,7 @@ class ComplianceCheck:
 @dataclass
 class ComplianceViolation:
     """규정 위반"""
+
     violation_id: str
     check_id: str
     stage_name: str
@@ -68,9 +71,9 @@ class ComplianceViolation:
     remediation: str = ""
     detected_at: datetime = field(default_factory=datetime.now)
     resolved: bool = False
-    resolved_at: Optional[datetime] = None
-    
-    def to_dict(self) -> Dict:
+    resolved_at: datetime | None = None
+
+    def to_dict(self) -> dict:
         return {
             "violation_id": self.violation_id,
             "check_id": self.check_id,
@@ -89,22 +92,23 @@ class ComplianceViolation:
 @dataclass
 class ComplianceReport:
     """규정 준수 리포트"""
+
     report_id: str
     stage_name: str
-    standards: List[ComplianceStandard]
+    standards: list[ComplianceStandard]
     generated_at: datetime = field(default_factory=datetime.now)
     total_checks: int = 0
     passed_checks: int = 0
     failed_checks: int = 0
-    violations: List[ComplianceViolation] = field(default_factory=list)
+    violations: list[ComplianceViolation] = field(default_factory=list)
     compliance_score: float = 100.0  # 0-100%
-    
+
     @property
     def is_compliant(self) -> bool:
         """규정 준수 여부"""
         return len([v for v in self.violations if not v.resolved]) == 0
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         return {
             "report_id": self.report_id,
             "stage_name": self.stage_name,

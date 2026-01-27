@@ -13,9 +13,13 @@ To activate this backend:
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from selfhealing.audit.backends.base import AsyncAuditBackend, BackendHealth, BackendStatus
+from selfhealing.audit.backends.base import (
+    AsyncAuditBackend,
+    BackendHealth,
+    BackendStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +43,10 @@ class RemoteAuditBackend(AsyncAuditBackend):
     def __init__(
         self,
         server_url: str = "https://audit.internal.example.com:8443",
-        client_cert: Optional[str] = None,
-        client_key: Optional[str] = None,
-        ca_cert: Optional[str] = None,
-        api_key: Optional[str] = None,
+        client_cert: str | None = None,
+        client_key: str | None = None,
+        ca_cert: str | None = None,
+        api_key: str | None = None,
         timeout: int = 30,
         max_retries: int = 3,
     ):
@@ -103,7 +107,7 @@ class RemoteAuditBackend(AsyncAuditBackend):
             logger.error(f"[RemoteAuditBackend] Failed to enable: {e}")
             return False
 
-    def write(self, entry: Dict[str, Any]) -> bool:
+    def write(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry to remote server.
 
@@ -127,7 +131,7 @@ class RemoteAuditBackend(AsyncAuditBackend):
 
         return True
 
-    async def write_async(self, entry: Dict[str, Any]) -> bool:
+    async def write_async(self, entry: dict[str, Any]) -> bool:
         """
         Write an audit log entry asynchronously.
 
@@ -165,12 +169,12 @@ class RemoteAuditBackend(AsyncAuditBackend):
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Query audit logs from remote server.
 
@@ -181,7 +185,7 @@ class RemoteAuditBackend(AsyncAuditBackend):
 
         return []
 
-    def get_configuration_template(self) -> Dict[str, Any]:
+    def get_configuration_template(self) -> dict[str, Any]:
         """Get configuration template for remote audit backend."""
         return {
             "required_packages": ["httpx"],

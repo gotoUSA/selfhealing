@@ -46,12 +46,12 @@ from django.conf import settings
 from django.db.models.signals import post_migrate
 
 if TYPE_CHECKING:
-    from typing import List
+    pass
 
 logger = logging.getLogger(__name__)
 
 # RBAC group definitions
-SELFHEALING_GROUPS: List[str] = [
+SELFHEALING_GROUPS: list[str] = [
     "selfhealing_viewer",
     "selfhealing_operator",
     "selfhealing_admin",
@@ -85,7 +85,9 @@ def create_selfhealing_groups(sender, **kwargs):
             logger.info(f"[SelfHealing] RBAC groups created: {created_groups}")
 
         if existing_groups and created_groups:
-            logger.debug(f"[SelfHealing] RBAC groups already existed: {existing_groups}")
+            logger.debug(
+                f"[SelfHealing] RBAC groups already existed: {existing_groups}"
+            )
 
     except Exception as e:
         # Best-effort: 실패해도 시스템은 시작
@@ -184,16 +186,21 @@ class SelfHealingConfig(AppConfig):
         try:
             # Check if distributed hash chain is enabled
             if not getattr(settings, "SELFHEALING_DISTRIBUTED_HASH_CHAIN", False):
-                logger.debug("[SelfHealing] Distributed hash chain not enabled, skipping sync")
+                logger.debug(
+                    "[SelfHealing] Distributed hash chain not enabled, skipping sync"
+                )
                 return
 
             from pathlib import Path
+
             from selfhealing.audit.integrity import StartupHashChainSync
 
             # Get Redis client
             redis_client = self._get_redis_client_for_hash_chain()
             if redis_client is None:
-                logger.debug("[SelfHealing] Redis client not available for hash chain sync")
+                logger.debug(
+                    "[SelfHealing] Redis client not available for hash chain sync"
+                )
                 return
 
             # Get log directory from settings
@@ -203,7 +210,9 @@ class SelfHealingConfig(AppConfig):
             sync = StartupHashChainSync(
                 redis_client=redis_client,
                 log_dir=log_dir,
-                key_prefix=getattr(settings, "SELFHEALING_REDIS_KEY_PREFIX", "selfhealing:"),
+                key_prefix=getattr(
+                    settings, "SELFHEALING_REDIS_KEY_PREFIX", "selfhealing:"
+                ),
             )
             result = sync.sync()
 
@@ -218,7 +227,9 @@ class SelfHealingConfig(AppConfig):
                         f"synced to file (seq {result.get('file_sequence')})"
                     )
                 elif action == "fresh_start":
-                    logger.info("[SelfHealing] Hash chain sync: Fresh start (no prior state)")
+                    logger.info(
+                        "[SelfHealing] Hash chain sync: Fresh start (no prior state)"
+                    )
                 else:
                     logger.info(f"[SelfHealing] Hash chain sync: {action}")
 
@@ -233,7 +244,9 @@ class SelfHealingConfig(AppConfig):
                 )
 
         except ImportError:
-            logger.debug("[SelfHealing] integrity module not available for hash chain sync")
+            logger.debug(
+                "[SelfHealing] integrity module not available for hash chain sync"
+            )
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
             logger.warning(f"[SelfHealing] Failed to sync hash chain on startup: {e}")
@@ -253,7 +266,9 @@ class SelfHealingConfig(AppConfig):
         try:
             # Strategy 1: Try ResilientStorageBackend
             try:
-                from selfhealing.adapters.resilient.backend import ResilientStorageBackend
+                from selfhealing.adapters.resilient.backend import (
+                    ResilientStorageBackend,
+                )
 
                 backend = ResilientStorageBackend()
                 return backend.get_redis_client()
@@ -293,13 +308,15 @@ class SelfHealingConfig(AppConfig):
         """
         try:
             from selfhealing.core.safe_defaults import (
-                validate_startup_config,
-                FatalConfigError,
                 ENABLE_QUARANTINE_ON_FATAL,
+                FatalConfigError,
+                validate_startup_config,
             )
 
             try:
-                changes = validate_startup_config(log_changes=True, raise_on_fatal=False)
+                changes = validate_startup_config(
+                    log_changes=True, raise_on_fatal=False
+                )
 
                 if changes > 0:
                     logger.info(
@@ -307,7 +324,9 @@ class SelfHealingConfig(AppConfig):
                         f"applied {changes} safe default(s)"
                     )
                 else:
-                    logger.debug("[SelfHealing] Startup config validation: all settings valid")
+                    logger.debug(
+                        "[SelfHealing] Startup config validation: all settings valid"
+                    )
 
             except FatalConfigError as e:
                 # Fatal 설정 위반 시 Quarantine Mode 활성화
@@ -338,8 +357,8 @@ class SelfHealingConfig(AppConfig):
         """
         try:
             from selfhealing.services.emergency_mode import (
-                GracefulDegradationManager,
                 EmergencyLevel,
+                GracefulDegradationManager,
             )
 
             manager = GracefulDegradationManager()
@@ -358,7 +377,9 @@ class SelfHealingConfig(AppConfig):
             )
 
         except ImportError:
-            logger.warning("[SelfHealing] emergency_mode module not available for Quarantine")
+            logger.warning(
+                "[SelfHealing] emergency_mode module not available for Quarantine"
+            )
         except Exception as e:
             logger.error(f"[SelfHealing] Failed to activate Quarantine Mode: {e}")
 

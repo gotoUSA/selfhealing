@@ -44,7 +44,9 @@ class RateLimitTracker:
         cutoff = time.time() - window_seconds
         with self._lock:
             # Clean old entries
-            self._rate_limit_events[service_name] = [t for t in self._rate_limit_events[service_name] if t > cutoff]
+            self._rate_limit_events[service_name] = [
+                t for t in self._rate_limit_events[service_name] if t > cutoff
+            ]
             return len(self._rate_limit_events[service_name])
 
     def get_request_count(self, service_name: str, window_seconds: int) -> int:
@@ -52,7 +54,9 @@ class RateLimitTracker:
         cutoff = time.time() - window_seconds
         with self._lock:
             # Clean old entries
-            self._request_events[service_name] = [t for t in self._request_events[service_name] if t > cutoff]
+            self._request_events[service_name] = [
+                t for t in self._request_events[service_name] if t > cutoff
+            ]
             return len(self._request_events[service_name])
 
     def get_backoff_level(self, service_name: str) -> int:

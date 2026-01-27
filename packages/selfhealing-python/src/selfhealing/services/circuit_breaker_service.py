@@ -35,6 +35,17 @@ from selfhealing.services.circuit_breaker.config import (
     CircuitState,
 )
 
+# Convenience functions
+from selfhealing.services.circuit_breaker.convenience import (
+    force_close_circuit,
+    force_open_circuit,
+    get_circuit_breaker_service,
+    get_protection_status,
+    record_rate_limit,
+    should_allow_request,
+    should_allow_with_protection,
+)
+
 # Rate limit tracking
 from selfhealing.services.circuit_breaker.rate_limit_tracker import (
     RateLimitTracker,
@@ -43,17 +54,6 @@ from selfhealing.services.circuit_breaker.rate_limit_tracker import (
 
 # Main service
 from selfhealing.services.circuit_breaker.service import CircuitBreakerService
-
-# Convenience functions
-from selfhealing.services.circuit_breaker.convenience import (
-    get_circuit_breaker_service,
-    should_allow_request,
-    force_open_circuit,
-    force_close_circuit,
-    record_rate_limit,
-    should_allow_with_protection,
-    get_protection_status,
-)
 
 __all__ = [
     # Config and types

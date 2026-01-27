@@ -15,13 +15,14 @@ Provides:
 
 from __future__ import annotations
 
+import logging
+import ssl
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Callable, Any, TypeVar
-import ssl
-import logging
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,8 @@ class TLSErrorInfo:
     error_message: str
     is_retryable: bool
     detected_at: datetime
-    certificate_expiry: Optional[datetime] = None
-    days_until_expiry: Optional[int] = None
+    certificate_expiry: datetime | None = None
+    days_until_expiry: int | None = None
     recommended_action: str = ""
 
     @property
@@ -88,6 +89,7 @@ class TLSErrorInfo:
 @dataclass(frozen=True)
 class _ErrorPattern:
     """Pattern for matching TLS errors."""
+
     error_type: TLSErrorType
     severity: TLSErrorSeverity
     is_retryable: bool
@@ -191,7 +193,9 @@ class TLSErrorClassifier:
         if not all(p in error_str for p in pattern.patterns):
             return False
         # If any_patterns specified, at least one must match
-        if pattern.any_patterns and not any(p in error_str for p in pattern.any_patterns):
+        if pattern.any_patterns and not any(
+            p in error_str for p in pattern.any_patterns
+        ):
             return False
         # If no any_patterns, patterns alone are sufficient (if non-empty)
         return bool(pattern.patterns) or bool(pattern.any_patterns)
@@ -270,7 +274,7 @@ class SimpleTLSResilientClient(TLSResilientClient):
     def __init__(
         self,
         http_client: Any,  # requests.Session, httpx.Client, etc.
-        error_callback: Optional[Callable[[TLSErrorInfo], None]] = None,
+        error_callback: Callable[[TLSErrorInfo], None] | None = None,
         max_retries: int = 3,
     ):
         """
@@ -288,7 +292,7 @@ class SimpleTLSResilientClient(TLSResilientClient):
 
     def request(self, method: str, url: str, **kwargs) -> Any:
         """Make request with TLS error handling and retry."""
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(self._max_retries):
             try:
@@ -296,7 +300,9 @@ class SimpleTLSResilientClient(TLSResilientClient):
             except ssl.SSLError as e:
                 error_info = self._classifier.classify(e, url)
                 self.on_tls_error(error_info)
-                logger.warning(f"TLS error (attempt {attempt + 1}): {error_info.error_type}")
+                logger.warning(
+                    f"TLS error (attempt {attempt + 1}): {error_info.error_type}"
+                )
 
                 if not error_info.is_retryable:
                     raise
@@ -310,7 +316,9 @@ class SimpleTLSResilientClient(TLSResilientClient):
                 if "ssl" in error_name or "ssl" in error_msg or "tls" in error_msg:
                     error_info = self._classifier.classify(e, url)
                     self.on_tls_error(error_info)
-                    logger.warning(f"TLS error (attempt {attempt + 1}): {error_info.error_type}")
+                    logger.warning(
+                        f"TLS error (attempt {attempt + 1}): {error_info.error_type}"
+                    )
 
                     if not error_info.is_retryable:
                         raise

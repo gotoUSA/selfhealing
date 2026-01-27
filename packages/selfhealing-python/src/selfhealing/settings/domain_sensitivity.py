@@ -18,9 +18,8 @@ Reference:
 """
 
 import logging
-from typing import Dict, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -151,7 +150,7 @@ class DomainSensitivitySettings(BaseSettings):
         }
         return multipliers.get(level_upper, self.level_multiplier_normal)
 
-    def as_domain_dict(self) -> Dict[str, float]:
+    def as_domain_dict(self) -> dict[str, float]:
         """도메인 민감도 딕셔너리 반환."""
         return {
             "payment": self.payment,
@@ -161,7 +160,7 @@ class DomainSensitivitySettings(BaseSettings):
             "analytics": self.analytics,
         }
 
-    def as_level_dict(self) -> Dict[str, float]:
+    def as_level_dict(self) -> dict[str, float]:
         """레벨 승수 딕셔너리 반환."""
         return {
             "NORMAL": self.level_multiplier_normal,
@@ -174,7 +173,7 @@ class DomainSensitivitySettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_domain_sensitivity_settings: Optional[DomainSensitivitySettings] = None
+_domain_sensitivity_settings: DomainSensitivitySettings | None = None
 
 
 def get_domain_sensitivity_settings() -> DomainSensitivitySettings:

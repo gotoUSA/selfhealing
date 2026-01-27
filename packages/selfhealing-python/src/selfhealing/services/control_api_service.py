@@ -13,14 +13,13 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import Any
 
-from selfhealing.core.timezone import now
 from selfhealing.core.constants import (
     ControlAPIActions,
     ControlAPIEnvironments,
     RiskLevels,
 )
+from selfhealing.core.timezone import now
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +57,31 @@ def classify_reason(reason: str) -> str:
 
     # Pattern matching for classification (order matters - more specific first)
     patterns = [
-        (ReasonClassification.MAINTENANCE_WINDOW, ["maintenance", "scheduled", "upgrade", "deploy"]),
-        (ReasonClassification.SLA_BREACH_MITIGATION, ["sla", "breach", "violation", "threshold"]),
+        (
+            ReasonClassification.MAINTENANCE_WINDOW,
+            ["maintenance", "scheduled", "upgrade", "deploy"],
+        ),
+        (
+            ReasonClassification.SLA_BREACH_MITIGATION,
+            ["sla", "breach", "violation", "threshold"],
+        ),
         (ReasonClassification.CHAOS_EXPERIMENT, ["chaos", "experiment", "resilience"]),
-        (ReasonClassification.RECOVERY_PROCEDURE, ["recovery", "recovered", "restored", "fixed"]),
-        (ReasonClassification.SECURITY_INCIDENT, ["security", "attack", "ddos", "vulnerability"]),
+        (
+            ReasonClassification.RECOVERY_PROCEDURE,
+            ["recovery", "recovered", "restored", "fixed"],
+        ),
+        (
+            ReasonClassification.SECURITY_INCIDENT,
+            ["security", "attack", "ddos", "vulnerability"],
+        ),
         (
             ReasonClassification.EXTERNAL_DEPENDENCY_FAILURE,
             ["external", "pg", "payment gateway", "api down", "timeout", "latency"],
         ),
-        (ReasonClassification.INTERNAL_SERVICE_ERROR, ["internal", "service", "error", "bug"]),
+        (
+            ReasonClassification.INTERNAL_SERVICE_ERROR,
+            ["internal", "service", "error", "bug"],
+        ),
     ]
 
     for classification, keywords in patterns:
@@ -108,12 +122,30 @@ def assess_risk_level(action: str, environment: str) -> str:
         (ControlAPIActions.RESET, ControlAPIEnvironments.TEST): RiskLevels.INFO,
         (ControlAPIActions.RESET, ControlAPIEnvironments.CHAOS): RiskLevels.WARNING,
         (ControlAPIActions.RESET, ControlAPIEnvironments.OPS): RiskLevels.WARNING,
-        (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.TEST): RiskLevels.INFO,
-        (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.CHAOS): RiskLevels.HIGH,
-        (ControlAPIActions.INJECT_FAILURE, ControlAPIEnvironments.OPS): RiskLevels.FORBIDDEN,
-        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.TEST): RiskLevels.INFO,
-        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.CHAOS): RiskLevels.INFO,
-        (ControlAPIActions.INJECT_SUCCESS, ControlAPIEnvironments.OPS): RiskLevels.FORBIDDEN,
+        (
+            ControlAPIActions.INJECT_FAILURE,
+            ControlAPIEnvironments.TEST,
+        ): RiskLevels.INFO,
+        (
+            ControlAPIActions.INJECT_FAILURE,
+            ControlAPIEnvironments.CHAOS,
+        ): RiskLevels.HIGH,
+        (
+            ControlAPIActions.INJECT_FAILURE,
+            ControlAPIEnvironments.OPS,
+        ): RiskLevels.FORBIDDEN,
+        (
+            ControlAPIActions.INJECT_SUCCESS,
+            ControlAPIEnvironments.TEST,
+        ): RiskLevels.INFO,
+        (
+            ControlAPIActions.INJECT_SUCCESS,
+            ControlAPIEnvironments.CHAOS,
+        ): RiskLevels.INFO,
+        (
+            ControlAPIActions.INJECT_SUCCESS,
+            ControlAPIEnvironments.OPS,
+        ): RiskLevels.FORBIDDEN,
     }
 
     return risk_matrix.get((action, environment), RiskLevels.WARNING)
@@ -213,7 +245,9 @@ class ControlAPIService:
 
     def __init__(self):
         """Initialize the Control API Service."""
-        from selfhealing.services.circuit_breaker_service import get_circuit_breaker_service
+        from selfhealing.services.circuit_breaker_service import (
+            get_circuit_breaker_service,
+        )
         from selfhealing.services.replay_service import ReplayService
 
         self.circuit_breaker = get_circuit_breaker_service()
@@ -268,7 +302,10 @@ class ControlAPIService:
         except Exception as e:
             logger.exception(f"[ControlAPI] Error executing action: {e}")
             response = ControlResponse(
-                status="error", action_applied=request.action, error_code="EXECUTION_ERROR", error_message=str(e)
+                status="error",
+                action_applied=request.action,
+                error_code="EXECUTION_ERROR",
+                error_message=str(e),
             )
 
         # 4. Add metadata
@@ -319,12 +356,16 @@ class ControlAPIService:
 
         Maps to: Circuit Breaker → OPEN state
         """
-        result = self.circuit_breaker.force_open(service_name=request.service_name, reason=request.reason, controlled_by=None)
+        result = self.circuit_breaker.force_open(
+            service_name=request.service_name, reason=request.reason, controlled_by=None
+        )
 
         # Calculate effective_until
         effective_until = None
         if request.ttl_minutes:
-            effective_until = (now() + timedelta(minutes=request.ttl_minutes)).isoformat()
+            effective_until = (
+                now() + timedelta(minutes=request.ttl_minutes)
+            ).isoformat()
         elif request.environment == ControlAPIEnvironments.OPS:
             # Default 90 minutes in ops
             effective_until = (now() + timedelta(minutes=90)).isoformat()
@@ -353,12 +394,16 @@ class ControlAPIService:
         """
         # For override, we force close (allow) with a TTL
         result = self.circuit_breaker.force_close(
-            service_name=request.service_name, reason=f"OVERRIDE: {request.reason}", controlled_by=None
+            service_name=request.service_name,
+            reason=f"OVERRIDE: {request.reason}",
+            controlled_by=None,
         )
 
         effective_until = None
         if request.ttl_minutes:
-            effective_until = (now() + timedelta(minutes=request.ttl_minutes)).isoformat()
+            effective_until = (
+                now() + timedelta(minutes=request.ttl_minutes)
+            ).isoformat()
 
         if result.success:
             return ControlResponse(
@@ -394,7 +439,9 @@ class ControlAPIService:
         except AttributeError:
             # Fallback if reset_to_default doesn't exist
             result = self.circuit_breaker.force_close(
-                service_name=request.service_name, reason=f"RESET: {request.reason}", controlled_by=None
+                service_name=request.service_name,
+                reason=f"RESET: {request.reason}",
+                controlled_by=None,
             )
 
             return ControlResponse(
@@ -454,7 +501,9 @@ class ControlAPIService:
         }
 
         if request.ttl_minutes:
-            failure_config["expires_at"] = now() + timedelta(minutes=request.ttl_minutes)
+            failure_config["expires_at"] = now() + timedelta(
+                minutes=request.ttl_minutes
+            )
 
         self._failure_injections[request.service_name] = failure_config
 
@@ -472,7 +521,10 @@ class ControlAPIService:
             action_applied="inject_failure",
             system_state="block",  # Failures being injected
             effective_until=effective_until,
-            evidence={"failure_rate": failure_config["failure_rate"], "failure_type": failure_config["failure_type"]},
+            evidence={
+                "failure_rate": failure_config["failure_rate"],
+                "failure_type": failure_config["failure_type"],
+            },
         )
 
     def _execute_inject_success(self, request: ControlRequest) -> ControlResponse:
@@ -572,7 +624,9 @@ class ControlAPIService:
             return {
                 "failure_count": state.failure_count,
                 "success_count": state.success_count,
-                "last_failure_at": state.last_failure_at.isoformat() if state.last_failure_at else None,
+                "last_failure_at": (
+                    state.last_failure_at.isoformat() if state.last_failure_at else None
+                ),
             }
         except Exception as e:
             logger.warning(f"[ControlAPI] Failed to gather evidence: {e}")
@@ -614,7 +668,11 @@ class ControlAPIService:
         """
         states = self.circuit_breaker.get_all_states()
 
-        return {"services": states, "environment": environment, "timestamp": now().isoformat()}
+        return {
+            "services": states,
+            "environment": environment,
+            "timestamp": now().isoformat(),
+        }
 
     def get_service_status(self, service_name: str) -> dict:
         """
@@ -694,12 +752,12 @@ class ControlAPIService:
         start_time = time.time()
 
         from selfhealing.core.timezone import now as get_now
+        from selfhealing.factory import ProviderRegistry
         from selfhealing.services.metrics.registry import get_registered_domains
         from selfhealing.services.metrics.updaters import (
             update_dlq_pending_gauges,
             update_retry_success_rates,
         )
-        from selfhealing.factory import ProviderRegistry
 
         current_time = get_now()
         five_min_ago = current_time - timedelta(minutes=5)
@@ -724,9 +782,17 @@ class ControlAPIService:
             pass
 
         # Calculate aggregate service counts
-        total_services = len(set(list(dlq_pending.keys()) + list(cb_states.keys()) + get_registered_domains()))
+        total_services = len(
+            set(
+                list(dlq_pending.keys())
+                + list(cb_states.keys())
+                + get_registered_domains()
+            )
+        )
         healthy_services = sum(1 for s in cb_states.values() if s == "closed")
-        degraded_services = sum(1 for s in cb_states.values() if s in ("open", "half_open"))
+        degraded_services = sum(
+            1 for s in cb_states.values() if s in ("open", "half_open")
+        )
 
         # Calculate 5-minute failure rate from repository
         last_5m_failure_rate = 0.0
@@ -739,7 +805,9 @@ class ControlAPIService:
                 stats = failed_op_repo.get_statistics()
                 # Use statistics if available
                 if stats:
-                    last_5m_failure_rate = stats.get("pending_count", 0) / max(stats.get("total_count", 1), 1)
+                    last_5m_failure_rate = stats.get("pending_count", 0) / max(
+                        stats.get("total_count", 1), 1
+                    )
                     last_5m_request_count = stats.get("total_count", 0)
                     avg_time_to_recovery = stats.get("avg_resolution_time_seconds")
         except Exception:

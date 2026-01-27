@@ -17,13 +17,13 @@ Usage:
         require_automation_allowed,
         AutomationBlockedError,
     )
-    
+
     # 방법 1: 조건 체크
     result = check_automation_allowed()
     if not result.allowed:
         logger.warning(f"Automation blocked: {result.reason}")
         return  # 자동화 중단
-    
+
     # 방법 2: 예외 발생 (권장)
     try:
         require_automation_allowed(action="dlq_auto_replay")
@@ -37,41 +37,40 @@ Reference:
 - 설계 철학: "보고는 자동, 결정은 수동"
 """
 
+from selfhealing.services.error_budget_gate.alert_manager import (
+    GateAlertManager,
+)
+
 # Configuration
 from selfhealing.services.error_budget_gate.config import (
     ErrorBudgetGateConfig,
-    GateStatus,
     GateCheckResult,
-)
-
-# Components
-from selfhealing.services.error_budget_gate.rate_limiter import (
-    InMemoryRateLimiter,
-)
-from selfhealing.services.error_budget_gate.fault_detector import (
-    GateFaultState,
-    GateFaultDetector,
-    # Deprecated aliases는 __getattr__을 통해 lazy load됨
-)
-from selfhealing.services.error_budget_gate.alert_manager import (
-    GateAlertManager,
+    GateStatus,
 )
 
 # Exceptions
 from selfhealing.services.error_budget_gate.exceptions import (
     AutomationBlockedError,
 )
+from selfhealing.services.error_budget_gate.fault_detector import (  # Deprecated aliases는 __getattr__을 통해 lazy load됨
+    GateFaultDetector,
+    GateFaultState,
+)
 
 # Gate & Convenience Functions
 from selfhealing.services.error_budget_gate.gate import (
     ErrorBudgetGate,
-    get_error_budget_gate,
-    check_automation_allowed,
-    require_automation_allowed,
-    is_automation_allowed,
     automation_gate,
+    check_automation_allowed,
+    get_error_budget_gate,
+    is_automation_allowed,
+    require_automation_allowed,
 )
 
+# Components
+from selfhealing.services.error_budget_gate.rate_limiter import (
+    InMemoryRateLimiter,
+)
 
 # =============================================================================
 # Deprecated 별칭 - __getattr__ 패턴으로 DeprecationWarning 발생
@@ -88,15 +87,16 @@ _deprecated_warned_init: set = set()
 def __getattr__(name: str):
     """
     Deprecated 별칭 접근 시 DeprecationWarning 발생.
-    
+
     .. deprecated:: 2.0.0
         CircuitState -> GateFaultState
         InMemoryCircuitBreaker -> GateFaultDetector
         Will be removed in version 3.0.0.
     """
     import warnings
+
     from selfhealing.services.error_budget_gate import fault_detector
-    
+
     if name in _DEPRECATED_ALIASES:
         new_name = _DEPRECATED_ALIASES[name]
         if name not in _deprecated_warned_init:

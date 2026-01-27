@@ -17,10 +17,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from decimal import Decimal
 from enum import Enum
-from typing import Any, Optional
-
+from typing import Any
 
 # ============================================================================
 # Enums (Framework-independent)
@@ -30,7 +28,7 @@ from typing import Any, Optional
 class FailedOperationDomain(str, Enum):
     """
     Domain classification for failed operations (domain-neutral).
-    
+
     Core domains are framework-agnostic. Application-specific domains
     (like 'payment', 'order') should be registered via adapter configuration.
     """
@@ -121,10 +119,10 @@ class FailedOperationData:
     # Generic entity references (domain-neutral)
     # For single entity: entity_type="order", entity_id="123"
     # For multiple entities: use entity_refs dict
-    entity_type: Optional[str] = None
-    entity_id: Optional[str] = None
+    entity_type: str | None = None
+    entity_id: str | None = None
     entity_refs: dict[str, Any] = field(default_factory=dict)  # Legacy/extended refs
-    user_id: Optional[int] = None
+    user_id: int | None = None
 
     # Snapshot Data
     snapshot_data: dict[str, Any] = field(default_factory=dict)
@@ -136,7 +134,7 @@ class FailedOperationData:
     # Retry Tracking
     retry_count: int = 0
     max_retries: int = 2
-    last_retry_at: Optional[datetime] = None
+    last_retry_at: datetime | None = None
 
     # Forensic Context
     request_data: dict[str, Any] = field(default_factory=dict)
@@ -144,8 +142,8 @@ class FailedOperationData:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # Resolution
-    resolved_at: Optional[datetime] = None
-    resolved_by_id: Optional[int] = None
+    resolved_at: datetime | None = None
+    resolved_by_id: int | None = None
     resolution_type: str = ""
     resolution_note: str = ""
 
@@ -154,9 +152,9 @@ class FailedOperationData:
     recommended_action: str = ""
 
     # Lifecycle
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    expires_at: datetime | None = None
 
     @property
     def is_pending(self) -> bool:
@@ -184,7 +182,7 @@ class CircuitBreakerStateData:
 
     # Identity
     service_name: str
-    id: Optional[int] = None
+    id: int | None = None
 
     # State
     state: str = CircuitBreakerStateEnum.CLOSED.value
@@ -192,21 +190,21 @@ class CircuitBreakerStateData:
     success_count: int = 0
 
     # Timing
-    last_failure_at: Optional[datetime] = None
-    opened_at: Optional[datetime] = None
+    last_failure_at: datetime | None = None
+    opened_at: datetime | None = None
 
     # Manual Control
     manually_controlled: bool = False
-    controlled_by_id: Optional[int] = None
+    controlled_by_id: int | None = None
     control_reason: str = ""
-    manual_override_expires_at: Optional[datetime] = None
+    manual_override_expires_at: datetime | None = None
 
     # Half-Open Tracking
     half_open_request_count: int = 0
 
     # Lifecycle
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     @property
     def is_open(self) -> bool:
@@ -241,9 +239,9 @@ class SecurityIncidentData:
     status: str
 
     # Source Information
-    source_ip: Optional[str] = None
+    source_ip: str | None = None
     user_agent: str = ""
-    user_id: Optional[int] = None
+    user_id: int | None = None
 
     # Generic entity references (domain-neutral)
     entity_refs: dict[str, int] = field(default_factory=dict)
@@ -253,13 +251,13 @@ class SecurityIncidentData:
     raw_payload: dict[str, Any] = field(default_factory=dict)
 
     # Investigation
-    assigned_to_id: Optional[int] = None
+    assigned_to_id: int | None = None
     investigation_notes: str = ""
-    resolved_at: Optional[datetime] = None
+    resolved_at: datetime | None = None
 
     # Lifecycle
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     @property
     def is_critical(self) -> bool:
@@ -296,12 +294,12 @@ class FailedOperationRepository(ABC):
         failure_type: str,
         error_message: str = "",
         error_code: str = "",
-        entity_refs: Optional[dict[str, int]] = None,
-        user_id: Optional[int] = None,
-        snapshot_data: Optional[dict[str, Any]] = None,
-        request_data: Optional[dict[str, Any]] = None,
-        response_data: Optional[dict[str, Any]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        entity_refs: dict[str, int] | None = None,
+        user_id: int | None = None,
+        snapshot_data: dict[str, Any] | None = None,
+        request_data: dict[str, Any] | None = None,
+        response_data: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         retry_count: int = 0,
         max_retries: int = 2,
         next_action_hint: str = "",
@@ -311,7 +309,7 @@ class FailedOperationRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_id(self, id: int) -> Optional[FailedOperationData]:
+    def get_by_id(self, id: int) -> FailedOperationData | None:
         """Get a failed operation by ID"""
         ...
 
@@ -336,7 +334,7 @@ class FailedOperationRepository(ABC):
         status: str,
         resolution_type: str = "",
         resolution_note: str = "",
-        resolved_by_id: Optional[int] = None,
+        resolved_by_id: int | None = None,
     ) -> bool:
         """Update the status of a failed operation"""
         ...
@@ -352,7 +350,7 @@ class FailedOperationRepository(ABC):
         id: int,
         resolution_type: str,
         resolution_note: str = "",
-        resolved_by_id: Optional[int] = None,
+        resolved_by_id: int | None = None,
     ) -> bool:
         """Mark a failed operation as resolved"""
         ...
@@ -379,8 +377,8 @@ class FailedOperationRepository(ABC):
     def find_by_status(
         self,
         status: str,
-        domain: Optional[str] = None,
-        failure_type: Optional[str] = None,
+        domain: str | None = None,
+        failure_type: str | None = None,
         limit: int = 100,
     ) -> list[FailedOperationData]:
         """Find operations by status with optional filters"""
@@ -390,8 +388,8 @@ class FailedOperationRepository(ABC):
     def find_replayable(
         self,
         max_retries: int,
-        domain: Optional[str] = None,
-        failure_type: Optional[str] = None,
+        domain: str | None = None,
+        failure_type: str | None = None,
         limit: int = 100,
     ) -> list[FailedOperationData]:
         """Find operations that can be replayed (pending and retry_count < max_retries)"""
@@ -401,7 +399,7 @@ class FailedOperationRepository(ABC):
     def find_sla_breached(
         self,
         current_time: datetime,
-        sla_thresholds: dict[str, "timedelta"],
+        sla_thresholds: dict[str, timedelta],
     ) -> list[FailedOperationData]:
         """Find operations that have breached their SLA"""
         ...
@@ -428,7 +426,7 @@ class FailedOperationRepository(ABC):
         self,
         id: int,
         max_retries: int,
-    ) -> Optional[FailedOperationData]:
+    ) -> FailedOperationData | None:
         """
         Atomically acquire a DLQ entry for replay.
 
@@ -467,8 +465,8 @@ class FailedOperationRepository(ABC):
         success: bool,
         resolution_type: str = "",
         note: str = "",
-        resolved_by_id: Optional[int] = None,
-        error_details: Optional[dict[str, Any]] = None,
+        resolved_by_id: int | None = None,
+        error_details: dict[str, Any] | None = None,
     ) -> bool:
         """
         Complete a replay operation by updating the final status.
@@ -538,8 +536,8 @@ class FailedOperationRepository(ABC):
     @abstractmethod
     def purge_archived(
         self,
-        ids: Optional[list[int]] = None,
-        older_than_days: Optional[int] = None,
+        ids: list[int] | None = None,
+        older_than_days: int | None = None,
     ) -> int:
         """
         Permanently delete archived entries.
@@ -594,7 +592,9 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_service_name(self, service_name: str) -> Optional[CircuitBreakerStateData]:
+    def get_by_service_name(
+        self, service_name: str
+    ) -> CircuitBreakerStateData | None:
         """Get circuit breaker state by service name"""
         ...
 
@@ -603,9 +603,9 @@ class CircuitBreakerStateRepository(ABC):
         self,
         service_name: str,
         state: str,
-        failure_count: Optional[int] = None,
-        success_count: Optional[int] = None,
-        opened_at: Optional[datetime] = None,
+        failure_count: int | None = None,
+        success_count: int | None = None,
+        opened_at: datetime | None = None,
     ) -> bool:
         """Update circuit breaker state"""
         ...
@@ -625,15 +625,17 @@ class CircuitBreakerStateRepository(ABC):
         self,
         service_name: str,
         state: str,
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         reason: str = "",
-        expires_at: Optional[datetime] = None,
+        expires_at: datetime | None = None,
     ) -> bool:
         """Set manual control on a circuit breaker"""
         ...
 
     @abstractmethod
-    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+    def clear_manual_control(
+        self, service_name: str, preserve_reason: bool = False
+    ) -> bool:
         """Clear manual control from a circuit breaker
 
         Args:
@@ -666,7 +668,7 @@ class CircuitBreakerStateRepository(ABC):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
         ttl_minutes: int = 90,
     ) -> tuple[bool, str, str]:
         """
@@ -702,7 +704,7 @@ class CircuitBreakerStateRepository(ABC):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple[bool, str, str]:
         """
         Atomically force close a circuit breaker.
@@ -724,7 +726,7 @@ class CircuitBreakerStateRepository(ABC):
         self,
         service_name: str,
         reason: str = "",
-        controlled_by_id: Optional[int] = None,
+        controlled_by_id: int | None = None,
     ) -> tuple[bool, str, str]:
         """
         Atomically reset a circuit breaker to initial state.
@@ -756,17 +758,17 @@ class SecurityIncidentRepository(ABC):
         incident_type: str,
         severity: str,
         description: str = "",
-        source_ip: Optional[str] = None,
+        source_ip: str | None = None,
         user_agent: str = "",
-        user_id: Optional[int] = None,
-        entity_refs: Optional[dict[str, int]] = None,
-        raw_payload: Optional[dict[str, Any]] = None,
+        user_id: int | None = None,
+        entity_refs: dict[str, int] | None = None,
+        raw_payload: dict[str, Any] | None = None,
     ) -> SecurityIncidentData:
         """Create a new security incident"""
         ...
 
     @abstractmethod
-    def get_by_id(self, id: int) -> Optional[SecurityIncidentData]:
+    def get_by_id(self, id: int) -> SecurityIncidentData | None:
         """Get a security incident by ID"""
         ...
 
@@ -802,7 +804,7 @@ class SecurityIncidentRepository(ABC):
         id: int,
         status: str,
         investigation_notes: str = "",
-        assigned_to_id: Optional[int] = None,
+        assigned_to_id: int | None = None,
     ) -> bool:
         """Update incident status"""
         ...

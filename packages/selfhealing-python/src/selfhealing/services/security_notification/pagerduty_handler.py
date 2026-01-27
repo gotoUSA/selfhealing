@@ -7,7 +7,7 @@ Handles PagerDuty-specific incident triggering.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -50,7 +50,7 @@ class PagerDutyHandlerMixin:
         incident_id: int,
         incident_type: str,
         description: str,
-        source_ip: Optional[str],
+        source_ip: str | None,
     ) -> NotificationResult:
         """
         Trigger a PagerDuty incident.
@@ -144,6 +144,7 @@ class PagerDutyHandlerMixin:
 
         try:
             import hashlib
+
             dedup_key = hashlib.md5(f"{message['title']}".encode()).hexdigest()[:16]
 
             payload = {

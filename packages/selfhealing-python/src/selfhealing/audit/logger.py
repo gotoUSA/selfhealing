@@ -5,16 +5,22 @@ Provides a unified interface for logging configuration changes
 with privacy protection, tamper detection, and multi-backend support.
 """
 
-import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
-from selfhealing.audit.backends import CompositeBackend, LocalFileBackend, get_default_backend
+from selfhealing.audit.backends import (
+    CompositeBackend,
+    get_default_backend,
+)
 from selfhealing.audit.backends.base import AuditBackend
-from selfhealing.audit.masking import extract_ip_from_request, mask_ip, mask_sensitive_fields
+from selfhealing.audit.masking import (
+    extract_ip_from_request,
+    mask_ip,
+    mask_sensitive_fields,
+)
 from selfhealing.audit.trace import get_trace_id
 
 logger = logging.getLogger(__name__)
@@ -43,19 +49,19 @@ class ConfigChangeEvent:
 
     config_type: str
     config_key: str
-    action: Union[AuditAction, str]
+    action: AuditAction | str
     old_value: Any = None
     new_value: Any = None
-    reason: Optional[str] = None
-    user: Optional[str] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    reason: str | None = None
+    user: str | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
     source: str = "api"  # api, cli, system, scheduler
-    apply_strategy: Optional[str] = None
-    apply_delay_seconds: Optional[int] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    apply_strategy: str | None = None
+    apply_delay_seconds: int | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         result = asdict(self)
         if isinstance(result["action"], AuditAction):
@@ -81,9 +87,9 @@ class AuditLogger:
 
     def __init__(
         self,
-        backend: Optional[AuditBackend] = None,
+        backend: AuditBackend | None = None,
         mask_ip_addresses: bool = True,
-        sensitive_fields: Optional[List[str]] = None,
+        sensitive_fields: list[str] | None = None,
         enable_console_log: bool = True,
     ):
         """
@@ -117,7 +123,7 @@ class AuditLogger:
     @classmethod
     def configure(
         cls,
-        backend: Optional[AuditBackend] = None,
+        backend: AuditBackend | None = None,
         **kwargs,
     ) -> "AuditLogger":
         """Configure the singleton instance."""
@@ -126,7 +132,7 @@ class AuditLogger:
 
     def log_change(
         self,
-        event: Union[ConfigChangeEvent, Dict[str, Any]],
+        event: ConfigChangeEvent | dict[str, Any],
         request=None,
     ) -> bool:
         """
@@ -174,9 +180,9 @@ class AuditLogger:
         config_key: str,
         old_value: Any,
         new_value: Any,
-        user: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        reason: Optional[str] = None,
+        user: str | None = None,
+        ip_address: str | None = None,
+        reason: str | None = None,
         request=None,
         **kwargs,
     ) -> bool:
@@ -210,8 +216,8 @@ class AuditLogger:
     def log_batch_update(
         self,
         config_type: str,
-        changes: List[Dict[str, Any]],
-        user: Optional[str] = None,
+        changes: list[dict[str, Any]],
+        user: str | None = None,
         request=None,
     ) -> bool:
         """
@@ -241,7 +247,7 @@ class AuditLogger:
 
         return success
 
-    def _build_entry(self, event_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_entry(self, event_dict: dict[str, Any]) -> dict[str, Any]:
         """Build the full audit log entry."""
         now = datetime.now(timezone.utc)
 
@@ -279,12 +285,14 @@ class AuditLogger:
                 "new_value": event_dict.get("new_value"),
                 "reason": event_dict.get("reason"),
             },
-            "apply_strategy": {
-                "strategy": event_dict.get("apply_strategy"),
-                "delay_seconds": event_dict.get("apply_delay_seconds"),
-            }
-            if event_dict.get("apply_strategy")
-            else None,
+            "apply_strategy": (
+                {
+                    "strategy": event_dict.get("apply_strategy"),
+                    "delay_seconds": event_dict.get("apply_delay_seconds"),
+                }
+                if event_dict.get("apply_strategy")
+                else None
+            ),
             "metadata": event_dict.get("metadata", {}),
         }
 
@@ -293,7 +301,7 @@ class AuditLogger:
 
         return entry
 
-    def _log_to_console(self, entry: Dict[str, Any]) -> None:
+    def _log_to_console(self, entry: dict[str, Any]) -> None:
         """Log to standard Python logging."""
         change = entry.get("change", {})
         actor = entry.get("actor", {})
@@ -326,12 +334,12 @@ class AuditLogger:
 
     def query(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        config_type: Optional[str] = None,
-        user: Optional[str] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        config_type: str | None = None,
+        user: str | None = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Query audit logs."""
         return self._backend.query(
             start_time=start_time,
@@ -341,7 +349,7 @@ class AuditLogger:
             limit=limit,
         )
 
-    def get_backend_health(self) -> Dict[str, Any]:
+    def get_backend_health(self) -> dict[str, Any]:
         """Get health status of all backends."""
         if isinstance(self._backend, CompositeBackend):
             return {
@@ -367,7 +375,7 @@ def log_config_change(
     config_key: str,
     old_value: Any,
     new_value: Any,
-    user: Optional[str] = None,
+    user: str | None = None,
     request=None,
     **kwargs,
 ) -> bool:

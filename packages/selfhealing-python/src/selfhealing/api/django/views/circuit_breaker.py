@@ -20,11 +20,11 @@ Note:
 import logging
 
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.serializers import (
     ControlRequestSerializer,
 )
@@ -70,7 +70,7 @@ class ControlActionView(APIView):
     Execute Self-Healing Control Actions.
 
     POST /api/self-healing/control/
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -113,7 +113,9 @@ class ControlActionView(APIView):
         if response.status == "rejected":
             return Response(response.to_dict(), status=status.HTTP_403_FORBIDDEN)
         elif response.status == "error":
-            return Response(response.to_dict(), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                response.to_dict(), status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         else:
             return Response(response.to_dict(), status=status.HTTP_200_OK)
 
@@ -123,7 +125,7 @@ class ControlStatusView(APIView):
     Get Self-Healing Service Status.
 
     GET /api/self-healing/status/
-    
+
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
@@ -144,7 +146,7 @@ class ServiceStatusView(APIView):
     Get Specific Service Status.
 
     GET /api/self-healing/status/{service_name}/
-    
+
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
@@ -163,7 +165,7 @@ class ControlAuditView(APIView):
     Get Self-Healing Audit Logs.
 
     GET /api/self-healing/audit/
-    
+
     Note: Read-only endpoint - Viewer role or higher can access.
     Audit logs are immutable and cannot be modified via any API.
     """
@@ -173,19 +175,20 @@ class ControlAuditView(APIView):
     def get(self, request):
         """Get audit logs from AuditLogger."""
         from datetime import datetime, timedelta, timezone
+
         from selfhealing.audit import get_audit_logger
-        
+
         page = int(request.query_params.get("page", 1))
         page_size = int(request.query_params.get("page_size", 50))
         config_type = request.query_params.get("config_type")
         user = request.query_params.get("user")
         days = int(request.query_params.get("days", 7))
-        
+
         try:
             audit_logger = get_audit_logger()
             end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=days)
-            
+
             # Query logs with filters
             all_logs = audit_logger.query(
                 start_time=start_time,
@@ -194,23 +197,25 @@ class ControlAuditView(APIView):
                 user=user,
                 limit=page * page_size + page_size,  # Fetch enough for pagination
             )
-            
+
             # Paginate results
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
             paginated_logs = all_logs[start_idx:end_idx]
-            
-            return Response({
-                "logs": paginated_logs,
-                "total_count": len(all_logs),
-                "page": page,
-                "page_size": page_size,
-                "filters": {
-                    "config_type": config_type,
-                    "user": user,
-                    "days": days,
-                },
-            })
+
+            return Response(
+                {
+                    "logs": paginated_logs,
+                    "total_count": len(all_logs),
+                    "page": page,
+                    "page_size": page_size,
+                    "filters": {
+                        "config_type": config_type,
+                        "user": user,
+                        "days": days,
+                    },
+                }
+            )
         except Exception as e:
             logger.warning(f"[AuditLogsView] Error retrieving audit logs: {e}")
             return Response(
@@ -234,7 +239,7 @@ class QuickAllowView(APIView):
     Quick Allow Action.
 
     POST /api/self-healing/allow/{service_name}/
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -261,7 +266,7 @@ class QuickBlockView(APIView):
     Quick Block Action.
 
     POST /api/self-healing/block/{service_name}/
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -289,7 +294,7 @@ class QuickResetView(APIView):
     Quick Reset Action.
 
     POST /api/self-healing/reset/{service_name}/
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 

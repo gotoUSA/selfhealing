@@ -19,8 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,34 +30,40 @@ logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import Counter, Gauge, Histogram, Info
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    
+
     # 더미 클래스 정의
     class DummyMetric:
         def labels(self, **kwargs):
             return self
+
         def inc(self, amount=1):
             pass
+
         def dec(self, amount=1):
             pass
+
         def set(self, value):
             pass
+
         def observe(self, value):
             pass
+
         def info(self, value):
             pass
-    
+
     def Counter(*args, **kwargs):
         return DummyMetric()
-    
+
     def Gauge(*args, **kwargs):
         return DummyMetric()
-    
+
     def Histogram(*args, **kwargs):
         return DummyMetric()
-    
+
     def Info(*args, **kwargs):
         return DummyMetric()
 
@@ -161,39 +166,40 @@ STATUS_TO_VALUE = {
 # Metrics Recorder
 # =============================================================================
 
+
 class RecoveryMetricsRecorder:
     """
     복구 메트릭 기록기.
-    
+
     복구 프로세스의 각 단계에서 Prometheus 메트릭을 기록합니다.
-    
+
     Usage:
         recorder = get_recovery_metrics_recorder()
-        
+
         # 세션 시작
         recorder.record_session_started("global", "LEVEL_3")
-        
+
         # 단계 완료
         recorder.record_step_completed("global", "budget_reset", duration=1.5)
-        
+
         # 세션 완료
         recorder.record_session_completed("global", "LEVEL_3", "completed", duration=120)
     """
-    
+
     def __init__(self):
         """초기화."""
         self._lock = threading.Lock()
         # 내부 상태 추적 (Prometheus 없을 때 대체용)
-        self._internal_metrics: Dict[str, Any] = {
+        self._internal_metrics: dict[str, Any] = {
             "sessions": {},
             "steps": {},
             "pending_approvals": {},
         }
-    
+
     # =========================================================================
     # Session Metrics
     # =========================================================================
-    
+
     def record_session_started(
         self,
         namespace: str,
@@ -201,7 +207,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         세션 시작 기록.
-        
+
         Args:
             namespace: 네임스페이스
             trigger_level: 트리거 레벨
@@ -211,14 +217,14 @@ class RecoveryMetricsRecorder:
             trigger_level=trigger_level,
             status="started",
         ).inc()
-        
+
         self._set_status(namespace, "recovering")
-        
+
         logger.debug(
             f"[RecoveryMetrics] Session started: "
             f"namespace={namespace}, level={trigger_level}"
         )
-    
+
     def record_session_completed(
         self,
         namespace: str,
@@ -228,7 +234,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         세션 완료 기록.
-        
+
         Args:
             namespace: 네임스페이스
             trigger_level: 트리거 레벨
@@ -240,25 +246,25 @@ class RecoveryMetricsRecorder:
             trigger_level=trigger_level,
             status=status,
         ).inc()
-        
+
         RECOVERY_DURATION_SECONDS.labels(
             namespace=namespace,
             trigger_level=trigger_level,
             status=status,
         ).observe(duration_seconds)
-        
+
         final_status = "normal" if status == "completed" else "emergency"
         self._set_status(namespace, final_status)
-        
+
         logger.debug(
             f"[RecoveryMetrics] Session completed: "
             f"namespace={namespace}, status={status}, duration={duration_seconds:.1f}s"
         )
-    
+
     # =========================================================================
     # Step Metrics
     # =========================================================================
-    
+
     def record_step_started(
         self,
         namespace: str,
@@ -266,7 +272,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         단계 시작 기록.
-        
+
         Args:
             namespace: 네임스페이스
             step_type: 단계 유형
@@ -276,12 +282,12 @@ class RecoveryMetricsRecorder:
             step_type=step_type,
             status="started",
         ).inc()
-        
+
         logger.debug(
             f"[RecoveryMetrics] Step started: "
             f"namespace={namespace}, step={step_type}"
         )
-    
+
     def record_step_completed(
         self,
         namespace: str,
@@ -292,7 +298,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         단계 완료 기록.
-        
+
         Args:
             namespace: 네임스페이스
             step_type: 단계 유형
@@ -301,30 +307,30 @@ class RecoveryMetricsRecorder:
             idempotent_skip: 멱등성 스킵 여부
         """
         status = "completed" if success else "failed"
-        
+
         RECOVERY_STEPS_TOTAL.labels(
             namespace=namespace,
             step_type=step_type,
             status=status,
         ).inc()
-        
+
         RECOVERY_STEP_DURATION_SECONDS.labels(
             namespace=namespace,
             step_type=step_type,
         ).observe(duration_seconds)
-        
+
         if idempotent_skip:
             RECOVERY_IDEMPOTENT_SKIPS_TOTAL.labels(
                 namespace=namespace,
                 step_type=step_type,
             ).inc()
-        
+
         logger.debug(
             f"[RecoveryMetrics] Step completed: "
             f"namespace={namespace}, step={step_type}, "
             f"success={success}, duration={duration_seconds:.2f}s"
         )
-    
+
     def record_step_retry(
         self,
         namespace: str,
@@ -332,7 +338,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         단계 재시도 기록.
-        
+
         Args:
             namespace: 네임스페이스
             step_type: 단계 유형
@@ -341,16 +347,15 @@ class RecoveryMetricsRecorder:
             namespace=namespace,
             step_type=step_type,
         ).inc()
-        
+
         logger.debug(
-            f"[RecoveryMetrics] Step retry: "
-            f"namespace={namespace}, step={step_type}"
+            f"[RecoveryMetrics] Step retry: " f"namespace={namespace}, step={step_type}"
         )
-    
+
     # =========================================================================
     # Circuit Breaker Metrics
     # =========================================================================
-    
+
     def record_circuit_breaker_trip(
         self,
         namespace: str,
@@ -358,7 +363,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         서킷 브레이커 트립 기록.
-        
+
         Args:
             namespace: 네임스페이스
             reason: 트립 사유
@@ -367,18 +372,18 @@ class RecoveryMetricsRecorder:
             namespace=namespace,
             reason=reason,
         ).inc()
-        
+
         self._set_status(namespace, "emergency")
-        
+
         logger.warning(
             f"[RecoveryMetrics] Circuit breaker tripped: "
             f"namespace={namespace}, reason={reason}"
         )
-    
+
     # =========================================================================
     # Approval Metrics
     # =========================================================================
-    
+
     def update_pending_approvals(
         self,
         namespace: str,
@@ -387,7 +392,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         대기 중인 승인 수 업데이트.
-        
+
         Args:
             namespace: 네임스페이스
             count: 대기 중인 승인 수
@@ -396,18 +401,18 @@ class RecoveryMetricsRecorder:
         RECOVERY_PENDING_APPROVALS.labels(
             namespace=namespace,
         ).set(count)
-        
+
         RECOVERY_STALE_APPROVALS.labels(
             namespace=namespace,
         ).set(stale_count)
-        
+
         if count > 0:
             self._set_status(namespace, "ready_to_restore")
-    
+
     # =========================================================================
     # Status Metrics
     # =========================================================================
-    
+
     def _set_status(
         self,
         namespace: str,
@@ -415,7 +420,7 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         현재 상태 설정.
-        
+
         Args:
             namespace: 네임스페이스
             status: 상태 문자열
@@ -424,7 +429,7 @@ class RecoveryMetricsRecorder:
         RECOVERY_CURRENT_STATUS.labels(
             namespace=namespace,
         ).set(value)
-    
+
     def set_current_status(
         self,
         namespace: str,
@@ -432,17 +437,17 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         현재 상태 명시적 설정.
-        
+
         Args:
             namespace: 네임스페이스
             status: 상태 문자열
         """
         self._set_status(namespace, status)
-    
+
     # =========================================================================
     # Batch Update
     # =========================================================================
-    
+
     def update_from_coordinator_state(
         self,
         namespace: str,
@@ -453,9 +458,9 @@ class RecoveryMetricsRecorder:
     ) -> None:
         """
         Coordinator 상태에서 일괄 업데이트.
-        
+
         주기적으로 호출하여 상태를 동기화합니다.
-        
+
         Args:
             namespace: 네임스페이스
             status: 현재 상태
@@ -471,17 +476,18 @@ class RecoveryMetricsRecorder:
 # Context Manager for Step Timing
 # =============================================================================
 
+
 class StepTimer:
     """
     단계 타이밍 컨텍스트 매니저.
-    
+
     Usage:
         with StepTimer(recorder, "global", "budget_reset") as timer:
             # 단계 실행
             result = execute_step()
             timer.set_success(result.get("success", False))
     """
-    
+
     def __init__(
         self,
         recorder: RecoveryMetricsRecorder,
@@ -492,23 +498,23 @@ class StepTimer:
         self.recorder = recorder
         self.namespace = namespace
         self.step_type = step_type
-        self.start_time: Optional[float] = None
+        self.start_time: float | None = None
         self.success = True
         self.idempotent_skip = False
-    
-    def __enter__(self) -> "StepTimer":
+
+    def __enter__(self) -> StepTimer:
         """컨텍스트 진입."""
         self.start_time = time.time()
         self.recorder.record_step_started(self.namespace, self.step_type)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """컨텍스트 종료."""
         duration = time.time() - (self.start_time or time.time())
-        
+
         if exc_type is not None:
             self.success = False
-        
+
         self.recorder.record_step_completed(
             namespace=self.namespace,
             step_type=self.step_type,
@@ -516,11 +522,11 @@ class StepTimer:
             duration_seconds=duration,
             idempotent_skip=self.idempotent_skip,
         )
-    
+
     def set_success(self, success: bool) -> None:
         """성공 여부 설정."""
         self.success = success
-    
+
     def set_idempotent_skip(self) -> None:
         """멱등성 스킵 설정."""
         self.idempotent_skip = True
@@ -530,17 +536,17 @@ class StepTimer:
 # Singleton
 # =============================================================================
 
-_metrics_recorder: Optional[RecoveryMetricsRecorder] = None
+_metrics_recorder: RecoveryMetricsRecorder | None = None
 _recorder_lock = threading.Lock()
 
 
 def get_recovery_metrics_recorder() -> RecoveryMetricsRecorder:
     """RecoveryMetricsRecorder 싱글톤 반환."""
     global _metrics_recorder
-    
+
     if _metrics_recorder is not None:
         return _metrics_recorder
-    
+
     with _recorder_lock:
         if _metrics_recorder is None:
             _metrics_recorder = RecoveryMetricsRecorder()

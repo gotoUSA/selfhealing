@@ -10,20 +10,18 @@ Core Principle: "시스템은 조언하고, 결정은 사람이 한다."
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
-
 from selfhealing.core.timezone import now
+from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
 from selfhealing.services.error_budget.enums import (
     FreezeStatus,
-    get_error_budget_thresholds,
     get_burn_rate_thresholds,
+    get_error_budget_thresholds,
 )
 from selfhealing.services.error_budget.models import (
-    ErrorBudgetStatus,
     DeploymentVerdict,
+    ErrorBudgetStatus,
     FreezeDecisionRecord,
 )
-from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
 
 
 class DeploymentPolicyAdvisor:
@@ -39,7 +37,7 @@ class DeploymentPolicyAdvisor:
 
     def __init__(
         self,
-        calculator: Optional[ErrorBudgetCalculator] = None,
+        calculator: ErrorBudgetCalculator | None = None,
     ):
         """
         초기화.
@@ -50,7 +48,7 @@ class DeploymentPolicyAdvisor:
         self.calculator = calculator or ErrorBudgetCalculator()
 
         # 활성 Override 목록
-        self._active_overrides: Dict[str, FreezeDecisionRecord] = {}
+        self._active_overrides: dict[str, FreezeDecisionRecord] = {}
 
     def get_deployment_verdict(
         self,
@@ -85,7 +83,7 @@ class DeploymentPolicyAdvisor:
     def _evaluate_status(
         self,
         budget_status: ErrorBudgetStatus,
-    ) -> tuple[FreezeStatus, str, str, List[str]]:
+    ) -> tuple[FreezeStatus, str, str, list[str]]:
         """상태 평가 및 메시지 생성."""
         reasons = []
         remaining = budget_status.budget_remaining_percent
@@ -97,7 +95,8 @@ class DeploymentPolicyAdvisor:
         # Fast Burn 체크 (최우선)
         if budget_status.burn_rate_1h >= br_thresholds["fast_critical"]:
             reasons.append(
-                f"Fast Burn Rate 위험: {budget_status.burn_rate_1h:.1f}x " f"(임계값: {br_thresholds['fast_critical']}x)"
+                f"Fast Burn Rate 위험: {budget_status.burn_rate_1h:.1f}x "
+                f"(임계값: {br_thresholds['fast_critical']}x)"
             )
             return (
                 FreezeStatus.FREEZE_RECOMMENDED,
@@ -108,7 +107,10 @@ class DeploymentPolicyAdvisor:
 
         # Budget 잔여량 기반 판정
         if remaining < eb_thresholds["warning"]:
-            reasons.append(f"Error Budget 잔여량 위험: {remaining:.1f}% " f"(임계값: {eb_thresholds['warning']}%)")
+            reasons.append(
+                f"Error Budget 잔여량 위험: {remaining:.1f}% "
+                f"(임계값: {eb_thresholds['warning']}%)"
+            )
             return (
                 FreezeStatus.FREEZE_RECOMMENDED,
                 "🔴 현재 에러 버짓이 소진되었습니다. 긴급 패치 외의 모든 신규 배포 중단을 권고합니다.",
@@ -117,11 +119,16 @@ class DeploymentPolicyAdvisor:
             )
 
         if remaining < eb_thresholds["caution"]:
-            reasons.append(f"Error Budget 잔여량 경고: {remaining:.1f}% " f"(임계값: {eb_thresholds['caution']}%)")
+            reasons.append(
+                f"Error Budget 잔여량 경고: {remaining:.1f}% "
+                f"(임계값: {eb_thresholds['caution']}%)"
+            )
 
             # Slow Burn 추가 체크
             if budget_status.has_slow_burn:
-                reasons.append(f"Slow Burn Rate 감지: {budget_status.burn_rate_6h:.1f}x")
+                reasons.append(
+                    f"Slow Burn Rate 감지: {budget_status.burn_rate_6h:.1f}x"
+                )
 
             return (
                 FreezeStatus.WARNING,
@@ -131,7 +138,10 @@ class DeploymentPolicyAdvisor:
             )
 
         if remaining < eb_thresholds["healthy"]:
-            reasons.append(f"Error Budget 주의: {remaining:.1f}% " f"(권장: {eb_thresholds['healthy']}% 이상)")
+            reasons.append(
+                f"Error Budget 주의: {remaining:.1f}% "
+                f"(권장: {eb_thresholds['healthy']}% 이상)"
+            )
             return (
                 FreezeStatus.CAUTION,
                 "🟡 Error Budget 주의 수준입니다. 배포 시 주의가 필요합니다.",
@@ -146,10 +156,17 @@ class DeploymentPolicyAdvisor:
             reasons,
         )
 
-    def _get_allowed_deployment_types(self, status: FreezeStatus) -> List[str]:
+    def _get_allowed_deployment_types(self, status: FreezeStatus) -> list[str]:
         """상태별 허용 배포 유형."""
         if status == FreezeStatus.PROCEED:
-            return ["feature", "enhancement", "refactor", "hotfix", "security_patch", "rollback"]
+            return [
+                "feature",
+                "enhancement",
+                "refactor",
+                "hotfix",
+                "security_patch",
+                "rollback",
+            ]
         elif status == FreezeStatus.CAUTION:
             return ["feature", "hotfix", "security_patch", "rollback"]
         elif status == FreezeStatus.WARNING:
@@ -157,7 +174,9 @@ class DeploymentPolicyAdvisor:
         else:  # FREEZE_RECOMMENDED
             return ["security_patch", "rollback"]
 
-    def check_active_override(self, deployment_id: Optional[str] = None) -> Optional[FreezeDecisionRecord]:
+    def check_active_override(
+        self, deployment_id: str | None = None
+    ) -> FreezeDecisionRecord | None:
         """
         활성 Override 확인.
 

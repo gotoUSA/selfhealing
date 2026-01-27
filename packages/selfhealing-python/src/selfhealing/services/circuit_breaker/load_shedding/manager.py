@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional
 
-from selfhealing.services.circuit_breaker.load_shedding.error_rate import ErrorRateProvider
+from selfhealing.services.circuit_breaker.load_shedding.error_rate import (
+    ErrorRateProvider,
+)
 from selfhealing.services.circuit_breaker.load_shedding.shedding_models import (
     SheddingAuditEntry,
     SheddingDecision,
@@ -52,7 +54,7 @@ class LoadSheddingManager:
     비핵심 서비스 트래픽을 단계적으로 제한합니다.
     """
 
-    _instance: Optional["LoadSheddingManager"] = None
+    _instance: LoadSheddingManager | None = None
 
     def __new__(cls, *args, **kwargs):
         """싱글톤 패턴."""
@@ -63,18 +65,18 @@ class LoadSheddingManager:
 
     def __init__(
         self,
-        policy: Optional[LoadSheddingPolicy] = None,
-        error_rate_provider: Optional[ErrorRateProvider] = None,
+        policy: LoadSheddingPolicy | None = None,
+        error_rate_provider: ErrorRateProvider | None = None,
     ):
         if getattr(self, "_initialized", False):
             return
 
         self._policy = policy or LoadSheddingPolicy()
         self._error_rate_provider = error_rate_provider or ErrorRateProvider()
-        self._service_configs: Dict[str, ServiceConfig] = {}
+        self._service_configs: dict[str, ServiceConfig] = {}
         self._current_level_index: int = -1  # -1 = inactive
-        self._activated_at: Optional[str] = None
-        self._audit_callback: Optional[Callable[[SheddingAuditEntry], None]] = None
+        self._activated_at: str | None = None
+        self._audit_callback: Callable[[SheddingAuditEntry], None] | None = None
         self._initialized = True
 
         logger.debug("[LoadSheddingManager] Initialized")
@@ -131,7 +133,7 @@ class LoadSheddingManager:
         )
         return True
 
-    def register_services(self, configs: List[ServiceConfig]) -> int:
+    def register_services(self, configs: list[ServiceConfig]) -> int:
         """여러 서비스 일괄 등록."""
         count = 0
         for config in configs:
@@ -150,7 +152,7 @@ class LoadSheddingManager:
         """모든 서비스 등록 해제."""
         self._service_configs.clear()
 
-    def get_service_config(self, service_id: str) -> Optional[ServiceConfig]:
+    def get_service_config(self, service_id: str) -> ServiceConfig | None:
         """서비스 설정 조회."""
         return self._service_configs.get(service_id)
 
@@ -178,7 +180,7 @@ class LoadSheddingManager:
     # Critical Services Error Rate
     # =========================================================================
 
-    def _get_critical_services(self) -> List[ServiceConfig]:
+    def _get_critical_services(self) -> list[ServiceConfig]:
         """critical 서비스 목록 조회."""
         return [
             config
@@ -232,13 +234,15 @@ class LoadSheddingManager:
         if applicable_level is None:
             return 100.0
 
-        return max(applicable_level.traffic_limit, service_config.min_traffic_percentage)
+        return max(
+            applicable_level.traffic_limit, service_config.min_traffic_percentage
+        )
 
     def _find_applicable_level(
         self,
         critical_error_rate: float,
         service_criticality: str,
-    ) -> Optional[SheddingLevel]:
+    ) -> SheddingLevel | None:
         """현재 에러율과 서비스 criticality에 맞는 Shedding 레벨 찾기."""
         for level in sorted(
             self._policy.levels, key=lambda l: l.error_rate, reverse=True
@@ -263,7 +267,9 @@ class LoadSheddingManager:
                 allowed_traffic_percent=100.0,
                 is_shed=False,
                 reason="No shedding applied",
-                service_criticality=service_config.criticality if service_config else None,
+                service_criticality=(
+                    service_config.criticality if service_config else None
+                ),
             )
 
         if allowed_percent <= 0.0:
@@ -274,7 +280,9 @@ class LoadSheddingManager:
                 is_shed=True,
                 reason=f"Fully shed - {current_level}",
                 current_level=current_level,
-                service_criticality=service_config.criticality if service_config else None,
+                service_criticality=(
+                    service_config.criticality if service_config else None
+                ),
             )
 
         allow = random.random() * 100 < allowed_percent
@@ -284,7 +292,11 @@ class LoadSheddingManager:
             allow_request=allow,
             allowed_traffic_percent=allowed_percent,
             is_shed=True,
-            reason=f"Probabilistic shedding - {current_level}" if not allow else "Request allowed",
+            reason=(
+                f"Probabilistic shedding - {current_level}"
+                if not allow
+                else "Request allowed"
+            ),
             current_level=current_level,
             service_criticality=service_config.criticality if service_config else None,
         )
@@ -319,7 +331,7 @@ class LoadSheddingManager:
 
         return -1
 
-    def update_shedding_state(self) -> Optional[SheddingAuditEntry]:
+    def update_shedding_state(self) -> SheddingAuditEntry | None:
         """Shedding 상태 업데이트 및 레벨 변화 감지."""
         new_level_index = self.get_current_level_index()
         previous_level_index = self._current_level_index
@@ -365,7 +377,7 @@ class LoadSheddingManager:
 
         return audit_entry
 
-    def _get_affected_services(self, level_index: int) -> List[ServiceConfig]:
+    def _get_affected_services(self, level_index: int) -> list[ServiceConfig]:
         """현재 레벨에서 영향받는 서비스 목록."""
         if level_index < 0 or level_index >= len(self._policy.levels):
             return []
@@ -402,7 +414,7 @@ class LoadSheddingManager:
             state = SheddingState.CUSTOM
 
         level_description = ""
-        shed_criticality: List[str] = []
+        shed_criticality: list[str] = []
         traffic_limit = 100.0
         if active and level_index < len(self._policy.levels):
             level = self._policy.levels[level_index]
@@ -451,7 +463,9 @@ class LoadSheddingManager:
 
         self.update_shedding_state()
 
-        logger.info(f"[LoadSheddingManager] Force activated at level {level_index}: {reason}")
+        logger.info(
+            f"[LoadSheddingManager] Force activated at level {level_index}: {reason}"
+        )
         return True
 
     def force_deactivate(self, reason: str = "manual_deactivation") -> bool:

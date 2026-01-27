@@ -8,26 +8,25 @@ Automatic recovery actions for pool issues:
 - Circuit breaker for new connections
 """
 
+import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, Callable, List
-import logging
 
 from .pool_monitor import (
     ConnectionPoolMonitor,
     PoolHealthStatus,
     PoolStats,
-    LeakReport,
 )
-
 
 logger = logging.getLogger(__name__)
 
 
 class RecoveryAction(str, Enum):
     """Types of recovery actions"""
+
     NONE = "none"
     ALERT_ONLY = "alert_only"
     CLOSE_LEAKED = "close_leaked"
@@ -38,6 +37,7 @@ class RecoveryAction(str, Enum):
 @dataclass
 class RecoveryResult:
     """Result of a recovery action"""
+
     action: RecoveryAction
     success: bool
     message: str
@@ -82,8 +82,8 @@ class PoolWatchdog:
     def __init__(
         self,
         monitor: ConnectionPoolMonitor,
-        recovery_handler: Optional[PoolRecoveryHandler] = None,
-        alert_callback: Optional[Callable[[str, PoolHealthStatus], None]] = None,
+        recovery_handler: PoolRecoveryHandler | None = None,
+        alert_callback: Callable[[str, PoolHealthStatus], None] | None = None,
         auto_close_leaked: bool = True,
         auto_expand: bool = False,
         max_expansion: int = 10,
@@ -136,7 +136,7 @@ class PoolWatchdog:
 
         self._send_alert(
             f"Connection leak detected: {leak_report.leak_count} connections",
-            PoolHealthStatus.LEAK_SUSPECTED
+            PoolHealthStatus.LEAK_SUSPECTED,
         )
 
         if not self._auto_close_leaked or not self._recovery_handler:
@@ -155,7 +155,9 @@ class PoolWatchdog:
                     self._monitor.on_connection_released(conn_info.connection_id)
                     closed += 1
             except Exception as e:
-                logger.error(f"Failed to close connection {conn_info.connection_id}: {e}")
+                logger.error(
+                    f"Failed to close connection {conn_info.connection_id}: {e}"
+                )
 
         return RecoveryResult(
             action=RecoveryAction.CLOSE_LEAKED,
@@ -169,7 +171,7 @@ class PoolWatchdog:
         """Handle pool exhaustion"""
         self._send_alert(
             f"Connection pool exhausted: {stats.waiting_requests} requests waiting",
-            PoolHealthStatus.EXHAUSTED
+            PoolHealthStatus.EXHAUSTED,
         )
 
         if not self._auto_expand or not self._recovery_handler:
@@ -202,11 +204,12 @@ class PoolWatchdog:
             timestamp=datetime.now(timezone.utc),
         )
 
-    def _handle_high_usage(self, status: PoolHealthStatus, stats: PoolStats) -> RecoveryResult:
+    def _handle_high_usage(
+        self, status: PoolHealthStatus, stats: PoolStats
+    ) -> RecoveryResult:
         """Handle high usage warning/critical"""
         self._send_alert(
-            f"Pool usage {status.value}: {stats.usage_percent:.1f}%",
-            status
+            f"Pool usage {status.value}: {stats.usage_percent:.1f}%", status
         )
 
         return RecoveryResult(

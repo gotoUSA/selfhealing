@@ -11,130 +11,129 @@ Backoff API:
       Usage: strategy = ExponentialBackoff(base=2); strategy.calculate(attempt)
 """
 
-from selfhealing.core.types import (
-    FailureType,
-    OperationStatus,
-    CircuitState,
-    DomainType,
-    FailedOperationData,
-    CircuitBreakerStateData,
-    SecurityIncidentData,
-    RetryContext,
-    MetricsSnapshot,
+from selfhealing.core.action_executor import (
+    Action,
+    ActionExecutor,
+    ActionResult,
+    execute_action,
+    get_action_executor,
 )
+from selfhealing.core.adaptive_jitter import AdaptiveJitter
 from selfhealing.core.backoff import (
-    # Strategy pattern implementations (advanced)
-    ExponentialBackoff,
-    LinearBackoff,
+    BackoffConfig,
     ConstantBackoff,
     DecorrelatedJitterBackoff,
-    get_backoff_calculator,
-    # Simple config-based interface (recommended for most use cases)
-    BackoffConfig,
-    LegacyBackoffCalculator as BackoffCalculator,  # Config-based calculator
+    ExponentialBackoff,
+    LinearBackoff,
     calculate_backoff,
+    get_backoff_calculator,
+)
+from selfhealing.core.backoff import (
+    LegacyBackoffCalculator as BackoffCalculator,  # Strategy pattern implementations (advanced); Simple config-based interface (recommended for most use cases); Config-based calculator
+)
+from selfhealing.core.cert_monitor import (
+    CertificateAlertManager,
+    CertificateExpiryMonitor,
+    CertificateInfo,
+    CertificateStatus,
+)
+from selfhealing.core.connection_health import (
+    ConnectionHealth,
+    ConnectionHealthMonitor,
+    ConnectionStatus,
+    ConnectionType,
+    DefaultConnectionHealthMonitor,
+    PartitionState,
+)
+from selfhealing.core.decision_logger import (
+    DecisionLogger,
+    EventType,
+    ReasonCode,
+    log_enter_pre_decision_zone,
+    log_exit_pre_decision_zone,
+    log_intervention_evaluated,
+)
+from selfhealing.core.degraded_mode_handler import DegradedModeHandler
+from selfhealing.core.execution_mode import (
+    ExecutionMode,
+    ExecutionModeType,
+    clear_execution_mode_override,
+    get_execution_mode,
+    set_execution_mode,
+)
+from selfhealing.core.fallback_strategy import (
+    CacheFirstFallback,
+    FallbackMode,
+    FallbackResult,
+    FallbackStrategy,
+    PartitionAwareFallback,
+    SimpleFallback,
 )
 
 # ForensicContext, ForensicContextBuilder, etc. removed - forensic.py deleted
 from selfhealing.core.pool_monitor import (
+    ConnectionInfo,
+    ConnectionPoolMonitor,
+    LeakReport,
     PoolHealthStatus,
     PoolStats,
-    ConnectionInfo,
-    LeakReport,
     PoolStatsProvider,
-    ConnectionPoolMonitor,
 )
 from selfhealing.core.pool_watchdog import (
-    RecoveryAction,
-    RecoveryResult,
     PoolRecoveryHandler,
     PoolWatchdog,
-)
-from selfhealing.core.shutdown_coordinator import (
-    ShutdownPhase,
-    RequestState,
-    TrackedRequest,
-    ShutdownStats,
-    ShutdownHandler,
-    RequestTracker,
-    GracefulShutdownCoordinator,
+    RecoveryAction,
+    RecoveryResult,
 )
 from selfhealing.core.request_context import (
     RequestContext,
     track_request,
 )
-from selfhealing.core.time_provider import (
-    TimeProvider,
-    SystemTimeProvider,
-    MockTimeProvider,
-    FrozenTime,
-    get_time_provider,
-    set_time_provider as set_global_time_provider,
-    reset_time_provider,
-    is_within_clock_skew,
-)
-from selfhealing.core.connection_health import (
-    ConnectionType,
-    ConnectionStatus,
-    ConnectionHealth,
-    PartitionState,
-    ConnectionHealthMonitor,
-    DefaultConnectionHealthMonitor,
-)
-from selfhealing.core.fallback_strategy import (
-    FallbackMode,
-    FallbackResult,
-    FallbackStrategy,
-    SimpleFallback,
-    PartitionAwareFallback,
-    CacheFirstFallback,
-)
-from selfhealing.core.tls_handler import (
-    TLSErrorType,
-    TLSErrorSeverity,
-    TLSErrorInfo,
-    TLSErrorClassifier,
-    TLSResilientClient,
-    SimpleTLSResilientClient,
-)
-from selfhealing.core.cert_monitor import (
-    CertificateStatus,
-    CertificateInfo,
-    CertificateExpiryMonitor,
-    CertificateAlertManager,
-)
-from selfhealing.core.decision_logger import (
-    ReasonCode,
-    EventType,
-    DecisionLogger,
-    log_enter_pre_decision_zone,
-    log_intervention_evaluated,
-    log_exit_pre_decision_zone,
-)
-from selfhealing.core.execution_mode import (
-    ExecutionModeType,
-    ExecutionMode,
-    get_execution_mode,
-    set_execution_mode,
-    clear_execution_mode_override,
-)
-from selfhealing.core.action_executor import (
-    Action,
-    ActionResult,
-    ActionExecutor,
-    get_action_executor,
-    execute_action,
+from selfhealing.core.shutdown_coordinator import (
+    GracefulShutdownCoordinator,
+    RequestState,
+    RequestTracker,
+    ShutdownHandler,
+    ShutdownPhase,
+    ShutdownStats,
+    TrackedRequest,
 )
 from selfhealing.core.state_cache import CBStateCache
-from selfhealing.core.degraded_mode_handler import DegradedModeHandler
-from selfhealing.core.adaptive_jitter import AdaptiveJitter
 from selfhealing.core.test_mode_context import (
     TestModeContext,
-    is_synthetic_context,
     get_synthetic_session_id,
+    is_synthetic_context,
     synthetic_context,
 )
-
+from selfhealing.core.time_provider import (
+    FrozenTime,
+    MockTimeProvider,
+    SystemTimeProvider,
+    TimeProvider,
+    get_time_provider,
+    is_within_clock_skew,
+    reset_time_provider,
+)
+from selfhealing.core.time_provider import set_time_provider as set_global_time_provider
+from selfhealing.core.tls_handler import (
+    SimpleTLSResilientClient,
+    TLSErrorClassifier,
+    TLSErrorInfo,
+    TLSErrorSeverity,
+    TLSErrorType,
+    TLSResilientClient,
+)
+from selfhealing.core.types import (
+    CircuitBreakerStateData,
+    CircuitState,
+    DomainType,
+    FailedOperationData,
+    FailureType,
+    MetricsSnapshot,
+    OperationStatus,
+    RetryContext,
+    SecurityIncidentData,
+)
 
 __all__ = [
     # Types

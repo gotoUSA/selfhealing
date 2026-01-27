@@ -6,7 +6,7 @@ Used when Prometheus gauge is not available (e.g., metrics disabled).
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
 class NoOpGaugeChild:
@@ -56,7 +56,7 @@ class NoOpGaugeChild:
         """No-op mark_stale."""
         pass
 
-    def get_reliability_info(self) -> Dict[str, Any]:
+    def get_reliability_info(self) -> dict[str, Any]:
         """Return empty reliability info."""
         return {"is_synced": False, "status": "noop"}
 

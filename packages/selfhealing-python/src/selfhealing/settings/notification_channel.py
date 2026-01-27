@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Dict, List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -95,27 +94,27 @@ class NotificationChannelSettings(BaseSettings):
     # ==========================================================================
     # Channel Defaults (from unified_notification.py#L150-152)
     # ==========================================================================
-    default_channels: List[str] = Field(
+    default_channels: list[str] = Field(
         default_factory=lambda: ["slack"],
         description="기본 알림 채널 목록",
     )
 
-    critical_channels: List[str] = Field(
+    critical_channels: list[str] = Field(
         default_factory=lambda: ["slack", "email", "sms", "pagerduty"],
         description="CRITICAL 심각도 알림 채널",
     )
 
-    high_channels: List[str] = Field(
+    high_channels: list[str] = Field(
         default_factory=lambda: ["slack", "email"],
         description="HIGH 심각도 알림 채널",
     )
 
-    medium_channels: List[str] = Field(
+    medium_channels: list[str] = Field(
         default_factory=lambda: ["slack"],
         description="MEDIUM 심각도 알림 채널",
     )
 
-    low_channels: List[str] = Field(
+    low_channels: list[str] = Field(
         default_factory=lambda: ["slack"],
         description="LOW 심각도 알림 채널",
     )
@@ -123,7 +122,7 @@ class NotificationChannelSettings(BaseSettings):
     # ==========================================================================
     # Escalation Settings (from models.py#L351)
     # ==========================================================================
-    escalation_channels: List[str] = Field(
+    escalation_channels: list[str] = Field(
         default_factory=lambda: ["slack", "pagerduty"],
         description="에스컬레이션 알림 채널",
     )
@@ -156,7 +155,7 @@ class NotificationChannelSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[NotificationChannelSettings] = None
+_settings: NotificationChannelSettings | None = None
 
 
 def get_notification_channel_settings() -> NotificationChannelSettings:

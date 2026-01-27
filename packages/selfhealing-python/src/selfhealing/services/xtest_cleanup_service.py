@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.services.audit.xtest_audit import log_xtest_cleanup_audit
 
@@ -44,11 +44,13 @@ class XTestCleanupResult:
     idempotency_keys_cleared: int = 0
     rate_limit_counters_reset: int = 0
     scenario_results_cleared: int = 0
-    errors: List[str] = field(default_factory=list)
-    cleaned_session_ids: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    errors: list[str] = field(default_factory=list)
+    cleaned_session_ids: list[str] = field(default_factory=list)
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """직렬화용 딕셔너리 변환."""
         return {
             "success": self.success,
@@ -72,7 +74,7 @@ class XTestCleanupService:
     시스템 오염을 방지합니다.
     """
 
-    def __init__(self, redis_client: Optional[Any] = None):
+    def __init__(self, redis_client: Any | None = None):
         """
         Args:
             redis_client: Redis 클라이언트 (None이면 자동 생성)
@@ -86,6 +88,7 @@ class XTestCleanupService:
         """설정 lazy loading."""
         if self._settings is None:
             from selfhealing.settings.xtest_cleanup import get_xtest_cleanup_settings
+
             self._settings = get_xtest_cleanup_settings()
         return self._settings
 
@@ -95,6 +98,7 @@ class XTestCleanupService:
         if self._redis is None:
             try:
                 from selfhealing.adapters.redis import get_redis_client
+
                 self._redis = get_redis_client()
             except ImportError:
                 logger.warning("[XTestCleanup] Redis adapter not available")
@@ -105,7 +109,10 @@ class XTestCleanupService:
     def session_manager(self):
         """세션 매니저 lazy loading."""
         if self._session_manager is None:
-            from selfhealing.services.xtest_session_manager import get_xtest_session_manager
+            from selfhealing.services.xtest_session_manager import (
+                get_xtest_session_manager,
+            )
+
             self._session_manager = get_xtest_session_manager()
         return self._session_manager
 
@@ -140,9 +147,7 @@ class XTestCleanupService:
                     result.sessions_cleaned += 1
                     result.cleaned_session_ids.append(session.session_id)
 
-                    logger.info(
-                        f"[XTestCleanup] Cleaned session: {session.session_id}"
-                    )
+                    logger.info(f"[XTestCleanup] Cleaned session: {session.session_id}")
 
                 except Exception as e:
                     error_msg = f"Failed to clean session {session.session_id}: {e}"
@@ -201,7 +206,7 @@ class XTestCleanupService:
         cleared = self.clear_scenario_results()
         result.scenario_results_cleared = cleared
 
-    def restore_cb_states(self, components: Optional[List[str]] = None) -> int:
+    def restore_cb_states(self, components: list[str] | None = None) -> int:
         """
         X-Test 모드로 변경된 Circuit Breaker 상태를 CLOSED로 원복.
 
@@ -215,8 +220,8 @@ class XTestCleanupService:
 
         try:
             from selfhealing.services.circuit_breaker_service import (
-                get_circuit_breaker_service,
                 CircuitState,
+                get_circuit_breaker_service,
             )
 
             cb_service = get_circuit_breaker_service()
@@ -230,9 +235,7 @@ class XTestCleanupService:
                     try:
                         cb_service.reset_circuit(service_name)
                         restored_count += 1
-                        logger.debug(
-                            f"[XTestCleanup] Restored CB: {service_name}"
-                        )
+                        logger.debug(f"[XTestCleanup] Restored CB: {service_name}")
                     except Exception as e:
                         logger.warning(
                             f"[XTestCleanup] Failed to restore CB {service_name}: {e}"
@@ -245,7 +248,7 @@ class XTestCleanupService:
 
         return restored_count
 
-    def purge_dlq_entries(self, artifact_ids: Optional[List[str]] = None) -> int:
+    def purge_dlq_entries(self, artifact_ids: list[str] | None = None) -> int:
         """
         X-Test 모드로 생성된 DLQ 항목 삭제.
 
@@ -285,7 +288,7 @@ class XTestCleanupService:
 
         return purged_count
 
-    def clear_idempotency_keys(self, session_id: Optional[str] = None) -> int:
+    def clear_idempotency_keys(self, session_id: str | None = None) -> int:
         """
         X-Test 모드로 생성된 Idempotency 키 삭제.
 
@@ -311,16 +314,14 @@ class XTestCleanupService:
             if keys:
                 self.redis.delete(*keys)
                 cleared_count = len(keys)
-                logger.info(
-                    f"[XTestCleanup] Cleared {cleared_count} idempotency keys"
-                )
+                logger.info(f"[XTestCleanup] Cleared {cleared_count} idempotency keys")
 
         except Exception as e:
             logger.error(f"[XTestCleanup] Idempotency clear failed: {e}")
 
         return cleared_count
 
-    def reset_rate_limit_counters(self, session_id: Optional[str] = None) -> int:
+    def reset_rate_limit_counters(self, session_id: str | None = None) -> int:
         """
         X-Test 모드로 사용된 Rate Limit 카운터 초기화.
 
@@ -346,9 +347,7 @@ class XTestCleanupService:
             if keys:
                 self.redis.delete(*keys)
                 reset_count = len(keys)
-                logger.info(
-                    f"[XTestCleanup] Reset {reset_count} rate limit counters"
-                )
+                logger.info(f"[XTestCleanup] Reset {reset_count} rate limit counters")
 
         except Exception as e:
             logger.error(f"[XTestCleanup] Rate limit reset failed: {e}")
@@ -368,11 +367,10 @@ class XTestCleanupService:
             from selfhealing.api.django.views.xtest.integration_scenarios import (
                 clear_scenario_results,
             )
+
             cleared_count = clear_scenario_results()
             if cleared_count > 0:
-                logger.info(
-                    f"[XTestCleanup] Cleared {cleared_count} scenario results"
-                )
+                logger.info(f"[XTestCleanup] Cleared {cleared_count} scenario results")
 
         except ImportError:
             logger.debug("[XTestCleanup] Scenario module not available")
@@ -381,7 +379,7 @@ class XTestCleanupService:
 
         return cleared_count
 
-    def get_cleanup_stats(self) -> Dict[str, Any]:
+    def get_cleanup_stats(self) -> dict[str, Any]:
         """
         현재 정리 대상 통계 조회.
 
@@ -400,16 +398,18 @@ class XTestCleanupService:
         try:
             # 세션 통계
             stats["active_sessions"] = self.session_manager.get_sessions_count()
-            stats["expired_sessions"] = len(
-                self.session_manager.get_expired_sessions()
-            )
+            stats["expired_sessions"] = len(self.session_manager.get_expired_sessions())
 
             # Redis 키 통계
             if self.redis:
                 idempotency_keys = self.redis.keys(f"{XTEST_IDEMPOTENCY_PREFIX}*")
                 rate_limit_keys = self.redis.keys(f"{XTEST_RATE_LIMIT_PREFIX}*")
-                stats["pending_idempotency_clears"] = len(idempotency_keys) if idempotency_keys else 0
-                stats["pending_rate_limit_resets"] = len(rate_limit_keys) if rate_limit_keys else 0
+                stats["pending_idempotency_clears"] = (
+                    len(idempotency_keys) if idempotency_keys else 0
+                )
+                stats["pending_rate_limit_resets"] = (
+                    len(rate_limit_keys) if rate_limit_keys else 0
+                )
 
         except Exception as e:
             logger.error(f"[XTestCleanup] Stats collection failed: {e}")
@@ -421,7 +421,7 @@ class XTestCleanupService:
 # Factory Function
 # =============================================================================
 
-_xtest_cleanup_service: Optional[XTestCleanupService] = None
+_xtest_cleanup_service: XTestCleanupService | None = None
 
 
 def get_xtest_cleanup_service() -> XTestCleanupService:

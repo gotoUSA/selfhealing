@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -137,7 +136,7 @@ class DriftThresholdSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[DriftThresholdSettings] = None
+_settings: DriftThresholdSettings | None = None
 
 
 def get_drift_threshold_settings() -> DriftThresholdSettings:

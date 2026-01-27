@@ -18,7 +18,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -123,8 +122,7 @@ class RecoveryCircuitBreakerSettings(BaseSettings):
         valid_levels = {"NORMAL", "LEVEL_1", "LEVEL_2", "LEVEL_3"}
         if v not in valid_levels:
             logger.warning(
-                f"Unknown re_escalation_level={v}. "
-                f"Valid levels: {valid_levels}"
+                f"Unknown re_escalation_level={v}. " f"Valid levels: {valid_levels}"
             )
         return v
 
@@ -133,7 +131,7 @@ class RecoveryCircuitBreakerSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[RecoveryCircuitBreakerSettings] = None
+_settings: RecoveryCircuitBreakerSettings | None = None
 
 
 def get_recovery_circuit_breaker_settings() -> RecoveryCircuitBreakerSettings:

@@ -13,11 +13,9 @@ Provides get/update methods for advanced configuration types:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.settings import DriftThresholdSettings as DriftThresholdConfig
-
-from .constants import DEFAULT_SLO_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +28,10 @@ class AdvancedConfigMixin:
     # 시스템 컴포넌트별 로깅 설정 관리
     # =========================================================================
 
-    def get_logging_config(self) -> Dict[str, Any]:
+    def get_logging_config(self) -> dict[str, Any]:
         """
         Get logging configuration.
-        
+
         Returns:
             dict: 컴포넌트별 로그 레벨 및 포맷 설정
         """
@@ -42,26 +40,26 @@ class AdvancedConfigMixin:
     def update_logging_config(
         self,
         # 컴포넌트별 로그 레벨
-        dlq_log_level: Optional[str] = None,
-        circuit_breaker_log_level: Optional[str] = None,
-        replay_log_level: Optional[str] = None,
-        sla_log_level: Optional[str] = None,
-        forensic_log_level: Optional[str] = None,
-        emergency_log_level: Optional[str] = None,
-        chaos_log_level: Optional[str] = None,
-        l2_storage_log_level: Optional[str] = None,
+        dlq_log_level: str | None = None,
+        circuit_breaker_log_level: str | None = None,
+        replay_log_level: str | None = None,
+        sla_log_level: str | None = None,
+        forensic_log_level: str | None = None,
+        emergency_log_level: str | None = None,
+        chaos_log_level: str | None = None,
+        l2_storage_log_level: str | None = None,
         # 로그 포맷 설정
-        include_timestamps: Optional[bool] = None,
-        include_request_id: Optional[bool] = None,
-        include_user_info: Optional[bool] = None,
+        include_timestamps: bool | None = None,
+        include_request_id: bool | None = None,
+        include_user_info: bool | None = None,
         # 로그 출력 설정
-        console_output_enabled: Optional[bool] = None,
-        file_output_enabled: Optional[bool] = None,
-        structured_json: Optional[bool] = None,
-    ) -> Dict[str, Any]:
+        console_output_enabled: bool | None = None,
+        file_output_enabled: bool | None = None,
+        structured_json: bool | None = None,
+    ) -> dict[str, Any]:
         """
         Update logging configuration.
-        
+
         Args:
             dlq_log_level: DLQ 관련 로그 레벨
             circuit_breaker_log_level: Circuit Breaker 로그 레벨
@@ -77,7 +75,7 @@ class AdvancedConfigMixin:
             console_output_enabled: 콘솔 로그 출력 활성화
             file_output_enabled: 파일 로그 출력 활성화
             structured_json: JSON 구조화 로그 포맷 사용
-            
+
         Returns:
             dict: 업데이트된 설정값
         """
@@ -88,20 +86,20 @@ class AdvancedConfigMixin:
     # Metrics Config
     # =========================================================================
 
-    def get_metrics_config(self) -> Dict[str, Any]:
+    def get_metrics_config(self) -> dict[str, Any]:
         """Get metrics configuration."""
         return self._get_config("metrics")
 
     def update_metrics_config(
         self,
-        enabled: Optional[bool] = None,
-        collection_interval_seconds: Optional[int] = None,
-        histogram_buckets: Optional[list] = None,
-        export_prometheus: Optional[bool] = None,
-        export_statsd: Optional[bool] = None,
-        statsd_host: Optional[str] = None,
-        statsd_port: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        enabled: bool | None = None,
+        collection_interval_seconds: int | None = None,
+        histogram_buckets: list | None = None,
+        export_prometheus: bool | None = None,
+        export_statsd: bool | None = None,
+        statsd_host: str | None = None,
+        statsd_port: int | None = None,
+    ) -> dict[str, Any]:
         """Update metrics configuration."""
         updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
         return self._update_config("metrics", **updates)
@@ -110,7 +108,7 @@ class AdvancedConfigMixin:
     # Error Budget Config
     # =========================================================================
 
-    def get_error_budget_config(self) -> Dict[str, Any]:
+    def get_error_budget_config(self) -> dict[str, Any]:
         """
         Get Error Budget configuration.
 
@@ -121,28 +119,28 @@ class AdvancedConfigMixin:
 
     def update_error_budget_config(
         self,
-        threshold_healthy: Optional[float] = None,
-        threshold_caution: Optional[float] = None,
-        threshold_warning: Optional[float] = None,
-        threshold_critical: Optional[float] = None,
-        burn_rate_fast_critical: Optional[float] = None,
-        burn_rate_fast_warning: Optional[float] = None,
-        burn_rate_slow_warning: Optional[float] = None,
-        burn_rate_slow_info: Optional[float] = None,
-        failsafe_alert_enabled: Optional[bool] = None,
-        failsafe_cooldown_seconds: Optional[int] = None,
+        threshold_healthy: float | None = None,
+        threshold_caution: float | None = None,
+        threshold_warning: float | None = None,
+        threshold_critical: float | None = None,
+        burn_rate_fast_critical: float | None = None,
+        burn_rate_fast_warning: float | None = None,
+        burn_rate_slow_warning: float | None = None,
+        burn_rate_slow_info: float | None = None,
+        failsafe_alert_enabled: bool | None = None,
+        failsafe_cooldown_seconds: int | None = None,
         # Heartbeat (Dead Man's Snitch) 설정
-        heartbeat_enabled: Optional[bool] = None,
-        heartbeat_interval_seconds: Optional[int] = None,
-        heartbeat_timeout_seconds: Optional[int] = None,
+        heartbeat_enabled: bool | None = None,
+        heartbeat_interval_seconds: int | None = None,
+        heartbeat_timeout_seconds: int | None = None,
         # 복구 알림 (Recovery Notification) 설정
-        recovery_alert_enabled: Optional[bool] = None,
-        recovery_alert_include_downtime: Optional[bool] = None,
+        recovery_alert_enabled: bool | None = None,
+        recovery_alert_include_downtime: bool | None = None,
         # Override 에스컬레이션 설정
-        escalation_enabled: Optional[bool] = None,
-        escalation_channel: Optional[str] = None,
-        escalation_mention: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        escalation_enabled: bool | None = None,
+        escalation_channel: str | None = None,
+        escalation_mention: str | None = None,
+    ) -> dict[str, Any]:
         """
         Update Error Budget configuration.
 
@@ -176,7 +174,7 @@ class AdvancedConfigMixin:
     # SLO Config (Service Level Objectives)
     # =========================================================================
 
-    def get_slo_config(self) -> Dict[str, Any]:
+    def get_slo_config(self) -> dict[str, Any]:
         """
         Get SLO configuration.
 
@@ -192,13 +190,13 @@ class AdvancedConfigMixin:
 
     def update_slo_config(
         self,
-        default_window_days: Optional[int] = None,
-        default_target: Optional[float] = None,
-        default_fast_burn_rate: Optional[float] = None,
-        default_slow_burn_rate: Optional[float] = None,
-        slo: Optional[Dict[str, Any]] = None,
-        slos: Optional[list] = None,
-    ) -> Dict[str, Any]:
+        default_window_days: int | None = None,
+        default_target: float | None = None,
+        default_fast_burn_rate: float | None = None,
+        default_slow_burn_rate: float | None = None,
+        slo: dict[str, Any] | None = None,
+        slos: list | None = None,
+    ) -> dict[str, Any]:
         """
         Update SLO configuration.
 
@@ -219,16 +217,24 @@ class AdvancedConfigMixin:
             # Update defaults
             if default_window_days is not None:
                 current["default_window_days"] = default_window_days
-                logger.info(f"[RuntimeConfig] Updated slo.default_window_days = {default_window_days}")
+                logger.info(
+                    f"[RuntimeConfig] Updated slo.default_window_days = {default_window_days}"
+                )
             if default_target is not None:
                 current["default_target"] = default_target
-                logger.info(f"[RuntimeConfig] Updated slo.default_target = {default_target}")
+                logger.info(
+                    f"[RuntimeConfig] Updated slo.default_target = {default_target}"
+                )
             if default_fast_burn_rate is not None:
                 current["default_fast_burn_rate"] = default_fast_burn_rate
-                logger.info(f"[RuntimeConfig] Updated slo.default_fast_burn_rate = {default_fast_burn_rate}")
+                logger.info(
+                    f"[RuntimeConfig] Updated slo.default_fast_burn_rate = {default_fast_burn_rate}"
+                )
             if default_slow_burn_rate is not None:
                 current["default_slow_burn_rate"] = default_slow_burn_rate
-                logger.info(f"[RuntimeConfig] Updated slo.default_slow_burn_rate = {default_slow_burn_rate}")
+                logger.info(
+                    f"[RuntimeConfig] Updated slo.default_slow_burn_rate = {default_slow_burn_rate}"
+                )
 
             # Add/update SLOs
             slos_to_update = []
@@ -243,14 +249,16 @@ class AdvancedConfigMixin:
             self._save_config("slo", current)
             return current.copy()
 
-    def _upsert_slo(self, config: Dict[str, Any], slo_def: Dict[str, Any]) -> None:
+    def _upsert_slo(self, config: dict[str, Any], slo_def: dict[str, Any]) -> None:
         """Insert or update an SLO definition."""
         if "slos" not in config:
             config["slos"] = []
 
         slo_name = slo_def.get("name")
         if not slo_name:
-            logger.warning("[RuntimeConfig] SLO definition missing 'name' field, skipping")
+            logger.warning(
+                "[RuntimeConfig] SLO definition missing 'name' field, skipping"
+            )
             return
 
         # Find existing SLO by name
@@ -266,14 +274,20 @@ class AdvancedConfigMixin:
                 "name": slo_name,
                 "sli_type": slo_def.get("sli_type", "availability"),
                 "target": slo_def.get("target", config.get("default_target", 0.999)),
-                "window_days": slo_def.get("window_days", config.get("default_window_days", 30)),
+                "window_days": slo_def.get(
+                    "window_days", config.get("default_window_days", 30)
+                ),
                 "description": slo_def.get("description", ""),
                 "service_name": slo_def.get("service_name", ""),
                 "domain": slo_def.get("domain", ""),
                 "warning_threshold": slo_def.get("warning_threshold"),
                 "critical_threshold": slo_def.get("critical_threshold"),
-                "fast_burn_rate": slo_def.get("fast_burn_rate", config.get("default_fast_burn_rate", 14.4)),
-                "slow_burn_rate": slo_def.get("slow_burn_rate", config.get("default_slow_burn_rate", 3.0)),
+                "fast_burn_rate": slo_def.get(
+                    "fast_burn_rate", config.get("default_fast_burn_rate", 14.4)
+                ),
+                "slow_burn_rate": slo_def.get(
+                    "slow_burn_rate", config.get("default_slow_burn_rate", 3.0)
+                ),
             }
             config["slos"].append(new_slo)
             logger.info(f"[RuntimeConfig] Added SLO: {slo_name}")
@@ -284,7 +298,7 @@ class AdvancedConfigMixin:
                     config["slos"][existing_idx][key] = value
             logger.info(f"[RuntimeConfig] Updated SLO: {slo_name}")
 
-    def delete_slo(self, slo_name: str) -> Dict[str, Any]:
+    def delete_slo(self, slo_name: str) -> dict[str, Any]:
         """
         Delete an SLO by name.
 
@@ -319,7 +333,7 @@ class AdvancedConfigMixin:
                 "remaining_count": len(current["slos"]),
             }
 
-    def get_slo_by_name(self, slo_name: str) -> Optional[Dict[str, Any]]:
+    def get_slo_by_name(self, slo_name: str) -> dict[str, Any] | None:
         """
         Get a specific SLO by name.
 
@@ -339,7 +353,7 @@ class AdvancedConfigMixin:
     # Governance Config (RBAC, Emergency Escalation)
     # =========================================================================
 
-    def get_governance_config(self) -> Dict[str, Any]:
+    def get_governance_config(self) -> dict[str, Any]:
         """
         Get Governance configuration.
 
@@ -356,19 +370,19 @@ class AdvancedConfigMixin:
 
     def update_governance_config(
         self,
-        threshold_operator: Optional[float] = None,
-        threshold_admin: Optional[float] = None,
-        emergency_expiry_hours: Optional[int] = None,
-        emergency_warning_hours: Optional[int] = None,
-        emergency_final_warning_hours: Optional[int] = None,
-        default_mode: Optional[str] = None,
-        notify_on_emergency: Optional[bool] = None,
-        notify_channels: Optional[list] = None,
-        emergency_slack_channel: Optional[str] = None,
-        emergency_email_recipients: Optional[list] = None,
-        four_eyes_enabled: Optional[bool] = None,
-        four_eyes_expiry_hours: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        threshold_operator: float | None = None,
+        threshold_admin: float | None = None,
+        emergency_expiry_hours: int | None = None,
+        emergency_warning_hours: int | None = None,
+        emergency_final_warning_hours: int | None = None,
+        default_mode: str | None = None,
+        notify_on_emergency: bool | None = None,
+        notify_channels: list | None = None,
+        emergency_slack_channel: str | None = None,
+        emergency_email_recipients: list | None = None,
+        four_eyes_enabled: bool | None = None,
+        four_eyes_expiry_hours: int | None = None,
+    ) -> dict[str, Any]:
         """
         Update Governance configuration.
 
@@ -410,7 +424,7 @@ class AdvancedConfigMixin:
     # Drift Threshold Config
     # =========================================================================
 
-    def get_drift_threshold_config(self) -> Dict[str, Any]:
+    def get_drift_threshold_config(self) -> dict[str, Any]:
         """
         Get Drift Threshold configuration.
 
@@ -426,14 +440,14 @@ class AdvancedConfigMixin:
 
     def update_drift_threshold_config(
         self,
-        warning_threshold: Optional[float] = None,
-        critical_threshold: Optional[float] = None,
-        incident_threshold: Optional[float] = None,
-        alert_enabled: Optional[bool] = None,
-        incident_auto_create: Optional[bool] = None,
+        warning_threshold: float | None = None,
+        critical_threshold: float | None = None,
+        incident_threshold: float | None = None,
+        alert_enabled: bool | None = None,
+        incident_auto_create: bool | None = None,
         changed_by: str = "system",
         reason: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update Drift Threshold configuration.
 
@@ -448,18 +462,30 @@ class AdvancedConfigMixin:
 
         Returns:
             dict: 업데이트된 Drift Threshold 설정
-            
+
         Raises:
             ValueError: 임계값이 올바른 순서가 아닌 경우
         """
         # Get current values for validation
         current = self._get_config("drift_threshold")
-        
+
         # Apply updates to copies for validation
-        new_warning = warning_threshold if warning_threshold is not None else current.get("warning_threshold", 0.05)
-        new_critical = critical_threshold if critical_threshold is not None else current.get("critical_threshold", 0.20)
-        new_incident = incident_threshold if incident_threshold is not None else current.get("incident_threshold", 0.50)
-        
+        new_warning = (
+            warning_threshold
+            if warning_threshold is not None
+            else current.get("warning_threshold", 0.05)
+        )
+        new_critical = (
+            critical_threshold
+            if critical_threshold is not None
+            else current.get("critical_threshold", 0.20)
+        )
+        new_incident = (
+            incident_threshold
+            if incident_threshold is not None
+            else current.get("incident_threshold", 0.50)
+        )
+
         # Validate thresholds order
         if not (0 < new_warning < new_critical < new_incident <= 1.0):
             raise ValueError(
@@ -468,23 +494,27 @@ class AdvancedConfigMixin:
             )
 
         updates = {
-            k: v for k, v in {
+            k: v
+            for k, v in {
                 "warning_threshold": warning_threshold,
                 "critical_threshold": critical_threshold,
                 "incident_threshold": incident_threshold,
                 "alert_enabled": alert_enabled,
                 "incident_auto_create": incident_auto_create,
-            }.items() if v is not None
+            }.items()
+            if v is not None
         }
-        
+
         return self._update_config(
             "drift_threshold",
             changed_by=changed_by,
             reason=reason or f"Updated fields: {list(updates.keys())}",
-            **updates
+            **updates,
         )
 
-    def reset_drift_threshold_config(self, changed_by: str = "system") -> Dict[str, Any]:
+    def reset_drift_threshold_config(
+        self, changed_by: str = "system"
+    ) -> dict[str, Any]:
         """
         Reset Drift Threshold configuration to defaults.
 
@@ -496,13 +526,13 @@ class AdvancedConfigMixin:
         """
         default_config = DriftThresholdConfig().model_dump()
         self._save_config("drift_threshold", default_config)
-        
+
         self._save_to_history(
             config_type="drift_threshold",
             values=default_config,
             changed_by=changed_by,
             reason="Reset to default values",
         )
-        
+
         logger.info(f"[RuntimeConfig] Drift threshold config reset by {changed_by}")
         return default_config

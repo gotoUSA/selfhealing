@@ -15,7 +15,6 @@ Environment Variables:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -69,7 +68,7 @@ class AuditWatchdogSettings(BaseSettings):
     # ==========================================================================
     # Local File Heartbeat
     # ==========================================================================
-    local_heartbeat_file: Optional[str] = Field(
+    local_heartbeat_file: str | None = Field(
         default=None,
         description="로컬 파일 heartbeat 경로 (외부 서비스 없이 작동)",
     )
@@ -77,7 +76,7 @@ class AuditWatchdogSettings(BaseSettings):
     # ==========================================================================
     # Heartbeat URL
     # ==========================================================================
-    heartbeat_url: Optional[str] = Field(
+    heartbeat_url: str | None = Field(
         default=None,
         description="Heartbeat 전송 URL",
     )
@@ -108,7 +107,7 @@ class AuditWatchdogSettings(BaseSettings):
 # Singleton Pattern
 # =============================================================================
 
-_settings: Optional[AuditWatchdogSettings] = None
+_settings: AuditWatchdogSettings | None = None
 
 
 def get_audit_watchdog_settings() -> AuditWatchdogSettings:

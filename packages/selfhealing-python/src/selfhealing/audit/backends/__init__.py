@@ -18,8 +18,8 @@ Stage 4 (Interface):
 """
 
 from selfhealing.audit.backends.base import (
-    AuditBackend,
     AsyncAuditBackend,
+    AuditBackend,
     BackendHealth,
     BackendStatus,
     BufferedBackend,

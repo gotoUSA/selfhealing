@@ -21,17 +21,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, Optional, Callable
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from selfhealing.core.timezone import now
-from selfhealing.settings import get_config
 from selfhealing.core.time_provider import TimeProvider, get_time_provider
+from selfhealing.settings import get_config
 
 if TYPE_CHECKING:
-    from selfhealing.interfaces import CacheProviderInterface
     from selfhealing.core.time_provider import TimeProvider
 
 logger = logging.getLogger(__name__)
@@ -69,7 +68,7 @@ class IdempotencyDomain(Enum):
 
     CHAOS_ZOMBIE_HUNTER = "chaos_zombie_hunter"
     """Zombie Hunter 분산 락 (고아 실험 중복 rollback 방지).
-    
+
     고아 상태의 실험을 감지하고 안전하게 정리합니다.
     """
 
@@ -125,7 +124,7 @@ class IdempotencyKey:
         entity_id: int,
         operation: str,
         domain: IdempotencyDomain = IdempotencyDomain.EXTERNAL_SERVICE,
-    ) -> "IdempotencyKey":
+    ) -> IdempotencyKey:
         """
         Create an idempotency key for a generic operation.
 
@@ -150,7 +149,7 @@ class IdempotencyKey:
         )
 
     @classmethod
-    def for_event(cls, event_id: str) -> "IdempotencyKey":
+    def for_event(cls, event_id: str) -> IdempotencyKey:
         """
         Create an idempotency key for event processing.
 
@@ -172,8 +171,8 @@ class IdempotencyKey:
         resource_type: str,
         resource_id: int,
         action: str,
-        amount: Optional[int] = None,
-    ) -> "IdempotencyKey":
+        amount: int | None = None,
+    ) -> IdempotencyKey:
         """
         Create an idempotency key for resource actions.
 
@@ -202,7 +201,7 @@ class IdempotencyKey:
         )
 
     @classmethod
-    def custom(cls, key: str, **components: Any) -> "IdempotencyKey":
+    def custom(cls, key: str, **components: Any) -> IdempotencyKey:
         """
         Create a custom idempotency key.
 
@@ -229,7 +228,7 @@ class IdempotencyKey:
         schedule_id: str,
         experiment_type: str,
         target_service: str,
-    ) -> "IdempotencyKey":
+    ) -> IdempotencyKey:
         """
         Chaos 실험에 대한 멱등성 키 생성.
 
@@ -258,44 +257,44 @@ class IdempotencyKey:
     def for_chaos_service_lock(
         cls,
         target_service: str,
-    ) -> "IdempotencyKey":
+    ) -> IdempotencyKey:
         """
         서비스 단위 Chaos 실험 락.
-        
+
         동일 서비스에 2개 이상의 실험이 동시 실행되는 것을 방지.
         (원인 분석 명확성 확보)
-        
+
         Schedule 락과 함께 사용하는 이중 락 패턴:
         - Service Lock: 동시성 제어 (실험 종료 시 해제)
         - Schedule Lock: 재실행 방지 (TTL까지 유지)
-        
+
         Args:
             target_service: 대상 서비스명
-        
+
         Returns:
             IdempotencyKey for service-level chaos lock
-            
+
         Usage:
             # 이중 락 패턴 사용 예시
             service_lock = IdempotencyKey.for_chaos_service_lock(target_service)
             schedule_lock = IdempotencyKey.for_chaos_experiment(schedule_id, exp_type, target_service)
-            
+
             # 1. 서비스 락 획득 (동시성 제어)
             if not idempotency.acquire_lock(service_lock, ttl_seconds=7200):
                 return "다른 실험 실행 중"
-                
+
             # 2. 스케줄 락 획득 (재실행 방지)
             if not idempotency.acquire_lock(schedule_lock, ttl_seconds=86400):
                 idempotency.release_lock(service_lock)  # 롤백
                 return "이미 실행된 스케줄"
-                
+
             try:
                 # 3. 실험 실행
                 execute_experiment()
             finally:
                 # 4. 서비스 락만 해제 (스케줄 락은 TTL 유지)
                 idempotency.release_lock(service_lock)
-        
+
         """
         key = f"chaos:service_lock:{target_service}"
         return cls(
@@ -313,9 +312,9 @@ class IdempotencyKey:
         config_key: str,
         new_value_hash: str,
         changed_by: str,
-        request_id: Optional[str] = None,
-        window_id: Optional[str] = None,
-    ) -> "IdempotencyKey":
+        request_id: str | None = None,
+        window_id: str | None = None,
+    ) -> IdempotencyKey:
         """
         설정 변경에 대한 멱등성 키 생성.
 
@@ -366,7 +365,7 @@ class IdempotencyKey:
         service_name: str,
         record_id: str,
         intended_state: str,
-    ) -> "IdempotencyKey":
+    ) -> IdempotencyKey:
         """
         L2 동기화에 대한 멱등성 키 생성.
 
@@ -396,7 +395,7 @@ class IdempotencyKey:
         cls,
         wal_entry_id: str,
         operation: str,
-    ) -> "IdempotencyKey":
+    ) -> IdempotencyKey:
         """
         WAL 복구에 대한 멱등성 키 생성.
 
@@ -425,7 +424,7 @@ class IdempotencyKey:
         module: str,
         parameter: str,
         target_value: str,
-    ) -> "IdempotencyKey":
+    ) -> IdempotencyKey:
         """
         자율 조정에 대한 멱등성 키 생성.
 
@@ -490,8 +489,8 @@ class IdempotencyService:
     def __init__(
         self,
         cache_ttl: int | None = None,
-        time_provider: Optional["TimeProvider"] = None,
-        clock_skew_tolerance_seconds: Optional[float] = None,
+        time_provider: TimeProvider | None = None,
+        clock_skew_tolerance_seconds: float | None = None,
     ):
         """
         Initialize the idempotency service.
@@ -501,8 +500,6 @@ class IdempotencyService:
             time_provider: TimeProvider for testable time operations
             clock_skew_tolerance_seconds: Clock skew tolerance for distributed checks
         """
-        from selfhealing.settings import get_config
-        from selfhealing.core.time_provider import TimeProvider, get_time_provider
 
         config = get_config()
         self._default_cache_ttl = config.idempotency.default_cache_ttl
@@ -516,6 +513,29 @@ class IdempotencyService:
             else config.idempotency.clock_skew_tolerance_seconds
         )
         self._time_provider: TimeProvider = time_provider or get_time_provider()
+        self._cache = None  # Lazy initialized
+
+    def _get_cache(self):
+        """Django cache 인터페이스를 lazy load합니다."""
+        if self._cache is None:
+            try:
+                from django.core.cache import cache
+
+                self._cache = cache
+            except ImportError:
+                # Django not available - use noop cache
+                class NoopCache:
+                    def get(self, key):
+                        return None
+
+                    def set(self, key, value, timeout=None):
+                        pass
+
+                    def delete(self, key):
+                        pass
+
+                self._cache = NoopCache()
+        return self._cache
 
     @property
     def DEFAULT_CACHE_TTL(self) -> int:
@@ -533,7 +553,7 @@ class IdempotencyService:
         return self._clock_skew_tolerance
 
     @property
-    def time_provider(self) -> "TimeProvider":
+    def time_provider(self) -> TimeProvider:
         """Get the time provider for this service."""
         return self._time_provider
 
@@ -549,7 +569,7 @@ class IdempotencyService:
     def is_timestamp_valid(
         self,
         timestamp: datetime,
-        tolerance_seconds: Optional[float] = None,
+        tolerance_seconds: float | None = None,
     ) -> bool:
         """
         Check if a timestamp is within acceptable clock skew tolerance.
@@ -564,7 +584,6 @@ class IdempotencyService:
         Returns:
             True if timestamp is within tolerance of current time
         """
-        from datetime import timedelta
 
         tolerance = tolerance_seconds if tolerance_seconds is not None else self._clock_skew_tolerance
         return self._time_provider.is_within_tolerance(
@@ -575,8 +594,8 @@ class IdempotencyService:
     def check(
         self,
         key: IdempotencyKey,
-        lookup_fn: Optional[Callable[..., Any]] = None,
-        cache_ttl: Optional[int] = None,
+        lookup_fn: Callable[..., Any] | None = None,
+        cache_ttl: int | None = None,
     ) -> IdempotencyResult:
         """
         Check if an operation has already been processed.
@@ -593,6 +612,7 @@ class IdempotencyService:
             Gracefully degrades to DB-only check if Redis is unavailable.
         """
         ttl = cache_ttl or self.cache_ttl
+        cache = self._get_cache()
 
         # Check cache first (fast path) with graceful degradation
         try:
@@ -632,7 +652,7 @@ class IdempotencyService:
             message="Not found",
         )
 
-    def check_event(self, event_id: str, exists_fn: Optional[Callable[[str], bool]] = None) -> IdempotencyResult:
+    def check_event(self, event_id: str, exists_fn: Callable[[str], bool] | None = None) -> IdempotencyResult:
         """
         Check if an event has already been processed.
 
@@ -644,6 +664,7 @@ class IdempotencyService:
             IdempotencyResult with duplicate status
         """
         key = IdempotencyKey.for_event(event_id)
+        cache = self._get_cache()
 
         # Check cache with graceful degradation
         try:
@@ -699,6 +720,7 @@ class IdempotencyService:
             The operation is still considered successful even if cache fails,
             as the DB is the source of truth.
         """
+        cache = self._get_cache()
         value = record_id if record_id else True
         try:
             cache.set(key.cache_key, value, timeout=ttl or self.cache_ttl)
@@ -721,6 +743,7 @@ class IdempotencyService:
         Returns:
             True if cache was cleared, False if cache was unavailable.
         """
+        cache = self._get_cache()
         try:
             cache.delete(key.cache_key)
             logger.debug(f"[Idempotency] Cleared: {key.cache_key}")
@@ -803,7 +826,10 @@ class AntiFlappingWindow:
     def _init_redis_client(self) -> None:
         """Redis 클라이언트 초기화."""
         try:
-            from selfhealing.core.state_backend import get_state_backend, RedisStateBackend
+            from selfhealing.core.state_backend import (
+                RedisStateBackend,
+                get_state_backend,
+            )
 
             backend = get_state_backend()
             if isinstance(backend, RedisStateBackend):
@@ -882,7 +908,10 @@ class AntiFlappingWindow:
 
             # 4. 플래핑 감지
             if similar_count >= self.max_similar_changes:
-                return True, f"Flapping detected: {similar_count} similar changes in {self.window_seconds}s"
+                return (
+                    True,
+                    f"Flapping detected: {similar_count} similar changes in {self.window_seconds}s",
+                )
 
             # 5. 현재 값 기록
             member = f"{now_ts}:{new_value}"
@@ -908,10 +937,7 @@ class AntiFlappingWindow:
 
         with self._lock:
             # 슬라이딩 윈도우: 오래된 엔트리 제거
-            self._windows[key] = [
-                (ts, val) for ts, val in self._windows[key]
-                if ts > window_start
-            ]
+            self._windows[key] = [(ts, val) for ts, val in self._windows[key] if ts > window_start]
 
             # 유사한 값 변경 횟수 계산
             similar_count = 0
@@ -921,7 +947,10 @@ class AntiFlappingWindow:
 
             # 플래핑 감지
             if similar_count >= self.max_similar_changes:
-                return True, f"Flapping detected: {similar_count} similar changes in {self.window_seconds}s"
+                return (
+                    True,
+                    f"Flapping detected: {similar_count} similar changes in {self.window_seconds}s",
+                )
 
             # 현재 값 기록
             self._windows[key].append((now_ts, new_value))

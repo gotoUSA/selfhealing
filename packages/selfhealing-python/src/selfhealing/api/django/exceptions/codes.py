@@ -20,7 +20,6 @@ Categories:
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, Tuple
 
 
 class ErrorCode(str, Enum):
@@ -137,7 +136,7 @@ class ErrorCode(str, Enum):
 # HTTP 상태 코드 매핑
 # =============================================================================
 
-ERROR_CODE_TO_HTTP_STATUS: Dict[ErrorCode, int] = {
+ERROR_CODE_TO_HTTP_STATUS: dict[ErrorCode, int] = {
     # VALIDATION → 400
     ErrorCode.VALIDATION_FIELD_REQUIRED: 400,
     ErrorCode.VALIDATION_FIELD_INVALID: 400,
@@ -179,7 +178,7 @@ ERROR_CODE_TO_HTTP_STATUS: Dict[ErrorCode, int] = {
 # 재시도 가능 여부 매핑
 # =============================================================================
 
-ERROR_CODE_RETRYABLE: Dict[ErrorCode, bool] = {
+ERROR_CODE_RETRYABLE: dict[ErrorCode, bool] = {
     # VALIDATION → 재시도 불가 (입력 수정 필요)
     ErrorCode.VALIDATION_FIELD_REQUIRED: False,
     ErrorCode.VALIDATION_FIELD_INVALID: False,
@@ -221,7 +220,7 @@ ERROR_CODE_RETRYABLE: Dict[ErrorCode, bool] = {
 # 사용자 친화적 기본 메시지
 # =============================================================================
 
-ERROR_CODE_DEFAULT_MESSAGES: Dict[ErrorCode, str] = {
+ERROR_CODE_DEFAULT_MESSAGES: dict[ErrorCode, str] = {
     # VALIDATION
     ErrorCode.VALIDATION_FIELD_REQUIRED: "필수 필드가 누락되었습니다.",
     ErrorCode.VALIDATION_FIELD_INVALID: "필드값 형식이 올바르지 않습니다.",
@@ -279,7 +278,7 @@ def get_default_message(code: ErrorCode) -> str:
     return ERROR_CODE_DEFAULT_MESSAGES.get(code, "오류가 발생했습니다.")
 
 
-def get_error_info(code: ErrorCode) -> Tuple[int, bool, str]:
+def get_error_info(code: ErrorCode) -> tuple[int, bool, str]:
     """
     에러 코드의 전체 정보 반환.
 

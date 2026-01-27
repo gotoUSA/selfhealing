@@ -37,15 +37,18 @@ from __future__ import annotations
 
 import contextvars
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Generator, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Context variable for thread-safe actor tracking
-_current_actor: contextvars.ContextVar[Optional["Actor"]] = contextvars.ContextVar("current_actor", default=None)
+_current_actor: contextvars.ContextVar[Actor | None] = contextvars.ContextVar(
+    "current_actor", default=None
+)
 
 
 # RBAC 역할 우선순위 상수
@@ -75,8 +78,8 @@ class Actor:
     actor_id: str
     actor_type: str = "user"
     source: str = "unknown"
-    ip_address: Optional[str] = None
-    session_id: Optional[str] = None
+    ip_address: str | None = None
+    session_id: str | None = None
     set_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
     roles: list[str] = field(default_factory=list)
@@ -137,9 +140,9 @@ class ActorContext:
         actor_id: str,
         actor_type: str = "user",
         source: str = "unknown",
-        ip_address: Optional[str] = None,
-        session_id: Optional[str] = None,
-        roles: Optional[list[str]] = None,
+        ip_address: str | None = None,
+        session_id: str | None = None,
+        roles: list[str] | None = None,
         **metadata: Any,
     ) -> Generator[Actor, None, None]:
         """
@@ -161,28 +164,32 @@ class ActorContext:
         )
         token = _current_actor.set(actor)
         try:
-            logger.debug(f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source} roles={actor.roles}")
+            logger.debug(
+                f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source} roles={actor.roles}"
+            )
             yield actor
         finally:
             _current_actor.reset(token)
             logger.debug(f"[ActorContext] Cleared actor: {actor_id}")
 
     @classmethod
-    def set_actor_from_django_request(cls, request: Any) -> Generator[Actor, None, None]:
+    def set_actor_from_django_request(
+        cls, request: Any
+    ) -> Generator[Actor, None, None]:
         """
         Set actor from Django request object.
 
         Extracts user info, IP address, session ID, and RBAC roles automatically.
-        
+
         RBAC: 역할도 함께 추출하여 actor_type에 가장 높은 권한을 설정.
         """
         # Extract user info
         if hasattr(request, "user") and request.user.is_authenticated:
             actor_id = getattr(request.user, "email", None) or str(request.user.pk)
-            
+
             # RBAC 역할 추출
             roles = cls._extract_selfhealing_roles(request.user)
-            
+
             # actor_type을 가장 높은 RBAC 역할로 설정 (있는 경우)
             if roles:
                 actor_type = cls._get_highest_role(roles)
@@ -220,21 +227,21 @@ class ActorContext:
     def _extract_selfhealing_roles(cls, user: Any) -> list[str]:
         """
         사용자의 selfhealing RBAC 그룹 추출.
-        
+
         Django User의 groups에서 selfhealing_ 접두사 그룹만 필터링.
-        
+
         Args:
             user: Django User 객체
-            
+
         Returns:
             selfhealing_ 접두사를 가진 그룹 이름 리스트
         """
         try:
             if hasattr(user, "groups"):
                 return list(
-                    user.groups.filter(
-                        name__startswith="selfhealing_"
-                    ).values_list("name", flat=True)
+                    user.groups.filter(name__startswith="selfhealing_").values_list(
+                        "name", flat=True
+                    )
                 )
         except Exception:
             logger.debug(f"[ActorContext] Failed to extract RBAC roles for user {user}")
@@ -244,12 +251,12 @@ class ActorContext:
     def _get_highest_role(cls, roles: list[str]) -> str:
         """
         RBAC 역할 중 가장 높은 권한 반환.
-        
+
         selfhealing_admin > selfhealing_operator > selfhealing_viewer 순.
-        
+
         Args:
             roles: RBAC 역할 리스트
-            
+
         Returns:
             가장 높은 권한의 역할 이름, 없으면 'user'
         """
@@ -262,7 +269,7 @@ class ActorContext:
         )
 
     @classmethod
-    def _get_client_ip(cls, request: Any) -> Optional[str]:
+    def _get_client_ip(cls, request: Any) -> str | None:
         """Extract client IP from Django request."""
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
@@ -282,7 +289,7 @@ class ActorContext:
         return actor
 
     @classmethod
-    def get_current_or_none(cls) -> Optional[Actor]:
+    def get_current_or_none(cls) -> Actor | None:
         """Get the current actor, or None if not set."""
         return _current_actor.get()
 
@@ -352,7 +359,8 @@ def warn_if_untracked(operation: str) -> None:
             stacklevel=2,
         )
         logger.warning(
-            f"[ActorContext] UNTRACKED_OPERATION operation={operation} " f"actor={ActorContext.get_current().actor_id}"
+            f"[ActorContext] UNTRACKED_OPERATION operation={operation} "
+            f"actor={ActorContext.get_current().actor_id}"
         )
 
 
@@ -385,7 +393,7 @@ def get_audit_actor_info() -> dict[str, Any]:
     Get actor info formatted for AuditEntry.
 
     Returns dict with actor_id, actor_type, actor_roles that can be unpacked into AuditEntry.
-    
+
     actor_roles도 포함하여 RBAC-Audit 연동 지원.
 
     Usage:
@@ -411,7 +419,7 @@ def get_audit_actor_info() -> dict[str, Any]:
 def get_actor_for_celery() -> dict[str, Any]:
     """
     Get current actor info for passing to Celery task.
-    
+
     roles 정보도 함께 전달하여 Celery Task에서 RBAC 역할 유지.
 
     Usage (in view/api):
@@ -442,10 +450,12 @@ def get_actor_for_celery() -> dict[str, Any]:
 
 
 @contextmanager
-def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, None, None]:
+def restore_actor_from_celery(
+    actor_info: dict[str, Any]
+) -> Generator[Actor, None, None]:
     """
     Restore actor context in Celery task from passed info.
-    
+
     roles 정보도 함께 복원하여 RBAC 역할 유지.
 
     Usage:
@@ -458,7 +468,10 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
     """
     if not actor_info:
         # No actor info passed, log warning
-        logger.warning("[ActorContext] Celery task started without actor_info. " "Operations will be attributed to 'system'.")
+        logger.warning(
+            "[ActorContext] Celery task started without actor_info. "
+            "Operations will be attributed to 'system'."
+        )
         yield SYSTEM_ACTOR
         return
 
@@ -482,7 +495,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
 @contextmanager
 def set_management_command_actor(
     command_name: str,
-    run_by: Optional[str] = None,
+    run_by: str | None = None,
 ) -> Generator[Actor, None, None]:
     """
     Set actor context for Django management command.
@@ -503,5 +516,7 @@ def set_management_command_actor(
         actor_type="management_command",
         source=f"manage.py:{command_name}",
     ) as actor:
-        logger.info(f"[ActorContext] Management command '{command_name}' started by {actor_id}")
+        logger.info(
+            f"[ActorContext] Management command '{command_name}' started by {actor_id}"
+        )
         yield actor

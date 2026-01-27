@@ -22,13 +22,11 @@ V3 Optimization:
 import logging
 
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.services.error_budget_service import (
     get_error_budget_service,
     get_failsafe_status_response,
@@ -52,7 +50,7 @@ class ErrorBudgetStatusView(APIView):
     Query Parameters:
     - slo_name: SLO name to check (default: "availability")
     - nocache: Set to "true" to bypass cache (V3)
-    
+
     V3 Optimization: Uses multi-tier cache for P95 < 20ms target.
     """
 
@@ -62,11 +60,14 @@ class ErrorBudgetStatusView(APIView):
         try:
             slo_name = request.query_params.get("slo_name", "availability")
             use_cache = request.query_params.get("nocache", "").lower() != "true"
-            
+
             # V3: Use cached response for default SLO
             if use_cache and slo_name == "availability":
                 try:
-                    from selfhealing.services.precomputed_cache import get_cached_error_budget
+                    from selfhealing.services.precomputed_cache import (
+                        get_cached_error_budget,
+                    )
+
                     return Response(get_cached_error_budget())
                 except ImportError:
                     pass  # Fall through to direct computation
@@ -147,13 +148,13 @@ class ErrorBudgetRecordView(APIView):
         error_count = int(request.data.get("error_count", 1))
         error_type = request.data.get("error_type", "simulated")
         service_name = request.data.get("service_name", "test")
-        
+
         # Extended format: domain, severity, multiplier
         domain = request.data.get("domain", service_name)
         severity = request.data.get("severity", "medium")
         multiplier = float(request.data.get("multiplier", 1.0))
         reason = request.data.get("reason", "")
-        
+
         # severity에 따른 가중치 조정
         severity_weights = {
             "low": 1,
@@ -173,7 +174,7 @@ class ErrorBudgetRecordView(APIView):
             error_type=error_type,
             service_name=domain,
         )
-        
+
         # 확장 정보 추가
         result["severity"] = severity
         result["multiplier"] = multiplier

@@ -11,7 +11,7 @@ PostgreSQL 영속성 저장소용 Django Abstract 모델.
 사용법:
     # Django 프로젝트의 models.py에서:
     from selfhealing.models import AbstractRecoverySessionArchive
-    
+
     class RecoverySessionArchive(AbstractRecoverySessionArchive):
         class Meta(AbstractRecoverySessionArchive.Meta):
             abstract = False
@@ -24,11 +24,12 @@ Reference:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 try:
     from django.db import models
     from django.utils import timezone
+
     DJANGO_AVAILABLE = True
 except ImportError:
     DJANGO_AVAILABLE = False
@@ -37,19 +38,19 @@ except ImportError:
 
 
 if TYPE_CHECKING:
-    from django.db import models as models_type
+    pass
 
 
 class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else object):
     """
     Recovery Session Archive를 위한 Abstract Django 모델.
-    
+
     특징:
     - 복구 세션의 전체 히스토리 저장
     - 단계별 실행 결과 저장 (JSONB)
     - 복구 시작/완료 시각 및 소요 시간
     - 트리거 레벨 및 결과 상태
-    
+
     스키마 설계 근거:
     - session_id: 복구 세션 고유 ID
     - namespace: 복구 대상 네임스페이스
@@ -57,18 +58,19 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
     - status: 최종 복구 상태 (COMPLETED, FAILED, ABORTED)
     - steps_data: 각 단계의 실행 결과 (JSONB)
     """
-    
+
     if not DJANGO_AVAILABLE:
         raise ImportError(
             "Django is required to use AbstractRecoverySessionArchive. "
             "Install it with: pip install django"
         )
-    
+
     # ========================================
     # Status Choices
     # ========================================
     class RecoveryStatusChoice(models.TextChoices):
         """복구 상태 선택지."""
+
         NOT_STARTED = "not_started", "Not Started"
         IN_PROGRESS = "in_progress", "In Progress"
         HEALTH_CHECK = "health_check", "Health Check"
@@ -76,13 +78,14 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
         ABORTED = "aborted", "Aborted"
-    
+
     class TriggerLevelChoice(models.TextChoices):
         """트리거 레벨 선택지."""
+
         LEVEL_1 = "LEVEL_1", "Level 1"
         LEVEL_2 = "LEVEL_2", "Level 2"
         LEVEL_3 = "LEVEL_3", "Level 3"
-    
+
     # ========================================
     # Primary Key & Identifiers
     # ========================================
@@ -92,14 +95,14 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Session ID",
         help_text="복구 세션 고유 ID (예: recovery-abc123)",
     )
-    
+
     namespace = models.CharField(
         max_length=100,
         db_index=True,
         verbose_name="Namespace",
         help_text="복구 대상 네임스페이스 (예: seoul, global)",
     )
-    
+
     # ========================================
     # Recovery Configuration
     # ========================================
@@ -110,7 +113,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Trigger Level",
         help_text="복구 대상 Emergency 레벨",
     )
-    
+
     status = models.CharField(
         max_length=30,
         choices=RecoveryStatusChoice.choices,
@@ -119,14 +122,14 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Status",
         help_text="최종 복구 상태",
     )
-    
+
     initiated_by = models.CharField(
         max_length=100,
         default="system",
         verbose_name="Initiated By",
         help_text="복구 시작 주체 (system 또는 사용자 ID)",
     )
-    
+
     # ========================================
     # Steps Data (JSONB)
     # ========================================
@@ -135,7 +138,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Steps Data",
         help_text="각 단계의 실행 결과 목록",
     )
-    
+
     # ========================================
     # Timing Information
     # ========================================
@@ -146,7 +149,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Started At",
         help_text="복구 시작 시각",
     )
-    
+
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -154,14 +157,14 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Completed At",
         help_text="복구 완료 시각",
     )
-    
+
     duration_seconds = models.FloatField(
         null=True,
         blank=True,
         verbose_name="Duration (seconds)",
         help_text="복구 소요 시간 (초)",
     )
-    
+
     # ========================================
     # Result Information
     # ========================================
@@ -171,7 +174,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Abort Reason",
         help_text="중단 사유 (ABORTED, FAILED 상태일 때)",
     )
-    
+
     cascade_event_id = models.CharField(
         max_length=100,
         blank=True,
@@ -180,7 +183,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Cascade Event ID",
         help_text="연결된 Cascade Event ID",
     )
-    
+
     # ========================================
     # Approval Information (READY_TO_RESTORE용)
     # ========================================
@@ -189,7 +192,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Requires Approval",
         help_text="수동 승인 필요 여부",
     )
-    
+
     approved_by = models.CharField(
         max_length=100,
         blank=True,
@@ -197,14 +200,14 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Approved By",
         help_text="승인자 (사용자 ID)",
     )
-    
+
     approved_at = models.DateTimeField(
         null=True,
         blank=True,
         verbose_name="Approved At",
         help_text="승인 시각",
     )
-    
+
     # ========================================
     # Metadata
     # ========================================
@@ -213,7 +216,7 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Metadata",
         help_text="추가 메타데이터 (리전 정책, 멱등성 정보 등)",
     )
-    
+
     # ========================================
     # Timestamps
     # ========================================
@@ -223,13 +226,13 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         verbose_name="Created At",
         help_text="레코드 생성 시각",
     )
-    
+
     updated_at = models.DateTimeField(
         auto_now=True,
         verbose_name="Updated At",
         help_text="레코드 수정 시각",
     )
-    
+
     class Meta:
         abstract = True
         ordering = ["-started_at"]
@@ -252,52 +255,76 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         ]
         verbose_name = "Recovery Session Archive"
         verbose_name_plural = "Recovery Session Archives"
-    
+
     def __str__(self) -> str:
         return f"Recovery({self.session_id}): {self.namespace} - {self.status}"
-    
+
     # ========================================
     # Convenience Methods
     # ========================================
-    
+
     def mark_started(self) -> None:
         """복구 시작으로 마킹."""
         self.status = self.RecoveryStatusChoice.IN_PROGRESS
         self.started_at = timezone.now()
         self.save(update_fields=["status", "started_at", "updated_at"])
-    
+
     def mark_completed(self) -> None:
         """복구 완료로 마킹."""
         self.status = self.RecoveryStatusChoice.COMPLETED
         self.completed_at = timezone.now()
         if self.started_at:
-            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
-        self.save(update_fields=["status", "completed_at", "duration_seconds", "updated_at"])
-    
+            self.duration_seconds = (
+                self.completed_at - self.started_at
+            ).total_seconds()
+        self.save(
+            update_fields=["status", "completed_at", "duration_seconds", "updated_at"]
+        )
+
     def mark_failed(self, reason: str) -> None:
         """복구 실패로 마킹."""
         self.status = self.RecoveryStatusChoice.FAILED
         self.abort_reason = reason
         self.completed_at = timezone.now()
         if self.started_at:
-            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
-        self.save(update_fields=["status", "abort_reason", "completed_at", "duration_seconds", "updated_at"])
-    
+            self.duration_seconds = (
+                self.completed_at - self.started_at
+            ).total_seconds()
+        self.save(
+            update_fields=[
+                "status",
+                "abort_reason",
+                "completed_at",
+                "duration_seconds",
+                "updated_at",
+            ]
+        )
+
     def mark_aborted(self, reason: str) -> None:
         """복구 중단으로 마킹."""
         self.status = self.RecoveryStatusChoice.ABORTED
         self.abort_reason = reason
         self.completed_at = timezone.now()
         if self.started_at:
-            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
-        self.save(update_fields=["status", "abort_reason", "completed_at", "duration_seconds", "updated_at"])
-    
+            self.duration_seconds = (
+                self.completed_at - self.started_at
+            ).total_seconds()
+        self.save(
+            update_fields=[
+                "status",
+                "abort_reason",
+                "completed_at",
+                "duration_seconds",
+                "updated_at",
+            ]
+        )
+
     def mark_ready_to_restore(self) -> None:
         """승인 대기 상태로 마킹."""
         self.status = self.RecoveryStatusChoice.READY_TO_RESTORE
         self.requires_approval = True
         self.save(update_fields=["status", "requires_approval", "updated_at"])
-    
+
     def approve(self, approved_by: str) -> None:
         """수동 승인 처리."""
         self.approved_by = approved_by
@@ -305,31 +332,39 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
         self.status = self.RecoveryStatusChoice.COMPLETED
         self.completed_at = timezone.now()
         if self.started_at:
-            self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
-        self.save(update_fields=[
-            "approved_by", "approved_at", "status",
-            "completed_at", "duration_seconds", "updated_at"
-        ])
-    
-    def add_step_result(self, step_data: Dict[str, Any]) -> None:
+            self.duration_seconds = (
+                self.completed_at - self.started_at
+            ).total_seconds()
+        self.save(
+            update_fields=[
+                "approved_by",
+                "approved_at",
+                "status",
+                "completed_at",
+                "duration_seconds",
+                "updated_at",
+            ]
+        )
+
+    def add_step_result(self, step_data: dict[str, Any]) -> None:
         """단계 결과 추가."""
         if not isinstance(self.steps_data, list):
             self.steps_data = []
         self.steps_data.append(step_data)
         self.save(update_fields=["steps_data", "updated_at"])
-    
+
     def get_step_count(self) -> int:
         """완료된 단계 수 반환."""
         if isinstance(self.steps_data, list):
             return len(self.steps_data)
         return 0
-    
+
     def get_total_steps(self) -> int:
         """전체 단계 수 반환 (메타데이터에서)."""
         if isinstance(self.metadata, dict):
             return self.metadata.get("total_steps", 0)
         return 0
-    
+
     def is_terminal(self) -> bool:
         """최종 상태 여부 확인."""
         return self.status in (
@@ -337,8 +372,8 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
             self.RecoveryStatusChoice.FAILED,
             self.RecoveryStatusChoice.ABORTED,
         )
-    
-    def to_summary_dict(self) -> Dict[str, Any]:
+
+    def to_summary_dict(self) -> dict[str, Any]:
         """요약 딕셔너리 반환."""
         return {
             "session_id": self.session_id,
@@ -347,7 +382,9 @@ class AbstractRecoverySessionArchive(models.Model if DJANGO_AVAILABLE else objec
             "status": self.status,
             "initiated_by": self.initiated_by,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "duration_seconds": self.duration_seconds,
             "step_count": self.get_step_count(),
             "total_steps": self.get_total_steps(),

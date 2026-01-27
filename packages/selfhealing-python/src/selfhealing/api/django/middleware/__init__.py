@@ -14,11 +14,6 @@ Features:
 from __future__ import annotations
 
 # ============================================================
-# Health Bridge
-# ============================================================
-from selfhealing.api.django.middleware.health_bridge import HealthBridgeMiddleware
-
-# ============================================================
 # Access Logging
 # ============================================================
 from selfhealing.api.django.middleware.access_logging import (
@@ -29,6 +24,11 @@ from selfhealing.api.django.middleware.access_logging import (
 )
 
 # ============================================================
+# Health Bridge
+# ============================================================
+from selfhealing.api.django.middleware.health_bridge import HealthBridgeMiddleware
+
+# ============================================================
 # Fail-Secure Permissions
 # ============================================================
 from selfhealing.api.django.middleware.permissions import (
@@ -37,17 +37,17 @@ from selfhealing.api.django.middleware.permissions import (
 )
 
 # ============================================================
-# Self-Healing
-# ============================================================
-from selfhealing.api.django.middleware.self_healing import SelfHealingMiddleware
-
-# ============================================================
 # Recovery Logger
 # ============================================================
 from selfhealing.api.django.middleware.recovery_logger import (
     SelfHealingRecoveryLogger,
     get_recovery_logger,
 )
+
+# ============================================================
+# Self-Healing
+# ============================================================
+from selfhealing.api.django.middleware.self_healing import SelfHealingMiddleware
 
 # ============================================================
 # Public API

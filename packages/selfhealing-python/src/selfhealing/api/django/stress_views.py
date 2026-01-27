@@ -13,8 +13,8 @@ import json
 import logging
 
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
 
 from selfhealing.services.stress_test_service import get_stress_test_service
 from selfhealing.settings.stress_test import get_stress_test_settings
@@ -239,7 +239,9 @@ def advisory_lock_contention(request):
         body = {}
 
     lock_id = int(body.get("lock_id", settings.contention_lock_id))
-    duration_seconds = int(body.get("duration_seconds", settings.default_contention_duration_seconds))
+    duration_seconds = int(
+        body.get("duration_seconds", settings.default_contention_duration_seconds)
+    )
     lock_hold_ms = int(body.get("lock_hold_ms", settings.default_lock_hold_ms))
 
     service = get_stress_test_service()
@@ -290,8 +292,12 @@ def controlled_burst_failure(request):
 
     lock_id = int(body.get("lock_id", settings.burst_lock_id))
     lock_timeout_ms = int(body.get("lock_timeout_ms", settings.default_lock_timeout_ms))
-    burst_duration_seconds = int(body.get("burst_duration_seconds", settings.default_burst_duration_seconds))
-    concurrent_locks = int(body.get("concurrent_locks", settings.default_concurrent_locks))
+    burst_duration_seconds = int(
+        body.get("burst_duration_seconds", settings.default_burst_duration_seconds)
+    )
+    concurrent_locks = int(
+        body.get("concurrent_locks", settings.default_concurrent_locks)
+    )
 
     service = get_stress_test_service()
     result = service.run_controlled_burst_failure(
@@ -340,7 +346,9 @@ def pool_exhaust(request):
     except json.JSONDecodeError:
         body = {}
 
-    connections_to_hold = int(body.get("connections_to_hold", settings.default_connections_to_hold))
+    connections_to_hold = int(
+        body.get("connections_to_hold", settings.default_connections_to_hold)
+    )
     hold_seconds = int(body.get("hold_seconds", settings.default_pool_hold_seconds))
 
     service = get_stress_test_service()

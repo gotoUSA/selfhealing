@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.services.audit import (
     log_system_control_audit,
@@ -33,10 +33,10 @@ class CleanupResult:
     success: bool
     operation: str
     count: int = 0
-    error: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {
             "success": self.success,
@@ -78,6 +78,7 @@ class CleanupService:
         """
         if older_than_days is None:
             from selfhealing.settings.cleanup import get_cleanup_settings
+
             older_than_days = get_cleanup_settings().archive_older_than_days
 
         logger.info(
@@ -132,6 +133,7 @@ class CleanupService:
         """
         if older_than_hours is None:
             from selfhealing.settings.cleanup import get_cleanup_settings
+
             older_than_hours = get_cleanup_settings().expired_config_hours
 
         logger.info(
@@ -186,6 +188,7 @@ class CleanupService:
         """
         if older_than_hours is None:
             from selfhealing.settings.cleanup import get_cleanup_settings
+
             older_than_hours = get_cleanup_settings().approval_expiry_hours
 
         logger.info(
@@ -238,6 +241,7 @@ class CleanupService:
         """
         if older_than_days is None:
             from selfhealing.settings.cleanup import get_cleanup_settings
+
             older_than_days = get_cleanup_settings().purge_older_than_days
 
         logger.warning(
@@ -278,7 +282,11 @@ class CleanupService:
                     action="purge_dlq_permanent",
                     actor="system",
                     old_state={"purged_count": 0},
-                    new_state={"purged_count": count, "permanent": True, "unrecoverable": True},
+                    new_state={
+                        "purged_count": count,
+                        "permanent": True,
+                        "unrecoverable": True,
+                    },
                     reason=f"PERMANENT DELETION: Purged {count} archived entries older than {older_than_days} days - UNRECOVERABLE",
                 )
 
@@ -289,9 +297,11 @@ class CleanupService:
                 details={
                     "older_than_days": older_than_days,
                     "dry_run": dry_run,
-                    "warning": "PERMANENT DELETION - UNRECOVERABLE"
-                    if not dry_run
-                    else "DRY RUN - No actual deletion",
+                    "warning": (
+                        "PERMANENT DELETION - UNRECOVERABLE"
+                        if not dry_run
+                        else "DRY RUN - No actual deletion"
+                    ),
                 },
             )
 
@@ -309,7 +319,7 @@ class CleanupService:
 # Singleton
 # =============================================================================
 
-_cleanup_service: Optional[CleanupService] = None
+_cleanup_service: CleanupService | None = None
 
 
 def get_cleanup_service() -> CleanupService:

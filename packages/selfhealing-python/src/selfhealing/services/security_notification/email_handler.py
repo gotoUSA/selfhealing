@@ -19,7 +19,9 @@ class EmailHandlerMixin:
 
     config: NotificationConfig
 
-    def _send_email(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
+    def _send_email(
+        self, message: dict[str, Any], recipients: list[str]
+    ) -> NotificationResult:
         """
         Send an email notification.
 
@@ -56,7 +58,8 @@ class EmailHandlerMixin:
             # The selfhealing package logs the intent but actual sending
             # should be handled by the application's email service
             logger.info(
-                f"[Security Notification] Email notification prepared for {len(recipients)} recipients: " f"Subject: {subject}"
+                f"[Security Notification] Email notification prepared for {len(recipients)} recipients: "
+                f"Subject: {subject}"
             )
             logger.debug(f"[Security Notification] Email body: {body[:200]}...")
 
@@ -109,7 +112,9 @@ View in Admin: {message['admin_url']}
 This is an automated security alert. Do not reply to this email.
         """.strip()
 
-    def _send_email_alert(self, message: dict[str, Any], recipients: list[str]) -> NotificationResult:
+    def _send_email_alert(
+        self, message: dict[str, Any], recipients: list[str]
+    ) -> NotificationResult:
         """Send email alert notification."""
         if self.config.dry_run:
             logger.info(f"[DRY RUN] Email alert to {recipients}: {message['title']}")

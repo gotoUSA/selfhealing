@@ -10,17 +10,18 @@ Design Principle (07_HYBRID_STORAGE_ARCHITECTURE.md):
 
 Usage:
     Add these tasks to Celery:
-    
+
     # Triggered by DLQ store operations
     async_persist_dlq_entry.delay(entry_data)
-    
+
     # Batch sync from AuditMiddleware
     async_persist_batch.delay(entries)
 """
 
+from typing import Any
+
 from celery import shared_task
 from celery.utils.log import get_task_logger
-from typing import Any, Dict, List, Optional
 
 logger = get_task_logger(__name__)
 
@@ -36,7 +37,7 @@ logger = get_task_logger(__name__)
     retry_backoff=True,
     retry_backoff_max=60,
 )
-def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
+def async_persist_dlq_entry(self, entry_data: dict[str, Any]) -> dict:
     """
     Asynchronously persist a DLQ entry to the statistics store.
 
@@ -49,7 +50,9 @@ def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
     Returns:
         Dictionary with persistence result
     """
-    logger.debug(f"[AsyncPersist] Persisting DLQ entry: {entry_data.get('id', 'unknown')}")
+    logger.debug(
+        f"[AsyncPersist] Persisting DLQ entry: {entry_data.get('id', 'unknown')}"
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -91,7 +94,7 @@ def async_persist_dlq_entry(self, entry_data: Dict[str, Any]) -> dict:
     time_limit=120,
     soft_time_limit=110,
 )
-def async_persist_batch(self, entries: List[Dict[str, Any]]) -> dict:
+def async_persist_batch(self, entries: list[dict[str, Any]]) -> dict:
     """
     Batch persist DLQ entries to the statistics store.
 
@@ -148,10 +151,10 @@ def link_audit_to_dlq(
     entity_id: str,
     entity_type: str,
     action: str,
-    actor_id: Optional[str] = None,
-    status: Optional[str] = None,
-    details: Optional[str] = None,
-    audit_record_hash: Optional[str] = None,
+    actor_id: str | None = None,
+    status: str | None = None,
+    details: str | None = None,
+    audit_record_hash: str | None = None,
 ) -> dict:
     """
     Link an audit record to a DLQ entity.

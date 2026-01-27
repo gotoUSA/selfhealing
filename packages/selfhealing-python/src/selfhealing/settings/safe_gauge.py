@@ -17,7 +17,6 @@ Usage:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -85,7 +84,7 @@ class SafeGaugeSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_safe_gauge_settings: Optional[SafeGaugeSettings] = None
+_safe_gauge_settings: SafeGaugeSettings | None = None
 
 
 def get_safe_gauge_settings() -> SafeGaugeSettings:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, fields
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.settings import L2StorageSettings as L2StorageConfig
 
@@ -26,7 +26,7 @@ class ChaosStorageMixin:
     # Chaos Engineering Config
     # =========================================================================
 
-    def get_chaos_config(self) -> Dict[str, Any]:
+    def get_chaos_config(self) -> dict[str, Any]:
         """
         Get Chaos Engineering configuration.
 
@@ -48,11 +48,11 @@ class ChaosStorageMixin:
 
     def update_chaos_config(
         self,
-        scheduler_config: Optional[Dict[str, Any]] = None,
-        safety_guard_config: Optional[Dict[str, Any]] = None,
-        blast_radius_policy: Optional[Dict[str, Any]] = None,
-        report_config: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        scheduler_config: dict[str, Any] | None = None,
+        safety_guard_config: dict[str, Any] | None = None,
+        blast_radius_policy: dict[str, Any] | None = None,
+        report_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Update Chaos Engineering configuration.
 
@@ -90,11 +90,11 @@ class ChaosStorageMixin:
 
     def update_chaos_ttl_config(
         self,
-        default_ttl_seconds: Optional[int] = None,
-        min_ttl_seconds: Optional[int] = None,
-        max_ttl_seconds: Optional[int] = None,
-        auto_expiration_enabled: Optional[bool] = None,
-    ) -> Dict[str, Any]:
+        default_ttl_seconds: int | None = None,
+        min_ttl_seconds: int | None = None,
+        max_ttl_seconds: int | None = None,
+        auto_expiration_enabled: bool | None = None,
+    ) -> dict[str, Any]:
         """
         Update Chaos TTL configuration.
 
@@ -110,12 +110,15 @@ class ChaosStorageMixin:
         storage_key = "runtime_config:chaos"
         with self._lock:
             current = self.get_chaos_config()
-            ttl_config = current.get("ttl_config", {
-                "default_ttl_seconds": 600,
-                "min_ttl_seconds": 60,
-                "max_ttl_seconds": 3600,
-                "auto_expiration_enabled": True,
-            })
+            ttl_config = current.get(
+                "ttl_config",
+                {
+                    "default_ttl_seconds": 600,
+                    "min_ttl_seconds": 60,
+                    "max_ttl_seconds": 3600,
+                    "auto_expiration_enabled": True,
+                },
+            )
 
             if default_ttl_seconds is not None:
                 ttl_config["default_ttl_seconds"] = default_ttl_seconds
@@ -133,14 +136,14 @@ class ChaosStorageMixin:
 
     def update_chaos_stop_conditions_config(
         self,
-        max_error_rate_percent: Optional[float] = None,
-        max_latency_p99_ms: Optional[int] = None,
-        max_latency_p95_ms: Optional[int] = None,
-        min_error_budget_percent: Optional[float] = None,
-        check_interval_seconds: Optional[int] = None,
-        consecutive_breaches_required: Optional[int] = None,
-        enabled: Optional[bool] = None,
-    ) -> Dict[str, Any]:
+        max_error_rate_percent: float | None = None,
+        max_latency_p99_ms: int | None = None,
+        max_latency_p95_ms: int | None = None,
+        min_error_budget_percent: float | None = None,
+        check_interval_seconds: int | None = None,
+        consecutive_breaches_required: int | None = None,
+        enabled: bool | None = None,
+    ) -> dict[str, Any]:
         """
         Update Chaos Stop Conditions configuration.
 
@@ -159,15 +162,18 @@ class ChaosStorageMixin:
         storage_key = "runtime_config:chaos"
         with self._lock:
             current = self.get_chaos_config()
-            stop_config = current.get("stop_conditions_config", {
-                "max_error_rate_percent": 5.0,
-                "max_latency_p99_ms": 2000,
-                "max_latency_p95_ms": 1000,
-                "min_error_budget_percent": 10.0,
-                "check_interval_seconds": 10,
-                "consecutive_breaches_required": 2,
-                "enabled": True,
-            })
+            stop_config = current.get(
+                "stop_conditions_config",
+                {
+                    "max_error_rate_percent": 5.0,
+                    "max_latency_p99_ms": 2000,
+                    "max_latency_p95_ms": 1000,
+                    "min_error_budget_percent": 10.0,
+                    "check_interval_seconds": 10,
+                    "consecutive_breaches_required": 2,
+                    "enabled": True,
+                },
+            )
 
             if max_error_rate_percent is not None:
                 stop_config["max_error_rate_percent"] = max_error_rate_percent
@@ -180,7 +186,9 @@ class ChaosStorageMixin:
             if check_interval_seconds is not None:
                 stop_config["check_interval_seconds"] = check_interval_seconds
             if consecutive_breaches_required is not None:
-                stop_config["consecutive_breaches_required"] = consecutive_breaches_required
+                stop_config["consecutive_breaches_required"] = (
+                    consecutive_breaches_required
+                )
             if enabled is not None:
                 stop_config["enabled"] = enabled
 
@@ -191,9 +199,9 @@ class ChaosStorageMixin:
 
     def update_chaos_dry_run_config(
         self,
-        enabled: Optional[bool] = None,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        enabled: bool | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """
         Update Chaos Dry Run configuration.
 
@@ -207,10 +215,13 @@ class ChaosStorageMixin:
         storage_key = "runtime_config:chaos"
         with self._lock:
             current = self.get_chaos_config()
-            dry_run_config = current.get("dry_run_config", {
-                "enabled": True,
-                "reason": "Initial deployment - simulation mode",
-            })
+            dry_run_config = current.get(
+                "dry_run_config",
+                {
+                    "enabled": True,
+                    "reason": "Initial deployment - simulation mode",
+                },
+            )
 
             if enabled is not None:
                 dry_run_config["enabled"] = enabled
@@ -219,14 +230,16 @@ class ChaosStorageMixin:
 
             current["dry_run_config"] = dry_run_config
             self._backend.set(storage_key, current)
-            logger.info(f"[RuntimeConfig] Updated chaos.dry_run_config: enabled={dry_run_config['enabled']}")
+            logger.info(
+                f"[RuntimeConfig] Updated chaos.dry_run_config: enabled={dry_run_config['enabled']}"
+            )
             return dry_run_config
 
     # =========================================================================
     # L2 Storage Config
     # =========================================================================
 
-    def get_l2_storage_config(self) -> Dict[str, Any]:
+    def get_l2_storage_config(self) -> dict[str, Any]:
         """
         Get L2 Storage configuration.
 
@@ -247,7 +260,7 @@ class ChaosStorageMixin:
             self._cache["l2_storage"] = default_config
             return default_config
 
-    def update_l2_storage_config(self, **kwargs) -> Dict[str, Any]:
+    def update_l2_storage_config(self, **kwargs) -> dict[str, Any]:
         """
         Update L2 Storage configuration.
 
@@ -277,10 +290,12 @@ class ChaosStorageMixin:
 
             self._backend.set(storage_key, current)
             self._cache["l2_storage"] = current
-            logger.info(f"[RuntimeConfig] Updated l2_storage config: {list(kwargs.keys())}")
+            logger.info(
+                f"[RuntimeConfig] Updated l2_storage config: {list(kwargs.keys())}"
+            )
             return current
 
-    def reset_l2_storage_config(self) -> Dict[str, Any]:
+    def reset_l2_storage_config(self) -> dict[str, Any]:
         """
         Reset L2 Storage configuration to defaults.
 

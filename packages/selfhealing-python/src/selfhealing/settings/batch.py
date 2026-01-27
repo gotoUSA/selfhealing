@@ -20,9 +20,8 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -142,7 +141,7 @@ class BatchSettings(BaseSettings):
 # ==========================================================================
 # Singleton 관리
 # ==========================================================================
-_batch_settings: Optional[BatchSettings] = None
+_batch_settings: BatchSettings | None = None
 
 
 def get_batch_settings() -> BatchSettings:

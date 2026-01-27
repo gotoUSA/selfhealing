@@ -18,7 +18,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -93,14 +92,12 @@ class RecoveryShutdownSettings(BaseSettings):
 
     @field_validator("max_shutdown_wait_seconds")
     @classmethod
-    def validate_max_wait_ge_drain(
-        cls, v: float, info
-    ) -> float:
+    def validate_max_wait_ge_drain(cls, v: float, info) -> float:
         """Ensure max_shutdown_wait >= drain_timeout + extension."""
         drain = info.data.get("default_drain_timeout_seconds", 30.0)
         extension = info.data.get("recovery_extension_seconds", 300.0)
         min_required = drain + extension
-        
+
         if v < min_required:
             logger.warning(
                 f"max_shutdown_wait_seconds ({v}) < "
@@ -114,7 +111,7 @@ class RecoveryShutdownSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[RecoveryShutdownSettings] = None
+_settings: RecoveryShutdownSettings | None = None
 
 
 def get_recovery_shutdown_settings() -> RecoveryShutdownSettings:

@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -87,7 +86,7 @@ class ForensicSettings(BaseSettings):
         default=True,
         description="Sanitize sensitive data in forensic context",
     )
-    sensitive_key_patterns: List[str] = Field(
+    sensitive_key_patterns: list[str] = Field(
         default_factory=lambda: ["password", "secret", "token", "key", "auth"],
         description="Patterns to match sensitive keys for sanitization",
     )
@@ -125,7 +124,7 @@ class ForensicSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[ForensicSettings] = None
+_settings: ForensicSettings | None = None
 
 
 def get_forensic_settings() -> ForensicSettings:

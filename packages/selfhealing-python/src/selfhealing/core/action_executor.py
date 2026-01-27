@@ -27,18 +27,19 @@ Usage:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 from uuid import uuid4
 
-from selfhealing.core.timezone import now
-from selfhealing.core.execution_mode import ExecutionMode, get_execution_mode
 from selfhealing.core.decision_logger import (
     DecisionLogger,
     ReasonCode,
     log_intervention_evaluated,
 )
+from selfhealing.core.execution_mode import ExecutionMode, get_execution_mode
+from selfhealing.core.timezone import now
 
 logger = logging.getLogger("selfhealing.action_executor")
 
@@ -65,8 +66,8 @@ class Action:
     name: str
     target: str
     execute_fn: Callable[[], Any]
-    params: Dict[str, Any] = field(default_factory=dict)
-    validate_fn: Optional[Callable[[], bool]] = None
+    params: dict[str, Any] = field(default_factory=dict)
+    validate_fn: Callable[[], bool] | None = None
     description: str = ""
     action_id: str = field(default_factory=lambda: str(uuid4()))
 
@@ -100,18 +101,18 @@ class ActionResult:
     executed: bool
     mode: str
     timestamp: datetime
-    success: Optional[bool] = None
+    success: bool | None = None
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     decision_logged: bool = False
-    validation_result: Optional[bool] = None
+    validation_result: bool | None = None
 
     @property
     def was_dry_run(self) -> bool:
         """Check if this was a dry-run (shadow/evaluation mode)."""
         return not self.executed
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "action_id": self.action_id,
@@ -145,7 +146,7 @@ class ActionExecutor:
     This ensures consistent behavior across all action types.
     """
 
-    def __init__(self, mode: Optional[ExecutionMode] = None):
+    def __init__(self, mode: ExecutionMode | None = None):
         """
         Initialize the executor.
 
@@ -185,7 +186,11 @@ class ActionExecutor:
                 log_intervention_evaluated(
                     service_name=action.target,
                     allowed=should_execute,
-                    reason=(ReasonCode.INTERVENTION_ALLOWED if should_execute else ReasonCode.POLICY_CONSTRAINT_ACTIVE),
+                    reason=(
+                        ReasonCode.INTERVENTION_ALLOWED
+                        if should_execute
+                        else ReasonCode.POLICY_CONSTRAINT_ACTIVE
+                    ),
                 )
                 decision_logged = True
             except Exception as e:
@@ -225,12 +230,15 @@ class ActionExecutor:
         mode: ExecutionMode,
         timestamp: datetime,
         decision_logged: bool,
-        validation_result: Optional[bool],
+        validation_result: bool | None,
     ) -> ActionResult:
         """Execute the action and return result."""
         try:
             result = action.execute_fn()
-            logger.info(f"[ActionExecutor] Executed {action.name} on {action.target} | " f"mode={mode.mode.value}")
+            logger.info(
+                f"[ActionExecutor] Executed {action.name} on {action.target} | "
+                f"mode={mode.mode.value}"
+            )
             return ActionResult(
                 action_id=action.action_id,
                 action_name=action.name,
@@ -244,7 +252,9 @@ class ActionExecutor:
                 validation_result=validation_result,
             )
         except Exception as e:
-            logger.error(f"[ActionExecutor] Failed {action.name} on {action.target}: {e}")
+            logger.error(
+                f"[ActionExecutor] Failed {action.name} on {action.target}: {e}"
+            )
             return ActionResult(
                 action_id=action.action_id,
                 action_name=action.name,
@@ -264,7 +274,7 @@ class ActionExecutor:
         mode: ExecutionMode,
         timestamp: datetime,
         decision_logged: bool,
-        validation_result: Optional[bool],
+        validation_result: bool | None,
     ) -> ActionResult:
         """Log the action without executing (shadow/evaluation mode)."""
         logger.info(
@@ -289,7 +299,7 @@ class ActionExecutor:
 # =============================================================================
 
 # Global executor instance
-_default_executor: Optional[ActionExecutor] = None
+_default_executor: ActionExecutor | None = None
 
 
 def get_action_executor() -> ActionExecutor:

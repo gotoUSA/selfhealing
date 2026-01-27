@@ -25,12 +25,12 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
+def check_emergency_mode_expiry(task_id: str = None) -> dict[str, Any]:
     """
     Check emergency mode expiry and perform auto-recovery if needed.
 
@@ -38,7 +38,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
     All business logic is implemented in the service layer.
 
     This should be scheduled via Celery Beat (every 15 minutes).
-    
+
     Audit 기록:
     - EMERGENCY_MODE_ACTIVATED/DEACTIVATED 이벤트 기록
 
@@ -47,7 +47,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
     2. If 4 hours elapsed: Send warning to Admin
     3. If 6 hours elapsed: Send final warning ("2 hours until auto-restore")
     4. If 8 hours elapsed: Auto-restore to NORMAL mode
-    
+
     Args:
         task_id: Celery task ID (for audit tracking)
 
@@ -60,15 +60,15 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
         service = get_governance_service()
         result = service.check_emergency_mode_expiry()
         result_dict = result.to_dict()
-        
+
         # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_governance_task_audit
-            
+
             status = result_dict.get("status", "completed")
             auto_recovered = result_dict.get("auto_recovered", False)
             notification_sent = result_dict.get("notification_sent", False)
-            
+
             log_governance_task_audit(
                 action="expiry_check",
                 emergency_level=result_dict.get("emergency_level"),
@@ -83,12 +83,12 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
             logger.debug(f"[Governance] Audit logging failed: {audit_error}")
 
         return result_dict
-        
+
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
             from selfhealing.services.audit_helpers import log_governance_task_audit
-            
+
             log_governance_task_audit(
                 action="expiry_check",
                 status="failed",
@@ -105,7 +105,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> Dict[str, Any]:
 # =============================================================================
 
 
-def get_governance_beat_schedule() -> Dict[str, Dict[str, Any]]:
+def get_governance_beat_schedule() -> dict[str, dict[str, Any]]:
     """
     Get Celery Beat schedule for governance tasks.
 
@@ -136,6 +136,7 @@ def get_governance_beat_schedule() -> Dict[str, Dict[str, Any]]:
 
 try:
     from celery import shared_task
+
     from selfhealing.settings.governance import get_governance_settings
 
     # 모듈 로드 시점에 설정값 캐싱
@@ -149,7 +150,7 @@ try:
         autoretry_for=(Exception,),
         retry_backoff=True,
     )
-    def check_emergency_mode_expiry_task(self) -> Dict[str, Any]:
+    def check_emergency_mode_expiry_task(self) -> dict[str, Any]:
         """
         Celery task wrapper for check_emergency_mode_expiry.
 

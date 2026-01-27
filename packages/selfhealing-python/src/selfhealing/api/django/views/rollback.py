@@ -5,14 +5,13 @@ Rollback DNA 서비스의 REST API 엔드포인트
 """
 
 import logging
-from typing import List
 
 from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class RollbackPolicyView(APIView):
     POST /api/self-healing/rollback/policy/<stage_name>/ - 정책 설정 (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
@@ -96,7 +95,7 @@ class RollbackRequestView(APIView):
     POST /api/self-healing/rollback/request/             - 롤백 요청 생성 (Operator)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsOperator()]

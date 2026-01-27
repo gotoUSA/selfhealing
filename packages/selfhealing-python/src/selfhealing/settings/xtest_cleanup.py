@@ -17,8 +17,6 @@ Environment Variables:
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -119,9 +117,7 @@ class XTestCleanupSettings(BaseSettings):
     def validate_session_ttl(cls, v: int) -> int:
         """세션 TTL 검증."""
         if v < 1:
-            logger.warning(
-                f"[XTestCleanup] session_ttl_hours={v} is too low, using 1"
-            )
+            logger.warning(f"[XTestCleanup] session_ttl_hours={v} is too low, using 1")
             return 1
         return v
 
@@ -141,7 +137,7 @@ class XTestCleanupSettings(BaseSettings):
 # Settings Instance Factory
 # =============================================================================
 
-_xtest_cleanup_settings: Optional[XTestCleanupSettings] = None
+_xtest_cleanup_settings: XTestCleanupSettings | None = None
 
 
 def get_xtest_cleanup_settings() -> XTestCleanupSettings:

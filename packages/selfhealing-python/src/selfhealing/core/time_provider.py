@@ -13,8 +13,8 @@ This module enables:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone as tz
-from typing import Optional, List
+from datetime import datetime, timedelta
+from datetime import timezone as tz
 
 try:
     from zoneinfo import ZoneInfo
@@ -55,7 +55,7 @@ class TimeProvider(ABC):
         self,
         timestamp: datetime,
         tolerance: timedelta,
-        reference_time: Optional[datetime] = None,
+        reference_time: datetime | None = None,
     ) -> bool:
         """
         Check if a timestamp is within tolerance of reference time.
@@ -129,7 +129,7 @@ class SystemTimeProvider(TimeProvider):
     This is the default provider for production use.
     """
 
-    def __init__(self, default_timezone: Optional[str] = None):
+    def __init__(self, default_timezone: str | None = None):
         """
         Initialize the system time provider.
 
@@ -158,7 +158,7 @@ class MockTimeProvider(TimeProvider):
     Allows controlled time manipulation for deterministic tests.
     """
 
-    def __init__(self, fixed_time: Optional[datetime] = None):
+    def __init__(self, fixed_time: datetime | None = None):
         """
         Initialize mock time provider.
 
@@ -167,7 +167,7 @@ class MockTimeProvider(TimeProvider):
                        as the starting point.
         """
         self._current_time = fixed_time or datetime.now(tz.utc)
-        self._time_log: List[datetime] = [self._current_time]
+        self._time_log: list[datetime] = [self._current_time]
 
     @property
     def current_time(self) -> datetime:
@@ -175,7 +175,7 @@ class MockTimeProvider(TimeProvider):
         return self._current_time
 
     @property
-    def time_log(self) -> List[datetime]:
+    def time_log(self) -> list[datetime]:
         """Get log of all times that were set."""
         return list(self._time_log)
 
@@ -244,7 +244,7 @@ class MockTimeProvider(TimeProvider):
         """
         return self.advance(timedelta(seconds=skew_seconds))
 
-    def freeze(self) -> "FrozenTime":
+    def freeze(self) -> FrozenTime:
         """
         Create a context manager that freezes time.
 
@@ -264,7 +264,7 @@ class FrozenTime:
 
     def __init__(self, provider: MockTimeProvider):
         self._provider = provider
-        self._original_time: Optional[datetime] = None
+        self._original_time: datetime | None = None
 
     def __enter__(self) -> MockTimeProvider:
         self._original_time = self._provider.current_time

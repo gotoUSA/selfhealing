@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
@@ -60,7 +60,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
 
     def __init__(
         self,
-        repository_factory: Optional[Callable] = None,
+        repository_factory: Callable | None = None,
     ) -> None:
         """
         Initialize database rate limit storage.
@@ -71,7 +71,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
         """
         self._repository_factory = repository_factory
         self._lock = threading.Lock()
-        self._available: Optional[bool] = None
+        self._available: bool | None = None
 
     @property
     def storage_type(self) -> RateLimitStorageType:
@@ -129,7 +129,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
         self,
         key: str,
         cooldown_until: float,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """Set cooldown in database."""
         try:
@@ -145,7 +145,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                     },
                 )
 
-                logger.debug(f"[DatabaseRateLimitStorage] Set cooldown for '{key}': " f"until={cooldown_until}")
+                logger.debug(
+                    f"[DatabaseRateLimitStorage] Set cooldown for '{key}': "
+                    f"until={cooldown_until}"
+                )
 
         except Exception as e:
             logger.error(f"[DatabaseRateLimitStorage] Failed to set cooldown: {e}")
@@ -158,7 +161,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 repo = self._get_repository()
                 new_value = repo.increment(key, "consecutive_429s")
 
-                logger.debug(f"[DatabaseRateLimitStorage] Incremented 429 counter for '{key}': " f"{new_value}")
+                logger.debug(
+                    f"[DatabaseRateLimitStorage] Incremented 429 counter for '{key}': "
+                    f"{new_value}"
+                )
                 return new_value
 
         except Exception as e:
@@ -172,7 +178,9 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 repo = self._get_repository()
                 repo.update(key, {"consecutive_429s": 0})
 
-                logger.debug(f"[DatabaseRateLimitStorage] Reset 429 counter for '{key}'")
+                logger.debug(
+                    f"[DatabaseRateLimitStorage] Reset 429 counter for '{key}'"
+                )
 
         except Exception as e:
             logger.error(f"[DatabaseRateLimitStorage] Failed to reset: {e}")

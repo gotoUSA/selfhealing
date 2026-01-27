@@ -5,28 +5,29 @@ Blast Radius DNA Models - 장애 영향 범위 관련 데이터 모델
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Set
 
 
 class BlastRadiusLevel(Enum):
     """영향 범위 수준"""
-    ISOLATED = "isolated"       # 완전 격리 (단일 컴포넌트)
-    LIMITED = "limited"         # 제한적 (같은 서비스 내)
-    MODERATE = "moderate"       # 중간 (관련 서비스들)
-    EXTENSIVE = "extensive"     # 광범위 (여러 도메인)
-    CRITICAL = "critical"       # 치명적 (전체 시스템)
+
+    ISOLATED = "isolated"  # 완전 격리 (단일 컴포넌트)
+    LIMITED = "limited"  # 제한적 (같은 서비스 내)
+    MODERATE = "moderate"  # 중간 (관련 서비스들)
+    EXTENSIVE = "extensive"  # 광범위 (여러 도메인)
+    CRITICAL = "critical"  # 치명적 (전체 시스템)
 
 
 @dataclass
 class ServiceDependency:
     """서비스 의존성"""
+
     source_service: str
     target_service: str
     dependency_type: str = "sync"  # sync, async, weak
     criticality: str = "medium"  # low, medium, high, critical
-    metadata: Dict = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict:
+    metadata: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
         return {
             "source_service": self.source_service,
             "target_service": self.target_service,
@@ -39,18 +40,19 @@ class ServiceDependency:
 @dataclass
 class BlastRadiusPolicy:
     """영향 범위 정책"""
+
     policy_id: str
     stage_name: str
     level: BlastRadiusLevel = BlastRadiusLevel.ISOLATED
-    affected_services: List[str] = field(default_factory=list)
+    affected_services: list[str] = field(default_factory=list)
     max_affected_percentage: float = 10.0  # 최대 영향 비율 (%)
     auto_isolate: bool = True
     isolation_timeout_seconds: int = 300
     notify_threshold: BlastRadiusLevel = BlastRadiusLevel.MODERATE
     enabled: bool = True
     created_at: datetime = field(default_factory=datetime.now)
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         return {
             "policy_id": self.policy_id,
             "stage_name": self.stage_name,
@@ -68,23 +70,24 @@ class BlastRadiusPolicy:
 @dataclass
 class ImpactAssessment:
     """영향 평가 결과"""
+
     assessment_id: str
     stage_name: str
     trigger_event: str
     level: BlastRadiusLevel
-    affected_services: List[str]
+    affected_services: list[str]
     affected_users_estimate: int = 0
     affected_percentage: float = 0.0
     dependencies_analyzed: int = 0
     cascading_risk: bool = False
-    recommendations: List[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
     assessed_at: datetime = field(default_factory=datetime.now)
-    
+
     @property
     def is_critical(self) -> bool:
         return self.level in [BlastRadiusLevel.EXTENSIVE, BlastRadiusLevel.CRITICAL]
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         return {
             "assessment_id": self.assessment_id,
             "stage_name": self.stage_name,

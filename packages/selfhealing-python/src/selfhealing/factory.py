@@ -22,17 +22,18 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional, Type
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from selfhealing.interfaces.audit_adapter import AuditLogAdapter
+    from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.repositories import (
-        FailedOperationRepository,
         CircuitBreakerStateRepository,
+        FailedOperationRepository,
         SecurityIncidentRepository,
     )
-    from selfhealing.interfaces.cache_provider import CacheProviderInterface
-    from selfhealing.interfaces.task_queue import TaskQueueInterface
     from selfhealing.interfaces.statistics import StatisticsRepositoryInterface
+    from selfhealing.interfaces.task_queue import TaskQueueInterface
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +47,15 @@ class ProviderRegistry:
     """
 
     # Provider registries
-    _cache_providers: dict[str, Type] = {}
-    _task_queues: dict[str, Type] = {}
-    _failed_op_repos: dict[str, Type] = {}
-    _circuit_breaker_repos: dict[str, Type] = {}
-    _security_repos: dict[str, Type] = {}
-    _audit_adapters: dict[str, Type] = {}  # Audit adapters
+    _cache_providers: dict[str, type] = {}
+    _task_queues: dict[str, type] = {}
+    _failed_op_repos: dict[str, type] = {}
+    _circuit_breaker_repos: dict[str, type] = {}
+    _security_repos: dict[str, type] = {}
+    _audit_adapters: dict[str, type] = {}  # Audit adapters
 
     # Statistics adapter (singleton, registered by app)
-    _statistics_adapter: Optional["StatisticsRepositoryInterface"] = None
+    _statistics_adapter: StatisticsRepositoryInterface | None = None
 
     # Default provider names
     _default_cache: str = "memory"
@@ -70,37 +71,37 @@ class ProviderRegistry:
     # =========================================================================
 
     @classmethod
-    def register_cache(cls, name: str, provider_class: Type) -> None:
+    def register_cache(cls, name: str, provider_class: type) -> None:
         """Register a cache provider adapter."""
         cls._cache_providers[name] = provider_class
         logger.debug(f"[Registry] Registered cache provider: {name}")
 
     @classmethod
-    def register_queue(cls, name: str, provider_class: Type) -> None:
+    def register_queue(cls, name: str, provider_class: type) -> None:
         """Register a task queue adapter."""
         cls._task_queues[name] = provider_class
         logger.debug(f"[Registry] Registered task queue: {name}")
 
     @classmethod
-    def register_failed_operation_repo(cls, name: str, repo_class: Type) -> None:
+    def register_failed_operation_repo(cls, name: str, repo_class: type) -> None:
         """Register a failed operation repository."""
         cls._failed_op_repos[name] = repo_class
         logger.debug(f"[Registry] Registered failed operation repo: {name}")
 
     @classmethod
-    def register_circuit_breaker_repo(cls, name: str, repo_class: Type) -> None:
+    def register_circuit_breaker_repo(cls, name: str, repo_class: type) -> None:
         """Register a circuit breaker state repository."""
         cls._circuit_breaker_repos[name] = repo_class
         logger.debug(f"[Registry] Registered circuit breaker repo: {name}")
 
     @classmethod
-    def register_security_repo(cls, name: str, repo_class: Type) -> None:
+    def register_security_repo(cls, name: str, repo_class: type) -> None:
         """Register a security incident repository."""
         cls._security_repos[name] = repo_class
         logger.debug(f"[Registry] Registered security repo: {name}")
 
     @classmethod
-    def register_audit_adapter(cls, name: str, adapter_class: Type) -> None:
+    def register_audit_adapter(cls, name: str, adapter_class: type) -> None:
         """Register an audit log adapter."""
         cls._audit_adapters[name] = adapter_class
         logger.debug(f"[Registry] Registered audit adapter: {name}")
@@ -108,7 +109,7 @@ class ProviderRegistry:
     @classmethod
     def register_statistics_adapter(
         cls,
-        adapter: "StatisticsRepositoryInterface",
+        adapter: StatisticsRepositoryInterface,
     ) -> None:
         """
         Register a statistics adapter.
@@ -140,9 +141,9 @@ class ProviderRegistry:
     @classmethod
     def get_cache(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         singleton: bool = True,
-    ) -> "CacheProviderInterface":
+    ) -> CacheProviderInterface:
         """
         Get cache provider instance.
 
@@ -173,9 +174,9 @@ class ProviderRegistry:
     @classmethod
     def get_queue(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         singleton: bool = True,
-    ) -> "TaskQueueInterface":
+    ) -> TaskQueueInterface:
         """
         Get task queue instance.
 
@@ -206,9 +207,9 @@ class ProviderRegistry:
     @classmethod
     def get_failed_operation_repo(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         singleton: bool = True,
-    ) -> "FailedOperationRepository":
+    ) -> FailedOperationRepository:
         """Get failed operation repository instance."""
         name = name or cls._default_repo
 
@@ -230,9 +231,9 @@ class ProviderRegistry:
     @classmethod
     def get_circuit_breaker_repo(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         singleton: bool = True,
-    ) -> "CircuitBreakerStateRepository":
+    ) -> CircuitBreakerStateRepository:
         """Get circuit breaker state repository instance."""
         name = name or cls._default_repo
 
@@ -254,9 +255,9 @@ class ProviderRegistry:
     @classmethod
     def get_security_repo(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         singleton: bool = True,
-    ) -> "SecurityIncidentRepository":
+    ) -> SecurityIncidentRepository:
         """Get security incident repository instance."""
         name = name or cls._default_repo
 
@@ -280,7 +281,7 @@ class ProviderRegistry:
     # =========================================================================
 
     @classmethod
-    def get_statistics_repo(cls) -> "StatisticsRepositoryInterface":
+    def get_statistics_repo(cls) -> StatisticsRepositoryInterface:
         """
         Get statistics repository instance.
 
@@ -318,9 +319,9 @@ class ProviderRegistry:
     @classmethod
     def get_audit_adapter(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         singleton: bool = True,
-    ) -> "AuditLogAdapter":
+    ) -> AuditLogAdapter:
         """
         Get audit adapter instance.
 
@@ -334,7 +335,6 @@ class ProviderRegistry:
         Raises:
             ValueError: If no adapter registered with the given name
         """
-        from selfhealing.interfaces.audit_adapter import AuditLogAdapter
 
         name = name or cls._default_audit
 
@@ -371,8 +371,8 @@ class ProviderRegistry:
         """Auto-register default audit adapters."""
         try:
             from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
-            from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
             from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter
+            from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
 
             if "file" not in cls._audit_adapters:
                 cls.register_audit_adapter("file", FileAuditLogAdapter)
@@ -390,9 +390,9 @@ class ProviderRegistry:
     @classmethod
     def set_defaults(
         cls,
-        cache: Optional[str] = None,
-        queue: Optional[str] = None,
-        repo: Optional[str] = None,
+        cache: str | None = None,
+        queue: str | None = None,
+        repo: str | None = None,
     ) -> None:
         """
         Set default providers.
@@ -434,7 +434,7 @@ class ProviderRegistry:
             "circuit_breaker_repo": list(cls._circuit_breaker_repos.keys()),
             "security_repo": list(cls._security_repos.keys()),
             "audit_adapter": list(cls._audit_adapters.keys()),
-            "statistics_adapter": type(cls._statistics_adapter).__name__ if cls._statistics_adapter else None,
+            "statistics_adapter": (type(cls._statistics_adapter).__name__ if cls._statistics_adapter else None),
         }
 
     @classmethod
@@ -550,8 +550,8 @@ def _auto_register_adapters() -> None:
     # In-memory repositories (for testing, standalone)
     try:
         from selfhealing.adapters.memory import (
-            InMemoryFailedOperationRepository,
             InMemoryCircuitBreakerStateRepository,
+            InMemoryFailedOperationRepository,
             InMemorySecurityIncidentRepository,
         )
 
@@ -583,8 +583,8 @@ def _auto_register_adapters() -> None:
     # Audit adapters
     try:
         from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
-        from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
         from selfhealing.adapters.audit.null_adapter import NullAuditLogAdapter
+        from selfhealing.adapters.audit.stdout_adapter import StdoutAuditLogAdapter
 
         ProviderRegistry.register_audit_adapter("file", FileAuditLogAdapter)
         ProviderRegistry.register_audit_adapter("stdout", StdoutAuditLogAdapter)
@@ -614,7 +614,9 @@ def get_storage_backend():
     Returns:
         ResilientStorageBackend singleton instance
     """
-    from selfhealing.adapters.resilient.backend import get_storage_backend as _get_backend
+    from selfhealing.adapters.resilient.backend import (
+        get_storage_backend as _get_backend,
+    )
 
     return _get_backend()
 
@@ -629,7 +631,9 @@ def get_circuit_breaker_repo():
     Returns:
         RedisCircuitBreakerStateRepository instance
     """
-    from selfhealing.adapters.redis.circuit_breaker import get_redis_circuit_breaker_repo
+    from selfhealing.adapters.redis.circuit_breaker import (
+        get_redis_circuit_breaker_repo,
+    )
 
     return get_redis_circuit_breaker_repo()
 

@@ -27,23 +27,24 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
-from .codes import ErrorCode
 from .classifier import ClassifiedError
+from .codes import ErrorCode
 
 
-def _get_current_region() -> Optional[str]:
+def _get_current_region() -> str | None:
     """
     현재 리전 정보 조회.
-    
+
     ClusterIdentity가 있으면 해당 값 사용, 없으면 환경변수 직접 조회.
-    
+
     Returns:
         리전 식별자 (seoul, tokyo 등) 또는 None
     """
     try:
         from selfhealing.core.cluster_identity import get_cluster_identity
+
         identity = get_cluster_identity(skip_validation=True)
         return identity.region
     except ImportError:
@@ -67,18 +68,18 @@ class ErrorInfo:
     message: str
     """사용자 친화적 메시지."""
 
-    detail: Optional[str] = None
+    detail: str | None = None
     """기술적 상세 정보."""
 
-    field: Optional[str] = None
+    field: str | None = None
     """필드 관련 에러 시 필드명."""
 
     retryable: bool = False
     """재시도 가능 여부."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "code": self.code,
             "message": self.message,
         }
@@ -103,27 +104,27 @@ class ResponseMeta:
     멀티 리전 환경에서는 region 필드로 에러 발생 리전을 식별합니다.
     """
 
-    request_id: Optional[str] = None
+    request_id: str | None = None
     """요청 추적 ID."""
 
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     """에러 발생 시간."""
 
-    path: Optional[str] = None
+    path: str | None = None
     """요청 경로."""
 
-    method: Optional[str] = None
+    method: str | None = None
     """HTTP 메서드."""
 
-    causation_id: Optional[str] = None
+    causation_id: str | None = None
     """인과관계 추적용 Cascade ID (API-Celery 인과관계 연결)."""
 
-    region: Optional[str] = None
+    region: str | None = None
     """에러 발생 리전 (멀티 리전 환경에서 SELFHEALING_REGION 값)."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "timestamp": self.timestamp.isoformat(),
         }
 
@@ -170,16 +171,16 @@ class StandardErrorResponse:
     http_status: int = 500
     """HTTP 상태 코드 (응답 객체 생성 시 사용)."""
 
-    extra: Optional[Dict[str, Any]] = None
+    extra: dict[str, Any] | None = None
     """추가 정보 (ConfigLockError의 current_owner 등)."""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         딕셔너리로 변환 (JSON 직렬화용).
 
         http_status와 extra는 응답 본문에 포함되지 않습니다.
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": self.success,
             "error": self.error.to_dict(),
             "meta": self.meta.to_dict(),
@@ -195,12 +196,12 @@ class StandardErrorResponse:
     def from_classified_error(
         cls,
         classified: ClassifiedError,
-        request_id: Optional[str] = None,
-        path: Optional[str] = None,
-        method: Optional[str] = None,
-        causation_id: Optional[str] = None,
-        region: Optional[str] = None,
-    ) -> "StandardErrorResponse":
+        request_id: str | None = None,
+        path: str | None = None,
+        method: str | None = None,
+        causation_id: str | None = None,
+        region: str | None = None,
+    ) -> StandardErrorResponse:
         """
         ClassifiedError로부터 표준 응답 생성.
 
@@ -219,7 +220,7 @@ class StandardErrorResponse:
         resolved_region = region
         if resolved_region is None:
             resolved_region = _get_current_region()
-        
+
         error_info = ErrorInfo(
             code=classified.code.value,
             message=classified.message,
@@ -248,10 +249,10 @@ class StandardErrorResponse:
     def from_exception(
         cls,
         exc: BaseException,
-        request_id: Optional[str] = None,
-        path: Optional[str] = None,
-        method: Optional[str] = None,
-    ) -> "StandardErrorResponse":
+        request_id: str | None = None,
+        path: str | None = None,
+        method: str | None = None,
+    ) -> StandardErrorResponse:
         """
         예외로부터 표준 응답 생성 (분류 포함).
 
@@ -279,14 +280,14 @@ class StandardErrorResponse:
 
 def create_error_response(
     code: ErrorCode,
-    message: Optional[str] = None,
-    detail: Optional[str] = None,
-    field: Optional[str] = None,
-    request_id: Optional[str] = None,
-    path: Optional[str] = None,
-    method: Optional[str] = None,
-    extra: Optional[Dict[str, Any]] = None,
-    region: Optional[str] = None,
+    message: str | None = None,
+    detail: str | None = None,
+    field: str | None = None,
+    request_id: str | None = None,
+    path: str | None = None,
+    method: str | None = None,
+    extra: dict[str, Any] | None = None,
+    region: str | None = None,
 ) -> StandardErrorResponse:
     """
     에러 코드로부터 표준 응답 생성 (편의 함수).
@@ -305,7 +306,7 @@ def create_error_response(
     Returns:
         StandardErrorResponse 인스턴스
     """
-    from .codes import get_http_status, is_retryable, get_default_message
+    from .codes import get_default_message, get_http_status, is_retryable
 
     # region 자동 설정
     resolved_region = region if region is not None else _get_current_region()

@@ -15,7 +15,7 @@ Tasks:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def archive_old_dlq_entries(older_than_days: int = 30) -> Dict[str, Any]:
+def archive_old_dlq_entries(older_than_days: int = 30) -> dict[str, Any]:
     """
     30일 이상 된 해결된 DLQ 항목을 아카이브.
 
@@ -57,7 +57,7 @@ def archive_old_dlq_entries(older_than_days: int = 30) -> Dict[str, Any]:
         raise
 
 
-def cleanup_expired_config(older_than_hours: int = 24) -> Dict[str, Any]:
+def cleanup_expired_config(older_than_hours: int = 24) -> dict[str, Any]:
     """
     만료된 Pending Config 항목 정리.
 
@@ -88,7 +88,7 @@ def cleanup_expired_config(older_than_hours: int = 24) -> Dict[str, Any]:
         raise
 
 
-def expire_approval_requests(older_than_hours: int = 72) -> Dict[str, Any]:
+def expire_approval_requests(older_than_hours: int = 72) -> dict[str, Any]:
     """
     72시간 이상 대기 중인 승인 요청 만료 처리.
 
@@ -122,7 +122,7 @@ def expire_approval_requests(older_than_hours: int = 72) -> Dict[str, Any]:
 def purge_archived_dlq_entries(
     older_than_days: int = 90,
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     90일 이상 된 아카이브 항목을 영구 삭제.
 
@@ -166,6 +166,7 @@ def purge_archived_dlq_entries(
 
 try:
     from celery import shared_task
+
     from selfhealing.settings.cleanup import get_cleanup_settings
 
     # 모듈 로드 시점에 설정값 캐싱
@@ -225,7 +226,7 @@ except ImportError:
 # =============================================================================
 
 
-def get_cleanup_beat_schedule() -> Dict[str, Any]:
+def get_cleanup_beat_schedule() -> dict[str, Any]:
     """
     청소부 레인 Beat Schedule 반환.
 
@@ -369,6 +370,7 @@ def __getattr__(name: str):
     if name in _lazy_service_imports:
         # Import directly to avoid services/__init__.py
         import importlib
+
         cs_module = importlib.import_module("selfhealing.services.cleanup_service")
         return getattr(cs_module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Literal
 
 
 class NotificationTiming(str, Enum):
@@ -95,10 +95,10 @@ class NotificationPolicy:
 
     timing: NotificationTiming = NotificationTiming.AFTER
     aggregate: bool = False
-    threshold: Optional[float] = None
+    threshold: float | None = None
     threshold_field: str = ""
     cooldown_seconds: int = 300  # 5 minutes
     default_severity: Literal["info", "warning", "critical"] = "info"
-    channels: List[str] = field(default_factory=lambda: ["slack"])
+    channels: list[str] = field(default_factory=lambda: ["slack"])
     requires_approval: bool = False
     escalate_on_emergency: bool = True

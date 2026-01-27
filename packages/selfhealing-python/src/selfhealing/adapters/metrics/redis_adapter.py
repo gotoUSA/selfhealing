@@ -7,7 +7,7 @@ Provides metrics from Redis cache using Write-Through pattern.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
 
@@ -36,7 +36,7 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
 
     def __init__(
         self,
-        redis_client: "redis.Redis",
+        redis_client: redis.Redis,
         prefix: str = "sh:metrics:",
     ):
         """
@@ -172,7 +172,7 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
         self,
         service: str,
         state: str,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> None:
         """
         Circuit Breaker 상태 설정.

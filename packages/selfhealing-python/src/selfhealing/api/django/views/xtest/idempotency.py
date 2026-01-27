@@ -22,8 +22,7 @@ Security:
 """
 
 import logging
-import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.core.cache import cache
 from django.utils import timezone
@@ -44,7 +43,7 @@ DEFAULT_TTL_SECONDS = 3600  # 1시간 기본 TTL
 MAX_STATUS_RESULTS = 50  # 상태 조회 시 최대 결과 수
 
 
-def _get_xtest_tracked_keys() -> List[str]:
+def _get_xtest_tracked_keys() -> list[str]:
     """X-Test-Mode로 등록된 키 목록 조회."""
     try:
         keys = cache.get(XTEST_METADATA_KEY) or []
@@ -116,8 +115,8 @@ class GenerateKeyView(XTestModeMixin, APIView):
             return denied
 
         from selfhealing.services.idempotency_service import (
-            IdempotencyKey,
             IdempotencyDomain,
+            IdempotencyKey,
             get_idempotency_service,
         )
 
@@ -256,8 +255,8 @@ class CheckDuplicateView(XTestModeMixin, APIView):
             return denied
 
         from selfhealing.services.idempotency_service import (
-            IdempotencyKey,
             IdempotencyDomain,
+            IdempotencyKey,
             get_idempotency_service,
         )
 
@@ -352,7 +351,11 @@ class CheckDuplicateView(XTestModeMixin, APIView):
                 request=request,
                 action="check_duplicate",
                 component="idempotency",
-                details={"key_string": key_string, "is_duplicate": is_duplicate, "registered": registered},
+                details={
+                    "key_string": key_string,
+                    "is_duplicate": is_duplicate,
+                    "registered": registered,
+                },
                 result="success",
             )
 
@@ -376,33 +379,33 @@ class CheckDuplicateView(XTestModeMixin, APIView):
 
 
 def _filter_tracked_keys(
-    tracked_keys: List[str],
+    tracked_keys: list[str],
     domain_filter: str,
     prefix_filter: str,
-) -> List[str]:
+) -> list[str]:
     """도메인 및 프리픽스 필터 적용."""
     from selfhealing.services.idempotency_service import IdempotencyDomain
-    
+
     result = tracked_keys
-    
+
     if domain_filter:
         try:
             domain = IdempotencyDomain[domain_filter]
             result = [k for k in result if f":{domain.value}:" in k]
         except KeyError:
             pass
-    
+
     if prefix_filter:
         result = [k for k in result if prefix_filter in k]
-    
+
     return result
 
 
-def _aggregate_by_domain(tracked_keys: List[str]) -> Dict[str, int]:
+def _aggregate_by_domain(tracked_keys: list[str]) -> dict[str, int]:
     """도메인별 키 집계."""
     from selfhealing.services.idempotency_service import IdempotencyDomain
-    
-    by_domain: Dict[str, int] = {}
+
+    by_domain: dict[str, int] = {}
     for key in tracked_keys:
         for domain in IdempotencyDomain:
             if f":{domain.value}:" in key:
@@ -411,7 +414,9 @@ def _aggregate_by_domain(tracked_keys: List[str]) -> Dict[str, int]:
     return by_domain
 
 
-def _get_recent_keys_details(tracked_keys: List[str], limit: int) -> List[Dict[str, Any]]:
+def _get_recent_keys_details(
+    tracked_keys: list[str], limit: int
+) -> list[dict[str, Any]]:
     """최근 키 상세 정보 조회."""
     recent_keys = []
     for cache_key in tracked_keys[:limit]:
@@ -420,23 +425,28 @@ def _get_recent_keys_details(tracked_keys: List[str], limit: int) -> List[Dict[s
             first_seen_at = None
             if isinstance(cached_value, dict):
                 first_seen_at = cached_value.get("first_seen_at")
-            recent_keys.append({
-                "cache_key": cache_key,
-                "first_seen_at": first_seen_at,
-                "has_value": cached_value is not None,
-            })
+            recent_keys.append(
+                {
+                    "cache_key": cache_key,
+                    "first_seen_at": first_seen_at,
+                    "has_value": cached_value is not None,
+                }
+            )
         except Exception:
-            recent_keys.append({
-                "cache_key": cache_key,
-                "first_seen_at": None,
-                "has_value": False,
-            })
+            recent_keys.append(
+                {
+                    "cache_key": cache_key,
+                    "first_seen_at": None,
+                    "has_value": False,
+                }
+            )
     return recent_keys
 
 
 def _get_cache_backend_name() -> str:
     """캐시 백엔드 이름 조회."""
     from django.conf import settings
+
     try:
         cache_config = settings.CACHES.get("default", {})
         return cache_config.get("BACKEND", "unknown")
@@ -485,14 +495,19 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
         domain_filter = request.query_params.get("domain", "").upper()
         prefix_filter = request.query_params.get("prefix", "")
         try:
-            limit = min(int(request.query_params.get("limit", MAX_STATUS_RESULTS)), MAX_STATUS_RESULTS)
+            limit = min(
+                int(request.query_params.get("limit", MAX_STATUS_RESULTS)),
+                MAX_STATUS_RESULTS,
+            )
         except (ValueError, TypeError):
             limit = MAX_STATUS_RESULTS
 
         try:
             # X-Test로 등록된 키 조회 및 필터링
             tracked_keys = _get_xtest_tracked_keys()
-            tracked_keys = _filter_tracked_keys(tracked_keys, domain_filter, prefix_filter)
+            tracked_keys = _filter_tracked_keys(
+                tracked_keys, domain_filter, prefix_filter
+            )
 
             # 도메인별 집계
             by_domain = _aggregate_by_domain(tracked_keys)
@@ -575,8 +590,8 @@ class RegisterKeyView(XTestModeMixin, APIView):
             return denied
 
         from selfhealing.services.idempotency_service import (
-            IdempotencyKey,
             IdempotencyDomain,
+            IdempotencyKey,
             get_idempotency_service,
         )
 
@@ -637,6 +652,7 @@ class RegisterKeyView(XTestModeMixin, APIView):
 
             # 만료 시간 계산
             from datetime import timedelta
+
             expires_at = now + timedelta(seconds=ttl_seconds)
 
             response_data = {
@@ -710,16 +726,16 @@ class ClearKeysView(XTestModeMixin, APIView):
             return denied
 
         from selfhealing.services.idempotency_service import (
-            IdempotencyKey,
             IdempotencyDomain,
+            IdempotencyKey,
         )
 
         key_string = request.data.get("key")
         domain_str = request.data.get("domain", "EXTERNAL_SERVICE").upper()
         clear_all_xtest = request.data.get("clear_all_xtest", False)
 
-        cleared_keys: List[str] = []
-        errors: List[str] = []
+        cleared_keys: list[str] = []
+        errors: list[str] = []
 
         try:
             if clear_all_xtest:

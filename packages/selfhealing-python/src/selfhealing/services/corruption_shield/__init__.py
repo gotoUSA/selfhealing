@@ -8,19 +8,20 @@ Provides defense-in-depth against data corruption:
 
 Usage:
     from selfhealing.services.corruption_shield import CorruptionShield
-    
+
     shield = CorruptionShield()
-    
+
     result = shield.validate(data={
         "amount": 50000,
         "order_id": "order_123",
         "signature": "abc123",
     }, context={"expected_amount": 50000})
-    
+
     if not result.is_valid:
         print(f"Blocked: {result.violations}")
 """
 
+from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
 from selfhealing.services.corruption_shield.shield import (
     CorruptionShield,
     ValidationResult,
@@ -34,7 +35,6 @@ from selfhealing.services.corruption_shield.validators import (
     L3AnomalyDetector,
     Violation,
 )
-from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
 
 __all__ = [
     "CorruptionShield",

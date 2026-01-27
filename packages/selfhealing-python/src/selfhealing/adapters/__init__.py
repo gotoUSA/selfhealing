@@ -55,20 +55,30 @@ except ImportError:
     RedisDLQRepository = None
 
 # =============================================================================
-# Repository Adapters - InMemory (Testing)
-# =============================================================================
-from selfhealing.adapters.memory import (
-    InMemoryFailedOperationRepository,
-    InMemoryCircuitBreakerStateRepository,
-    InMemorySecurityIncidentRepository,
-)
-
-# =============================================================================
 # Cache Adapters
 # =============================================================================
 from selfhealing.adapters.cache import (
-    RedisCacheAdapter,
     InMemoryCacheAdapter,
+    RedisCacheAdapter,
+)
+
+# =============================================================================
+# Health Checker Adapters (Platinum SLA Optimization)
+# =============================================================================
+from selfhealing.adapters.health_checker import (
+    HealthCheckStrategy,
+    LinuxTCPInfoStrategy,
+    PortableHealthChecker,
+    TTLCacheStrategy,
+)
+
+# =============================================================================
+# Repository Adapters - InMemory (Testing)
+# =============================================================================
+from selfhealing.adapters.memory import (
+    InMemoryCircuitBreakerStateRepository,
+    InMemoryFailedOperationRepository,
+    InMemorySecurityIncidentRepository,
 )
 
 # =============================================================================
@@ -78,17 +88,6 @@ from selfhealing.adapters.queues import (
     CeleryTaskAdapter,
     SyncTaskAdapter,
 )
-
-# =============================================================================
-# Health Checker Adapters (Platinum SLA Optimization)
-# =============================================================================
-from selfhealing.adapters.health_checker import (
-    HealthCheckStrategy,
-    TTLCacheStrategy,
-    LinuxTCPInfoStrategy,
-    PortableHealthChecker,
-)
-
 
 __all__ = [
     # =========================================================================

@@ -12,14 +12,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
 class ErrorBudgetGateConfig:
     """
     에러 예산 게이트 설정.
-    
+
     Attributes:
         enabled: 게이트 활성화 여부 (False면 항상 자동화 허용)
         critical_threshold_percent: 이 값 미만이면 자동화 차단 (기본: 10%)
@@ -35,6 +35,7 @@ class ErrorBudgetGateConfig:
         alert_on_fail_open: Fail-Open 발동 시 알림 발송 여부 (기본: True)
         alert_cooldown_seconds: 동일 알림 재발송 쿨다운 (기본: 300초)
     """
+
     enabled: bool = True
     critical_threshold_percent: float = 10.0
     warning_threshold_percent: float = 20.0
@@ -51,8 +52,8 @@ class ErrorBudgetGateConfig:
     # 알림 설정
     alert_on_fail_open: bool = True
     alert_cooldown_seconds: int = 300
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
             "critical_threshold_percent": self.critical_threshold_percent,
@@ -68,9 +69,9 @@ class ErrorBudgetGateConfig:
             "alert_on_fail_open": self.alert_on_fail_open,
             "alert_cooldown_seconds": self.alert_cooldown_seconds,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ErrorBudgetGateConfig":
+    def from_dict(cls, data: dict[str, Any]) -> ErrorBudgetGateConfig:
         return cls(
             enabled=data.get("enabled", True),
             critical_threshold_percent=data.get("critical_threshold_percent", 10.0),
@@ -78,11 +79,19 @@ class ErrorBudgetGateConfig:
             fail_open=data.get("fail_open", True),
             cache_ttl_seconds=data.get("cache_ttl_seconds", 30),
             fail_open_rate_limit_enabled=data.get("fail_open_rate_limit_enabled", True),
-            fail_open_rate_limit_per_minute=data.get("fail_open_rate_limit_per_minute", 10),
-            fail_open_rate_limit_window_seconds=data.get("fail_open_rate_limit_window_seconds", 60),
+            fail_open_rate_limit_per_minute=data.get(
+                "fail_open_rate_limit_per_minute", 10
+            ),
+            fail_open_rate_limit_window_seconds=data.get(
+                "fail_open_rate_limit_window_seconds", 60
+            ),
             circuit_breaker_enabled=data.get("circuit_breaker_enabled", True),
-            circuit_breaker_failure_threshold=data.get("circuit_breaker_failure_threshold", 5),
-            circuit_breaker_recovery_timeout=data.get("circuit_breaker_recovery_timeout", 30),
+            circuit_breaker_failure_threshold=data.get(
+                "circuit_breaker_failure_threshold", 5
+            ),
+            circuit_breaker_recovery_timeout=data.get(
+                "circuit_breaker_recovery_timeout", 30
+            ),
             alert_on_fail_open=data.get("alert_on_fail_open", True),
             alert_cooldown_seconds=data.get("alert_cooldown_seconds", 300),
         )
@@ -90,22 +99,22 @@ class ErrorBudgetGateConfig:
 
 class GateStatus(str, Enum):
     """게이트 상태."""
-    
+
     OPEN = "open"
     """자동화 허용 - 에러 예산 충분."""
-    
+
     WARNING = "warning"
     """자동화 허용 (경고) - 에러 예산 낮음."""
-    
+
     BLOCKED = "blocked"
     """자동화 차단 - 에러 예산 위험 수준, 수동 모드 강제."""
-    
+
     FAIL_OPEN = "fail_open"
     """자동화 허용 (장애 복구 모드) - 에러 예산 조회 실패."""
-    
+
     FAIL_OPEN_RATE_LIMITED = "fail_open_rate_limited"
     """자동화 차단 (Rate Limit 초과) - Fail-Open 상황에서 과도한 요청."""
-    
+
     DISABLED = "disabled"
     """게이트 비활성화 - 항상 자동화 허용."""
 
@@ -113,38 +122,38 @@ class GateStatus(str, Enum):
 @dataclass
 class GateCheckResult:
     """게이트 체크 결과."""
-    
+
     allowed: bool
     """자동화 허용 여부."""
-    
+
     status: GateStatus
     """게이트 상태."""
-    
-    error_budget_percent: Optional[float] = None
+
+    error_budget_percent: float | None = None
     """현재 에러 예산 잔여율 (%)."""
-    
+
     threshold_percent: float = 10.0
     """차단 임계값 (%)."""
-    
+
     reason: str = ""
     """상태 설명."""
-    
+
     recommendation: str = ""
     """권장 조치."""
-    
+
     checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     """체크 시각."""
-    
+
     fail_open_triggered: bool = False
     """Fail-open이 발동되었는지 여부."""
-    
-    rate_limit_remaining: Optional[int] = None
+
+    rate_limit_remaining: int | None = None
     """Rate limit 잔여 횟수 (Fail-Open 시에만 유효)."""
-    
-    rate_limit_reset_at: Optional[datetime] = None
+
+    rate_limit_reset_at: datetime | None = None
     """Rate limit 리셋 시각."""
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "allowed": self.allowed,
             "status": self.status.value,

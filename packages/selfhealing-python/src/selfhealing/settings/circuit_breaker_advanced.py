@@ -5,7 +5,6 @@ Single Source of Truth for circuit breaker advanced protection.
 Replaces: core/config.py:CircuitBreakerAdvancedConfig (lines 540-605)
 """
 
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,23 +13,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class CircuitBreakerAdvancedSettings(BaseSettings):
     """
     Circuit Breaker 고급 보호 설정.
-    
+
     이 설정은 RuntimeConfigManager를 통해 중앙 관리됩니다.
     서버 재시작 없이 API로 변경 가능합니다.
     """
-    
+
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CB_ADV_",
         env_file=".env",
         extra="ignore",
     )
-    
+
     # 전체 활성화
     enabled: bool = Field(
         default=True,
         description="고급 보호 기능 활성화 여부",
     )
-    
+
     # =========================================================================
     # Load Shedding
     # =========================================================================
@@ -44,7 +43,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
         le=100.0,
         description="Load Shedding 트리거 임계값 (%)",
     )
-    
+
     # =========================================================================
     # Adaptive Threshold (Emergency Level 연동)
     # =========================================================================
@@ -64,7 +63,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
         le=3600,
         description="기본 관찰 윈도우 (초)",
     )
-    
+
     # =========================================================================
     # Canary Recovery
     # =========================================================================
@@ -88,7 +87,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
         default=True,
         description="critical 서비스는 100% 성공률 요구",
     )
-    
+
     # =========================================================================
     # Blast Radius 연동
     # =========================================================================
@@ -100,7 +99,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
         default=True,
         description="CRITICAL 시 자동 OPEN 차단",
     )
-    
+
     # =========================================================================
     # Freeze Mode
     # =========================================================================
@@ -112,7 +111,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
         default=True,
         description="LOCKDOWN 중 수동 조작 허용",
     )
-    
+
     # =========================================================================
     # Panic Threshold
     # =========================================================================
@@ -130,7 +129,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
         default="freeze",
         description='Panic 발생 시 행동 ("freeze" | "alert_only")',
     )
-    
+
     # =========================================================================
     # Open Strategy
     # =========================================================================
@@ -149,7 +148,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
 # =============================================================================
 # Singleton pattern
 # =============================================================================
-_settings: Optional[CircuitBreakerAdvancedSettings] = None
+_settings: CircuitBreakerAdvancedSettings | None = None
 
 
 def get_circuit_breaker_advanced_settings() -> CircuitBreakerAdvancedSettings:

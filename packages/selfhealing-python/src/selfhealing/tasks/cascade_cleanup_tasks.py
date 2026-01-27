@@ -25,7 +25,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,44 +39,42 @@ def archive_cascade_events(
     namespace: str = "global",
     older_than_days: int = 7,
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Redis에서 PostgreSQL로 Cascade 이벤트 이관.
-    
+
     Hot tier(Redis)에서 Warm tier(PostgreSQL)로 오래된 이벤트를 이관합니다.
-    
+
     Args:
         namespace: 네임스페이스
         older_than_days: 이 일수보다 오래된 이벤트 이관
         dry_run: True면 실제 이관 없이 대상만 확인
-    
+
     Returns:
         이관 결과 통계
-    
+
     Code reference:
         tasks/cleanup_tasks.py (archive_old_dlq_entries 패턴)
     """
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
-    
+
     auditor = get_cascade_event_auditor()
     cutoff_time = datetime.now(timezone.utc) - timedelta(days=older_than_days)
     cutoff_str = cutoff_time.isoformat()
-    
+
     # 모든 이벤트 조회
     events = auditor.get_recent_events(namespace, limit=10000)
-    
+
     # older_than_days보다 오래된 이벤트 필터링
     to_archive = []
     for event in events:
         try:
-            event_time = datetime.fromisoformat(
-                event.timestamp.replace('Z', '+00:00')
-            )
+            event_time = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00"))
             if event_time < cutoff_time:
                 to_archive.append(event)
         except ValueError:
             continue
-    
+
     if dry_run:
         logger.info(
             f"[CascadeCleanup] Archive dry run: "
@@ -90,11 +88,11 @@ def archive_cascade_events(
             "cutoff_time": cutoff_str,
             "archived": 0,
         }
-    
+
     # PostgreSQL로 이관 (실제 Django ORM 사용 시)
     archived_count = 0
     failed_count = 0
-    
+
     for event in to_archive:
         try:
             # PostgreSQL 저장 (실제 구현 시 Django ORM 사용)
@@ -105,13 +103,13 @@ def archive_cascade_events(
                 f"[CascadeCleanup] Archive failed: cascade={event.id}, error={e}"
             )
             failed_count += 1
-    
+
     logger.info(
         f"[CascadeCleanup] Archive completed: "
         f"archived={archived_count}, failed={failed_count}, "
         f"namespace={namespace}"
     )
-    
+
     return {
         "status": "completed",
         "namespace": namespace,
@@ -124,13 +122,14 @@ def archive_cascade_events(
 def _archive_single_event_to_db(event: Any) -> None:
     """
     단일 Cascade Event를 PostgreSQL에 저장.
-    
+
     Django ORM이 사용 가능한 경우 실제 DB에 저장합니다.
     """
     try:
         from django.db import transaction
+
         from selfhealing.models import CascadeEventArchive
-        
+
         with transaction.atomic():
             CascadeEventArchive.objects.update_or_create(
                 cascade_id=event.id,
@@ -156,23 +155,21 @@ def _archive_single_event_to_db(event: Any) -> None:
 def _archive_single_event_to_file(event: Any) -> None:
     """
     단일 Cascade Event를 로컬 파일에 저장.
-    
+
     PostgreSQL을 사용할 수 없는 환경에서 폴백으로 사용합니다.
     """
     archive_dir = Path("/tmp/cascade_archive")
     archive_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # 월별 파일로 저장
     try:
-        event_date = datetime.fromisoformat(
-            event.timestamp.replace('Z', '+00:00')
-        )
+        event_date = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00"))
         month_str = event_date.strftime("%Y_%m")
     except ValueError:
         month_str = datetime.now(timezone.utc).strftime("%Y_%m")
-    
+
     archive_file = archive_dir / f"cascade_{event.namespace}_{month_str}.jsonl"
-    
+
     with open(archive_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(event.to_dict()) + "\n")
 
@@ -186,43 +183,41 @@ def purge_old_cascade_events(
     namespace: str = "global",
     older_than_days: int = 365,
     dry_run: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     오래된 Cascade 이벤트 영구 삭제.
-    
+
     ⚠️ 고위험 작업: 기본값 dry_run=True
-    
+
     아카이브된 이벤트 중 보관 기간이 지난 이벤트를 영구 삭제합니다.
-    
+
     Args:
         namespace: 네임스페이스
         older_than_days: 이 일수보다 오래된 이벤트 삭제
         dry_run: True면 실제 삭제 없이 대상만 확인 (기본값)
-    
+
     Returns:
         삭제 결과 통계
     """
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
-    
+
     auditor = get_cascade_event_auditor()
     cutoff_time = datetime.now(timezone.utc) - timedelta(days=older_than_days)
     cutoff_str = cutoff_time.isoformat()
-    
+
     # 모든 이벤트 조회
     events = auditor.get_recent_events(namespace, limit=10000)
-    
+
     # older_than_days보다 오래된 이벤트 필터링
     to_purge = []
     for event in events:
         try:
-            event_time = datetime.fromisoformat(
-                event.timestamp.replace('Z', '+00:00')
-            )
+            event_time = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00"))
             if event_time < cutoff_time:
                 to_purge.append(event)
         except ValueError:
             continue
-    
+
     if dry_run:
         logger.warning(
             f"[CascadeCleanup] Purge dry run: "
@@ -236,11 +231,11 @@ def purge_old_cascade_events(
             "cutoff_time": cutoff_str,
             "purged": 0,
         }
-    
+
     # 실제 삭제
     purged_count = 0
     failed_count = 0
-    
+
     for event in to_purge:
         try:
             _delete_cascade_event(event.id, namespace)
@@ -250,13 +245,13 @@ def purge_old_cascade_events(
                 f"[CascadeCleanup] Purge failed: cascade={event.id}, error={e}"
             )
             failed_count += 1
-    
+
     logger.warning(
         f"[CascadeCleanup] Purge completed: "
         f"purged={purged_count}, failed={failed_count}, "
         f"namespace={namespace}"
     )
-    
+
     return {
         "status": "completed",
         "namespace": namespace,
@@ -269,21 +264,21 @@ def purge_old_cascade_events(
 def _delete_cascade_event(cascade_id: str, namespace: str) -> None:
     """
     단일 Cascade Event 삭제.
-    
+
     Redis에서 이벤트를 삭제합니다.
     """
     from selfhealing.core.state_backend import get_state_backend
-    
+
     backend = get_state_backend()
-    
+
     # 이벤트 삭제
     event_key = f"selfhealing:{namespace}:audit:cascade:{cascade_id}"
     backend.delete(event_key)
-    
+
     # 인덱스에서 제거
     index_key = f"selfhealing:{namespace}:audit:cascade_index"
     index_data = backend.get(index_key)
-    
+
     if index_data:
         ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
         if cascade_id in ids:
@@ -298,32 +293,32 @@ def _delete_cascade_event(cascade_id: str, namespace: str) -> None:
 
 def create_cascade_daily_checkpoint(
     namespace: str = "global",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     일일 체크포인트 생성.
-    
+
     Daily Celery Beat에서 호출되어 Hash Chain 체크포인트를 생성합니다.
     이후 무결성 검증 시 체크포인트 이후만 검증하여 효율성을 높입니다.
-    
+
     Args:
         namespace: 네임스페이스
-    
+
     Returns:
         생성된 체크포인트 정보
-    
+
     Code reference:
         audit/integrity/anchor.py (DailyHashAnchor 패턴)
     """
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
-    
+
     auditor = get_cascade_event_auditor()
     checkpoint = auditor.create_checkpoint(namespace)
-    
+
     logger.info(
         f"[CascadeCleanup] Daily checkpoint created: "
         f"namespace={namespace}, event_count={checkpoint.get('event_count')}"
     )
-    
+
     return checkpoint
 
 
@@ -335,29 +330,29 @@ def create_cascade_daily_checkpoint(
 def verify_cascade_chain_integrity(
     namespace: str = "global",
     use_checkpoint: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Hash Chain 무결성 검증.
-    
+
     Cascade Event의 Hash Chain 무결성을 검증합니다.
     체크포인트가 있으면 체크포인트 이후만 검증하여 효율성을 높입니다.
-    
+
     Args:
         namespace: 네임스페이스
         use_checkpoint: 체크포인트 기반 검증 사용 여부
-    
+
     Returns:
         검증 결과
     """
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
-    
+
     auditor = get_cascade_event_auditor()
-    
+
     if use_checkpoint:
         result = auditor.verify_chain_integrity_from_checkpoint(namespace)
     else:
         result = auditor.verify_chain_integrity(namespace)
-    
+
     if result["valid"]:
         logger.info(
             f"[CascadeCleanup] Chain integrity verified: "
@@ -368,7 +363,7 @@ def verify_cascade_chain_integrity(
             f"[CascadeCleanup] Chain integrity FAILED: "
             f"namespace={namespace}, errors={len(result['errors'])}"
         )
-    
+
     return result
 
 
@@ -390,29 +385,29 @@ LOCAL_FALLBACK_PATH = LOCAL_CASCADE_WAL_PATH
 def recover_cascade_from_wal(
     namespace: str = "global",
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     로컬 WAL에서 Redis로 복구.
-    
+
     Redis 장애 복구 후 로컬 WAL에 쌓인 엔트리를 Redis로 이관합니다.
-    
+
     WAL 용어 통일:
         시스템 전반에서 wal_dir, WriteAheadLog 등 WAL 용어 사용.
         (backend.py, services/audit/base.py, audit/wal.py 참조)
-    
+
     Args:
         namespace: 네임스페이스
         dry_run: True면 실제 복구 없이 대상만 확인
-    
+
     Returns:
         복구 결과 통계
-    
+
     Code reference:
         audit/graceful_degradation/manager.py#L180-220 (reconcile 패턴)
     """
     from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
     from selfhealing.audit.cascade_event import CascadeEvent
-    
+
     if not LOCAL_CASCADE_WAL_PATH.exists():
         return {
             "status": "no_wal_data",
@@ -420,12 +415,12 @@ def recover_cascade_from_wal(
             "recovered": 0,
             "failed": 0,
         }
-    
+
     auditor = get_cascade_event_auditor()
     entries = []
-    
+
     # WAL 파일에서 해당 네임스페이스 엔트리 읽기
-    with open(LOCAL_CASCADE_WAL_PATH, "r", encoding="utf-8") as f:
+    with open(LOCAL_CASCADE_WAL_PATH, encoding="utf-8") as f:
         for line in f:
             try:
                 entry = json.loads(line.strip())
@@ -433,7 +428,7 @@ def recover_cascade_from_wal(
                     entries.append(entry)
             except json.JSONDecodeError:
                 continue
-    
+
     if dry_run:
         logger.info(
             f"[CascadeCleanup] WAL recovery dry run: "
@@ -445,11 +440,11 @@ def recover_cascade_from_wal(
             "entries_to_recover": len(entries),
             "recovered": 0,
         }
-    
+
     # Redis로 복구
     recovered = 0
     failed = 0
-    
+
     for entry in entries:
         try:
             event = CascadeEvent.from_dict(entry)
@@ -457,20 +452,18 @@ def recover_cascade_from_wal(
             auditor._add_to_index(namespace, event.id)
             recovered += 1
         except Exception as e:
-            logger.error(
-                f"[CascadeCleanup] Recovery failed: error={e}"
-            )
+            logger.error(f"[CascadeCleanup] Recovery failed: error={e}")
             failed += 1
-    
+
     # 복구 완료 후 WAL 파일에서 해당 네임스페이스 엔트리 제거
     if recovered > 0 and failed == 0:
         _remove_namespace_from_wal(namespace)
-    
+
     logger.info(
         f"[CascadeCleanup] WAL recovery completed: "
         f"recovered={recovered}, failed={failed}, namespace={namespace}"
     )
-    
+
     return {
         "status": "completed",
         "namespace": namespace,
@@ -487,10 +480,10 @@ def _remove_namespace_from_wal(namespace: str) -> None:
     """WAL 파일에서 특정 네임스페이스 엔트리 제거."""
     if not LOCAL_CASCADE_WAL_PATH.exists():
         return
-    
+
     remaining = []
-    
-    with open(LOCAL_CASCADE_WAL_PATH, "r", encoding="utf-8") as f:
+
+    with open(LOCAL_CASCADE_WAL_PATH, encoding="utf-8") as f:
         for line in f:
             try:
                 entry = json.loads(line.strip())
@@ -498,7 +491,7 @@ def _remove_namespace_from_wal(namespace: str) -> None:
                     remaining.append(line)
             except json.JSONDecodeError:
                 remaining.append(line)
-    
+
     if remaining:
         with open(LOCAL_CASCADE_WAL_PATH, "w", encoding="utf-8") as f:
             f.writelines(remaining)

@@ -45,6 +45,7 @@ class TestRegionalOverrideConflictScenario:
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
+
         return RegionalOverrideConflictScenario(
             service_name="test-service",
             config={"target_region": "seoul"},
@@ -57,13 +58,13 @@ class TestRegionalOverrideConflictScenario:
     def test_regional_override_conflict_scenario_execution(self, scenario):
         """8단계 전체 시나리오가 성공적으로 실행되는지 확인."""
         result = scenario.run()
-        
+
         assert result is not None
         assert result.scenario == "regional_override_conflict"
         assert result.service_name == "test-service"
         assert result.status.value == "completed"
         assert len(result.steps) == 8
-        
+
         # 각 단계 성공 확인
         for step in result.steps:
             assert step.success is True, f"Step {step.step} failed: {step.error}"
@@ -71,7 +72,7 @@ class TestRegionalOverrideConflictScenario:
     def test_initial_state_is_normal(self, scenario):
         """Step 1: 초기 상태가 NORMAL인지 확인."""
         result = scenario.run()
-        
+
         step1 = result.steps[0]
         assert step1.action == "check_initial_state"
         assert "NORMAL" in step1.actual
@@ -80,7 +81,7 @@ class TestRegionalOverrideConflictScenario:
     def test_regional_strict_setting(self, scenario):
         """Step 2: Regional STRICT 설정 확인."""
         result = scenario.run()
-        
+
         step2 = result.steps[1]
         assert step2.action == "set_regional_strict"
         assert "STRICT" in step2.actual
@@ -89,7 +90,7 @@ class TestRegionalOverrideConflictScenario:
     def test_regional_strict_takes_priority_over_global_normal(self, scenario):
         """Step 3: Global NORMAL일 때 Regional STRICT가 우선하는지 확인."""
         result = scenario.run()
-        
+
         step3 = result.steps[2]
         assert step3.action == "get_effective_state_regional_priority"
         assert "STRICT" in step3.actual
@@ -99,7 +100,7 @@ class TestRegionalOverrideConflictScenario:
     def test_global_strict_setting(self, scenario):
         """Step 4: Global STRICT 설정 확인."""
         result = scenario.run()
-        
+
         step4 = result.steps[3]
         assert step4.action == "set_global_strict"
         assert "STRICT" in step4.actual
@@ -108,7 +109,7 @@ class TestRegionalOverrideConflictScenario:
     def test_global_strict_overrides_regional(self, scenario):
         """Step 5: Global STRICT가 Regional을 오버라이드하는지 확인."""
         result = scenario.run()
-        
+
         step5 = result.steps[4]
         assert step5.action == "get_effective_state_global_override"
         assert "STRICT" in step5.actual
@@ -118,7 +119,7 @@ class TestRegionalOverrideConflictScenario:
     def test_admin_override_setting(self, scenario):
         """Step 6: Admin Override 설정 확인."""
         result = scenario.run()
-        
+
         step6 = result.steps[5]
         assert step6.action == "set_admin_override"
         assert "ADMIN_OVERRIDE" in step6.actual
@@ -127,7 +128,7 @@ class TestRegionalOverrideConflictScenario:
     def test_admin_override_wins_over_global_strict(self, scenario):
         """Step 7: Admin Override가 Global STRICT를 이기는지 확인."""
         result = scenario.run()
-        
+
         step7 = result.steps[6]
         assert step7.action == "get_effective_state_admin_wins"
         assert "NORMAL" in step7.actual
@@ -137,7 +138,7 @@ class TestRegionalOverrideConflictScenario:
     def test_state_restoration_returns_all_to_normal(self, scenario):
         """Step 8: 상태 원복 후 모두 NORMAL인지 확인."""
         result = scenario.run()
-        
+
         step8 = result.steps[7]
         assert step8.action == "restore_all_states"
         assert "NORMAL" in step8.actual
@@ -146,7 +147,7 @@ class TestRegionalOverrideConflictScenario:
     def test_state_transitions_recorded(self, scenario):
         """상태 전환 이력이 기록되는지 확인."""
         result = scenario.run()
-        
+
         assert result.config is not None
         assert "state_transitions" in result.config
         transitions = result.config["state_transitions"]
@@ -155,7 +156,7 @@ class TestRegionalOverrideConflictScenario:
     def test_timeline_has_all_events(self, scenario):
         """타임라인에 모든 이벤트가 기록되는지 확인."""
         result = scenario.run()
-        
+
         assert len(result.timeline) == 8
         for i, event in enumerate(result.timeline):
             assert event.step == i + 1
@@ -170,6 +171,7 @@ class TestMultiRegionIsolationTestScenario:
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             MultiRegionIsolationTestScenario,
         )
+
         return MultiRegionIsolationTestScenario(
             service_name="test-service",
             config={"target_region": "seoul", "other_region": "tokyo"},
@@ -182,13 +184,13 @@ class TestMultiRegionIsolationTestScenario:
     def test_multi_region_isolation_test_scenario_execution(self, scenario):
         """5단계 전체 시나리오가 성공적으로 실행되는지 확인."""
         result = scenario.run()
-        
+
         assert result is not None
         assert result.scenario == "multi_region_isolation_test"
         assert result.service_name == "test-service"
         assert result.status.value == "completed"
         assert len(result.steps) == 5
-        
+
         # 각 단계 성공 확인
         for step in result.steps:
             assert step.success is True, f"Step {step.step} failed: {step.error}"
@@ -196,7 +198,7 @@ class TestMultiRegionIsolationTestScenario:
     def test_current_region_check(self, scenario):
         """Step 1: 현재 리전 확인."""
         result = scenario.run()
-        
+
         step1 = result.steps[0]
         assert step1.action == "check_current_region"
         assert "seoul" in step1.actual
@@ -205,7 +207,7 @@ class TestMultiRegionIsolationTestScenario:
     def test_target_region_isolation(self, scenario):
         """Step 2: 타겟 리전 격리 설정 확인."""
         result = scenario.run()
-        
+
         step2 = result.steps[1]
         assert step2.action == "set_region_strict"
         assert "seoul" in step2.actual
@@ -215,7 +217,7 @@ class TestMultiRegionIsolationTestScenario:
     def test_other_region_remains_normal(self, scenario):
         """Step 3: 다른 리전이 NORMAL 상태인지 확인."""
         result = scenario.run()
-        
+
         step3 = result.steps[2]
         assert step3.action == "check_other_region_normal"
         assert "tokyo" in step3.actual
@@ -225,7 +227,7 @@ class TestMultiRegionIsolationTestScenario:
     def test_only_target_region_is_isolated(self, scenario):
         """Step 4: 타겟 리전만 격리되었는지 확인."""
         result = scenario.run()
-        
+
         step4 = result.steps[3]
         assert step4.action == "verify_isolation_state"
         assert "seoul" in step4.actual
@@ -236,7 +238,7 @@ class TestMultiRegionIsolationTestScenario:
     def test_region_restore(self, scenario):
         """Step 5: 격리 해제 확인."""
         result = scenario.run()
-        
+
         step5 = result.steps[4]
         assert step5.action == "restore_region"
         assert "NORMAL" in step5.actual
@@ -252,10 +254,10 @@ class TestScenarioRegistry:
             SCENARIO_REGISTRY,
             list_available_scenarios,
         )
-        
+
         assert "regional_override_conflict" in SCENARIO_REGISTRY
         assert "multi_region_isolation_test" in SCENARIO_REGISTRY
-        
+
         available = list_available_scenarios()
         assert "regional_override_conflict" in available
         assert "multi_region_isolation_test" in available
@@ -267,7 +269,7 @@ class TestScenarioRegistry:
             RegionalOverrideConflictScenario,
             MultiRegionIsolationTestScenario,
         )
-        
+
         assert get_scenario_class("regional_override_conflict") == RegionalOverrideConflictScenario
         assert get_scenario_class("multi_region_isolation_test") == MultiRegionIsolationTestScenario
 
@@ -278,7 +280,7 @@ class TestScenarioRegistry:
             RegionalOverrideConflictScenario,
             MultiRegionIsolationTestScenario,
         )
-        
+
         assert issubclass(RegionalOverrideConflictScenario, IntegrationScenario)
         assert issubclass(MultiRegionIsolationTestScenario, IntegrationScenario)
 
@@ -291,13 +293,13 @@ class TestStateTransitionMatrix:
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
-        
+
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
             config={"target_region": "seoul"},
         )
         result = scenario.run()
-        
+
         # Step 1에서 초기 상태 확인
         step1 = result.steps[0]
         assert "NORMAL" in step1.actual
@@ -307,13 +309,13 @@ class TestStateTransitionMatrix:
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
-        
+
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
             config={"target_region": "seoul"},
         )
         result = scenario.run()
-        
+
         # Step 3에서 Regional STRICT 상태 확인
         step3 = result.steps[2]
         assert "STRICT" in step3.actual
@@ -324,13 +326,13 @@ class TestStateTransitionMatrix:
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
-        
+
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
             config={"target_region": "seoul"},
         )
         result = scenario.run()
-        
+
         # Step 5에서 Global STRICT 오버라이드 확인
         step5 = result.steps[4]
         assert "STRICT" in step5.actual
@@ -341,13 +343,13 @@ class TestStateTransitionMatrix:
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
-        
+
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
             config={"target_region": "seoul"},
         )
         result = scenario.run()
-        
+
         # Step 7에서 Admin Override로 NORMAL 확인
         step7 = result.steps[6]
         assert "NORMAL" in step7.actual

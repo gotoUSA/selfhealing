@@ -7,7 +7,7 @@ Provides methods for audit logging and notifications with Fail-Open principle.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +18,14 @@ class AuditHelpersMixin:
     def _log_l2_failure_audit(
         self,
         operation: str,
-        service_name: Optional[str],
+        service_name: str | None,
         error_type: str,
         error_message: str,
     ) -> None:
         """L2 장애 발생 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
             from selfhealing.services.audit_helpers import log_storage_failure_audit
-            
+
             log_storage_failure_audit(
                 storage_type="l2",
                 adapter_type=self._adapter_type,
@@ -43,7 +43,7 @@ class AuditHelpersMixin:
         """L2 복구 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
             from selfhealing.services.audit_helpers import log_storage_recovery_audit
-            
+
             log_storage_recovery_audit(
                 storage_type="l2",
                 adapter_type=self._adapter_type,
@@ -58,12 +58,14 @@ class AuditHelpersMixin:
         reconciled: int,
         l1_wins: int,
         l2_wins: int,
-        errors: List[Dict[str, Any]],
+        errors: list[dict[str, Any]],
     ) -> None:
         """드리프트 복구 완료 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.audit_helpers import log_drift_reconciliation_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_drift_reconciliation_audit,
+            )
+
             log_drift_reconciliation_audit(
                 adapter_type=self._adapter_type,
                 total_checked=total_checked,
@@ -83,8 +85,10 @@ class AuditHelpersMixin:
     ) -> None:
         """L2 연속 장애 시 알림 발송. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.unified_notification import get_notification_service
-            
+            from selfhealing.services.unified_notification import (
+                get_notification_service,
+            )
+
             notification_service = get_notification_service()
             notification_service.send(
                 level="warning",
@@ -107,8 +111,10 @@ class AuditHelpersMixin:
     def _send_l2_recovery_notification(self) -> None:
         """L2 복구 완료 시 알림 발송. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.unified_notification import get_notification_service
-            
+            from selfhealing.services.unified_notification import (
+                get_notification_service,
+            )
+
             notification_service = get_notification_service()
             notification_service.send(
                 level="info",

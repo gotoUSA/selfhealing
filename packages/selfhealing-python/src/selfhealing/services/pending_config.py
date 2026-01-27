@@ -16,12 +16,12 @@ Audit:
 import logging
 import threading
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from selfhealing.core.apply_strategy import ApplyStrategy, ApplyOptions
+from selfhealing.core.apply_strategy import ApplyOptions, ApplyStrategy
 from selfhealing.core.state_backend import get_state_backend
 from selfhealing.services.audit import log_config_apply_audit
 from selfhealing.settings.audit_settings import get_audit_settings
@@ -45,27 +45,27 @@ class PendingConfigChange:
 
     id: str
     config_type: str
-    changes: Dict[str, Any]
+    changes: dict[str, Any]
     strategy: str  # ApplyStrategy value
     status: str = PendingStatus.PENDING.value
     created_at: str = ""
     scheduled_at: str = ""
-    applied_at: Optional[str] = None
-    cancelled_at: Optional[str] = None
-    cancelled_by: Optional[str] = None
-    error_message: Optional[str] = None
-    previous_values: Dict[str, Any] = field(default_factory=dict)
+    applied_at: str | None = None
+    cancelled_at: str | None = None
+    cancelled_by: str | None = None
+    error_message: str | None = None
+    previous_values: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now(timezone.utc).isoformat()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PendingConfigChange":
+    def from_dict(cls, data: dict[str, Any]) -> "PendingConfigChange":
         """Create from dictionary."""
         return cls(**data)
 
@@ -80,7 +80,7 @@ class PendingConfigService:
     Service for managing pending configuration changes.
 
     Thread-safe singleton that tracks scheduled config changes.
-    
+
     Reference:
         92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [20] AuditSettings 참조.
     """
@@ -91,8 +91,8 @@ class PendingConfigService:
         """Initialize PendingConfigService."""
         self._lock = threading.RLock()
         self._backend = get_state_backend()
-        self._pending: Dict[str, PendingConfigChange] = {}
-        self._history: List[PendingConfigChange] = []
+        self._pending: dict[str, PendingConfigChange] = {}
+        self._history: list[PendingConfigChange] = []
         self._settings = get_audit_settings()
         self._load_state()
 
@@ -138,9 +138,9 @@ class PendingConfigService:
     def create_pending_change(
         self,
         config_type: str,
-        changes: Dict[str, Any],
+        changes: dict[str, Any],
         apply_options: ApplyOptions,
-        previous_values: Optional[Dict[str, Any]] = None,
+        previous_values: dict[str, Any] | None = None,
     ) -> PendingConfigChange:
         """
         Create a new pending configuration change.
@@ -159,7 +159,9 @@ class PendingConfigService:
 
             # Calculate scheduled time
             if apply_options.strategy == ApplyStrategy.DELAYED:
-                scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=apply_options.delay_seconds)
+                scheduled_time = datetime.now(timezone.utc) + timedelta(
+                    seconds=apply_options.delay_seconds
+                )
             else:
                 scheduled_time = datetime.now(timezone.utc)
 
@@ -176,29 +178,39 @@ class PendingConfigService:
             self._save_state()
 
             logger.info(
-                f"[PendingConfig] Created pending change {change_id} " f"for {config_type}, scheduled at {scheduled_time}"
+                f"[PendingConfig] Created pending change {change_id} "
+                f"for {config_type}, scheduled at {scheduled_time}"
             )
 
             return change
 
-    def get_pending_change(self, change_id: str) -> Optional[PendingConfigChange]:
+    def get_pending_change(self, change_id: str) -> PendingConfigChange | None:
         """Get a pending change by ID."""
         with self._lock:
             return self._pending.get(change_id)
 
-    def get_pending_changes_for_config(self, config_type: str) -> List[PendingConfigChange]:
+    def get_pending_changes_for_config(
+        self, config_type: str
+    ) -> list[PendingConfigChange]:
         """Get all pending changes for a config type."""
         with self._lock:
             return [
-                c for c in self._pending.values() if c.config_type == config_type and c.status == PendingStatus.PENDING.value
+                c
+                for c in self._pending.values()
+                if c.config_type == config_type
+                and c.status == PendingStatus.PENDING.value
             ]
 
-    def get_all_pending_changes(self) -> List[PendingConfigChange]:
+    def get_all_pending_changes(self) -> list[PendingConfigChange]:
         """Get all pending changes."""
         with self._lock:
-            return [c for c in self._pending.values() if c.status == PendingStatus.PENDING.value]
+            return [
+                c
+                for c in self._pending.values()
+                if c.status == PendingStatus.PENDING.value
+            ]
 
-    def get_due_changes(self) -> List[PendingConfigChange]:
+    def get_due_changes(self) -> list[PendingConfigChange]:
         """Get all changes that are due to be applied."""
         with self._lock:
             now = datetime.now(timezone.utc)
@@ -214,8 +226,8 @@ class PendingConfigService:
     def cancel_pending_change(
         self,
         change_id: str,
-        cancelled_by: Optional[str] = None,
-    ) -> Optional[PendingConfigChange]:
+        cancelled_by: str | None = None,
+    ) -> PendingConfigChange | None:
         """
         Cancel a pending change.
 
@@ -232,7 +244,9 @@ class PendingConfigService:
                 return None
 
             if change.status != PendingStatus.PENDING.value:
-                logger.warning(f"[PendingConfig] Cannot cancel {change_id}: status is {change.status}")
+                logger.warning(
+                    f"[PendingConfig] Cannot cancel {change_id}: status is {change.status}"
+                )
                 return None
 
             change.status = PendingStatus.CANCELLED.value
@@ -263,7 +277,7 @@ class PendingConfigService:
     def mark_applied(
         self,
         change_id: str,
-    ) -> Optional[PendingConfigChange]:
+    ) -> PendingConfigChange | None:
         """Mark a pending change as applied."""
         with self._lock:
             change = self._pending.get(change_id)
@@ -283,7 +297,7 @@ class PendingConfigService:
         self,
         change_id: str,
         error_message: str,
-    ) -> Optional[PendingConfigChange]:
+    ) -> PendingConfigChange | None:
         """Mark a pending change as failed."""
         with self._lock:
             change = self._pending.get(change_id)
@@ -296,14 +310,16 @@ class PendingConfigService:
             self._move_to_history(change)
             self._save_state()
 
-            logger.error(f"[PendingConfig] Failed to apply {change_id}: {error_message}")
+            logger.error(
+                f"[PendingConfig] Failed to apply {change_id}: {error_message}"
+            )
             return change
 
     def get_history(
         self,
-        config_type: Optional[str] = None,
+        config_type: str | None = None,
         limit: int = 50,
-    ) -> List[PendingConfigChange]:
+    ) -> list[PendingConfigChange]:
         """Get change history."""
         with self._lock:
             history = self._history
@@ -334,7 +350,9 @@ class PendingConfigService:
 
             if expired:
                 self._save_state()
-                logger.info(f"[PendingConfig] Cleaned up {len(expired)} expired changes")
+                logger.info(
+                    f"[PendingConfig] Cleaned up {len(expired)} expired changes"
+                )
 
             return len(expired)
 

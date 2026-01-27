@@ -17,7 +17,7 @@ Reference:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -72,7 +72,7 @@ class SLOSettings(BaseSettings):
 
     # SLO definitions list (runtime dynamically managed)
     # Each item is a dict serialized from SLODefinition
-    slos: List[Dict[str, Any]] = Field(
+    slos: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of SLO definitions",
     )
@@ -90,7 +90,7 @@ class SLOSettings(BaseSettings):
 
 
 # Singleton instance (cached)
-_settings: Optional[SLOSettings] = None
+_settings: SLOSettings | None = None
 
 
 def get_slo_settings() -> SLOSettings:

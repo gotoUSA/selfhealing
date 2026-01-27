@@ -32,19 +32,18 @@ Configuration via environment variables:
 import json
 import logging
 import os
-import traceback
+from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
-from celery import current_app
 from celery.signals import (
-    task_failure,
-    task_success,
-    task_retry,
-    task_prerun,
-    task_postrun,
     before_task_publish,
+    task_failure,
+    task_postrun,
+    task_prerun,
+    task_retry,
+    task_success,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,7 +67,7 @@ def _get_int_env(key: str, default: int) -> int:
         return default
 
 
-def _get_task_domain_mapping() -> Dict[str, str]:
+def _get_task_domain_mapping() -> dict[str, str]:
     """Get task name to domain mapping from environment."""
     mapping_str = os.environ.get("SELFHEALING_TASK_DOMAIN_MAPPING", "{}")
     try:
@@ -100,7 +99,7 @@ class SignalHooksConfig:
         self.task_domain_mapping = _get_task_domain_mapping()
 
         # Excluded tasks (never process these)
-        self.excluded_tasks: Set[str] = {
+        self.excluded_tasks: set[str] = {
             "celery.backend_cleanup",
             "celery.chord_unlock",
             "selfhealing.adapters.celery.tasks.check_circuit_breaker_recovery",
@@ -173,7 +172,7 @@ def _extract_domain_from_task_name(task_name: str) -> str:
     return "unknown"
 
 
-def _extract_service_name(task_name: str, exception: Optional[Exception] = None) -> str:
+def _extract_service_name(task_name: str, exception: Exception | None = None) -> str:
     """
     Extract service name for circuit breaker tracking.
 
@@ -212,7 +211,7 @@ def _should_store_to_dlq(sender) -> bool:
     request = sender.request if sender else None
     retries = getattr(request, "retries", 0) if request else 0
     max_retries = getattr(sender, "max_retries", None) if sender else None
-    
+
     # Store to DLQ if:
     # 1. max_retries is None or 0 (no retry configured)
     # 2. retries >= max_retries (all retries exhausted)
@@ -220,8 +219,12 @@ def _should_store_to_dlq(sender) -> bool:
 
 
 def _handle_task_failure_internal(
-    sender, task_id: str, exception: Exception,
-    args: tuple, kwargs: dict, einfo: Any,
+    sender,
+    task_id: str,
+    exception: Exception,
+    args: tuple,
+    kwargs: dict,
+    einfo: Any,
 ) -> None:
     """Internal handler for task failure - separated for complexity reduction."""
     task_name = sender.name if sender else "unknown"
@@ -386,10 +389,10 @@ def on_before_task_publish(
 ):
     """
     Celery Task 발행 전 Causation Context 헤더 자동 주입.
-    
+
     현재 CausationContext가 설정되어 있으면 Celery 메시지 헤더에
     cascade_id, parent_event_id, chain_depth, namespace를 자동 추가합니다.
-    
+
     이를 통해:
     - API 요청 → Celery Task 인과관계 자동 연결
     - 개발자가 수동으로 headers=get_causation_for_celery() 호출 불필요
@@ -397,50 +400,44 @@ def on_before_task_publish(
     """
     if not _config.enabled:
         return
-    
+
     try:
         from selfhealing.context.causation_context import (
-            CausationContext,
             CELERY_HEADER_CASCADE_ID,
-            CELERY_HEADER_PARENT_EVENT,
             CELERY_HEADER_CHAIN_DEPTH,
             CELERY_HEADER_NAMESPACE,
+            CELERY_HEADER_PARENT_EVENT,
+            CausationContext,
         )
-        
+
         # 현재 CausationContext 확인
         if not CausationContext.is_set():
             return
-        
+
         info = CausationContext.get_current()
         if not info:
             return
-        
+
         # headers 딕셔너리가 없으면 생략 (발행 시점에 headers 설정 불가)
         if headers is None:
-            logger.debug(
-                "[SelfHealing Signal] before_task_publish: headers is None, "
-                "cannot inject causation context"
-            )
+            logger.debug("[SelfHealing Signal] before_task_publish: headers is None, " "cannot inject causation context")
             return
-        
+
         # 이미 causation 헤더가 있으면 덮어쓰지 않음 (명시적 설정 우선)
         if headers.get(CELERY_HEADER_CASCADE_ID):
-            logger.debug(
-                "[SelfHealing Signal] Causation headers already present, skipping auto-injection"
-            )
+            logger.debug("[SelfHealing Signal] Causation headers already present, skipping auto-injection")
             return
-        
+
         # Causation 헤더 주입
         headers[CELERY_HEADER_CASCADE_ID] = info.cascade_id
         headers[CELERY_HEADER_PARENT_EVENT] = info.parent_event_id
         headers[CELERY_HEADER_CHAIN_DEPTH] = str(info.chain_depth)
         headers[CELERY_HEADER_NAMESPACE] = info.namespace
-        
+
         logger.debug(
-            f"[SelfHealing Signal] Causation headers injected: "
-            f"cascade={info.cascade_id}, depth={info.chain_depth}"
+            f"[SelfHealing Signal] Causation headers injected: " f"cascade={info.cascade_id}, depth={info.chain_depth}"
         )
-        
+
     except ImportError:
         # causation_context 모듈 없음 - 생략
         pass
@@ -461,32 +458,33 @@ _CAUSATION_TOKEN_ATTR = "_selfhealing_causation_token"
 def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
     """
     Celery Task 시작 시 Causation Context 자동 복원 또는 시스템 Cascade 생성.
-    
+
     task.request.headers에서 causation 정보를 추출하여 CausationContext를 설정합니다.
     헤더가 없는 경우 (Celery Beat, 독립 실행 등) 시스템 Cascade를 자동 생성합니다.
     """
     try:
+        import uuid
+        from datetime import datetime, timezone
+
         from selfhealing.context.causation_context import (
-            CausationInfo,
-            CausationContext,
-            _current_causation,
             CELERY_HEADER_CASCADE_ID,
-            CELERY_HEADER_PARENT_EVENT,
             CELERY_HEADER_CHAIN_DEPTH,
             CELERY_HEADER_NAMESPACE,
+            CELERY_HEADER_PARENT_EVENT,
+            CausationContext,
+            CausationInfo,
+            _current_causation,
         )
-        from datetime import datetime, timezone
-        import uuid
-        
+
         request = sender.request if sender else None
         if not request:
             return
-        
+
         headers = getattr(request, "headers", None) or {}
-        
+
         # Causation 헤더 추출
         cascade_id = headers.get(CELERY_HEADER_CASCADE_ID)
-        
+
         if cascade_id:
             # 헤더에서 복원 (API 요청에서 전파된 경우)
             info = CausationInfo(
@@ -510,7 +508,7 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
             source = _detect_causation_source(task_name)
             system_event_id = f"SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
             new_cascade_id = f"cascade-{uuid.uuid4().hex[:12]}"
-            
+
             info = CausationInfo(
                 cascade_id=new_cascade_id,
                 parent_event_id=system_event_id,
@@ -528,13 +526,13 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
                 f"[SelfHealing Signal] System causation context created: "
                 f"source={source}, cascade={new_cascade_id}, task={task_name}"
             )
-        
+
         # ContextVar에 설정 (token 저장)
         token = _current_causation.set(info)
-        
+
         # token을 task.request에 저장 (postrun에서 정리용)
         setattr(request, _CAUSATION_TOKEN_ATTR, token)
-        
+
     except ImportError:
         # causation_context 모듈 없음 - 생략
         pass
@@ -545,24 +543,24 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
 def _detect_causation_source(task_name: str) -> str:
     """
     Task 이름에서 causation source 유형 추론.
-    
+
     Returns:
         source 문자열 (celery_beat, management_cmd, scheduler, worker)
     """
     task_name_lower = task_name.lower()
-    
+
     # 스케줄러 관련 패턴
     if any(pattern in task_name_lower for pattern in ["beat", "schedule", "periodic"]):
         return "celery_beat"
-    
+
     # 관리 명령 관련 패턴
     if any(pattern in task_name_lower for pattern in ["manage", "command", "admin"]):
         return "management_cmd"
-    
+
     # 크론/스케줄러 패턴
     if any(pattern in task_name_lower for pattern in ["cron", "cleanup", "expire"]):
         return "scheduler"
-    
+
     # 기본값
     return "worker"
 
@@ -570,26 +568,26 @@ def _detect_causation_source(task_name: str) -> str:
 def _cleanup_causation_context(sender: Any) -> None:
     """
     Celery Task 종료 시 Causation Context 정리.
-    
+
     Worker 재사용 시 이전 Task의 causation 컨텍스트 잔존 방지.
-    
+
     Code reference:
         audit/trace.py#L333-340 (clear_celery_context 패턴)
     """
     try:
         from selfhealing.context.causation_context import _current_causation
-        
+
         request = sender.request if sender else None
         if not request:
             return
-        
+
         token = getattr(request, _CAUSATION_TOKEN_ATTR, None)
-        
+
         if token:
             _current_causation.reset(token)
             delattr(request, _CAUSATION_TOKEN_ATTR)
             logger.debug("[SelfHealing Signal] Causation context cleaned up")
-    
+
     except ImportError:
         pass
     except Exception as e:
@@ -612,13 +610,13 @@ def on_task_prerun(
 ):
     """
     Celery Task 시작 전 TraceContext 자동 주입.
-    
+
     모든 Celery Task에 자동으로 trace_id를 주입합니다.
-    
+
     동작:
     1. kwargs에 trace_info가 있으면 HTTP에서 전파된 것으로 간주 → 원본 trace_id 사용
     2. 없으면 CELERY_{task_id} 형식으로 생성
-    
+
     이를 통해:
     - 개발자가 수동으로 trace_id 설정 불필요
     - 모든 Audit 로그에 자동으로 Celery Task ID 포함
@@ -626,23 +624,22 @@ def on_task_prerun(
     """
     if not _config.enabled:
         return
-    
+
     task_name = sender.name if sender else "unknown"
-    
+
     # Skip excluded tasks
     if task_name in _config.excluded_tasks:
         return
-    
+
     try:
         from selfhealing.audit.trace import (
             generate_celery_trace_id,
-            set_celery_context,
             set_trace_id,
         )
-        
+
         # HTTP에서 전파된 trace_info 확인
         trace_info = kwargs.get("trace_info") if kwargs else None
-        
+
         if trace_info and trace_info.get("trace_id"):
             # HTTP 요청에서 전파된 trace_id 사용
             trace_id = trace_info["trace_id"]
@@ -651,28 +648,26 @@ def on_task_prerun(
             # Celery Task ID 기반 trace_id 생성
             trace_id = generate_celery_trace_id(task_id)
             set_trace_id(trace_id)
-        
+
         # 재시도 횟수 추출
         request = sender.request if sender else None
         retries = getattr(request, "retries", 0) if request else 0
-        
+
         # Celery 컨텍스트 설정 (trace_id는 이미 위에서 설정됨)
         from selfhealing.audit.trace import _celery_context_var
+
         context = {
             "task_id": task_id,
             "task_name": task_name,
             "retries": retries,
         }
         _celery_context_var.set(context)
-        
+
         # Phase 6: Causation Context 자동 복원
         _setup_causation_context(sender, task_id, task_name)
-        
-        logger.debug(
-            f"[SelfHealing Signal] Task prerun: {task_name}, "
-            f"task_id={task_id}, trace_id={trace_id}"
-        )
-        
+
+        logger.debug(f"[SelfHealing Signal] Task prerun: {task_name}, " f"task_id={task_id}, trace_id={trace_id}")
+
     except Exception as e:
         # Never let signal handler crash affect task execution
         logger.error(f"[SelfHealing Signal] Error in prerun handler: {e}")
@@ -691,30 +686,27 @@ def on_task_postrun(
 ):
     """
     Celery Task 완료 후 TraceContext 정리.
-    
+
     Worker 재사용 시 이전 Task의 trace_id/celery_context 잔존 방지.
     """
     if not _config.enabled:
         return
-    
+
     task_name = sender.name if sender else "unknown"
-    
+
     if task_name in _config.excluded_tasks:
         return
-    
+
     try:
         from selfhealing.audit.trace import clear_celery_context
-        
+
         clear_celery_context()
-        
+
         # Phase 6: Causation Context 정리
         _cleanup_causation_context(sender)
-        
-        logger.debug(
-            f"[SelfHealing Signal] Task postrun: {task_name}, "
-            f"task_id={task_id}, state={state}"
-        )
-        
+
+        logger.debug(f"[SelfHealing Signal] Task postrun: {task_name}, " f"task_id={task_id}, state={state}")
+
     except Exception as e:
         logger.error(f"[SelfHealing Signal] Error in postrun handler: {e}")
 
@@ -767,7 +759,9 @@ def _record_circuit_breaker_success(service_name: str, task_name: str):
 def _trigger_conditional_replay(service_name: str):
     """Trigger conditional replay when circuit closes."""
     try:
-        from selfhealing.adapters.celery.tasks import conditional_replay_on_circuit_close
+        from selfhealing.adapters.celery.tasks import (
+            conditional_replay_on_circuit_close,
+        )
 
         # Enqueue replay task
         conditional_replay_on_circuit_close.delay(service_name=service_name, max_items=50)
@@ -901,7 +895,7 @@ def _classify_failure_type(exception: Exception) -> str:
     return "UNKNOWN_ERROR"
 
 
-def _extract_entity_refs(kwargs: Optional[dict]) -> Dict[str, str]:
+def _extract_entity_refs(kwargs: dict | None) -> dict[str, str]:
     """
     Extract entity references from task kwargs.
 
@@ -1055,13 +1049,13 @@ def _capture_forensic_context(
 
 
 def setup_selfhealing_signals(
-    enabled: Optional[bool] = None,
-    cb_enabled: Optional[bool] = None,
-    dlq_enabled: Optional[bool] = None,
-    metrics_enabled: Optional[bool] = None,
-    forensics_enabled: Optional[bool] = None,
-    excluded_tasks: Optional[List[str]] = None,
-    task_domain_mapping: Optional[Dict[str, str]] = None,
+    enabled: bool | None = None,
+    cb_enabled: bool | None = None,
+    dlq_enabled: bool | None = None,
+    metrics_enabled: bool | None = None,
+    forensics_enabled: bool | None = None,
+    excluded_tasks: list[str] | None = None,
+    task_domain_mapping: dict[str, str] | None = None,
 ):
     """
     Setup self-healing signal hooks for Celery.
@@ -1144,7 +1138,7 @@ def disconnect_selfhealing_signals():
         task_failure.disconnect(on_task_failure)
         task_success.disconnect(on_task_success)
         task_retry.disconnect(on_task_retry)
-        task_prerun.disconnect(on_task_prerun)    # trace_id 자동 주입
+        task_prerun.disconnect(on_task_prerun)  # trace_id 자동 주입
         task_postrun.disconnect(on_task_postrun)  # trace_id 정리
         before_task_publish.disconnect(on_before_task_publish)  # causation 자동 전파
         _signals_connected = False
@@ -1164,8 +1158,8 @@ def is_signals_connected() -> bool:
 
 
 def selfhealing_task(
-    domain: Optional[str] = None,
-    service_name: Optional[str] = None,
+    domain: str | None = None,
+    service_name: str | None = None,
     track_cb: bool = True,
     track_dlq: bool = True,
 ):

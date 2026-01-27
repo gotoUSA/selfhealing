@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 
-from selfhealing.settings import get_security_settings
 from selfhealing.services.security.policies import ActionPolicy
+from selfhealing.settings import get_security_settings
 
 
 @dataclass
@@ -34,12 +33,12 @@ class ProtectionResult:
     rollback_success: bool = True
     error_message: str = ""
     # v2.2.0: Tracing Deep Link
-    triggering_trace_id: Optional[str] = None
+    triggering_trace_id: str | None = None
     """보호 조치를 유발한 원본 요청의 trace_id (Jaeger/Zipkin 연동용)."""
-    triggering_request_path: Optional[str] = None
+    triggering_request_path: str | None = None
     """보호 조치를 유발한 원본 요청 경로 (예: POST /api/payments/)."""
 
-    def get_trace_url(self, template: str = "") -> Optional[str]:
+    def get_trace_url(self, template: str = "") -> str | None:
         """
         Trace UI Deep Link 생성.
 
@@ -74,7 +73,7 @@ class SecurityViolationResult:
         incident_id: int,
         action: str,
         protection_result: ProtectionResult | None = None,
-    ) -> "SecurityViolationResult":
+    ) -> SecurityViolationResult:
         """Factory for successfully handled violation."""
         return cls(
             success=True,
@@ -84,7 +83,7 @@ class SecurityViolationResult:
         )
 
     @classmethod
-    def failed(cls, error: str) -> "SecurityViolationResult":
+    def failed(cls, error: str) -> SecurityViolationResult:
         """Factory for failed handling."""
         return cls(success=False, error=error)
 
@@ -113,7 +112,7 @@ class SecurityConfig:
     banned_ip_cache_prefix: str = "security:banned_ip:"
 
     @classmethod
-    def from_settings(cls) -> "SecurityConfig":
+    def from_settings(cls) -> SecurityConfig:
         """Load configuration from settings."""
         security = get_security_settings()
         return cls(

@@ -29,9 +29,9 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any
 
-from selfhealing.settings import get_layered_settings, NotificationChannelSettings
+from selfhealing.settings import NotificationChannelSettings, get_layered_settings
 
 logger = logging.getLogger(__name__)
 
@@ -86,21 +86,21 @@ class NotificationPayload:
 
     # Source information
     source: str = "unknown"  # e.g., "drift_detection", "circuit_breaker"
-    task_name: Optional[str] = None
-    task_id: Optional[str] = None
+    task_name: str | None = None
+    task_id: str | None = None
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Routing hints (can be overridden by manager)
-    channels: Optional[List[str]] = None
+    channels: list[str] | None = None
 
     # Deduplication
-    dedup_key: Optional[str] = None  # If set, used for cooldown dedup
+    dedup_key: str | None = None  # If set, used for cooldown dedup
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "title": self.title,
@@ -123,13 +123,13 @@ class NotificationResult:
     """Result of notification attempt."""
 
     success: bool
-    channels_sent: List[str] = field(default_factory=list)
-    channels_failed: List[str] = field(default_factory=list)
+    channels_sent: list[str] = field(default_factory=list)
+    channels_failed: list[str] = field(default_factory=list)
     suppressed: bool = False
-    suppression_reason: Optional[str] = None
-    error: Optional[str] = None
+    suppression_reason: str | None = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "success": self.success,
@@ -157,7 +157,7 @@ class RoutingPolicy:
     """
 
     # Channel mapping by priority
-    priority_channels: Dict[NotificationPriority, List[str]] = field(
+    priority_channels: dict[NotificationPriority, list[str]] = field(
         default_factory=lambda: {
             NotificationPriority.CRITICAL: ["slack", "email", "sms", "pagerduty"],
             NotificationPriority.HIGH: ["slack", "email"],
@@ -168,7 +168,7 @@ class RoutingPolicy:
     )
 
     # Category-specific channel overrides
-    category_channels: Dict[NotificationCategory, List[str]] = field(
+    category_channels: dict[NotificationCategory, list[str]] = field(
         default_factory=lambda: {
             NotificationCategory.SECURITY: ["slack", "email"],
             NotificationCategory.APPROVAL: ["slack", "email"],
@@ -177,7 +177,7 @@ class RoutingPolicy:
     )
 
     # Cooldown settings (seconds) by category
-    cooldown_seconds: Dict[NotificationCategory, int] = field(
+    cooldown_seconds: dict[NotificationCategory, int] = field(
         default_factory=lambda: {
             NotificationCategory.SECURITY: 60,  # 1 min
             NotificationCategory.OPERATIONS: _get_notification_channel_settings().cooldown_seconds,
@@ -192,7 +192,7 @@ class RoutingPolicy:
     )
 
     @classmethod
-    def from_settings(cls) -> "RoutingPolicy":
+    def from_settings(cls) -> RoutingPolicy:
         """
         LayeredSettings에서 라우팅 정책 생성.
 
@@ -219,7 +219,7 @@ class RoutingPolicy:
         self,
         priority: NotificationPriority,
         category: NotificationCategory,
-    ) -> List[str]:
+    ) -> list[str]:
         """Get channels for a notification based on priority and category."""
         # Category override takes precedence for specific categories
         if category in self.category_channels:
@@ -267,10 +267,10 @@ class UnifiedNotificationManager:
         ))
     """
 
-    def __init__(self, policy: Optional[RoutingPolicy] = None):
+    def __init__(self, policy: RoutingPolicy | None = None):
         self._policy = policy or RoutingPolicy()
-        self._cooldown_cache: Dict[str, datetime] = {}
-        self._notification_counts: Dict[str, int] = {}
+        self._cooldown_cache: dict[str, datetime] = {}
+        self._notification_counts: dict[str, int] = {}
 
     def notify(self, payload: NotificationPayload) -> NotificationResult:
         """
@@ -290,12 +290,19 @@ class UnifiedNotificationManager:
         effective_priority = self._get_effective_priority(payload)
 
         # 3. Determine channels
-        channels = payload.channels or self._policy.get_channels(effective_priority, payload.category)
+        channels = payload.channels or self._policy.get_channels(
+            effective_priority, payload.category
+        )
 
         if not channels:
             # Log only
-            logger.info(f"[UnifiedNotification] {payload.category.value}: " f"{payload.title} - {payload.message}")
-            return NotificationResult(success=True, suppressed=True, suppression_reason="log_only")
+            logger.info(
+                f"[UnifiedNotification] {payload.category.value}: "
+                f"{payload.title} - {payload.message}"
+            )
+            return NotificationResult(
+                success=True, suppressed=True, suppression_reason="log_only"
+            )
 
         # 4. Send to each channel
         result = self._send_to_channels(payload, channels, effective_priority)
@@ -339,7 +346,9 @@ class UnifiedNotificationManager:
         dedup_key = payload.dedup_key or f"{payload.source}:{payload.category.value}"
         self._cooldown_cache[dedup_key] = datetime.now(timezone.utc)
 
-    def _get_effective_priority(self, payload: NotificationPayload) -> NotificationPriority:
+    def _get_effective_priority(
+        self, payload: NotificationPayload
+    ) -> NotificationPriority:
         """
         Get effective priority considering emergency level.
 
@@ -387,7 +396,7 @@ class UnifiedNotificationManager:
     def _send_to_channels(
         self,
         payload: NotificationPayload,
-        channels: List[str],
+        channels: list[str],
         priority: NotificationPriority,
     ) -> NotificationResult:
         """Send notification to specified channels."""
@@ -430,7 +439,9 @@ class UnifiedNotificationManager:
 
         return result
 
-    def _record_audit(self, payload: NotificationPayload, result: NotificationResult) -> None:
+    def _record_audit(
+        self, payload: NotificationPayload, result: NotificationResult
+    ) -> None:
         """Record notification in audit trail."""
         try:
             from selfhealing.audit import get_audit_logger
@@ -439,7 +450,8 @@ class UnifiedNotificationManager:
             audit_logger.log_event(
                 event_type="notification_sent",
                 entity_type="notification",
-                entity_id=payload.dedup_key or f"{payload.source}:{payload.timestamp.timestamp()}",
+                entity_id=payload.dedup_key
+                or f"{payload.source}:{payload.timestamp.timestamp()}",
                 action="send",
                 details={
                     "title": payload.title,
@@ -477,7 +489,7 @@ class UnifiedNotificationManager:
         """Reset all cooldowns (for testing)."""
         self._cooldown_cache.clear()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get notification statistics."""
         return {
             "cooldown_entries": len(self._cooldown_cache),
@@ -489,7 +501,7 @@ class UnifiedNotificationManager:
 # Module-level Singleton
 # =============================================================================
 
-_manager: Optional[UnifiedNotificationManager] = None
+_manager: UnifiedNotificationManager | None = None
 
 
 def get_unified_notification_manager() -> UnifiedNotificationManager:
@@ -644,7 +656,7 @@ def notify_error(
 def format_cb_slack_blocks(
     payload: NotificationPayload,
     priority: NotificationPriority,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
         Circuit Breaker 알림용 Slack Block Kit 메시지 포맷.
 
@@ -789,7 +801,7 @@ def format_cb_slack_blocks(
     return {"blocks": blocks}
 
 
-def format_cb_notification_with_actions(payload: NotificationPayload) -> Dict[str, Any]:
+def format_cb_notification_with_actions(payload: NotificationPayload) -> dict[str, Any]:
     """
     Circuit Breaker 알림을 Actionable Alert 형식으로 포맷.
 
@@ -810,9 +822,16 @@ def format_cb_notification_with_actions(payload: NotificationPayload) -> Dict[st
 
         # Emergency Level에 따른 우선순위 조정
         priority = payload.priority
-        if level >= 3 and priority in (NotificationPriority.LOW, NotificationPriority.INFO, NotificationPriority.MEDIUM):
+        if level >= 3 and priority in (
+            NotificationPriority.LOW,
+            NotificationPriority.INFO,
+            NotificationPriority.MEDIUM,
+        ):
             priority = NotificationPriority.HIGH
-        elif level >= 2 and priority in (NotificationPriority.LOW, NotificationPriority.INFO):
+        elif level >= 2 and priority in (
+            NotificationPriority.LOW,
+            NotificationPriority.INFO,
+        ):
             priority = NotificationPriority.MEDIUM
 
     except ImportError:

@@ -31,8 +31,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -157,7 +158,7 @@ class SelfHealingMiddleware:
             f"Domains={len(cls.DOMAIN_MAPPING)}"
         )
 
-    def __call__(self, request: "HttpRequest") -> "HttpResponse":
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         """Process request/response with self-healing logic."""
         from django.http import JsonResponse
 
@@ -186,7 +187,11 @@ class SelfHealingMiddleware:
 
             self._log_audit_event(
                 "preemptive_dlq_stored",
-                {"dlq_id": dlq_id, "reason": "circuit_breaker_open", "path": request.path},
+                {
+                    "dlq_id": dlq_id,
+                    "reason": "circuit_breaker_open",
+                    "path": request.path,
+                },
                 request=request,
             )
 
@@ -211,7 +216,9 @@ class SelfHealingMiddleware:
         except Exception as e:
             error_type = type(e).__name__
 
-            if error_type in self.MONITORED_DB_ERRORS or self._is_db_connection_error(e):
+            if error_type in self.MONITORED_DB_ERRORS or self._is_db_connection_error(
+                e
+            ):
                 db_error_context = {
                     "error_type": error_type,
                     "error_message": str(e),
@@ -280,7 +287,7 @@ class SelfHealingMiddleware:
         ]
         return any(keyword in error_str for keyword in db_error_keywords)
 
-    def _capture_request_data(self, request: "HttpRequest") -> Dict[str, Any]:
+    def _capture_request_data(self, request: HttpRequest) -> dict[str, Any]:
         """Capture request data for DLQ storage."""
         try:
             body = {}
@@ -312,7 +319,7 @@ class SelfHealingMiddleware:
             logger.warning(f"[SelfHealingMiddleware] Request capture failed: {e}")
             return {"path": getattr(request, "path", "unknown"), "error": str(e)}
 
-    def _is_dlq_eligible(self, request: "HttpRequest") -> bool:
+    def _is_dlq_eligible(self, request: HttpRequest) -> bool:
         """Check if request is eligible for DLQ storage."""
         if request.method not in ("POST", "PUT", "PATCH"):
             return False
@@ -323,7 +330,7 @@ class SelfHealingMiddleware:
 
         return False
 
-    def _is_infrastructure_failure_path(self, request: "HttpRequest") -> bool:
+    def _is_infrastructure_failure_path(self, request: HttpRequest) -> bool:
         """Check if request path is an infrastructure failure path."""
         for pattern in self.INFRASTRUCTURE_FAILURE_PATHS:
             if pattern.match(request.path):
@@ -342,7 +349,9 @@ class SelfHealingMiddleware:
                     return True
 
             try:
-                from selfhealing.api.django.pool_circuit_breaker import pool_circuit_breaker
+                from selfhealing.api.django.pool_circuit_breaker import (
+                    pool_circuit_breaker,
+                )
 
                 pool_state = pool_circuit_breaker.state
                 if pool_state in ("OPEN", "HALF_OPEN"):
@@ -359,8 +368,8 @@ class SelfHealingMiddleware:
 
     def _record_cb_failure(
         self,
-        error_context: Dict[str, Any],
-        request: Optional["HttpRequest"] = None,
+        error_context: dict[str, Any],
+        request: HttpRequest | None = None,
     ) -> None:
         """Record failure to CircuitBreaker."""
         try:
@@ -404,10 +413,10 @@ class SelfHealingMiddleware:
 
     def _store_to_dlq(
         self,
-        request_data: Dict[str, Any],
-        error_context: Dict[str, Any],
-        request: Optional["HttpRequest"] = None,
-    ) -> Optional[int]:
+        request_data: dict[str, Any],
+        error_context: dict[str, Any],
+        request: HttpRequest | None = None,
+    ) -> int | None:
         """Store failed request to DLQ."""
         try:
             from selfhealing.services.dlq_service import store_to_dlq
@@ -454,7 +463,9 @@ class SelfHealingMiddleware:
 
                 return result.dlq_id
             else:
-                logger.warning(f"[SelfHealingMiddleware] DLQ storage failed: {result.error}")
+                logger.warning(
+                    f"[SelfHealingMiddleware] DLQ storage failed: {result.error}"
+                )
                 return None
 
         except Exception as e:
@@ -471,21 +482,26 @@ class SelfHealingMiddleware:
     def _log_audit_event(
         self,
         event_type: str,
-        data: Dict[str, Any],
-        request: Optional["HttpRequest"] = None,
+        data: dict[str, Any],
+        request: HttpRequest | None = None,
     ) -> None:
         """Log event to audit system."""
         # === 버퍼 패턴 우선 ===
         if request is not None:
             try:
-                from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
+                from selfhealing.audit.event_buffer import (
+                    AuditEventType,
+                    RequestAuditBuffer,
+                )
 
                 event_type_map = {
                     "preemptive_dlq_stored": AuditEventType.DLQ_STORE,
                     "dlq_auto_stored": AuditEventType.DLQ_STORE,
                     "cb_failure_recorded": AuditEventType.CB_STATE_CHANGE,
                 }
-                audit_event_type = event_type_map.get(event_type, AuditEventType.ERROR_DETECTED)
+                audit_event_type = event_type_map.get(
+                    event_type, AuditEventType.ERROR_DETECTED
+                )
 
                 buffer = RequestAuditBuffer.get_or_create(request)
                 buffer.add(

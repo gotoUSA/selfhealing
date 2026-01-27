@@ -9,11 +9,11 @@ Available Adapters:
     - InMemoryCacheAdapter: In-memory caching for testing
 """
 
-from selfhealing.adapters.cache.redis_adapter import (
-    RedisCacheAdapter,
-)
 from selfhealing.adapters.cache.memory_adapter import (
     InMemoryCacheAdapter,
+)
+from selfhealing.adapters.cache.redis_adapter import (
+    RedisCacheAdapter,
 )
 
 __all__ = [

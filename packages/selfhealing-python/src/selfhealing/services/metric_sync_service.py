@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from selfhealing.adapters.metrics.factory import get_metric_adapter
 from selfhealing.metrics.reconciler import (
     MetricReconciler,
     get_reconciler,
 )
-from selfhealing.adapters.metrics.factory import get_metric_adapter
 
 if TYPE_CHECKING:
     from selfhealing.adapters.metrics.base import MetricSourceAdapter
@@ -50,19 +50,19 @@ class MetricSyncService:
 
     def __init__(
         self,
-        reconciler: Optional[MetricReconciler] = None,
-        adapter: Optional["MetricSourceAdapter"] = None,
+        reconciler: MetricReconciler | None = None,
+        adapter: MetricSourceAdapter | None = None,
     ):
         self.reconciler = reconciler or get_reconciler(adapter)
         self.adapter = adapter or get_metric_adapter()
 
     def sync_metrics(
         self,
-        domains: Optional[List[str]] = None,
+        domains: list[str] | None = None,
         dry_run: bool = False,
         actor: str = "unknown",
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """
         메트릭 동기화 수행.
 
@@ -119,7 +119,7 @@ class MetricSyncService:
             "summary": summary,
         }
 
-    def get_drift_report(self) -> Dict[str, Any]:
+    def get_drift_report(self) -> dict[str, Any]:
         """
         현재 Drift 상태 조회 (읽기 전용).
 
@@ -150,9 +150,11 @@ class MetricSyncService:
             "recommendation": recommendation,
         }
 
-    def _capture_current_state(self, domains: Optional[List[str]]) -> Dict[str, Dict[str, Any]]:
+    def _capture_current_state(
+        self, domains: list[str] | None
+    ) -> dict[str, dict[str, Any]]:
         """현재 인메모리(Gauge) 상태 캡처."""
-        result: Dict[str, Dict[str, Any]] = {
+        result: dict[str, dict[str, Any]] = {
             "dlq_pending": {},
             "circuit_breaker": {},
             "retry_rate": {},
@@ -181,9 +183,11 @@ class MetricSyncService:
 
         return result
 
-    def _get_actual_state(self, domains: Optional[List[str]]) -> Dict[str, Dict[str, Any]]:
+    def _get_actual_state(
+        self, domains: list[str] | None
+    ) -> dict[str, dict[str, Any]]:
         """DB에서 실제 상태 조회."""
-        result: Dict[str, Dict[str, Any]] = {
+        result: dict[str, dict[str, Any]] = {
             "dlq_pending": {},
             "circuit_breaker": {},
             "retry_rate": {},
@@ -193,20 +197,24 @@ class MetricSyncService:
 
         for domain in target_domains:
             try:
-                result["dlq_pending"][domain] = self.adapter.get_dlq_pending_count(domain)
+                result["dlq_pending"][domain] = self.adapter.get_dlq_pending_count(
+                    domain
+                )
             except Exception as e:
                 logger.warning(f"Failed to get DLQ pending for {domain}: {e}")
                 result["dlq_pending"][domain] = 0
 
             try:
-                result["retry_rate"][domain] = self.adapter.get_retry_success_rate(domain)
+                result["retry_rate"][domain] = self.adapter.get_retry_success_rate(
+                    domain
+                )
             except Exception as e:
                 logger.warning(f"Failed to get retry rate for {domain}: {e}")
                 result["retry_rate"][domain] = 0.0
 
         return result
 
-    def _get_all_domains(self) -> List[str]:
+    def _get_all_domains(self) -> list[str]:
         """등록된 모든 도메인 목록 반환."""
         try:
             from selfhealing.metrics.prometheus import get_domains
@@ -217,12 +225,12 @@ class MetricSyncService:
 
     def _build_results(
         self,
-        before: Dict[str, Dict[str, Any]],
-        after: Dict[str, Dict[str, Any]],
-        domains: Optional[List[str]],
-    ) -> Dict[str, Dict[str, Any]]:
+        before: dict[str, dict[str, Any]],
+        after: dict[str, dict[str, Any]],
+        domains: list[str] | None,
+    ) -> dict[str, dict[str, Any]]:
         """동기화 결과 빌드."""
-        results: Dict[str, Dict[str, Any]] = {}
+        results: dict[str, dict[str, Any]] = {}
         target_domains = domains or self._get_all_domains()
 
         for domain in target_domains:
@@ -239,7 +247,7 @@ class MetricSyncService:
 
         return results
 
-    def _calculate_summary(self, results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def _calculate_summary(self, results: dict[str, dict[str, Any]]) -> dict[str, Any]:
         """동기화 요약 계산."""
         total_drifts = 0
         max_drift_percent = 0.0
@@ -265,11 +273,11 @@ class MetricSyncService:
 
     def _calculate_drift_metrics(
         self,
-        in_memory: Dict[str, Dict[str, Any]],
-        actual: Dict[str, Dict[str, Any]],
-    ) -> Dict[str, Dict[str, Any]]:
+        in_memory: dict[str, dict[str, Any]],
+        actual: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
         """Drift 메트릭 계산."""
-        metrics: Dict[str, Dict[str, Any]] = {
+        metrics: dict[str, dict[str, Any]] = {
             "dlq_pending_count": {},
         }
 
@@ -296,7 +304,7 @@ class MetricSyncService:
 
         return metrics
 
-    def _get_max_drift_percent(self, metrics: Dict[str, Dict[str, Any]]) -> float:
+    def _get_max_drift_percent(self, metrics: dict[str, dict[str, Any]]) -> float:
         """최대 Drift 퍼센트 추출."""
         max_pct = 0.0
 
@@ -330,14 +338,18 @@ class MetricSyncService:
     def _log_sync_action(
         self,
         actor: str,
-        domains: Optional[List[str]],
+        domains: list[str] | None,
         dry_run: bool,
-        reason: Optional[str],
-        summary: Dict[str, Any],
+        reason: str | None,
+        summary: dict[str, Any],
     ) -> None:
         """Audit 로깅."""
         try:
-            from selfhealing.audit.logger import AuditLogger, ConfigChangeEvent, AuditAction
+            from selfhealing.audit.logger import (
+                AuditAction,
+                AuditLogger,
+                ConfigChangeEvent,
+            )
 
             audit_logger = AuditLogger.get_instance()
             event = ConfigChangeEvent(
@@ -370,7 +382,7 @@ class MetricSyncService:
 # =============================================================================
 
 
-_metric_sync_service: Optional[MetricSyncService] = None
+_metric_sync_service: MetricSyncService | None = None
 
 
 def get_metric_sync_service() -> MetricSyncService:

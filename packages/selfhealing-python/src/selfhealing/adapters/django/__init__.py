@@ -11,28 +11,29 @@ Provides:
 - DjangoStatisticsAdapter: Statistics adapter using Django ORM
 """
 
-from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
 from selfhealing.adapters.django.apps import (
+    SELFHEALING_GROUPS,
     SelfHealingConfig,
     create_selfhealing_groups,
-    SELFHEALING_GROUPS,
 )
+from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
 
 
 # Lazy import for AbstractFailedOperation (requires Django)
 def get_abstract_failed_operation():
     """
     Get AbstractFailedOperation model class.
-    
+
     This is a lazy import to avoid Django dependency at module load time.
-    
+
     Returns:
         AbstractFailedOperation class
-        
+
     Raises:
         ImportError: If Django is not installed
     """
     from selfhealing.adapters.django.models import AbstractFailedOperation
+
     return AbstractFailedOperation
 
 

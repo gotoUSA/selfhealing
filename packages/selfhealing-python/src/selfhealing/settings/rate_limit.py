@@ -19,7 +19,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -137,7 +136,7 @@ class RateLimitSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[RateLimitSettings] = None
+_settings: RateLimitSettings | None = None
 
 
 def get_rate_limit_settings() -> RateLimitSettings:

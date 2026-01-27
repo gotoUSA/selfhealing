@@ -15,14 +15,14 @@ Usage:
         WeightedBudgetAuditEntry,
         WeightedAuditRecorder,
     )
-    
+
     entry = WeightedBudgetAuditEntry(
         raw_consumption_minutes=1.0,
         weighted_consumption_minutes=5.0,
         level_multiplier=5.0,
         emergency_id="emg_123",
     )
-    
+
     recorder = WeightedAuditRecorder()
     recorder.record(entry)
 
@@ -36,10 +36,9 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from selfhealing.core.timezone import now as utc_now
-
 
 logger = logging.getLogger(__name__)
 
@@ -48,77 +47,78 @@ logger = logging.getLogger(__name__)
 # Weighted Budget Audit Entry
 # =============================================================================
 
+
 @dataclass
 class WeightedBudgetAuditEntry:
     """
     가중치 적용된 버짓 소진 감사 로그.
-    
+
     버짓 소진 시 적용된 가중치와 그 근거를 기록하여
     Hash Chain에 포함시킵니다.
-    
+
     Features:
     - 적용된 가중치 값 기록
     - 근거가 된 Emergency ID 기록
     - 도메인 가중치 정보 포함
     - Hash Chain 통합
-    
+
     Reference:
         docs/self_healing/middleware_system/75_CRISIS_BUDGET_MULTIPLIER.md §8.6
     """
-    
+
     # 식별자
     audit_id: str = field(default_factory=lambda: f"wba_{uuid.uuid4().hex[:12]}")
     """감사 로그 ID."""
-    
+
     # 시간 정보
     recorded_at: datetime = field(default_factory=utc_now)
     """기록 시각."""
-    
+
     # 버짓 정보
     raw_consumption_minutes: float = 0.0
     """원시 소진량 (분)."""
-    
+
     weighted_consumption_minutes: float = 0.0
     """가중치 적용된 소진량 (분)."""
-    
+
     # 가중치 근거
     level_multiplier: float = 1.0
     """Emergency Level 기반 가중치."""
-    
+
     domain_multiplier: float = 1.0
     """도메인 기반 가중치."""
-    
+
     final_multiplier: float = 1.0
     """최종 적용 가중치."""
-    
+
     # Emergency 근거
-    emergency_id: Optional[str] = None
+    emergency_id: str | None = None
     """관련 Emergency ID."""
-    
-    emergency_level: Optional[str] = None
+
+    emergency_level: str | None = None
     """당시 Emergency Level."""
-    
+
     # 도메인 정보
-    crisis_domain: Optional[str] = None
+    crisis_domain: str | None = None
     """장애 발생 도메인."""
-    
-    error_domain: Optional[str] = None
+
+    error_domain: str | None = None
     """에러 발생 도메인."""
-    
+
     hop_distance: int = 0
     """도메인 간 홉 거리."""
-    
+
     # 메타데이터
-    namespace: Optional[str] = None
+    namespace: str | None = None
     """네임스페이스."""
-    
-    service_name: Optional[str] = None
+
+    service_name: str | None = None
     """서비스 이름."""
-    
-    error_type: Optional[str] = None
+
+    error_type: str | None = None
     """에러 유형."""
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리 변환."""
         return {
             "audit_id": self.audit_id,
@@ -137,11 +137,11 @@ class WeightedBudgetAuditEntry:
             "service_name": self.service_name,
             "error_type": self.error_type,
         }
-    
-    def to_hash_chain_entry(self) -> Dict[str, Any]:
+
+    def to_hash_chain_entry(self) -> dict[str, Any]:
         """
         Hash Chain 엔트리 변환.
-        
+
         무결성 체인에 포함될 형식으로 변환합니다.
         """
         return {
@@ -170,14 +170,14 @@ class WeightedBudgetAuditEntry:
                 "error_type": self.error_type,
             },
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WeightedBudgetAuditEntry":
+    def from_dict(cls, data: dict[str, Any]) -> WeightedBudgetAuditEntry:
         """딕셔너리에서 생성."""
         recorded_at = data.get("recorded_at")
         if isinstance(recorded_at, str):
             recorded_at = datetime.fromisoformat(recorded_at)
-        
+
         return cls(
             audit_id=data.get("audit_id", f"wba_{uuid.uuid4().hex[:12]}"),
             recorded_at=recorded_at or utc_now(),
@@ -201,51 +201,53 @@ class WeightedBudgetAuditEntry:
 # Weighted Audit Recorder
 # =============================================================================
 
+
 class WeightedAuditRecorder:
     """
     가중치 감사 로그 기록기.
-    
+
     WeightedBudgetAuditEntry를 Hash Chain에 기록합니다.
-    
+
     Reference:
         docs/self_healing/middleware_system/75_CRISIS_BUDGET_MULTIPLIER.md §8.6
     """
-    
+
     def __init__(
         self,
-        hash_chain_manager: Optional[Any] = None,
+        hash_chain_manager: Any | None = None,
         enable_hash_chain: bool = True,
     ):
         """
         WeightedAuditRecorder 초기화.
-        
+
         Args:
             hash_chain_manager: Hash Chain 관리자 (None이면 lazy loading)
             enable_hash_chain: Hash Chain 기록 활성화 여부
         """
         self._hash_chain_manager = hash_chain_manager
         self._enable_hash_chain = enable_hash_chain
-        self._entries: List[WeightedBudgetAuditEntry] = []
-    
-    def _get_hash_chain_manager(self) -> Optional[Any]:
+        self._entries: list[WeightedBudgetAuditEntry] = []
+
+    def _get_hash_chain_manager(self) -> Any | None:
         """Hash Chain Manager 획득 (lazy loading)."""
         if self._hash_chain_manager is None:
             try:
                 from selfhealing.services.hash_chain import get_hash_chain_manager
+
                 self._hash_chain_manager = get_hash_chain_manager()
             except ImportError:
                 logger.debug("[WeightedAudit] Hash Chain Manager not available")
         return self._hash_chain_manager
-    
+
     def record(self, entry: WeightedBudgetAuditEntry) -> None:
         """
         감사 로그 기록.
-        
+
         Args:
             entry: 기록할 감사 로그
         """
         self._entries.append(entry)
-        
+
         logger.debug(
             f"[WeightedAudit] Recorded: "
             f"audit_id={entry.audit_id}, "
@@ -253,11 +255,11 @@ class WeightedAuditRecorder:
             f"weighted={entry.weighted_consumption_minutes:.2f}, "
             f"multiplier={entry.final_multiplier}x"
         )
-        
+
         # Hash Chain에 기록
         if self._enable_hash_chain:
             self._record_to_hash_chain(entry)
-    
+
     def _record_to_hash_chain(self, entry: WeightedBudgetAuditEntry) -> None:
         """Hash Chain에 기록."""
         manager = self._get_hash_chain_manager()
@@ -265,59 +267,57 @@ class WeightedAuditRecorder:
             try:
                 chain_entry = entry.to_hash_chain_entry()
                 manager.add_entry(chain_entry)
-                
+
                 logger.debug(
                     f"[WeightedAudit] Added to hash chain: "
                     f"audit_id={entry.audit_id}"
                 )
             except Exception as e:
-                logger.warning(
-                    f"[WeightedAudit] Failed to add to hash chain: {e}"
-                )
-    
+                logger.warning(f"[WeightedAudit] Failed to add to hash chain: {e}")
+
     def get_entries(
         self,
         limit: int = 100,
-        namespace: Optional[str] = None,
-    ) -> List[WeightedBudgetAuditEntry]:
+        namespace: str | None = None,
+    ) -> list[WeightedBudgetAuditEntry]:
         """
         기록된 감사 로그 조회.
-        
+
         Args:
             limit: 최대 조회 개수
             namespace: 네임스페이스 필터
-        
+
         Returns:
             감사 로그 목록 (최신순)
         """
         entries = self._entries
-        
+
         if namespace:
             entries = [e for e in entries if e.namespace == namespace]
-        
+
         # 최신순 정렬
         entries = sorted(entries, key=lambda e: e.recorded_at, reverse=True)
-        
+
         return entries[:limit]
-    
+
     def get_total_consumption(
         self,
-        namespace: Optional[str] = None,
-    ) -> Dict[str, float]:
+        namespace: str | None = None,
+    ) -> dict[str, float]:
         """
         총 소진량 통계 조회.
-        
+
         Args:
             namespace: 네임스페이스 필터
-        
+
         Returns:
             raw_total, weighted_total, average_multiplier
         """
         entries = self._entries
-        
+
         if namespace:
             entries = [e for e in entries if e.namespace == namespace]
-        
+
         if not entries:
             return {
                 "raw_total": 0.0,
@@ -325,11 +325,11 @@ class WeightedAuditRecorder:
                 "average_multiplier": 1.0,
                 "entry_count": 0,
             }
-        
+
         raw_total = sum(e.raw_consumption_minutes for e in entries)
         weighted_total = sum(e.weighted_consumption_minutes for e in entries)
         avg_multiplier = weighted_total / raw_total if raw_total > 0 else 1.0
-        
+
         return {
             "raw_total": raw_total,
             "weighted_total": weighted_total,
@@ -342,7 +342,7 @@ class WeightedAuditRecorder:
 # Singleton
 # =============================================================================
 
-_weighted_audit_recorder: Optional[WeightedAuditRecorder] = None
+_weighted_audit_recorder: WeightedAuditRecorder | None = None
 
 
 def get_weighted_audit_recorder() -> WeightedAuditRecorder:

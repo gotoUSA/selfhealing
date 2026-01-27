@@ -15,8 +15,9 @@ is done in the framework-specific adapter layer.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from selfhealing.core.timezone import now
 
@@ -31,11 +32,11 @@ logger = logging.getLogger(__name__)
 class FailedOperationQuerySet(Protocol):
     """Protocol for queryset-like objects."""
 
-    def filter(self, **kwargs) -> "FailedOperationQuerySet": ...
+    def filter(self, **kwargs) -> FailedOperationQuerySet: ...
 
     def count(self) -> int: ...
 
-    def order_by(self, *args) -> "FailedOperationQuerySet": ...
+    def order_by(self, *args) -> FailedOperationQuerySet: ...
 
     def __iter__(self): ...
 
@@ -131,18 +132,24 @@ class SLADriftDetector:
 
                 if domain_result["warning"]:
                     results["warnings"].append(domain_result["warning"])
-                    logger.warning(f"[SLA Drift] WARNING: {domain_result['warning']['message']}")
+                    logger.warning(
+                        f"[SLA Drift] WARNING: {domain_result['warning']['message']}"
+                    )
 
             if results["warnings"]:
                 self._send_drift_notifications(results["warnings"])
-                logger.warning(f"[SLA Drift] Completed with {len(results['warnings'])} warning(s)")
+                logger.warning(
+                    f"[SLA Drift] Completed with {len(results['warnings'])} warning(s)"
+                )
             else:
                 logger.info("[SLA Drift] Completed - No drift detected")
 
             return results
 
         except Exception as e:
-            logger.error(f"[SLA Drift] Error during drift detection: {e}", exc_info=True)
+            logger.error(
+                f"[SLA Drift] Error during drift detection: {e}", exc_info=True
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -153,7 +160,10 @@ class SLADriftDetector:
     def _get_analysis_window_hours() -> int:
         """Settings에서 analysis_window_hours 조회."""
         try:
-            from selfhealing.settings.drift_detection import get_drift_detection_settings
+            from selfhealing.settings.drift_detection import (
+                get_drift_detection_settings,
+            )
+
             return get_drift_detection_settings().analysis_window_hours
         except Exception:
             return 24  # 기본값
@@ -249,7 +259,10 @@ class SLADriftDetector:
                 "type": "SLA_BREACH_RATE_HIGH",
                 "domain": domain,
                 "severity": "critical" if breach_rate > 25 else "warning",
-                "message": (f"[{domain}] SLA 위반율이 {breach_rate:.1f}%입니다. " f"(임계값: 10%) 설정 검토가 필요합니다."),
+                "message": (
+                    f"[{domain}] SLA 위반율이 {breach_rate:.1f}%입니다. "
+                    f"(임계값: 10%) 설정 검토가 필요합니다."
+                ),
                 "metrics": metrics,
                 "recommendation": (
                     "현재 복구 속도로는 설정된 SLA를 달성하기 어렵습니다. "
@@ -268,7 +281,9 @@ class SLADriftDetector:
                 ),
                 "metrics": metrics,
                 "recommendation": (
-                    "SLA 위반 가능성이 높아지고 있습니다. " "사전 조치를 검토하세요. " "[ACTION REQUIRED: 운영자 검토 필요]"
+                    "SLA 위반 가능성이 높아지고 있습니다. "
+                    "사전 조치를 검토하세요. "
+                    "[ACTION REQUIRED: 운영자 검토 필요]"
                 ),
             }
         elif pending_at_risk > 5:
@@ -276,7 +291,10 @@ class SLADriftDetector:
                 "type": "PENDING_ITEMS_AT_RISK",
                 "domain": domain,
                 "severity": "warning",
-                "message": (f"[{domain}] {pending_at_risk}개 항목이 SLA 위반 위험에 있습니다. " f"(SLA 80% 이상 소진)"),
+                "message": (
+                    f"[{domain}] {pending_at_risk}개 항목이 SLA 위반 위험에 있습니다. "
+                    f"(SLA 80% 이상 소진)"
+                ),
                 "metrics": metrics,
                 "recommendation": (
                     "PENDING 상태의 항목 중 다수가 SLA 만료에 근접해 있습니다. "
@@ -366,7 +384,9 @@ class ChaosExperimentCleaner:
         try:
             resolved_count = self.resolve_expired_experiments()
 
-            logger.info(f"[ChaosCleanup] Completed - resolved {resolved_count} expired experiments")
+            logger.info(
+                f"[ChaosCleanup] Completed - resolved {resolved_count} expired experiments"
+            )
 
             return {
                 "success": True,
@@ -430,7 +450,11 @@ class DecisionRecorder:
         try:
             operation = self.get_failed_operation(operation_id)
 
-            advisory = operation.metadata.get("forensic_advisory", {}) if operation.metadata else {}
+            advisory = (
+                operation.metadata.get("forensic_advisory", {})
+                if operation.metadata
+                else {}
+            )
 
             decision_record = {
                 "decided_at": now().isoformat(),
@@ -464,7 +488,9 @@ class DecisionRecorder:
             }
 
         except Exception as e:
-            logger.error(f"[DecisionRecord] Error recording decision: {e}", exc_info=True)
+            logger.error(
+                f"[DecisionRecord] Error recording decision: {e}", exc_info=True
+            )
             return {
                 "success": False,
                 "error": str(e),

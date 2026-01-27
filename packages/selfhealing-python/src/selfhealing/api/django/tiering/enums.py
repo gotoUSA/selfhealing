@@ -11,6 +11,7 @@ from enum import Enum
 
 class TierFallbackReason(Enum):
     """Fallback reason for Shadow Audit tracking."""
+
     NONE = "none"
     CONFIG_MISSING = "config_missing"
     ENGINE_ERROR = "engine_error"
@@ -21,6 +22,7 @@ class TierFallbackReason(Enum):
 
 class PatternType(str, Enum):
     """Pattern matching type for tier mappings."""
+
     EXACT = "exact"
     WILDCARD = "wildcard"
     REGEX = "regex"
@@ -28,6 +30,7 @@ class PatternType(str, Enum):
 
 class OverrideIdentifierType(str, Enum):
     """Type of override identifier."""
+
     IP = "ip"
     USER_ID = "user_id"
     API_KEY = "api_key"

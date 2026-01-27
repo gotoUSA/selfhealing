@@ -15,10 +15,10 @@ Usage:
         ResourceGuard,
         get_resource_guard,
     )
-    
+
     guard = get_resource_guard()
     result = guard.is_safe_for_chaos()
-    
+
     if not result.is_safe:
         # 429 응답 반환
         retry_after = guard.get_recommended_wait()
@@ -27,8 +27,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 import psutil
 
@@ -42,13 +41,14 @@ logger = logging.getLogger(__name__)
 class ResourceStatus:
     """
     시스템 리소스 상태.
-    
+
     Attributes:
         cpu_percent: 현재 CPU 사용률 (%)
         memory_percent: 현재 메모리 사용률 (%)
         is_cgroup_available: cgroup 메트릭 사용 가능 여부
         source: 리소스 측정 소스 (cgroup_v2, cgroup_v1, psutil)
     """
+
     cpu_percent: float = 0.0
     memory_percent: float = 0.0
     is_cgroup_available: bool = False
@@ -59,7 +59,7 @@ class ResourceStatus:
 class ResourceCheckResult:
     """
     리소스 체크 결과.
-    
+
     Attributes:
         is_safe: Chaos 테스트 실행 가능 여부
         cpu_percent: 현재 CPU 사용률 (%)
@@ -69,14 +69,15 @@ class ResourceCheckResult:
         block_reason: 차단된 경우 사유
         source: 리소스 측정 소스
     """
+
     is_safe: bool = True
     cpu_percent: float = 0.0
     memory_percent: float = 0.0
     cpu_threshold: float = 80.0
     memory_threshold: float = 85.0
-    block_reason: Optional[str] = None
+    block_reason: str | None = None
     source: str = "psutil"
-    
+
     def to_response_dict(self) -> dict:
         """429 응답 본문용 딕셔너리 변환."""
         return {
@@ -93,27 +94,27 @@ class ResourceCheckResult:
 class ResourceGuard:
     """
     X-Test 리소스 가드.
-    
+
     시스템 CPU/메모리 상태를 체크하여 과부하 시 X-Test 요청을 차단.
     RecoveryGate의 cpu_threshold_percent(80%)와 일관성 유지.
-    
+
     측정 우선순위:
     1. cgroup v2 (Kubernetes 1.25+, Docker 20.10+)
     2. cgroup v1 (레거시)
     3. psutil (일반 환경)
     """
-    
+
     def __init__(self):
         """ResourceGuard 초기화."""
         self._settings = get_resource_guard_settings()
-    
+
     def _get_cpu_percent(self) -> float:
         """
         현재 CPU 사용률 조회.
-        
+
         psutil을 사용하여 CPU 사용률을 측정합니다.
         interval=0.1로 짧은 샘플링 사용.
-        
+
         Returns:
             CPU 사용률 (0.0 ~ 100.0)
         """
@@ -122,25 +123,25 @@ class ResourceGuard:
         except Exception as e:
             logger.warning(f"[ResourceGuard] Failed to get CPU percent: {e}")
             return 0.0
-    
-    def _get_memory_percent_cgroup(self) -> Optional[float]:
+
+    def _get_memory_percent_cgroup(self) -> float | None:
         """
         cgroup 기반 메모리 사용률 조회.
-        
+
         컨테이너 환경에서 cgroup 메트릭을 우선 사용.
         cgroup v2 > cgroup v1 순서로 시도.
-        
+
         Returns:
             메모리 사용률 (0.0 ~ 100.0) 또는 None (cgroup 미지원)
         """
         return CgroupResourceMonitor.get_memory_usage_percent()
-    
+
     def _get_memory_percent_psutil(self) -> float:
         """
         psutil 기반 메모리 사용률 조회.
-        
+
         일반 환경(비컨테이너)에서 사용.
-        
+
         Returns:
             메모리 사용률 (0.0 ~ 100.0)
         """
@@ -150,22 +151,22 @@ class ResourceGuard:
         except Exception as e:
             logger.warning(f"[ResourceGuard] Failed to get memory percent: {e}")
             return 0.0
-    
+
     def get_resource_status(self) -> ResourceStatus:
         """
         현재 시스템 리소스 상태 조회.
-        
+
         cgroup 메트릭이 가능하면 우선 사용하고,
         불가능하면 psutil로 폴백.
-        
+
         Returns:
             ResourceStatus: 현재 리소스 상태
         """
         cpu_percent = self._get_cpu_percent()
-        
+
         # 메모리: cgroup 우선, psutil 폴백
         cgroup_memory = self._get_memory_percent_cgroup()
-        
+
         if cgroup_memory is not None:
             return ResourceStatus(
                 cpu_percent=cpu_percent,
@@ -173,7 +174,7 @@ class ResourceGuard:
                 is_cgroup_available=True,
                 source="cgroup",
             )
-        
+
         psutil_memory = self._get_memory_percent_psutil()
         return ResourceStatus(
             cpu_percent=cpu_percent,
@@ -181,19 +182,19 @@ class ResourceGuard:
             is_cgroup_available=False,
             source="psutil",
         )
-    
+
     def is_safe_for_chaos(self) -> ResourceCheckResult:
         """
         X-Test(Chaos) 실행이 안전한지 확인.
-        
+
         CPU가 80% 초과하거나 메모리가 85% 초과하면 차단.
         설정에서 리소스 체크가 비활성화되어 있으면 항상 허용.
-        
+
         Returns:
             ResourceCheckResult: 체크 결과 (is_safe=False면 차단)
         """
         settings = self._settings
-        
+
         # 리소스 체크 비활성화 시 항상 허용
         if not settings.resource_check_enabled:
             logger.debug("[ResourceGuard] Resource check disabled, allowing")
@@ -202,9 +203,9 @@ class ResourceGuard:
                 cpu_threshold=settings.cpu_threshold,
                 memory_threshold=settings.memory_threshold,
             )
-        
+
         status = self.get_resource_status()
-        
+
         result = ResourceCheckResult(
             is_safe=True,
             cpu_percent=status.cpu_percent,
@@ -213,7 +214,7 @@ class ResourceGuard:
             memory_threshold=settings.memory_threshold,
             source=status.source,
         )
-        
+
         # CPU 임계값 체크
         if status.cpu_percent > settings.cpu_threshold:
             result.is_safe = False
@@ -221,11 +222,9 @@ class ResourceGuard:
                 f"CPU usage {status.cpu_percent:.1f}% exceeds threshold "
                 f"{settings.cpu_threshold}%"
             )
-            logger.warning(
-                f"[ResourceGuard] X-Test blocked: {result.block_reason}"
-            )
+            logger.warning(f"[ResourceGuard] X-Test blocked: {result.block_reason}")
             return result
-        
+
         # 메모리 임계값 체크
         if status.memory_percent > settings.memory_threshold:
             result.is_safe = False
@@ -233,23 +232,21 @@ class ResourceGuard:
                 f"Memory usage {status.memory_percent:.1f}% exceeds threshold "
                 f"{settings.memory_threshold}%"
             )
-            logger.warning(
-                f"[ResourceGuard] X-Test blocked: {result.block_reason}"
-            )
+            logger.warning(f"[ResourceGuard] X-Test blocked: {result.block_reason}")
             return result
-        
+
         logger.debug(
             f"[ResourceGuard] Resource check passed: "
             f"CPU={status.cpu_percent:.1f}%, Memory={status.memory_percent:.1f}%"
         )
         return result
-    
+
     def get_recommended_wait(self) -> int:
         """
         권장 대기 시간 반환.
-        
+
         429 응답의 Retry-After 헤더에 사용.
-        
+
         Returns:
             대기 시간 (초)
         """
@@ -260,13 +257,13 @@ class ResourceGuard:
 # Singleton Pattern
 # =============================================================================
 
-_resource_guard: Optional[ResourceGuard] = None
+_resource_guard: ResourceGuard | None = None
 
 
 def get_resource_guard() -> ResourceGuard:
     """
     캐시된 ResourceGuard 인스턴스 반환.
-    
+
     Returns:
         ResourceGuard: 싱글톤 인스턴스
     """

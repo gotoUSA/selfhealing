@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.tasks.base import BaseNotifyingTask
 from selfhealing.tasks.notification_policy import (
@@ -38,20 +38,20 @@ class TrafficHealthStatus:
 
     is_healthy: bool
     reason: str
-    checks: Dict[str, bool] = field(default_factory=dict)
+    checks: dict[str, bool] = field(default_factory=dict)
 
     @classmethod
-    def healthy(cls, checks: Dict[str, bool]) -> "TrafficHealthStatus":
+    def healthy(cls, checks: dict[str, bool]) -> TrafficHealthStatus:
         """건강한 상태 팩토리."""
         return cls(is_healthy=True, reason="All checks passed", checks=checks)
 
     @classmethod
-    def unhealthy(cls, reason: str, checks: Dict[str, bool]) -> "TrafficHealthStatus":
+    def unhealthy(cls, reason: str, checks: dict[str, bool]) -> TrafficHealthStatus:
         """비정상 상태 팩토리."""
         return cls(is_healthy=False, reason=reason, checks=checks)
 
 
-def check_traffic_health(domain: Optional[str] = None) -> TrafficHealthStatus:
+def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
     """
     트래픽 건강 상태를 확인합니다.
 
@@ -66,14 +66,14 @@ def check_traffic_health(domain: Optional[str] = None) -> TrafficHealthStatus:
     Returns:
         TrafficHealthStatus with is_healthy flag and check results
     """
-    checks: Dict[str, bool] = {}
+    checks: dict[str, bool] = {}
 
     # Check 1: Circuit Breaker State (도메인이 지정된 경우에만)
     if domain:
         try:
             from selfhealing.services.circuit_breaker_service import (
-                get_circuit_breaker_service,
                 CircuitState,
+                get_circuit_breaker_service,
             )
 
             cb_service = get_circuit_breaker_service()
@@ -86,7 +86,9 @@ def check_traffic_health(domain: Optional[str] = None) -> TrafficHealthStatus:
                     checks=checks,
                 )
         except ImportError:
-            logger.debug("[TrafficHealth] CircuitBreakerService not available, skipping CB check")
+            logger.debug(
+                "[TrafficHealth] CircuitBreakerService not available, skipping CB check"
+            )
             checks["circuit_breaker"] = True  # 사용 불가 시 통과
         except Exception as e:
             logger.warning(f"[TrafficHealth] CB check failed: {e}")
@@ -155,7 +157,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
     트래픽이 정상일 때만 DLQ Replay를 수행합니다.
     RuntimeConfig의 track3_enabled 설정에 따라 활성화/비활성화됩니다.
-    
+
     Audit 기록:
     - DLQ_REPLAY 이벤트 기록 (실행 결과와 함께)
 
@@ -196,7 +198,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
     def _get_cooldown_seconds() -> int:
         """Settings에서 cooldown_seconds 조회."""
         try:
-            from selfhealing.settings.intelligence_task import get_intelligence_task_settings
+
             # 기본 5분 (300초)을 유지하되, settings에서 조회 가능하도록
             return 300
         except Exception:
@@ -204,9 +206,9 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
     def run(
         self,
-        domain: Optional[str] = None,
-        max_items: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        domain: str | None = None,
+        max_items: int | None = None,
+    ) -> dict[str, Any]:
         """
         Traffic-Aware Replay 실행.
 
@@ -223,8 +225,10 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             dict with status, counts, and check results
         """
         logger.info(f"[TrafficAwareReplay] Starting check (domain={domain})")
-        
-        task_id = getattr(self.request, 'id', None) if hasattr(self, 'request') else None
+
+        task_id = (
+            getattr(self.request, "id", None) if hasattr(self, "request") else None
+        )
 
         # 1. RuntimeConfig에서 Track 3 설정 로드
         config = self._get_replay_automation_config()
@@ -301,25 +305,29 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             }
             self._log_audit(error_result, domain, task_id, error_message=str(e))
             return error_result
-    
+
     def _log_audit(
         self,
-        result: Dict[str, Any],
-        domain: Optional[str],
-        task_id: Optional[str],
-        error_message: Optional[str] = None,
+        result: dict[str, Any],
+        domain: str | None,
+        task_id: str | None,
+        error_message: str | None = None,
     ) -> None:
         """Audit 로그 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_traffic_aware_replay_audit,
+            )
+
             log_traffic_aware_replay_audit(
                 domain=domain,
                 status=result.get("status", "unknown"),
                 total=result.get("total", 0),
                 success_count=result.get("success", 0),
                 failed_count=result.get("failed", 0),
-                skipped_reason=result.get("reason") if result.get("status") == "skipped" else None,
+                skipped_reason=(
+                    result.get("reason") if result.get("status") == "skipped" else None
+                ),
                 health_checks=result.get("checks"),
                 error_message=error_message,
                 task_id=task_id,
@@ -327,7 +335,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         except Exception as audit_error:
             logger.debug(f"[TrafficAwareReplay] Audit logging failed: {audit_error}")
 
-    def _get_replay_automation_config(self) -> Dict[str, Any]:
+    def _get_replay_automation_config(self) -> dict[str, Any]:
         """RuntimeConfig에서 replay_automation 설정을 로드합니다."""
         try:
             from selfhealing.services.runtime_config import get_runtime_config_manager
@@ -341,9 +349,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             logger.warning(f"[TrafficAwareReplay] Failed to load config: {e}")
             return {}
 
-    def _execute_replay(
-        self, domain: Optional[str], max_items: int
-    ) -> Dict[str, int]:
+    def _execute_replay(self, domain: str | None, max_items: int) -> dict[str, int]:
         """ReplayService를 통해 실제 replay를 수행합니다."""
         try:
             from selfhealing.services.replay_service import ReplayService
@@ -363,7 +369,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             logger.error("[TrafficAwareReplay] ReplayService not available")
             raise RuntimeError("ReplayService not available")
 
-    def _get_severity(self, result: Dict[str, Any]) -> str:
+    def _get_severity(self, result: dict[str, Any]) -> str:
         """결과에 따른 심각도 결정."""
         status = result.get("status", "")
         if status == "error":
@@ -372,7 +378,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             return "warning"
         return "info"
 
-    def _get_summary_message(self, result: Dict[str, Any]) -> str:
+    def _get_summary_message(self, result: dict[str, Any]) -> str:
         """알림 메시지 생성."""
         status = result.get("status", "")
 
@@ -411,7 +417,7 @@ def register_traffic_aware_tasks_with_celery(app) -> None:
         logger.debug(f"[TrafficAware] Registered task: {task_class.name}")
 
 
-def get_traffic_aware_beat_schedule() -> Dict[str, Any]:
+def get_traffic_aware_beat_schedule() -> dict[str, Any]:
     """
     Traffic-Aware Replay Beat 스케줄을 반환합니다.
 

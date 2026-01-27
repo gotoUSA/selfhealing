@@ -17,7 +17,6 @@ Reference:
 """
 
 import logging
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -108,7 +107,7 @@ class ResilientRecorderSettings(BaseSettings):
     # ==========================================================================
     # Fallback Settings
     # ==========================================================================
-    fallback_file_path: Optional[str] = Field(
+    fallback_file_path: str | None = Field(
         default=None,
         description="폴백 파일 경로 (None이면 기본 위치 사용)",
     )
@@ -162,7 +161,7 @@ class ResilientRecorderSettings(BaseSettings):
 # Singleton Pattern (cached settings)
 # =============================================================================
 
-_settings: Optional[ResilientRecorderSettings] = None
+_settings: ResilientRecorderSettings | None = None
 
 
 def get_resilient_recorder_settings() -> ResilientRecorderSettings:

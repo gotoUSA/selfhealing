@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,23 +17,23 @@ logger = logging.getLogger(__name__)
 class TieringCircuitBreaker:
     """
     Circuit Breaker for Tiering Engine itself.
-    
+
     When RegEx evaluation is slow or failing, bypass tiering
     and use static fallback. Prevents tiering from becoming
     a performance bottleneck.
-    
+
     Reference: Envoy Proxy routing bypass pattern
     """
-    
-    FAILURE_THRESHOLD = 5       # 5 consecutive failures → OPEN
-    TIMEOUT_MS = 50             # 50ms → count as slow
-    SLOW_THRESHOLD = 10         # 10 slow responses → OPEN
-    HALF_OPEN_DELAY_SEC = 30    # 30s before trying again
-    
-    _instance: Optional["TieringCircuitBreaker"] = None
+
+    FAILURE_THRESHOLD = 5  # 5 consecutive failures → OPEN
+    TIMEOUT_MS = 50  # 50ms → count as slow
+    SLOW_THRESHOLD = 10  # 10 slow responses → OPEN
+    HALF_OPEN_DELAY_SEC = 30  # 30s before trying again
+
+    _instance: TieringCircuitBreaker | None = None
     _lock = threading.Lock()
-    
-    def __new__(cls) -> "TieringCircuitBreaker":
+
+    def __new__(cls) -> TieringCircuitBreaker:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -42,34 +41,36 @@ class TieringCircuitBreaker:
                     instance._init()
                     cls._instance = instance
         return cls._instance
-    
+
     def _init(self):
         """Initialize circuit breaker state."""
         self._state = "CLOSED"
         self._failure_count = 0
         self._slow_count = 0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
         self._state_lock = threading.Lock()
-    
+
     @property
     def is_open(self) -> bool:
         """Check if circuit is open (tiering should be bypassed)."""
         with self._state_lock:
             if self._state == "OPEN":
-                if self._last_failure_time and \
-                   time.time() - self._last_failure_time > self.HALF_OPEN_DELAY_SEC:
+                if (
+                    self._last_failure_time
+                    and time.time() - self._last_failure_time > self.HALF_OPEN_DELAY_SEC
+                ):
                     self._state = "HALF_OPEN"
                     logger.info("[TieringCB] Transitioning to HALF_OPEN")
                     return False
                 return True
             return False
-    
+
     @property
     def state(self) -> str:
         """Get current circuit breaker state."""
         with self._state_lock:
             return self._state
-    
+
     def record_success(self, latency_ms: float):
         """Record successful tiering evaluation."""
         with self._state_lock:
@@ -77,25 +78,27 @@ class TieringCircuitBreaker:
                 self._state = "CLOSED"
                 logger.info("[TieringCB] CLOSED - recovered")
                 self._record_metrics(is_open=False)
-            
+
             self._failure_count = 0
-            
+
             if latency_ms > self.TIMEOUT_MS:
                 self._slow_count += 1
                 if self._slow_count >= self.SLOW_THRESHOLD:
-                    self._trip(f"slow_responses ({self._slow_count} > {self.SLOW_THRESHOLD})")
+                    self._trip(
+                        f"slow_responses ({self._slow_count} > {self.SLOW_THRESHOLD})"
+                    )
             else:
                 self._slow_count = 0
-    
+
     def record_failure(self, error: Exception):
         """Record failed tiering evaluation."""
         with self._state_lock:
             self._failure_count += 1
             self._last_failure_time = time.time()
-            
+
             if self._failure_count >= self.FAILURE_THRESHOLD:
                 self._trip(f"failures: {error}")
-    
+
     def _trip(self, reason: str):
         """Open the circuit breaker."""
         self._state = "OPEN"
@@ -103,25 +106,26 @@ class TieringCircuitBreaker:
         logger.critical(f"[TieringCB] OPEN - {reason}")
         self._record_metrics(is_open=True)
         self._log_shadow_audit(reason)
-    
+
     def _record_metrics(self, is_open: bool):
         """Update Prometheus metrics."""
         try:
             from prometheus_client import Gauge
+
             gauge = Gauge(
-                'selfhealing_tiering_circuit_open',
-                'Tiering circuit breaker state (1=open)',
+                "selfhealing_tiering_circuit_open",
+                "Tiering circuit breaker state (1=open)",
                 registry=None,
             )
             gauge.set(1 if is_open else 0)
         except Exception:
             pass  # Best-effort metrics
-    
+
     def _log_shadow_audit(self, reason: str):
         """Log circuit breaker trip to audit."""
         try:
             from selfhealing.audit import log_config_change
-            
+
             log_config_change(
                 config_type="tiering_circuit_breaker",
                 config_key="circuit_state",
@@ -138,7 +142,7 @@ class TieringCircuitBreaker:
             )
         except Exception as e:
             logger.error(f"[TieringCB] Shadow audit failed: {e}")
-    
+
     def reset(self):
         """Reset circuit breaker (for testing)."""
         with self._state_lock:

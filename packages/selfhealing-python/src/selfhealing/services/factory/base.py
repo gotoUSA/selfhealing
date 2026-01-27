@@ -16,10 +16,10 @@ Storage Strategy (핵심 원칙: 호스트 DB에 침투하지 않음):
 Usage:
     # 기본 (Memory)
     factory = ServiceFactory()
-    
+
     # 분산 환경 (Layered: Memory + Redis)
     factory = ServiceFactory(storage_mode="layered")
-    
+
     # Django DB 사용 (opt-in, 명시적 설정 필요)
     factory = ServiceFactory(storage_mode="django")
 """
@@ -29,12 +29,12 @@ from __future__ import annotations
 import logging
 import os
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Dict, Any
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
-        FailedOperationRepository,
         CircuitBreakerStateRepository,
+        FailedOperationRepository,
         SecurityIncidentRepository,
     )
 
@@ -48,10 +48,10 @@ logger = logging.getLogger(__name__)
 
 class StorageMode(str, Enum):
     """저장소 모드."""
-    
-    MEMORY = "memory"      # 기본값: 메모리만 사용
-    LAYERED = "layered"    # L1(Memory) + L2(Redis)
-    DJANGO = "django"      # Django ORM (opt-in)
+
+    MEMORY = "memory"  # 기본값: 메모리만 사용
+    LAYERED = "layered"  # L1(Memory) + L2(Redis)
+    DJANGO = "django"  # Django ORM (opt-in)
 
 
 # =============================================================================
@@ -86,7 +86,7 @@ class ServiceFactory:
 
         # 분산 환경 (L1 Memory + L2 Redis)
         factory = ServiceFactory(storage_mode=StorageMode.LAYERED)
-        
+
         # Django DB 사용 (opt-in, 마이그레이션 필요)
         factory = ServiceFactory(storage_mode=StorageMode.DJANGO)
     """
@@ -94,31 +94,35 @@ class ServiceFactory:
     def __init__(
         self,
         framework: FrameworkType = FrameworkType.STANDALONE,
-        storage_mode: Optional[StorageMode] = None,
-        custom_repositories: Optional[Dict[str, Any]] = None,
+        storage_mode: StorageMode | None = None,
+        custom_repositories: dict[str, Any] | None = None,
     ):
         self._framework = framework
         self._custom_repos = custom_repositories or {}
-        self._repo_cache: Dict[str, Any] = {}
-        
+        self._repo_cache: dict[str, Any] = {}
+
         # 저장소 모드 결정 (환경변수 또는 파라미터)
         if storage_mode:
             self._storage_mode = storage_mode
         else:
             env_mode = os.environ.get("SELFHEALING_STORAGE", "memory").lower()
-            self._storage_mode = StorageMode(env_mode) if env_mode in [m.value for m in StorageMode] else StorageMode.MEMORY
+            self._storage_mode = (
+                StorageMode(env_mode)
+                if env_mode in [m.value for m in StorageMode]
+                else StorageMode.MEMORY
+            )
 
     @property
     def framework(self) -> FrameworkType:
         """Get the current framework type."""
         return self._framework
-    
+
     @property
     def storage_mode(self) -> StorageMode:
         """Get the current storage mode."""
         return self._storage_mode
 
-    def get_failed_operation_repository(self) -> "FailedOperationRepository":
+    def get_failed_operation_repository(self) -> FailedOperationRepository:
         """Get FailedOperation repository for current framework."""
         if "failed_operation" in self._custom_repos:
             return self._custom_repos["failed_operation"]
@@ -130,7 +134,7 @@ class ServiceFactory:
         self._repo_cache["failed_operation"] = repo
         return repo
 
-    def get_circuit_breaker_repository(self) -> "CircuitBreakerStateRepository":
+    def get_circuit_breaker_repository(self) -> CircuitBreakerStateRepository:
         """Get CircuitBreakerState repository for current framework."""
         if "circuit_breaker" in self._custom_repos:
             return self._custom_repos["circuit_breaker"]
@@ -142,7 +146,7 @@ class ServiceFactory:
         self._repo_cache["circuit_breaker"] = repo
         return repo
 
-    def get_security_incident_repository(self) -> "SecurityIncidentRepository":
+    def get_security_incident_repository(self) -> SecurityIncidentRepository:
         """Get SecurityIncident repository for current framework."""
         if "security_incident" in self._custom_repos:
             return self._custom_repos["security_incident"]
@@ -157,7 +161,7 @@ class ServiceFactory:
     def _create_repository(self, repo_type: str) -> Any:
         """
         Create repository based on storage_mode (not framework).
-        
+
         핵심 원칙: 기본값은 항상 Memory
         """
         if self._storage_mode == StorageMode.DJANGO:
@@ -171,10 +175,10 @@ class ServiceFactory:
     def _create_django_repository(self, repo_type: str) -> Any:
         """
         Create Django ORM based repository.
-        
+
         ⚠️ opt-in: 호스트가 명시적으로 SELFHEALING_STORAGE=django 설정 필요
         ⚠️ 마이그레이션: selfhealing.adapters.django를 INSTALLED_APPS에 추가 필요
-        
+
         NOTE: Django repository 모듈이 현재 구현되지 않아 InMemory로 fallback합니다.
         """
         logger.warning(
@@ -182,28 +186,37 @@ class ServiceFactory:
             f"Falling back to in-memory for: {repo_type}"
         )
         return self._create_inmemory_repository(repo_type)
-    
+
     def _create_layered_repository(self, repo_type: str) -> Any:
         """
         Create Layered repository (L1 Memory + L2 Redis).
-        
+
         분산 환경용: L1에서 즉시 판정, L2는 비동기 동기화
         """
         if repo_type == "circuit_breaker":
             from selfhealing.adapters.memory import LayeredCircuitBreakerStateRepository
-            
+
             # L2 Redis 연결 시도
             l2_repo = None
             try:
                 # Redis 저장소가 있으면 사용
-                from selfhealing.adapters.redis import RedisCircuitBreakerStateRepository
+                from selfhealing.adapters.redis import (
+                    RedisCircuitBreakerStateRepository,
+                )
+
                 l2_repo = RedisCircuitBreakerStateRepository()
-                logger.info("[ServiceFactory] Using Layered storage: L1=Memory + L2=Redis")
+                logger.info(
+                    "[ServiceFactory] Using Layered storage: L1=Memory + L2=Redis"
+                )
             except ImportError:
-                logger.info("[ServiceFactory] Redis adapter not available. Using L1=Memory only")
+                logger.info(
+                    "[ServiceFactory] Redis adapter not available. Using L1=Memory only"
+                )
             except Exception as e:
-                logger.warning(f"[ServiceFactory] Redis connection failed: {e}. Using L1=Memory only")
-            
+                logger.warning(
+                    f"[ServiceFactory] Redis connection failed: {e}. Using L1=Memory only"
+                )
+
             return LayeredCircuitBreakerStateRepository(l2_repo=l2_repo)
         else:
             # 다른 타입은 일단 Memory
@@ -212,8 +225,8 @@ class ServiceFactory:
     def _create_inmemory_repository(self, repo_type: str) -> Any:
         """Create in-memory repository for testing/standalone."""
         from selfhealing.adapters.memory import (
-            InMemoryFailedOperationRepository,
             InMemoryCircuitBreakerStateRepository,
+            InMemoryFailedOperationRepository,
             InMemorySecurityIncidentRepository,
         )
 
@@ -247,7 +260,9 @@ class ServiceFactory:
         """Create SecurityViolationService with proper repository."""
         from selfhealing.services.security import SecurityViolationService
 
-        return SecurityViolationService(repository=self.get_security_incident_repository())
+        return SecurityViolationService(
+            repository=self.get_security_incident_repository()
+        )
 
     def reset_cache(self) -> None:
         """Reset repository cache (for testing)."""
@@ -259,7 +274,7 @@ class ServiceFactory:
 # =============================================================================
 
 # Global factory instance
-_service_factory: Optional[ServiceFactory] = None
+_service_factory: ServiceFactory | None = None
 
 
 def get_service_factory() -> ServiceFactory:
@@ -277,7 +292,7 @@ def get_service_factory() -> ServiceFactory:
 
 def configure_service_factory(
     framework: FrameworkType,
-    custom_repositories: Optional[Dict[str, Any]] = None,
+    custom_repositories: dict[str, Any] | None = None,
 ) -> ServiceFactory:
     """
     Configure the global ServiceFactory with framework type.

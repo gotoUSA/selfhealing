@@ -7,18 +7,17 @@ Freeze Decision Recorder (Audit Trail)
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from selfhealing.core.timezone import now
+from selfhealing.services.error_budget.advisor import DeploymentPolicyAdvisor
 from selfhealing.services.error_budget.enums import (
-    FreezeStatus,
     OverrideType,
     _get_error_budget_config,
 )
 from selfhealing.services.error_budget.models import FreezeDecisionRecord
-from selfhealing.services.error_budget.advisor import DeploymentPolicyAdvisor
-
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +31,11 @@ class FreezeDecisionRecorder:
 
     def __init__(
         self,
-        advisor: Optional[DeploymentPolicyAdvisor] = None,
-        persist_record: Optional[Callable[[FreezeDecisionRecord], None]] = None,
-        emit_metric: Optional[Callable[[str, Dict], None]] = None,
-        emit_otel_event: Optional[Callable[[str, Dict], None]] = None,
-        alert_adapter: Optional[Any] = None,  # AlertAdapter for escalations
+        advisor: DeploymentPolicyAdvisor | None = None,
+        persist_record: Callable[[FreezeDecisionRecord], None] | None = None,
+        emit_metric: Callable[[str, dict], None] | None = None,
+        emit_otel_event: Callable[[str, dict], None] | None = None,
+        alert_adapter: Any | None = None,  # AlertAdapter for escalations
     ):
         """
         초기화.
@@ -55,7 +54,7 @@ class FreezeDecisionRecorder:
         self._alert_adapter = alert_adapter
 
         # In-memory 기록 (영속화 함수가 없는 경우)
-        self._records: List[FreezeDecisionRecord] = []
+        self._records: list[FreezeDecisionRecord] = []
 
     def record_freeze_acknowledged(
         self,
@@ -100,8 +99,8 @@ class FreezeDecisionRecorder:
         decided_by: str,
         justification: str,
         override_type: OverrideType,
-        deployment_id: Optional[str] = None,
-        deployment_name: Optional[str] = None,
+        deployment_id: str | None = None,
+        deployment_name: str | None = None,
         expires_hours: int = 4,
     ) -> FreezeDecisionRecord:
         """
@@ -163,7 +162,7 @@ class FreezeDecisionRecorder:
         override_type: OverrideType,
         requester: str,
         reason: str,
-        service_name: Optional[str] = None,
+        service_name: str | None = None,
     ) -> None:
         """
         Override 에스컬레이션 알림 발송.
@@ -181,7 +180,9 @@ class FreezeDecisionRecorder:
             escalation_mention = config.get("escalation_mention", "@cto @security")
 
             # 메트릭 기록
-            from selfhealing.services.metrics.recorders import record_override_escalation
+            from selfhealing.services.metrics.recorders import (
+                record_override_escalation,
+            )
 
             record_override_escalation(override_type.value)
 
@@ -196,7 +197,8 @@ class FreezeDecisionRecorder:
                     escalation_mention=escalation_mention,
                 )
                 logger.info(
-                    f"[FreezeDecision] Escalation alert sent: " f"type={override_type.value}, channel={escalation_channel}"
+                    f"[FreezeDecision] Escalation alert sent: "
+                    f"type={override_type.value}, channel={escalation_channel}"
                 )
             else:
                 logger.warning(
@@ -243,7 +245,8 @@ class FreezeDecisionRecorder:
         self._save_and_emit(record)
 
         logger.info(
-            f"[FreezeDecision] Freeze lifted by {decided_by}: " f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
+            f"[FreezeDecision] Freeze lifted by {decided_by}: "
+            f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
         )
 
         return record
@@ -251,8 +254,8 @@ class FreezeDecisionRecorder:
     def get_decision_history(
         self,
         limit: int = 50,
-        decision_type: Optional[str] = None,
-    ) -> List[FreezeDecisionRecord]:
+        decision_type: str | None = None,
+    ) -> list[FreezeDecisionRecord]:
         """
         결정 이력 조회.
 

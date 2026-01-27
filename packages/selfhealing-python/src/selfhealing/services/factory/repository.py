@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
-        FailedOperationRepository,
         CircuitBreakerStateRepository,
+        FailedOperationRepository,
         SecurityIncidentRepository,
     )
 
 
-def create_failed_operation_repository() -> "FailedOperationRepository":
+def create_failed_operation_repository() -> FailedOperationRepository:
     """
     Create a FailedOperationRepository instance.
 
@@ -31,7 +31,7 @@ def create_failed_operation_repository() -> "FailedOperationRepository":
     return InMemoryFailedOperationRepository()
 
 
-def create_circuit_breaker_repository() -> "CircuitBreakerStateRepository":
+def create_circuit_breaker_repository() -> CircuitBreakerStateRepository:
     """
     Create a CircuitBreakerStateRepository instance.
 
@@ -45,7 +45,7 @@ def create_circuit_breaker_repository() -> "CircuitBreakerStateRepository":
     return InMemoryCircuitBreakerStateRepository()
 
 
-def create_security_incident_repository() -> "SecurityIncidentRepository":
+def create_security_incident_repository() -> SecurityIncidentRepository:
     """
     Create a SecurityIncidentRepository instance.
 

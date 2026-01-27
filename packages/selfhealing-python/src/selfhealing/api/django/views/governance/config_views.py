@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 class GovernanceConfigView(APIView):
     """
     GET/PUT /api/self-healing/config/governance/
-    
+
     거버넌스 설정 조회/변경 API.
     RuntimeConfigManager를 통해 중앙 관리됩니다.
-    
+
     GET Response:
         {
             "status": "success",
@@ -39,7 +39,7 @@ class GovernanceConfigView(APIView):
                 ...
             }
         }
-    
+
     PUT Request:
         {
             "threshold_operator": 0.20,
@@ -47,20 +47,20 @@ class GovernanceConfigView(APIView):
             ...
         }
     """
-    
+
     def get_permissions(self):
         """GET은 Viewer, PUT은 Admin 권한 필요."""
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
-    
+
     def get(self, request: Request) -> Response:
         """거버넌스 설정 조회."""
         from selfhealing.services.runtime_config import get_runtime_config_manager
-        
+
         manager = get_runtime_config_manager()
         config = manager.get_governance_config()
-        
+
         return Response(
             {
                 "status": "success",
@@ -69,14 +69,14 @@ class GovernanceConfigView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-    
+
     def put(self, request: Request) -> Response:
         """거버넌스 설정 변경."""
         from selfhealing.services.runtime_config import get_runtime_config_manager
-        
+
         manager = get_runtime_config_manager()
         actor = str(request.user) if request.user.is_authenticated else "anonymous"
-        
+
         # 허용된 필드만 추출
         allowed_fields = {
             "threshold_operator",
@@ -92,22 +92,19 @@ class GovernanceConfigView(APIView):
             "four_eyes_enabled",
             "four_eyes_expiry_hours",
         }
-        
-        update_fields = {
-            k: v for k, v in request.data.items()
-            if k in allowed_fields
-        }
-        
+
+        update_fields = {k: v for k, v in request.data.items() if k in allowed_fields}
+
         if not update_fields:
             raise ValueError("No valid fields provided")
-        
+
         # 업데이트 수행 - ValueError는 exception handler로 전파
         new_config = manager.update_governance_config(**update_fields)
-        
+
         logger.info(
             f"[Governance] Config updated by {actor}: {list(update_fields.keys())}"
         )
-        
+
         return Response(
             {
                 "status": "updated",
@@ -156,8 +153,10 @@ class L2StorageConfigManagedView(APIView):
         actor = getattr(request.user, "username", str(request.user))
 
         update_fields = {
-            k: v for k, v in request.data.items()
-            if k in [
+            k: v
+            for k, v in request.data.items()
+            if k
+            in [
                 "redis_timeout_ms",
                 "database_timeout_ms",
                 "fallback_timeout_ms",

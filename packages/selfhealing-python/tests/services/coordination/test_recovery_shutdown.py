@@ -266,12 +266,22 @@ class TestCreateRecoveryAwareShutdownHook:
     
     def test_create_hook_with_defaults(self):
         """기본값으로 Hook 생성."""
-        # RecoveryCoordinator import가 실패해도 동작해야 함
-        hook = create_recovery_aware_shutdown_hook(namespace="global")
+        from unittest.mock import patch, MagicMock
         
-        assert hook is not None
-        # import 실패 시 False 반환
-        assert hook.is_shutdown_safe() is True
+        # RecoveryCoordinator를 mock하여 활성 세션이 없는 상태로 테스트
+        # check_recovery() 함수 내부에서 import하므로 coordinator 모듈을 patch
+        with patch(
+            "selfhealing.services.coordination.recovery_coordinator.get_recovery_coordinator"
+        ) as mock_get_coordinator:
+            mock_coordinator = MagicMock()
+            mock_coordinator.get_active_session.return_value = None
+            mock_get_coordinator.return_value = mock_coordinator
+            
+            hook = create_recovery_aware_shutdown_hook(namespace="global")
+            
+            assert hook is not None
+            # 활성 세션이 없으면 shutdown safe
+            assert hook.is_shutdown_safe() is True
     
     def test_create_hook_with_custom_config(self):
         """커스텀 설정으로 Hook 생성."""

@@ -15,44 +15,35 @@ from datetime import datetime
 
 from selfhealing.core.test_mode_context import TestModeContext
 
-from .definitions import (
-    # DLQ
-    dlq_items_total,
-    dlq_created_total,
-    sla_breach_total,
-    # Retry
-    retry_attempts_histogram,
-    retry_outcomes_total,
-    # Recovery
-    recovery_time_seconds,
-    # Circuit Breaker
-    circuit_breaker_state,
-    circuit_breaker_transitions,
-    circuit_breaker_open_duration,
-    # L2 Storage
-    l2_timeout_total,
-    l2_sync_failure_total,
-    l2_latency_seconds,
-    l2_connection_status,
-    # Replay
-    replay_attempts_total,
-    replay_outcomes_total,
-    # Error Budget
-    error_budget_remaining_percent,
-    error_budget_remaining_minutes,
+from .definitions import (  # DLQ; Retry; Recovery; Circuit Breaker; L2 Storage; Replay; Error Budget; Heartbeat; Fail-Safe
+    active_override_gauge,
     burn_rate_1h,
     burn_rate_6h,
+    circuit_breaker_open_duration,
+    circuit_breaker_state,
+    circuit_breaker_transitions,
     deployment_freeze_status,
+    dlq_created_total,
+    dlq_items_total,
+    error_budget_remaining_minutes,
+    error_budget_remaining_percent,
+    failsafe_mode_active,
+    failsafe_triggered_total,
     freeze_decision_total,
-    active_override_gauge,
-    # Heartbeat
-    selfhealing_heartbeat_timestamp,
-    selfhealing_heartbeat_count,
+    l2_connection_status,
+    l2_latency_seconds,
+    l2_sync_failure_total,
+    l2_timeout_total,
     override_escalation_total,
     recovery_alert_total,
-    # Fail-Safe
-    failsafe_triggered_total,
-    failsafe_mode_active,
+    recovery_time_seconds,
+    replay_attempts_total,
+    replay_outcomes_total,
+    retry_attempts_histogram,
+    retry_outcomes_total,
+    selfhealing_heartbeat_count,
+    selfhealing_heartbeat_timestamp,
+    sla_breach_total,
 )
 
 logger = logging.getLogger(__name__)
@@ -213,7 +204,9 @@ def record_circuit_breaker_open_duration(service: str, duration_seconds: float) 
     """
     try:
         circuit_breaker_open_duration.labels(service=service).observe(duration_seconds)
-        logger.debug(f"[Metrics] CB open duration recorded: {service}={duration_seconds}s")
+        logger.debug(
+            f"[Metrics] CB open duration recorded: {service}={duration_seconds}s"
+        )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record CB duration metric: {e}")
 
@@ -235,7 +228,9 @@ def record_l2_timeout(adapter_type: str, operation: str) -> None:
 def record_l2_sync_failure(adapter_type: str, operation: str) -> None:
     """Record L2 sync failure."""
     try:
-        l2_sync_failure_total.labels(adapter_type=adapter_type, operation=operation).inc()
+        l2_sync_failure_total.labels(
+            adapter_type=adapter_type, operation=operation
+        ).inc()
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record L2 sync failure: {e}")
 

@@ -19,7 +19,6 @@ import json
 import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
 
 logger = logging.getLogger("selfhealing.decision_record")
 
@@ -43,7 +42,7 @@ class EventType(str, Enum):
 
 def log_enter_pre_decision_zone(
     service_name: str,
-    policy_version: Optional[str] = None,
+    policy_version: str | None = None,
 ) -> None:
     """
     Log ENTER_PRE_DECISION_ZONE event.
@@ -65,7 +64,7 @@ def log_intervention_evaluated(
     service_name: str,
     allowed: bool,
     reason: ReasonCode,
-    policy_version: Optional[str] = None,
+    policy_version: str | None = None,
 ) -> None:
     """
     Log INTERVENTION_EVALUATED event.
@@ -89,7 +88,7 @@ def log_intervention_evaluated(
 
 def log_exit_pre_decision_zone(
     service_name: str,
-    policy_version: Optional[str] = None,
+    policy_version: str | None = None,
 ) -> None:
     """
     Log EXIT_PRE_DECISION_ZONE event.
@@ -114,7 +113,7 @@ class DecisionLogger:
     Provides a class-based interface for decision boundary logging.
     """
 
-    def __init__(self, service_name: str, policy_version: Optional[str] = None):
+    def __init__(self, service_name: str, policy_version: str | None = None):
         """
         Initialize the decision logger.
 

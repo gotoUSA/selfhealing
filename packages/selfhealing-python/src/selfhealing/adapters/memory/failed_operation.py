@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
 from selfhealing.adapters.memory.base import _now
 from selfhealing.interfaces.repositories import (
-    FailedOperationRepository,
     FailedOperationData,
+    FailedOperationRepository,
     FailedOperationStatus,
 )
 
@@ -27,7 +27,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     """
 
     def __init__(self):
-        self._storage: Dict[int, FailedOperationData] = {}
+        self._storage: dict[int, FailedOperationData] = {}
         self._next_id = 1
         self._lock = threading.RLock()  # RLock for reentrant calls
 
@@ -37,14 +37,14 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         failure_type: str,
         error_message: str = "",
         error_code: str = "",
-        entity_type: Optional[str] = None,
-        entity_id: Optional[str] = None,
-        entity_refs: Optional[dict[str, Any]] = None,
-        user_id: Optional[int] = None,
-        snapshot_data: Optional[dict[str, Any]] = None,
-        request_data: Optional[dict[str, Any]] = None,
-        response_data: Optional[dict[str, Any]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+        entity_refs: dict[str, Any] | None = None,
+        user_id: int | None = None,
+        snapshot_data: dict[str, Any] | None = None,
+        request_data: dict[str, Any] | None = None,
+        response_data: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         retry_count: int = 0,
         max_retries: int = 2,
         next_action_hint: str = "",
@@ -80,7 +80,9 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             self._next_id += 1
             return entry
 
-    def _copy_with_updates(self, entry: FailedOperationData, **updates) -> FailedOperationData:
+    def _copy_with_updates(
+        self, entry: FailedOperationData, **updates
+    ) -> FailedOperationData:
         """Create a copy of entry with specified field updates."""
         return FailedOperationData(
             id=updates.get("id", entry.id),
@@ -105,13 +107,15 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             resolution_type=updates.get("resolution_type", entry.resolution_type),
             resolution_note=updates.get("resolution_note", entry.resolution_note),
             next_action_hint=updates.get("next_action_hint", entry.next_action_hint),
-            recommended_action=updates.get("recommended_action", entry.recommended_action),
+            recommended_action=updates.get(
+                "recommended_action", entry.recommended_action
+            ),
             created_at=updates.get("created_at", entry.created_at),
             updated_at=updates.get("updated_at", _now()),
             expires_at=updates.get("expires_at", entry.expires_at),
         )
 
-    def get_by_id(self, id: int) -> Optional[FailedOperationData]:
+    def get_by_id(self, id: int) -> FailedOperationData | None:
         """Get a failed operation by ID."""
         with self._lock:
             return self._storage.get(id)
@@ -126,7 +130,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             results = [
                 entry
                 for entry in self._storage.values()
-                if entry.domain == domain and entry.status == FailedOperationStatus.PENDING.value
+                if entry.domain == domain
+                and entry.status == FailedOperationStatus.PENDING.value
             ]
             return results[:limit]
 
@@ -137,7 +142,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
                 [
                     entry
                     for entry in self._storage.values()
-                    if entry.domain == domain and entry.status == FailedOperationStatus.PENDING.value
+                    if entry.domain == domain
+                    and entry.status == FailedOperationStatus.PENDING.value
                 ]
             )
 
@@ -147,7 +153,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         status: str,
         resolution_type: str = "",
         resolution_note: str = "",
-        resolved_by_id: Optional[int] = None,
+        resolved_by_id: int | None = None,
     ) -> bool:
         """Update the status of a failed operation."""
         with self._lock:
@@ -158,7 +164,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
             updated = self._copy_with_updates(
                 entry,
                 status=status,
-                resolved_at=_now() if status == FailedOperationStatus.RESOLVED.value else entry.resolved_at,
+                resolved_at=(
+                    _now()
+                    if status == FailedOperationStatus.RESOLVED.value
+                    else entry.resolved_at
+                ),
                 resolved_by_id=resolved_by_id or entry.resolved_by_id,
                 resolution_type=resolution_type or entry.resolution_type,
                 resolution_note=resolution_note or entry.resolution_note,
@@ -186,7 +196,7 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         id: int,
         resolution_type: str,
         resolution_note: str = "",
-        resolved_by_id: Optional[int] = None,
+        resolved_by_id: int | None = None,
     ) -> bool:
         """Mark a failed operation as resolved."""
         return self.update_status(
@@ -204,7 +214,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     ) -> list[FailedOperationData]:
         """Get operations that have expired."""
         with self._lock:
-            results = [entry for entry in self._storage.values() if entry.expires_at and entry.expires_at < before_date]
+            results = [
+                entry
+                for entry in self._storage.values()
+                if entry.expires_at and entry.expires_at < before_date
+            ]
             return results[:limit]
 
     def bulk_update_status(
@@ -222,8 +236,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     def find_by_status(
         self,
         status: str,
-        domain: Optional[str] = None,
-        failure_type: Optional[str] = None,
+        domain: str | None = None,
+        failure_type: str | None = None,
         limit: int = 100,
     ) -> list[FailedOperationData]:
         """Find operations by status with optional filters."""
@@ -244,8 +258,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     def find_replayable(
         self,
         max_retries: int,
-        domain: Optional[str] = None,
-        failure_type: Optional[str] = None,
+        domain: str | None = None,
+        failure_type: str | None = None,
         limit: int = 100,
     ) -> list[FailedOperationData]:
         """Find operations that can be replayed."""
@@ -287,7 +301,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     ) -> list[FailedOperationData]:
         """Find operations past their retention period."""
         with self._lock:
-            return [entry for entry in self._storage.values() if entry.expires_at and entry.expires_at < current_time]
+            return [
+                entry
+                for entry in self._storage.values()
+                if entry.expires_at and entry.expires_at < current_time
+            ]
 
     def get_statistics(self) -> dict[str, Any]:
         """Get statistics about failed operations."""
@@ -298,15 +316,19 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
                 "by_domain": {},
             }
             for entry in self._storage.values():
-                stats["by_status"][entry.status] = stats["by_status"].get(entry.status, 0) + 1
-                stats["by_domain"][entry.domain] = stats["by_domain"].get(entry.domain, 0) + 1
+                stats["by_status"][entry.status] = (
+                    stats["by_status"].get(entry.status, 0) + 1
+                )
+                stats["by_domain"][entry.domain] = (
+                    stats["by_domain"].get(entry.domain, 0) + 1
+                )
             return stats
 
     def try_acquire_for_replay(
         self,
         id: int,
         max_retries: int,
-    ) -> Optional[FailedOperationData]:
+    ) -> FailedOperationData | None:
         """Atomically acquire a DLQ entry for replay."""
         with self._lock:
             entry = self._storage.get(id)
@@ -333,8 +355,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         success: bool,
         resolution_type: str = "",
         note: str = "",
-        resolved_by_id: Optional[int] = None,
-        error_details: Optional[dict[str, Any]] = None,
+        resolved_by_id: int | None = None,
+        error_details: dict[str, Any] | None = None,
     ) -> bool:
         """Complete a replay operation by updating the final status."""
         with self._lock:
@@ -373,7 +395,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
 
         with self._lock:
             for id, entry in list(self._storage.items()):
-                if entry.status == "replaying" and entry.last_retry_at and entry.last_retry_at < cutoff:
+                if (
+                    entry.status == "replaying"
+                    and entry.last_retry_at
+                    and entry.last_retry_at < cutoff
+                ):
                     updated = self._copy_with_updates(
                         entry,
                         status=FailedOperationStatus.PENDING.value,
@@ -403,7 +429,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
 
         with self._lock:
             for id, entry in list(self._storage.items()):
-                if entry.status == FailedOperationStatus.RESOLVED.value and entry.resolved_at and entry.resolved_at < cutoff:
+                if (
+                    entry.status == FailedOperationStatus.RESOLVED.value
+                    and entry.resolved_at
+                    and entry.resolved_at < cutoff
+                ):
                     updated = self._copy_with_updates(
                         entry,
                         status=FailedOperationStatus.ARCHIVED.value,
@@ -432,7 +462,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
         """Purge archived entries older than N days. Must be called with lock held."""
         cutoff = _now() - timedelta(days=older_than_days)
         to_delete = [
-            id for id, entry in self._storage.items()
+            id
+            for id, entry in self._storage.items()
             if entry.status == FailedOperationStatus.ARCHIVED.value
             and entry.updated_at
             and entry.updated_at < cutoff
@@ -444,7 +475,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
     def _purge_all_archived(self) -> int:
         """Purge all archived entries. Must be called with lock held."""
         to_delete = [
-            id for id, entry in self._storage.items()
+            id
+            for id, entry in self._storage.items()
             if entry.status == FailedOperationStatus.ARCHIVED.value
         ]
         for id in to_delete:
@@ -453,8 +485,8 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
 
     def purge_archived(
         self,
-        ids: Optional[list[int]] = None,
-        older_than_days: Optional[int] = None,
+        ids: list[int] | None = None,
+        older_than_days: int | None = None,
     ) -> int:
         """Permanently delete archived entries."""
         if ids is not None and older_than_days is not None:
@@ -493,7 +525,11 @@ class InMemoryFailedOperationRepository(FailedOperationRepository):
                     resolved_older_than_30_days += 1
 
                 # Count archived older than 90 days
-                if entry.status == FailedOperationStatus.ARCHIVED.value and entry.updated_at and entry.updated_at < day_90_ago:
+                if (
+                    entry.status == FailedOperationStatus.ARCHIVED.value
+                    and entry.updated_at
+                    and entry.updated_at < day_90_ago
+                ):
                     archived_older_than_90_days += 1
 
             return {

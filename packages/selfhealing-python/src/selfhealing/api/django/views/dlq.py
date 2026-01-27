@@ -19,15 +19,14 @@ Endpoints:
 import logging
 
 from rest_framework import status
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import (
-    IsViewer, 
-    IsOperator, 
-    IsSelfHealingAdmin, 
+    IsOperator,
+    IsSelfHealingAdmin,
     IsSelfHealingAuthenticated,
+    IsViewer,
 )
 from selfhealing.api.django.serializers import DLQReplayRequestSerializer
 from selfhealing.services.dlq_service import get_dlq_service
@@ -40,7 +39,7 @@ class DLQReplayView(APIView):
     DLQ Replay API.
 
     POST /api/self-healing/dlq/replay/
-    
+
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
@@ -63,13 +62,15 @@ class DLQReplayView(APIView):
             f"success={result.success}, failed={result.failed}"
         )
 
-        return Response({
-            "status": "success",
-            "total": result.processed,
-            "success_count": result.success,
-            "failed_count": result.failed,
-            "skipped_count": result.skipped,
-        })
+        return Response(
+            {
+                "status": "success",
+                "total": result.processed,
+                "success_count": result.success,
+                "failed_count": result.failed,
+                "skipped_count": result.skipped,
+            }
+        )
 
 
 class DLQCleanupStatsView(APIView):
@@ -77,7 +78,7 @@ class DLQCleanupStatsView(APIView):
     DLQ Cleanup Statistics API.
 
     GET /api/self-healing/dlq/cleanup/stats/
-    
+
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
@@ -88,16 +89,18 @@ class DLQCleanupStatsView(APIView):
         service = get_dlq_service()
         stats = service.get_cleanup_stats()
 
-        return Response({
-            "total": stats.total,
-            "by_status": stats.by_status,
-            "resolved_older_than_30_days": stats.resolved_older_than_30_days,
-            "archived_older_than_90_days": stats.archived_older_than_90_days,
-            "recommendations": {
-                "can_archive": stats.can_archive,
-                "can_purge": stats.can_purge,
-            },
-        })
+        return Response(
+            {
+                "total": stats.total,
+                "by_status": stats.by_status,
+                "resolved_older_than_30_days": stats.resolved_older_than_30_days,
+                "archived_older_than_90_days": stats.archived_older_than_90_days,
+                "recommendations": {
+                    "can_archive": stats.can_archive,
+                    "can_purge": stats.can_purge,
+                },
+            }
+        )
 
 
 class DLQArchiveView(APIView):
@@ -110,7 +113,7 @@ class DLQArchiveView(APIView):
     {
         "older_than_days": 30  (optional, default 30)
     }
-    
+
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
@@ -128,11 +131,13 @@ class DLQArchiveView(APIView):
             f"(resolved > {older_than_days} days ago) by user {request.user}"
         )
 
-        return Response({
-            "status": "success",
-            "archived_count": count,
-            "older_than_days": older_than_days,
-        })
+        return Response(
+            {
+                "status": "success",
+                "archived_count": count,
+                "older_than_days": older_than_days,
+            }
+        )
 
 
 class DLQPurgeView(APIView):
@@ -149,7 +154,7 @@ class DLQPurgeView(APIView):
     }
 
     If neither ids nor older_than_days specified, purges ALL archived.
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -170,13 +175,17 @@ class DLQPurgeView(APIView):
         service = get_dlq_service()
         count = service.purge_archived(ids=ids, older_than_days=older_than_days)
 
-        logger.warning(f"[DLQ] PURGED {count} archived entries via API by user {request.user}")
+        logger.warning(
+            f"[DLQ] PURGED {count} archived entries via API by user {request.user}"
+        )
 
-        return Response({
-            "status": "success",
-            "purged_count": count,
-            "warning": "This action is irreversible",
-        })
+        return Response(
+            {
+                "status": "success",
+                "purged_count": count,
+                "warning": "This action is irreversible",
+            }
+        )
 
 
 class DLQListView(APIView):
@@ -190,7 +199,7 @@ class DLQListView(APIView):
     - domain: Filter by domain
     - page: Page number (default 1)
     - page_size: Items per page (default 20, max 100)
-    
+
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
@@ -215,17 +224,19 @@ class DLQListView(APIView):
         service = get_dlq_service()
         result = service.list_entries(filters=filters, page=page, page_size=page_size)
 
-        return Response({
-            "results": result.results,
-            "pagination": {
-                "page": result.page,
-                "page_size": result.page_size,
-                "total_pages": result.total_pages,
-                "total_count": result.total_count,
-                "has_next": result.has_next,
-                "has_previous": result.has_previous,
-            },
-        })
+        return Response(
+            {
+                "results": result.results,
+                "pagination": {
+                    "page": result.page,
+                    "page_size": result.page_size,
+                    "total_pages": result.total_pages,
+                    "total_count": result.total_count,
+                    "has_next": result.has_next,
+                    "has_previous": result.has_previous,
+                },
+            }
+        )
 
 
 class DLQDetailView(APIView):
@@ -233,7 +244,7 @@ class DLQDetailView(APIView):
     DLQ Detail API.
 
     GET /api/self-healing/dlq/<pk>/
-    
+
     Note: Read-only endpoint - Viewer role or higher can access.
     """
 
@@ -246,6 +257,7 @@ class DLQDetailView(APIView):
 
         if entry is None:
             from django.http import Http404
+
             raise Http404(f"DLQ entry {pk} not found")
 
         return Response(entry)
@@ -258,7 +270,7 @@ class DLQRetryView(APIView):
     POST /api/self-healing/dlq/<pk>/retry/
 
     Retries a single DLQ entry.
-    
+
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
@@ -269,17 +281,17 @@ class DLQRetryView(APIView):
         service = get_dlq_service()
         result = service.retry_entry(pk)
 
-        logger.info(
-            f"[DLQ] Retry triggered for entry {pk} by user {request.user}"
-        )
+        logger.info(f"[DLQ] Retry triggered for entry {pk} by user {request.user}")
 
-        return Response({
-            "status": "success",
-            "id": result.id,
-            "retry_count": result.retry_count,
-            "previous_retry_count": result.previous_retry_count,
-            "message": result.message,
-        })
+        return Response(
+            {
+                "status": "success",
+                "id": result.id,
+                "retry_count": result.retry_count,
+                "previous_retry_count": result.previous_retry_count,
+                "message": result.message,
+            }
+        )
 
 
 class DLQResolveView(APIView):
@@ -292,7 +304,7 @@ class DLQResolveView(APIView):
     {
         "notes": "Reason for manual resolution"  (optional)
     }
-    
+
     Note: Operator-level endpoint - requires selfhealing_operator role.
     """
 
@@ -305,16 +317,20 @@ class DLQResolveView(APIView):
         service = get_dlq_service()
         result = service.resolve_entry(pk, notes=notes)
 
-        logger.info(f"[DLQ] Entry {pk} manually resolved by user {request.user}: {notes}")
+        logger.info(
+            f"[DLQ] Entry {pk} manually resolved by user {request.user}: {notes}"
+        )
 
-        return Response({
-            "status": "success",
-            "id": result.id,
-            "previous_status": result.previous_status,
-            "current_status": result.current_status,
-            "resolved_at": result.resolved_at,
-            "notes": result.notes,
-        })
+        return Response(
+            {
+                "status": "success",
+                "id": result.id,
+                "previous_status": result.previous_status,
+                "current_status": result.current_status,
+                "resolved_at": result.resolved_at,
+                "notes": result.notes,
+            }
+        )
 
 
 class DLQTestCreateView(APIView):
@@ -330,7 +346,7 @@ class DLQTestCreateView(APIView):
     - Load test verification of DLQ functionality
     - Integration testing of replay mechanism
     - CI/CD pipeline testing
-    
+
     Note: Admin-only endpoint - requires selfhealing_admin role.
     """
 
@@ -348,7 +364,9 @@ class DLQTestCreateView(APIView):
             user_id=request.user.id if request.user else None,
             entity_type=request.data.get("entity_type", "test"),
             entity_id=request.data.get("entity_id", ""),
-            error_message=request.data.get("error_message", "Test failure for load testing"),
+            error_message=request.data.get(
+                "error_message", "Test failure for load testing"
+            ),
             snapshot_data=request.data.get("snapshot_data"),
             request_data=request.data.get("request_data"),
             response_data=request.data.get("response_data"),
@@ -363,4 +381,3 @@ class DLQTestCreateView(APIView):
         )
 
         return Response(result, status=status.HTTP_201_CREATED)
-

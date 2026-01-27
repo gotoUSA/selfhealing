@@ -8,12 +8,12 @@ Uses Repository pattern for domain-free architecture.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
 
 if TYPE_CHECKING:
-    from selfhealing.interfaces.repositories import FailedOperationData
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class EntryOperationsMixin:
     """Mixin providing DLQ entry operations using Repository pattern."""
 
-    def retry_entry(self, pk: int) -> Dict[str, Any]:
+    def retry_entry(self, pk: int) -> dict[str, Any]:
         """
         Retry a single DLQ entry.
 
@@ -42,29 +42,29 @@ class EntryOperationsMixin:
             ValueError: If entry not found or already resolved/archived
         """
         entry = self.repository.get_by_id(pk)
-        
+
         if entry is None:
             raise ValueError(f"DLQ entry {pk} not found")
-        
+
         if entry.status == "resolved":
             raise ValueError("Cannot retry an already resolved entry")
-        
+
         if entry.status == "archived":
             raise ValueError("Cannot retry an archived entry")
-        
+
         old_count = entry.retry_count
-        
+
         # Use repository method
         success = self.repository.increment_retry_count(pk)
-        
+
         if not success:
             raise ValueError(f"Failed to increment retry count for entry {pk}")
-        
+
         logger.info(
             f"[DLQService] Retry triggered for entry {pk} "
             f"({entry.domain}/{entry.failure_type})"
         )
-        
+
         return {
             "success": True,
             "id": pk,
@@ -73,7 +73,7 @@ class EntryOperationsMixin:
             "message": f"Retry triggered for entry {pk}",
         }
 
-    def resolve_entry(self, pk: int, notes: str = "") -> Dict[str, Any]:
+    def resolve_entry(self, pk: int, notes: str = "") -> dict[str, Any]:
         """
         Manually resolve a DLQ entry.
 
@@ -94,35 +94,36 @@ class EntryOperationsMixin:
             ValueError: If entry not found or already resolved/archived
         """
         entry = self.repository.get_by_id(pk)
-        
+
         if entry is None:
             raise ValueError(f"DLQ entry {pk} not found")
-        
+
         if entry.status == "resolved":
             raise ValueError("Entry is already resolved")
-        
+
         if entry.status == "archived":
             raise ValueError("Cannot resolve an archived entry")
-        
+
         old_status = entry.status
-        
+
         # Use repository method
         success = self.repository.mark_as_resolved(
             id=pk,
             resolution_type="manual",
             resolution_note=notes,
         )
-        
+
         if not success:
             raise ValueError(f"Failed to resolve entry {pk}")
-        
+
         resolved_at = now()
-        
+
         logger.info(f"[DLQService] Entry {pk} manually resolved: {notes}")
-        
+
         # Metrics update (Fail-Open)
         try:
             from selfhealing.metrics.event_handlers import DLQMetricEventHandler
+
             DLQMetricEventHandler.on_item_resolved(
                 domain=entry.domain,
                 resolution_type="manual",
@@ -130,7 +131,7 @@ class EntryOperationsMixin:
             )
         except ImportError:
             pass
-        
+
         return {
             "success": True,
             "id": pk,
@@ -140,7 +141,7 @@ class EntryOperationsMixin:
             "notes": notes,
         }
 
-    def get_entry(self, pk: int) -> Optional[Dict[str, Any]]:
+    def get_entry(self, pk: int) -> dict[str, Any] | None:
         """
         Get detailed info for a single DLQ entry.
 
@@ -151,10 +152,10 @@ class EntryOperationsMixin:
             Dictionary with entry details or None if not found
         """
         entry = self.repository.get_by_id(pk)
-        
+
         if entry is None:
             return None
-        
+
         return {
             "id": entry.id,
             "domain": entry.domain,

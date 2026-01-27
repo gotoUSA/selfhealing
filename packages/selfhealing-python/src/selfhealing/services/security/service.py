@@ -15,24 +15,22 @@ from __future__ import annotations
 import logging
 import re
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
-from selfhealing.core.timezone import now
-from selfhealing.services.security.types import (
-    Severity,
-    ViolationType,
-    SEVERITY_BY_VIOLATION_TYPE,
-)
+from selfhealing.services.audit import log_security_violation_audit
 from selfhealing.services.security.models import (
-    ProtectionResult,
     SecurityConfig,
     SecurityViolationResult,
 )
-from selfhealing.services.audit import log_security_violation_audit
+from selfhealing.services.security.types import (
+    SEVERITY_BY_VIOLATION_TYPE,
+    Severity,
+    ViolationType,
+)
 
 if TYPE_CHECKING:
-    from selfhealing.interfaces.repositories import SecurityIncidentRepository
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
+    from selfhealing.interfaces.repositories import SecurityIncidentRepository
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +60,8 @@ class SecurityViolationService:
     def __init__(
         self,
         config: SecurityConfig | None = None,
-        repository: "SecurityIncidentRepository | None" = None,
-        cache: "CacheProviderInterface | None" = None,
+        repository: SecurityIncidentRepository | None = None,
+        cache: CacheProviderInterface | None = None,
     ):
         """
         Initialize the security violation service.
@@ -78,7 +76,7 @@ class SecurityViolationService:
         self._cache = cache
 
     @property
-    def repository(self) -> "SecurityIncidentRepository":
+    def repository(self) -> SecurityIncidentRepository:
         """Get the repository, creating default adapter if needed."""
         if self._repository is None:
             from selfhealing.factory import ProviderRegistry
@@ -86,13 +84,15 @@ class SecurityViolationService:
             try:
                 self._repository = ProviderRegistry.get_security_repo()
             except (ValueError, ImportError):
-                from selfhealing.adapters.memory import InMemorySecurityIncidentRepository
+                from selfhealing.adapters.memory import (
+                    InMemorySecurityIncidentRepository,
+                )
 
                 self._repository = InMemorySecurityIncidentRepository()
         return self._repository
 
     @property
-    def cache(self) -> "CacheProviderInterface":
+    def cache(self) -> CacheProviderInterface:
         """Get the cache provider, creating default if needed."""
         if self._cache is None:
             from selfhealing.factory import ProviderRegistry
@@ -109,8 +109,8 @@ class SecurityViolationService:
         self,
         violation_type: str | ViolationType,
         request_info: dict[str, Any] | None = None,
-        user_id: Optional[int] = None,
-        entity_refs: Optional[dict[str, int]] = None,
+        user_id: int | None = None,
+        entity_refs: dict[str, int] | None = None,
         description: str = "",
         raw_request_data: dict[str, Any] | None = None,
     ) -> SecurityViolationResult:
@@ -146,7 +146,9 @@ class SecurityViolationService:
             user_agent = request_info.get("user_agent", "") if request_info else ""
 
             # Determine severity
-            severity = SEVERITY_BY_VIOLATION_TYPE.get(violation_type_str, Severity.MEDIUM)
+            severity = SEVERITY_BY_VIOLATION_TYPE.get(
+                violation_type_str, Severity.MEDIUM
+            )
 
             # Create incident record via repository
             incident = self.repository.create(
@@ -179,7 +181,11 @@ class SecurityViolationService:
             log_security_violation_audit(
                 violation_type=violation_type_str,
                 action="handle_violation",
-                target=f"ip:{source_ip}" if source_ip else f"user:{user_id}" if user_id else "unknown",
+                target=(
+                    f"ip:{source_ip}"
+                    if source_ip
+                    else f"user:{user_id}" if user_id else "unknown"
+                ),
                 result="success",
                 severity=severity.value,
                 operator="system",
@@ -228,7 +234,7 @@ class SecurityViolationService:
         violation_type: str,
         details: dict[str, Any] | None = None,
         request_info: dict[str, Any] | None = None,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
     ) -> SecurityViolationResult:
         """
         Simplified interface for recording a violation.
@@ -267,7 +273,7 @@ class SecurityViolationService:
         self,
         violation_type: str,
         incident_id: int,
-        user_id: Optional[int],
+        user_id: int | None,
         source_ip: str | None,
     ) -> str:
         """
@@ -334,7 +340,7 @@ class SecurityViolationService:
             cache_key = f"user_session:{user_id}"
             self.cache.delete(cache_key)
             logger.info(f"[Security] Invalidated sessions for user {user_id}")
-            
+
             # === Audit 기록: 세션 무효화 (85_AUDIT_INTEGRATION Phase 1) ===
             log_security_violation_audit(
                 violation_type="session_invalidation",
@@ -345,11 +351,11 @@ class SecurityViolationService:
                 operator="system",
                 user_id=user_id,
             )
-            
+
             return f"User sessions cache cleared for user {user_id}"
         except Exception as e:
             logger.error(f"[Security] Failed to invalidate sessions: {e}")
-            
+
             # === Audit 기록: 세션 무효화 실패 ===
             log_security_violation_audit(
                 violation_type="session_invalidation",
@@ -361,7 +367,7 @@ class SecurityViolationService:
                 user_id=user_id,
                 details={"error": str(e)},
             )
-            
+
             return f"Session invalidation attempted but failed: {e}"
 
     def _log_suspicious_ip(self, ip_address: str) -> str:
@@ -376,7 +382,9 @@ class SecurityViolationService:
             ttl=timedelta(seconds=self.config.suspicious_ip_cache_timeout),
         )
 
-        logger.info(f"[Security] Suspicious IP logged: {ip_address} (count: {new_count})")
+        logger.info(
+            f"[Security] Suspicious IP logged: {ip_address} (count: {new_count})"
+        )
 
         if new_count >= self.config.permanent_ban_threshold:
             self._permanent_ip_ban(ip_address)
@@ -393,7 +401,7 @@ class SecurityViolationService:
             ttl=timedelta(hours=hours),
         )
         logger.info(f"[Security] IP temporarily banned: {ip_address} for {hours} hours")
-        
+
         # === Audit 기록: 임시 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
         log_security_violation_audit(
             violation_type="ip_ban_temporary",
@@ -405,7 +413,7 @@ class SecurityViolationService:
             source_ip=ip_address,
             details={"ban_type": "temporary", "duration_hours": hours},
         )
-        
+
         return f"IP {ip_address} temporarily banned for {hours} hour(s)"
 
     def _permanent_ip_ban(self, ip_address: str) -> str:
@@ -413,7 +421,7 @@ class SecurityViolationService:
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
         self.cache.set(cache_key, {"banned": True, "type": "permanent"}, ttl=None)
         logger.warning(f"[Security] IP permanently banned: {ip_address}")
-        
+
         # === Audit 기록: 영구 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
         log_security_violation_audit(
             violation_type="ip_ban_permanent",
@@ -425,7 +433,7 @@ class SecurityViolationService:
             source_ip=ip_address,
             details={"ban_type": "permanent"},
         )
-        
+
         return f"IP {ip_address} permanently banned"
 
     def _remove_ip_ban(self, ip_address: str) -> str:
@@ -441,9 +449,7 @@ class SecurityViolationService:
         ban_info = self.cache.get(cache_key)
         return ban_info is not None and ban_info.get("banned", False)
 
-    def _sanitize_request_data(
-        self, raw_data: dict[str, Any] | None
-    ) -> dict[str, Any]:
+    def _sanitize_request_data(self, raw_data: dict[str, Any] | None) -> dict[str, Any]:
         """
         Sanitize request data by removing sensitive fields and masking IPs/paths.
 
@@ -500,9 +506,11 @@ class SecurityViolationService:
             def sanitize(data: Any) -> Any:
                 if isinstance(data, dict):
                     return {
-                        k: "[REDACTED]"
-                        if k.lower() in sensitive_fields
-                        else sanitize(v)
+                        k: (
+                            "[REDACTED]"
+                            if k.lower() in sensitive_fields
+                            else sanitize(v)
+                        )
                         for k, v in data.items()
                     }
                 elif isinstance(data, list):
@@ -540,12 +548,12 @@ class SecurityViolationService:
         self,
         violation_type: str,
         incident_id: int,
-        source_ip: Optional[str],
-        user_id: Optional[int],
+        source_ip: str | None,
+        user_id: int | None,
     ) -> None:
         """CRITICAL 보안 위반 시 EventBus를 통해 이벤트 발행."""
         try:
-            from selfhealing.services.event_bus import get_event_bus, EventType
+            from selfhealing.services.event_bus import EventType, get_event_bus
 
             bus = get_event_bus()
             bus.emit(
@@ -565,4 +573,6 @@ class SecurityViolationService:
                 f"for incident {incident_id}, type={violation_type}"
             )
         except Exception as e:
-            logger.error(f"[SecurityViolationService] Failed to emit critical event: {e}")
+            logger.error(
+                f"[SecurityViolationService] Failed to emit critical event: {e}"
+            )

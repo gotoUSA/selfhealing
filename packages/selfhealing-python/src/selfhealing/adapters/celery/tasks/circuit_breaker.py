@@ -30,7 +30,9 @@ logger = get_task_logger(__name__)
     soft_time_limit=290,
     acks_late=True,
 )
-def conditional_replay_on_circuit_close(self, service_name: str, max_items: int = 50) -> dict:
+def conditional_replay_on_circuit_close(
+    self, service_name: str, max_items: int = 50
+) -> dict:
     """
     Trigger conditional replay when a circuit breaker closes.
 
@@ -223,7 +225,9 @@ def force_open_circuit_breaker(
     Returns:
         Dictionary with operation result
     """
-    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
+    logger.warning(
+        f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}"
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -240,7 +244,9 @@ def force_open_circuit_breaker(
         )
 
         if success:
-            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
+            logger.warning(
+                f"[Circuit Breaker] Successfully opened circuit for '{service_name}'"
+            )
             return {
                 "success": True,
                 "service_name": service_name,
@@ -293,7 +299,9 @@ def force_close_circuit_breaker(
     Returns:
         Dictionary with operation result
     """
-    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
+    logger.info(
+        f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}"
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -321,7 +329,9 @@ def force_close_circuit_breaker(
         )
 
         if success:
-            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
+            logger.info(
+                f"[Circuit Breaker] Successfully closed circuit for '{service_name}'"
+            )
 
             if trigger_replay:
                 conditional_replay_on_circuit_close.delay(service_name)

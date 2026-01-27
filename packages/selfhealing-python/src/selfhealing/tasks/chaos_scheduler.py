@@ -19,7 +19,7 @@ Features:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from selfhealing.settings.chaos import get_chaos_settings
 
@@ -34,34 +34,34 @@ _chaos_settings = get_chaos_settings()
 # =============================================================================
 
 
-def run_scheduled_experiments() -> Dict[str, Any]:
+def run_scheduled_experiments() -> dict[str, Any]:
     """
     Run scheduled chaos experiments.
-    
+
     This function is a thin wrapper that delegates to ChaosExecutionService.
     All governance checks and safety validations are performed in the service layer.
-    
+
     Audit 기록:
     - CHAOS_EXPERIMENT_STARTED/COMPLETED 이벤트 기록
-    
+
     Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
-    
+
     Called at regular intervals (default: every 5 minutes) via Celery Beat.
-    
+
     Returns:
         Summary of execution results
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
-    
+
     try:
         service = get_chaos_execution_service()
         result = service.run_scheduled_experiments()
         result_dict = result.to_dict()
-        
+
         # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
-            
+
             status = "completed" if result_dict.get("success", True) else "failed"
             log_chaos_scheduler_audit(
                 action="scheduled",
@@ -74,14 +74,14 @@ def run_scheduled_experiments() -> Dict[str, Any]:
             )
         except Exception as audit_error:
             logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
-        
+
         return result_dict
-        
+
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
-            
+
             log_chaos_scheduler_audit(
                 action="scheduled",
                 status="failed",
@@ -92,32 +92,32 @@ def run_scheduled_experiments() -> Dict[str, Any]:
         raise
 
 
-def generate_daily_resilience_report() -> Dict[str, Any]:
+def generate_daily_resilience_report() -> dict[str, Any]:
     """
     Generate daily resilience report.
-    
+
     This function is a thin wrapper that delegates to ChaosExecutionService.
     Called once per day (default: 6 AM UTC).
-    
+
     Audit 기록:
     - 리포트 생성 결과 기록
-    
+
     Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
-    
+
     Returns:
         Report summary
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
-    
+
     try:
         service = get_chaos_execution_service()
         result = service.generate_daily_report()
         result_dict = result.to_dict()
-        
+
         # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
-            
+
             log_chaos_scheduler_audit(
                 action="report_generated",
                 status="completed",
@@ -125,14 +125,14 @@ def generate_daily_resilience_report() -> Dict[str, Any]:
             )
         except Exception as audit_error:
             logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
-        
+
         return result_dict
-        
+
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
-            
+
             log_chaos_scheduler_audit(
                 action="report_generated",
                 status="failed",
@@ -143,31 +143,31 @@ def generate_daily_resilience_report() -> Dict[str, Any]:
         raise
 
 
-def cleanup_expired_approvals() -> Dict[str, Any]:
+def cleanup_expired_approvals() -> dict[str, Any]:
     """
     Clean up expired approval requests.
-    
+
     This function is a thin wrapper that delegates to ChaosExecutionService.
-    
+
     Audit 기록:
     - 만료된 승인 정리 결과 기록
-    
+
     Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
-    
+
     Returns:
         Cleanup summary
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
-    
+
     try:
         service = get_chaos_execution_service()
         result = service.cleanup_expired_approvals()
         result_dict = result.to_dict()
-        
+
         # === Audit 기록 ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
-            
+
             log_chaos_scheduler_audit(
                 action="cleanup",
                 status="completed",
@@ -177,14 +177,14 @@ def cleanup_expired_approvals() -> Dict[str, Any]:
             )
         except Exception as audit_error:
             logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
-        
+
         return result_dict
-        
+
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
             from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
-            
+
             log_chaos_scheduler_audit(
                 action="cleanup",
                 status="failed",
@@ -195,22 +195,22 @@ def cleanup_expired_approvals() -> Dict[str, Any]:
         raise
 
 
-def check_and_alert_pending_approvals() -> Dict[str, Any]:
+def check_and_alert_pending_approvals() -> dict[str, Any]:
     """
     Check for pending approvals and send alerts.
-    
+
     This function is a thin wrapper that delegates to ChaosExecutionService.
-    
+
     Note: task_id는 task_prerun 시그널에서 celery_context로 자동 설정됨
-    
+
     Returns:
         Alert summary
     """
     from selfhealing.services.execution_services import get_chaos_execution_service
-    
+
     service = get_chaos_execution_service()
     result = service.check_pending_approvals()
-    
+
     return result.to_dict()
 
 
@@ -222,15 +222,15 @@ def check_and_alert_pending_approvals() -> Dict[str, Any]:
 def register_celery_tasks(app):
     """
     Register chaos scheduler tasks with Celery app.
-    
+
     Args:
         app: Celery application instance
-        
+
     Usage in your celery.py:
         from selfhealing.tasks.chaos_scheduler import register_celery_tasks
         register_celery_tasks(app)
     """
-    
+
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.run_scheduled_experiments_task",
         bind=True,
@@ -241,7 +241,7 @@ def register_celery_tasks(app):
     def run_scheduled_experiments_task(self):
         """Celery task wrapper for run_scheduled_experiments."""
         return run_scheduled_experiments()
-    
+
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.generate_daily_resilience_report_task",
         bind=True,
@@ -255,7 +255,7 @@ def register_celery_tasks(app):
         except Exception as exc:
             logger.exception("[ChaosScheduler] Daily report generation failed")
             raise self.retry(exc=exc)
-    
+
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.cleanup_expired_approvals_task",
         bind=True,
@@ -264,7 +264,7 @@ def register_celery_tasks(app):
     def cleanup_expired_approvals_task(self):
         """Celery task wrapper for cleanup_expired_approvals."""
         return cleanup_expired_approvals()
-    
+
     @app.task(
         name="selfhealing.tasks.chaos_scheduler.check_pending_approvals_task",
         bind=True,
@@ -273,7 +273,7 @@ def register_celery_tasks(app):
     def check_pending_approvals_task(self):
         """Celery task wrapper for check_and_alert_pending_approvals."""
         return check_and_alert_pending_approvals()
-    
+
     return {
         "run_scheduled_experiments": run_scheduled_experiments_task,
         "generate_daily_report": generate_daily_resilience_report_task,
@@ -321,19 +321,19 @@ CHAOS_SCHEDULER_BEAT_SCHEDULE = {
 def get_beat_schedule_for_celery():
     """
     Get Celery Beat schedule configuration.
-    
+
     Returns schedule dict compatible with Celery Beat.
     For crontab schedules, import and use celery.schedules.crontab.
-    
+
     Usage in settings.py or celery.py:
         from selfhealing.tasks.chaos_scheduler import get_beat_schedule_for_celery
         app.conf.beat_schedule.update(get_beat_schedule_for_celery())
-    
+
     Returns:
         Dict with Celery Beat schedule configuration
     """
     from celery.schedules import crontab
-    
+
     return {
         # Run scheduled experiments every 5 minutes
         "chaos-run-scheduled-experiments": {
@@ -373,17 +373,17 @@ def get_beat_schedule_for_celery():
 # =============================================================================
 
 
-def hunt_zombie_experiments() -> Dict[str, Any]:
+def hunt_zombie_experiments() -> dict[str, Any]:
     """
     Zombie Hunter: 고아 실험 정리 함수.
-    
+
     RUNNING 상태인데 TTL이 만료된 실험 = 워커 크래시로 간주
     → 분산 락 획득 후 강제 rollback → ABORTED 처리
-    
+
     Fail-Safe 보장:
     - 워커가 크래시해도 주입된 장애가 운영 환경에 남지 않도록 보장
     - 분산 락으로 중복 rollback 방지
-    
+
     Returns:
         Dictionary with hunt results:
         - success: bool
@@ -392,97 +392,98 @@ def hunt_zombie_experiments() -> Dict[str, Any]:
         - errors: List[Dict] (에러 발생한 실험 정보)
     """
     logger.info("[ZombieHunter] Starting zombie experiment hunt")
-    
+
     try:
         from selfhealing.services.chaos import get_chaos_scheduler
         from selfhealing.services.chaos.base import ExperimentStatus
         from selfhealing.services.idempotency_service import (
-            IdempotencyService,
-            IdempotencyKey,
             IdempotencyDomain,
+            IdempotencyKey,
+            IdempotencyService,
         )
-        
+
         scheduler = get_chaos_scheduler()
         idempotency = IdempotencyService()
-        
+
         # RUNNING 상태 실험 조회
         running_experiments = scheduler.get_experiments_by_status(
             ExperimentStatus.RUNNING.value
         )
-        
+
         hunted = 0
         skipped = 0
         errors = []
-        
+
         for experiment in running_experiments:
-            exp_id = getattr(experiment, 'experiment_id', 'unknown')
-            
+            exp_id = getattr(experiment, "experiment_id", "unknown")
+
             try:
                 # TTL 만료 체크 (Monotonic 지원)
                 is_expired = False
-                
+
                 # Monotonic TTL 우선 체크 (ClockSkew 실험 보호)
-                if hasattr(experiment, '_is_expired_monotonic'):
+                if hasattr(experiment, "_is_expired_monotonic"):
                     is_expired = experiment._is_expired_monotonic()
-                elif hasattr(experiment, 'is_expired'):
+                elif hasattr(experiment, "is_expired"):
                     is_expired = experiment.is_expired()
-                
+
                 if not is_expired:
                     continue  # TTL 아직 유효 → 스킵
-                
+
                 # === 분산 락 획득 (레이스 컨디션 방지) ===
                 lock_key = IdempotencyKey(
                     domain=IdempotencyDomain.CHAOS_ZOMBIE_HUNTER,
                     key=f"zombie_rollback:{exp_id}",
                     components={"experiment_id": exp_id},
                 )
-                
-                if not idempotency.acquire_lock(lock_key, ttl_seconds=_chaos_settings.experiment_lock_ttl):
+
+                if not idempotency.acquire_lock(
+                    lock_key, ttl_seconds=_chaos_settings.experiment_lock_ttl
+                ):
                     # 다른 스케줄러가 이미 처리 중
                     skipped += 1
                     logger.debug(f"[ZombieHunter] {exp_id} already being handled")
                     continue
-                
+
                 try:
                     logger.warning(f"[ZombieHunter] Zombie detected: {exp_id}")
-                    
+
                     # 강제 rollback
-                    if hasattr(experiment, 'rollback'):
+                    if hasattr(experiment, "rollback"):
                         experiment.rollback()
-                    
+
                     # 상태 변경
                     experiment.status = ExperimentStatus.ABORTED
-                    
+
                     # 스케줄러에서 등록 해제
                     scheduler.unregister_experiment_instance(exp_id)
-                    
+
                     hunted += 1
                     logger.info(f"[ZombieHunter] Aborted zombie experiment {exp_id}")
-                    
+
                 finally:
                     # 락 해제
                     idempotency.release_lock(lock_key)
-                    
+
             except Exception as e:
                 logger.error(f"[ZombieHunter] Failed to abort {exp_id}: {e}")
                 errors.append({"experiment_id": exp_id, "error": str(e)})
-        
+
         result = {
             "success": True,
             "hunted": hunted,
             "skipped": skipped,
             "errors": errors,
         }
-        
+
         if hunted > 0:
             logger.warning(f"[ZombieHunter] Hunted {hunted} zombie experiments")
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"[ZombieHunter] Task failed: {e}", exc_info=True)
         return {
             "success": False,
             "error": str(e),
         }
-

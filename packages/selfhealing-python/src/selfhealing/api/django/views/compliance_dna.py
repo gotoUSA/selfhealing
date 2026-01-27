@@ -5,14 +5,13 @@ Compliance DNA 서비스의 REST API 엔드포인트
 """
 
 import logging
-from typing import List
 
 from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from selfhealing.api.django.permissions import IsViewer, IsOperator, IsSelfHealingAdmin
+from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ class ComplianceStandardsView(APIView):
     POST /api/self-healing/compliance/standards/<stage_name>/ - Stage에 규정 표준 설정 (Admin)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsSelfHealingAdmin()]
@@ -119,7 +118,7 @@ class ComplianceViolationView(APIView):
     POST /api/self-healing/compliance/violation/<violation_id>/ - 위반 해결 처리 (Operator)
     """
 
-    def get_permissions(self) -> List[BasePermission]:
+    def get_permissions(self) -> list[BasePermission]:
         if self.request.method == "GET":
             return [IsViewer()]
         return [IsOperator()]

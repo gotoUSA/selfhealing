@@ -8,7 +8,6 @@ delay between retry attempts.
 import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 class BackoffCalculator(ABC):
@@ -202,7 +201,7 @@ class DecorrelatedJitterBackoff(BackoffCalculator):
 
     base_delay: float = 1.0
     max_delay: float = 300.0
-    _previous_delay: Optional[float] = None
+    _previous_delay: float | None = None
 
     @classmethod
     def from_settings(cls, settings=None, **overrides) -> "DecorrelatedJitterBackoff":
@@ -240,7 +239,9 @@ class DecorrelatedJitterBackoff(BackoffCalculator):
         self._previous_delay = None
 
 
-def get_backoff_calculator(strategy: str = "exponential", **kwargs) -> BackoffCalculator:
+def get_backoff_calculator(
+    strategy: str = "exponential", **kwargs
+) -> BackoffCalculator:
     """
     Factory function to create a backoff calculator.
 
@@ -262,7 +263,10 @@ def get_backoff_calculator(strategy: str = "exponential", **kwargs) -> BackoffCa
     }
 
     if strategy not in strategies:
-        raise ValueError(f"Unknown backoff strategy: {strategy}. " f"Available: {list(strategies.keys())}")
+        raise ValueError(
+            f"Unknown backoff strategy: {strategy}. "
+            f"Available: {list(strategies.keys())}"
+        )
 
     return strategies[strategy](**kwargs)
 
@@ -315,7 +319,7 @@ class LegacyBackoffCalculator:
     Uses BackoffConfig for configuration.
     """
 
-    def __init__(self, config: Optional[BackoffConfig] = None):
+    def __init__(self, config: BackoffConfig | None = None):
         """
         Initialize the calculator.
 
@@ -365,7 +369,10 @@ class LegacyBackoffCalculator:
         Returns:
             List of delay values in seconds
         """
-        return [self.calculate(attempt, with_jitter) for attempt in range(1, max_attempts + 1)]
+        return [
+            self.calculate(attempt, with_jitter)
+            for attempt in range(1, max_attempts + 1)
+        ]
 
 
 def calculate_backoff(

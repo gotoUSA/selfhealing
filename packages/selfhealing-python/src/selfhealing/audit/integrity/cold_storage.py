@@ -8,7 +8,7 @@ Contains:
 Purpose:
     90-day retention in Redis is sufficient for operational audits.
     However, legal/compliance audits may require 5-7 years of history.
-    
+
     This module archives anchors to cold storage before Redis TTL expiration,
     ensuring long-term immutable records are preserved.
 
@@ -28,11 +28,10 @@ import gzip
 import json
 import logging
 import os
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
@@ -51,20 +50,20 @@ def _get_cold_retention_years() -> int:
 
 class ColdStorageBackend(Protocol):
     """Protocol for cold storage backends."""
-    
+
     def write(self, key: str, data: bytes) -> bool:
         """Write data to cold storage."""
         ...
-    
-    def read(self, key: str) -> Optional[bytes]:
+
+    def read(self, key: str) -> bytes | None:
         """Read data from cold storage."""
         ...
-    
+
     def exists(self, key: str) -> bool:
         """Check if key exists in cold storage."""
         ...
-    
-    def list_keys(self, prefix: str = "") -> List[str]:
+
+    def list_keys(self, prefix: str = "") -> list[str]:
         """List keys with optional prefix filter."""
         ...
 
@@ -72,9 +71,9 @@ class ColdStorageBackend(Protocol):
 class LocalFileColdStorage:
     """
     Local filesystem cold storage backend.
-    
+
     Stores compressed anchor data in JSONL format.
-    
+
     Directory Structure:
         {base_dir}/
             anchors/
@@ -83,7 +82,7 @@ class LocalFileColdStorage:
                         anchors_2026-01.jsonl.gz
                         anchors_2026-01.jsonl.gz.sha256
     """
-    
+
     def __init__(
         self,
         base_dir: Path,
@@ -91,7 +90,7 @@ class LocalFileColdStorage:
     ):
         """
         Initialize LocalFileColdStorage.
-        
+
         Args:
             base_dir: Base directory for cold storage
             create_dirs: Create directories if they don't exist
@@ -99,22 +98,22 @@ class LocalFileColdStorage:
         self._base_dir = Path(base_dir) / "cold_storage" / "anchors"
         if create_dirs and not self._base_dir.exists():
             self._base_dir.mkdir(parents=True, exist_ok=True)
-    
+
     def _get_archive_path(self, year: int, month: int) -> Path:
         """Get path for monthly archive file."""
         year_dir = self._base_dir / str(year)
         month_dir = year_dir / f"{month:02d}"
         month_dir.mkdir(parents=True, exist_ok=True)
         return month_dir / f"anchors_{year}-{month:02d}.jsonl.gz"
-    
+
     def write(self, key: str, data: bytes) -> bool:
         """
         Write data to cold storage.
-        
+
         Args:
             key: Storage key (format: "anchors/{year}/{month}/{date}")
             data: Compressed data to store
-            
+
         Returns:
             True if write succeeded
         """
@@ -122,55 +121,56 @@ class LocalFileColdStorage:
             parts = key.split("/")
             year = int(parts[1])
             month = int(parts[2])
-            
+
             archive_path = self._get_archive_path(year, month)
-            
+
             # Append to existing archive (decompressing and recompressing)
             # This is inefficient but ensures atomicity
             existing_data = b""
             if archive_path.exists():
                 with gzip.open(archive_path, "rb") as f:
                     existing_data = f.read()
-            
+
             # Append new data
             combined = existing_data + data + b"\n"
-            
+
             with gzip.open(archive_path, "wb") as f:
                 f.write(combined)
-            
+
             # Write checksum
             import hashlib
+
             checksum = hashlib.sha256(combined).hexdigest()
             checksum_path = Path(str(archive_path) + ".sha256")
             with open(checksum_path, "w") as f:
                 f.write(checksum)
-            
+
             logger.info(f"[ColdStorage] Archived to {archive_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"[ColdStorage] Write failed for {key}: {e}")
             return False
-    
-    def read(self, key: str) -> Optional[bytes]:
+
+    def read(self, key: str) -> bytes | None:
         """Read data from cold storage."""
         try:
             parts = key.split("/")
             year = int(parts[1])
             month = int(parts[2])
-            
+
             archive_path = self._get_archive_path(year, month)
-            
+
             if not archive_path.exists():
                 return None
-            
+
             with gzip.open(archive_path, "rb") as f:
                 return f.read()
-                
+
         except Exception as e:
             logger.error(f"[ColdStorage] Read failed for {key}: {e}")
             return None
-    
+
     def exists(self, key: str) -> bool:
         """Check if key exists in cold storage."""
         try:
@@ -181,8 +181,8 @@ class LocalFileColdStorage:
             return archive_path.exists()
         except Exception:
             return False
-    
-    def list_keys(self, prefix: str = "") -> List[str]:
+
+    def list_keys(self, prefix: str = "") -> list[str]:
         """List archive files."""
         keys = []
         for year_dir in self._base_dir.glob("*"):
@@ -192,28 +192,28 @@ class LocalFileColdStorage:
                         for archive in month_dir.glob("*.jsonl.gz"):
                             keys.append(str(archive.relative_to(self._base_dir)))
         return keys
-    
+
     def verify_integrity(self, year: int, month: int) -> bool:
         """
         Verify archive integrity using stored checksum.
-        
+
         Returns:
             True if checksum matches
         """
         import hashlib
-        
+
         archive_path = self._get_archive_path(year, month)
         checksum_path = Path(str(archive_path) + ".sha256")
-        
+
         if not archive_path.exists() or not checksum_path.exists():
             return False
-        
+
         with gzip.open(archive_path, "rb") as f:
             data = f.read()
-        
-        with open(checksum_path, "r") as f:
+
+        with open(checksum_path) as f:
             stored_checksum = f.read().strip()
-        
+
         computed_checksum = hashlib.sha256(data).hexdigest()
         return computed_checksum == stored_checksum
 
@@ -221,51 +221,53 @@ class LocalFileColdStorage:
 @dataclass
 class ArchiveResult:
     """Result of anchor archival operation."""
-    
+
     archived_count: int = 0
     failed_count: int = 0
-    archived_dates: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    archived_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    archived_dates: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    archived_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 class AnchorColdStorage:
     """
     Manages archival of expired anchors to cold storage.
-    
+
     Problem:
         Redis anchors expire after 90 days (configurable).
         For legal/compliance audits, we may need 5-7 years of history.
-        
+
     Solution:
         Before Redis TTL expires, archive anchors to cold storage:
         1. Daily Celery task checks for soon-to-expire anchors
         2. Archive to compressed JSONL files with checksums
         3. After successful archive, allow Redis TTL expiration
-        
+
     Archive Strategy:
         - Archive anchors when TTL < 7 days remaining
         - Store in monthly archives (reduced file count)
         - Include cryptographic checksums for integrity
         - Support retrieval for historical audits
     """
-    
+
     # Legacy constants for backward compatibility
     ARCHIVE_THRESHOLD_DAYS = 7  # Archive when TTL < 7 days
     DEFAULT_COLD_RETENTION_YEARS = 7  # Keep cold archives for 7 years
-    
+
     def __init__(
         self,
         redis_client: Any,
-        cold_backend: Optional[ColdStorageBackend] = None,
-        base_dir: Optional[Path] = None,
+        cold_backend: ColdStorageBackend | None = None,
+        base_dir: Path | None = None,
         key_prefix: str = "selfhealing:",
-        archive_threshold_days: Optional[int] = None,
-        cold_retention_years: Optional[int] = None,
+        archive_threshold_days: int | None = None,
+        cold_retention_years: int | None = None,
     ):
         """
         Initialize AnchorColdStorage.
-        
+
         Args:
             redis_client: Redis client instance
             cold_backend: Cold storage backend (default: LocalFileColdStorage)
@@ -276,46 +278,56 @@ class AnchorColdStorage:
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._archive_threshold = archive_threshold_days if archive_threshold_days is not None else _get_archive_threshold_days()
-        self._cold_retention_years = cold_retention_years if cold_retention_years is not None else _get_cold_retention_years()
-        
+        self._archive_threshold = (
+            archive_threshold_days
+            if archive_threshold_days is not None
+            else _get_archive_threshold_days()
+        )
+        self._cold_retention_years = (
+            cold_retention_years
+            if cold_retention_years is not None
+            else _get_cold_retention_years()
+        )
+
         # Default to local filesystem backend
         if cold_backend is None:
-            base = base_dir or Path(os.getenv("SELFHEALING_DATA_DIR", "/var/lib/selfhealing"))
+            base = base_dir or Path(
+                os.getenv("SELFHEALING_DATA_DIR", "/var/lib/selfhealing")
+            )
             self._cold_backend = LocalFileColdStorage(base)
         else:
             self._cold_backend = cold_backend
-    
+
     def _get_anchor_pattern(self) -> str:
         """Get Redis key pattern for anchors."""
         return f"{self._key_prefix}audit:hash_chain:anchor:*"
-    
-    def _parse_anchor_date(self, key: str) -> Optional[str]:
+
+    def _parse_anchor_date(self, key: str) -> str | None:
         """Extract date from anchor key."""
         try:
             # Key format: selfhealing:audit:hash_chain:anchor:2026-01-15
             return key.split(":")[-1]
         except Exception:
             return None
-    
-    def find_expiring_anchors(self) -> List[Dict[str, Any]]:
+
+    def find_expiring_anchors(self) -> list[dict[str, Any]]:
         """
         Find anchors that are close to expiration.
-        
+
         Returns:
             List of anchor data dictionaries with TTL info
         """
         expiring = []
         threshold_seconds = self._archive_threshold * 86400
-        
+
         try:
             pattern = self._get_anchor_pattern()
             for key in self._redis.scan_iter(match=pattern):
                 if isinstance(key, bytes):
                     key = key.decode("utf-8")
-                
+
                 ttl = self._redis.ttl(key)
-                
+
                 # TTL <= threshold, needs archival
                 if 0 < ttl <= threshold_seconds:
                     anchor_date = self._parse_anchor_date(key)
@@ -327,26 +339,26 @@ class AnchorColdStorage:
                             k_str = k.decode("utf-8") if isinstance(k, bytes) else k
                             v_str = v.decode("utf-8") if isinstance(v, bytes) else v
                             decoded[k_str] = v_str
-                        
+
                         decoded["_redis_key"] = key
                         decoded["_ttl_seconds"] = ttl
                         decoded["_ttl_days"] = ttl / 86400
                         expiring.append(decoded)
-            
+
             logger.info(f"[ColdStorage] Found {len(expiring)} expiring anchors")
             return expiring
-            
+
         except Exception as e:
             logger.error(f"[ColdStorage] Error finding expiring anchors: {e}")
             return []
-    
-    def archive_anchor(self, anchor_data: Dict[str, Any]) -> bool:
+
+    def archive_anchor(self, anchor_data: dict[str, Any]) -> bool:
         """
         Archive a single anchor to cold storage.
-        
+
         Args:
             anchor_data: Anchor data dictionary
-            
+
         Returns:
             True if archive succeeded
         """
@@ -354,12 +366,12 @@ class AnchorColdStorage:
             date_str = anchor_data.get("date", "")
             if not date_str:
                 return False
-            
+
             # Parse date for storage path
             date = datetime.strptime(date_str, "%Y-%m-%d")
             year = date.year
             month = date.month
-            
+
             # Prepare archive record
             archive_record = {
                 "date": date_str,
@@ -368,35 +380,35 @@ class AnchorColdStorage:
                 "created_at": anchor_data.get("created_at"),
                 "archived_at": datetime.now(timezone.utc).isoformat(),
             }
-            
+
             # Serialize as JSONL line
             json_line = json.dumps(archive_record, ensure_ascii=False)
             data = json_line.encode("utf-8")
-            
+
             # Write to cold storage
             key = f"anchors/{year}/{month}/{date_str}"
             success = self._cold_backend.write(key, data)
-            
+
             if success:
                 logger.info(f"[ColdStorage] Archived anchor for {date_str}")
-            
+
             return success
-            
+
         except Exception as e:
             logger.error(f"[ColdStorage] Archive failed: {e}")
             return False
-    
+
     def archive_expiring_anchors(self) -> ArchiveResult:
         """
         Archive all expiring anchors.
-        
+
         Returns:
             ArchiveResult with statistics
         """
         result = ArchiveResult()
-        
+
         expiring = self.find_expiring_anchors()
-        
+
         for anchor in expiring:
             date_str = anchor.get("date", "unknown")
             try:
@@ -409,17 +421,17 @@ class AnchorColdStorage:
             except Exception as e:
                 result.failed_count += 1
                 result.errors.append(f"Error archiving {date_str}: {e}")
-        
+
         # Log to self-audit if available
         self._log_archive_event(result)
-        
+
         return result
-    
+
     def _log_archive_event(self, result: ArchiveResult) -> None:
         """Log archive event to self-audit trail."""
         try:
-            from selfhealing.audit.self_audit import self_audit, SelfAuditEvent
-            
+            from selfhealing.audit.self_audit import SelfAuditEvent, self_audit
+
             # Use RECOVERY_COMPLETED as closest match
             self_audit().log(
                 SelfAuditEvent.RECOVERY_COMPLETED,
@@ -430,21 +442,21 @@ class AnchorColdStorage:
                     "failed_count": result.failed_count,
                     "archived_dates": result.archived_dates,
                     "errors": result.errors,
-                }
+                },
             )
         except (ImportError, AttributeError):
             logger.info(f"[ColdStorage] Archive result: {result}")
-    
+
     def retrieve_archived_anchor(
         self,
         date_str: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Retrieve an archived anchor from cold storage.
-        
+
         Args:
             date_str: Date string (YYYY-MM-DD)
-            
+
         Returns:
             Anchor data dictionary, or None if not found
         """
@@ -452,13 +464,13 @@ class AnchorColdStorage:
             date = datetime.strptime(date_str, "%Y-%m-%d")
             year = date.year
             month = date.month
-            
+
             key = f"anchors/{year}/{month}/{date_str}"
             data = self._cold_backend.read(key)
-            
+
             if not data:
                 return None
-            
+
             # Parse JSONL and find matching date
             lines = data.decode("utf-8").strip().split("\n")
             for line in lines:
@@ -466,23 +478,23 @@ class AnchorColdStorage:
                     record = json.loads(line)
                     if record.get("date") == date_str:
                         return record
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"[ColdStorage] Retrieval failed for {date_str}: {e}")
             return None
-    
-    def get_archived_months(self) -> List[str]:
+
+    def get_archived_months(self) -> list[str]:
         """
         List all archived months.
-        
+
         Returns:
             List of month strings (YYYY-MM format)
         """
         keys = self._cold_backend.list_keys()
         months = set()
-        
+
         for key in keys:
             # Extract YYYY-MM from path
             parts = key.split("/")
@@ -493,7 +505,7 @@ class AnchorColdStorage:
                     months.add(f"{year}-{month}")
                 except Exception:
                     continue
-        
+
         return sorted(list(months))
 
 

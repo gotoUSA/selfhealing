@@ -7,6 +7,37 @@ All classes are re-exported here for backward compatibility.
 
 from __future__ import annotations
 
+# Daily Hash Anchor
+from selfhealing.audit.integrity.anchor import (
+    DailyHashAnchor,
+)
+
+# Cold Storage (Phase 6)
+from selfhealing.audit.integrity.cold_storage import (
+    AnchorColdStorage,
+    ArchiveResult,
+    LocalFileColdStorage,
+)
+
+# Factory
+from selfhealing.audit.integrity.factory import (
+    create_hash_chain_manager,
+)
+
+# Health Score (Phase 6)
+from selfhealing.audit.integrity.health_score import (
+    IntegrityHealthMetrics,
+    IntegrityHealthScore,
+    RecoveryEvent,
+    get_integrity_health_score,
+    reset_integrity_health_score,
+)
+
+# Local Manager
+from selfhealing.audit.integrity.local_manager import (
+    HashChainManager,
+)
+
 # Models and core functions
 from selfhealing.audit.integrity.models import (
     IntegrityInfo,
@@ -18,15 +49,9 @@ from selfhealing.audit.integrity.protocol import (
     HashChainManagerProtocol,
 )
 
-# Verifier
-from selfhealing.audit.integrity.verifier import (
-    HashChainVerifier,
-    verify_audit_log_integrity,
-)
-
-# Local Manager
-from selfhealing.audit.integrity.local_manager import (
-    HashChainManager,
+# Reconciler
+from selfhealing.audit.integrity.reconciler import (
+    HashChainReconciler,
 )
 
 # Redis Manager
@@ -34,19 +59,9 @@ from selfhealing.audit.integrity.redis_manager import (
     RedisHashChainManager,
 )
 
-# Factory
-from selfhealing.audit.integrity.factory import (
-    create_hash_chain_manager,
-)
-
 # Pending Sequence Manager
 from selfhealing.audit.integrity.sequence import (
     PendingSequenceManager,
-)
-
-# Daily Hash Anchor
-from selfhealing.audit.integrity.anchor import (
-    DailyHashAnchor,
 )
 
 # Startup Sync
@@ -54,27 +69,11 @@ from selfhealing.audit.integrity.sync import (
     StartupHashChainSync,
 )
 
-# Reconciler
-from selfhealing.audit.integrity.reconciler import (
-    HashChainReconciler,
+# Verifier
+from selfhealing.audit.integrity.verifier import (
+    HashChainVerifier,
+    verify_audit_log_integrity,
 )
-
-# Cold Storage (Phase 6)
-from selfhealing.audit.integrity.cold_storage import (
-    AnchorColdStorage,
-    LocalFileColdStorage,
-    ArchiveResult,
-)
-
-# Health Score (Phase 6)
-from selfhealing.audit.integrity.health_score import (
-    IntegrityHealthScore,
-    IntegrityHealthMetrics,
-    RecoveryEvent,
-    get_integrity_health_score,
-    reset_integrity_health_score,
-)
-
 
 __all__ = [
     # Models

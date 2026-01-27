@@ -49,11 +49,16 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Callable, Dict, Any, Optional, List
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+
+    from selfhealing.audit.event_buffer import (
+        AuditEvent,
+        RequestAuditBuffer,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -61,23 +66,23 @@ logger = logging.getLogger(__name__)
 class AuditMiddleware:
     """
     중앙화된 Audit 미들웨어.
-    
+
     기능:
     1. 요청 시작 시 request_id 생성 및 버퍼 초기화
     2. 응답 반환 전 버퍼의 모든 이벤트 수집
     3. ContinuousAuditRecorder를 통해 일괄 기록 (HashChain 포함)
-    
+
     Fail-Open 정책:
     - Audit 기록 실패가 비즈니스 로직을 중단시키지 않음
     - 실패 시 stderr로 fallback 출력
     - 메트릭으로 실패 횟수 추적
-    
+
     설정 (환경변수):
     - AUDIT_MIDDLEWARE_ENABLED: True/False (기본: True)
     - AUDIT_CAPTURE_ERROR_RESPONSES: 4xx/5xx 응답도 기록 (기본: True)
     - AUDIT_MIN_EVENTS_TO_RECORD: 최소 이벤트 수 (기본: 1)
     """
-    
+
     # 제외 경로 (Audit 불필요)
     EXCLUDED_PATHS = [
         "/api/self-healing/health/",
@@ -87,37 +92,37 @@ class AuditMiddleware:
         "/favicon.ico",
         "/static/",
     ]
-    
+
     # ADR-002: 설정 기반 조회 기록 경로
     # 이 경로에 대한 GET 요청은 DATA_ACCESS 이벤트로 기록
     # Django settings의 SELFHEALING_AUDIT["read_paths"]로 오버라이드 가능
-    DEFAULT_READ_AUDIT_PATHS: List[str] = [
+    DEFAULT_READ_AUDIT_PATHS: list[str] = [
         "/api/admin/",
         "/api/payments/",
         "/api/users/personal/",
     ]
-    
+
     def __init__(self, get_response: Callable):
         """Initialize AuditMiddleware."""
         self.get_response = get_response
         self._recorder = None
         self._initialized = False
-        self._read_audit_paths: List[str] = []
-        
+        self._read_audit_paths: list[str] = []
+
         # 통계
         self._total_requests = 0
         self._total_events_recorded = 0
         self._failed_recordings = 0
-    
+
     def _ensure_initialized(self) -> None:
         """Lazy 초기화 - Django가 완전히 로드된 후 실행."""
         if self._initialized:
             return
-        
+
         try:
-            from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
             from selfhealing.adapters.audit.singleton import get_audit_adapter
-            
+            from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
+
             adapter = get_audit_adapter()
             self._recorder = ContinuousAuditRecorder(
                 audit_adapter=adapter,
@@ -128,73 +133,69 @@ class AuditMiddleware:
         except Exception as e:
             logger.warning(f"[AuditMiddleware] Recorder init failed: {e}")
             self._recorder = None
-        
+
         # ADR-002: 설정 기반 조회 기록 경로 로드
         self._load_read_audit_config()
-        
+
         self._initialized = True
-    
+
     def _load_read_audit_config(self) -> None:
         """ADR-002: Django settings에서 조회 기록 설정 로드."""
         try:
             from django.conf import settings
-            
+
             audit_config = getattr(settings, "SELFHEALING_AUDIT", {})
             self._read_audit_paths = audit_config.get("read_paths", self.DEFAULT_READ_AUDIT_PATHS)
-            
+
             logger.debug(f"[AuditMiddleware] Read audit paths: {self._read_audit_paths}")
         except Exception as e:
             logger.debug(f"[AuditMiddleware] Failed to load audit config: {e}")
             self._read_audit_paths = self.DEFAULT_READ_AUDIT_PATHS
-    
-    def __call__(self, request: "HttpRequest") -> "HttpResponse":
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         """Process request/response."""
         self._ensure_initialized()
         self._total_requests += 1
-        
+
         # === 제외 경로 체크 ===
         if self._should_skip(request):
             return self.get_response(request)
-        
+
         # === 버퍼 초기화 ===
         buffer = self._init_buffer(request)
-        
+
         # === ADR-002 조회 기록 (설정된 경로의 GET 요청) ===
         self._capture_read_access(request, buffer)
-        
+
         # === 요청 처리 ===
         response = self.get_response(request)
-        
+
         # === 응답 메타 수집 ===
         self._capture_response_meta(request, response, buffer)
-        
+
         # === 이벤트 기록 (버퍼 낚아채기) ===
         if buffer.has_events():
             self._record_events(buffer, request, response)
-        
+
         return response
-    
-    def _capture_read_access(
-        self, 
-        request: "HttpRequest", 
-        buffer: "RequestAuditBuffer"
-    ) -> None:
+
+    def _capture_read_access(self, request: HttpRequest, buffer: RequestAuditBuffer) -> None:
         """
         ADR-002: 설정된 경로에 대한 조회(GET) 요청을 DATA_ACCESS로 기록.
-        
+
         SELFHEALING_AUDIT["read_paths"]에 설정된 경로 패턴에 매칭되는
         GET 요청에 대해 DATA_ACCESS 이벤트를 버퍼에 추가합니다.
         """
         method = getattr(request, "method", "").upper()
         if method != "GET":
             return
-        
+
         path = getattr(request, "path", "")
         if not self._should_audit_read(path):
             return
-        
+
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         buffer.add(
             event_type=AuditEventType.DATA_ACCESS,
             source="AuditMiddleware",
@@ -206,54 +207,54 @@ class AuditMiddleware:
             success=True,
             actor_id=self._get_user_id(request),
         )
-    
+
     def _should_audit_read(self, path: str) -> bool:
         """조회 기록 대상 경로인지 확인."""
         if not path or not self._read_audit_paths:
             return False
-        
+
         for audit_path in self._read_audit_paths:
             if path.startswith(audit_path):
                 return True
         return False
-    
-    def _should_skip(self, request: "HttpRequest") -> bool:
+
+    def _should_skip(self, request: HttpRequest) -> bool:
         """제외 경로 체크."""
         path = getattr(request, "path", "")
         for excluded in self.EXCLUDED_PATHS:
             if path.startswith(excluded):
                 return True
         return False
-    
-    def _init_buffer(self, request: "HttpRequest") -> "RequestAuditBuffer":
+
+    def _init_buffer(self, request: HttpRequest) -> RequestAuditBuffer:
         """버퍼 초기화 및 request_id 생성."""
         from selfhealing.audit.event_buffer import RequestAuditBuffer
-        
+
         buffer = RequestAuditBuffer.get_or_create(request)
-        
+
         # request_id 생성 또는 추출
         buffer.request_id = self._get_or_create_request_id(request)
-        
+
         # 요청 메타데이터 설정
         buffer.set_request_metadata(
             path=getattr(request, "path", None),
             method=getattr(request, "method", None),
             user_id=self._get_user_id(request),
         )
-        
+
         return buffer
-    
-    def _get_or_create_request_id(self, request: "HttpRequest") -> str:
+
+    def _get_or_create_request_id(self, request: HttpRequest) -> str:
         """요청 ID 생성 또는 추출."""
         # X-Request-ID 헤더가 있으면 사용
         request_id = getattr(request, "META", {}).get("HTTP_X_REQUEST_ID")
         if request_id:
             return request_id
-        
+
         # 없으면 생성
         return str(uuid.uuid4())
-    
-    def _get_user_id(self, request: "HttpRequest") -> Optional[str]:
+
+    def _get_user_id(self, request: HttpRequest) -> str | None:
         """사용자 ID 추출."""
         try:
             user = getattr(request, "user", None)
@@ -262,30 +263,30 @@ class AuditMiddleware:
         except Exception:
             pass
         return None
-    
+
     def _capture_response_meta(
         self,
-        request: "HttpRequest",
-        response: "HttpResponse",
-        buffer: "RequestAuditBuffer",
+        request: HttpRequest,
+        response: HttpResponse,
+        buffer: RequestAuditBuffer,
     ) -> None:
         """
         응답 메타데이터 캡처 - 에러 응답 시 이벤트 추가.
-        
+
         ExceptionHandler가 이미 예외를 기록했으면 ERROR_DETECTED를 추가하지 않습니다.
         이를 통해 동일 예외에 대한 중복 Audit 기록을 방지합니다.
         """
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         status_code = getattr(response, "status_code", 200)
         elapsed = buffer.get_elapsed_seconds()
-        
+
         # 4xx/5xx 에러 응답인 경우 이벤트 추가
         if status_code >= 400:
             # ExceptionHandler가 이미 예외를 기록했으면 스킵 (중복 방지)
             if buffer.has_event_from_source("ExceptionHandler"):
                 return
-            
+
             buffer.add(
                 event_type=AuditEventType.ERROR_DETECTED,
                 source="AuditMiddleware",
@@ -298,27 +299,27 @@ class AuditMiddleware:
                 success=False,
                 error_message=f"HTTP {status_code}",
             )
-    
+
     def _record_events(
         self,
-        buffer: "RequestAuditBuffer",
-        request: "HttpRequest",
-        response: "HttpResponse",
+        buffer: RequestAuditBuffer,
+        request: HttpRequest,
+        response: HttpResponse,
     ) -> None:
         """
         이벤트 일괄 기록 - 버퍼 낚아채기.
-        
+
         Fail-Open: 기록 실패 시 메인 흐름 중단 없음.
         """
         if self._recorder is None:
             # Recorder 없으면 로그로 fallback
             self._fallback_log_events(buffer)
             return
-        
+
         try:
             # Actor 컨텍스트 가져오기
             actor_id, actor_type = self._get_actor_context()
-            
+
             # 요청 컨텍스트
             request_context = {
                 "request_id": buffer.request_id,
@@ -330,43 +331,47 @@ class AuditMiddleware:
                 "elapsed_seconds": round(buffer.get_elapsed_seconds(), 4),
                 "event_count": buffer.event_count(),
             }
-            
+
             # 각 이벤트 기록 (해시 체인으로 연결)
             for event in buffer.get_events():
                 self._record_single_event(event, request_context)
                 self._total_events_recorded += 1
-                
+
         except Exception as e:
             # Audit 실패가 메인 흐름을 막지 않음 (Fail-Open)
             self._failed_recordings += 1
             logger.warning(
-                f"[AuditMiddleware] Recording failed (fail-open): {e}. "
-                f"Total failures: {self._failed_recordings}"
+                f"[AuditMiddleware] Recording failed (fail-open): {e}. " f"Total failures: {self._failed_recordings}"
             )
             # Fallback 시도
             self._fallback_log_events(buffer)
-    
-    def _get_actor_context(self) -> tuple[Optional[str], str]:
+
+    def _get_actor_context(self) -> tuple[str | None, str]:
         """ActorContext에서 actor 정보 가져오기."""
         try:
             from selfhealing.context.actor_context import ActorContext
+
             if ActorContext.is_set():
                 actor = ActorContext.get_current()
                 return actor.actor_id, actor.actor_type
         except ImportError:
             pass
         return None, "system"
-    
+
     def _record_single_event(
         self,
-        event: "AuditEvent",
-        request_context: Dict[str, Any],
+        event: AuditEvent,
+        request_context: dict[str, Any],
     ) -> None:
         """단일 이벤트 기록 - ContinuousAuditRecorder 통해 HashChain 적용."""
         try:
-            from selfhealing.interfaces.audit_adapter import AuditEntry, AuditAction, ContextType
             from selfhealing.audit.event_buffer import AuditEventType
-            
+            from selfhealing.interfaces.audit_adapter import (
+                AuditAction,
+                AuditEntry,
+                ContextType,
+            )
+
             # 이벤트 타입 → AuditAction 매핑
             action_map = {
                 AuditEventType.DLQ_STORE: AuditAction.DLQ_STORE,
@@ -385,9 +390,9 @@ class AuditMiddleware:
                 AuditEventType.MANUAL_OVERRIDE: AuditAction.MANUAL_OVERRIDE,
                 AuditEventType.GENERIC: AuditAction.CONFIG_CHANGE,
             }
-            
+
             action = action_map.get(event.event_type, AuditAction.CONFIG_CHANGE)
-            
+
             # AuditEntry 생성
             entry = AuditEntry(
                 action=action,
@@ -406,16 +411,17 @@ class AuditMiddleware:
                 success=event.success,
                 error_message=event.error_message,
             )
-            
+
             # ContinuousAuditRecorder를 통해 기록 (HashChain 적용)
             self._recorder.audit_adapter.log(entry)
-            
+
         except Exception as e:
             logger.debug(f"[AuditMiddleware] Event record failed: {e}")
-    
-    def _fallback_log_events(self, buffer: "RequestAuditBuffer") -> None:
+
+    def _fallback_log_events(self, buffer: RequestAuditBuffer) -> None:
         """Fallback: stderr로 이벤트 출력."""
         import sys
+
         for event in buffer.get_events():
             try:
                 print(
@@ -424,13 +430,13 @@ class AuditMiddleware:
                 )
             except Exception:
                 pass
-    
+
     # =========================================================================
     # Statistics & Monitoring
     # =========================================================================
-    
+
     @classmethod
-    def get_stats(cls) -> Dict[str, Any]:
+    def get_stats(cls) -> dict[str, Any]:
         """미들웨어 통계 반환."""
         # 싱글톤이 아니므로 클래스 레벨에서 접근 불가
         # 개별 인스턴스 통계는 인스턴스에서 조회
@@ -443,10 +449,11 @@ class AuditMiddleware:
 # Utility Functions
 # =============================================================================
 
-def get_audit_middleware_from_settings() -> Optional[AuditMiddleware]:
+
+def get_audit_middleware_from_settings() -> AuditMiddleware | None:
     """
     Django settings에서 AuditMiddleware 인스턴스 가져오기.
-    
+
     Note: Django 미들웨어는 인스턴스화되어 있어 직접 접근이 어려움.
     이 함수는 참조용으로만 사용.
     """
@@ -456,4 +463,5 @@ def get_audit_middleware_from_settings() -> Optional[AuditMiddleware]:
 def is_audit_middleware_enabled() -> bool:
     """AuditMiddleware 활성화 여부 확인."""
     import os
+
     return os.environ.get("AUDIT_MIDDLEWARE_ENABLED", "TRUE").upper() == "TRUE"
