@@ -37,23 +37,18 @@ from selfhealing.context.causation_context import (
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def reset_causation_context():
+    """테스트 간 CausationContext 상태 초기화."""
+    # Reset before test
+    token = _current_causation.set(None)
+    yield
+    # Reset after test
+    _current_causation.reset(token)
+
+
 class TestSetupCausationContext:
     """_setup_causation_context 단위 테스트."""
-    
-    def setup_method(self):
-        """각 테스트 전 컨텍스트 초기화."""
-        # 기존 컨텍스트 정리
-        try:
-            _current_causation.set(None)
-        except Exception:
-            pass
-    
-    def teardown_method(self):
-        """각 테스트 후 컨텍스트 정리."""
-        try:
-            _current_causation.set(None)
-        except Exception:
-            pass
     
     def test_setup_with_valid_headers(self):
         """유효한 헤더로 컨텍스트 설정."""
@@ -85,8 +80,8 @@ class TestSetupCausationContext:
         # token 저장 확인
         assert hasattr(mock_sender.request, _CAUSATION_TOKEN_ATTR)
     
-    def test_setup_without_cascade_header(self):
-        """cascade_id 헤더 없으면 컨텍스트 설정 안함."""
+    def test_setup_without_cascade_header_creates_system_cascade(self):
+        """cascade_id 헤더 없으면 SYSTEM_ROOT cascade 자동 생성."""
         from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
         
         mock_sender = MagicMock()
@@ -96,10 +91,14 @@ class TestSetupCausationContext:
         _setup_causation_context(mock_sender, "task-123", "test_task")
         
         info = CausationContext.get_current()
-        assert info is None
+        # 새 동작: SYSTEM_ROOT cascade가 자동 생성됨
+        assert info is not None
+        assert info.cascade_id.startswith("cascade-")
+        assert info.parent_event_id.startswith("SYSTEM_ROOT_")
+        assert info.metadata.get("auto_generated") is True
     
     def test_setup_without_request(self):
-        """request 없으면 예외 없이 처리."""
+        """request 없으면 예외 없이 처리, 컨텍스트 설정 안함."""
         from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
         
         mock_sender = MagicMock()
@@ -109,6 +108,7 @@ class TestSetupCausationContext:
         _setup_causation_context(mock_sender, "task-123", "test_task")
         
         info = CausationContext.get_current()
+        # request 없으면 cascade 생성 안함
         assert info is None
     
     def test_metadata_includes_task_info(self):

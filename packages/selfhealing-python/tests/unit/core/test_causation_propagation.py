@@ -22,6 +22,16 @@ from selfhealing.context.causation_context import (
 )
 
 
+@pytest.fixture(autouse=True)
+def reset_causation_context():
+    """테스트 간 CausationContext 상태 초기화."""
+    # Reset before test
+    token = _current_causation.set(None)
+    yield
+    # Reset after test
+    _current_causation.reset(token)
+
+
 class TestCausationContextBasic:
     """CausationContext 기본 기능 테스트."""
     
@@ -216,116 +226,6 @@ class TestCausationInfoSerialization:
         assert info.metadata == {}
 
 
-@pytest.mark.django_db(transaction=False)
-class TestResponseMetaCausationId:
-    """ResponseMeta causation_id 필드 테스트."""
-    
-    @pytest.fixture(autouse=True)
-    def setup_django(self):
-        """Django 설정 초기화."""
-        import django
-        from django.conf import settings
-        if not settings.configured:
-            settings.configure(
-                DEBUG=True,
-                DATABASES={
-                    'default': {
-                        'ENGINE': 'django.db.backends.sqlite3',
-                        'NAME': ':memory:',
-                    }
-                },
-                INSTALLED_APPS=[
-                    'django.contrib.contenttypes',
-                    'django.contrib.auth',
-                ],
-                REST_FRAMEWORK={},
-                EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-            )
-    
-    def test_response_meta_includes_causation_id(self):
-        """ResponseMeta에 causation_id 포함."""
-        from selfhealing.api.django.exceptions.response import ResponseMeta
-        
-        meta = ResponseMeta(
-            request_id="req-123",
-            path="/api/test/",
-            method="POST",
-            causation_id="cascade-abc123",
-        )
-        
-        result = meta.to_dict()
-        
-        assert result["request_id"] == "req-123"
-        assert result["path"] == "/api/test/"
-        assert result["method"] == "POST"
-        assert result["causation_id"] == "cascade-abc123"
-    
-    def test_response_meta_omits_none_causation_id(self):
-        """causation_id가 None이면 출력에서 제외."""
-        from selfhealing.api.django.exceptions.response import ResponseMeta
-        
-        meta = ResponseMeta(
-            request_id="req-123",
-            causation_id=None,
-        )
-        
-        result = meta.to_dict()
-        
-        assert "request_id" in result
-        assert "causation_id" not in result
-
-
-@pytest.mark.django_db(transaction=False)
-class TestStandardErrorResponseWithCausation:
-    """StandardErrorResponse causation_id 테스트."""
-    
-    @pytest.fixture(autouse=True)
-    def setup_django(self):
-        """Django 설정 초기화."""
-        import django
-        from django.conf import settings
-        if not settings.configured:
-            settings.configure(
-                DEBUG=True,
-                DATABASES={
-                    'default': {
-                        'ENGINE': 'django.db.backends.sqlite3',
-                        'NAME': ':memory:',
-                    }
-                },
-                INSTALLED_APPS=[
-                    'django.contrib.contenttypes',
-                    'django.contrib.auth',
-                ],
-                REST_FRAMEWORK={},
-                EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-            )
-    
-    def test_from_classified_error_with_causation_id(self):
-        """from_classified_error가 causation_id 포함."""
-        from selfhealing.api.django.exceptions.response import StandardErrorResponse
-        from selfhealing.api.django.exceptions.classifier import ClassifiedError, ExceptionCategory
-        from selfhealing.api.django.exceptions.codes import ErrorCode
-        
-        classified = ClassifiedError(
-            category=ExceptionCategory.VALIDATION,
-            code=ErrorCode.VALIDATION_FIELD_REQUIRED,
-            http_status=400,
-            message="필수 필드 누락",
-            retryable=False,
-            exception_class="ValidationError",
-        )
-        
-        response = StandardErrorResponse.from_classified_error(
-            classified=classified,
-            request_id="req-456",
-            path="/api/orders/",
-            method="POST",
-            causation_id="cascade-test123",
-        )
-        
-        assert response.meta.causation_id == "cascade-test123"
-        
-        # to_dict에도 포함
-        result = response.to_dict()
-        assert result["meta"]["causation_id"] == "cascade-test123"
+# Note: Django-dependent tests (TestResponseMetaCausationId, TestStandardErrorResponseWithCausation)
+# are located in the global tests folder: tests/api/exceptions/test_causation_propagation.py
+# These tests require Django configuration and should be run via docker-compose.
