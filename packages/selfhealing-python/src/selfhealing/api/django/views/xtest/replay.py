@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -65,9 +64,6 @@ class ReplaySingleView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -336,9 +332,6 @@ class ReplayBatchView(XTestModeMixin, APIView):
         }
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     MAX_BATCH_SIZE = 50
     DEFAULT_BATCH_SIZE = 10
 
@@ -550,9 +543,6 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
         }
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -731,9 +721,6 @@ class ReplayStatusView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)

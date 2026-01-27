@@ -14,7 +14,6 @@ import time
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -46,9 +45,6 @@ class InjectCBFailureView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -155,9 +151,6 @@ class ResetCBView(XTestModeMixin, APIView):
         }
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -211,9 +204,6 @@ class CBStatusDetailView(XTestModeMixin, APIView):
 
     GET /api/self-healing/xtest/cb-status/?service=database
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -284,9 +274,6 @@ class FastFailTestView(XTestModeMixin, APIView):
     GET /api/self-healing/xtest/fast-fail-test/?service=database
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -336,9 +323,6 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
 
     Note: DB 모델의 half_open_max_calls 기본값은 3입니다.
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -430,9 +414,6 @@ class TryRecoveryTransitionView(XTestModeMixin, APIView):
     CB의 자동 전환 로직을 트리거합니다.
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -517,9 +498,6 @@ class SwitchToAutoModeView(XTestModeMixin, APIView):
     force_open 후 manually_controlled=True 상태를 해제하여
     recovery_timeout 후 자동으로 HALF_OPEN으로 전환되도록 함.
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)

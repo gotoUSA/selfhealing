@@ -28,7 +28,6 @@ from typing import Any, Dict, List, Optional
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -110,9 +109,6 @@ class GenerateKeyView(XTestModeMixin, APIView):
             }
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -253,9 +249,6 @@ class CheckDuplicateView(XTestModeMixin, APIView):
             "cache_key": "idempotency:external_service:order:123:process"
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -483,9 +476,6 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
         }
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -578,9 +568,6 @@ class RegisterKeyView(XTestModeMixin, APIView):
             "expires_at": "2026-01-26T11:00:00Z"
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -716,9 +703,6 @@ class ClearKeysView(XTestModeMixin, APIView):
             "cleared_keys": ["idempotency:..."]  // 삭제된 키 목록
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)

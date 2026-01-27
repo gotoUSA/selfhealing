@@ -29,7 +29,6 @@ from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -79,9 +78,6 @@ class RunScenarioView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-    
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -198,9 +194,6 @@ class ScenarioStatusView(XTestModeMixin, APIView):
             "errors": [...]
         }
     """
-    
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request, scenario_id: str) -> Response:
         denied = self.check_chaos_permission(request)
@@ -263,9 +256,6 @@ class FullSnapshotView(XTestModeMixin, APIView):
             "timestamp": "..."
         }
     """
-    
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -495,10 +485,7 @@ class ResetView(XTestModeMixin, APIView):
             }
         }
     """
-    
-    authentication_classes = []
-    permission_classes = [AllowAny]
-    
+
     VALID_COMPONENTS = [
         "circuit_breakers",
         "error_budget",

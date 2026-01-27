@@ -14,7 +14,6 @@ import logging
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -41,9 +40,6 @@ class HealingTimelineView(XTestModeMixin, APIView):
 
     장애 감지, CB 상태 변경, 복구 등의 이벤트 타임라인을 조회합니다.
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     @staticmethod
     def _get_timeline_default_limit() -> int:
@@ -122,9 +118,6 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
     - affected_service: 장애를 주입할 서비스 (필수)
     - check_services: 영향 확인할 서비스 목록 (생략 시 CB에 등록된 모든 서비스)
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -304,9 +297,6 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
     
     - test_services: 테스트할 서비스 목록 (생략 시 CB에 등록된 모든 서비스)
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -560,8 +550,6 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
     최근 힐링 이벤트를 기반으로 자동 Post-mortem 리포트를 생성합니다.
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -619,8 +607,6 @@ class RecordHealingEventView(XTestModeMixin, APIView):
     커스텀 힐링 이벤트를 기록합니다.
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -663,9 +649,6 @@ class GetHealingIncidentsView(XTestModeMixin, APIView):
 
     GET /api/self-healing/xtest/healing-incidents/?limit=10
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)

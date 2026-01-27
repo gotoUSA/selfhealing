@@ -7,7 +7,6 @@ X-Test-Mode Snapshot Views
 
 import logging
 
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,9 +22,6 @@ class SystemSnapshotView(XTestModeMixin, APIView):
 
     GET /api/self-healing/xtest/snapshot/
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)

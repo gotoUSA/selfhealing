@@ -643,6 +643,127 @@ class IsPanicRollbackAuthorized(BasePermission):
         return False
 
 
+class HasChaosTestPermission(BasePermission):
+    """
+    X-Test/Chaos 실험 API 권한 (2중 보안 장치 - 1차 Django RBAC).
+    
+    X-Test-Mode API에 대한 Django RBAC 기반 권한 클래스.
+    헤더 검증(XTestModeMixin.check_chaos_permission)과 함께 2중 보안을 구성합니다.
+    
+    허용 조건 (OR):
+    - 테스트 바이패스: DISABLE_SELFHEALING_AUTH=true
+    - Django superuser
+    - selfhealing_admin 그룹 멤버
+    - selfhealing_chaos_tester 그룹 멤버
+    
+    차단 조건 (무조건):
+    - ENVIRONMENT == production (Fail-Secure)
+    
+    로깅:
+    - 권한 거부: WARNING (사용자, 이유)
+    - 프로덕션 차단: ERROR
+    - 권한 허용: DEBUG
+    
+    보안:
+    - Fail-Secure: 모든 예외는 거부로 처리
+    """
+    
+    message = (
+        "X-Test/Chaos 실험 권한이 없습니다. "
+        "selfhealing_admin 또는 selfhealing_chaos_tester 그룹에 속해야 합니다."
+    )
+    
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        """
+        X-Test/Chaos API 접근 권한 체크.
+        
+        Args:
+            request: HTTP 요청 객체
+            view: 뷰 객체
+        
+        Returns:
+            bool: 권한 여부
+        
+        Note:
+            Fail-Secure: 모든 예외 발생 시 거부
+        """
+        try:
+            # 1. 테스트 환경 바이패스 (DISABLE_SELFHEALING_AUTH=true)
+            if _is_auth_disabled():
+                logger.debug(
+                    f"[RBAC] X-Test permission bypassed (auth disabled): "
+                    f"path={getattr(request, 'path', 'unknown')}"
+                )
+                return True
+            
+            # 2. 프로덕션 환경 무조건 차단 (Fail-Secure)
+            environment = os.environ.get("ENVIRONMENT", "development").lower()
+            if environment == "production":
+                logger.error(
+                    f"[RBAC] X-Test access DENIED in production: "
+                    f"user={request.user}, path={getattr(request, 'path', 'unknown')}, "
+                    f"ip={self._get_client_ip(request)}"
+                )
+                self.message = (
+                    "X-Test/Chaos API는 프로덕션 환경에서 사용할 수 없습니다. "
+                    "보안 정책에 따라 접근이 차단되었습니다."
+                )
+                return False
+            
+            # 3. 인증 필요
+            if not request.user or not request.user.is_authenticated:
+                logger.warning(
+                    f"[RBAC] X-Test permission denied (not authenticated): "
+                    f"path={getattr(request, 'path', 'unknown')}"
+                )
+                self.message = "X-Test/Chaos API 접근에는 인증이 필요합니다."
+                return False
+            
+            # 4. Django superuser 자동 허용
+            if request.user.is_superuser:
+                logger.debug(
+                    f"[RBAC] X-Test permission granted (superuser): "
+                    f"user={request.user}"
+                )
+                return True
+            
+            # 5. 그룹 기반 권한 체크 (selfhealing_admin 또는 selfhealing_chaos_tester)
+            allowed_groups = ["selfhealing_admin", "selfhealing_chaos_tester"]
+            if request.user.groups.filter(name__in=allowed_groups).exists():
+                user_groups = list(
+                    request.user.groups.filter(name__in=allowed_groups)
+                    .values_list("name", flat=True)
+                )
+                logger.debug(
+                    f"[RBAC] X-Test permission granted (group): "
+                    f"user={request.user}, groups={user_groups}"
+                )
+                return True
+            
+            # 6. 권한 없음 - 거부
+            logger.warning(
+                f"[RBAC] X-Test permission denied (no group): "
+                f"user={request.user}, required_groups={allowed_groups}"
+            )
+            return False
+            
+        except Exception as e:
+            # Fail-Secure: 예외 발생 시 거부
+            logger.error(
+                f"[RBAC] X-Test permission check failed (deny): "
+                f"error={e}, user={getattr(request, 'user', 'unknown')}"
+            )
+            self.message = "권한 확인 중 오류가 발생했습니다. 접근이 거부되었습니다."
+            return False
+    
+    def _get_client_ip(self, request: Request) -> Optional[str]:
+        """클라이언트 IP 추출."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR")
+
+
 # Backward compatibility aliases
 SelfHealingViewer = IsViewer
 SelfHealingOperator = IsOperator

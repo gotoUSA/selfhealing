@@ -3,7 +3,11 @@ X-Test-Mode Base Module
 
 공통 유틸리티, Mixin, 헬퍼 함수들을 정의합니다.
 
-Security:
+Security (2중 보안 장치):
+1차 - Django RBAC: HasChaosTestPermission 권한 클래스
+2차 - XTestModeMixin: X-Test-Mode 헤더 + 환경 변수 검증
+
+Requirements:
 - X-Test-Mode: chaos-monkey 헤더 필수
 - DEBUG 또는 CHAOS_ENABLED 환경 변수 필요
 - production 환경에서는 완전 차단
@@ -19,9 +23,11 @@ import psutil
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from selfhealing.api.django.permissions import HasChaosTestPermission
 from selfhealing.services.audit.xtest_audit import (
     log_xtest_operation_audit,
     log_xtest_injection_audit,
@@ -38,14 +44,24 @@ logger = logging.getLogger(__name__)
 
 class XTestModeMixin:
     """
-    X-Test-Mode 보안 검증 믹스인.
+    X-Test-Mode 2중 보안 검증 믹스인.
+    
+    Security (2중 보안 장치):
+    1차 - Django RBAC: HasChaosTestPermission (인증/그룹 기반)
+    2차 - XTestModeMixin: 헤더 + 환경 변수 검증
     
     Requirements:
-    1. X-Test-Mode: chaos-monkey 헤더
-    2. DEBUG=True 또는 CHAOS_ENABLED=true
-    3. ENVIRONMENT != production
+    1. Django 인증 + HasChaosTestPermission 권한
+    2. X-Test-Mode: chaos-monkey 헤더
+    3. DEBUG=True 또는 CHAOS_ENABLED=true
+    4. ENVIRONMENT != production
     """
     
+    # 1차 보안: Django RBAC 기반 인증/권한
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [HasChaosTestPermission]
+    
+    # 2차 보안: 헤더 검증용 상수
     CHAOS_HEADER = "X-Test-Mode"
     CHAOS_VALUE = "chaos-monkey"
     

@@ -26,7 +26,6 @@ from typing import Any, Dict
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -71,9 +70,6 @@ class RateLimitStatusView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -185,9 +181,6 @@ class RateLimitClientView(XTestModeMixin, APIView):
         }
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -273,9 +266,6 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
             }
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -367,9 +357,6 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
             }
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -471,9 +458,6 @@ class RateLimitResetView(XTestModeMixin, APIView):
             "events_reset": 10
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)

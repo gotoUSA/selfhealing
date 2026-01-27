@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -61,9 +60,6 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
             "snapshot": {...}
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
@@ -194,9 +190,6 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
         }
     """
 
-    authentication_classes = []
-    permission_classes = [AllowAny]
-
     def get(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
         if denied:
@@ -303,9 +296,6 @@ class ForceStatusView(XTestModeMixin, APIView):
             "changed_at": "2025-01-26T14:00:00+09:00"
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     # 허용되는 상태 목록
     ALLOWED_STATUSES = ["pending", "reviewing", "resolved", "rejected", "requires_review"]
@@ -472,9 +462,6 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
             "xtest_only": true
         }
     """
-
-    authentication_classes = []
-    permission_classes = [AllowAny]
 
     def post(self, request: Request) -> Response:
         denied = self.check_chaos_permission(request)
