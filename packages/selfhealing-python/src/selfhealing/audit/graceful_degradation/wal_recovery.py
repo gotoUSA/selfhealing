@@ -161,6 +161,7 @@ class HashChainWALRecovery:
             "entries_recovered": 0,
             "entries_failed": 0,
             "entries_already_committed": 0,
+            "idempotency_skipped": 0,  # 1차 방어 (IdempotencyKey) 중복 스킵
         }
         
         try:
@@ -174,6 +175,7 @@ class HashChainWALRecovery:
                 result["entries_recovered"] += file_result["recovered"]
                 result["entries_failed"] += file_result["failed"]
                 result["entries_already_committed"] += file_result["already_committed"]
+                result["idempotency_skipped"] += file_result.get("idempotency_skipped", 0)
             
             self._recovery_done = True
             self._recovered_count = result["entries_recovered"]
@@ -190,7 +192,13 @@ class HashChainWALRecovery:
     
     def _recover_from_wal_file(self, wal_file: Path) -> Dict[str, int]:
         """Recover entries from a single WAL file."""
-        result = {"found": 0, "recovered": 0, "failed": 0, "already_committed": 0}
+        result = {
+            "found": 0,
+            "recovered": 0,
+            "failed": 0,
+            "already_committed": 0,
+            "idempotency_skipped": 0,  # 1차 방어 (Redis) 중복 스킵
+        }
         
         # Read all entries
         entries: Dict[int, Dict[str, Any]] = {}
@@ -222,9 +230,19 @@ class HashChainWALRecovery:
                     result["already_committed"] += 1
                     continue
                 
+                # 1차 방어: IdempotencyKey를 사용한 중복 체크 (Redis)
+                if self._is_duplicate_via_idempotency(wal_seq, "redis_replay"):
+                    result["idempotency_skipped"] += 1
+                    logger.debug(
+                        f"[HashChainWAL] Skipped duplicate entry via idempotency: seq={wal_seq}"
+                    )
+                    continue
+                
                 # Attempt to replay
                 if self._replay_entry(entry):
                     result["recovered"] += 1
+                    # 복구 성공 시 멱등성 키 등록
+                    self._mark_as_processed_idempotency(wal_seq, "redis_replay")
                 else:
                     result["failed"] += 1
             
@@ -275,6 +293,75 @@ class HashChainWALRecovery:
         except Exception as e:
             logger.error(f"[HashChainWAL] Replay failed: {e}")
             return False
+    
+    def _is_duplicate_via_idempotency(self, wal_seq: int, operation: str) -> bool:
+        """
+        IdempotencyKey를 사용하여 중복 WAL 엔트리인지 확인 (1차 방어).
+        
+        Redis 기반 빠른 중복 감지로 불필요한 DB 쓰기를 방지합니다.
+        
+        Args:
+            wal_seq: WAL 시퀀스 번호
+            operation: 복구 작업 유형 (redis_replay, pg_insert 등)
+        
+        Returns:
+            True if duplicate (should skip), False if new
+        """
+        try:
+            from selfhealing.services.idempotency_service import (
+                IdempotencyKey,
+                IdempotencyService,
+            )
+            
+            # WAL 복구용 멱등성 키 생성
+            key = IdempotencyKey.for_wal_recovery(
+                wal_entry_id=str(wal_seq),
+                operation=operation,
+            )
+            
+            service = IdempotencyService()
+            result = service.check(key)
+            
+            return result.is_duplicate
+            
+        except ImportError:
+            # IdempotencyService 미사용 환경
+            logger.debug("[HashChainWAL] IdempotencyService not available")
+            return False
+        except Exception as e:
+            # 멱등성 검사 실패 시 안전하게 진행 (중복 허용)
+            logger.warning(f"[HashChainWAL] Idempotency check failed: {e}")
+            return False
+    
+    def _mark_as_processed_idempotency(self, wal_seq: int, operation: str) -> None:
+        """
+        복구 완료된 WAL 엔트리를 멱등성 캐시에 등록.
+        
+        다음 복구 시도에서 중복으로 처리되도록 합니다.
+        
+        Args:
+            wal_seq: WAL 시퀀스 번호
+            operation: 복구 작업 유형
+        """
+        try:
+            from selfhealing.services.idempotency_service import (
+                IdempotencyKey,
+                IdempotencyService,
+            )
+            
+            key = IdempotencyKey.for_wal_recovery(
+                wal_entry_id=str(wal_seq),
+                operation=operation,
+            )
+            
+            service = IdempotencyService()
+            # TTL 1시간 (복구 세션 내 중복 방지용)
+            service.mark_as_processed(key, ttl=3600)
+            
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"[HashChainWAL] Failed to mark as processed: {e}")
     
     def cleanup_old_wal_files(self, max_age_days: int = 7) -> int:
         """Remove WAL files older than specified days."""

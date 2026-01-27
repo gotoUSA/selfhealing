@@ -441,6 +441,90 @@ class WriteAheadLog:
             if self._config.group_commit_enabled:
                 self._flush_buffer()
     
+    def batch_write_entries(self, entries: List[Dict[str, Any]]) -> List[int]:
+        """
+        여러 엔트리를 한 번에 기록 (단일 fsync).
+        
+        개별 write() 호출 대비 I/O 비용을 크게 절감합니다.
+        모든 엔트리가 동일한 fsync 호출로 영속화됩니다.
+        
+        Args:
+            entries: 기록할 데이터 딕셔너리 목록
+        
+        Returns:
+            각 엔트리의 시퀀스 번호 목록 (입력 순서 동일)
+        
+        Raises:
+            WALError: WAL이 닫혀있는 경우
+        
+        Example:
+            wal = WriteAheadLog(config)
+            sequences = wal.batch_write_entries([
+                {"event": "config_change", "key": "max_retries"},
+                {"event": "config_change", "key": "timeout"},
+            ])
+            # sequences = [1, 2]
+        """
+        if not entries:
+            return []
+        
+        with self._lock:
+            if self._state == WALState.CLOSED:
+                raise WALError("WAL is closed")
+            
+            sequences: List[int] = []
+            records: List[bytes] = []
+            
+            # 모든 엔트리 준비 (직렬화 + 체크섬)
+            for data in entries:
+                self._sequence += 1
+                current_seq = self._sequence
+                sequences.append(current_seq)
+                
+                entry = {
+                    "seq": current_seq,
+                    "ts": time.time(),
+                    "data": data,
+                }
+                entry_bytes = json.dumps(
+                    entry, separators=(",", ":"), ensure_ascii=False
+                ).encode("utf-8")
+                checksum = self._compute_checksum(entry_bytes)
+                
+                record = (
+                    struct.pack(">I", len(entry_bytes)) +
+                    checksum.encode("ascii") +
+                    entry_bytes
+                )
+                records.append(record)
+            
+            # 파일에 일괄 기록
+            self._ensure_file_open()
+            
+            if self._current_handle:
+                for record in records:
+                    self._current_handle.write(record)
+                    self._total_entries += 1
+                
+                # 단일 fsync로 모든 엔트리 영속화
+                if self._config.sync_on_write:
+                    self._current_handle.flush()
+                    os.fsync(self._current_handle.fileno())
+                
+                self._last_write_time = time.time()
+                
+                # 파일 크기 확인 및 로테이션
+                if self._current_handle.tell() > self._config.max_file_size_bytes:
+                    self._rotate_file()
+            
+            # Drift Detection 메트릭 기록
+            if HAS_DRIFT_METRICS:
+                for _ in sequences:
+                    record_wal_entry_written()
+                update_wal_last_sequence(self._sequence)
+            
+            return sequences
+    
     def _read_wal_file(self, filepath: Path) -> Iterator[WALEntry]:
         """
         WAL 파일 읽기.

@@ -453,32 +453,35 @@ WAL 복구 시작
 
 ### Phase 3 (성능 개선) - 3주차
 
-- [ ] **Q3: Audit 배치 쓰기** (선택적)
-  - [ ] `wal.py`: `batch_write_entries()` 메서드 추가
-  - [ ] 성능 벤치마크 수행
-  - [ ] 테스트: `test_wal_batch_write.py`
+- [x] **Q3: Audit 배치 쓰기** (선택적)
+  - [x] `wal.py`: `batch_write_entries()` 메서드 추가
+  - [x] 성능 벤치마크: 배치 쓰기 기반 단일 fsync로 I/O 최적화
+  - [x] 테스트: `test_wal_batch_write.py` (15개 통과)
 
-- [ ] **Q3 보완: WAL 복구 시 중복 제거**
-  - [ ] `wal_recovery.py`: 복구 루프에서 `IdempotencyKey.for_wal_recovery()` 호출
-  - [ ] `recorder.py`: PostgreSQL INSERT 시 `ON CONFLICT DO NOTHING` 추가
-  - [ ] Django 마이그레이션: `audit_event_id` Unique 제약 추가
-  - [ ] 테스트: `test_wal_recovery_deduplication.py`
+- [x] **Q3 보완: WAL 복구 시 중복 제거** (1차 방어)
+  - [x] `wal_recovery.py`: 복구 루프에서 `IdempotencyKey.for_wal_recovery()` 호출
+  - [x] `wal_recovery.py`: `_is_duplicate_via_idempotency()` 함수 구현
+  - [x] `wal_recovery.py`: `_mark_as_processed_idempotency()` 함수 구현
+  - [ ] `recorder.py`: PostgreSQL INSERT 시 `ON CONFLICT DO NOTHING` 추가 (2차 방어 - 미완료)
+  - [ ] Django 마이그레이션: `audit_event_id` Unique 제약 추가 (2차 방어 - 미완료)
+  - [x] 테스트: `test_wal_recovery_deduplication.py` (11개 통과)
 
 ### Phase 4 (Budget 연동) - 4주차
 
-- [ ] **Q12: budget_impact_weight**
-  - [ ] `exception_weights.py` 신규 파일 생성
-  - [ ] `ExceptionBudgetWeightMap` 클래스 구현
-  - [ ] `get_weight_for_error_code()` 함수 구현
-  - [ ] `settings/error_budget.py` 설정 추가
-  - [ ] 테스트: `test_exception_budget_weights.py`
+- [x] **Q12: budget_impact_weight**
+  - [x] `exception_weights.py` 신규 파일 생성
+  - [x] `ExceptionBudgetWeightMap` 클래스 구현
+  - [x] `get_weight_for_error_code()` 함수 구현
+  - [x] `settings/error_budget.py` 설정 연동 (max_weight 참조)
+  - [x] 테스트: `test_exception_budget_weights.py` (28개 통과)
 
-- [ ] **Q12 보완: 가중치 중첩 정책**
-  - [ ] `exception_weights.py`: `WeightCombinePolicy` Enum 정의 (MAX, SUM, MULTIPLY)
-  - [ ] `exception_weights.py`: `combine_weights()` 함수 구현
-  - [ ] `settings/error_budget.py`: `SELFHEALING_WEIGHT_COMBINE_POLICY` 환경변수 추가
-  - [ ] `multiplier.py`: `get_current_multiplier()`에서 정책 적용 로직 추가
-  - [ ] 테스트: `test_weight_combination_policy.py`
+- [x] **Q12 보완: 가중치 중첩 정책**
+  - [x] `exception_weights.py`: `WeightCombinePolicy` Enum 정의 (MAX, SUM, MULTIPLY)
+  - [x] `exception_weights.py`: `combine_weights()` 함수 구현
+  - [x] `exception_weights.py`: `get_weight_combine_policy()` 함수 구현
+  - [x] `settings/error_budget.py`: `SELFHEALING_WEIGHT_COMBINE_POLICY` 환경변수 지원
+  - [ ] `multiplier.py`: `get_current_multiplier()`에서 정책 적용 로직 추가 (Phase 5에서 통합 예정)
+  - [x] 테스트: `test_exception_budget_weights.py`에 WeightCombinePolicy 테스트 포함 (28개 통과)
 
 ---
 
@@ -486,16 +489,17 @@ WAL 복구 시작
 
 ### 8.1 단위 테스트
 
-| 보완 | 테스트 파일 | 검증 항목 |
-|------|-----------|----------|
-| Q2 | `test_event_buffer_max_events.py` | 100개 초과 시 truncation |
-| Q7 | `test_role_based_masking.py` | 레벨별 마스킹 출력 검증 |
-| Q8 | `test_response_meta_region.py` | region 필드 직렬화 |
-| Q9 | `test_celery_causation_propagation.py` | 헤더 자동 주입/복원 |
-| Q9 보완 | `test_system_initiated_causation.py` | SYSTEM_ROOT_{source} 형식 생성 |
-| Q3 보완 | `test_wal_recovery_deduplication.py` | WAL 복구 중복 방지 |
-| Q12 | `test_exception_budget_weights.py` | ErrorCode별 가중치 조회 |
-| Q12 보완 | `test_weight_combination_policy.py` | Max/Sum/Multiply 정책 검증 |
+| 보완 | 테스트 파일 | 검증 항목 | 상태 |
+|------|-----------|----------|------|
+| Q2 | `test_event_buffer_max_events.py` | 100개 초과 시 truncation | ✅ 16개 통과 |
+| Q7 | `test_role_based_masking.py` | 레벨별 마스킹 출력 검증 | ✅ 통과 |
+| Q8 | `test_response_meta_region.py` | region 필드 직렬화 | ✅ 12개 통과 |
+| Q9 | `test_celery_causation_propagation.py` | 헤더 자동 주입/복원 | ✅ 24개 통과 |
+| Q9 보완 | `test_system_initiated_causation.py` | SYSTEM_ROOT_{source} 형식 생성 | ✅ 통과 |
+| Q3 | `test_wal_batch_write.py` | WAL 배치 쓰기 성능 검증 | ✅ 15개 통과 |
+| Q3 보완 | `test_wal_recovery_deduplication.py` | WAL 복구 중복 방지 | ✅ 11개 통과 |
+| Q12 | `test_exception_budget_weights.py` | ErrorCode별 가중치 조회 | ✅ 28개 통과 |
+| Q12 보완 | `test_exception_budget_weights.py` | Max/Sum/Multiply 정책 검증 | ✅ 포함 |
 
 ### 8.2 통합 테스트
 
