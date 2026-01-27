@@ -240,21 +240,37 @@ def get_exception_weight_map() -> ExceptionBudgetWeightMap:
     """
     ExceptionBudgetWeightMap 싱글톤 반환.
     
-    환경변수 SELFHEALING_EXCEPTION_WEIGHTS_JSON으로 커스텀 설정 가능.
+    설정 우선순위:
+    1. settings/error_budget.py의 exception_weights_json
+    2. 환경변수 SELFHEALING_EXCEPTION_WEIGHTS_JSON (직접)
+    3. 기본값
     """
     global _weight_map
     
     if _weight_map is None:
-        # 환경변수에서 커스텀 설정 로드
-        weights_json = os.environ.get("SELFHEALING_EXCEPTION_WEIGHTS_JSON")
+        weights_json = None
+        
+        # 1. Pydantic 설정에서 로드 시도
+        try:
+            from selfhealing.settings.error_budget import get_error_budget_settings
+            settings = get_error_budget_settings()
+            weights_json = settings.exception_weights_json
+        except ImportError:
+            pass
+        
+        # 2. 환경변수 직접 확인 (설정이 없을 경우)
+        if not weights_json:
+            weights_json = os.environ.get("SELFHEALING_EXCEPTION_WEIGHTS_JSON")
+        
+        # 3. JSON 파싱 및 WeightMap 생성
         if weights_json:
             try:
                 import json
                 data = json.loads(weights_json)
                 _weight_map = ExceptionBudgetWeightMap.from_dict(data)
-                logger.info("[ExceptionWeights] Loaded custom weights from env")
+                logger.info("[ExceptionWeights] Loaded custom weights from settings")
             except Exception as e:
-                logger.warning(f"[ExceptionWeights] Failed to parse env: {e}")
+                logger.warning(f"[ExceptionWeights] Failed to parse weights JSON: {e}")
                 _weight_map = ExceptionBudgetWeightMap()
         else:
             _weight_map = ExceptionBudgetWeightMap()
@@ -348,13 +364,29 @@ def get_weight_combine_policy() -> WeightCombinePolicy:
     """
     현재 가중치 결합 정책 반환.
     
-    환경변수 SELFHEALING_WEIGHT_COMBINE_POLICY로 설정 가능.
-    기본값: MAX
+    설정 우선순위:
+    1. settings/error_budget.py의 weight_combine_policy
+    2. 환경변수 SELFHEALING_WEIGHT_COMBINE_POLICY (직접)
+    3. 기본값 MAX
     
     Returns:
         WeightCombinePolicy enum
     """
-    policy_str = os.environ.get("SELFHEALING_WEIGHT_COMBINE_POLICY", "MAX").upper()
+    policy_str = None
+    
+    # 1. Pydantic 설정에서 로드 시도
+    try:
+        from selfhealing.settings.error_budget import get_error_budget_settings
+        settings = get_error_budget_settings()
+        policy_str = settings.weight_combine_policy
+    except ImportError:
+        pass
+    
+    # 2. 환경변수 직접 확인 (설정이 없을 경우)
+    if not policy_str:
+        policy_str = os.environ.get("SELFHEALING_WEIGHT_COMBINE_POLICY", "MAX")
+    
+    policy_str = policy_str.upper()
     
     try:
         return WeightCombinePolicy[policy_str]

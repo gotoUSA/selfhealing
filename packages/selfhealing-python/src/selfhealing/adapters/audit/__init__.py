@@ -64,4 +64,18 @@ __all__ = [
     "get_audit_adapter",
     "set_audit_adapter",
     "reset_audit_adapter",
+    # Django Adapter (optional - requires Django)
+    "DjangoAuditLogAdapter",
+    "get_django_audit_adapter",
 ]
+
+
+# Lazy import for Django adapter (to avoid import errors when Django is not installed)
+def __getattr__(name: str):
+    """Lazy import for optional adapters."""
+    if name in ("DjangoAuditLogAdapter", "get_django_audit_adapter"):
+        from .django_adapter import DjangoAuditLogAdapter, get_django_audit_adapter
+        if name == "DjangoAuditLogAdapter":
+            return DjangoAuditLogAdapter
+        return get_django_audit_adapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -376,6 +376,84 @@ class CrisisMultiplierProvider:
             level.name: self.config.get_multiplier(level)
             for level in EmergencyLevel
         }
+    
+    def get_combined_multiplier(
+        self,
+        error_code: Optional[Any] = None,
+        namespace: Optional[str] = None,
+        bypass_cache: bool = False,
+    ) -> float:
+        """
+        EmergencyLevel 가중치와 ErrorCode 가중치를 결합한 최종 가중치 반환.
+        
+        136_EXCEPTION_HANDLER_6_ENHANCEMENTS.md Q12 보완 구현.
+        
+        결합 정책 (settings/error_budget.py의 weight_combine_policy):
+        - MAX: 최댓값 (권장, 기본값)
+        - SUM: 합산
+        - MULTIPLY: 곱셈 (비권장)
+        
+        Args:
+            error_code: ErrorCode enum 또는 문자열 (None이면 ErrorCode 가중치 미적용)
+            namespace: 대상 네임스페이스 (None이면 현재 인스턴스)
+            bypass_cache: True면 캐시 무시하고 조회
+        
+        Returns:
+            결합된 가중치 (max_multiplier 이하)
+        
+        Example:
+            # LEVEL_3(5.0x) + SERVICE_TIMEOUT(0.5x) with MAX policy → 5.0
+            provider = get_crisis_multiplier_provider()
+            weight = provider.get_combined_multiplier(
+                error_code="SERVICE_TIMEOUT",
+                namespace="payment",
+            )
+        """
+        # 1. EmergencyLevel 가중치 조회
+        emergency_weight = self.get_current_multiplier(
+            namespace=namespace,
+            bypass_cache=bypass_cache,
+        )
+        
+        # 2. ErrorCode 가중치 조회 (옵션)
+        error_weight = 1.0
+        if error_code is not None:
+            try:
+                from selfhealing.services.error_budget.exception_weights import (
+                    get_weight_for_error_code,
+                )
+                error_weight = get_weight_for_error_code(error_code)
+            except ImportError:
+                logger.warning(
+                    "[CrisisMultiplier] exception_weights not available"
+                )
+        
+        # 3. 결합 정책 조회
+        try:
+            from selfhealing.services.error_budget.exception_weights import (
+                get_weight_combine_policy,
+                combine_weights,
+            )
+            policy = get_weight_combine_policy()
+            
+            # 4. 결합 및 상한 적용
+            combined = combine_weights(
+                emergency_weight=emergency_weight,
+                error_weight=error_weight,
+                policy=policy,
+                max_weight=self.config.max_multiplier,
+            )
+        except ImportError:
+            # exception_weights 모듈 없으면 EmergencyLevel 가중치만 반환
+            combined = emergency_weight
+        
+        logger.debug(
+            f"[CrisisMultiplier] Combined: "
+            f"emergency={emergency_weight}, error={error_weight}, "
+            f"combined={combined}x, error_code={error_code}"
+        )
+        
+        return combined
 
 
 # =============================================================================

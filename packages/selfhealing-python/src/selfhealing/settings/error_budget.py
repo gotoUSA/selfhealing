@@ -178,6 +178,38 @@ class ErrorBudgetSettings(BaseSettings):
         description="최대 위기 가중치. 과도한 Error Budget 소진 방지.",
     )
 
+    # ==========================================================================
+    # Exception Budget Weight Settings - Q12 구현
+    # ==========================================================================
+    weight_combine_policy: str = Field(
+        default="MAX",
+        pattern=r"^(MAX|SUM|MULTIPLY)$",
+        description=(
+            "EmergencyLevel과 ErrorCode 가중치 결합 정책. "
+            "MAX: 최댓값 (권장), SUM: 합산, MULTIPLY: 곱셈 (비권장)"
+        ),
+    )
+    exception_weights_json: Optional[str] = Field(
+        default=None,
+        description=(
+            "ErrorCode별 가중치 JSON 설정. "
+            '예: {"category_weights": {"SYSTEM": 1.0}, "code_weights": {"SERVICE_TIMEOUT": 0.5}}'
+        ),
+    )
+
+    # ==========================================================================
+    # Validators
+    # ==========================================================================
+    @field_validator("weight_combine_policy")
+    @classmethod
+    def validate_weight_combine_policy(cls, v: str) -> str:
+        """가중치 결합 정책 검증."""
+        valid_policies = {"MAX", "SUM", "MULTIPLY"}
+        v_upper = v.upper()
+        if v_upper not in valid_policies:
+            raise ValueError(f"Invalid policy: {v}. Must be one of {valid_policies}")
+        return v_upper
+
 
 # Singleton instance (cached)
 _settings: Optional[ErrorBudgetSettings] = None

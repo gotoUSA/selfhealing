@@ -1,3 +1,4 @@
+from .audit_log import AuditLog
 from .cart import Cart, CartItem
 from .email_verification import EmailLog, EmailVerificationToken
 from .failed_external_request import CircuitBreakerState, FailedExternalRequest
@@ -19,6 +20,7 @@ from .webhook_event import WebhookEvent
 # For import convenience
 
 __all__ = [
+    "AuditLog",
     "Product",
     "Category",
     "ProductImage",

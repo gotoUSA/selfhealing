@@ -458,13 +458,19 @@ WAL 복구 시작
   - [x] 성능 벤치마크: 배치 쓰기 기반 단일 fsync로 I/O 최적화
   - [x] 테스트: `test_wal_batch_write.py` (15개 통과)
 
-- [x] **Q3 보완: WAL 복구 시 중복 제거** (1차 방어)
-  - [x] `wal_recovery.py`: 복구 루프에서 `IdempotencyKey.for_wal_recovery()` 호출
+- [x] **Q3 보완: WAL 복구 시 중복 제거** (1차 + 2차 방어)
+  - [x] `wal_recovery.py`: 복구 루프에서 `IdempotencyKey.for_wal_recovery()` 호출 (1차 방어)
   - [x] `wal_recovery.py`: `_is_duplicate_via_idempotency()` 함수 구현
   - [x] `wal_recovery.py`: `_mark_as_processed_idempotency()` 함수 구현
-  - [ ] `recorder.py`: PostgreSQL INSERT 시 `ON CONFLICT DO NOTHING` 추가 (2차 방어 - 미완료)
-  - [ ] Django 마이그레이션: `audit_event_id` Unique 제약 추가 (2차 방어 - 미완료)
+  - [x] `adapters/django/models.py`: `AbstractAuditLog` 모델 추가 (2차 방어)
+  - [x] `adapters/django/models.py`: `audit_event_id` Unique 제약
+  - [x] `adapters/django/models.py`: `insert_ignore_conflict()` - ON CONFLICT DO NOTHING
+  - [x] `adapters/django/models.py`: `bulk_insert_ignore_conflict()` - 벌크 삽입
+  - [x] `shopping/models/audit_log.py`: `AuditLog` 모델 (AbstractAuditLog 상속)
+  - [x] `adapters/audit/django_adapter.py`: `DjangoAuditLogAdapter` 구현
   - [x] 테스트: `test_wal_recovery_deduplication.py` (11개 통과)
+  - [x] 테스트: `test_audit_log_model.py` (Django 통합, Docker Compose)
+  - [x] 테스트: `test_django_audit_adapter.py` (Django 통합, Docker Compose)
 
 ### Phase 4 (Budget 연동) - 4주차
 
@@ -472,16 +478,17 @@ WAL 복구 시작
   - [x] `exception_weights.py` 신규 파일 생성
   - [x] `ExceptionBudgetWeightMap` 클래스 구현
   - [x] `get_weight_for_error_code()` 함수 구현
-  - [x] `settings/error_budget.py` 설정 연동 (max_weight 참조)
+  - [x] `settings/error_budget.py`: `weight_combine_policy`, `exception_weights_json` 필드 추가
   - [x] 테스트: `test_exception_budget_weights.py` (28개 통과)
 
 - [x] **Q12 보완: 가중치 중첩 정책**
   - [x] `exception_weights.py`: `WeightCombinePolicy` Enum 정의 (MAX, SUM, MULTIPLY)
   - [x] `exception_weights.py`: `combine_weights()` 함수 구현
   - [x] `exception_weights.py`: `get_weight_combine_policy()` 함수 구현
-  - [x] `settings/error_budget.py`: `SELFHEALING_WEIGHT_COMBINE_POLICY` 환경변수 지원
-  - [ ] `multiplier.py`: `get_current_multiplier()`에서 정책 적용 로직 추가 (Phase 5에서 통합 예정)
+  - [x] `settings/error_budget.py`: `SELFHEALING_ERRORBUDGET_WEIGHT_COMBINE_POLICY` 환경변수 지원
+  - [x] `multiplier.py`: `get_combined_multiplier()` 메서드 추가 - EmergencyLevel + ErrorCode 가중치 결합
   - [x] 테스트: `test_exception_budget_weights.py`에 WeightCombinePolicy 테스트 포함 (28개 통과)
+  - [x] 테스트: `test_combined_multiplier.py` (Django 통합, Docker Compose)
 
 ---
 
@@ -501,7 +508,15 @@ WAL 복구 시작
 | Q12 | `test_exception_budget_weights.py` | ErrorCode별 가중치 조회 | ✅ 28개 통과 |
 | Q12 보완 | `test_exception_budget_weights.py` | Max/Sum/Multiply 정책 검증 | ✅ 포함 |
 
-### 8.2 통합 테스트
+### 8.2 Django 통합 테스트 (Docker Compose)
+
+| 테스트 파일 | 검증 항목 | 실행 방법 |
+|------------|----------|----------|
+| `test_audit_log_model.py` | AuditLog 모델, Unique 제약, ON CONFLICT | `docker-compose -f docker-compose.test.yml run --rm test pytest tests/self_healing/django/test_audit_log_model.py` |
+| `test_django_audit_adapter.py` | DjangoAuditLogAdapter, ContinuousAuditRecorder 연동 | `docker-compose -f docker-compose.test.yml run --rm test pytest tests/self_healing/django/test_django_audit_adapter.py` |
+| `test_combined_multiplier.py` | get_combined_multiplier(), 정책별 계산 | `docker-compose -f docker-compose.test.yml run --rm test pytest tests/self_healing/django/test_combined_multiplier.py` |
+
+### 8.3 통합 테스트
 
 | 시나리오 | 검증 항목 |
 |----------|----------|
