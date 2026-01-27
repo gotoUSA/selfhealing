@@ -107,6 +107,7 @@ def ensure_causation_context_for_task(
     Celery Task 시작 시 CausationContext 보장.
     
     호출 체인에서 전파된 causation이 없으면 시스템 cascade를 자동 생성합니다.
+    X-Test-Mode에서는 XTC- 프리픽스가 자동 추가됩니다.
     
     Args:
         task_name: Task 이름
@@ -123,11 +124,15 @@ def ensure_causation_context_for_task(
     from datetime import datetime, timezone
     import uuid
     
+    from selfhealing.context.causation_context import _get_xtest_id_prefix
+    
     # source 결정: 스케줄러 여부 확인
     source = _detect_task_source(task_name)
     
-    system_event_id = f"SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
-    cascade_id = f"cascade-{uuid.uuid4().hex[:12]}"
+    # X-Test-Mode 시 XTC- 프리픽스 적용
+    prefix = _get_xtest_id_prefix()
+    system_event_id = f"{prefix}SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
+    cascade_id = f"{prefix}cascade-{uuid.uuid4().hex[:12]}"
     
     info = CausationInfo(
         cascade_id=cascade_id,

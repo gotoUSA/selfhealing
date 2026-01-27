@@ -45,6 +45,77 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# X-Test Causation ID 프리픽스 상수 및 헬퍼
+# =============================================================================
+
+
+XTEST_CAUSATION_PREFIX = "XTC-"
+"""X-Test-Mode causation ID 프리픽스. 로그에서 테스트 요청 식별용."""
+
+
+def _get_xtest_id_prefix() -> str:
+    """
+    X-Test-Mode 여부에 따라 ID 프리픽스 반환.
+    
+    TestModeContext.is_synthetic()이 True이면 'XTC-' 반환,
+    그렇지 않으면 빈 문자열 반환.
+    
+    Returns:
+        'XTC-' (X-Test-Mode) 또는 '' (운영 모드)
+    """
+    try:
+        from selfhealing.core.test_mode_context import TestModeContext
+        if TestModeContext.is_synthetic():
+            return XTEST_CAUSATION_PREFIX
+    except ImportError:
+        pass
+    return ""
+
+
+def is_xtest_id(causation_id: str) -> bool:
+    """
+    주어진 ID가 X-Test causation ID인지 확인.
+    
+    Args:
+        causation_id: 확인할 causation ID (cascade_id 또는 event_id)
+    
+    Returns:
+        True if ID가 XTC- 프리픽스로 시작함
+    
+    Examples:
+        >>> is_xtest_id("XTC-cascade-a1b2c3d4e5f6")
+        True
+        >>> is_xtest_id("cascade-a1b2c3d4e5f6")
+        False
+    """
+    return causation_id.startswith(XTEST_CAUSATION_PREFIX)
+
+
+def normalize_causation_id(causation_id: str) -> str:
+    """
+    Causation ID에서 XTC- 프리픽스 제거.
+    
+    역호환성을 위해 기존 ID 파싱 로직에서 사용합니다.
+    프리픽스가 없는 ID는 그대로 반환합니다.
+    
+    Args:
+        causation_id: 정규화할 causation ID
+    
+    Returns:
+        XTC- 프리픽스가 제거된 순수 ID
+    
+    Examples:
+        >>> normalize_causation_id("XTC-cascade-a1b2c3d4e5f6")
+        'cascade-a1b2c3d4e5f6'
+        >>> normalize_causation_id("cascade-a1b2c3d4e5f6")
+        'cascade-a1b2c3d4e5f6'
+    """
+    if is_xtest_id(causation_id):
+        return causation_id[len(XTEST_CAUSATION_PREFIX):]
+    return causation_id
+
+
+# =============================================================================
 # Celery 헤더 상수
 # =============================================================================
 
@@ -181,6 +252,8 @@ class CausationContext:
         """
         새 Cascade 시작.
         
+        X-Test-Mode에서는 모든 ID에 XTC- 프리픽스가 자동 추가됩니다.
+        
         Args:
             namespace: 네임스페이스
             trigger_event_id: 트리거 이벤트 ID (없으면 자동 생성)
@@ -189,8 +262,9 @@ class CausationContext:
         Yields:
             CausationInfo 인스턴스
         """
-        cascade_id = f"cascade-{uuid.uuid4().hex[:12]}"
-        event_id = trigger_event_id or f"evt-{uuid.uuid4().hex[:8]}"
+        prefix = _get_xtest_id_prefix()
+        cascade_id = f"{prefix}cascade-{uuid.uuid4().hex[:12]}"
+        event_id = trigger_event_id or f"{prefix}evt-{uuid.uuid4().hex[:8]}"
         
         info = CausationInfo(
             cascade_id=cascade_id,
@@ -227,6 +301,7 @@ class CausationContext:
         
         API 요청이 아닌 시스템 자동화 작업의 인과관계 추적에 사용합니다.
         trigger_event_id를 SYSTEM_ROOT_{source}_{uuid} 형식으로 생성합니다.
+        X-Test-Mode에서는 XTC- 프리픽스가 자동 추가됩니다.
         
         Args:
             source: 트리거 소스 (celery_beat, management_cmd, cron, scheduler)
@@ -241,7 +316,8 @@ class CausationContext:
                 process_scheduled_task()
                 # ctx.parent_event_id = "SYSTEM_ROOT_celery_beat_{uuid}"
         """
-        system_event_id = f"SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
+        prefix = _get_xtest_id_prefix()
+        system_event_id = f"{prefix}SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
         
         with cls.start_cascade(
             namespace=namespace,

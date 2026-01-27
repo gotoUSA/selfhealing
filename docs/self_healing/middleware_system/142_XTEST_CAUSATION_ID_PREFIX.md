@@ -2,7 +2,7 @@
 
 **문서 번호:** 142  
 **작성일:** 2026-01-27  
-**상태:** 설계 완료  
+**상태:** 구현 완료 ✅  
 **선행 문서:** 141_XTEST_EMERGENCY_RECOVERY_SCENARIO.md
 
 ---
@@ -184,13 +184,16 @@ X-Test-Mode에서 생성되는 모든 causation_id에 `XTC-` (X-Test-Causation) 
 
 ### 7.1 단위 테스트
 
-| 테스트 케이스 | 검증 항목 |
-|--------------|----------|
-| `test_xtest_cascade_id_prefix` | X-Test 시 `XTC-` 포함 |
-| `test_normal_cascade_id_no_prefix` | 일반 요청 시 프리픽스 없음 |
-| `test_event_id_prefix` | Event ID에도 적용 |
-| `test_normalize_cascade_id` | 프리픽스 제거 함수 |
-| `test_is_xtest_id` | 프리픽스 판별 함수 |
+| 테스트 케이스 | 검증 항목 | 상태 |
+|--------------|----------|------|
+| `test_xtest_cascade_id_has_prefix` | X-Test 시 `XTC-` 포함 | ✅ 통과 |
+| `test_xtest_event_id_has_prefix` | Event ID에도 적용 | ✅ 통과 |
+| `test_normal_cascade_id_no_prefix` | 일반 요청 시 프리픽스 없음 | ✅ 통과 |
+| `test_normal_event_id_no_prefix` | Event ID에 프리픽스 없음 | ✅ 통과 |
+| `test_xtest_system_cascade_has_prefix` | 시스템 Cascade에 프리픽스 | ✅ 통과 |
+| `test_normal_system_cascade_no_prefix` | 운영 시스템 Cascade 프리픽스 없음 | ✅ 통과 |
+| `test_is_xtest_id` | 프리픽스 판별 함수 | ✅ 통과 |
+| `test_normalize_causation_id` | 프리픽스 제거 함수 | ✅ 통과 |
 
 ### 7.2 통합 테스트
 
@@ -206,10 +209,39 @@ X-Test-Mode에서 생성되는 모든 causation_id에 `XTC-` (X-Test-Causation) 
 
 | 파일 | 참조 내용 |
 |------|----------|
-| `core/causation_context.py` | `CausationContext` 클래스 |
-| `core/causation_propagation.py` | `start_new_cascade()` |
-| `adapters/celery/celery_causation.py` | Celery 컨텍스트 주입 |
-| `core/test_mode_context.py` | `TestModeContext` (137번에서 추가) |
+| `context/causation_context.py` | `CausationContext`, `_get_xtest_id_prefix()`, `is_xtest_id()`, `normalize_causation_id()` |
+| `context/celery_propagation.py` | `ensure_causation_context_for_task()` |
+| `core/test_mode_context.py` | `TestModeContext.is_synthetic()` |
+
+---
+
+## 9. 구현 결과
+
+### 9.1 구현 완료 항목
+
+| 순서 | 항목 | 파일 | 상태 |
+|------|------|------|------|
+| Step 1 | `_get_xtest_id_prefix()` 함수 추가 | `context/causation_context.py` | ✅ |
+| Step 2 | `start_cascade()` XTC- 프리픽스 적용 | `context/causation_context.py` | ✅ |
+| Step 3 | Event ID XTC- 프리픽스 적용 | `context/causation_context.py` | ✅ |
+| Step 4 | `start_system_cascade()` XTC- 프리픽스 적용 | `context/causation_context.py` | ✅ |
+| Step 5 | `ensure_causation_context_for_task()` 프리픽스 적용 | `context/celery_propagation.py` | ✅ |
+| Step 6 | 역호환성 함수 추가 | `context/causation_context.py` | ✅ |
+| Step 7 | `__init__.py` export 업데이트 | `context/__init__.py` | ✅ |
+
+### 9.2 테스트 결과
+
+- **테스트 파일:** `tests/unit/core/test_xtest_causation_id_prefix.py`
+- **테스트 수:** 26개
+- **결과:** ✅ 모두 통과
+
+### 9.3 API 변경 사항
+
+| 함수/상수 | 모듈 | 설명 |
+|----------|------|------|
+| `XTEST_CAUSATION_PREFIX` | `selfhealing.context` | XTC- 프리픽스 상수 |
+| `is_xtest_id(causation_id)` | `selfhealing.context` | XTC- 프리픽스 여부 확인 |
+| `normalize_causation_id(causation_id)` | `selfhealing.context` | XTC- 프리픽스 제거 |
 
 ---
 

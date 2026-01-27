@@ -40,6 +40,10 @@ from selfhealing.context.causation_context import (
     CELERY_HEADER_PARENT_EVENT,
     CELERY_HEADER_CHAIN_DEPTH,
     CELERY_HEADER_NAMESPACE,
+    # X-Test Causation ID 프리픽스 관련
+    XTEST_CAUSATION_PREFIX,
+    is_xtest_id,
+    normalize_causation_id,
 )
 
 __all__ = [
@@ -66,5 +70,9 @@ __all__ = [
     "CELERY_HEADER_PARENT_EVENT",
     "CELERY_HEADER_CHAIN_DEPTH",
     "CELERY_HEADER_NAMESPACE",
+    # X-Test Causation ID 프리픽스 관련
+    "XTEST_CAUSATION_PREFIX",
+    "is_xtest_id",
+    "normalize_causation_id",
 ]
 
