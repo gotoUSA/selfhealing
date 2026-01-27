@@ -254,18 +254,72 @@ class XTestModeMixin:
         )
         return True, None
     
+    def check_resource_constraints(self, request: Request) -> Optional[Response]:
+        """
+        시스템 리소스 제약 체크.
+        
+        CPU 80% 초과 또는 메모리 85% 초과 시 429 응답 반환.
+        시스템 과부하 상태에서 X-Test가 추가 부담을 주는 것을 방지.
+        
+        Returns:
+            None if allowed, 429 Response if resource overloaded
+        """
+        try:
+            from selfhealing.services.chaos.safety_guard import (
+                get_resource_guard,
+            )
+            
+            guard = get_resource_guard()
+            result = guard.is_safe_for_chaos()
+            
+            if not result.is_safe:
+                logger.warning(
+                    f"[X-Test-Mode] Resource constraint check failed: {result.block_reason} "
+                    f"(user: {request.user})"
+                )
+                
+                response = Response(
+                    {
+                        "status": "error",
+                        **result.to_response_dict(),
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+                response["Retry-After"] = str(guard.get_recommended_wait())
+                return response
+            
+            logger.debug(
+                f"[X-Test-Mode] Resource check passed: "
+                f"CPU={result.cpu_percent:.1f}%, Memory={result.memory_percent:.1f}%"
+            )
+            return None
+            
+        except ImportError:
+            logger.debug("[X-Test-Mode] ResourceGuard not available, skipping check")
+            return None
+        except Exception as e:
+            logger.warning(f"[X-Test-Mode] Resource check failed with error: {e}")
+            # 체크 실패 시 보수적으로 허용 (가용성 우선)
+            return None
+    
     def check_chaos_permission(self, request: Request) -> Optional[Response]:
         """
         Chaos 권한 체크. 실패시 Response 반환.
         
         검증 순서:
-        1. Chaos 모드 허용 여부 (헤더, 환경변수)
-        2. GLOBAL scope API인 경우 리전 경계 검증
+        1. 리소스 제약 체크 (CPU/메모리 과부하)
+        2. Chaos 모드 허용 여부 (헤더, 환경변수)
+        3. GLOBAL scope API인 경우 리전 경계 검증
         
         Returns:
             None if allowed, Response if denied
         """
-        # 1. Chaos 모드 기본 검증
+        # 1. 리소스 제약 체크 (CPU/메모리)
+        resource_response = self.check_resource_constraints(request)
+        if resource_response is not None:
+            return resource_response
+        
+        # 2. Chaos 모드 기본 검증
         allowed, reason = self.is_chaos_allowed(request)
         if not allowed:
             logger.warning(f"[X-Test-Mode] Denied: {reason} (user: {request.user})")
@@ -279,7 +333,7 @@ class XTestModeMixin:
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # 2. GLOBAL scope API 리전 경계 검증
+        # 3. GLOBAL scope API 리전 경계 검증
         region_allowed, region_response = self.check_regional_scope(request)
         if not region_allowed:
             return region_response

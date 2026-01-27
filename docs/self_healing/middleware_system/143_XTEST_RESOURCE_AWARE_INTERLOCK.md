@@ -2,7 +2,8 @@
 
 **문서 번호:** 143  
 **작성일:** 2026-01-27  
-**상태:** 설계 완료  
+**상태:** 구현 완료 ✅  
+**구현일:** 2026-01-28  
 **선행 문서:** 142_XTEST_CAUSATION_ID_PREFIX.md
 
 ---
@@ -230,6 +231,42 @@
 | `services/governance/safety_guard.py` | `SafetyGuard` 체크 패턴 |
 | `services/recovery_gate.py` | CPU 임계값 참조 (80%) |
 | `api/django/views/xtest/base.py` | `collect_system_snapshot()` psutil 패턴 |
+
+---
+
+## 9. 구현 결과
+
+### 9.1 생성된 파일
+
+| 파일 | 설명 |
+|------|------|
+| `settings/resource_guard.py` | ResourceGuardSettings 설정 클래스 |
+| `services/chaos/safety_guard/resource_guard.py` | ResourceGuard 클래스 |
+| `tests/unit/chaos/test_xtest_resource_guard.py` | 단위 테스트 (16개) |
+
+### 9.2 수정된 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `settings/__init__.py` | ResourceGuardSettings export 추가 |
+| `services/chaos/safety_guard/__init__.py` | ResourceGuard export 추가 |
+| `api/django/views/xtest/base.py` | `check_resource_constraints()` 메서드 추가 |
+
+### 9.3 테스트 결과
+
+```
+tests/unit/chaos/test_xtest_resource_guard.py - 16 passed
+```
+
+| 테스트 케이스 | 상태 |
+|--------------|------|
+| `test_cpu_threshold_blocks` | ✅ |
+| `test_memory_threshold_blocks` | ✅ |
+| `test_below_threshold_allows` | ✅ |
+| `test_retry_after_value` | ✅ |
+| `test_cgroup_priority` | ✅ |
+| `test_psutil_fallback` | ✅ |
+| `test_resource_check_disabled` | ✅ |
 
 ---
 

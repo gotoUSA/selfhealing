@@ -320,6 +320,13 @@ from selfhealing.settings.cleanup import (
     reset_cleanup_settings,
 )
 
+# X-Test Resource Guard Settings (143_XTEST_RESOURCE_AWARE_INTERLOCK.md)
+from selfhealing.settings.resource_guard import (
+    ResourceGuardSettings,
+    get_resource_guard_settings,
+    reset_resource_guard_settings,
+)
+
 # 고급 기능
 from selfhealing.settings.layered_provider import (
     get_layered_settings,
@@ -626,4 +633,8 @@ __all__ = [
     "CleanupSettings",
     "get_cleanup_settings",
     "reset_cleanup_settings",
+    # X-Test Resource Guard Settings (143_XTEST_RESOURCE_AWARE_INTERLOCK.md)
+    "ResourceGuardSettings",
+    "get_resource_guard_settings",
+    "reset_resource_guard_settings",
 ]

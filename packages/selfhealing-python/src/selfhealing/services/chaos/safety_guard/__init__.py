@@ -43,6 +43,15 @@ from .guard import SafetyGuard
 # Singleton helpers
 from .helpers import get_safety_guard, reset_safety_guard
 
+# Resource Guard (X-Test 리소스 체크)
+from .resource_guard import (
+    ResourceGuard,
+    ResourceStatus,
+    ResourceCheckResult,
+    get_resource_guard,
+    reset_resource_guard,
+)
+
 
 __all__ = [
     # Enums
@@ -56,4 +65,10 @@ __all__ = [
     # Helpers
     "get_safety_guard",
     "reset_safety_guard",
+    # Resource Guard
+    "ResourceGuard",
+    "ResourceStatus",
+    "ResourceCheckResult",
+    "get_resource_guard",
+    "reset_resource_guard",
 ]
