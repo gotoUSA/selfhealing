@@ -18,8 +18,8 @@ Usage:
 
         # Override domain field with choices
         domain = models.CharField(
-            max_length=50, 
-            choices=Domain.choices, 
+            max_length=50,
+            choices=Domain.choices,
             db_index=True
         )
 
@@ -83,10 +83,7 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
     """
 
     if not DJANGO_AVAILABLE:
-        raise ImportError(
-            "Django is required to use AbstractFailedOperation. "
-            "Install it with: pip install django"
-        )
+        raise ImportError("Django is required to use AbstractFailedOperation. " "Install it with: pip install django")
 
     # ========================================
     # Status Choices (domain-free)
@@ -398,9 +395,7 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
         self.status = self.Status.REPLAYED
         self.retry_count += 1
         self.last_retry_at = timezone.now()
-        self.save(
-            update_fields=["status", "retry_count", "last_retry_at", "updated_at"]
-        )
+        self.save(update_fields=["status", "retry_count", "last_retry_at", "updated_at"])
 
     def mark_as_reviewing(self, reviewer: Any = None) -> None:
         """
@@ -505,9 +500,7 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
         self.status = self.Status.EXPIRED
         self.resolution_type = self.ResolutionType.EXPIRED
         self.resolved_at = timezone.now()
-        self.save(
-            update_fields=["status", "resolution_type", "resolved_at", "updated_at"]
-        )
+        self.save(update_fields=["status", "resolution_type", "resolved_at", "updated_at"])
 
     # ========================================
     # Query Helpers
@@ -515,9 +508,7 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
     @property
     def is_replayable(self) -> bool:
         """Check if this entry can be replayed."""
-        return (
-            self.status == self.Status.PENDING and self.retry_count < self.max_retries
-        )
+        return self.status == self.Status.PENDING and self.retry_count < self.max_retries
 
     @property
     def age_seconds(self) -> float:
@@ -536,17 +527,12 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
 
             sla_config = get_sla_thresholds()
             threshold = sla_config.get_threshold(self.domain)
-            return (
-                self.status == self.Status.PENDING
-                and (timezone.now() - self.created_at) > threshold
-            )
+            return self.status == self.Status.PENDING and (timezone.now() - self.created_at) > threshold
         except ImportError:
             # Fallback to 1 hour if service not available
             from datetime import timedelta
 
-            return self.status == self.Status.PENDING and (
-                timezone.now() - self.created_at
-            ) > timedelta(hours=1)
+            return self.status == self.Status.PENDING and (timezone.now() - self.created_at) > timedelta(hours=1)
 
     # ========================================
     # Factory Methods
@@ -645,10 +631,7 @@ class AbstractAuditLog(models.Model if DJANGO_AVAILABLE else object):
     """
 
     if not DJANGO_AVAILABLE:
-        raise ImportError(
-            "Django is required to use AbstractAuditLog. "
-            "Install it with: pip install django"
-        )
+        raise ImportError("Django is required to use AbstractAuditLog. " "Install it with: pip install django")
 
     # ========================================
     # Unique Event Identifier (WAL 중복 방지용)
@@ -658,10 +641,7 @@ class AbstractAuditLog(models.Model if DJANGO_AVAILABLE else object):
         unique=True,
         db_index=True,
         verbose_name="Audit Event ID",
-        help_text=(
-            "Unique identifier for audit event. "
-            "Used for WAL recovery deduplication (ON CONFLICT DO NOTHING)."
-        ),
+        help_text=("Unique identifier for audit event. " "Used for WAL recovery deduplication (ON CONFLICT DO NOTHING)."),
     )
 
     # ========================================

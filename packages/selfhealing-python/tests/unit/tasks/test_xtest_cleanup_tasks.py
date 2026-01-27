@@ -22,6 +22,7 @@ class TestCleanupXTestArtifactsWrapper:
         from selfhealing.settings.xtest_cleanup import (
             reset_xtest_cleanup_settings,
         )
+
         reset_xtest_cleanup_service()
         reset_xtest_cleanup_settings()
         yield
@@ -73,6 +74,7 @@ class TestGetXTestCleanupStatsWrapper:
         from selfhealing.services.xtest_cleanup_service import (
             reset_xtest_cleanup_service,
         )
+
         reset_xtest_cleanup_service()
         yield
         reset_xtest_cleanup_service()
@@ -118,6 +120,7 @@ class TestGetXTestCleanupBeatSchedule:
     def reset_settings(self):
         """Reset settings before and after each test."""
         from selfhealing.settings.xtest_cleanup import reset_xtest_cleanup_settings
+
         reset_xtest_cleanup_settings()
         yield
         reset_xtest_cleanup_settings()

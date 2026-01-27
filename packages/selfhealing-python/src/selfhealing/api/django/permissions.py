@@ -66,9 +66,7 @@ class IsViewer(BasePermission):
     - staff 또는 'selfhealing_viewer' 그룹 멤버
     """
 
-    message = (
-        "Self-Healing 조회 권한이 필요합니다. selfhealing_viewer 그룹에 속해야 합니다."
-    )
+    message = "Self-Healing 조회 권한이 필요합니다. selfhealing_viewer 그룹에 속해야 합니다."
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -140,9 +138,7 @@ class IsOperator(BasePermission):
             return True
 
         # selfhealing_operator 또는 selfhealing_admin 그룹 멤버십 확인
-        return request.user.groups.filter(
-            name__in=["selfhealing_operator", "selfhealing_admin"]
-        ).exists()
+        return request.user.groups.filter(name__in=["selfhealing_operator", "selfhealing_admin"]).exists()
 
 
 class IsSelfHealingAdmin(BasePermission):
@@ -165,9 +161,7 @@ class IsSelfHealingAdmin(BasePermission):
     - Fail-Secure: 권한 확인 실패 시 거부
     """
 
-    message = (
-        "Self-Healing 관리자 권한이 필요합니다. selfhealing_admin 그룹에 속해야 합니다."
-    )
+    message = "Self-Healing 관리자 권한이 필요합니다. selfhealing_admin 그룹에 속해야 합니다."
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -263,10 +257,7 @@ class EmergencyEscalationPermission(BasePermission):
             # 강제 Audit: 사유 필수 검증
             if not reason:
                 self.message = "STRICT 모드 전환 시 reason(사유)은 필수입니다. 사후 감사를 위해 전환 사유를 입력해주세요."
-                logger.warning(
-                    f"[RBAC] STRICT escalation denied - reason required: "
-                    f"user={request.user}"
-                )
+                logger.warning(f"[RBAC] STRICT escalation denied - reason required: " f"user={request.user}")
                 return False
 
             has_perm = IsOperator().has_permission(request, view)
@@ -357,9 +348,7 @@ class ThresholdBasedPermission(BasePermission):
                     "dual_approval": governance.get("threshold_dual_approval", 0.50),
                 }
         except Exception as e:
-            logger.debug(
-                f"[RBAC] RuntimeConfigManager unavailable, using Settings: {e}"
-            )
+            logger.debug(f"[RBAC] RuntimeConfigManager unavailable, using Settings: {e}")
 
         # Settings 폴백 (환경변수 대신)
         try:
@@ -416,14 +405,10 @@ class ThresholdBasedPermission(BasePermission):
 
         # admin_approve 초과, dual_approval 이하: Admin + 경고 로그
         if discrepancy <= current_thresholds["dual_approval"]:
-            return self._check_high_risk_approval(
-                request, view, discrepancy, current_thresholds
-            )
+            return self._check_high_risk_approval(request, view, discrepancy, current_thresholds)
 
         # dual_approval 초과: 4-Eyes 듀얼 승인 강제
-        return self._check_dual_approval_required(
-            request, view, discrepancy, current_thresholds
-        )
+        return self._check_dual_approval_required(request, view, discrepancy, current_thresholds)
 
     def _check_high_risk_approval(
         self,
@@ -535,9 +520,7 @@ class ThresholdBasedPermission(BasePermission):
 
             # approval_id를 찾지 못함
             self.message = f"승인 요청 '{approval_id}'을(를) 찾을 수 없습니다."
-            logger.warning(
-                f"[RBAC] Approval request not found: approval_id={approval_id}"
-            )
+            logger.warning(f"[RBAC] Approval request not found: approval_id={approval_id}")
             return False
 
         except Exception as e:
@@ -545,9 +528,7 @@ class ThresholdBasedPermission(BasePermission):
             self.message = f"듀얼 승인 검증 중 오류가 발생했습니다: {e}"
             return False
 
-    def _notify_dual_approval_needed(
-        self, actor: str, discrepancy: float, request: Request
-    ) -> None:
+    def _notify_dual_approval_needed(self, actor: str, discrepancy: float, request: Request) -> None:
         """
         듀얼 승인이 필요할 때 Admin들에게 알림 발송.
 
@@ -614,10 +595,7 @@ class IsPanicRollbackAuthorized(BasePermission):
     - docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
     """
 
-    message = (
-        "긴급 롤백 권한이 없습니다. "
-        "Admin 또는 Emergency Escalation 권한이 필요합니다."
-    )
+    message = "긴급 롤백 권한이 없습니다. " "Admin 또는 Emergency Escalation 권한이 필요합니다."
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -640,29 +618,19 @@ class IsPanicRollbackAuthorized(BasePermission):
         # reason 필수 검증 (강제 Audit)
         reason = request.data.get("reason", "").strip()
         if not reason:
-            self.message = (
-                "긴급 롤백 시 reason(사유)은 필수입니다. "
-                "사후 감사를 위해 롤백 사유를 입력해주세요."
-            )
-            logger.warning(
-                f"[RBAC] Panic rollback denied - reason required: "
-                f"user={request.user}"
-            )
+            self.message = "긴급 롤백 시 reason(사유)은 필수입니다. " "사후 감사를 위해 롤백 사유를 입력해주세요."
+            logger.warning(f"[RBAC] Panic rollback denied - reason required: " f"user={request.user}")
             return False
 
         # Admin은 항상 허용
         if IsSelfHealingAdmin().has_permission(request, view):
-            logger.warning(
-                f"[RBAC] Panic rollback authorized (Admin): "
-                f"user={request.user}, reason={reason[:50]}"
-            )
+            logger.warning(f"[RBAC] Panic rollback authorized (Admin): " f"user={request.user}, reason={reason[:50]}")
             return True
 
         # Operator + Emergency Escalation (Break Glass)
         if IsOperator().has_permission(request, view):
             logger.warning(
-                f"[RBAC] Panic rollback authorized (Emergency Escalation): "
-                f"user={request.user}, reason={reason[:50]}"
+                f"[RBAC] Panic rollback authorized (Emergency Escalation): " f"user={request.user}, reason={reason[:50]}"
             )
             return True
 
@@ -694,10 +662,7 @@ class HasChaosTestPermission(BasePermission):
     - Fail-Secure: 모든 예외는 거부로 처리
     """
 
-    message = (
-        "X-Test/Chaos 실험 권한이 없습니다. "
-        "selfhealing_admin 또는 selfhealing_chaos_tester 그룹에 속해야 합니다."
-    )
+    message = "X-Test/Chaos 실험 권한이 없습니다. " "selfhealing_admin 또는 selfhealing_chaos_tester 그룹에 속해야 합니다."
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         """
@@ -717,8 +682,7 @@ class HasChaosTestPermission(BasePermission):
             # 1. 테스트 환경 바이패스 (DISABLE_SELFHEALING_AUTH=true)
             if _is_auth_disabled():
                 logger.debug(
-                    f"[RBAC] X-Test permission bypassed (auth disabled): "
-                    f"path={getattr(request, 'path', 'unknown')}"
+                    f"[RBAC] X-Test permission bypassed (auth disabled): " f"path={getattr(request, 'path', 'unknown')}"
                 )
                 return True
 
@@ -731,54 +695,40 @@ class HasChaosTestPermission(BasePermission):
                     f"ip={self._get_client_ip(request)}"
                 )
                 self.message = (
-                    "X-Test/Chaos API는 프로덕션 환경에서 사용할 수 없습니다. "
-                    "보안 정책에 따라 접근이 차단되었습니다."
+                    "X-Test/Chaos API는 프로덕션 환경에서 사용할 수 없습니다. " "보안 정책에 따라 접근이 차단되었습니다."
                 )
                 return False
 
             # 3. 인증 필요
             if not request.user or not request.user.is_authenticated:
                 logger.warning(
-                    f"[RBAC] X-Test permission denied (not authenticated): "
-                    f"path={getattr(request, 'path', 'unknown')}"
+                    f"[RBAC] X-Test permission denied (not authenticated): " f"path={getattr(request, 'path', 'unknown')}"
                 )
                 self.message = "X-Test/Chaos API 접근에는 인증이 필요합니다."
                 return False
 
             # 4. Django superuser 자동 허용
             if request.user.is_superuser:
-                logger.debug(
-                    f"[RBAC] X-Test permission granted (superuser): "
-                    f"user={request.user}"
-                )
+                logger.debug(f"[RBAC] X-Test permission granted (superuser): " f"user={request.user}")
                 return True
 
             # 5. 그룹 기반 권한 체크 (selfhealing_admin 또는 selfhealing_chaos_tester)
             allowed_groups = ["selfhealing_admin", "selfhealing_chaos_tester"]
             if request.user.groups.filter(name__in=allowed_groups).exists():
-                user_groups = list(
-                    request.user.groups.filter(name__in=allowed_groups).values_list(
-                        "name", flat=True
-                    )
-                )
-                logger.debug(
-                    f"[RBAC] X-Test permission granted (group): "
-                    f"user={request.user}, groups={user_groups}"
-                )
+                user_groups = list(request.user.groups.filter(name__in=allowed_groups).values_list("name", flat=True))
+                logger.debug(f"[RBAC] X-Test permission granted (group): " f"user={request.user}, groups={user_groups}")
                 return True
 
             # 6. 권한 없음 - 거부
             logger.warning(
-                f"[RBAC] X-Test permission denied (no group): "
-                f"user={request.user}, required_groups={allowed_groups}"
+                f"[RBAC] X-Test permission denied (no group): " f"user={request.user}, required_groups={allowed_groups}"
             )
             return False
 
         except Exception as e:
             # Fail-Secure: 예외 발생 시 거부
             logger.error(
-                f"[RBAC] X-Test permission check failed (deny): "
-                f"error={e}, user={getattr(request, 'user', 'unknown')}"
+                f"[RBAC] X-Test permission check failed (deny): " f"error={e}, user={getattr(request, 'user', 'unknown')}"
             )
             self.message = "권한 확인 중 오류가 발생했습니다. 접근이 거부되었습니다."
             return False

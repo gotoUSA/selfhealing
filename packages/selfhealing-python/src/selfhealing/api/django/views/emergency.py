@@ -149,8 +149,7 @@ class EmergencyTriggerView(APIView):
                 {
                     "success": False,
                     "error": "invalid_level",
-                    "message": f"유효하지 않은 레벨: {level_name}. "
-                    f"사용 가능: LEVEL_1, LEVEL_2, LEVEL_3",
+                    "message": f"유효하지 않은 레벨: {level_name}. " f"사용 가능: LEVEL_1, LEVEL_2, LEVEL_3",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -160,8 +159,7 @@ class EmergencyTriggerView(APIView):
                 {
                     "success": False,
                     "error": "invalid_level",
-                    "message": "NORMAL은 비상 모드가 아닙니다. "
-                    "비상 모드를 해제하려면 /release/ 엔드포인트를 사용하세요.",
+                    "message": "NORMAL은 비상 모드가 아닙니다. " "비상 모드를 해제하려면 /release/ 엔드포인트를 사용하세요.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -176,10 +174,7 @@ class EmergencyTriggerView(APIView):
             duration_minutes=int(duration_minutes) if duration_minutes else None,
         )
 
-        logger.warning(
-            f"[EmergencyAPI] Emergency mode activated: level={level.name}, "
-            f"by={actor}, reason={reason}"
-        )
+        logger.warning(f"[EmergencyAPI] Emergency mode activated: level={level.name}, " f"by={actor}, reason={reason}")
 
         return Response(
             {
@@ -255,10 +250,7 @@ class EmergencyReleaseView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        logger.info(
-            f"[EmergencyAPI] Emergency mode deactivated: "
-            f"previous_level={previous_level}, by={actor}"
-        )
+        logger.info(f"[EmergencyAPI] Emergency mode deactivated: " f"previous_level={previous_level}, by={actor}")
 
         return Response(
             {

@@ -37,7 +37,7 @@ class TestExceptionEventHasIntegrity:
 
         events = buffer.get_events()
         assert len(events) >= 1
-        
+
         event = events[-1]
         assert event.source == "ExceptionHandler"
         assert event.success is False
@@ -58,7 +58,7 @@ class TestExceptionEventHasIntegrity:
 
         events = buffer.get_events()
         event = events[-1]
-        
+
         assert "error_code" in event.details
         assert event.details["error_code"] is not None
 
@@ -78,7 +78,7 @@ class TestExceptionEventHasIntegrity:
 
         events = buffer.get_events()
         event = events[-1]
-        
+
         assert "http_status" in event.details
         assert isinstance(event.details["http_status"], int)
 
@@ -89,17 +89,17 @@ class TestHashChainIntegration:
     def test_hash_chain_manager_adds_integrity_fields(self):
         """HashChainManager가 integrity 필드를 추가하는지 확인."""
         from selfhealing.audit.integrity import HashChainManager
-        
+
         manager = HashChainManager()
-        
+
         entry = {
             "action": "test_action",
             "actor_id": "test_user",
             "details": {"key": "value"},
         }
-        
+
         result = manager.add_integrity(entry)
-        
+
         assert "integrity" in result
         assert "sequence" in result["integrity"]
         assert "previous_hash" in result["integrity"]
@@ -109,13 +109,13 @@ class TestHashChainIntegration:
     def test_hash_chain_sequence_increments(self):
         """해시 체인 시퀀스가 증가하는지 확인."""
         from selfhealing.audit.integrity import HashChainManager
-        
+
         manager = HashChainManager()
-        
+
         entry1 = manager.add_integrity({"action": "action1"})
         entry2 = manager.add_integrity({"action": "action2"})
         entry3 = manager.add_integrity({"action": "action3"})
-        
+
         assert entry1["integrity"]["sequence"] == 1
         assert entry2["integrity"]["sequence"] == 2
         assert entry3["integrity"]["sequence"] == 3
@@ -123,47 +123,47 @@ class TestHashChainIntegration:
     def test_hash_chain_links_previous_to_current(self):
         """이전 current_hash가 다음 previous_hash와 연결되는지 확인."""
         from selfhealing.audit.integrity import HashChainManager
-        
+
         manager = HashChainManager()
-        
+
         entry1 = manager.add_integrity({"action": "action1"})
         entry2 = manager.add_integrity({"action": "action2"})
-        
+
         # entry1의 current_hash가 entry2의 previous_hash와 같아야 함
         assert entry1["integrity"]["current_hash"] == entry2["integrity"]["previous_hash"]
 
     def test_first_entry_has_genesis_previous_hash(self):
         """첫 번째 엔트리는 GENESIS previous_hash를 가짐."""
         from selfhealing.audit.integrity import HashChainManager
-        
+
         manager = HashChainManager()
-        
+
         entry = manager.add_integrity({"action": "first_action"})
-        
+
         assert entry["integrity"]["previous_hash"] == "GENESIS"
 
     def test_hash_is_deterministic(self):
         """동일한 데이터는 동일한 해시를 생성."""
         from selfhealing.audit.integrity.models import compute_hash
-        
+
         data = {"action": "test", "value": 123}
-        
+
         hash1 = compute_hash(data)
         hash2 = compute_hash(data)
-        
+
         assert hash1 == hash2
         assert len(hash1) == 64  # SHA-256 hex
 
     def test_different_data_produces_different_hash(self):
         """다른 데이터는 다른 해시를 생성."""
         from selfhealing.audit.integrity.models import compute_hash
-        
+
         data1 = {"action": "test", "value": 123}
         data2 = {"action": "test", "value": 456}
-        
+
         hash1 = compute_hash(data1)
         hash2 = compute_hash(data2)
-        
+
         assert hash1 != hash2
 
 
@@ -174,20 +174,20 @@ class TestContinuousAuditRecorderIntegrity:
         """ContinuousAuditRecorder가 엔트리에 integrity를 추가하는지 확인."""
         from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
         from selfhealing.interfaces.audit_adapter import AuditLogAdapter, AuditEntry
-        
+
         # Mock adapter that captures entries
         captured_entries = []
-        
+
         class CapturingAdapter(AuditLogAdapter):
             def log(self, entry: AuditEntry) -> None:
                 captured_entries.append(entry)
-            
+
             def query(self, **kwargs):
                 return []
-        
+
         adapter = CapturingAdapter()
         recorder = ContinuousAuditRecorder(audit_adapter=adapter)
-        
+
         # Record an auto-tuning event
         recorder.record_auto_tuning(
             parameter="timeout_ms",
@@ -198,10 +198,10 @@ class TestContinuousAuditRecorderIntegrity:
             metrics_snapshot={"latency": 100},
             safety_check={"within_bounds": True},
         )
-        
+
         assert len(captured_entries) == 1
         entry = captured_entries[0]
-        
+
         # integrity가 details에 포함되어야 함
         assert "integrity" in entry.details
         assert "sequence" in entry.details["integrity"]
@@ -212,19 +212,19 @@ class TestContinuousAuditRecorderIntegrity:
         """ContinuousAuditRecorder가 연속 기록 간 해시 체인을 유지하는지 확인."""
         from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
         from selfhealing.interfaces.audit_adapter import AuditLogAdapter, AuditEntry
-        
+
         captured_entries = []
-        
+
         class CapturingAdapter(AuditLogAdapter):
             def log(self, entry: AuditEntry) -> None:
                 captured_entries.append(entry)
-            
+
             def query(self, **kwargs):
                 return []
-        
+
         adapter = CapturingAdapter()
         recorder = ContinuousAuditRecorder(audit_adapter=adapter)
-        
+
         # Record multiple events
         recorder.record_auto_tuning(
             parameter="param1",
@@ -235,7 +235,7 @@ class TestContinuousAuditRecorderIntegrity:
             metrics_snapshot={},
             safety_check={},
         )
-        
+
         recorder.record_auto_tuning(
             parameter="param2",
             old_value=10,
@@ -245,15 +245,15 @@ class TestContinuousAuditRecorderIntegrity:
             metrics_snapshot={},
             safety_check={},
         )
-        
+
         assert len(captured_entries) == 2
-        
+
         entry1_integrity = captured_entries[0].details["integrity"]
         entry2_integrity = captured_entries[1].details["integrity"]
-        
+
         # 시퀀스 증가 확인
         assert entry2_integrity["sequence"] == entry1_integrity["sequence"] + 1
-        
+
         # 해시 체인 연결 확인
         assert entry2_integrity["previous_hash"] == entry1_integrity["current_hash"]
 
@@ -265,39 +265,39 @@ class TestHashChainVerification:
         """단일 엔트리의 무결성 검증."""
         from selfhealing.audit.integrity import HashChainManager
         from selfhealing.audit.integrity.models import compute_hash
-        
+
         manager = HashChainManager()
-        
+
         original_entry = {"action": "test_action", "data": "some_data"}
         entry = manager.add_integrity(original_entry.copy())
-        
+
         # 무결성 정보 추출
         integrity = entry["integrity"]
         stored_hash = integrity.pop("current_hash")
-        
+
         # 재계산
         recomputed_hash = compute_hash(entry)
-        
+
         assert stored_hash == recomputed_hash
 
     def test_detect_tampered_entry(self):
         """변조된 엔트리 감지."""
         from selfhealing.audit.integrity import HashChainManager
         from selfhealing.audit.integrity.models import compute_hash
-        
+
         manager = HashChainManager()
-        
+
         entry = manager.add_integrity({"action": "original_action"})
         original_hash = entry["integrity"]["current_hash"]
-        
+
         # 엔트리 변조
         entry["action"] = "tampered_action"
-        
+
         # current_hash를 제거하고 재계산
         integrity = entry["integrity"]
         del integrity["current_hash"]
         recomputed_hash = compute_hash(entry)
-        
+
         # 원본 해시와 재계산 해시가 달라야 함 (변조 감지)
         assert original_hash != recomputed_hash
 
@@ -308,7 +308,7 @@ class TestExceptionHandlerToHashChainFlow:
     def test_exception_event_flows_through_audit_system(self):
         """예외 이벤트가 Audit 시스템을 통해 흐르는지 확인."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         exc = ValueError("Test error")
         request = Mock()
         request.path = "/api/flow-test/"

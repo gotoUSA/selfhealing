@@ -177,9 +177,7 @@ class FinOpsAlertsView(APIView):
             )
 
         stage_name = request.query_params.get("stage_name")
-        unacknowledged = (
-            request.query_params.get("unacknowledged", "false").lower() == "true"
-        )
+        unacknowledged = request.query_params.get("unacknowledged", "false").lower() == "true"
 
         alerts = service.get_alerts(
             stage_name=stage_name,

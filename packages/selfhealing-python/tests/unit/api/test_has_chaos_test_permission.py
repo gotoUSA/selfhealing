@@ -44,6 +44,7 @@ class TestHasChaosTestPermission:
     def permission_class(self):
         """HasChaosTestPermission 인스턴스 반환."""
         from selfhealing.api.django.permissions import HasChaosTestPermission
+
         return HasChaosTestPermission()
 
     @pytest.fixture
@@ -113,25 +114,21 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_chaos_tester_group_allowed(
-        self, permission_class, mock_request, mock_view, mock_chaos_tester_group
-    ):
+    def test_chaos_tester_group_allowed(self, permission_class, mock_request, mock_view, mock_chaos_tester_group):
         """selfhealing_chaos_tester 그룹 멤버는 허용된다."""
         mock_request.user = mock_chaos_tester_group
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_admin_group_allowed(
-        self, permission_class, mock_request, mock_view, mock_admin_group
-    ):
+    def test_admin_group_allowed(self, permission_class, mock_request, mock_view, mock_admin_group):
         """selfhealing_admin 그룹 멤버는 허용된다."""
         mock_request.user = mock_admin_group
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     # =========================================================================
@@ -139,14 +136,12 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_superuser_always_allowed(
-        self, permission_class, mock_request, mock_view, mock_superuser
-    ):
+    def test_superuser_always_allowed(self, permission_class, mock_request, mock_view, mock_superuser):
         """Django superuser는 자동 허용된다."""
         mock_request.user = mock_superuser
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     # =========================================================================
@@ -154,35 +149,31 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_anonymous_denied(
-        self, permission_class, mock_request, mock_view, mock_anonymous_user
-    ):
+    def test_anonymous_denied(self, permission_class, mock_request, mock_view, mock_anonymous_user):
         """미인증 사용자는 거부된다."""
         mock_request.user = mock_anonymous_user
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is False
         assert "인증이 필요합니다" in permission_class.message
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_authenticated_no_group_denied(
-        self, permission_class, mock_request, mock_view, mock_no_group_user
-    ):
+    def test_authenticated_no_group_denied(self, permission_class, mock_request, mock_view, mock_no_group_user):
         """인증되었지만 그룹이 없으면 거부된다."""
         mock_request.user = mock_no_group_user
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is False
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
     def test_none_user_denied(self, permission_class, mock_request, mock_view):
         """request.user가 None이면 거부된다."""
         mock_request.user = None
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is False
 
     # =========================================================================
@@ -190,26 +181,22 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "production", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_production_always_denied(
-        self, permission_class, mock_request, mock_view, mock_superuser
-    ):
+    def test_production_always_denied(self, permission_class, mock_request, mock_view, mock_superuser):
         """프로덕션 환경에서는 superuser도 거부된다 (Fail-Secure)."""
         mock_request.user = mock_superuser
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is False
         assert "프로덕션 환경" in permission_class.message
 
     @patch.dict(os.environ, {"ENVIRONMENT": "production", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_production_chaos_tester_denied(
-        self, permission_class, mock_request, mock_view, mock_chaos_tester_group
-    ):
+    def test_production_chaos_tester_denied(self, permission_class, mock_request, mock_view, mock_chaos_tester_group):
         """프로덕션 환경에서는 chaos_tester 그룹도 거부된다."""
         mock_request.user = mock_chaos_tester_group
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is False
         assert "프로덕션 환경" in permission_class.message
 
@@ -218,36 +205,30 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "production", "DISABLE_SELFHEALING_AUTH": "true"})
-    def test_auth_disabled_bypass_in_production(
-        self, permission_class, mock_request, mock_view, mock_anonymous_user
-    ):
+    def test_auth_disabled_bypass_in_production(self, permission_class, mock_request, mock_view, mock_anonymous_user):
         """DISABLE_SELFHEALING_AUTH=true 시 프로덕션에서도 바이패스된다."""
         mock_request.user = mock_anonymous_user
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": "1"})
-    def test_auth_disabled_bypass_with_1(
-        self, permission_class, mock_request, mock_view, mock_anonymous_user
-    ):
+    def test_auth_disabled_bypass_with_1(self, permission_class, mock_request, mock_view, mock_anonymous_user):
         """DISABLE_SELFHEALING_AUTH=1 시 바이패스된다."""
         mock_request.user = mock_anonymous_user
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": "yes"})
-    def test_auth_disabled_bypass_with_yes(
-        self, permission_class, mock_request, mock_view, mock_anonymous_user
-    ):
+    def test_auth_disabled_bypass_with_yes(self, permission_class, mock_request, mock_view, mock_anonymous_user):
         """DISABLE_SELFHEALING_AUTH=yes 시 바이패스된다."""
         mock_request.user = mock_anonymous_user
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     # =========================================================================
@@ -255,15 +236,13 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_exception_during_group_check_denied(
-        self, permission_class, mock_request, mock_view, mock_user
-    ):
+    def test_exception_during_group_check_denied(self, permission_class, mock_request, mock_view, mock_user):
         """그룹 체크 중 예외 발생 시 거부된다 (Fail-Secure)."""
         mock_request.user = mock_user
         mock_user.groups.filter.side_effect = Exception("Database error")
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is False
         assert "오류가 발생" in permission_class.message
 
@@ -272,27 +251,23 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "staging", "DISABLE_SELFHEALING_AUTH": ""})
-    def test_staging_environment_allowed(
-        self, permission_class, mock_request, mock_view, mock_chaos_tester_group
-    ):
+    def test_staging_environment_allowed(self, permission_class, mock_request, mock_view, mock_chaos_tester_group):
         """staging 환경에서는 허용된다."""
         mock_request.user = mock_chaos_tester_group
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True
 
     @patch.dict(os.environ, {"DISABLE_SELFHEALING_AUTH": ""}, clear=True)
-    def test_default_environment_allowed(
-        self, permission_class, mock_request, mock_view, mock_chaos_tester_group
-    ):
+    def test_default_environment_allowed(self, permission_class, mock_request, mock_view, mock_chaos_tester_group):
         """ENVIRONMENT 미설정 시 development로 간주하여 허용된다."""
         # ENVIRONMENT 환경변수 제거
         if "ENVIRONMENT" in os.environ:
             del os.environ["ENVIRONMENT"]
-        
+
         mock_request.user = mock_chaos_tester_group
-        
+
         result = permission_class.has_permission(mock_request, mock_view)
-        
+
         assert result is True

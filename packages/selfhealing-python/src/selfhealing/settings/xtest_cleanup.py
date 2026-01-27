@@ -126,9 +126,7 @@ class XTestCleanupSettings(BaseSettings):
     def validate_cleanup_interval(cls, v: int) -> int:
         """정리 주기 검증."""
         if v < 5:
-            logger.warning(
-                f"[XTestCleanup] cleanup_interval_minutes={v} is too low, using 5"
-            )
+            logger.warning(f"[XTestCleanup] cleanup_interval_minutes={v} is too low, using 5")
             return 5
         return v
 

@@ -175,9 +175,7 @@ class HashChainWALRecovery:
                 result["entries_recovered"] += file_result["recovered"]
                 result["entries_failed"] += file_result["failed"]
                 result["entries_already_committed"] += file_result["already_committed"]
-                result["idempotency_skipped"] += file_result.get(
-                    "idempotency_skipped", 0
-                )
+                result["idempotency_skipped"] += file_result.get("idempotency_skipped", 0)
 
             self._recovery_done = True
             self._recovered_count = result["entries_recovered"]
@@ -235,9 +233,7 @@ class HashChainWALRecovery:
                 # 1차 방어: IdempotencyKey를 사용한 중복 체크 (Redis)
                 if self._is_duplicate_via_idempotency(wal_seq, "redis_replay"):
                     result["idempotency_skipped"] += 1
-                    logger.debug(
-                        f"[HashChainWAL] Skipped duplicate entry via idempotency: seq={wal_seq}"
-                    )
+                    logger.debug(f"[HashChainWAL] Skipped duplicate entry via idempotency: seq={wal_seq}")
                     continue
 
                 # Attempt to replay
@@ -377,16 +373,12 @@ class HashChainWALRecovery:
             try:
                 # Extract date from filename
                 date_str = wal_file.stem.split("_")[-1]
-                file_date = datetime.strptime(date_str, "%Y%m%d").replace(
-                    tzinfo=timezone.utc
-                )
+                file_date = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
 
                 if file_date < cutoff:
                     wal_file.unlink()
                     removed += 1
-                    logger.debug(
-                        f"[HashChainWAL] Removed old WAL file: {wal_file.name}"
-                    )
+                    logger.debug(f"[HashChainWAL] Removed old WAL file: {wal_file.name}")
             except Exception:
                 continue
 
@@ -405,9 +397,7 @@ class HashChainWALRecovery:
             "recovered_count": self._recovered_count,
             "failed_count": self._failed_count,
             "wal_sequence": self._wal_sequence,
-            "current_wal_file": (
-                str(self._current_wal_file) if self._current_wal_file else None
-            ),
+            "current_wal_file": (str(self._current_wal_file) if self._current_wal_file else None),
         }
 
 

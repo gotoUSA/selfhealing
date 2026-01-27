@@ -58,9 +58,7 @@ def _format_rollout_summary(rollout) -> dict:
         "id": rollout.id,
         "config_type": rollout.config_type,
         "state": rollout.state.value,
-        "current_stage": (
-            rollout.current_stage.name if rollout.current_stage else None
-        ),
+        "current_stage": (rollout.current_stage.name if rollout.current_stage else None),
         "current_stage_index": rollout.current_stage_index,
         "total_stages": len(rollout.stages),
         "affected_clusters": rollout.affected_clusters,
@@ -96,9 +94,7 @@ def _format_rollout_detail(rollout) -> dict:
         "affected_clusters": rollout.affected_clusters,
         "created_by": rollout.created_by,
         "created_at": rollout.created_at.isoformat(),
-        "completed_at": (
-            rollout.completed_at.isoformat() if rollout.completed_at else None
-        ),
+        "completed_at": (rollout.completed_at.isoformat() if rollout.completed_at else None),
         "reason": rollout.reason,
         "rollback_reason": rollout.rollback_reason,
         "progress_percentage": rollout.progress_percentage,
@@ -163,9 +159,7 @@ class CanaryRolloutListView(APIView):
         service = get_canary_rollout_service()
 
         # Query parameters
-        include_completed = (
-            request.query_params.get("include_completed", "").lower() == "true"
-        )
+        include_completed = request.query_params.get("include_completed", "").lower() == "true"
         config_type_filter = request.query_params.get("config_type")
 
         # 롤아웃 조회
@@ -247,10 +241,7 @@ class CanaryRolloutListView(APIView):
             force_during_chaos=request.data.get("force_during_chaos", False),
         )
 
-        logger.info(
-            f"[CanaryAPI] Rollout created: id={rollout.id}, "
-            f"config={config_type}, by={_get_username(request)}"
-        )
+        logger.info(f"[CanaryAPI] Rollout created: id={rollout.id}, " f"config={config_type}, by={_get_username(request)}")
 
         return Response(
             {
@@ -296,20 +287,14 @@ class CanaryRolloutDetailView(APIView):
 # =============================================================================
 
 
-def _action_start(
-    service, rollout_id: str, rollout, request
-) -> tuple[bool, str | None]:
+def _action_start(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
     """Handle start action."""
     success = service.start_rollout(rollout_id)
-    error_msg = (
-        None if success else f"Cannot start rollout in state: {rollout.state.value}"
-    )
+    error_msg = None if success else f"Cannot start rollout in state: {rollout.state.value}"
     return success, error_msg
 
 
-def _action_promote(
-    service, rollout_id: str, rollout, request
-) -> tuple[bool, str | None]:
+def _action_promote(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
     """Handle promote action."""
     force = request.data.get("force", False)
     success = service.promote(rollout_id, force=force)
@@ -317,39 +302,29 @@ def _action_promote(
     return success, error_msg
 
 
-def _action_rollback(
-    service, rollout_id: str, rollout, request
-) -> tuple[bool, str | None]:
+def _action_rollback(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
     """Handle rollback action."""
     reason = request.data.get("reason", f"Manual rollback by {_get_username(request)}")
     success = service.rollback(rollout_id, reason=reason)
-    error_msg = (
-        None if success else "Rollback failed - rollout may be in terminal state"
-    )
+    error_msg = None if success else "Rollback failed - rollout may be in terminal state"
     return success, error_msg
 
 
-def _action_pause(
-    service, rollout_id: str, rollout, request
-) -> tuple[bool, str | None]:
+def _action_pause(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
     """Handle pause action."""
     success = service.pause(rollout_id)
     error_msg = None if success else "Cannot pause - rollout is not in CANARY state"
     return success, error_msg
 
 
-def _action_resume(
-    service, rollout_id: str, rollout, request
-) -> tuple[bool, str | None]:
+def _action_resume(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
     """Handle resume action."""
     success = service.resume(rollout_id)
     error_msg = None if success else "Cannot resume - rollout is not in PAUSED state"
     return success, error_msg
 
 
-def _action_cancel(
-    service, rollout_id: str, rollout, request
-) -> tuple[bool, str | None]:
+def _action_cancel(service, rollout_id: str, rollout, request) -> tuple[bool, str | None]:
     """Handle cancel action."""
     success = service.cancel(rollout_id)
     error_msg = None if success else "Cannot cancel - rollout may be in terminal state"
@@ -433,11 +408,7 @@ class CanaryRolloutActionView(APIView):
             {
                 "status": "success",
                 "action": action,
-                "rollout": (
-                    _format_rollout_summary(updated_rollout)
-                    if updated_rollout
-                    else None
-                ),
+                "rollout": (_format_rollout_summary(updated_rollout) if updated_rollout else None),
             }
         )
 
@@ -466,9 +437,7 @@ class CanaryPanicRollbackView(APIView):
         """모든 활성 롤아웃 긴급 롤백."""
         service = get_canary_rollout_service()
 
-        reason = request.data.get(
-            "reason", f"Panic rollback by {_get_username(request)}"
-        )
+        reason = request.data.get("reason", f"Panic rollback by {_get_username(request)}")
         emergency_code = request.data.get("emergency_code", "")
 
         # 활성 롤아웃 조회
@@ -555,9 +524,7 @@ class CanaryMetricsView(APIView):
                 "status": "success",
                 "rollout_id": rollout_id,
                 "state": rollout.state.value,
-                "current_stage": (
-                    rollout.current_stage.name if rollout.current_stage else None
-                ),
+                "current_stage": (rollout.current_stage.name if rollout.current_stage else None),
                 "metrics": (
                     [
                         {

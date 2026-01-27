@@ -84,9 +84,7 @@ class TestXTestCleanupServiceWithMocks:
         service._session_manager = mock_session_manager
         return service
 
-    def test_cleanup_expired_sessions_no_expired(
-        self, cleanup_service, mock_session_manager
-    ):
+    def test_cleanup_expired_sessions_no_expired(self, cleanup_service, mock_session_manager):
         """만료된 세션이 없을 때."""
         mock_session_manager.get_expired_sessions.return_value = []
 
@@ -95,9 +93,7 @@ class TestXTestCleanupServiceWithMocks:
         assert result.success is True
         assert result.sessions_cleaned == 0
 
-    def test_cleanup_expired_sessions_with_expired(
-        self, cleanup_service, mock_session_manager
-    ):
+    def test_cleanup_expired_sessions_with_expired(self, cleanup_service, mock_session_manager):
         """만료된 세션이 있을 때."""
         from selfhealing.services.xtest_session_manager import XTestSessionMetadata
 
@@ -145,9 +141,7 @@ class TestXTestCleanupServiceWithMocks:
         assert count == 1
         mock_redis.delete.assert_called()
 
-    def test_reset_rate_limit_counters_with_session_id(
-        self, cleanup_service, mock_redis
-    ):
+    def test_reset_rate_limit_counters_with_session_id(self, cleanup_service, mock_redis):
         """특정 세션의 Rate Limit 카운터만 초기화."""
         mock_redis.keys.return_value = [b"xtest:rate_limit:session1:counter1"]
 
@@ -182,6 +176,7 @@ class TestXTestCleanupServiceFactory:
         from selfhealing.services.xtest_cleanup_service import (
             reset_xtest_cleanup_service,
         )
+
         reset_xtest_cleanup_service()
         yield
         reset_xtest_cleanup_service()

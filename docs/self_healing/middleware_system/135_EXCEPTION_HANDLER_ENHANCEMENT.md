@@ -1,8 +1,8 @@
 # 135. Exception Handler 고도화 설계
 
-> **Version**: 1.0.0  
-> **Created**: 2026-01-27  
-> **Status**: Implemented  
+> **Version**: 1.0.0
+> **Created**: 2026-01-27
+> **Status**: Implemented
 > **Parent**: [110_EXCEPTION_HANDLER_OVERVIEW.md](110_EXCEPTION_HANDLER_OVERVIEW.md)
 
 ## 1. 개요

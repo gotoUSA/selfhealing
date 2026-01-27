@@ -296,9 +296,7 @@ class WriteAheadLog:
                 self._cleanup_old_files()
 
             finally:
-                self._state = (
-                    old_state if old_state != WALState.ROTATING else WALState.ACTIVE
-                )
+                self._state = old_state if old_state != WALState.ROTATING else WALState.ACTIVE
 
     def _cleanup_old_files(self) -> None:
         """오래된 WAL 파일 정리."""
@@ -340,17 +338,11 @@ class WriteAheadLog:
                 "ts": time.time(),
                 "data": data,
             }
-            entry_bytes = json.dumps(
-                entry, separators=(",", ":"), ensure_ascii=False
-            ).encode("utf-8")
+            entry_bytes = json.dumps(entry, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             checksum = self._compute_checksum(entry_bytes)
 
             # 레코드 포맷: [4-byte length][8-byte checksum][entry_bytes]
-            record = (
-                struct.pack(">I", len(entry_bytes))
-                + checksum.encode("ascii")
-                + entry_bytes
-            )
+            record = struct.pack(">I", len(entry_bytes)) + checksum.encode("ascii") + entry_bytes
 
             self._ensure_file_open()
 
@@ -400,8 +392,7 @@ class WriteAheadLog:
             # 플러시 조건 체크
             should_flush = (
                 len(self._group_buffer) >= self._config.group_commit_max_entries
-                or self._time_since_last_flush_ms()
-                >= self._config.group_commit_max_wait_ms
+                or self._time_since_last_flush_ms() >= self._config.group_commit_max_wait_ms
             )
 
             if should_flush:
@@ -422,16 +413,10 @@ class WriteAheadLog:
 
         if self._current_handle:
             for entry in self._group_buffer:
-                entry_bytes = json.dumps(
-                    entry, separators=(",", ":"), ensure_ascii=False
-                ).encode("utf-8")
+                entry_bytes = json.dumps(entry, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
                 checksum = self._compute_checksum(entry_bytes)
 
-                record = (
-                    struct.pack(">I", len(entry_bytes))
-                    + checksum.encode("ascii")
-                    + entry_bytes
-                )
+                record = struct.pack(">I", len(entry_bytes)) + checksum.encode("ascii") + entry_bytes
                 self._current_handle.write(record)
                 self._total_entries += 1
 
@@ -501,16 +486,10 @@ class WriteAheadLog:
                     "ts": time.time(),
                     "data": data,
                 }
-                entry_bytes = json.dumps(
-                    entry, separators=(",", ":"), ensure_ascii=False
-                ).encode("utf-8")
+                entry_bytes = json.dumps(entry, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
                 checksum = self._compute_checksum(entry_bytes)
 
-                record = (
-                    struct.pack(">I", len(entry_bytes))
-                    + checksum.encode("ascii")
-                    + entry_bytes
-                )
+                record = struct.pack(">I", len(entry_bytes)) + checksum.encode("ascii") + entry_bytes
                 records.append(record)
 
             # 파일에 일괄 기록
@@ -711,9 +690,7 @@ class WriteAheadLog:
                 except Exception:
                     pass
 
-            total_files = len(
-                list(self._wal_dir.glob(f"{self._config.file_prefix}_*.wal"))
-            )
+            total_files = len(list(self._wal_dir.glob(f"{self._config.file_prefix}_*.wal")))
 
             return WALStats(
                 state=self._state,

@@ -71,9 +71,7 @@ class ComplianceStandardsView(APIView):
         data = request.data
         from selfhealing.services.compliance.models import ComplianceStandard
 
-        standards = [
-            ComplianceStandard(s) for s in data.get("standards", ["DORA_2025"])
-        ]
+        standards = [ComplianceStandard(s) for s in data.get("standards", ["DORA_2025"])]
         service.set_stage_standards(stage_name, standards)
         return Response(
             {"stage_name": stage_name, "standards": [s.value for s in standards]},

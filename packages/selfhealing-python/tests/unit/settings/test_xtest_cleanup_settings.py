@@ -18,6 +18,7 @@ class TestXTestCleanupSettings:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.xtest_cleanup import reset_xtest_cleanup_settings
+
         reset_xtest_cleanup_settings()
         yield
         reset_xtest_cleanup_settings()
@@ -176,6 +177,7 @@ class TestXTestCleanupSettingsValidators:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.xtest_cleanup import reset_xtest_cleanup_settings
+
         reset_xtest_cleanup_settings()
         yield
         reset_xtest_cleanup_settings()

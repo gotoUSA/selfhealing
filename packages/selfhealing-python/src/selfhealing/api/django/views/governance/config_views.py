@@ -101,9 +101,7 @@ class GovernanceConfigView(APIView):
         # 업데이트 수행 - ValueError는 exception handler로 전파
         new_config = manager.update_governance_config(**update_fields)
 
-        logger.info(
-            f"[Governance] Config updated by {actor}: {list(update_fields.keys())}"
-        )
+        logger.info(f"[Governance] Config updated by {actor}: {list(update_fields.keys())}")
 
         return Response(
             {
@@ -174,9 +172,7 @@ class L2StorageConfigManagedView(APIView):
 
         new_config = manager.update_l2_storage_config(**update_fields)
 
-        logger.info(
-            f"[Governance] L2 storage config updated by {actor}: {list(update_fields.keys())}"
-        )
+        logger.info(f"[Governance] L2 storage config updated by {actor}: {list(update_fields.keys())}")
 
         return Response(
             {

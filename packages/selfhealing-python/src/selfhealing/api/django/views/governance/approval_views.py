@@ -104,9 +104,7 @@ class ApprovalRequestListView(APIView):
             expiry_hours=expiry_hours,
         )
 
-        logger.info(
-            f"[Governance] Approval request created: {approval_request['id']} by {actor}"
-        )
+        logger.info(f"[Governance] Approval request created: {approval_request['id']} by {actor}")
 
         return Response(
             {
@@ -140,9 +138,7 @@ class ApprovalRequestApproveView(APIView):
         result = manager.approve_request(request_id, actor)
 
         if result is None:
-            raise ValueError(
-                "Request not found, already processed, expired, or self-approval attempted"
-            )
+            raise ValueError("Request not found, already processed, expired, or self-approval attempted")
 
         logger.info(f"[Governance] Request {request_id} approved by {actor}")
 

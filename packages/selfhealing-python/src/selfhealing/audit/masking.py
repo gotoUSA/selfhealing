@@ -284,14 +284,7 @@ def mask_sensitive_fields(data, sensitive_keys: list | None = None):
         elif isinstance(value, dict):
             result[key] = mask_sensitive_fields(value, sensitive_keys)
         elif isinstance(value, list):
-            result[key] = [
-                (
-                    mask_sensitive_fields(item, sensitive_keys)
-                    if isinstance(item, dict)
-                    else item
-                )
-                for item in value
-            ]
+            result[key] = [(mask_sensitive_fields(item, sensitive_keys) if isinstance(item, dict) else item) for item in value]
         else:
             result[key] = value
 

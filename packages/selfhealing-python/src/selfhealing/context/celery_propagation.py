@@ -74,9 +74,7 @@ def on_before_task_publish(
 
     # 이미 causation 헤더가 있으면 덮어쓰지 않음 (명시적 설정 우선)
     if headers.get(CELERY_HEADER_CASCADE_ID):
-        logger.debug(
-            f"[CausationPropagation] Causation headers already set for task: {sender}"
-        )
+        logger.debug(f"[CausationPropagation] Causation headers already set for task: {sender}")
         return
 
     # 현재 CausationContext에서 헤더 생성
@@ -147,8 +145,7 @@ def ensure_causation_context_for_task(
     token = _current_causation.set(info)
 
     logger.debug(
-        f"[CausationPropagation] Auto-created system cascade: "
-        f"source={source}, cascade_id={cascade_id}, task={task_name}"
+        f"[CausationPropagation] Auto-created system cascade: " f"source={source}, cascade_id={cascade_id}, task={task_name}"
     )
 
     return token

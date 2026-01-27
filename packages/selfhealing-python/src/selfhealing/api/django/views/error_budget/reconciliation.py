@@ -90,11 +90,7 @@ class FailSafePeriodsView(APIView):
                 "data": {
                     "periods": [p.to_dict() for p in periods],
                     "count": len(periods),
-                    "active_period": (
-                        tracker.get_active_period().to_dict()
-                        if tracker.get_active_period()
-                        else None
-                    ),
+                    "active_period": (tracker.get_active_period().to_dict() if tracker.get_active_period() else None),
                 },
                 "timestamp": timezone.now().isoformat(),
             }
@@ -126,9 +122,7 @@ class ShadowBudgetsView(APIView):
         )
 
         limit = int(request.query_params.get("limit", 50))
-        pending_only = (
-            request.query_params.get("pending_only", "false").lower() == "true"
-        )
+        pending_only = request.query_params.get("pending_only", "false").lower() == "true"
 
         service = get_reconciliation_service()
 

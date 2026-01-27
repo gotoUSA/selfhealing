@@ -135,12 +135,8 @@ class ExceptionBudgetWeightMap:
         default_weight: 매핑되지 않은 코드의 기본 가중치
     """
 
-    category_weights: dict[str, float] = field(
-        default_factory=lambda: dict(DEFAULT_CATEGORY_WEIGHTS)
-    )
-    code_weights: dict[str, float] = field(
-        default_factory=lambda: dict(DEFAULT_CODE_WEIGHTS)
-    )
+    category_weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_CATEGORY_WEIGHTS))
+    code_weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_CODE_WEIGHTS))
     default_weight: float = 1.0
 
     def get_weight(self, error_code) -> float:
@@ -220,9 +216,7 @@ class ExceptionBudgetWeightMap:
     def from_dict(cls, data: dict[str, Any]) -> ExceptionBudgetWeightMap:
         """딕셔너리에서 생성."""
         return cls(
-            category_weights=data.get(
-                "category_weights", dict(DEFAULT_CATEGORY_WEIGHTS)
-            ),
+            category_weights=data.get("category_weights", dict(DEFAULT_CATEGORY_WEIGHTS)),
             code_weights=data.get("code_weights", dict(DEFAULT_CODE_WEIGHTS)),
             default_weight=data.get("default_weight", 1.0),
         )

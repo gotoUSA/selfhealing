@@ -127,8 +127,7 @@ class DLQArchiveView(APIView):
         count = service.archive_old_entries(older_than_days=older_than_days)
 
         logger.info(
-            f"[DLQ] Archived {count} entries via API "
-            f"(resolved > {older_than_days} days ago) by user {request.user}"
+            f"[DLQ] Archived {count} entries via API " f"(resolved > {older_than_days} days ago) by user {request.user}"
         )
 
         return Response(
@@ -175,9 +174,7 @@ class DLQPurgeView(APIView):
         service = get_dlq_service()
         count = service.purge_archived(ids=ids, older_than_days=older_than_days)
 
-        logger.warning(
-            f"[DLQ] PURGED {count} archived entries via API by user {request.user}"
-        )
+        logger.warning(f"[DLQ] PURGED {count} archived entries via API by user {request.user}")
 
         return Response(
             {
@@ -317,9 +314,7 @@ class DLQResolveView(APIView):
         service = get_dlq_service()
         result = service.resolve_entry(pk, notes=notes)
 
-        logger.info(
-            f"[DLQ] Entry {pk} manually resolved by user {request.user}: {notes}"
-        )
+        logger.info(f"[DLQ] Entry {pk} manually resolved by user {request.user}: {notes}")
 
         return Response(
             {
@@ -364,9 +359,7 @@ class DLQTestCreateView(APIView):
             user_id=request.user.id if request.user else None,
             entity_type=request.data.get("entity_type", "test"),
             entity_id=request.data.get("entity_id", ""),
-            error_message=request.data.get(
-                "error_message", "Test failure for load testing"
-            ),
+            error_message=request.data.get("error_message", "Test failure for load testing"),
             snapshot_data=request.data.get("snapshot_data"),
             request_data=request.data.get("request_data"),
             response_data=request.data.get("response_data"),

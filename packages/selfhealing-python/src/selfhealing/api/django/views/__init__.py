@@ -402,9 +402,7 @@ def __getattr__(name: str) -> object:
         _loaded_symbols[name] = symbol
         return symbol
 
-    raise AttributeError(
-        f"module 'selfhealing.api.django.views' has no attribute '{name}'"
-    )
+    raise AttributeError(f"module 'selfhealing.api.django.views' has no attribute '{name}'")
 
 
 def __dir__() -> list[str]:

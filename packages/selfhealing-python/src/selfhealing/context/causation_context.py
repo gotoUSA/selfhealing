@@ -205,9 +205,7 @@ class CausationInfo:
 # =============================================================================
 
 
-_current_causation: ContextVar[CausationInfo | None] = ContextVar(
-    "current_causation", default=None
-)
+_current_causation: ContextVar[CausationInfo | None] = ContextVar("current_causation", default=None)
 """현재 인과관계 컨텍스트 (actor_context.py 패턴 준수)."""
 
 
@@ -278,10 +276,7 @@ class CausationContext:
 
         token = _current_causation.set(info)
         try:
-            logger.debug(
-                f"[CausationContext] Started cascade: "
-                f"cascade={cascade_id}, namespace={namespace}"
-            )
+            logger.debug(f"[CausationContext] Started cascade: " f"cascade={cascade_id}, namespace={namespace}")
             yield info
         finally:
             _current_causation.reset(token)
@@ -323,10 +318,7 @@ class CausationContext:
             trigger_event_id=system_event_id,
             metadata={**(metadata or {}), "system_source": source},
         ) as ctx:
-            logger.debug(
-                f"[CausationContext] Started system cascade: "
-                f"source={source}, trigger={system_event_id}"
-            )
+            logger.debug(f"[CausationContext] Started system cascade: " f"source={source}, trigger={system_event_id}")
             yield ctx
 
     @classmethod
@@ -358,10 +350,7 @@ class CausationContext:
 
         token = _current_causation.set(continued_info)
         try:
-            logger.debug(
-                f"[CausationContext] Continued cascade: "
-                f"cascade={info.cascade_id}, depth={new_depth}"
-            )
+            logger.debug(f"[CausationContext] Continued cascade: " f"cascade={info.cascade_id}, depth={new_depth}")
             yield continued_info
         finally:
             _current_causation.reset(token)
@@ -573,9 +562,7 @@ def restore_causation_from_kafka(
     for key, value in headers:
         if key.startswith(KAFKA_HEADER_PREFIX):
             short_key = key[len(KAFKA_HEADER_PREFIX) :]
-            header_dict[short_key] = (
-                value.decode("utf-8") if isinstance(value, bytes) else value
-            )
+            header_dict[short_key] = value.decode("utf-8") if isinstance(value, bytes) else value
 
     cascade_id = header_dict.get("cascade_id")
     if not cascade_id:

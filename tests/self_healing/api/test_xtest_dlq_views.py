@@ -57,20 +57,20 @@ def mock_chaos_allowed():
 def mock_dlq_service():
     """Mock DLQ service for testing."""
     mock_service = MagicMock()
-    
+
     # Mock store_failure result
     mock_result = MagicMock()
     mock_result.success = True
     mock_result.dlq_id = 123
     mock_service.store_failure.return_value = mock_result
-    
+
     # Mock get_stats result
     mock_service.get_stats.return_value = {
         "total": 100,
         "by_status": {"pending": 80, "resolved": 20},
         "by_domain": {"external_service": 50, "internal_process": 50},
     }
-    
+
     # Mock list_entries result
     mock_list_result = MagicMock()
     mock_list_result.results = [
@@ -85,7 +85,7 @@ def mock_dlq_service():
         }
     ]
     mock_service.list_entries.return_value = mock_list_result
-    
+
     # Mock get_entry result
     mock_service.get_entry.return_value = {
         "id": 123,
@@ -93,12 +93,12 @@ def mock_dlq_service():
         "domain": "external_service",
         "failure_type": "TIMEOUT",
     }
-    
+
     # Mock repository
     mock_service.repository = MagicMock()
     mock_service.repository.update_status.return_value = True
     mock_service.repository.delete_by_id.return_value = True
-    
+
     with patch("selfhealing.services.dlq.get_dlq_service", return_value=mock_service):
         yield mock_service
 
@@ -127,9 +127,9 @@ class TestInjectDLQEntryView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["status"] == "success"
         assert response.data["created_count"] == 1
@@ -145,9 +145,9 @@ class TestInjectDLQEntryView:
             {"failure_type": "TIMEOUT"},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
 
@@ -159,9 +159,9 @@ class TestInjectDLQEntryView:
             {"domain": "external_service"},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
 
@@ -177,9 +177,9 @@ class TestInjectDLQEntryView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "injection_limit_exceeded"
 
@@ -195,9 +195,9 @@ class TestInjectDLQEntryView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["created_count"] == 5
         assert len(response.data["dlq_ids"]) == 5
@@ -213,9 +213,9 @@ class TestInjectDLQEntryView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         # 헤더 없으면 403 Forbidden
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
@@ -232,9 +232,9 @@ class TestDLQXTestStatusView:
         """DLQ 현황 조회 성공 테스트."""
         view = DLQXTestStatusView.as_view()
         request = request_factory.get("/api/self-healing/xtest/dlq/status/")
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "success"
         assert "total_count" in response.data
@@ -249,9 +249,9 @@ class TestDLQXTestStatusView:
             "/api/self-healing/xtest/dlq/status/",
             {"domain": "external_service"},
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["filters_applied"]["domain"] == "external_service"
 
@@ -262,9 +262,9 @@ class TestDLQXTestStatusView:
             "/api/self-healing/xtest/dlq/status/",
             {"status": "pending"},
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["filters_applied"]["status"] == "pending"
 
@@ -272,9 +272,9 @@ class TestDLQXTestStatusView:
         """X-Test-Mode 헤더 없이 요청 시 거부 테스트."""
         view = DLQXTestStatusView.as_view()
         request = request_factory.get("/api/self-healing/xtest/dlq/status/")
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -297,9 +297,9 @@ class TestForceStatusView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "success"
         assert response.data["dlq_id"] == 123
@@ -317,9 +317,9 @@ class TestForceStatusView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         # resolve_entry 메서드가 호출되어야 함
         mock_dlq_service.resolve_entry.assert_called_once()
@@ -332,9 +332,9 @@ class TestForceStatusView:
             {"new_status": "resolved"},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
 
@@ -349,16 +349,16 @@ class TestForceStatusView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "invalid_status"
 
     def test_force_status_entry_not_found(self, request_factory, mock_chaos_allowed, mock_dlq_service):
         """존재하지 않는 항목 테스트."""
         mock_dlq_service.get_entry.return_value = None
-        
+
         view = ForceStatusView.as_view()
         request = request_factory.post(
             "/api/self-healing/xtest/dlq/force-status/",
@@ -368,9 +368,9 @@ class TestForceStatusView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.data["error"] == "not_found"
 
@@ -385,9 +385,9 @@ class TestForceStatusView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -407,9 +407,9 @@ class TestResetDLQXTestView:
             {},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["status"] == "success"
         assert "deleted_count" in response.data
@@ -423,9 +423,9 @@ class TestResetDLQXTestView:
             {"domain": "external_service"},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["domain_filter"] == "external_service"
 
@@ -438,16 +438,16 @@ class TestResetDLQXTestView:
             {"id": 2, "metadata": {}},
         ]
         mock_dlq_service.list_entries.return_value = mock_list_result
-        
+
         view = ResetDLQXTestView.as_view()
         request = request_factory.post(
             "/api/self-healing/xtest/dlq/reset/",
             {"created_by_xtest": False},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert response.data["xtest_only"] is False
 
@@ -459,9 +459,9 @@ class TestResetDLQXTestView:
             {},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
@@ -488,7 +488,7 @@ class TestImportCompatibility:
             ForceStatusView,
             ResetDLQXTestView,
         )
-        
+
         assert InjectDLQEntryView is not None
         assert DLQXTestStatusView is not None
         assert ForceStatusView is not None
@@ -502,7 +502,7 @@ class TestImportCompatibility:
             ForceStatusView,
             ResetDLQXTestView,
         )
-        
+
         assert InjectDLQEntryView is not None
         assert DLQXTestStatusView is not None
         assert ForceStatusView is not None

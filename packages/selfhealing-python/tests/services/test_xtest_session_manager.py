@@ -143,6 +143,7 @@ class TestXTestSessionManagerWithMockRedis:
             XTestSessionManager,
             reset_xtest_session_manager,
         )
+
         reset_xtest_session_manager()
         manager = XTestSessionManager(redis_client=mock_redis)
         return manager
@@ -198,9 +199,7 @@ class TestXTestSessionManagerWithMockRedis:
         assert result.session_id == "test-001"
         assert result.user == "test_user"
 
-    def test_register_artifact_creates_session_if_not_exists(
-        self, session_manager, mock_redis
-    ):
+    def test_register_artifact_creates_session_if_not_exists(self, session_manager, mock_redis):
         """세션이 없으면 생성 후 아티팩트 등록."""
         mock_redis.hgetall.return_value = {}
         mock_redis.exists.return_value = False
@@ -251,6 +250,7 @@ class TestXTestSessionManagerFactory:
         from selfhealing.services.xtest_session_manager import (
             reset_xtest_session_manager,
         )
+
         reset_xtest_session_manager()
         yield
         reset_xtest_session_manager()

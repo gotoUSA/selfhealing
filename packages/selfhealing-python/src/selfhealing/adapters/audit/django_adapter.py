@@ -65,10 +65,7 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
         self._model_class = model_class
         self._generate_event_id = generate_event_id
 
-        logger.info(
-            f"[DjangoAuditAdapter] Initialized with model: "
-            f"{model_class._meta.db_table}"
-        )
+        logger.info(f"[DjangoAuditAdapter] Initialized with model: " f"{model_class._meta.db_table}")
 
     def log(self, entry: AuditEntry) -> None:
         """
@@ -95,9 +92,7 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             if created:
                 logger.debug(f"[DjangoAuditAdapter] Logged: {audit_event_id}")
             else:
-                logger.debug(
-                    f"[DjangoAuditAdapter] Duplicate skipped: {audit_event_id}"
-                )
+                logger.debug(f"[DjangoAuditAdapter] Duplicate skipped: {audit_event_id}")
         except Exception as e:
             logger.error(f"[DjangoAuditAdapter] Failed to log: {e}")
             raise
@@ -132,10 +127,7 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
         try:
             inserted, skipped = self._model_class.bulk_insert_ignore_conflict(records)
 
-            logger.info(
-                f"[DjangoAuditAdapter] Batch: inserted={inserted}, "
-                f"skipped={skipped}"
-            )
+            logger.info(f"[DjangoAuditAdapter] Batch: inserted={inserted}, " f"skipped={skipped}")
             return inserted, skipped
         except Exception as e:
             logger.error(f"[DjangoAuditAdapter] Batch failed: {e}")
@@ -219,11 +211,7 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
     ) -> dict[str, Any]:
         """AuditEntry를 모델 필드 딕셔너리로 변환."""
         return {
-            "action": (
-                entry.action.value
-                if isinstance(entry.action, AuditAction)
-                else entry.action
-            ),
+            "action": (entry.action.value if isinstance(entry.action, AuditAction) else entry.action),
             "timestamp": entry.timestamp,
             "actor_id": entry.actor_id or "",
             "actor_type": entry.actor_type or "",
@@ -237,15 +225,9 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             "success": entry.success,
             "error_message": entry.error_message or "",
             # 해시 체인 필드 (details에서 추출)
-            "integrity_hash": (entry.details or {})
-            .get("integrity", {})
-            .get("hash", ""),
-            "previous_hash": (entry.details or {})
-            .get("integrity", {})
-            .get("previous_hash", ""),
-            "sequence_number": (entry.details or {})
-            .get("integrity", {})
-            .get("sequence", 0),
+            "integrity_hash": (entry.details or {}).get("integrity", {}).get("hash", ""),
+            "previous_hash": (entry.details or {}).get("integrity", {}).get("previous_hash", ""),
+            "sequence_number": (entry.details or {}).get("integrity", {}).get("sequence", 0),
         }
 
     def _model_to_entry(self, obj: models.Model) -> AuditEntry:
@@ -293,8 +275,6 @@ def get_django_audit_adapter(
 
             model_class = AuditLog
         except ImportError:
-            raise ImportError(
-                "shopping.models.AuditLog not found. " "Provide model_class explicitly."
-            )
+            raise ImportError("shopping.models.AuditLog not found. " "Provide model_class explicitly.")
 
     return DjangoAuditLogAdapter(model_class=model_class)

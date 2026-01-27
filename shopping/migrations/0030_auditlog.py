@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     """
     AuditLog 모델 마이그레이션.
-    
+
     Q3 보완: WAL 복구 시 중복 삽입 방지 (2차 방어)
     - audit_event_id: Unique 제약 (ON CONFLICT DO NOTHING 지원)
     - 해시 체인 필드: integrity_hash, previous_hash

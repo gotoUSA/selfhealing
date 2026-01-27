@@ -3,7 +3,7 @@ Celery Beat Schedule for Self-Healing Autonomous Tasks
 
 Consolidates all autonomous task schedules from 3 lanes:
 - 🧹 청소부 레인 (Cleanup & Expire)
-- 🧠 지능 레인 (Analyze & Learn)  
+- 🧠 지능 레인 (Analyze & Learn)
 - 📋 증명 레인 (Compliance & Report)
 
 Usage:
@@ -167,9 +167,7 @@ def get_selfhealing_beat_schedule(
             from selfhealing.tasks.governance import get_governance_beat_schedule
 
             schedule.update(get_governance_beat_schedule())
-            logger.debug(
-                "[BeatSchedule] Added governance schedules (emergency mode expiry)"
-            )
+            logger.debug("[BeatSchedule] Added governance schedules (emergency mode expiry)")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load governance tasks: {e}")
 
@@ -295,12 +293,7 @@ def validate_schedule() -> dict[str, Any]:
 
         # Check queue exists
         queue = config.get("options", {}).get("queue")
-        if (
-            queue
-            and queue not in SELFHEALING_QUEUE_CONFIG
-            and queue != "default"
-            and queue != "dlq"
-        ):
+        if queue and queue not in SELFHEALING_QUEUE_CONFIG and queue != "default" and queue != "dlq":
             warnings.append(f"{name}: queue '{queue}' not in SELFHEALING_QUEUE_CONFIG")
 
     return {

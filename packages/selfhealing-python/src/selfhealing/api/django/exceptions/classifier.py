@@ -293,9 +293,7 @@ class ExceptionClassifier:
             retryable=False,
         )
 
-    def _classify_django_exception(
-        self, exc: BaseException
-    ) -> ClassifiedError | None:
+    def _classify_django_exception(self, exc: BaseException) -> ClassifiedError | None:
         """Django 예외 분류."""
         try:
             from django.core.exceptions import (
@@ -366,9 +364,7 @@ class ExceptionClassifier:
 
         return None
 
-    def _classify_custom_exception(
-        self, exc: BaseException
-    ) -> ClassifiedError | None:
+    def _classify_custom_exception(self, exc: BaseException) -> ClassifiedError | None:
         """selfhealing 패키지 커스텀 예외 분류."""
         exception_class = type(exc).__name__
 

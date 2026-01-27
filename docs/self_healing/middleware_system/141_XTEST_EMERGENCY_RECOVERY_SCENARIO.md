@@ -1,9 +1,9 @@
 # X-Test Emergency Recovery Flow 시나리오
 
-**문서 번호:** 141  
-**작성일:** 2026-01-27  
-**상태:** 구현 완료 ✅  
-**구현일:** 2026-01-28  
+**문서 번호:** 141
+**작성일:** 2026-01-27
+**상태:** 구현 완료 ✅
+**구현일:** 2026-01-28
 **선행 문서:** 140_XTEST_REGIONAL_BOUNDARY.md, 77_RECOVERY_COORDINATOR.md, 74_CANARY_SAFETY_INTERLOCK.md
 
 ---

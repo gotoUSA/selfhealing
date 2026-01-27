@@ -256,10 +256,7 @@ class BaseConfigView(APIView):
         previous_config = manager._get_config(self.config_name)
 
         # Extract reason for history tracking
-        reason = (
-            apply_options.pop("reason", "")
-            or f"API update: {list(config_changes.keys())}"
-        )
+        reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
 
         # Update with strategy (includes ConfigHistory integration)
         result = manager.update_with_strategy(
@@ -279,10 +276,7 @@ class BaseConfigView(APIView):
             )
         except Exception as log_err:
             # Fallback to basic logging - never let logging failure affect the API
-            logger.warning(
-                f"[ConfigAPI] Semantic log formatting failed: {log_err}. "
-                f"Falling back to basic log."
-            )
+            logger.warning(f"[ConfigAPI] Semantic log formatting failed: {log_err}. " f"Falling back to basic log.")
             logger.info(
                 f"[ConfigAPI] {self.config_name} config updated by {request.user}: "
                 f"changes={config_changes}, strategy={result.get('applied_strategy')}"

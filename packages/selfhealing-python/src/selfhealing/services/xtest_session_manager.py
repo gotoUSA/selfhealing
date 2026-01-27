@@ -169,10 +169,7 @@ class XTestSessionManager:
                 # 활성 세션 목록에 추가
                 self.redis.sadd(active_key, session_id)
 
-                logger.info(
-                    f"[XTestSession] Created session: {session_id} "
-                    f"(user={user}, ttl={ttl_hours}h)"
-                )
+                logger.info(f"[XTestSession] Created session: {session_id} " f"(user={user}, ttl={ttl_hours}h)")
 
             except Exception as e:
                 logger.error(f"[XTestSession] Failed to create session: {e}")
@@ -305,9 +302,7 @@ class XTestSessionManager:
         try:
             active_key = self._get_active_sessions_key()
             session_ids = self.redis.smembers(active_key)
-            return [
-                sid.decode() if isinstance(sid, bytes) else sid for sid in session_ids
-            ]
+            return [sid.decode() if isinstance(sid, bytes) else sid for sid in session_ids]
 
         except Exception as e:
             logger.error(f"[XTestSession] Failed to get active sessions: {e}")
@@ -328,10 +323,7 @@ class XTestSessionManager:
             if session and session.is_expired:
                 expired_sessions.append(session)
 
-        logger.debug(
-            f"[XTestSession] Found {len(expired_sessions)} expired sessions "
-            f"out of {len(active_ids)} active"
-        )
+        logger.debug(f"[XTestSession] Found {len(expired_sessions)} expired sessions " f"out of {len(active_ids)} active")
 
         return expired_sessions
 
