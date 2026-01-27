@@ -215,6 +215,67 @@ Phase 4: Budget 연동 (독립, 장기)
 - WAL 쓰기는 fsync 포함하여 **동기 유지**
 - 배치 사이즈 제한: `MAX_EVENTS_PER_REQUEST` (Q2)와 연동
 
+### 5.2 Q3 보완: WAL 복구 시 중복 제거 (De-duplication)
+
+**목적**: 프로세스 재기동 시 WAL 데이터 재전송으로 인한 중복 기록 방지
+
+**문제 상황**:
+- 네트워크 지연으로 "전송 성공했으나 응답 못 받음" 상태 발생 가능
+- 재기동 시 같은 로그가 두 번 기록되면 Error Rate 왜곡
+- 에러 버짗이 잘못 계산될 위험
+
+**현재 코드 상태 - 이미 인프라 존재**:
+- `IdempotencyDomain.WAL_RECOVERY`: idempotency_service.py#L88 ✅
+- `IdempotencyKey.for_wal_recovery()`: idempotency_service.py#L395-418 ✅
+- 키 형식: `wal:{wal_entry_id}:{operation}`
+
+**구현 설계 - 2계층 방어**:
+
+| 계층 | 방식 | 위치 | 역할 |
+|------|------|------|------|
+| **1차** | `IdempotencyKey.for_wal_recovery()` | Redis | 빠른 중복 감지 |
+| **2차** | `audit_event_id` Unique 제약 | PostgreSQL | 최종 보장 |
+
+**수정 파일 및 위치**:
+
+| 파일 | 수정 위치 | 변경 내용 |
+|------|----------|----------|
+| `audit/graceful_degradation/wal_recovery.py` | 복구 루프 | `IdempotencyKey.for_wal_recovery()` 호출하여 중복 체크 |
+| `audit/recorder.py` | `ContinuousAuditRecorder` | PostgreSQL INSERT 시 `ON CONFLICT (audit_event_id) DO NOTHING` |
+| Django 마이그레이션 | `AuditLog` 모델 | `audit_event_id` 필드에 `unique=True` 제약 추가 |
+
+**코드 근거**:
+- WAL 엔트리 `sequence` 필드: wal.py#L55-68
+- `IdempotencyDomain.WAL_RECOVERY` 정의: idempotency_service.py#L88
+- `for_wal_recovery()` 팩토리: idempotency_service.py#L395-418
+- `HashChainWALRecovery` 클래스: degradation_manager.py#L21
+
+**동작 흐름**:
+
+```
+WAL 복구 시작
+    │
+    ▼
+┌─────────────────────────────────────┐
+│ 1차 방어: IdempotencyService       │
+│   key = for_wal_recovery(           │
+│       wal_entry_id=seq,              │
+│       operation="pg_insert"          │
+│   )                                  │
+│   if service.is_duplicate(key):     │
+│       skip  ← 중복, 건너뛰기           │
+└─────────────────────────────────────┘
+    │ 중복 아님
+    ▼
+┌─────────────────────────────────────┐
+│ 2차 방어: PostgreSQL Unique          │
+│   INSERT INTO audit_log (...)       │
+│   ON CONFLICT (audit_event_id)      │
+│   DO NOTHING                        │
+│   → Redis TTL 만료 후에도 중복 방지   │
+└─────────────────────────────────────┘
+```
+
 ---
 
 ## 6. Phase 4: Budget 연동
@@ -255,6 +316,85 @@ Phase 4: Budget 연동 (독립, 장기)
 | `services/error_budget/exception_weights.py` | 신규 | `ErrorCode` → `weight` 매핑 딕셔너리 |
 | `services/error_budget/exception_weights.py` | 신규 | `get_weight_for_error_code(code: ErrorCode)` 함수 |
 | `settings/error_budget.py` | 설정 추가 | `EXCEPTION_BUDGET_WEIGHTS` 환경변수 지원 |
+
+### 6.2 Q12 보완: 가중치 중첩 정책 (Weight Combination Policy)
+
+**목적**: EmergencyLevel 가중치와 ErrorCode 가중치가 동시 적용될 때의 계산 규칙 정의
+
+**현재 코드 상태 - 정책 미정의**:
+- `CrisisMultiplierProvider.get_current_multiplier()`: EmergencyLevel 기반 가중치만 반환 (multiplier.py#L273-323)
+- `CrisisMultiplierConfig.get_multiplier()`: `min(multiplier, max_multiplier)` 상한 제한만 존재 (multiplier.py#L138-152)
+- `max_multiplier` 기본값: 15.0 (multiplier.py#L136)
+- **ErrorCode별 가중치와의 조합 규칙 없음**
+
+**문제 상황 예시**:
+- LEVEL_3 상황 (5.0x) + CONFIG_LOCKED 에러 (2.0x) 동시 발생
+- 최종 가중치는? → 정의 없음
+
+**정책 선택지 분석**:
+
+| 방식 | 계산식 | LEVEL_3(5.0x) + CONFIG_LOCKED(2.0x) | 위험성 |
+|------|--------|--------------------------------------|--------|
+| 곱셈 | `Level × Error` | 10.0x | 🔴 버짗 폭발 |
+| 합산 | `Level + Error` | 7.0x | 🟡 선형 증가 |
+| **Max** | `Max(Level, Error)` | **5.0x** | 🟢 제어 가능 |
+
+**권장: Max 정책**
+
+**근거**:
+- 곱셈/합산은 버짗을 순식간에 증발시켜 시스템을 너무 예민하게 만듦
+- 가장 강력한 리스크 인자 하나만 채택하는 것이 운영상 안정적
+- `max_multiplier` (15.0)는 최종 결과 상한으로 유지 → 이중 안전장치
+
+**수정 파일 및 위치**:
+
+| 파일 | 수정 위치 | 변경 내용 |
+|------|----------|----------|
+| `services/error_budget/exception_weights.py` | 신규 | `WeightCombinePolicy` Enum 정의 (MAX, SUM, MULTIPLY) |
+| `services/error_budget/exception_weights.py` | 신규 | `combine_weights(level_weight, error_weight, policy)` 함수 |
+| `settings/error_budget.py` | 설정 추가 | `SELFHEALING_WEIGHT_COMBINE_POLICY` 환경변수 (기본값: MAX) |
+| `services/error_budget/multiplier.py` | `get_current_multiplier()` | ErrorCode 가중치 조회 후 정책 적용 |
+
+**코드 근거**:
+- `CrisisMultiplierConfig.get_multiplier()`: multiplier.py#L138-152
+- `max_multiplier` 상한: multiplier.py#L136
+- 레벨별 기본 가중치: multiplier.py#L120-123 (`NORMAL: 1.0`, `LEVEL_3: 10.0`)
+
+**계산 흐름**:
+
+```
+예외 발생 (ErrorCode: CONFIG_LOCKED)
+    │
+    ▼
+┌───────────────────────────────────────────┐
+│ 1. EmergencyLevel 가중치 조회               │
+│    CrisisMultiplierProvider                  │
+│    .get_current_multiplier() → 5.0x         │
+└───────────────────────────────────────────┘
+    │
+    ▼
+┌───────────────────────────────────────────┐
+│ 2. ErrorCode 가중치 조회                     │
+│    ExceptionBudgetWeightMap                  │
+│    .get_weight(CONFIG_LOCKED) → 2.0x        │
+└───────────────────────────────────────────┘
+    │
+    ▼
+┌───────────────────────────────────────────┐
+│ 3. 정책 적용 (Max)                          │
+│    combine_weights(5.0, 2.0, MAX)            │
+│    → max(5.0, 2.0) = 5.0x                   │
+└───────────────────────────────────────────┘
+    │
+    ▼
+┌───────────────────────────────────────────┐
+│ 4. 상한 적용                                 │
+│    min(5.0, max_multiplier=15.0)             │
+│    → 최종 가중치: 5.0x                       │
+└───────────────────────────────────────────┘
+```
+
+---
 
 **기본 가중치 매핑**:
 
@@ -303,12 +443,24 @@ Phase 4: Budget 연동 (독립, 장기)
   - [ ] `signal_hooks.py`: `setup_selfhealing_signals()` 등록 추가
   - [ ] 테스트: `test_celery_causation_propagation.py`
 
+- [ ] **Q9 보완: System-initiated Causation**
+  - [ ] `causation_context.py`: `start_system_cascade(source)` 함수 추가
+  - [ ] `causation_context.py`: `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성
+  - [ ] `signal_hooks.py`: `on_task_prerun()`에서 `CausationContext.is_set()` 확인 후 미설정 시 자동 생성
+  - [ ] 테스트: `test_system_initiated_causation.py`
+
 ### Phase 3 (성능 개선) - 3주차
 
 - [ ] **Q3: Audit 배치 쓰기** (선택적)
   - [ ] `wal.py`: `batch_write_entries()` 메서드 추가
   - [ ] 성능 벤치마크 수행
   - [ ] 테스트: `test_wal_batch_write.py`
+
+- [ ] **Q3 보완: WAL 복구 시 중복 제거**
+  - [ ] `wal_recovery.py`: 복구 루프에서 `IdempotencyKey.for_wal_recovery()` 호출
+  - [ ] `recorder.py`: PostgreSQL INSERT 시 `ON CONFLICT DO NOTHING` 추가
+  - [ ] Django 마이그레이션: `audit_event_id` Unique 제약 추가
+  - [ ] 테스트: `test_wal_recovery_deduplication.py`
 
 ### Phase 4 (Budget 연동) - 4주차
 
@@ -318,6 +470,13 @@ Phase 4: Budget 연동 (독립, 장기)
   - [ ] `get_weight_for_error_code()` 함수 구현
   - [ ] `settings/error_budget.py` 설정 추가
   - [ ] 테스트: `test_exception_budget_weights.py`
+
+- [ ] **Q12 보완: 가중치 중첩 정책**
+  - [ ] `exception_weights.py`: `WeightCombinePolicy` Enum 정의 (MAX, SUM, MULTIPLY)
+  - [ ] `exception_weights.py`: `combine_weights()` 함수 구현
+  - [ ] `settings/error_budget.py`: `SELFHEALING_WEIGHT_COMBINE_POLICY` 환경변수 추가
+  - [ ] `multiplier.py`: `get_current_multiplier()`에서 정책 적용 로직 추가
+  - [ ] 테스트: `test_weight_combination_policy.py`
 
 ---
 
@@ -331,7 +490,10 @@ Phase 4: Budget 연동 (독립, 장기)
 | Q7 | `test_role_based_masking.py` | 레벨별 마스킹 출력 검증 |
 | Q8 | `test_response_meta_region.py` | region 필드 직렬화 |
 | Q9 | `test_celery_causation_propagation.py` | 헤더 자동 주입/복원 |
+| Q9 보완 | `test_system_initiated_causation.py` | SYSTEM_ROOT_{source} 형식 생성 |
+| Q3 보완 | `test_wal_recovery_deduplication.py` | WAL 복구 중복 방지 |
 | Q12 | `test_exception_budget_weights.py` | ErrorCode별 가중치 조회 |
+| Q12 보완 | `test_weight_combination_policy.py` | Max/Sum/Multiply 정책 검증 |
 
 ### 8.2 통합 테스트
 
@@ -340,6 +502,9 @@ Phase 4: Budget 연동 (독립, 장기)
 | API 요청 → 예외 → Audit 기록 | hash_for_audit 적용 확인 |
 | API 요청 → Celery Task → 완료 | causation_id 전파 확인 |
 | 대량 이벤트 발생 요청 | MAX_EVENTS 제한 동작 |
+| Celery Beat 태스크 예외 | SYSTEM_ROOT_celery_beat 형식 확인 |
+| 프로세스 재기동 후 WAL 복구 | 중복 기록 방지 확인 |
+| LEVEL_3 + CONFIG_LOCKED 예외 | Max 정책 적용 확인 |
 
 ---
 

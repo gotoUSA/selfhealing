@@ -121,6 +121,66 @@ Celery 시그널 핸들러:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### 2.5 System-initiated Causation (Celery Beat / Management Command)
+
+**목적**: API 요청이 아닌 시스템 자동화 작업의 인과관계 추적
+
+**문제 상황**:
+- Celery Beat 스케줄러, Management Command에서 시작되는 작업은 부모 `request_id`가 없음
+- `CausationContext.get_current()`가 `None` 반환
+- 예외 발생 시 인과관계 추적 불가
+
+**현재 코드 상태**:
+- `CausationContext.start_cascade()`: `trigger_event_id` 미전달 시 `evt-{uuid}` 자동 생성 (causation_context.py#L193)
+- `SYSTEM_ACTOR`: `actor_id="system"`, `source="internal"` 정의됨 (actor_context.py#L110-115)
+- Celery Beat 테스트: `SYSTEM_ACTOR`로 기록되는지 검증 존재 (test_rbac_audit_flow.py#L164-197)
+
+**구현 설계**:
+
+| 항목 | 설명 |
+|------|------|
+| **Root ID 형식** | `SYSTEM_ROOT_{source}_{UUID}` |
+| **source 유형** | `celery_beat`, `management_cmd`, `cron`, `scheduler` |
+| **적용 위치** | `CausationContext.start_cascade()` 호출 시 |
+
+**수정 파일 및 위치**:
+
+| 파일 | 수정 위치 | 변경 내용 |
+|------|----------|----------|
+| `context/causation_context.py` | `start_cascade()` | `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성 |
+| `context/causation_context.py` | 신규 함수 | `start_system_cascade(source: str)` - 시스템 트리거용 |
+| `adapters/celery/signal_hooks.py` | `on_task_prerun()` | `CausationContext.is_set()` 확인 후 미설정 시 `start_system_cascade("celery_beat")` 호출 |
+
+**코드 근거**:
+- `Actor.source` 필드: `"internal"`, `"celery"`, `"management_command"` 등 구분 (actor_context.py#L68)
+- `start_cascade()` 현재 구현: causation_context.py#L176-211
+- Celery Beat 태스크 시뮬레이션: test_rbac_audit_flow.py#L179
+
+**데이터 흐름 (System-initiated)**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Celery Beat / Management Command (부모 request_id 없음)         │
+└─────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ task_prerun Signal                                                  │
+│   1. CausationContext.is_set() → False                            │
+│   2. start_system_cascade(source="celery_beat")                    │
+│   3. trigger_event_id = "SYSTEM_ROOT_celery_beat_{uuid}"           │
+└─────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ 예외 발생 시 Audit 로그                                           │
+│   - cascade_id: "cascade-{uuid}"                                   │
+│   - trigger_event_id: "SYSTEM_ROOT_celery_beat_{uuid}"             │
+│   - actor_id: "system" (SYSTEM_ACTOR)                              │
+│   → "사람이 건드리지 않은 자동화 작업" 명확히 구분                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## 3. Role-based Masking 설계 (RBAC 연동)
@@ -281,6 +341,11 @@ _mask_error_message() 수정:
   - [ ] `task_postrun` 시그널 핸들러
   - [ ] `setup_celery_causation_propagation()` 초기화 함수
 
+- [ ] `context/causation_context.py` (System-initiated 지원)
+  - [ ] `start_system_cascade(source: str)` 함수 추가
+  - [ ] `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성
+  - [ ] `on_task_prerun()`에서 `CausationContext.is_set()` 확인 후 자동 생성
+
 ### Phase 2: Role-based Masking (우선순위: 중간)
 
 - [ ] `audit/masking.py`
@@ -299,6 +364,11 @@ _mask_error_message() 수정:
   - [ ] request_id → causation_id 전파 테스트
   - [ ] Celery 헤더 주입 테스트
   - [ ] Celery 복원 테스트
+
+- [ ] `tests/context/test_system_initiated_causation.py`
+  - [ ] Celery Beat 태스크에서 SYSTEM_ROOT_celery_beat 형식 생성 검증
+  - [ ] Management Command에서 SYSTEM_ROOT_management_cmd 형식 생성 검증
+  - [ ] CausationContext 미설정 시 자동 생성 검증
 
 - [ ] `tests/audit/test_role_based_masking.py`
   - [ ] MaskingLevel별 출력 검증
