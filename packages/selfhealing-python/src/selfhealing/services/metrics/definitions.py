@@ -21,7 +21,7 @@ from .registry import (
 dlq_items_total = get_or_create_counter(
     "dlq_items_total",
     "Total DLQ items created",
-    ["domain", "failure_type"],
+    ["domain", "failure_type", "is_synthetic"],
 )
 
 dlq_pending_gauge = get_or_create_gauge(
@@ -50,14 +50,14 @@ dlq_created_total = get_or_create_counter(
 retry_attempts_histogram = get_or_create_histogram(
     "retry_attempts_total",
     "Number of retry attempts before resolution",
-    ["domain"],
+    ["domain", "is_synthetic"],
     buckets=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
 )
 
 retry_outcomes_total = get_or_create_counter(
     "retry_outcomes_total",
     "Retry outcomes by domain and result",
-    ["domain", "outcome"],
+    ["domain", "outcome", "is_synthetic"],
 )
 
 retry_success_rate = get_or_create_gauge(
@@ -105,7 +105,7 @@ circuit_breaker_state = get_or_create_gauge(
 circuit_breaker_transitions = get_or_create_counter(
     "circuit_breaker_transitions_total",
     "Total circuit breaker state transitions",
-    ["service", "from_state", "to_state"],
+    ["service", "from_state", "to_state", "is_synthetic"],
 )
 
 circuit_breaker_open_duration = get_or_create_histogram(
@@ -165,13 +165,13 @@ drift_reconciliation_total = get_or_create_counter(
 replay_attempts_total = get_or_create_counter(
     "replay_attempts_total",
     "Total replay attempts",
-    ["domain", "replay_type"],
+    ["domain", "replay_type", "is_synthetic"],
 )
 
 replay_outcomes_total = get_or_create_counter(
     "replay_outcomes_total",
     "Replay outcomes",
-    ["domain", "outcome"],
+    ["domain", "outcome", "is_synthetic"],
 )
 
 
@@ -182,13 +182,13 @@ replay_outcomes_total = get_or_create_counter(
 error_budget_remaining_percent = get_or_create_gauge(
     "error_budget_remaining_percent",
     "Error budget remaining as percentage (0-100)",
-    ["slo_name"],
+    ["slo_name", "is_synthetic"],
 )
 
 error_budget_remaining_minutes = get_or_create_gauge(
     "error_budget_remaining_minutes",
     "Error budget remaining in minutes",
-    ["slo_name"],
+    ["slo_name", "is_synthetic"],
 )
 
 burn_rate_1h = get_or_create_gauge(

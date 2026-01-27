@@ -44,6 +44,9 @@ class ResilientStorageConfig:
     
     # Allow memory-only mode (for testing/development)
     allow_memory_only: bool = False
+    
+    # Dynamic prefix 지원: TestModeContext 활성화 시 xtest: 프리픽스 자동 적용
+    use_dynamic_prefix: bool = True
 
 
 class ResilientStorageBackend:
@@ -107,6 +110,28 @@ class ResilientStorageBackend:
         self._init_wal()
         self._init_shadow_logger()
         self._init_health_checker()
+    
+    def _get_full_key(self, key: str) -> str:
+        """
+        동적 프리픽스를 적용한 전체 키 반환.
+        
+        TestModeContext가 활성화된 경우 xtest: 프리픽스가 추가되어
+        운영 데이터와 테스트 데이터가 분리됩니다.
+        
+        Args:
+            key: 원본 키
+            
+        Returns:
+            프리픽스가 적용된 전체 키
+            - 운영 모드: "selfhealing:dlq:pending"
+            - 합성 모드: "xtest:selfhealing:dlq:pending"
+        """
+        if self.config.use_dynamic_prefix:
+            from selfhealing.settings.namespace import get_effective_key_prefix
+            prefix = get_effective_key_prefix()
+            return f"{prefix}{key}"
+        
+        return f"{self.config.key_prefix}{key}"
     
     def _init_redis(self) -> None:
         """Initialize Redis connection (failure is acceptable)."""
@@ -293,7 +318,7 @@ class ResilientStorageBackend:
         Returns:
             Value if exists, None otherwise
         """
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -319,7 +344,7 @@ class ResilientStorageBackend:
         Returns:
             True on success
         """
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -369,7 +394,7 @@ class ResilientStorageBackend:
     
     def delete(self, key: str) -> bool:
         """Delete value by key."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -395,7 +420,7 @@ class ResilientStorageBackend:
     
     def hget(self, key: str, field: str) -> Optional[Any]:
         """Get hash field value."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -413,7 +438,7 @@ class ResilientStorageBackend:
     
     def hset(self, key: str, mapping: Dict[str, Any]) -> bool:
         """Set hash fields."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -453,7 +478,7 @@ class ResilientStorageBackend:
     
     def hgetall(self, key: str) -> Dict[str, Any]:
         """Get all hash fields."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -474,7 +499,7 @@ class ResilientStorageBackend:
     
     def hdel(self, key: str, field: str) -> bool:
         """Delete hash field."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -503,7 +528,7 @@ class ResilientStorageBackend:
     
     def lpush(self, key: str, *values: Any) -> int:
         """Push values to list head."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -522,7 +547,7 @@ class ResilientStorageBackend:
     
     def lrange(self, key: str, start: int, end: int) -> List[Any]:
         """Get list range."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -540,7 +565,7 @@ class ResilientStorageBackend:
     
     def ltrim(self, key: str, start: int, end: int) -> bool:
         """Trim list to specified range."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -560,7 +585,7 @@ class ResilientStorageBackend:
     
     def zadd(self, key: str, mapping: Dict[str, float]) -> int:
         """Add members to sorted set with scores."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -578,7 +603,7 @@ class ResilientStorageBackend:
     
     def zrange(self, key: str, start: int, end: int) -> List[str]:
         """Get sorted set range by index."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -597,7 +622,7 @@ class ResilientStorageBackend:
     
     def zrem(self, key: str, *members: str) -> int:
         """Remove members from sorted set."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -617,7 +642,7 @@ class ResilientStorageBackend:
     
     def zcard(self, key: str) -> int:
         """Get sorted set cardinality."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -633,7 +658,7 @@ class ResilientStorageBackend:
     
     def incr(self, key: str) -> int:
         """Atomically increment counter."""
-        full_key = f"{self.config.key_prefix}{key}"
+        full_key = self._get_full_key(key)
         
         if self._mode == StorageMode.REDIS and self._redis:
             try:
@@ -757,7 +782,7 @@ class ResilientStorageBackend:
             reconciler = None
         
         for key, value in self._memory.items():
-            full_key = f"{self.config.key_prefix}{key}"
+            full_key = self._get_full_key(key)
             
             try:
                 if isinstance(value, dict):

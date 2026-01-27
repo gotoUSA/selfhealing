@@ -12,12 +12,16 @@ Usage:
     SELFHEALING_TENANT=customer123
     SELFHEALING_ENV=production
 
-Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
+동적 Namespace (X-Test-Mode 지원):
+    - 운영 요청: selfhealing:*
+    - 합성 요청: xtest:selfhealing:* (TestModeContext 활성화 시)
 """
 from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from selfhealing.core.test_mode_context import TestModeContext
 
 
 class NamespaceSettings(BaseSettings):
@@ -100,6 +104,45 @@ class NamespaceSettings(BaseSettings):
         if ns:
             return f"{base_prefix}:{ns}:"
         return f"{base_prefix}:"
+
+
+# =============================================================================
+# Synthetic Mode Key Prefix (X-Test-Mode 지원)
+# =============================================================================
+
+SYNTHETIC_KEY_PREFIX = "xtest"
+
+
+def get_effective_key_prefix(base_prefix: str = "selfhealing") -> str:
+    """
+    현재 컨텍스트 기반 동적 키 프리픽스 반환.
+    
+    TestModeContext가 활성화된 경우 xtest: 프리픽스가 자동 추가되어
+    운영 데이터와 테스트 데이터가 분리됩니다.
+    
+    Args:
+        base_prefix: 기본 프리픽스
+        
+    Returns:
+        동적 키 프리픽스:
+        - 운영 모드: "selfhealing:*" 또는 "selfhealing:seoul:*"
+        - 합성 모드: "xtest:selfhealing:*" 또는 "xtest:selfhealing:seoul:*"
+    
+    Example:
+        # 운영 요청
+        prefix = get_effective_key_prefix()  # "selfhealing:"
+        
+        # X-Test-Mode 요청
+        with TestModeContext.start():
+            prefix = get_effective_key_prefix()  # "xtest:selfhealing:"
+    """
+    settings = get_namespace_settings()
+    standard_prefix = settings.get_key_prefix(base_prefix)
+    
+    if TestModeContext.is_synthetic():
+        return f"{SYNTHETIC_KEY_PREFIX}:{standard_prefix}"
+    
+    return standard_prefix
 
 
 # =============================================================================

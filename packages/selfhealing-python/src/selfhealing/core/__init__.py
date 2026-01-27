@@ -128,6 +128,12 @@ from selfhealing.core.action_executor import (
 from selfhealing.core.state_cache import CBStateCache
 from selfhealing.core.degraded_mode_handler import DegradedModeHandler
 from selfhealing.core.adaptive_jitter import AdaptiveJitter
+from selfhealing.core.test_mode_context import (
+    TestModeContext,
+    is_synthetic_context,
+    get_synthetic_session_id,
+    synthetic_context,
+)
 
 
 __all__ = [
@@ -232,4 +238,9 @@ __all__ = [
     "CBStateCache",
     "DegradedModeHandler",
     "AdaptiveJitter",
+    # Test Mode Context (X-Test-Mode, Chaos)
+    "TestModeContext",
+    "is_synthetic_context",
+    "get_synthetic_session_id",
+    "synthetic_context",
 ]

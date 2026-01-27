@@ -27,6 +27,7 @@ from selfhealing.services.audit.xtest_audit import (
     log_xtest_injection_audit,
     log_xtest_cleanup_audit,
 )
+from selfhealing.core.test_mode_context import TestModeContext
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,29 @@ class XTestModeMixin:
     def get_xtest_session_id(self, request: Request) -> str:
         """X-Test 세션 ID 추출. 헤더가 없으면 자동 생성."""
         return request.headers.get("X-Test-Session", str(uuid.uuid4())[:8])
+
+    def enter_synthetic_context(self, request: Request) -> None:
+        """
+        합성 요청 컨텍스트 진입.
+        
+        X-Test 요청 처리 시작 시 호출하여 TestModeContext를 활성화합니다.
+        이후 모든 메트릭과 Redis 키가 합성 요청으로 태깅됩니다.
+        
+        Args:
+            request: HTTP 요청 객체
+        """
+        session_id = self.get_xtest_session_id(request)
+        TestModeContext.enter_synthetic_mode(session_id=session_id)
+        logger.debug(f"[X-Test-Mode] Synthetic context entered: session={session_id}")
+
+    def exit_synthetic_context(self) -> None:
+        """
+        합성 요청 컨텍스트 종료.
+        
+        X-Test 요청 처리 완료 시 호출하여 TestModeContext를 비활성화합니다.
+        """
+        TestModeContext.exit_synthetic_mode()
+        logger.debug("[X-Test-Mode] Synthetic context exited")
 
     def get_xtest_user(self, request: Request) -> str:
         """X-Test 사용자 추출."""

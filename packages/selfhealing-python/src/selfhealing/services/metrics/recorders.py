@@ -3,6 +3,8 @@ Metric Recording Functions.
 
 All record_* functions that increment counters, observe histograms,
 and set gauge values for specific events.
+
+합성 요청(X-Test-Mode, Chaos 실험) 시 자동으로 is_synthetic 레이블 설정.
 """
 
 from __future__ import annotations
@@ -10,6 +12,8 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime
+
+from selfhealing.core.test_mode_context import TestModeContext
 
 from .definitions import (
     # DLQ
@@ -68,9 +72,17 @@ def record_dlq_item_created(domain: str, failure_type: str) -> None:
         failure_type: Specific failure type (PG_TIMEOUT, AMOUNT_MISMATCH, etc.)
     """
     try:
-        dlq_items_total.labels(domain=domain, failure_type=failure_type).inc()
+        is_synthetic = TestModeContext.get_synthetic_label_value()
+        dlq_items_total.labels(
+            domain=domain,
+            failure_type=failure_type,
+            is_synthetic=is_synthetic,
+        ).inc()
         dlq_created_total.labels(domain=domain).inc()
-        logger.debug(f"[Metrics] DLQ item created: domain={domain}, type={failure_type}")
+        logger.debug(
+            f"[Metrics] DLQ item created: domain={domain}, type={failure_type}, "
+            f"is_synthetic={is_synthetic}"
+        )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record DLQ creation metric: {e}")
 
@@ -104,10 +116,19 @@ def record_retry_attempt(domain: str, attempt_count: int, outcome: str) -> None:
         outcome: Result (success, failure, exhausted)
     """
     try:
-        retry_attempts_histogram.labels(domain=domain).observe(attempt_count)
-        retry_outcomes_total.labels(domain=domain, outcome=outcome).inc()
+        is_synthetic = TestModeContext.get_synthetic_label_value()
+        retry_attempts_histogram.labels(
+            domain=domain,
+            is_synthetic=is_synthetic,
+        ).observe(attempt_count)
+        retry_outcomes_total.labels(
+            domain=domain,
+            outcome=outcome,
+            is_synthetic=is_synthetic,
+        ).inc()
         logger.debug(
-            f"[Metrics] Retry recorded: domain={domain}, attempts={attempt_count}, outcome={outcome}"
+            f"[Metrics] Retry recorded: domain={domain}, attempts={attempt_count}, "
+            f"outcome={outcome}, is_synthetic={is_synthetic}"
         )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record retry metric: {e}")
@@ -165,15 +186,18 @@ def record_circuit_breaker_state_change(
         to_state: New state
     """
     try:
+        is_synthetic = TestModeContext.get_synthetic_label_value()
         state_value = {"closed": 0, "open": 1, "half_open": 2}.get(to_state, 0)
         circuit_breaker_state.labels(service=service).set(state_value)
         circuit_breaker_transitions.labels(
             service=service,
             from_state=from_state,
             to_state=to_state,
+            is_synthetic=is_synthetic,
         ).inc()
         logger.info(
-            f"[Metrics] Circuit breaker transition: {service} {from_state} -> {to_state}"
+            f"[Metrics] Circuit breaker transition: {service} {from_state} -> {to_state}, "
+            f"is_synthetic={is_synthetic}"
         )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record circuit breaker metric: {e}")
@@ -240,11 +264,21 @@ def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
         success: Whether replay succeeded
     """
     try:
-        replay_attempts_total.labels(domain=domain, replay_type=replay_type).inc()
+        is_synthetic = TestModeContext.get_synthetic_label_value()
+        replay_attempts_total.labels(
+            domain=domain,
+            replay_type=replay_type,
+            is_synthetic=is_synthetic,
+        ).inc()
         outcome = "success" if success else "failure"
-        replay_outcomes_total.labels(domain=domain, outcome=outcome).inc()
+        replay_outcomes_total.labels(
+            domain=domain,
+            outcome=outcome,
+            is_synthetic=is_synthetic,
+        ).inc()
         logger.debug(
-            f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, success={success}"
+            f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, "
+            f"success={success}, is_synthetic={is_synthetic}"
         )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record replay metric: {e}")
@@ -273,13 +307,21 @@ def record_error_budget_status(
         burn_rate_6h_value: 6-hour burn rate
     """
     try:
-        error_budget_remaining_percent.labels(slo_name=slo_name).set(remaining_percent)
-        error_budget_remaining_minutes.labels(slo_name=slo_name).set(remaining_minutes)
+        is_synthetic = TestModeContext.get_synthetic_label_value()
+        error_budget_remaining_percent.labels(
+            slo_name=slo_name,
+            is_synthetic=is_synthetic,
+        ).set(remaining_percent)
+        error_budget_remaining_minutes.labels(
+            slo_name=slo_name,
+            is_synthetic=is_synthetic,
+        ).set(remaining_minutes)
         burn_rate_1h.labels(slo_name=slo_name).set(burn_rate_1h_value)
         burn_rate_6h.labels(slo_name=slo_name).set(burn_rate_6h_value)
         logger.debug(
             f"[Metrics] Error budget recorded: slo={slo_name}, "
-            f"remaining={remaining_percent:.1f}%, burn_1h={burn_rate_1h_value:.2f}"
+            f"remaining={remaining_percent:.1f}%, burn_1h={burn_rate_1h_value:.2f}, "
+            f"is_synthetic={is_synthetic}"
         )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record error budget metric: {e}")

@@ -3,11 +3,16 @@ Error Budget Calculator
 
 SLO 대비 현재 에러 버짓 소진량을 계산합니다.
 DLQ 유입량 및 장애 시간을 기반으로 계산합니다.
+
+합성 요청(X-Test-Mode, Chaos 실험) 필터링:
+- exclude_synthetic=True 시 합성 에러를 에러 버짓에서 제외
+- exclude_chaos는 deprecated되어 exclude_synthetic으로 통합됨
 """
 
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import datetime, timedelta
 from typing import Callable, Dict, Optional
 
@@ -50,7 +55,8 @@ class ErrorBudgetCalculator:
         slo_name: str = "availability",
         window_start: Optional[datetime] = None,
         window_end: Optional[datetime] = None,
-        exclude_chaos: bool = True,
+        exclude_chaos: Optional[bool] = None,
+        exclude_synthetic: bool = True,
     ) -> ErrorBudgetStatus:
         """
         Error Budget 상태 계산.
@@ -59,12 +65,25 @@ class ErrorBudgetCalculator:
             slo_name: SLO 이름
             window_start: 윈도우 시작 시간 (None이면 SLO window 사용)
             window_end: 윈도우 종료 시간 (None이면 현재)
-            exclude_chaos: Chaos 실험 데이터 제외 여부 (기본: True)
-                           True이면 is_chaos_experiment=True인 에러는 예산 소진에서 제외됨
+            exclude_chaos: (deprecated) exclude_synthetic 사용 권장.
+                           None이 아니면 exclude_synthetic으로 해석됨.
+            exclude_synthetic: 합성 트래픽(Chaos + X-Test) 제외 여부 (기본: True)
+                               True이면 is_chaos_experiment=True 또는 
+                               source="x-test-mode"인 에러는 예산 소진에서 제외됨
 
         Returns:
             ErrorBudgetStatus
         """
+        # exclude_chaos deprecated 처리
+        if exclude_chaos is not None:
+            warnings.warn(
+                "exclude_chaos is deprecated, use exclude_synthetic instead. "
+                "exclude_synthetic covers both Chaos and X-Test-Mode traffic.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            exclude_synthetic = exclude_chaos
+
         slo = self.slo_config.get_slo(slo_name)
         if not slo:
             # 기본 availability SLO 사용
@@ -88,19 +107,29 @@ class ErrorBudgetCalculator:
 
         if self._get_failed_operation_stats:
             try:
+                # exclude_synthetic 파라미터 우선 시도
                 stats = self._get_failed_operation_stats(
                     start_time=window_start,
                     end_time=current_time,
-                    exclude_chaos=exclude_chaos,
+                    exclude_synthetic=exclude_synthetic,
                 )
                 error_count = stats.get("total_errors", 0)
             except TypeError:
-                # 이전 버전 호환: exclude_chaos 미지원 시
-                stats = self._get_failed_operation_stats(
-                    start_time=window_start,
-                    end_time=current_time,
-                )
-                error_count = stats.get("total_errors", 0)
+                # 이전 버전 호환: exclude_synthetic/exclude_chaos 미지원 시
+                try:
+                    stats = self._get_failed_operation_stats(
+                        start_time=window_start,
+                        end_time=current_time,
+                        exclude_chaos=exclude_synthetic,
+                    )
+                    error_count = stats.get("total_errors", 0)
+                except TypeError:
+                    # 파라미터 없는 버전
+                    stats = self._get_failed_operation_stats(
+                        start_time=window_start,
+                        end_time=current_time,
+                    )
+                    error_count = stats.get("total_errors", 0)
             except Exception as e:
                 logger.warning(f"[ErrorBudget] Failed to get error stats: {e}")
 
