@@ -84,6 +84,7 @@ def get_selfhealing_beat_schedule(
     include_traffic_aware: bool = True,
     include_canary_watchdog: bool = True,
     include_governance: bool = True,
+    include_xtest_cleanup: bool = True,
     include_legacy: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -96,6 +97,7 @@ def get_selfhealing_beat_schedule(
         include_traffic_aware: Include 🚦 Traffic-Aware Replay tasks (Track 3)
         include_canary_watchdog: Include 🐤 Canary Watchdog tasks
         include_governance: Include 🛡️ Governance tasks (emergency mode expiry)
+        include_xtest_cleanup: Include 🧪 X-Test Artifact Cleanup tasks
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
     
     Returns:
@@ -158,6 +160,14 @@ def get_selfhealing_beat_schedule(
             logger.debug("[BeatSchedule] Added governance schedules (emergency mode expiry)")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load governance tasks: {e}")
+    
+    if include_xtest_cleanup:
+        try:
+            from selfhealing.tasks.xtest_cleanup_tasks import get_xtest_cleanup_beat_schedule
+            schedule.update(get_xtest_cleanup_beat_schedule())
+            logger.debug("[BeatSchedule] Added X-Test cleanup schedules")
+        except ImportError as e:
+            logger.warning(f"[BeatSchedule] Could not load X-Test cleanup tasks: {e}")
     
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())

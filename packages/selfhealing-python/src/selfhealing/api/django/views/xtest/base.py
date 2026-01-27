@@ -116,17 +116,98 @@ class XTestModeMixin:
         """X-Test 세션 ID 추출. 헤더가 없으면 자동 생성."""
         return request.headers.get("X-Test-Session", str(uuid.uuid4())[:8])
 
+    def ensure_xtest_session(self, request: Request) -> str:
+        """
+        X-Test 세션 생성 또는 갱신.
+        
+        세션이 없으면 새로 생성하고, 있으면 기존 세션을 반환합니다.
+        세션 메타데이터는 Redis에 저장되어 자동 정리 시 사용됩니다.
+        
+        Args:
+            request: HTTP 요청 객체
+            
+        Returns:
+            세션 ID
+        """
+        session_id = self.get_xtest_session_id(request)
+        user = self.get_xtest_user(request)
+        
+        try:
+            from selfhealing.services.xtest_session_manager import get_xtest_session_manager
+            session_manager = get_xtest_session_manager()
+            
+            # 기존 세션 확인
+            existing = session_manager.get_session(session_id)
+            if not existing:
+                # 새 세션 생성
+                session_manager.create_session(session_id=session_id, user=user)
+                logger.debug(f"[X-Test-Mode] Created new session: {session_id}")
+            
+        except ImportError:
+            logger.debug("[X-Test-Mode] Session manager not available")
+        except Exception as e:
+            logger.warning(f"[X-Test-Mode] Failed to ensure session: {e}")
+        
+        return session_id
+
+    def register_xtest_artifact(
+        self,
+        request: Request,
+        artifact_id: str,
+        component: str,
+    ) -> bool:
+        """
+        X-Test 아티팩트를 세션에 등록.
+        
+        테스트 중 생성된 DLQ 항목, CB 상태 변경 등을 세션에 등록하여
+        세션 만료 시 자동으로 정리될 수 있도록 합니다.
+        
+        Args:
+            request: HTTP 요청 객체
+            artifact_id: 아티팩트 ID (DLQ entry ID, CB service name 등)
+            component: 컴포넌트 이름 (dlq, cb, idempotency 등)
+            
+        Returns:
+            등록 성공 여부
+        """
+        session_id = self.get_xtest_session_id(request)
+        
+        try:
+            from selfhealing.services.xtest_session_manager import get_xtest_session_manager
+            session_manager = get_xtest_session_manager()
+            
+            success = session_manager.register_artifact(
+                session_id=session_id,
+                artifact_id=artifact_id,
+                component=component,
+            )
+            
+            if success:
+                logger.debug(
+                    f"[X-Test-Mode] Registered artifact: "
+                    f"session={session_id}, component={component}, id={artifact_id}"
+                )
+            return success
+            
+        except ImportError:
+            logger.debug("[X-Test-Mode] Session manager not available")
+            return False
+        except Exception as e:
+            logger.warning(f"[X-Test-Mode] Failed to register artifact: {e}")
+            return False
+
     def enter_synthetic_context(self, request: Request) -> None:
         """
         합성 요청 컨텍스트 진입.
         
         X-Test 요청 처리 시작 시 호출하여 TestModeContext를 활성화합니다.
         이후 모든 메트릭과 Redis 키가 합성 요청으로 태깅됩니다.
+        세션이 없으면 자동으로 생성합니다.
         
         Args:
             request: HTTP 요청 객체
         """
-        session_id = self.get_xtest_session_id(request)
+        session_id = self.ensure_xtest_session(request)
         TestModeContext.enter_synthetic_mode(session_id=session_id)
         logger.debug(f"[X-Test-Mode] Synthetic context entered: session={session_id}")
 
