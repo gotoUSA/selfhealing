@@ -860,13 +860,43 @@ class AbstractAuditLog(models.Model if DJANGO_AVAILABLE else object):
     ) -> tuple[int, int]:
         """PostgreSQL-specific bulk insert with ON CONFLICT DO NOTHING."""
         from django.db import connection
+        from datetime import datetime, timezone
+        import json
         
         if not entries:
             return 0, 0
         
+        # Default values for missing fields (raw SQL doesn't use Django defaults)
+        default_values = {
+            "actor_id": "",
+            "actor_type": "",
+            "actor_roles": [],
+            "target_type": "",
+            "target_id": "",
+            "service_name": "",
+            "domain": "",
+            "reason": "",
+            "details": {},
+            "success": True,
+            "error_message": "",
+            "integrity_hash": "",
+            "previous_hash": "",
+            "sequence_number": 0,
+            "created_at": datetime.now(timezone.utc),
+        }
+        
+        # Normalize entries with defaults
+        normalized = []
+        for entry in entries:
+            norm_entry = {**default_values, **entry}
+            # Ensure created_at is always fresh for each entry if not provided
+            if "created_at" not in entry:
+                norm_entry["created_at"] = datetime.now(timezone.utc)
+            normalized.append(norm_entry)
+        
         # Build INSERT ... ON CONFLICT DO NOTHING query
         table_name = cls._meta.db_table
-        fields = list(entries[0].keys())
+        fields = list(normalized[0].keys())
         placeholders = ", ".join(["%s"] * len(fields))
         columns = ", ".join(f'"{f}"' for f in fields)
         
@@ -878,8 +908,15 @@ class AbstractAuditLog(models.Model if DJANGO_AVAILABLE else object):
         
         inserted = 0
         with connection.cursor() as cursor:
-            for entry in entries:
-                values = [entry[f] for f in fields]
+            for entry in normalized:
+                # dict/list 타입 필드를 JSON 문자열로 변환 (psycopg2 호환)
+                values = []
+                for f in fields:
+                    val = entry[f]
+                    if isinstance(val, (dict, list)):
+                        values.append(json.dumps(val))
+                    else:
+                        values.append(val)
                 cursor.execute(sql, values)
                 if cursor.rowcount > 0:
                     inserted += 1

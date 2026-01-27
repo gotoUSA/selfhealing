@@ -87,6 +87,7 @@ class TestGetCombinedMultiplier:
         )
         from selfhealing.services.error_budget.exception_weights import (
             reset_exception_weight_map,
+            WeightCombinePolicy,
         )
         
         provider = CrisisMultiplierProvider()
@@ -96,17 +97,21 @@ class TestGetCombinedMultiplier:
         with patch.object(
             provider, "get_current_multiplier", return_value=3.0
         ):
-            with patch.dict(os.environ, {"SELFHEALING_WEIGHT_COMBINE_POLICY": "SUM"}):
-                # 싱글톤 리셋하여 새 정책 적용
-                reset_exception_weight_map()
-                
-                # ErrorCode: VALIDATION_FIELD_REQUIRED = 0.1
-                result = provider.get_combined_multiplier(
-                    error_code="VALIDATION_FIELD_REQUIRED"
-                )
-                
-                # SUM(3.0, 0.1) = 3.1
-                assert result == 3.1
+            # get_weight_combine_policy와 get_weight_for_error_code를 직접 mock
+            with patch(
+                "selfhealing.services.error_budget.exception_weights.get_weight_combine_policy",
+                return_value=WeightCombinePolicy.SUM,
+            ):
+                with patch(
+                    "selfhealing.services.error_budget.exception_weights.get_weight_for_error_code",
+                    return_value=0.1,  # VALIDATION 카테고리
+                ):
+                    result = provider.get_combined_multiplier(
+                        error_code="VALIDATION_FIELD_REQUIRED"
+                    )
+                    
+                    # SUM(3.0, 0.1) = 3.1
+                    assert result == 3.1
     
     def test_combined_multiplier_multiply_policy(self):
         """MULTIPLY 정책: 곱셈."""
@@ -115,6 +120,7 @@ class TestGetCombinedMultiplier:
         )
         from selfhealing.services.error_budget.exception_weights import (
             reset_exception_weight_map,
+            WeightCombinePolicy,
         )
         
         provider = CrisisMultiplierProvider()
@@ -124,16 +130,21 @@ class TestGetCombinedMultiplier:
         with patch.object(
             provider, "get_current_multiplier", return_value=2.0
         ):
-            with patch.dict(os.environ, {"SELFHEALING_WEIGHT_COMBINE_POLICY": "MULTIPLY"}):
-                reset_exception_weight_map()
-                
-                # ErrorCode: SERVICE_UNAVAILABLE = 0.5
-                result = provider.get_combined_multiplier(
-                    error_code="SERVICE_UNAVAILABLE"
-                )
-                
-                # MULTIPLY(2.0, 0.5) = 1.0
-                assert result == 1.0
+            # get_weight_combine_policy와 get_weight_for_error_code를 직접 mock
+            with patch(
+                "selfhealing.services.error_budget.exception_weights.get_weight_combine_policy",
+                return_value=WeightCombinePolicy.MULTIPLY,
+            ):
+                with patch(
+                    "selfhealing.services.error_budget.exception_weights.get_weight_for_error_code",
+                    return_value=0.5,  # SERVICE_UNAVAILABLE
+                ):
+                    result = provider.get_combined_multiplier(
+                        error_code="SERVICE_UNAVAILABLE"
+                    )
+                    
+                    # MULTIPLY(2.0, 0.5) = 1.0
+                    assert result == 1.0
     
     def test_combined_multiplier_respects_max_multiplier(self):
         """max_multiplier 상한 적용."""

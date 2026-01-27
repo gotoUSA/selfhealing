@@ -57,7 +57,7 @@ class TestDjangoAuditLogAdapter:
         
         # DB 확인
         log = AuditLog.objects.get(audit_event_id="adapter:test:001")
-        assert log.action == "AUTO_TUNING_ADJUSTMENT"
+        assert log.action == "auto_tuning_adjustment"  # AuditAction enum value는 소문자
         assert log.actor_id == "test_user"
         assert log.service_name == "payment"
     
@@ -80,7 +80,7 @@ class TestDjangoAuditLogAdapter:
         
         # 첫 번째 레코드만 존재
         log = AuditLog.objects.get(audit_event_id="adapter:dup:001")
-        assert log.action == "CB_FORCE_OPEN"
+        assert log.action == "cb_force_open"  # AuditAction enum value는 소문자
         
         # 레코드 수 확인
         count = AuditLog.objects.filter(audit_event_id="adapter:dup:001").count()
@@ -102,7 +102,7 @@ class TestDjangoAuditLogAdapter:
         
         # WAL 형식 ID로 저장됨
         log = AuditLog.objects.get(audit_event_id="wal:12345:pg_insert")
-        assert log.action == "DLQ_STORE"
+        assert log.action == "dlq_store"  # AuditAction enum value는 소문자
     
     def test_log_auto_generate_event_id(self, adapter):
         """audit_event_id 자동 생성."""
@@ -118,7 +118,7 @@ class TestDjangoAuditLogAdapter:
         # auto: 접두사로 생성됨
         log = AuditLog.objects.filter(audit_event_id__startswith="auto:").first()
         assert log is not None
-        assert log.action == "CONFIG_CHANGE"
+        assert log.action == "config_change"  # AuditAction enum value는 소문자
     
     def test_log_batch_success(self, adapter):
         """배치 로깅 성공."""
@@ -217,7 +217,7 @@ class TestDjangoAuditLogAdapterQuery:
         
         assert len(results) == 2
         for entry in results:
-            assert entry.action == "AUTO_TUNING_ADJUSTMENT"
+            assert entry.action == "auto_tuning_adjustment"  # AuditAction enum value는 소문자
     
     def test_query_by_target(self, adapter_with_data):
         """target_type, target_id로 쿼리."""
@@ -227,7 +227,7 @@ class TestDjangoAuditLogAdapterQuery:
         )
         
         assert len(results) == 1
-        assert results[0].action == "CB_FORCE_OPEN"
+        assert results[0].action == "cb_force_open"  # AuditAction enum value는 소문자
     
     def test_query_by_time_range(self, adapter_with_data):
         """시간 범위로 쿼리."""
@@ -278,7 +278,7 @@ class TestDjangoAuditLogAdapterIntegration:
         assert audit_id is not None
         
         # DB 확인
-        log = AuditLog.objects.filter(action="AUTO_TUNING_ADJUSTMENT").first()
+        log = AuditLog.objects.filter(action="auto_tuning_adjustment").first()
         assert log is not None
         assert log.details["parameter"] == "max_connections"
         assert log.details["before"]["value"] == 100
