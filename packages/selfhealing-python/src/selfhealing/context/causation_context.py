@@ -216,6 +216,46 @@ class CausationContext:
     
     @classmethod
     @contextmanager
+    def start_system_cascade(
+        cls,
+        source: str,
+        namespace: str = "global",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Generator[CausationInfo, None, None]:
+        """
+        시스템 트리거용 Cascade 시작 (Celery Beat / Management Command).
+        
+        API 요청이 아닌 시스템 자동화 작업의 인과관계 추적에 사용합니다.
+        trigger_event_id를 SYSTEM_ROOT_{source}_{uuid} 형식으로 생성합니다.
+        
+        Args:
+            source: 트리거 소스 (celery_beat, management_cmd, cron, scheduler)
+            namespace: 네임스페이스
+            metadata: 추가 메타데이터
+        
+        Yields:
+            CausationInfo 인스턴스
+            
+        Examples:
+            with CausationContext.start_system_cascade(source="celery_beat") as ctx:
+                process_scheduled_task()
+                # ctx.parent_event_id = "SYSTEM_ROOT_celery_beat_{uuid}"
+        """
+        system_event_id = f"SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
+        
+        with cls.start_cascade(
+            namespace=namespace,
+            trigger_event_id=system_event_id,
+            metadata={**(metadata or {}), "system_source": source},
+        ) as ctx:
+            logger.debug(
+                f"[CausationContext] Started system cascade: "
+                f"source={source}, trigger={system_event_id}"
+            )
+            yield ctx
+    
+    @classmethod
+    @contextmanager
     def continue_cascade(
         cls,
         info: CausationInfo,

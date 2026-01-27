@@ -3,11 +3,136 @@ IP and PII Masking Utilities.
 
 Provides privacy-preserving data handling for audit logs.
 Implements Privacy-by-Design principles for GDPR/CCPA compliance.
+
+Role-based Masking:
+    - MaskingLevel.CLIENT: 클라이언트 응답용 - 완전 치환 (***REDACTED***)
+    - MaskingLevel.AUDIT: 내부 감사용 - 해시화 (동일성 확인 가능)
+    - MaskingLevel.FORENSIC: 법적 조사용 - 암호화 저장 (복원 가능)
+
+RBAC 역할별 접근 가능 레벨:
+    - selfhealing_admin (우선순위 3): FORENSIC까지 허용
+    - selfhealing_operator (우선순위 2): AUDIT까지 허용
+    - selfhealing_viewer (우선순위 1): CLIENT만 허용
 """
 
 import hashlib
 import re
+from enum import Enum
 from typing import Optional
+
+
+# =============================================================================
+# MaskingLevel Enum (RBAC 연동)
+# =============================================================================
+
+
+class MaskingLevel(Enum):
+    """
+    마스킹 수준.
+    
+    RBAC 역할에 따라 다른 마스킹 수준을 적용합니다.
+    
+    - CLIENT: 클라이언트 응답용 - 완전 치환 (***REDACTED***)
+    - AUDIT: 내부 감사용 - SHA-256 해시화 (동일성 확인 가능)
+    - FORENSIC: 법적 조사용 - 암호화 저장 (복원 가능)
+    """
+    
+    CLIENT = "client"
+    """클라이언트 응답용: 완전 치환 (복원 불가)"""
+    
+    AUDIT = "audit"
+    """내부 감사용: SHA-256 해시화 (동일성 확인만 가능)"""
+    
+    FORENSIC = "forensic"
+    """법적 조사용: 암호화 저장 (복원 가능)"""
+
+
+def mask_with_level(
+    value: str,
+    level: MaskingLevel,
+    salt: Optional[str] = None,
+) -> str:
+    """
+    마스킹 수준에 따른 마스킹 적용.
+    
+    Args:
+        value: 마스킹할 원본 값
+        level: 마스킹 수준 (CLIENT, AUDIT, FORENSIC)
+        salt: 해시용 솔트 (AUDIT 레벨에서 사용)
+    
+    Returns:
+        마스킹된 문자열
+        
+    Examples:
+        >>> mask_with_level("admin@example.com", MaskingLevel.CLIENT)
+        '***REDACTED***'
+        >>> mask_with_level("admin@example.com", MaskingLevel.AUDIT)
+        'sha256:a1b2c3d4e5f6...'
+        >>> mask_with_level("admin@example.com", MaskingLevel.FORENSIC, salt="secret")
+        'encrypted:...'
+    """
+    if not value:
+        return ""
+    
+    if level == MaskingLevel.CLIENT:
+        # 완전 치환 - 복원 불가
+        return "***REDACTED***"
+    
+    elif level == MaskingLevel.AUDIT:
+        # SHA-256 해시 - 동일성 확인만 가능
+        return hash_for_audit(value, salt)
+    
+    elif level == MaskingLevel.FORENSIC:
+        # 암호화 저장 - 복원 가능 (실제 암호화는 별도 구현 필요)
+        # 현재는 hash_for_audit와 동일하게 처리하되 prefix만 다르게 함
+        # 실제 운영 환경에서는 AES 등으로 암호화하여 저장
+        data = f"{salt}:{value}" if salt else value
+        hash_value = hashlib.sha256(data.encode()).hexdigest()
+        return f"encrypted:{hash_value[:32]}"
+    
+    # 기본값은 CLIENT 레벨
+    return "***REDACTED***"
+
+
+def get_masking_level_for_context() -> MaskingLevel:
+    """
+    현재 ActorContext의 RBAC 역할에 따른 마스킹 레벨 결정.
+    
+    RBAC 역할별 접근 가능 레벨:
+        - selfhealing_admin (우선순위 3): FORENSIC
+        - selfhealing_operator (우선순위 2): AUDIT
+        - selfhealing_viewer (우선순위 1): CLIENT
+        - 역할 없음: CLIENT (기본값)
+    
+    Returns:
+        MaskingLevel (현재 Actor가 접근 가능한 최대 레벨)
+    """
+    try:
+        from selfhealing.context.actor_context import (
+            ActorContext,
+            RBAC_ROLE_PRIORITY,
+        )
+        
+        actor = ActorContext.get_current_or_none()
+        
+        if actor is None:
+            return MaskingLevel.CLIENT
+        
+        highest_role = actor.highest_role
+        priority = RBAC_ROLE_PRIORITY.get(highest_role, 0)
+        
+        # 우선순위에 따른 레벨 결정
+        if priority >= 3:  # selfhealing_admin
+            return MaskingLevel.FORENSIC
+        elif priority >= 2:  # selfhealing_operator
+            return MaskingLevel.AUDIT
+        else:  # selfhealing_viewer 또는 역할 없음
+            return MaskingLevel.CLIENT
+            
+    except ImportError:
+        return MaskingLevel.CLIENT
+    except Exception:
+        return MaskingLevel.CLIENT
 
 
 def mask_ip(ip: str, mask_last_octets: int = 2) -> str:

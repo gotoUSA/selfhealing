@@ -93,6 +93,9 @@ class ResponseMeta:
     method: Optional[str] = None
     """HTTP 메서드."""
 
+    causation_id: Optional[str] = None
+    """인과관계 추적용 Cascade ID (API-Celery 인과관계 연결)."""
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
         result: Dict[str, Any] = {
@@ -107,6 +110,9 @@ class ResponseMeta:
 
         if self.method:
             result["method"] = self.method
+
+        if self.causation_id:
+            result["causation_id"] = self.causation_id
 
         return result
 
@@ -164,6 +170,7 @@ class StandardErrorResponse:
         request_id: Optional[str] = None,
         path: Optional[str] = None,
         method: Optional[str] = None,
+        causation_id: Optional[str] = None,
     ) -> "StandardErrorResponse":
         """
         ClassifiedError로부터 표준 응답 생성.
@@ -173,6 +180,7 @@ class StandardErrorResponse:
             request_id: 요청 추적 ID
             path: 요청 경로
             method: HTTP 메서드
+            causation_id: 인과관계 추적용 Cascade ID
 
         Returns:
             StandardErrorResponse 인스턴스
@@ -189,6 +197,7 @@ class StandardErrorResponse:
             request_id=request_id,
             path=path,
             method=method,
+            causation_id=causation_id,
         )
 
         return cls(

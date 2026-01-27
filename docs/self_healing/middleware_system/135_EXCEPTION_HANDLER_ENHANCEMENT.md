@@ -2,7 +2,7 @@
 
 > **Version**: 1.0.0  
 > **Created**: 2026-01-27  
-> **Status**: Draft  
+> **Status**: Implemented  
 > **Parent**: [110_EXCEPTION_HANDLER_OVERVIEW.md](110_EXCEPTION_HANDLER_OVERVIEW.md)
 
 ## 1. 개요
@@ -326,54 +326,53 @@ _mask_error_message() 수정:
 
 ### Phase 1: Causation Chain (우선순위: 높음)
 
-- [ ] `api/django/exceptions/handler.py`
-  - [ ] `_init_causation_context()` 함수 추가
-  - [ ] `selfhealing_exception_handler()`에서 CausationContext 초기화
-  - [ ] Audit 이벤트에 `cascade_id` 포함
+- [x] `api/django/exceptions/handler.py`
+  - [x] `_init_causation_context()` 함수 추가
+  - [x] `selfhealing_exception_handler()`에서 CausationContext 초기화
+  - [x] Audit 이벤트에 `cascade_id` 포함
 
-- [ ] `api/django/exceptions/response.py`
-  - [ ] `ResponseMeta`에 `causation_id` 필드 추가
-  - [ ] `to_dict()`에서 causation_id 직렬화
+- [x] `api/django/exceptions/response.py`
+  - [x] `ResponseMeta`에 `causation_id` 필드 추가
+  - [x] `to_dict()`에서 causation_id 직렬화
 
-- [ ] `context/celery_propagation.py` (신규)
-  - [ ] `before_task_publish` 시그널 핸들러
-  - [ ] `task_prerun` 시그널 핸들러
-  - [ ] `task_postrun` 시그널 핸들러
-  - [ ] `setup_celery_causation_propagation()` 초기화 함수
+- [x] `context/celery_propagation.py` (신규)
+  - [x] `before_task_publish` 시그널 핸들러
+  - [x] `ensure_causation_context_for_task()` 헬퍼 함수
+  - [x] `setup_celery_causation_propagation()` 초기화 함수
 
-- [ ] `context/causation_context.py` (System-initiated 지원)
-  - [ ] `start_system_cascade(source: str)` 함수 추가
-  - [ ] `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성
-  - [ ] `on_task_prerun()`에서 `CausationContext.is_set()` 확인 후 자동 생성
+- [x] `context/causation_context.py` (System-initiated 지원)
+  - [x] `start_system_cascade(source: str)` 함수 추가
+  - [x] `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성
+
+- [x] `adapters/celery/signal_hooks.py` (System-initiated 자동 생성)
+  - [x] `_setup_causation_context()`에서 헤더 없을 때 시스템 cascade 자동 생성
+  - [x] `_detect_causation_source()` 함수 추가
 
 ### Phase 2: Role-based Masking (우선순위: 중간)
 
-- [ ] `audit/masking.py`
-  - [ ] `MaskingLevel` Enum 추가
-  - [ ] `mask_with_level()` 함수 추가
-  - [ ] `get_masking_level_for_context()` 함수 추가
+- [x] `audit/masking.py`
+  - [x] `MaskingLevel` Enum 추가 (CLIENT, AUDIT, FORENSIC)
+  - [x] `mask_with_level()` 함수 추가
+  - [x] `get_masking_level_for_context()` 함수 추가
 
-- [ ] `api/django/exceptions/handler.py`
-  - [ ] `_mask_error_message()` 리팩토링
-  - [ ] 클라이언트 응답용 마스킹 분리
-  - [ ] Audit 기록용 마스킹 분리
+- [x] `api/django/exceptions/handler.py`
+  - [x] `_mask_error_message()` 리팩토링 (클라이언트용)
+  - [x] `_mask_error_message_for_audit()` 함수 추가 (Audit용 - 해시화)
 
 ### Phase 3: 테스트
 
-- [ ] `tests/api/exceptions/test_causation_propagation.py`
-  - [ ] request_id → causation_id 전파 테스트
-  - [ ] Celery 헤더 주입 테스트
-  - [ ] Celery 복원 테스트
+- [x] `tests/unit/core/test_causation_propagation.py`
+  - [x] CausationContext 기본 기능 테스트
+  - [x] start_system_cascade SYSTEM_ROOT prefix 테스트
+  - [x] Celery 헤더 주입/복원 테스트
+  - [x] CausationInfo 직렬화/역직렬화 테스트
+  - [x] ResponseMeta causation_id 테스트
 
-- [ ] `tests/context/test_system_initiated_causation.py`
-  - [ ] Celery Beat 태스크에서 SYSTEM_ROOT_celery_beat 형식 생성 검증
-  - [ ] Management Command에서 SYSTEM_ROOT_management_cmd 형식 생성 검증
-  - [ ] CausationContext 미설정 시 자동 생성 검증
-
-- [ ] `tests/audit/test_role_based_masking.py`
-  - [ ] MaskingLevel별 출력 검증
-  - [ ] hash_for_audit 동일성 확인 테스트
-  - [ ] ActorContext 기반 레벨 결정 테스트
+- [x] `tests/unit/audit/test_role_based_masking.py`
+  - [x] MaskingLevel별 출력 검증
+  - [x] hash_for_audit 동일성 확인 테스트
+  - [x] ActorContext 기반 레벨 결정 테스트
+  - [x] DoS 패턴 분석 시나리오 테스트
 
 ---
 

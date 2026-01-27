@@ -376,18 +376,15 @@ _CAUSATION_TOKEN_ATTR = "_selfhealing_causation_token"
 
 def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
     """
-    Celery Task 시작 시 Causation Context 자동 복원.
+    Celery Task 시작 시 Causation Context 자동 복원 또는 시스템 Cascade 생성.
     
-    task.request.headers에서 causation 정보를 추출하여
-    CausationContext를 설정합니다.
-    
-    Code reference:
-        context/actor_context.py#L447-478 (restore_actor_from_celery 패턴)
-        audit/trace.py#L300-320 (set_celery_context 패턴)
+    task.request.headers에서 causation 정보를 추출하여 CausationContext를 설정합니다.
+    헤더가 없는 경우 (Celery Beat, 독립 실행 등) 시스템 Cascade를 자동 생성합니다.
     """
     try:
         from selfhealing.context.causation_context import (
             CausationInfo,
+            CausationContext,
             _current_causation,
             CELERY_HEADER_CASCADE_ID,
             CELERY_HEADER_PARENT_EVENT,
@@ -395,6 +392,7 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
             CELERY_HEADER_NAMESPACE,
         )
         from datetime import datetime, timezone
+        import uuid
         
         request = sender.request if sender else None
         if not request:
@@ -405,23 +403,47 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
         # Causation 헤더 추출
         cascade_id = headers.get(CELERY_HEADER_CASCADE_ID)
         
-        if not cascade_id:
-            # Causation 헤더 없음 - 컨텍스트 설정 생략
-            return
-        
-        # 컨텍스트 복원 (원자성 보장 - 새 인스턴스 생성)
-        info = CausationInfo(
-            cascade_id=cascade_id,
-            parent_event_id=headers.get(CELERY_HEADER_PARENT_EVENT, ""),
-            chain_depth=int(headers.get(CELERY_HEADER_CHAIN_DEPTH, "0")) + 1,  # 깊이 증가
-            namespace=headers.get(CELERY_HEADER_NAMESPACE, "global"),
-            metadata={
-                "restored_from": "celery_signal",
-                "restored_at": datetime.now(timezone.utc).isoformat(),
-                "task_id": task_id,
-                "task_name": task_name,
-            },
-        )
+        if cascade_id:
+            # 헤더에서 복원 (API 요청에서 전파된 경우)
+            info = CausationInfo(
+                cascade_id=cascade_id,
+                parent_event_id=headers.get(CELERY_HEADER_PARENT_EVENT, ""),
+                chain_depth=int(headers.get(CELERY_HEADER_CHAIN_DEPTH, "0")) + 1,
+                namespace=headers.get(CELERY_HEADER_NAMESPACE, "global"),
+                metadata={
+                    "restored_from": "celery_signal",
+                    "restored_at": datetime.now(timezone.utc).isoformat(),
+                    "task_id": task_id,
+                    "task_name": task_name,
+                },
+            )
+            logger.debug(
+                f"[SelfHealing Signal] Causation context restored: "
+                f"cascade={cascade_id}, depth={info.chain_depth}, task={task_name}"
+            )
+        else:
+            # 헤더 없음 - 시스템 Cascade 자동 생성 (Celery Beat, 독립 실행 등)
+            source = _detect_causation_source(task_name)
+            system_event_id = f"SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
+            new_cascade_id = f"cascade-{uuid.uuid4().hex[:12]}"
+            
+            info = CausationInfo(
+                cascade_id=new_cascade_id,
+                parent_event_id=system_event_id,
+                chain_depth=0,
+                namespace="global",
+                metadata={
+                    "system_source": source,
+                    "auto_generated": True,
+                    "task_id": task_id,
+                    "task_name": task_name,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            logger.debug(
+                f"[SelfHealing Signal] System causation context created: "
+                f"source={source}, cascade={new_cascade_id}, task={task_name}"
+            )
         
         # ContextVar에 설정 (token 저장)
         token = _current_causation.set(info)
@@ -429,16 +451,36 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
         # token을 task.request에 저장 (postrun에서 정리용)
         setattr(request, _CAUSATION_TOKEN_ATTR, token)
         
-        logger.debug(
-            f"[SelfHealing Signal] Causation context restored: "
-            f"cascade={cascade_id}, depth={info.chain_depth}, task={task_name}"
-        )
-        
     except ImportError:
         # causation_context 모듈 없음 - 생략
         pass
     except Exception as e:
         logger.debug(f"[SelfHealing Signal] Causation setup failed: {e}")
+
+
+def _detect_causation_source(task_name: str) -> str:
+    """
+    Task 이름에서 causation source 유형 추론.
+    
+    Returns:
+        source 문자열 (celery_beat, management_cmd, scheduler, worker)
+    """
+    task_name_lower = task_name.lower()
+    
+    # 스케줄러 관련 패턴
+    if any(pattern in task_name_lower for pattern in ["beat", "schedule", "periodic"]):
+        return "celery_beat"
+    
+    # 관리 명령 관련 패턴
+    if any(pattern in task_name_lower for pattern in ["manage", "command", "admin"]):
+        return "management_cmd"
+    
+    # 크론/스케줄러 패턴
+    if any(pattern in task_name_lower for pattern in ["cron", "cleanup", "expire"]):
+        return "scheduler"
+    
+    # 기본값
+    return "worker"
 
 
 def _cleanup_causation_context(sender: Any) -> None:

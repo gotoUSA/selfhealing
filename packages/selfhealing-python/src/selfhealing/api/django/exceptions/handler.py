@@ -160,6 +160,7 @@ def selfhealing_exception_handler(
 
     모든 예외를 표준화된 형식으로 변환하고 Audit 버퍼에 기록합니다.
     Pool Timeout 감지 시 503 Service Unavailable을 반환합니다.
+    CausationContext가 미설정 시 request_id를 trigger_event_id로 사용하여 설정합니다.
 
     Args:
         exc: 발생한 예외
@@ -180,6 +181,9 @@ def selfhealing_exception_handler(
     request_id = _extract_request_id(request)
     path = _extract_path(request)
     method = _extract_method(request)
+
+    # CausationContext 초기화 (미설정 시 request_id를 trigger로 사용)
+    causation_id = _init_causation_context(request_id)
 
     # Pool Timeout 우선 처리 (SQLAlchemy 연동)
     if _is_pool_timeout(exc):
@@ -204,10 +208,11 @@ def selfhealing_exception_handler(
             request_id=request_id,
             path=path,
             method=method,
+            causation_id=causation_id,
         )
 
         # Audit 및 메트릭 기록
-        _record_audit_event(request, exc, pool_classified, standard_response)
+        _record_audit_event(request, exc, pool_classified, standard_response, causation_id)
         _record_metrics(path, method, 503, ErrorCode.SERVICE_UNAVAILABLE.value, "service")
 
         response = Response(
@@ -224,16 +229,17 @@ def selfhealing_exception_handler(
     classifier = get_exception_classifier()
     classified = classifier.classify(exc)
 
-    # 표준 응답 생성
+    # 표준 응답 생성 (causation_id 포함)
     standard_response = StandardErrorResponse.from_classified_error(
         classified=classified,
         request_id=request_id,
         path=path,
         method=method,
+        causation_id=causation_id,
     )
 
     # Audit 버퍼에 이벤트 적재 (민감정보 마스킹 포함)
-    _record_audit_event(request, exc, classified, standard_response)
+    _record_audit_event(request, exc, classified, standard_response, causation_id)
 
     # Prometheus 메트릭 기록
     _record_metrics(
@@ -259,6 +265,66 @@ def selfhealing_exception_handler(
             response[header_name] = header_value
 
     return response
+
+
+def _init_causation_context(request_id: Optional[str]) -> Optional[str]:
+    """
+    CausationContext 초기화.
+    
+    CausationContext가 미설정 시 request_id를 trigger_event_id로 사용하여
+    새 Cascade를 시작합니다.
+    
+    Args:
+        request_id: 요청 추적 ID
+    
+    Returns:
+        cascade_id (CausationContext가 설정된 경우) 또는 None
+    """
+    try:
+        from selfhealing.context.causation_context import CausationContext
+        
+        if CausationContext.is_set():
+            # 이미 설정됨 - 기존 cascade_id 반환
+            return CausationContext.get_current_cascade_id()
+        
+        # 미설정 시 새 Cascade 시작 (request_id를 trigger로 사용)
+        # 컨텍스트 매니저 없이 직접 설정
+        from selfhealing.context.causation_context import (
+            CausationInfo,
+            _current_causation,
+        )
+        import uuid as uuid_module
+        from datetime import datetime, timezone
+        
+        cascade_id = f"cascade-{uuid_module.uuid4().hex[:12]}"
+        trigger_id = request_id or f"evt-{uuid_module.uuid4().hex[:8]}"
+        
+        info = CausationInfo(
+            cascade_id=cascade_id,
+            parent_event_id=trigger_id,
+            chain_depth=0,
+            namespace="global",
+            metadata={
+                "source": "exception_handler",
+                "request_id": request_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        
+        _current_causation.set(info)
+        
+        logger.debug(
+            f"[ExceptionHandler] Initialized CausationContext: "
+            f"cascade_id={cascade_id}, trigger={trigger_id}"
+        )
+        
+        return cascade_id
+        
+    except ImportError:
+        return None
+    except Exception as e:
+        logger.debug(f"[ExceptionHandler] Failed to init CausationContext: {e}")
+        return None
 
 
 def _extract_request_id(request: Optional["Request"]) -> Optional[str]:
@@ -305,14 +371,22 @@ def _record_audit_event(
     request: Optional["Request"],
     exc: Exception,
     classified: "ClassifiedError",
-    response: StandardErrorResponse,
+    response: "StandardErrorResponse",
+    causation_id: Optional[str] = None,
 ) -> None:
     """
     Audit 버퍼에 예외 이벤트 적재.
 
     AuditMiddleware가 응답 반환 시 이 이벤트를 수집하여 기록합니다.
-    민감정보는 자동으로 마스킹됩니다.
+    민감정보는 RBAC 역할에 따라 차등 마스킹됩니다.
     Audit 기록 실패가 응답을 막지 않습니다 (fail-open).
+    
+    Args:
+        request: DRF Request 객체
+        exc: 발생한 예외
+        classified: 분류된 예외 정보
+        response: 표준 에러 응답
+        causation_id: 인과관계 추적용 Cascade ID
     """
     if request is None:
         return
@@ -338,6 +412,10 @@ def _record_audit_event(
             "method": response.meta.method,
         }
 
+        # cascade_id 포함 (인과관계 추적)
+        if causation_id:
+            details["cascade_id"] = causation_id
+
         # 추가 메타데이터
         if classified.field:
             details["field"] = classified.field
@@ -345,8 +423,8 @@ def _record_audit_event(
         if classified.extra:
             details["extra"] = classified.extra
 
-        # 에러 메시지에서 민감정보 마스킹
-        error_message = _mask_error_message(str(exc)[:500])
+        # 에러 메시지에서 민감정보 마스킹 (Audit용 - 해시화, 동일성 확인 가능)
+        error_message = _mask_error_message_for_audit(str(exc)[:500])
 
         buffer.add(
             event_type=event_type,
@@ -391,15 +469,15 @@ def _get_audit_event_type(classified: "ClassifiedError") -> "AuditEventType":
 
 def _mask_error_message(message: str) -> str:
     """
-    에러 메시지에서 민감정보 마스킹.
+    클라이언트 응답용 에러 메시지 마스킹.
 
-    패스워드, 토큰, API 키 등의 패턴을 감지하여 마스킹합니다.
+    패스워드, 토큰, API 키 등의 패턴을 감지하여 완전히 숨깁니다.
+    MaskingLevel.CLIENT 수준으로 마스킹합니다.
     """
     try:
-        from selfhealing.audit.masking import mask_sensitive_fields
+        from selfhealing.audit.masking import MaskingLevel, mask_with_level
 
-        # 메시지를 딕셔너리로 감싸서 마스킹 후 다시 추출
-        # 단순 문자열에서 민감 패턴 감지
+        # 민감 패턴 감지
         sensitive_patterns = [
             "password",
             "token",
@@ -413,12 +491,63 @@ def _mask_error_message(message: str) -> str:
         message_lower = message.lower()
         for pattern in sensitive_patterns:
             if pattern in message_lower:
-                # 민감정보가 포함된 것으로 보이면 상세 정보 숨김
-                return f"[MASKED] Error message may contain sensitive data"
+                # 민감정보가 포함된 것으로 보이면 완전히 숨김
+                return mask_with_level(message, MaskingLevel.CLIENT)
 
         return message
 
     except ImportError:
+        # fallback - 민감 패턴 감지 시 기본 마스킹
+        sensitive_patterns = [
+            "password", "token", "api_key", "apikey",
+            "secret", "authorization", "credential",
+        ]
+        message_lower = message.lower()
+        if any(pattern in message_lower for pattern in sensitive_patterns):
+            return "***REDACTED***"
+        return message
+    except Exception:
+        return message
+
+
+def _mask_error_message_for_audit(message: str) -> str:
+    """
+    Audit 기록용 에러 메시지 마스킹.
+
+    SHA-256 해시화를 통해 민감정보를 보호하면서도 동일성 확인이 가능합니다.
+    동일한 에러 메시지는 동일한 해시값을 가지므로 패턴 분석이 가능합니다.
+    """
+    try:
+        from selfhealing.audit.masking import MaskingLevel, mask_with_level
+
+        # 민감 패턴 감지
+        sensitive_patterns = [
+            "password",
+            "token",
+            "api_key",
+            "apikey",
+            "secret",
+            "authorization",
+            "credential",
+        ]
+
+        message_lower = message.lower()
+        for pattern in sensitive_patterns:
+            if pattern in message_lower:
+                # Audit용 - 해시화 (동일성 확인 가능)
+                return mask_with_level(message, MaskingLevel.AUDIT)
+
+        return message
+
+    except ImportError:
+        # fallback - 민감 패턴 감지 시 기본 마스킹
+        sensitive_patterns = [
+            "password", "token", "api_key", "apikey",
+            "secret", "authorization", "credential",
+        ]
+        message_lower = message.lower()
+        if any(pattern in message_lower for pattern in sensitive_patterns):
+            return "[MASKED_FOR_AUDIT]"
         return message
     except Exception:
         return message
