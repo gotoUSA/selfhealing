@@ -300,8 +300,12 @@ class RequestAuditBuffer:
 
     # request.META에 저장될 키
     META_KEY = "X-AUDIT-EVENTS"
+    
+    # 단일 요청당 최대 이벤트 수 (메모리 폭발 방지)
+    # 환경변수 SELFHEALING_MAX_EVENTS_PER_REQUEST로 설정 가능
+    DEFAULT_MAX_EVENTS = 100
 
-    def __init__(self):
+    def __init__(self, max_events: Optional[int] = None):
         self.events: List[AuditEvent] = []
         self.request_id: Optional[str] = None
         self.start_time: datetime = datetime.now(timezone.utc)
@@ -310,10 +314,51 @@ class RequestAuditBuffer:
         self._path: Optional[str] = None
         self._method: Optional[str] = None
         self._user_id: Optional[str] = None
+        
+        # 이벤트 개수 제한 (메모리 폭발 방지)
+        import os
+        if max_events is not None:
+            self._max_events = max_events
+        else:
+            self._max_events = int(os.environ.get(
+                "SELFHEALING_MAX_EVENTS_PER_REQUEST",
+                str(self.DEFAULT_MAX_EVENTS)
+            ))
+        
+        # 제한 초과로 버려진 이벤트 카운터
+        self._truncated_count: int = 0
 
-    def add_event(self, event: AuditEvent) -> None:
-        """이벤트 직접 추가."""
+    def add_event(self, event: AuditEvent) -> bool:
+        """
+        이벤트 직접 추가.
+        
+        Args:
+            event: 추가할 AuditEvent
+            
+        Returns:
+            True: 정상 추가됨
+            False: max_events 초과로 버려짐 (truncated)
+        """
+        if len(self.events) >= self._max_events:
+            self._truncated_count += 1
+            self._mark_last_event_truncated()
+            return False
+        
         self.events.append(event)
+        return True
+    
+    def _mark_last_event_truncated(self) -> None:
+        """
+        마지막 이벤트에 truncation 메타데이터 추가.
+        
+        후속 이벤트가 버려지고 있음을 마지막 이벤트에 기록합니다.
+        """
+        if not self.events:
+            return
+        
+        last_event = self.events[-1]
+        last_event.details["_truncated"] = True
+        last_event.details["_truncated_count"] = self._truncated_count
 
     def add(
         self,
@@ -328,9 +373,12 @@ class RequestAuditBuffer:
         target_id: Optional[str] = None,
         domain: Optional[str] = None,
         reason: Optional[str] = None,
-    ) -> AuditEvent:
+    ) -> Optional[AuditEvent]:
         """
         편의 메서드: 이벤트 생성 및 추가.
+        
+        max_events 초과 시 이벤트가 버려지고 None 반환됩니다.
+        버려진 이벤트 수는 마지막 이벤트의 details._truncated_count에 기록됩니다.
 
         Args:
             event_type: 이벤트 유형
@@ -346,7 +394,7 @@ class RequestAuditBuffer:
             reason: 이벤트 사유
 
         Returns:
-            생성된 AuditEvent
+            생성된 AuditEvent, 또는 max_events 초과 시 None
         """
         # ActorContext에서 actor 정보 자동 추출 시도
         if actor_id is None:
@@ -373,7 +421,12 @@ class RequestAuditBuffer:
             domain=domain,
             reason=reason,
         )
-        self.events.append(event)
+        
+        # max_events 제한 적용 (add_event 호출)
+        if not self.add_event(event):
+            # 한도 초과로 버려짐
+            return None
+        
         return event
 
     def get_events(self) -> List[AuditEvent]:
@@ -429,9 +482,24 @@ class RequestAuditBuffer:
         """요청 시작부터 경과 시간 (초)."""
         return (datetime.now(timezone.utc) - self.start_time).total_seconds()
 
+    @property
+    def max_events(self) -> int:
+        """설정된 최대 이벤트 수."""
+        return self._max_events
+    
+    @property
+    def truncated_count(self) -> int:
+        """한도 초과로 버려진 이벤트 수."""
+        return self._truncated_count
+    
+    @property
+    def is_truncated(self) -> bool:
+        """이벤트가 버려졌는지 여부."""
+        return self._truncated_count > 0
+
     def to_dict(self) -> Dict[str, Any]:
         """버퍼 전체를 딕셔너리로 변환."""
-        return {
+        result = {
             "request_id": self.request_id,
             "start_time": self.start_time.isoformat(),
             "elapsed_seconds": self.get_elapsed_seconds(),
@@ -441,10 +509,19 @@ class RequestAuditBuffer:
             "event_count": len(self.events),
             "events": [e.to_dict() for e in self.events],
         }
+        
+        # 이벤트가 버려진 경우 truncation 정보 추가
+        if self._truncated_count > 0:
+            result["truncated"] = True
+            result["truncated_count"] = self._truncated_count
+            result["max_events"] = self._max_events
+        
+        return result
 
     def clear(self) -> None:
         """버퍼 초기화 (테스트용)."""
         self.events.clear()
+        self._truncated_count = 0
 
     # =========================================================================
     # Class Methods - request에서 버퍼 관리

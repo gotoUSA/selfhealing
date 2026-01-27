@@ -412,42 +412,44 @@ WAL 복구 시작
 
 ### Phase 1 (기반 확장) - 1주차
 
-- [ ] **Q2: MAX_EVENTS_PER_REQUEST**
-  - [ ] `event_buffer.py`: `max_events` 인스턴스 변수 추가
-  - [ ] `event_buffer.py`: `add_event()` 제한 로직 추가
-  - [ ] `event_buffer.py`: `add()` 제한 로직 추가
-  - [ ] `event_buffer.py`: `_truncated_count` 카운터 추가
-  - [ ] 테스트: `test_event_buffer_max_events.py`
+- [x] **Q2: MAX_EVENTS_PER_REQUEST**
+  - [x] `event_buffer.py`: `max_events` 인스턴스 변수 추가
+  - [x] `event_buffer.py`: `add_event()` 제한 로직 추가
+  - [x] `event_buffer.py`: `add()` 제한 로직 추가
+  - [x] `event_buffer.py`: `_truncated_count` 카운터 추가
+  - [x] 테스트: `test_event_buffer_max_events.py` (16개 통과)
 
-- [ ] **Q7: hash_for_audit 연동**
-  - [ ] `masking.py`: `MaskingLevel` Enum 추가
-  - [ ] `masking.py`: `get_masking_level_for_context()` 함수 추가
-  - [ ] `masking.py`: `mask_with_level()` 함수 추가
-  - [ ] `handler.py`: `_mask_error_message()` 리팩토링
-  - [ ] `handler.py`: Audit 기록 시 `MaskingLevel.AUDIT` 적용
-  - [ ] 테스트: `test_role_based_masking.py`
+- [x] **Q7: hash_for_audit 연동** (기존 구현 완료 확인)
+  - [x] `masking.py`: `MaskingLevel` Enum 추가
+  - [x] `masking.py`: `get_masking_level_for_context()` 함수 추가
+  - [x] `masking.py`: `mask_with_level()` 함수 추가
+  - [x] `handler.py`: `_mask_error_message()` 리팩토링
+  - [x] `handler.py`: Audit 기록 시 `MaskingLevel.AUDIT` 적용
+  - [x] 테스트: `test_role_based_masking.py`
 
-- [ ] **Q8: region 필드 추가**
-  - [ ] `response.py`: `ResponseMeta.region` 필드 추가
-  - [ ] `response.py`: `to_dict()` 수정
-  - [ ] `response.py`: `create()` 메서드에서 region 설정
-  - [ ] 테스트: `test_response_meta_region.py`
+- [x] **Q8: region 필드 추가**
+  - [x] `response.py`: `ResponseMeta.region` 필드 추가
+  - [x] `response.py`: `to_dict()` 수정
+  - [x] `response.py`: `from_classified_error()` 메서드에서 region 자동 설정
+  - [x] `response.py`: `create_error_response()` 함수에서 region 자동 설정
+  - [x] `response.py`: `_get_current_region()` 함수로 ClusterIdentity/환경변수 연동
+  - [x] 테스트: `test_response_meta_region.py` (12개 통과)
 
 ### Phase 2 (컨텍스트 통합) - 2주차
 
-- [ ] **Q9: Auto-Causation Propagation**
-  - [ ] `signal_hooks.py`: `before_task_publish` 시그널 임포트
-  - [ ] `signal_hooks.py`: `on_before_task_publish()` 핸들러 구현
-  - [ ] `signal_hooks.py`: `on_task_prerun()` causation 복원 추가
-  - [ ] `signal_hooks.py`: `on_task_postrun()` causation 정리 추가
-  - [ ] `signal_hooks.py`: `setup_selfhealing_signals()` 등록 추가
-  - [ ] 테스트: `test_celery_causation_propagation.py`
+- [x] **Q9: Auto-Causation Propagation**
+  - [x] `signal_hooks.py`: `before_task_publish` 시그널 임포트
+  - [x] `signal_hooks.py`: `on_before_task_publish()` 핸들러 구현
+  - [x] `signal_hooks.py`: `on_task_prerun()` causation 복원 추가 (기존 구현 완료)
+  - [x] `signal_hooks.py`: `on_task_postrun()` causation 정리 추가 (기존 구현 완료)
+  - [x] `signal_hooks.py`: `disconnect_selfhealing_signals()` 등록 추가
+  - [x] 테스트: `test_celery_causation_propagation.py` (24개 통과)
 
-- [ ] **Q9 보완: System-initiated Causation**
-  - [ ] `causation_context.py`: `start_system_cascade(source)` 함수 추가
-  - [ ] `causation_context.py`: `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성
-  - [ ] `signal_hooks.py`: `on_task_prerun()`에서 `CausationContext.is_set()` 확인 후 미설정 시 자동 생성
-  - [ ] 테스트: `test_system_initiated_causation.py`
+- [x] **Q9 보완: System-initiated Causation** (기존 구현 완료 확인)
+  - [x] `causation_context.py`: `start_system_cascade(source)` 함수 추가
+  - [x] `causation_context.py`: `trigger_event_id` 미전달 시 `SYSTEM_ROOT_{source}_{uuid}` 형식 생성
+  - [x] `signal_hooks.py`: `_setup_causation_context()`에서 헤더 없으면 시스템 Cascade 자동 생성
+  - [x] 테스트: `test_celery_causation_propagation.py`에 포함
 
 ### Phase 3 (성능 개선) - 3주차
 

@@ -44,6 +44,7 @@ from celery.signals import (
     task_retry,
     task_prerun,
     task_postrun,
+    before_task_publish,
 )
 
 logger = logging.getLogger(__name__)
@@ -363,6 +364,89 @@ def on_task_retry(
         _record_retry_metrics(domain, task_name)
     except Exception as e:
         logger.error(f"[SelfHealing Signal] Error in retry handler: {e}")
+
+
+# =============================================================================
+# Auto-Causation Propagation (Q9)
+# before_task_publish: Celery Task 호출 시 causation 헤더 자동 주입
+# =============================================================================
+
+
+@before_task_publish.connect
+def on_before_task_publish(
+    sender=None,
+    body=None,
+    exchange=None,
+    routing_key=None,
+    headers=None,
+    properties=None,
+    declare=None,
+    retry_policy=None,
+    **kw,
+):
+    """
+    Celery Task 발행 전 Causation Context 헤더 자동 주입.
+    
+    현재 CausationContext가 설정되어 있으면 Celery 메시지 헤더에
+    cascade_id, parent_event_id, chain_depth, namespace를 자동 추가합니다.
+    
+    이를 통해:
+    - API 요청 → Celery Task 인과관계 자동 연결
+    - 개발자가 수동으로 headers=get_causation_for_celery() 호출 불필요
+    - 모든 비동기 작업에서 causation chain 추적 가능
+    """
+    if not _config.enabled:
+        return
+    
+    try:
+        from selfhealing.context.causation_context import (
+            CausationContext,
+            CELERY_HEADER_CASCADE_ID,
+            CELERY_HEADER_PARENT_EVENT,
+            CELERY_HEADER_CHAIN_DEPTH,
+            CELERY_HEADER_NAMESPACE,
+        )
+        
+        # 현재 CausationContext 확인
+        if not CausationContext.is_set():
+            return
+        
+        info = CausationContext.get_current()
+        if not info:
+            return
+        
+        # headers 딕셔너리가 없으면 생략 (발행 시점에 headers 설정 불가)
+        if headers is None:
+            logger.debug(
+                "[SelfHealing Signal] before_task_publish: headers is None, "
+                "cannot inject causation context"
+            )
+            return
+        
+        # 이미 causation 헤더가 있으면 덮어쓰지 않음 (명시적 설정 우선)
+        if headers.get(CELERY_HEADER_CASCADE_ID):
+            logger.debug(
+                "[SelfHealing Signal] Causation headers already present, skipping auto-injection"
+            )
+            return
+        
+        # Causation 헤더 주입
+        headers[CELERY_HEADER_CASCADE_ID] = info.cascade_id
+        headers[CELERY_HEADER_PARENT_EVENT] = info.parent_event_id
+        headers[CELERY_HEADER_CHAIN_DEPTH] = str(info.chain_depth)
+        headers[CELERY_HEADER_NAMESPACE] = info.namespace
+        
+        logger.debug(
+            f"[SelfHealing Signal] Causation headers injected: "
+            f"cascade={info.cascade_id}, depth={info.chain_depth}"
+        )
+        
+    except ImportError:
+        # causation_context 모듈 없음 - 생략
+        pass
+    except Exception as e:
+        # 시그널 핸들러가 태스크 발행에 영향을 주지 않도록 함
+        logger.debug(f"[SelfHealing Signal] Causation header injection failed: {e}")
 
 
 # =============================================================================
@@ -1062,6 +1146,7 @@ def disconnect_selfhealing_signals():
         task_retry.disconnect(on_task_retry)
         task_prerun.disconnect(on_task_prerun)    # trace_id 자동 주입
         task_postrun.disconnect(on_task_postrun)  # trace_id 정리
+        before_task_publish.disconnect(on_before_task_publish)  # causation 자동 전파
         _signals_connected = False
         logger.info("[SelfHealing] Signal hooks disconnected")
     except Exception as e:

@@ -24,12 +24,33 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from .codes import ErrorCode
 from .classifier import ClassifiedError
+
+
+def _get_current_region() -> Optional[str]:
+    """
+    현재 리전 정보 조회.
+    
+    ClusterIdentity가 있으면 해당 값 사용, 없으면 환경변수 직접 조회.
+    
+    Returns:
+        리전 식별자 (seoul, tokyo 등) 또는 None
+    """
+    try:
+        from selfhealing.core.cluster_identity import get_cluster_identity
+        identity = get_cluster_identity(skip_validation=True)
+        return identity.region
+    except ImportError:
+        # ClusterIdentity 모듈 없음 - 환경변수 직접 조회
+        return os.environ.get("SELFHEALING_REGION")
+    except Exception:
+        return os.environ.get("SELFHEALING_REGION")
 
 
 @dataclass
@@ -79,6 +100,7 @@ class ResponseMeta:
     응답 메타데이터.
 
     응답의 "meta" 필드에 해당합니다.
+    멀티 리전 환경에서는 region 필드로 에러 발생 리전을 식별합니다.
     """
 
     request_id: Optional[str] = None
@@ -95,6 +117,9 @@ class ResponseMeta:
 
     causation_id: Optional[str] = None
     """인과관계 추적용 Cascade ID (API-Celery 인과관계 연결)."""
+
+    region: Optional[str] = None
+    """에러 발생 리전 (멀티 리전 환경에서 SELFHEALING_REGION 값)."""
 
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
@@ -113,6 +138,9 @@ class ResponseMeta:
 
         if self.causation_id:
             result["causation_id"] = self.causation_id
+
+        if self.region:
+            result["region"] = self.region
 
         return result
 
@@ -171,6 +199,7 @@ class StandardErrorResponse:
         path: Optional[str] = None,
         method: Optional[str] = None,
         causation_id: Optional[str] = None,
+        region: Optional[str] = None,
     ) -> "StandardErrorResponse":
         """
         ClassifiedError로부터 표준 응답 생성.
@@ -181,10 +210,16 @@ class StandardErrorResponse:
             path: 요청 경로
             method: HTTP 메서드
             causation_id: 인과관계 추적용 Cascade ID
+            region: 에러 발생 리전 (None이면 SELFHEALING_REGION 환경변수 사용)
 
         Returns:
             StandardErrorResponse 인스턴스
         """
+        # region 자동 설정 (환경변수에서 읽기)
+        resolved_region = region
+        if resolved_region is None:
+            resolved_region = _get_current_region()
+        
         error_info = ErrorInfo(
             code=classified.code.value,
             message=classified.message,
@@ -198,6 +233,7 @@ class StandardErrorResponse:
             path=path,
             method=method,
             causation_id=causation_id,
+            region=resolved_region,
         )
 
         return cls(
@@ -250,6 +286,7 @@ def create_error_response(
     path: Optional[str] = None,
     method: Optional[str] = None,
     extra: Optional[Dict[str, Any]] = None,
+    region: Optional[str] = None,
 ) -> StandardErrorResponse:
     """
     에러 코드로부터 표준 응답 생성 (편의 함수).
@@ -263,11 +300,15 @@ def create_error_response(
         path: 요청 경로
         method: HTTP 메서드
         extra: 추가 정보
+        region: 에러 발생 리전 (None이면 SELFHEALING_REGION 환경변수 사용)
 
     Returns:
         StandardErrorResponse 인스턴스
     """
     from .codes import get_http_status, is_retryable, get_default_message
+
+    # region 자동 설정
+    resolved_region = region if region is not None else _get_current_region()
 
     if message is None:
         message = get_default_message(code)
@@ -284,6 +325,7 @@ def create_error_response(
         request_id=request_id,
         path=path,
         method=method,
+        region=resolved_region,
     )
 
     return StandardErrorResponse(
