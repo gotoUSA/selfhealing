@@ -31,18 +31,18 @@ from selfhealing.api.django.views.xtest.observability import (
 def api_client():
     """Create authenticated API client with staff user and required groups."""
     from django.contrib.auth.models import Group
-    
+
     User = get_user_model()
     user = User.objects.create_user(
         username="xtest_admin",
         password="testpass123",
         is_staff=True,
     )
-    
+
     # Add user to required groups for X-Test access
     chaos_group, _ = Group.objects.get_or_create(name="selfhealing_chaos_tester")
     user.groups.add(chaos_group)
-    
+
     client = APIClient()
     client.force_authenticate(user=user)
     return client
@@ -68,9 +68,7 @@ def mock_chaos_allowed():
 class TestBlastRadiusTestViewDomainFree:
     """Tests for BlastRadiusTestView domain-free behavior."""
 
-    def test_affected_service_required_returns_400_when_missing(
-        self, api_client, chaos_headers, mock_chaos_allowed
-    ):
+    def test_affected_service_required_returns_400_when_missing(self, api_client, chaos_headers, mock_chaos_allowed):
         """affected_service 파라미터가 없으면 400 Bad Request 반환."""
         response = api_client.post(
             "/api/self-healing/xtest/blast-radius-test/",
@@ -82,9 +80,7 @@ class TestBlastRadiusTestViewDomainFree:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "affected_service" in response.data.get("error", "")
 
-    def test_check_services_empty_triggers_dynamic_lookup(
-        self, api_client, chaos_headers, mock_chaos_allowed
-    ):
+    def test_check_services_empty_triggers_dynamic_lookup(self, api_client, chaos_headers, mock_chaos_allowed):
         """check_services가 비어있으면 CB 저장소에서 동적 조회."""
         # Mock CB service
         mock_state = MagicMock()
@@ -102,9 +98,7 @@ class TestBlastRadiusTestViewDomainFree:
                 "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
-            patch(
-                "selfhealing.api.django.views.xtest.observability.add_healing_event"
-            ),
+            patch("selfhealing.api.django.views.xtest.observability.add_healing_event"),
             patch(
                 "selfhealing.api.django.views.xtest.observability.collect_system_snapshot",
                 return_value={},
@@ -125,9 +119,7 @@ class TestBlastRadiusTestViewDomainFree:
         # 동적 조회가 발생했는지 확인
         mock_cb_service.repository.get_all_states.assert_called()
 
-    def test_check_services_with_values_skips_dynamic_lookup(
-        self, api_client, chaos_headers, mock_chaos_allowed
-    ):
+    def test_check_services_with_values_skips_dynamic_lookup(self, api_client, chaos_headers, mock_chaos_allowed):
         """check_services가 제공되면 동적 조회를 건너뜀."""
         mock_cb_service = MagicMock()
         mock_cb_service.get_state.return_value = "closed"
@@ -138,9 +130,7 @@ class TestBlastRadiusTestViewDomainFree:
                 "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
-            patch(
-                "selfhealing.api.django.views.xtest.observability.add_healing_event"
-            ),
+            patch("selfhealing.api.django.views.xtest.observability.add_healing_event"),
             patch(
                 "selfhealing.api.django.views.xtest.observability.collect_system_snapshot",
                 return_value={},
@@ -166,9 +156,7 @@ class TestBlastRadiusTestViewDomainFree:
 class TestMultiServiceBlastRadiusViewDomainFree:
     """Tests for MultiServiceBlastRadiusView domain-free behavior."""
 
-    def test_test_services_empty_triggers_dynamic_lookup(
-        self, api_client, chaos_headers, mock_chaos_allowed
-    ):
+    def test_test_services_empty_triggers_dynamic_lookup(self, api_client, chaos_headers, mock_chaos_allowed):
         """test_services가 비어있으면 CB 저장소에서 동적 조회."""
         # Mock CB service with 2+ services
         mock_state_a = MagicMock()
@@ -206,9 +194,7 @@ class TestMultiServiceBlastRadiusViewDomainFree:
         mock_cb_service.repository.get_all_states.assert_called()
         assert response.data["total_services_tested"] == 2
 
-    def test_minimum_two_services_required(
-        self, api_client, chaos_headers, mock_chaos_allowed
-    ):
+    def test_minimum_two_services_required(self, api_client, chaos_headers, mock_chaos_allowed):
         """최소 2개 서비스가 필요하며 미만일 경우 400 반환."""
         mock_cb_service = MagicMock()
 
@@ -229,9 +215,7 @@ class TestMultiServiceBlastRadiusViewDomainFree:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "At least 2 services" in response.data.get("error", "")
 
-    def test_test_services_with_values_uses_provided_list(
-        self, api_client, chaos_headers, mock_chaos_allowed
-    ):
+    def test_test_services_with_values_uses_provided_list(self, api_client, chaos_headers, mock_chaos_allowed):
         """test_services가 제공되면 그 목록을 사용."""
         mock_cb_service = MagicMock()
         mock_cb_service.get_state.return_value = "closed"
