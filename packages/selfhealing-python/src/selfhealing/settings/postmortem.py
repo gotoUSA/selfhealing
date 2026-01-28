@@ -154,6 +154,59 @@ class PostmortemSettings(BaseSettings):
         description="알림 최대 대기 시간 (초)",
     )
 
+    # ==========================================================================
+    # Timeline Snapshot - Postmortem 타임라인 스냅샷 보존
+    # ==========================================================================
+
+    # Prometheus 쿼리 설정
+    snapshot_prometheus_enabled: bool = Field(
+        default=True,
+        description="Prometheus 피크 메트릭 쿼리 활성화",
+    )
+
+    snapshot_prometheus_url: str = Field(
+        default="http://prometheus:9090",
+        description="Prometheus 서버 URL",
+    )
+
+    snapshot_prometheus_timeout: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+        description="Prometheus 쿼리 타임아웃 (초)",
+    )
+
+    # 로그 수집 설정
+    snapshot_logs_enabled: bool = Field(
+        default=True,
+        description="에러 로그 수집 활성화",
+    )
+
+    snapshot_logs_max_count: int = Field(
+        default=50,
+        ge=10,
+        le=200,
+        description="수집할 최대 에러 로그 개수",
+    )
+
+    snapshot_logs_max_length: int = Field(
+        default=500,
+        ge=100,
+        le=2000,
+        description="로그 메시지 최대 길이",
+    )
+
+    # Grafana 대시보드 링크 설정
+    snapshot_grafana_base_url: str = Field(
+        default="http://grafana:3000",
+        description="Grafana 서버 URL",
+    )
+
+    snapshot_grafana_dashboard_uid: str = Field(
+        default="selfhealing",
+        description="Grafana 대시보드 UID",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

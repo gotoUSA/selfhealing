@@ -597,6 +597,63 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
         logger.warning(f"[Notification] Failed to send CB notification: {e}")
 
 
+def _on_circuit_breaker_opened_snapshot(event: SelfHealingEvent) -> None:
+    """
+    CB OPEN 시 시스템 스냅샷을 Redis에 저장.
+
+    Postmortem 생성 시 장애 시작 시점의 메트릭을 참조할 수 있도록
+    CB OPEN 시점의 스냅샷을 임시 저장합니다 (TTL 30분).
+
+    저장 내용:
+    - timestamp: 캡처 시각
+    - cpu_percent: CPU 사용률
+    - memory_percent: 메모리 사용률
+    - db_connections: DB 활성 연결 수
+    - cb_states: 서비스별 CB 상태
+    """
+    service_name = event.data.get("service_name", "unknown")
+
+    try:
+        from selfhealing.api.django.views.xtest.base import collect_system_snapshot
+        from selfhealing.services.postmortem.snapshot_builder import (
+            save_open_snapshot_to_redis,
+        )
+
+        # 시스템 스냅샷 수집
+        snapshot = collect_system_snapshot()
+        snapshot["captured_at"] = "open"
+        snapshot["service"] = service_name
+        snapshot["event_timestamp"] = event.timestamp.isoformat()
+
+        # CB 상태 정보 추가
+        try:
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
+
+            cb_service = get_circuit_breaker_service()
+            cb_states = {}
+            for name in cb_service.get_all_services():
+                status = cb_service.get_status(name)
+                cb_states[name] = status.get("state", "UNKNOWN") if status else "UNKNOWN"
+            snapshot["cb_states"] = str(cb_states)  # Redis HASH는 문자열만 저장
+        except Exception as e:
+            logger.debug(f"[EventHandler] Failed to get CB states: {e}")
+
+        # Redis에 저장
+        success = save_open_snapshot_to_redis(service_name, snapshot)
+
+        if success:
+            logger.info(f"[EventHandler] CB OPEN snapshot saved for {service_name}")
+        else:
+            logger.warning(f"[EventHandler] Failed to save CB OPEN snapshot for {service_name}")
+
+    except ImportError as e:
+        logger.debug(f"[EventHandler] Snapshot module not available: {e}")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to capture CB OPEN snapshot: {e}")
+
+
 def _send_postmortem_notification(
     settings,
     postmortem: dict,
@@ -1228,6 +1285,13 @@ def register_default_handlers():
         EventType.CIRCUIT_BREAKER_OPENED,
         _on_circuit_breaker_opened_notify,
         priority=EventPriority.HIGH,  # 지연 없이 처리
+    )
+
+    # Circuit Breaker OPEN 시점 스냅샷 저장 핸들러
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_OPENED,
+        _on_circuit_breaker_opened_snapshot,
+        priority=EventPriority.NORMAL,  # 알림 이후에 실행
     )
 
     # Emergency Recovery 완료 시 자동 Postmortem 핸들러 (낮은 우선순위)

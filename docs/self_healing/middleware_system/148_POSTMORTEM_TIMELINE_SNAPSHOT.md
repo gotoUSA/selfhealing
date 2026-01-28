@@ -364,41 +364,41 @@ SELFHEALING_POSTMORTEM_SNAPSHOT_GRAFANA_DASHBOARD_UID=selfhealing
 
 ### 13.1 CB OPEN 스냅샷
 
-- [ ] `_on_circuit_breaker_opened_snapshot()` 핸들러 생성
-- [ ] Redis 저장 로직 구현
-- [ ] `register_default_handlers()`에 등록
+- [x] `_on_circuit_breaker_opened_snapshot()` 핸들러 생성
+- [x] Redis 저장 로직 구현
+- [x] `register_default_handlers()`에 등록
 
 ### 13.2 Prometheus Collector
 
-- [ ] `services/postmortem/prometheus_collector.py` 생성
-- [ ] `query_range()` 메서드 구현
-- [ ] `get_peak_metrics()` 메서드 구현
-- [ ] 연결 실패 시 graceful fallback
+- [x] `services/postmortem/prometheus_collector.py` 생성
+- [x] `query_range()` 메서드 구현
+- [x] `get_peak_metrics()` 메서드 구현
+- [x] 연결 실패 시 graceful fallback
 
 ### 13.3 Log Buffer
 
-- [ ] `services/postmortem/log_buffer.py` 생성
-- [ ] 인메모리 버퍼 구현
-- [ ] 로그 핸들러 연동 (logging.Handler)
+- [x] `services/postmortem/log_buffer.py` 생성
+- [x] 인메모리 버퍼 구현
+- [x] 로그 핸들러 연동 (logging.Handler)
 
 ### 13.4 Snapshot Builder
 
-- [ ] `services/postmortem/snapshot_builder.py` 생성
-- [ ] `build()` 메서드 구현
-- [ ] 대시보드 링크 생성 로직
+- [x] `services/postmortem/snapshot_builder.py` 생성
+- [x] `build()` 메서드 구현
+- [x] 대시보드 링크 생성 로직
 
 ### 13.5 Postmortem 통합
 
-- [ ] `_generate_postmortem_data()` 수정
-- [ ] `SnapshotBuilder.build()` 호출
-- [ ] 반환 구조에 확장 필드 추가
+- [x] `_generate_postmortem_data()` 수정
+- [x] `SnapshotBuilder.build()` 호출
+- [x] 반환 구조에 확장 필드 추가
 
 ### 13.6 테스트
 
-- [ ] CB OPEN 스냅샷 저장 확인
-- [ ] Prometheus 쿼리 통합 테스트
-- [ ] 대시보드 링크 생성 확인
-- [ ] Prometheus 미연결 시 fallback 확인
+- [x] CB OPEN 스냅샷 저장 확인
+- [x] Prometheus 쿼리 통합 테스트
+- [x] 대시보드 링크 생성 확인
+- [x] Prometheus 미연결 시 fallback 확인
 
 ---
 

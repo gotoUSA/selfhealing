@@ -495,10 +495,12 @@ def _generate_postmortem_data(
     unaffected: list,
     fast_fail_count: int,
     snapshot: dict,
+    service_name: str | None = None,
 ) -> dict:
     """Generate postmortem data structure with dynamic calculations.
 
     Google SRE 표준에 맞춰 trigger, detection, resolution, root_cause_hypothesis 필드 포함.
+    타임라인 스냅샷을 확장하여 CB OPEN/CLOSE 시점 메트릭, 피크 메트릭, 에러 로그 등을 포함합니다.
     """
     # duration 계산 (세분화된 정보 포함)
     duration_result = calculate_incident_duration_detailed(timeline)
@@ -510,6 +512,45 @@ def _generate_postmortem_data(
     from selfhealing.utils.postmortem_root_cause import build_postmortem_root_cause_fields
 
     root_cause_fields = build_postmortem_root_cause_fields(timeline, affected)
+
+    # 타임라인 스냅샷 빌드 (확장)
+    timeline_snapshot = {}
+    try:
+        from datetime import datetime
+
+        from selfhealing.services.postmortem.snapshot_builder import SnapshotBuilder
+
+        # 서비스 이름 추출 (affected에서 첫 번째 또는 명시적으로 전달된 것)
+        target_service = service_name or (affected[0] if affected else "unknown")
+
+        # 시작/종료 시각 파싱
+        start_time = None
+        end_time = None
+        if duration_result.started_at:
+            try:
+                start_time = datetime.fromisoformat(duration_result.started_at.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+        if duration_result.resolved_at:
+            try:
+                end_time = datetime.fromisoformat(duration_result.resolved_at.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+
+        # 스냅샷 빌드
+        builder = SnapshotBuilder(
+            service_name=target_service,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        timeline_snapshot = builder.build_dict(timeline[:30])
+
+    except ImportError:
+        pass  # SnapshotBuilder 없으면 기본 방식 유지
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(f"Failed to build timeline snapshot: {e}")
 
     return {
         "incident_id": incident_id,
@@ -532,6 +573,8 @@ def _generate_postmortem_data(
         },
         "timeline": timeline[:30],
         "system_snapshot": snapshot,
+        # 확장된 타임라인 스냅샷
+        "timeline_snapshot": timeline_snapshot,
         "auto_actions": auto_actions,
         "recommendations": recommendations,
     }

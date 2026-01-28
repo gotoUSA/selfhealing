@@ -554,7 +554,21 @@ class XTestModeMixin:
 
 
 def collect_system_snapshot() -> dict[str, Any]:
-    """시스템 스냅샷 수집 (CPU, Memory, Connections)."""
+    """시스템 스냅샷 수집 (CPU, Memory, Connections, Error/Request Rate).
+
+    Postmortem 타임라인 스냅샷에 포함될 시스템 상태를 수집합니다.
+
+    Returns:
+        시스템 스냅샷 딕셔너리:
+        - timestamp: 캡처 시각
+        - cpu_percent: CPU 사용률
+        - memory_percent: 메모리 사용률
+        - memory_used_mb: 사용 메모리 (MB)
+        - memory_available_mb: 가용 메모리 (MB)
+        - db_active_connections: DB 활성 연결 수
+        - error_rate: 에러율 (있는 경우)
+        - request_rate: 요청률 (있는 경우)
+    """
     try:
         cpu_percent = psutil.cpu_percent(interval=0.1)
         memory = psutil.virtual_memory()
@@ -576,6 +590,35 @@ def collect_system_snapshot() -> dict[str, Any]:
             snapshot["db_active_connections"] = active_connections
         except Exception:
             snapshot["db_active_connections"] = None
+
+        # Error Budget에서 에러율 조회
+        try:
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
+
+            error_budget_service = get_error_budget_service()
+            status = error_budget_service.get_status()
+            if status:
+                snapshot["error_rate"] = status.get("current_error_rate", 0.0)
+                snapshot["remaining_budget_percent"] = status.get("remaining_percent", 100.0)
+        except Exception:
+            snapshot["error_rate"] = None
+
+        # 메트릭 어댑터에서 요청률 조회
+        try:
+            from selfhealing.adapters.metrics import get_metric_adapter
+
+            adapter = get_metric_adapter()
+            # MetricSourceAdapter에서 요청 카운터 조회 시도
+            if hasattr(adapter, "get_counter_value"):
+                request_counter = adapter.get_counter_value("selfhealing_http_requests_total")
+                if request_counter is not None:
+                    snapshot["request_rate"] = request_counter
+            else:
+                snapshot["request_rate"] = None
+        except Exception:
+            snapshot["request_rate"] = None
 
         return snapshot
     except Exception as e:
