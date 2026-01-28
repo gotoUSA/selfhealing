@@ -217,6 +217,20 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
             f"unaffected={len(results['unaffected_services'])}"
         )
 
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="blast_radius_test",
+            component="observability",
+            details={
+                "affected_service": affected_service,
+                "isolation_verified": results["isolation_verified"],
+                "affected_count": len(results["affected_services"]),
+                "unaffected_count": len(results["unaffected_services"]),
+            },
+            result="success" if results["isolation_verified"] else "partial",
+        )
+
         return Response(
             {
                 "status": "success",
@@ -343,6 +357,19 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
         isolation_score = _calculate_isolation_score(matrix, len(test_services))
 
         logger.info(f"[Stage 51] Multi blast radius test: score={isolation_score:.1f}%")
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="multi_blast_radius_test",
+            component="observability",
+            details={
+                "test_services": test_services,
+                "isolation_score_percent": round(isolation_score, 1),
+                "total_services_tested": len(test_services),
+            },
+            result="success",
+        )
 
         return Response(
             {
@@ -555,6 +582,19 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
 
         logger.info(f"[Stage 51] Postmortem generated: {incident_id}")
 
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="generate_postmortem",
+            component="observability",
+            details={
+                "incident_id": incident_id,
+                "affected_services": affected,
+                "duration_seconds": postmortem.get("duration_seconds"),
+            },
+            result="success",
+        )
+
         return Response(
             {
                 "status": "success",
@@ -608,6 +648,18 @@ class RecordHealingEventView(XTestModeMixin, APIView):
         add_healing_event(event)
 
         logger.info(f"[Stage 51] Healing event recorded: {event_type} ({service})")
+
+        # WAL Audit 기록
+        self.log_xtest_audit(
+            request=request,
+            action="record_healing_event",
+            component="observability",
+            details={
+                "event_type": event_type,
+                "service": service,
+            },
+            result="success",
+        )
 
         return Response(
             {

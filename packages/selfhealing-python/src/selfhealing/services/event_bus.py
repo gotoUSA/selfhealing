@@ -718,6 +718,27 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
 
         logger.info(f"[EventHandler] Auto postmortem generated: {incident_id} " f"(duration={duration}s)")
 
+        # WAL Audit 기록 - 자동 Post-mortem 생성 이벤트
+        try:
+            from selfhealing.services.audit.base import _write_to_wal
+
+            _write_to_wal(
+                event_type="POSTMORTEM_AUTO_GENERATED",
+                source="EventHandler.Postmortem",
+                details={
+                    "incident_id": incident_id,
+                    "service_name": service_name,
+                    "duration_seconds": duration,
+                    "affected_services": affected,
+                    "trigger_event": event.event_type.value,
+                },
+                success=True,
+                domain="selfhealing",
+                target_id=incident_id,
+            )
+        except Exception as audit_error:
+            logger.warning(f"[EventHandler] Failed to log postmortem audit: {audit_error}")
+
     except ImportError:
         logger.debug("[EventHandler] Postmortem module not available, skipping auto generation")
     except Exception as e:

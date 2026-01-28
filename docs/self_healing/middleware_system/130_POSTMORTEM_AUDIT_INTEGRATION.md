@@ -3,7 +3,7 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-27
 **선행 문서:** [128_POSTMORTEM_AUTO_TRIGGER.md](128_POSTMORTEM_AUTO_TRIGGER.md)
-**상태:** 분석 완료
+**상태:** ✅ 구현 완료
 
 ---
 
@@ -129,15 +129,15 @@ X-Test-Mode에서 수동으로 Post-mortem을 생성할 때는 다른 X-Test 작
 
 ### 5.1 수동 API
 
-- [ ] `PostmortemGeneratorView.post()` 끝에 `self.log_xtest_audit()` 추가
-- [ ] `BlastRadiusTestView.post()` 끝에 `self.log_xtest_audit()` 추가
-- [ ] `MultiServiceBlastRadiusView.post()` 끝에 `self.log_xtest_audit()` 추가
-- [ ] `RecordHealingEventView.post()` 끝에 `self.log_xtest_audit()` 추가
+- [x] `PostmortemGeneratorView.post()` 끝에 `self.log_xtest_audit()` 추가
+- [x] `BlastRadiusTestView.post()` 끝에 `self.log_xtest_audit()` 추가
+- [x] `MultiServiceBlastRadiusView.post()` 끝에 `self.log_xtest_audit()` 추가
+- [x] `RecordHealingEventView.post()` 끝에 `self.log_xtest_audit()` 추가
 
 ### 5.2 자동 트리거
 
-- [ ] `_on_circuit_breaker_closed_postmortem()`에 Audit 로깅 추가
-- [ ] Audit 함수 선택 (xtest용 vs 일반용)
+- [x] `_on_circuit_breaker_closed_postmortem()`에 Audit 로깅 추가
+- [x] Audit 함수 선택 (xtest용 vs 일반용) → `_write_to_wal()` 사용, event_type=`POSTMORTEM_AUTO_GENERATED`
 
 ---
 
