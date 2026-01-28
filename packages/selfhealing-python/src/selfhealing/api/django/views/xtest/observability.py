@@ -470,12 +470,20 @@ def _generate_postmortem_data(
     fast_fail_count: int,
     snapshot: dict,
 ) -> dict:
-    """Generate postmortem data structure with dynamic calculations."""
+    """Generate postmortem data structure with dynamic calculations.
+
+    Google SRE 표준에 맞춰 trigger, detection, resolution, root_cause_hypothesis 필드 포함.
+    """
     # duration 계산 (세분화된 정보 포함)
     duration_result = calculate_incident_duration_detailed(timeline)
 
     # 동적 action items 생성
     auto_actions, recommendations = _generate_dynamic_actions(timeline, affected, duration_result.duration_seconds)
+
+    # Root cause 관련 필드 추출
+    from selfhealing.utils.postmortem_root_cause import build_postmortem_root_cause_fields
+
+    root_cause_fields = build_postmortem_root_cause_fields(timeline, affected)
 
     return {
         "incident_id": incident_id,
@@ -485,6 +493,11 @@ def _generate_postmortem_data(
         "duration_seconds": duration_result.duration_seconds,
         "downtime_seconds": duration_result.downtime_seconds,
         "validation_seconds": duration_result.validation_seconds,
+        # Google SRE 표준 필드 (trigger, detection, resolution, root_cause_hypothesis)
+        "trigger": root_cause_fields.get("trigger"),
+        "detection": root_cause_fields.get("detection"),
+        "resolution": root_cause_fields.get("resolution"),
+        "root_cause_hypothesis": root_cause_fields.get("root_cause_hypothesis"),
         "summary": {
             "affected_services": affected,
             "unaffected_services": unaffected,
