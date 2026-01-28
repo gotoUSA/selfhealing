@@ -55,12 +55,12 @@ def mock_chaos_allowed():
 def mock_replay_service():
     """Mock ReplayService for testing."""
     mock_service = MagicMock()
-    
+
     # Mock repository
     mock_repo = MagicMock()
     mock_service.repository = mock_repo
     mock_service.config = {"max_replay_attempts": 5}
-    
+
     # Mock get_by_id result
     mock_entry = MagicMock()
     mock_entry.id = 123
@@ -69,7 +69,7 @@ def mock_replay_service():
     mock_entry.failure_type = "TIMEOUT"
     mock_entry.retry_count = 1
     mock_repo.get_by_id.return_value = mock_entry
-    
+
     # Mock replay_single result
     mock_replay_result = MagicMock()
     mock_replay_result.success = True
@@ -78,7 +78,7 @@ def mock_replay_service():
     mock_replay_result.error = None
     mock_replay_result.data = None
     mock_service.replay_single.return_value = mock_replay_result
-    
+
     # Mock replay_batch result
     mock_batch_result = MagicMock()
     mock_batch_result.total = 5
@@ -89,13 +89,13 @@ def mock_replay_service():
     mock_batch_result.governance_block_reason = ""
     mock_batch_result.results = []
     mock_service.replay_batch.return_value = mock_batch_result
-    
+
     # Mock replay_on_circuit_close result
     mock_service.replay_on_circuit_close.return_value = mock_batch_result
-    
+
     # Mock get_pending_entries
     mock_repo.get_pending_entries.return_value = [mock_entry]
-    
+
     with patch(
         "selfhealing.services.replay_service.get_replay_service",
         return_value=mock_service,
@@ -110,7 +110,7 @@ def mock_governance_checks():
     mock_result.allowed = True
     mock_result.block_reason = None
     mock_result.block_message = ""
-    
+
     with patch(
         "selfhealing.services.governance_checks.check_all_governance",
         return_value=mock_result,
@@ -139,7 +139,7 @@ def mock_dlq_service():
         "by_status": {"pending": 80, "resolved": 20},
         "by_domain": {"external_service": 50, "internal_process": 30},
     }
-    
+
     with patch(
         "selfhealing.services.dlq.get_dlq_service",
         return_value=mock_service,
@@ -156,7 +156,7 @@ def mock_circuit_breaker():
         "database": {"state": "CLOSED"},
         "external_api": {"state": "CLOSED"},
     }
-    
+
     with patch(
         "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
         return_value=mock_cb_service,
@@ -587,7 +587,7 @@ class TestReplayIntegrationScenarios:
         status_view = ReplayStatusView.as_view()
         status_request = request_factory.get("/api/self-healing/xtest/replay/status/")
         status_response = status_view(status_request)
-        
+
         assert status_response.status_code == status.HTTP_200_OK
         assert "pending_count" in status_response.data
 
@@ -599,7 +599,7 @@ class TestReplayIntegrationScenarios:
             format="json",
         )
         single_response = single_view(single_request)
-        
+
         assert single_response.status_code == status.HTTP_200_OK
         assert single_response.data["success"] is True
 
@@ -611,7 +611,7 @@ class TestReplayIntegrationScenarios:
             format="json",
         )
         batch_response = batch_view(batch_request)
-        
+
         assert batch_response.status_code == status.HTTP_200_OK
         assert "success_count" in batch_response.data
 

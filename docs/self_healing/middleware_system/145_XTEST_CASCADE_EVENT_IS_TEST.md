@@ -1,8 +1,8 @@
 # X-Test CascadeEvent.is_test Field
 
-**문서 번호:** 145  
-**작성일:** 2026-01-27  
-**상태:** 설계 완료  
+**문서 번호:** 145
+**작성일:** 2026-01-27
+**상태:** 설계 완료
 **선행 문서:** 144_XTEST_CROSS_REGION_SCENARIO.md, 76_CASCADE_EVENT.md
 
 ---

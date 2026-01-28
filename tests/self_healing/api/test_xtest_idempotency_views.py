@@ -73,19 +73,19 @@ def mock_system_snapshot():
 def create_mock_cache():
     """Mock cache 객체 생성."""
     cache_store = {}
-    
+
     def mock_get(key):
         return cache_store.get(key)
-    
+
     def mock_set(key, value, timeout=None):
         cache_store[key] = value
-    
+
     def mock_delete(key):
         cache_store.pop(key, None)
-    
+
     def mock_ttl(key):
         return 3600 if key in cache_store else None
-    
+
     mock_cache_obj = MagicMock()
     mock_cache_obj.get = MagicMock(side_effect=mock_get)
     mock_cache_obj.set = MagicMock(side_effect=mock_set)
@@ -119,7 +119,7 @@ class TestGenerateKeyView:
     def test_generate_key_success(self, request_factory, mock_chaos_allowed):
         """키 생성 성공 테스트."""
         mock_service = create_mock_idempotency_service()
-        
+
         with patch(
             "selfhealing.services.idempotency_service.get_idempotency_service",
             return_value=mock_service,
@@ -134,9 +134,9 @@ class TestGenerateKeyView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["status"] == "success"
             assert response.data["key_string"] == "order:123:process"
@@ -149,7 +149,7 @@ class TestGenerateKeyView:
     def test_generate_key_with_custom_domain(self, request_factory, mock_chaos_allowed):
         """커스텀 도메인으로 키 생성 테스트."""
         mock_service = create_mock_idempotency_service()
-        
+
         with patch(
             "selfhealing.services.idempotency_service.get_idempotency_service",
             return_value=mock_service,
@@ -165,9 +165,9 @@ class TestGenerateKeyView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["domain"] == "ASYNC_TASK"
 
@@ -182,9 +182,9 @@ class TestGenerateKeyView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
         assert "entity_type" in response.data["missing"]
@@ -197,9 +197,9 @@ class TestGenerateKeyView:
             {},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
         assert len(response.data["missing"]) == 3
@@ -217,9 +217,9 @@ class TestGenerateKeyView:
             },
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "invalid_domain"
         assert "valid_domains" in response.data
@@ -253,7 +253,7 @@ class TestCheckDuplicateView:
         """중복 아닌 경우 테스트."""
         mock_cache = create_mock_cache()
         mock_service = create_mock_idempotency_service()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
                 "selfhealing.services.idempotency_service.get_idempotency_service",
@@ -267,9 +267,9 @@ class TestCheckDuplicateView:
                     },
                     format="json",
                 )
-                
+
                 response = view(request)
-                
+
                 assert response.status_code == status.HTTP_200_OK
                 assert response.data["status"] == "success"
                 assert response.data["is_duplicate"] is False
@@ -279,7 +279,7 @@ class TestCheckDuplicateView:
         """등록과 함께 체크 테스트."""
         mock_cache = create_mock_cache()
         mock_service = create_mock_idempotency_service()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
                 "selfhealing.services.idempotency_service.get_idempotency_service",
@@ -294,9 +294,9 @@ class TestCheckDuplicateView:
                     },
                     format="json",
                 )
-                
+
                 response = view(request)
-                
+
                 assert response.status_code == status.HTTP_200_OK
                 assert response.data["is_duplicate"] is False
                 assert response.data["registered"] is True
@@ -310,7 +310,7 @@ class TestCheckDuplicateView:
             "first_seen_at": "2026-01-26T10:00:00Z",
             "source": XTEST_SOURCE,
         }
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = CheckDuplicateView.as_view()
             request = request_factory.post(
@@ -321,9 +321,9 @@ class TestCheckDuplicateView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["is_duplicate"] is True
             assert response.data["first_seen_at"] == "2026-01-26T10:00:00Z"
@@ -336,9 +336,9 @@ class TestCheckDuplicateView:
             {},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
 
@@ -348,10 +348,10 @@ class TestCheckDuplicateView:
         # EXTERNAL_SERVICE 도메인에 키 등록
         cache_key = "idempotency:external_service:test:1"
         mock_cache._store[cache_key] = {"first_seen_at": "2026-01-26T10:00:00Z"}
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = CheckDuplicateView.as_view()
-            
+
             # ASYNC_TASK 도메인으로 체크
             request = request_factory.post(
                 "/api/self-healing/xtest/idempotency/check-duplicate/",
@@ -361,9 +361,9 @@ class TestCheckDuplicateView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["is_duplicate"] is False  # 다른 도메인이므로 중복 아님
 
@@ -391,15 +391,15 @@ class TestIdempotencyStatusView:
     def test_status_empty(self, request_factory, mock_chaos_allowed, mock_system_snapshot):
         """등록된 키가 없는 경우 테스트."""
         mock_cache = create_mock_cache()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = IdempotencyStatusView.as_view()
             request = request_factory.get(
                 "/api/self-healing/xtest/idempotency/status/",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["status"] == "success"
             assert response.data["total_xtest_keys"] == 0
@@ -409,7 +409,7 @@ class TestIdempotencyStatusView:
     def test_status_with_keys(self, request_factory, mock_chaos_allowed, mock_system_snapshot):
         """등록된 키가 있는 경우 테스트."""
         mock_cache = create_mock_cache()
-        
+
         # 추적 목록에 키 추가
         tracked_keys = [
             "idempotency:external_service:order:1",
@@ -417,22 +417,22 @@ class TestIdempotencyStatusView:
             "idempotency:async_task:task:1",
         ]
         mock_cache._store[XTEST_METADATA_KEY] = tracked_keys
-        
+
         # 키별 데이터 추가
         for key in tracked_keys:
             mock_cache._store[key] = {
                 "first_seen_at": "2026-01-26T10:00:00Z",
                 "source": XTEST_SOURCE,
             }
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = IdempotencyStatusView.as_view()
             request = request_factory.get(
                 "/api/self-healing/xtest/idempotency/status/",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["total_xtest_keys"] == 3
             assert response.data["by_domain"]["EXTERNAL_SERVICE"] == 2
@@ -442,22 +442,22 @@ class TestIdempotencyStatusView:
     def test_status_with_domain_filter(self, request_factory, mock_chaos_allowed, mock_system_snapshot):
         """도메인 필터 적용 테스트."""
         mock_cache = create_mock_cache()
-        
+
         tracked_keys = [
             "idempotency:external_service:order:1",
             "idempotency:async_task:task:1",
         ]
         mock_cache._store[XTEST_METADATA_KEY] = tracked_keys
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = IdempotencyStatusView.as_view()
             request = request_factory.get(
                 "/api/self-healing/xtest/idempotency/status/",
                 {"domain": "EXTERNAL_SERVICE"},
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             # 필터 적용으로 EXTERNAL_SERVICE만 조회
             assert response.data["filters_applied"]["domain"] == "EXTERNAL_SERVICE"
@@ -483,7 +483,7 @@ class TestRegisterKeyView:
         """키 등록 성공 테스트."""
         mock_cache = create_mock_cache()
         mock_service = create_mock_idempotency_service()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
                 "selfhealing.services.idempotency_service.get_idempotency_service",
@@ -498,9 +498,9 @@ class TestRegisterKeyView:
                     },
                     format="json",
                 )
-                
+
                 response = view(request)
-                
+
                 assert response.status_code == status.HTTP_201_CREATED
                 assert response.data["status"] == "success"
                 assert response.data["registered"] is True
@@ -512,7 +512,7 @@ class TestRegisterKeyView:
         """결과 데이터와 함께 키 등록 테스트."""
         mock_cache = create_mock_cache()
         mock_service = create_mock_idempotency_service()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
                 "selfhealing.services.idempotency_service.get_idempotency_service",
@@ -527,9 +527,9 @@ class TestRegisterKeyView:
                     },
                     format="json",
                 )
-                
+
                 response = view(request)
-                
+
                 assert response.status_code == status.HTTP_201_CREATED
                 assert response.data["metadata"]["has_result_data"] is True
 
@@ -541,9 +541,9 @@ class TestRegisterKeyView:
             {},
             format="json",
         )
-        
+
         response = view(request)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_fields"
 
@@ -571,12 +571,12 @@ class TestClearKeysView:
     def test_clear_single_key(self, request_factory, mock_chaos_allowed):
         """단일 키 삭제 테스트."""
         mock_cache = create_mock_cache()
-        
+
         # 키 등록
         cache_key = "idempotency:external_service:order:123:process"
         mock_cache._store[cache_key] = {"source": XTEST_SOURCE}
         mock_cache._store[XTEST_METADATA_KEY] = [cache_key]
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = ClearKeysView.as_view()
             request = request_factory.post(
@@ -587,9 +587,9 @@ class TestClearKeysView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["status"] == "success"
             assert response.data["cleared_count"] == 1
@@ -598,7 +598,7 @@ class TestClearKeysView:
     def test_clear_all_xtest_keys(self, request_factory, mock_chaos_allowed):
         """X-Test 생성 키 전체 삭제 테스트."""
         mock_cache = create_mock_cache()
-        
+
         # 다수 키 등록
         keys = [
             "idempotency:external_service:order:1",
@@ -608,7 +608,7 @@ class TestClearKeysView:
         for key in keys:
             mock_cache._store[key] = {"source": XTEST_SOURCE}
         mock_cache._store[XTEST_METADATA_KEY] = keys
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = ClearKeysView.as_view()
             request = request_factory.post(
@@ -618,16 +618,16 @@ class TestClearKeysView:
                 },
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_200_OK
             assert response.data["cleared_count"] == 3
 
     def test_clear_missing_parameters(self, request_factory, mock_chaos_allowed):
         """파라미터 누락 테스트."""
         mock_cache = create_mock_cache()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             view = ClearKeysView.as_view()
             request = request_factory.post(
@@ -635,9 +635,9 @@ class TestClearKeysView:
                 {},
                 format="json",
             )
-            
+
             response = view(request)
-            
+
             assert response.status_code == status.HTTP_400_BAD_REQUEST
             assert response.data["error"] == "missing_parameters"
 
@@ -661,7 +661,7 @@ class TestIdempotencyFlowIntegration:
         """키 생성 → 중복 체크 → 등록 → 중복 확인 플로우 테스트."""
         mock_cache = create_mock_cache()
         mock_service = create_mock_idempotency_service()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
                 "selfhealing.services.idempotency_service.get_idempotency_service",
@@ -681,7 +681,7 @@ class TestIdempotencyFlowIntegration:
                 response = generate_view(request)
                 assert response.status_code == status.HTTP_200_OK
                 key_string = response.data["key_string"]
-                
+
                 # 2. 첫 번째 중복 체크 (등록과 함께)
                 check_view = CheckDuplicateView.as_view()
                 request = request_factory.post(
@@ -696,7 +696,7 @@ class TestIdempotencyFlowIntegration:
                 assert response.status_code == status.HTTP_200_OK
                 assert response.data["is_duplicate"] is False
                 assert response.data["registered"] is True
-                
+
                 # 3. 두 번째 중복 체크 (이미 등록됨)
                 request = request_factory.post(
                     "/api/self-healing/xtest/idempotency/check-duplicate/",
@@ -713,7 +713,7 @@ class TestIdempotencyFlowIntegration:
         """등록 → 상태 확인 → 삭제 플로우 테스트."""
         mock_cache = create_mock_cache()
         mock_service = create_mock_idempotency_service()
-        
+
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
                 "selfhealing.services.idempotency_service.get_idempotency_service",
@@ -730,7 +730,7 @@ class TestIdempotencyFlowIntegration:
                 )
                 response = register_view(request)
                 assert response.status_code == status.HTTP_201_CREATED
-                
+
                 # 2. 상태 확인
                 status_view = IdempotencyStatusView.as_view()
                 request = request_factory.get(
@@ -739,7 +739,7 @@ class TestIdempotencyFlowIntegration:
                 response = status_view(request)
                 assert response.status_code == status.HTTP_200_OK
                 assert response.data["total_xtest_keys"] >= 1
-                
+
                 # 3. 전체 삭제
                 clear_view = ClearKeysView.as_view()
                 request = request_factory.post(
@@ -751,7 +751,7 @@ class TestIdempotencyFlowIntegration:
                 )
                 response = clear_view(request)
                 assert response.status_code == status.HTTP_200_OK
-                
+
                 # 4. 삭제 후 상태 확인
                 request = request_factory.get(
                     "/api/self-healing/xtest/idempotency/status/",

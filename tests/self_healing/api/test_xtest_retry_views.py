@@ -62,9 +62,7 @@ def mock_backoff_calculator():
 
     mock_calculator = MagicMock()
     mock_calculator.config = mock_config
-    mock_calculator.calculate.side_effect = lambda attempt, with_jitter=True: min(
-        4 ** attempt, 180
-    )
+    mock_calculator.calculate.side_effect = lambda attempt, with_jitter=True: min(4**attempt, 180)
     mock_calculator.get_delays_sequence.return_value = [4, 16, 64, 180]
 
     return mock_calculator
@@ -179,9 +177,7 @@ class TestBackoffPreviewView:
         assert response.data["config"]["jitter_percent"] == 10
         assert len(response.data["delays"]) == 4
 
-    def test_backoff_preview_invalid_params(
-        self, request_factory, chaos_headers, mock_chaos_allowed
-    ):
+    def test_backoff_preview_invalid_params(self, request_factory, chaos_headers, mock_chaos_allowed):
         """잘못된 파라미터 오류 처리."""
         view = BackoffPreviewView.as_view()
         request = request_factory.get(
@@ -217,7 +213,7 @@ class TestBackoffPreviewView:
 
         assert response.status_code == status.HTTP_200_OK
         delays_with_jitter = response.data["delays_with_jitter"]
-        
+
         # 각 attempt에 대해 min/max 범위 확인
         for item in delays_with_jitter:
             base = item["base"]
@@ -271,9 +267,7 @@ class TestRetrySimulateView:
         assert response.data["final_action"] == "dlq"
         assert response.data["dlq_routed"] is True
 
-    def test_simulate_missing_failure_count(
-        self, request_factory, chaos_headers, mock_chaos_allowed
-    ):
+    def test_simulate_missing_failure_count(self, request_factory, chaos_headers, mock_chaos_allowed):
         """failure_count 누락 시 오류."""
         view = RetrySimulateView.as_view()
         request = request_factory.post(
@@ -287,9 +281,7 @@ class TestRetrySimulateView:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data["error"] == "missing_required_field"
 
-    def test_simulate_invalid_failure_count(
-        self, request_factory, chaos_headers, mock_chaos_allowed
-    ):
+    def test_simulate_invalid_failure_count(self, request_factory, chaos_headers, mock_chaos_allowed):
         """잘못된 failure_count 오류."""
         view = RetrySimulateView.as_view()
         request = request_factory.post(
@@ -318,17 +310,17 @@ class TestRetrySimulateView:
 
         assert response.status_code == status.HTTP_200_OK
         retry_sequence = response.data["retry_sequence"]
-        
+
         # 첫 번째 시도: 실패, delay 있음
         assert retry_sequence[0]["attempt"] == 1
         assert retry_sequence[0]["result"] == "FAILURE"
         assert retry_sequence[0]["delay_before_next"] is not None
-        
+
         # 두 번째 시도: 실패, delay 있음
         assert retry_sequence[1]["attempt"] == 2
         assert retry_sequence[1]["result"] == "FAILURE"
         assert retry_sequence[1]["delay_before_next"] is not None
-        
+
         # 세 번째 시도: 성공, delay 없음
         assert retry_sequence[2]["attempt"] == 3
         assert retry_sequence[2]["result"] == "SUCCESS"
@@ -383,9 +375,7 @@ class TestRetryRateLimitStatusView:
         assert response.data["throttled"] is False
         assert "state" in response.data
 
-    def test_rate_limit_status_throttled(
-        self, request_factory, chaos_headers, mock_chaos_allowed, mock_system_snapshot
-    ):
+    def test_rate_limit_status_throttled(self, request_factory, chaos_headers, mock_chaos_allowed, mock_system_snapshot):
         """스로틀링 상태에서 rate limit 상태 조회."""
         import time
 
@@ -427,9 +417,7 @@ class TestRetryRateLimitStatusView:
                 assert response.data["state"]["consecutive_429s"] == 3
                 assert response.data["state"]["is_in_cooldown"] is True
 
-    def test_rate_limit_status_error_handling(
-        self, request_factory, chaos_headers, mock_chaos_allowed, mock_system_snapshot
-    ):
+    def test_rate_limit_status_error_handling(self, request_factory, chaos_headers, mock_chaos_allowed, mock_system_snapshot):
         """Rate limit coordinator 오류 시 fail-safe 처리."""
         with patch(
             "selfhealing.services.rate_limit_coordinator.get_rate_limit_coordinator",

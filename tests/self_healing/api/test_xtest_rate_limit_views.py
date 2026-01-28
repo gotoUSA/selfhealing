@@ -71,8 +71,8 @@ def mock_system_snapshot():
 def create_mock_health_checker(state=RedisHealthState.HEALTHY):
     """Create a mock health checker with configurable state."""
     mock_checker = MagicMock()
-    mock_checker.is_healthy = (state == RedisHealthState.HEALTHY)
-    mock_checker.is_degraded = (state != RedisHealthState.HEALTHY)
+    mock_checker.is_healthy = state == RedisHealthState.HEALTHY
+    mock_checker.is_degraded = state != RedisHealthState.HEALTHY
     mock_checker.ping_interval = 5
     mock_checker.failure_threshold = 3
     mock_checker.recovery_jitter_max = 10
@@ -115,17 +115,23 @@ class TestRateLimitStatusView:
         """전체 상태 조회 성공."""
         mock_checker = create_mock_health_checker(RedisHealthState.HEALTHY)
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
             with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
-                with patch("selfhealing.api.django.rate_limit.get_rate_limit_config", return_value={
-                    "control_api_rate_limit": 100,
-                    "control_api_window_seconds": 60,
-                    "emergency_rate_limit": 10,
-                    "emergency_window_seconds": 60,
-                }):
+                with patch(
+                    "selfhealing.api.django.rate_limit.get_rate_limit_config",
+                    return_value={
+                        "control_api_rate_limit": 100,
+                        "control_api_window_seconds": 60,
+                        "emergency_rate_limit": 10,
+                        "emergency_window_seconds": 60,
+                    },
+                ):
                     with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=10):
-                        with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={"client1": {"total": 5, "exceeded": 1}}):
+                        with patch(
+                            "selfhealing.api.django.rate_limit.get_client_stats",
+                            return_value={"client1": {"total": 5, "exceeded": 1}},
+                        ):
                             view = RateLimitStatusView.as_view()
                             request = request_factory.get("/xtest/rate-limit/status/", **chaos_headers)
                             response = view(request)
@@ -148,17 +154,23 @@ class TestRateLimitStatusView:
         """특정 클라이언트 키로 조회."""
         mock_checker = create_mock_health_checker(RedisHealthState.HEALTHY)
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
             with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
-                with patch("selfhealing.api.django.rate_limit.get_rate_limit_config", return_value={
-                    "control_api_rate_limit": 100,
-                    "control_api_window_seconds": 60,
-                    "emergency_rate_limit": 10,
-                    "emergency_window_seconds": 60,
-                }):
+                with patch(
+                    "selfhealing.api.django.rate_limit.get_rate_limit_config",
+                    return_value={
+                        "control_api_rate_limit": 100,
+                        "control_api_window_seconds": 60,
+                        "emergency_rate_limit": 10,
+                        "emergency_window_seconds": 60,
+                    },
+                ):
                     with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=10):
-                        with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={"client1": {"total": 5, "exceeded": 1}}):
+                        with patch(
+                            "selfhealing.api.django.rate_limit.get_client_stats",
+                            return_value={"client1": {"total": 5, "exceeded": 1}},
+                        ):
                             view = RateLimitStatusView.as_view()
                             request = request_factory.get(
                                 "/xtest/rate-limit/status/",
@@ -197,7 +209,7 @@ class TestRateLimitClientView:
         """클라이언트별 상태 조회 성공."""
         mock_checker = create_mock_health_checker(RedisHealthState.HEALTHY)
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
             with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
                 view = RateLimitClientView.as_view()
@@ -260,10 +272,12 @@ class TestRateLimitHistoryView:
         mock_events = [
             {"timestamp": "2026-01-26T12:00:00Z", "client_key": "client1", "allowed": True},
         ]
-        
+
         with patch("selfhealing.api.django.rate_limit.get_rate_limit_events", return_value=mock_events):
             with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=10):
-                with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={"client1": {"total": 5, "exceeded": 1}}):
+                with patch(
+                    "selfhealing.api.django.rate_limit.get_client_stats", return_value={"client1": {"total": 5, "exceeded": 1}}
+                ):
                     view = RateLimitHistoryView.as_view()
                     request = request_factory.get("/xtest/rate-limit/history/", **chaos_headers)
                     response = view(request)
@@ -282,7 +296,7 @@ class TestRateLimitHistoryView:
     ):
         """커스텀 limit으로 조회."""
         mock_events = [{"timestamp": "2026-01-26T12:00:00Z", "client_key": "client1", "allowed": True}]
-        
+
         with patch("selfhealing.api.django.rate_limit.get_rate_limit_events", return_value=mock_events):
             with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=100):
                 with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={}):
@@ -304,10 +318,12 @@ class TestRateLimitHistoryView:
     ):
         """클라이언트별 필터링."""
         mock_events = [{"timestamp": "2026-01-26T12:00:00Z", "client_key": "client1", "allowed": True}]
-        
+
         with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_by_client", return_value=mock_events):
             with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=10):
-                with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={"client1": {"total": 5, "exceeded": 1}}):
+                with patch(
+                    "selfhealing.api.django.rate_limit.get_client_stats", return_value={"client1": {"total": 5, "exceeded": 1}}
+                ):
                     view = RateLimitHistoryView.as_view()
                     request = request_factory.get(
                         "/xtest/rate-limit/history/",
@@ -343,14 +359,17 @@ class TestRateLimitConfigXTestView:
     ):
         """설정 조회 성공."""
         mock_checker = create_mock_health_checker(RedisHealthState.HEALTHY)
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
-            with patch("selfhealing.api.django.rate_limit.get_rate_limit_config", return_value={
-                "control_api_rate_limit": 100,
-                "control_api_window_seconds": 60,
-                "emergency_rate_limit": 10,
-                "emergency_window_seconds": 60,
-            }):
+            with patch(
+                "selfhealing.api.django.rate_limit.get_rate_limit_config",
+                return_value={
+                    "control_api_rate_limit": 100,
+                    "control_api_window_seconds": 60,
+                    "emergency_rate_limit": 10,
+                    "emergency_window_seconds": 60,
+                },
+            ):
                 view = RateLimitConfigXTestView.as_view()
                 request = request_factory.get("/xtest/rate-limit/config/", **chaos_headers)
                 response = view(request)
@@ -370,14 +389,17 @@ class TestRateLimitConfigXTestView:
     ):
         """설정에 path_prefix 포함."""
         mock_checker = create_mock_health_checker(RedisHealthState.HEALTHY)
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
-            with patch("selfhealing.api.django.rate_limit.get_rate_limit_config", return_value={
-                "control_api_rate_limit": 100,
-                "control_api_window_seconds": 60,
-                "emergency_rate_limit": 10,
-                "emergency_window_seconds": 60,
-            }):
+            with patch(
+                "selfhealing.api.django.rate_limit.get_rate_limit_config",
+                return_value={
+                    "control_api_rate_limit": 100,
+                    "control_api_window_seconds": 60,
+                    "emergency_rate_limit": 10,
+                    "emergency_window_seconds": 60,
+                },
+            ):
                 view = RateLimitConfigXTestView.as_view()
                 request = request_factory.get("/xtest/rate-limit/config/", **chaos_headers)
                 response = view(request)
@@ -410,7 +432,7 @@ class TestRateLimitResetView:
     ):
         """특정 클라이언트 초기화."""
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
             with patch("selfhealing.api.django.rate_limit.reset_rate_limit_events", return_value=5):
                 view = RateLimitResetView.as_view()
@@ -434,7 +456,7 @@ class TestRateLimitResetView:
     ):
         """전체 초기화."""
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
             with patch("selfhealing.api.django.rate_limit.reset_rate_limit_state"):
                 with patch("selfhealing.api.django.rate_limit.reset_rate_limit_events", return_value=10):
@@ -500,15 +522,18 @@ class TestEmergencyMode:
         """Redis 장애 시 emergency 모드 표시."""
         mock_checker = create_mock_health_checker(RedisHealthState.UNHEALTHY)
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
             with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
-                with patch("selfhealing.api.django.rate_limit.get_rate_limit_config", return_value={
-                    "control_api_rate_limit": 100,
-                    "control_api_window_seconds": 60,
-                    "emergency_rate_limit": 10,
-                    "emergency_window_seconds": 60,
-                }):
+                with patch(
+                    "selfhealing.api.django.rate_limit.get_rate_limit_config",
+                    return_value={
+                        "control_api_rate_limit": 100,
+                        "control_api_window_seconds": 60,
+                        "emergency_rate_limit": 10,
+                        "emergency_window_seconds": 60,
+                    },
+                ):
                     with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=0):
                         with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={}):
                             view = RateLimitStatusView.as_view()
@@ -530,15 +555,18 @@ class TestEmergencyMode:
         """복구 중 degraded 모드 표시."""
         mock_checker = create_mock_health_checker(RedisHealthState.RECOVERING)
         mock_limiter = create_mock_local_limiter()
-        
+
         with patch("selfhealing.api.django.rate_limit.get_redis_health_checker", return_value=mock_checker):
             with patch("selfhealing.api.django.rate_limit.get_local_limiter", return_value=mock_limiter):
-                with patch("selfhealing.api.django.rate_limit.get_rate_limit_config", return_value={
-                    "control_api_rate_limit": 100,
-                    "control_api_window_seconds": 60,
-                    "emergency_rate_limit": 10,
-                    "emergency_window_seconds": 60,
-                }):
+                with patch(
+                    "selfhealing.api.django.rate_limit.get_rate_limit_config",
+                    return_value={
+                        "control_api_rate_limit": 100,
+                        "control_api_window_seconds": 60,
+                        "emergency_rate_limit": 10,
+                        "emergency_window_seconds": 60,
+                    },
+                ):
                     with patch("selfhealing.api.django.rate_limit.get_rate_limit_events_count", return_value=0):
                         with patch("selfhealing.api.django.rate_limit.get_client_stats", return_value={}):
                             view = RateLimitStatusView.as_view()
