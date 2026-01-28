@@ -234,6 +234,33 @@ class PostmortemSettings(BaseSettings):
         description="인시던트 후 배포 조회 범위 (분)",
     )
 
+    # ==========================================================================
+    # Revision/Versioning - Postmortem 리비전(버전) 관리
+    # ==========================================================================
+    versioning_enabled: bool = Field(
+        default=True,
+        description="Postmortem 버전 관리 활성화",
+    )
+
+    max_revisions: int = Field(
+        default=50,
+        ge=10,
+        le=200,
+        description="Postmortem당 최대 리비전 수",
+    )
+
+    auto_seal_days: int = Field(
+        default=30,
+        ge=0,
+        le=365,
+        description="자동 봉인 일수 (0=비활성화)",
+    )
+
+    revision_storage: str = Field(
+        default="hybrid",
+        description="리비전 저장소 유형 (redis/postgresql/hybrid)",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

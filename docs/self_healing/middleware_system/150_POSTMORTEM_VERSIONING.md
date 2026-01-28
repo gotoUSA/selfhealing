@@ -3,8 +3,8 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-28
 **선행 문서:** [147_POSTMORTEM_INCIDENT_GROUP.md](147_POSTMORTEM_INCIDENT_GROUP.md), [132_POSTMORTEM_PERSISTENT_STORAGE.md](132_POSTMORTEM_PERSISTENT_STORAGE.md)
-**관련 코드:** `audit/integrity/local_manager.py`, `services/runtime_config/base.py`
-**상태:** 설계 완료
+**관련 코드:** `audit/integrity/local_manager.py`, `services/runtime_config/base.py`, `services/postmortem/revision.py`
+**상태:** 구현 완료
 
 ---
 
@@ -313,22 +313,22 @@ SELFHEALING_POSTMORTEM_REVISION_STORAGE=hybrid
 
 ### 12.1 코어 구현
 
-- [ ] `PostmortemRevision` 데이터클래스 정의
-- [ ] `PostmortemRevisionManager` 클래스 구현
-- [ ] diff 계산 로직 구현
-- [ ] HashChain 연동
+- [x] `PostmortemRevision` 데이터클래스 정의
+- [x] `PostmortemRevisionManager` 클래스 구현
+- [x] diff 계산 로직 구현
+- [x] HashChain 연동
 
 ### 12.2 저장소 구현
 
-- [ ] Redis 리비전 저장 구현
+- [x] Redis 리비전 저장 구현
 - [ ] PostgreSQL 스냅샷 저장 구현 (선택적)
-- [ ] 하이브리드 조회 로직
+- [x] 하이브리드 조회 로직
 
 ### 12.3 봉인 기능
 
-- [ ] 봉인 메서드 구현
-- [ ] 봉인 상태 체크 로직
-- [ ] 봉인 해제 (관리자용)
+- [x] 봉인 메서드 구현
+- [x] 봉인 상태 체크 로직
+- [x] 봉인 해제 (관리자용)
 
 ### 12.4 API
 
@@ -339,10 +339,10 @@ SELFHEALING_POSTMORTEM_REVISION_STORAGE=hybrid
 
 ### 12.5 테스트
 
-- [ ] 리비전 생성 테스트
-- [ ] diff 계산 테스트
-- [ ] 봉인 테스트
-- [ ] 롤백 테스트
+- [x] 리비전 생성 테스트
+- [x] diff 계산 테스트
+- [x] 봉인 테스트
+- [x] 롤백 테스트
 
 ---
 

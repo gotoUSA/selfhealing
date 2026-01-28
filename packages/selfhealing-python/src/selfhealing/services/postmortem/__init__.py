@@ -59,6 +59,15 @@ from .snapshot_builder import (
     save_open_snapshot_to_redis,
     delete_open_snapshot_from_redis,
 )
+from .revision import (
+    RevisionChangeType,
+    RevisionDiff,
+    PostmortemRevision,
+    PostmortemRevisionManager,
+    compute_diff,
+    get_postmortem_revision_manager,
+    reset_postmortem_revision_manager,
+)
 
 __all__ = [
     # Deployment Correlator
@@ -98,4 +107,12 @@ __all__ = [
     "TimelineSnapshot",
     "save_open_snapshot_to_redis",
     "delete_open_snapshot_from_redis",
+    # Revision Manager
+    "RevisionChangeType",
+    "RevisionDiff",
+    "PostmortemRevision",
+    "PostmortemRevisionManager",
+    "compute_diff",
+    "get_postmortem_revision_manager",
+    "reset_postmortem_revision_manager",
 ]
