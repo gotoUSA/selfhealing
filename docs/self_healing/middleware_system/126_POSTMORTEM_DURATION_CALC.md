@@ -3,7 +3,7 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-27
 **선행 문서:** [125_POSTMORTEM_DOMAIN_FREE.md](125_POSTMORTEM_DOMAIN_FREE.md)
-**상태:** 구현 준비
+**상태:** ✅ 구현 완료
 
 ---
 
@@ -113,25 +113,25 @@ event.data.state_change 존재
 
 ### 6.1 헬퍼 함수
 
-- [ ] `_calculate_incident_duration()` 함수 생성
-- [ ] 타임라인에서 첫 OPEN 이벤트 찾기
-- [ ] 타임라인에서 마지막 CLOSED 이벤트 찾기
-- [ ] 시간 차이 계산 (초 단위)
-- [ ] ISO 형식 파싱 처리
+- [x] `_calculate_incident_duration()` 함수 생성
+- [x] 타임라인에서 첫 OPEN 이벤트 찾기
+- [x] 타임라인에서 마지막 CLOSED 이벤트 찾기
+- [x] 시간 차이 계산 (초 단위)
+- [x] ISO 형식 파싱 처리
 
 ### 6.2 _generate_postmortem_data 수정
 
-- [ ] 헬퍼 함수 호출
-- [ ] `started_at` 필드 업데이트
-- [ ] `resolved_at` 필드 업데이트
-- [ ] `duration_seconds` 필드 계산값 설정
+- [x] 헬퍼 함수 호출
+- [x] `started_at` 필드 업데이트
+- [x] `resolved_at` 필드 업데이트
+- [x] `duration_seconds` 필드 계산값 설정
 
 ### 6.3 테스트
 
-- [ ] 정상 케이스: OPEN → CLOSED 존재
-- [ ] 예외 케이스: CLOSED 없음 (진행 중 인시던트)
-- [ ] 예외 케이스: 빈 타임라인
-- [ ] 시간 계산 정확도 확인
+- [x] 정상 케이스: OPEN → CLOSED 존재
+- [x] 예외 케이스: CLOSED 없음 (진행 중 인시던트)
+- [x] 예외 케이스: 빈 타임라인
+- [x] 시간 계산 정확도 확인
 
 ---
 
@@ -216,10 +216,10 @@ event.data.state_change 존재
 
 ### 8.6 구현 체크리스트 (추가)
 
-- [ ] 타임라인에서 HALF_OPEN 이벤트 추출 로직 추가
-- [ ] `_calculate_incident_duration()` 함수에 세분화 필드 추가
-- [ ] 반환 타입 확장: `tuple[str, str, float, float, float]`
-- [ ] Postmortem 스키마에 `downtime_seconds`, `validation_seconds` 추가
+- [x] 타임라인에서 HALF_OPEN 이벤트 추출 로직 추가
+- [x] `_calculate_incident_duration()` 함수에 세분화 필드 추가
+- [x] 반환 타입 확장: `tuple[str, str, float, float, float]`
+- [x] Postmortem 스키마에 `downtime_seconds`, `validation_seconds` 추가
 
 ---
 

@@ -368,6 +368,17 @@ def _collect_service_states(cb_service) -> tuple[list, list]:
     return affected, unaffected
 
 
+# Re-export from utils for backward compatibility
+from selfhealing.utils.duration import (
+    IncidentDurationResult,
+    calculate_incident_duration,
+    calculate_time_diff_seconds as _calculate_time_diff_seconds,
+    find_first_event_by_type as _find_first_event_by_type,
+    find_last_event_by_type as _find_last_event_by_type,
+    parse_iso_timestamp as _parse_iso_timestamp,
+)
+
+
 def _calculate_incident_duration(
     timeline: list,
 ) -> tuple[str | None, str | None, float | None]:
@@ -377,50 +388,24 @@ def _calculate_incident_duration(
     Returns:
         tuple: (started_at, resolved_at, duration_seconds)
     """
-    if not timeline:
-        return None, timezone.now().isoformat(), None
+    result = calculate_incident_duration_detailed(timeline)
+    return result.started_at, result.resolved_at, result.duration_seconds
 
-    from datetime import datetime
 
-    started_at = None
-    resolved_at = None
+def calculate_incident_duration_detailed(timeline: list) -> IncidentDurationResult:
+    """
+    타임라인에서 인시던트 지속 시간 세부 정보 계산.
 
-    # 첫 번째 CB OPEN 이벤트 찾기
-    for event in timeline:
-        event_type = event.get("event_type", "").lower()
-        if "opened" in event_type or "open" in event_type:
-            started_at = event.get("timestamp")
-            break
+    CB 상태별 시간 세분화:
+    - duration_seconds: 전체 소요 시간 (OPEN → CLOSED)
+    - downtime_seconds: 실제 서비스 중단 시간 (OPEN → HALF_OPEN)
+    - validation_seconds: 복구 검증 시간 (HALF_OPEN → CLOSED)
 
-    # OPEN 이벤트가 없으면 첫 번째 이벤트 사용
-    if not started_at and timeline:
-        started_at = timeline[0].get("timestamp")
-
-    # 마지막 CB CLOSED 이벤트 찾기
-    for event in reversed(timeline):
-        event_type = event.get("event_type", "").lower()
-        if "closed" in event_type:
-            resolved_at = event.get("timestamp")
-            break
-
-    # CLOSED 이벤트가 없으면 현재 시각 사용
-    if not resolved_at:
-        resolved_at = timezone.now().isoformat()
-
-    # duration 계산
-    duration_seconds = None
-    if started_at and resolved_at:
-        try:
-            # ISO 형식 파싱
-            start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-            end_dt = datetime.fromisoformat(resolved_at.replace("Z", "+00:00"))
-            duration_seconds = (end_dt - start_dt).total_seconds()
-            if duration_seconds < 0:
-                duration_seconds = None
-        except (ValueError, TypeError):
-            pass
-
-    return started_at, resolved_at, duration_seconds
+    Returns:
+        IncidentDurationResult: 시작/종료 시각 및 세분화된 duration 정보
+    """
+    current_time = timezone.now().isoformat()
+    return calculate_incident_duration(timeline, current_time)
 
 
 def _generate_dynamic_actions(
@@ -535,18 +520,20 @@ def _generate_postmortem_data(
     snapshot: dict,
 ) -> dict:
     """Generate postmortem data structure with dynamic calculations."""
-    # duration 계산
-    started_at, resolved_at, duration_seconds = _calculate_incident_duration(timeline)
+    # duration 계산 (세분화된 정보 포함)
+    duration_result = calculate_incident_duration_detailed(timeline)
 
     # 동적 action items 생성
-    auto_actions, recommendations = _generate_dynamic_actions(timeline, affected, duration_seconds)
+    auto_actions, recommendations = _generate_dynamic_actions(timeline, affected, duration_result.duration_seconds)
 
     return {
         "incident_id": incident_id,
         "generated_at": timezone.now().isoformat(),
-        "started_at": started_at,
-        "resolved_at": resolved_at,
-        "duration_seconds": duration_seconds,
+        "started_at": duration_result.started_at,
+        "resolved_at": duration_result.resolved_at,
+        "duration_seconds": duration_result.duration_seconds,
+        "downtime_seconds": duration_result.downtime_seconds,
+        "validation_seconds": duration_result.validation_seconds,
         "summary": {
             "affected_services": affected,
             "unaffected_services": unaffected,
