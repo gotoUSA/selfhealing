@@ -59,10 +59,7 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
     """
 
     if not DJANGO_AVAILABLE:
-        raise ImportError(
-            "Django is required to use AbstractCascadeEventArchive. "
-            "Install it with: pip install django"
-        )
+        raise ImportError("Django is required to use AbstractCascadeEventArchive. " "Install it with: pip install django")
 
     # ========================================
     # Trigger Type Choices
@@ -204,6 +201,16 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
         help_text="데이터 스키마 버전",
     )
 
+    # ========================================
+    # Test Mode Flag
+    # ========================================
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Is Test Event",
+        help_text="테스트 환경 이벤트 여부 (X-Test-Mode에서 생성 시 True)",
+    )
+
     class Meta:
         abstract = True
         ordering = ["-timestamp"]
@@ -224,6 +231,11 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
             models.Index(
                 fields=["current_hash"],
                 name="idx_cascade_hash",
+            ),
+            # 테스트 데이터 시간순 조회용
+            models.Index(
+                fields=["is_test", "-timestamp"],
+                name="idx_cascade_test_ts",
             ),
         ]
 
@@ -293,10 +305,9 @@ class AbstractCascadeEventArchive(models.Model if DJANGO_AVAILABLE else object):
             success_count=event.success_count,
             failure_count=event.failure_count,
             timestamp=timestamp,
-            external_trace=(
-                event.external_trace.to_dict() if event.external_trace else None
-            ),
+            external_trace=(event.external_trace.to_dict() if event.external_trace else None),
             version=getattr(event, "version", "1.0"),
+            is_test=getattr(event, "is_test", False),
         )
 
 

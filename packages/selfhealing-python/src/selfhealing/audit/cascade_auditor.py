@@ -54,6 +54,7 @@ from selfhealing.audit.cascade_event import (
     generate_event_id,
     get_current_timestamp,
 )
+from selfhealing.core.test_mode_context import TestModeContext
 from selfhealing.settings.cascade_retention import get_cascade_retention_settings
 
 logger = logging.getLogger(__name__)
@@ -114,11 +115,7 @@ class CascadeEventAuditor:
         self._lock = threading.RLock()
         self._enable_load_shedding = enable_load_shedding
         self._load_shedding = None  # Lazy init
-        self._max_index_size = (
-            max_index_size
-            if max_index_size is not None
-            else _get_max_cascade_index_size()
-        )
+        self._max_index_size = max_index_size if max_index_size is not None else _get_max_cascade_index_size()
 
     def _get_backend(self):
         """State backend 획득."""
@@ -191,6 +188,7 @@ class CascadeEventAuditor:
                 timestamp=now,
                 previous_hash=previous_hash,
                 external_trace=external_trace,
+                is_test=TestModeContext.is_synthetic(),
             )
 
             # 6. 해시 계산 및 설정
@@ -310,9 +308,7 @@ class CascadeEventAuditor:
         if not index_data:
             return []
 
-        cascade_ids = (
-            index_data if isinstance(index_data, list) else index_data.get("ids", [])
-        )
+        cascade_ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
         cascade_ids = cascade_ids[:limit]
 
         events = []
@@ -340,9 +336,7 @@ class CascadeEventAuditor:
         if not index_data:
             return 0
 
-        cascade_ids = (
-            index_data if isinstance(index_data, list) else index_data.get("ids", [])
-        )
+        cascade_ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
         return len(cascade_ids)
 
     def verify_chain_integrity(
@@ -565,11 +559,7 @@ class CascadeEventAuditor:
         # 이벤트 수 계산
         index_data = backend.get(self.CASCADE_INDEX_KEY.format(namespace=namespace))
         if index_data:
-            ids = (
-                index_data
-                if isinstance(index_data, list)
-                else index_data.get("ids", [])
-            )
+            ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
             event_count = len(ids)
         else:
             event_count = 0
@@ -664,8 +654,7 @@ class CascadeEventAuditor:
         if not checkpoint_found:
             # 체크포인트 해시를 찾을 수 없음 (데이터 불일치)
             logger.warning(
-                f"[CascadeAudit] Checkpoint hash not found, "
-                f"falling back to full verification: namespace={namespace}"
+                f"[CascadeAudit] Checkpoint hash not found, " f"falling back to full verification: namespace={namespace}"
             )
             return self.verify_chain_integrity(namespace)
 
@@ -755,9 +744,7 @@ class CascadeEventAuditor:
         filtered = []
         for event in all_events:
             try:
-                event_time = datetime.fromisoformat(
-                    event.timestamp.replace("Z", "+00:00")
-                )
+                event_time = datetime.fromisoformat(event.timestamp.replace("Z", "+00:00"))
                 if event_time > cutoff:
                     filtered.append(event)
             except ValueError:
@@ -802,11 +789,7 @@ class CascadeEventAuditor:
         # 기존 인덱스 조회
         index_data = backend.get(key)
         if index_data:
-            ids = (
-                index_data
-                if isinstance(index_data, list)
-                else index_data.get("ids", [])
-            )
+            ids = index_data if isinstance(index_data, list) else index_data.get("ids", [])
         else:
             ids = []
 
@@ -879,8 +862,7 @@ class CascadeEventAuditor:
         if not decision["accepted"]:
             # 드롭
             logger.warning(
-                f"[CascadeAudit] Event dropped by load shedding: "
-                f"trigger={trigger_type}, reason={decision['reason']}"
+                f"[CascadeAudit] Event dropped by load shedding: " f"trigger={trigger_type}, reason={decision['reason']}"
             )
 
             # 폴백 권장 시 로컬에 저장
@@ -1016,19 +998,13 @@ class CascadeEventAuditor:
             for line in f:
                 try:
                     entry = json.loads(line.strip())
-                    if (
-                        entry.get("namespace") == namespace
-                        and entry.get("type") != "dropped"
-                    ):
+                    if entry.get("namespace") == namespace and entry.get("type") != "dropped":
                         entries.append(entry)
                 except json.JSONDecodeError:
                     continue
 
         if dry_run:
-            logger.info(
-                f"[CascadeAudit] WAL recovery dry run: "
-                f"found {len(entries)} entries, namespace={namespace}"
-            )
+            logger.info(f"[CascadeAudit] WAL recovery dry run: " f"found {len(entries)} entries, namespace={namespace}")
             return {
                 "status": "dry_run",
                 "namespace": namespace,
@@ -1055,8 +1031,7 @@ class CascadeEventAuditor:
             self._remove_namespace_from_wal(namespace)
 
         logger.info(
-            f"[CascadeAudit] WAL recovery completed: "
-            f"recovered={recovered}, failed={failed}, namespace={namespace}"
+            f"[CascadeAudit] WAL recovery completed: " f"recovered={recovered}, failed={failed}, namespace={namespace}"
         )
 
         return {

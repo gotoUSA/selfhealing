@@ -473,6 +473,9 @@ class CascadeEvent:
     version: str = "1.0"
     """스키마 버전."""
 
+    is_test: bool = False
+    """테스트 환경 이벤트 여부 (X-Test-Mode에서 생성 시 True)."""
+
     total_effects: int = field(default=0, init=False)
     """총 효과 수."""
 
@@ -525,6 +528,7 @@ class CascadeEvent:
             "previous_hash": self.previous_hash,
             "current_hash": self.current_hash,
             "version": self.version,
+            "is_test": self.is_test,
             "total_effects": self.total_effects,
             "success_count": self.success_count,
             "failure_count": self.failure_count,
@@ -562,6 +566,7 @@ class CascadeEvent:
             current_hash=data.get("current_hash"),
             external_trace=external_trace,
             version=data.get("version", "1.0"),
+            is_test=data.get("is_test", False),
         )
 
         return event
