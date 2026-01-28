@@ -743,7 +743,8 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
     CB 복구 시 자동 Post-mortem 생성.
 
     Settings에서 auto_enabled가 True인 경우에만 동작합니다.
-    실제 프로덕션 장애에 대한 자동 Post-mortem 리포트를 생성합니다.
+    incident_group_enabled가 True이면 IncidentGroupManager를 통해 그룹화합니다.
+    그룹화된 경우 그룹 종료 시 통합 Postmortem이 생성됩니다.
     """
     service_name = event.data.get("service_name", "unknown")
 
@@ -759,11 +760,84 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
 
         min_duration = settings.auto_min_duration
         history_limit = settings.history_limit
+
+        # 인시던트 그룹핑 활성화 여부 확인
+        incident_group_enabled = getattr(settings, "incident_group_enabled", True)
     except Exception as e:
         logger.warning(f"[EventHandler] Failed to get postmortem settings: {e}")
         return
 
-    # Post-mortem 생성
+    # 인시던트 그룹핑 처리
+    if incident_group_enabled:
+        try:
+            _handle_incident_group(event, service_name, settings)
+            return  # 그룹핑 시 즉시 Postmortem 생성 안함
+        except Exception as e:
+            logger.warning(f"[EventHandler] Incident grouping failed, fallback to individual: {e}")
+            # Fallback: 개별 Postmortem 생성
+
+    # 개별 Post-mortem 생성 (그룹핑 비활성화 또는 실패 시)
+    _create_individual_postmortem(event, service_name, settings, min_duration, history_limit)
+
+
+def _handle_incident_group(event: SelfHealingEvent, service_name: str, settings) -> None:
+    """
+    CB CLOSED 이벤트를 IncidentGroup에 추가.
+
+    새 그룹 생성 시 종료 타이머를 스케줄링합니다.
+    """
+    from selfhealing.services.postmortem.incident_group import get_incident_group_manager
+
+    manager = get_incident_group_manager()
+    namespace = event.data.get("namespace", "default")
+
+    # 그룹에 인시던트 추가
+    group_id, is_new_group = manager.add_incident(
+        service_name=service_name,
+        event=event,
+        namespace=namespace,
+    )
+
+    if is_new_group:
+        # 새 그룹 생성 시 종료 타이머 스케줄링
+        _schedule_group_close(group_id, namespace, settings)
+        logger.info(f"[EventHandler] New incident group created: {group_id} " f"(service={service_name})")
+    else:
+        logger.info(f"[EventHandler] Incident added to existing group: {group_id} " f"(service={service_name})")
+
+
+def _schedule_group_close(group_id: str, namespace: str, settings) -> None:
+    """그룹 종료 Celery 태스크 스케줄링."""
+    try:
+        from selfhealing.adapters.celery.tasks import close_incident_group
+
+        window_seconds = getattr(settings, "incident_group_window_seconds", 600)
+
+        # 윈도우 종료 후 그룹 종료 태스크 실행
+        close_incident_group.apply_async(
+            kwargs={
+                "group_id": group_id,
+                "namespace": namespace,
+            },
+            countdown=window_seconds,
+        )
+
+        logger.debug(f"[EventHandler] Scheduled group close: {group_id} " f"(delay={window_seconds}s)")
+
+    except ImportError:
+        logger.debug("[EventHandler] Celery tasks not available, skipping group close scheduling")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to schedule group close: {e}")
+
+
+def _create_individual_postmortem(
+    event: SelfHealingEvent,
+    service_name: str,
+    settings,
+    min_duration: int,
+    history_limit: int,
+) -> None:
+    """개별 Post-mortem 생성 (그룹핑 비활성화 또는 Fallback 시)."""
     try:
         from selfhealing.api.django.views.xtest.base import (
             collect_system_snapshot,
@@ -807,6 +881,15 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
                 f"duration {duration:.0f}s < min {min_duration}s"
             )
             return
+
+        # 무결성 봉인
+        try:
+            from selfhealing.services.postmortem.integrity_sealer import get_integrity_sealer
+
+            sealer = get_integrity_sealer()
+            postmortem = sealer.seal(postmortem)
+        except Exception as seal_error:
+            logger.warning(f"[EventHandler] Integrity seal failed: {seal_error}")
 
         # 저장
         add_healing_incident(postmortem)

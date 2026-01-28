@@ -103,6 +103,57 @@ class PostmortemSettings(BaseSettings):
         description="인시던트 목록 조회 기본 limit",
     )
 
+    # ==========================================================================
+    # Incident Group - 연쇄 CB 이벤트 그룹핑
+    # ==========================================================================
+    incident_group_enabled: bool = Field(
+        default=True,
+        description="연쇄 CB 이벤트 그룹핑 활성화",
+    )
+
+    incident_group_window_seconds: int = Field(
+        default=600,
+        ge=60,
+        le=3600,
+        description="그룹핑 윈도우 크기 (초, 기본 10분)",
+    )
+
+    incident_group_inactivity_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="비활성 종료 시간 (초, 기본 2분)",
+    )
+
+    incident_group_min_count: int = Field(
+        default=2,
+        ge=1,
+        le=100,
+        description="그룹화 최소 인시던트 수",
+    )
+
+    # ==========================================================================
+    # Notification Aggregation - 알림 집계 (Alert Storm 방지)
+    # ==========================================================================
+    notification_aggregation_enabled: bool = Field(
+        default=True,
+        description="알림 집계 활성화",
+    )
+
+    notification_aggregation_window_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description="알림 집계 윈도우 크기 (초)",
+    )
+
+    notification_aggregation_max_wait_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=600,
+        description="알림 최대 대기 시간 (초)",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

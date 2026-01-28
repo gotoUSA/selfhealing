@@ -2,10 +2,10 @@
 
 **문서 버전:** 1.1
 **작성일:** 2026-01-28
-**수정일:** 2026-01-28
+**수정일:** 2026-01-29
 **선행 문서:** [146_POSTMORTEM_LIFECYCLE_INTEGRATION.md](146_POSTMORTEM_LIFECYCLE_INTEGRATION.md)
 **관련 코드:** `audit/integrity/local_manager.py`, `idempotency_service.py`
-**상태:** 설계 완료
+**상태:** 구현 완료
 
 ---
 
@@ -321,35 +321,35 @@ SELFHEALING_POSTMORTEM_INCIDENT_GROUP_MIN_COUNT=2
 
 ### 12.1 IncidentGroupManager
 
-- [ ] `services/postmortem/incident_group.py` 생성
-- [ ] `IncidentGroupManager` 클래스 구현
-- [ ] Redis ZSET 기반 그룹 관리
-- [ ] In-Memory Fallback 구현
+- [x] `services/postmortem/incident_group.py` 생성
+- [x] `IncidentGroupManager` 클래스 구현
+- [x] Redis ZSET 기반 그룹 관리
+- [x] In-Memory Fallback 구현
 
 ### 12.2 핸들러 수정
 
-- [ ] `_on_circuit_breaker_closed_postmortem()` 수정
-- [ ] `IncidentGroupManager.add_incident()` 호출
-- [ ] 그룹 종료 시 Postmortem 생성
+- [x] `_on_circuit_breaker_closed_postmortem()` 수정
+- [x] `IncidentGroupManager.add_incident()` 호출
+- [x] 그룹 종료 시 Postmortem 생성
 
 ### 12.3 Celery Task
 
-- [ ] `close_incident_group` 태스크 구현
-- [ ] 그룹 생성 시 태스크 스케줄링
-- [ ] 비활성 감지 스케줄링
+- [x] `close_incident_group` 태스크 구현
+- [x] 그룹 생성 시 태스크 스케줄링
+- [x] 비활성 감지 스케줄링
 
 ### 12.4 Settings
 
-- [ ] 그룹핑 관련 설정 추가
-- [ ] 환경 변수 매핑
+- [x] 그룹핑 관련 설정 추가
+- [x] 환경 변수 매핑
 
 ### 12.5 테스트
 
-- [ ] 단일 인시던트 → 개별 Postmortem 생성
-- [ ] 다중 인시던트 → 그룹 Postmortem 생성
-- [ ] 타임아웃 후 그룹 종료 확인
-- [ ] 비활성 종료 확인
-- [ ] Redis Fallback 테스트
+- [x] 단일 인시던트 → 개별 Postmortem 생성
+- [x] 다중 인시던트 → 그룹 Postmortem 생성
+- [x] 타임아웃 후 그룹 종료 확인
+- [x] 비활성 종료 확인
+- [x] Redis Fallback 테스트
 
 ---
 
@@ -423,10 +423,10 @@ SELFHEALING_POSTMORTEM_INCIDENT_GROUP_MIN_COUNT=2
 
 ### 15.1 무결성 연동
 
-- [ ] `HashChainManager` import
-- [ ] Postmortem 생성 후 `add_integrity()` 호출
-- [ ] 무결성 필드 Postmortem 스키마에 추가
-- [ ] 검증 API 엔드포인트 구현
+- [x] `HashChainManager` import
+- [x] Postmortem 생성 후 `add_integrity()` 호출
+- [x] 무결성 필드 Postmortem 스키마에 추가
+- [x] 검증 API 엔드포인트 구현
 
 ---
 
@@ -504,11 +504,11 @@ IncidentGroup은 Postmortem 병합은 해결하지만, 알림 폭주(Alert Storm
 
 ### 16.8 구현 체크리스트 (추가)
 
-- [ ] `NotificationAggregator` 클래스 구현
-- [ ] Redis ZSET 기반 대기 큐
-- [ ] 집계 윈도우 타이머 (Celery Task)
-- [ ] `IncidentSummaryNotification` 데이터클래스
-- [ ] 기존 `PostmortemNotifier`와 통합
+- [x] `NotificationAggregator` 클래스 구현
+- [x] Redis ZSET 기반 대기 큐
+- [x] 집계 윈도우 타이머 (Celery Task)
+- [x] `IncidentSummaryNotification` 데이터클래스
+- [x] 기존 `PostmortemNotifier`와 통합
 
 ---
 

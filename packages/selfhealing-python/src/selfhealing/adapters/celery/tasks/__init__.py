@@ -81,6 +81,15 @@ from .persistence import (
 )
 
 # ============================================================
+# Postmortem Tasks
+# ============================================================
+from .postmortem import (
+    check_stale_incident_groups,
+    close_incident_group,
+    flush_aggregated_notifications,
+)
+
+# ============================================================
 # Public API
 # ============================================================
 __all__ = [
@@ -103,4 +112,8 @@ __all__ = [
     "check_and_report_sla_breaches",
     "emit_selfhealing_heartbeat",
     "notify_failsafe_recovery",
+    # Postmortem
+    "close_incident_group",
+    "flush_aggregated_notifications",
+    "check_stale_incident_groups",
 ]
