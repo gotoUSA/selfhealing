@@ -8,6 +8,7 @@ from .order import Order, OrderItem
 from .password_reset import PasswordResetToken
 from .payment import Payment, PaymentLog
 from .point import PointHistory
+from .postmortem_record import PostmortemRecord
 from .product import Category, Product, ProductImage, ProductReview
 from .product_qa import ProductAnswer, ProductQuestion
 from .rate_limit_state import RateLimitState
@@ -48,4 +49,5 @@ __all__ = [
     "SellerProfile",
     "WebhookEvent",
     "RateLimitState",
+    "PostmortemRecord",
 ]

@@ -1,9 +1,10 @@
 # 132. Postmortem 영속성 (Persistence)
 
-**문서 버전:** 1.0
+**문서 버전:** 1.1
 **작성일:** 2026-01-27
+**수정일:** 2026-01-28
 **선행 문서:** [131_POSTMORTEM_NOTIFICATION.md](131_POSTMORTEM_NOTIFICATION.md)
-**상태:** 분석 완료
+**상태:** ✅ 구현 완료
 
 ---
 
@@ -189,27 +190,36 @@ GET /api/self-healing/postmortem/stats/?period=30d
 
 ### 7.1 Model 생성
 
-- [ ] `Postmortem` Django Model 정의
-- [ ] Migration 파일 생성
+- [x] `Postmortem` Django Model 정의
+  - `AbstractPostmortemRecord` 추상 모델: `selfhealing/adapters/django/models.py`
+  - `PostmortemRecord` 구체 모델: `shopping/models/postmortem_record.py`
+- [x] Migration 파일 생성: `shopping/migrations/0032_add_postmortem_record.py`
 - [ ] Admin 등록 (선택적)
 
 ### 7.2 저장 함수 수정
 
-- [ ] `add_healing_incident()` PostgreSQL 저장 추가
-- [ ] 트랜잭션 처리
-- [ ] 에러 핸들링 (DB 실패 시 In-Memory fallback)
+- [x] `add_healing_incident()` PostgreSQL 저장 추가
+  - `_save_incident_to_db()` 함수 추가
+- [x] 트랜잭션 처리
+- [x] 에러 핸들링 (DB 실패 시 In-Memory fallback)
 
 ### 7.3 조회 함수 수정
 
-- [ ] `get_healing_incidents()` DB 조회로 변경
-- [ ] 필터링 파라미터 지원
-- [ ] 페이지네이션 지원
+- [x] `get_healing_incidents()` DB 조회로 변경
+  - `_get_incidents_from_db()` 함수 추가
+- [x] 필터링 파라미터 지원 (start_date, end_date, service, min_duration)
+- [x] 페이지네이션 지원 (offset 파라미터)
 
 ### 7.4 Redis 통합 (선택적)
 
 - [ ] Healing Events Redis 저장
 - [ ] TTL 설정
 - [ ] 다중 워커 동기화
+
+### 7.5 테스트
+
+- [x] 순수 단위 테스트: `packages/selfhealing-python/tests/unit/resilience/test_postmortem_persistence.py`
+- [x] 통합 테스트: `tests/integration/selfhealing/test_postmortem_persistence_integration.py`
 
 ---
 
