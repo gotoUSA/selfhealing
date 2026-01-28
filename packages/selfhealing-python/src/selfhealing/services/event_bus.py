@@ -740,9 +740,10 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
 
 def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
     """
-    CB 복구 시 자동 Post-mortem 생성 (Stage 51 확장).
+    CB 복구 시 자동 Post-mortem 생성.
 
-    Settings에서 xtest_auto_postmortem_enabled가 True인 경우에만 동작합니다.
+    Settings에서 auto_postmortem_enabled가 True인 경우에만 동작합니다.
+    실제 프로덕션 장애에 대한 자동 Post-mortem 리포트를 생성합니다.
     """
     service_name = event.data.get("service_name", "unknown")
 
@@ -752,11 +753,11 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
 
         settings = get_api_view_settings()
 
-        if not settings.xtest_auto_postmortem_enabled:
+        if not settings.auto_postmortem_enabled:
             logger.debug(f"[EventHandler] Auto postmortem disabled, skipping for {service_name}")
             return
 
-        min_duration = settings.xtest_auto_postmortem_min_duration
+        min_duration = settings.auto_postmortem_min_duration
     except Exception as e:
         logger.warning(f"[EventHandler] Failed to get api_view settings: {e}")
         return
@@ -764,7 +765,6 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
     # Post-mortem 생성
     try:
         from selfhealing.api.django.views.xtest.base import (
-            add_healing_incident,
             collect_system_snapshot,
             get_healing_events,
         )
@@ -776,6 +776,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         from selfhealing.services.circuit_breaker_service import (
             get_circuit_breaker_service,
         )
+        from selfhealing.services.postmortem_store import add_healing_incident
 
         # 히스토리 및 상태 수집
         bus = get_event_bus()

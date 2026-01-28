@@ -197,37 +197,37 @@ Post-mortem은 **실제 장애**에 대한 사후 분석 리포트이나, 현재
 
 ### 9.1 Phase 1
 
-- [ ] `services/postmortem_store.py` 생성
-- [ ] `_healing_incidents` 리스트 이동
-- [ ] `add_healing_incident()` 함수 이동
-- [ ] `get_healing_incidents()` 함수 이동
-- [ ] `get_healing_incidents_count()` 함수 이동
-- [ ] `event_bus.py` import 경로 수정
-- [ ] 테스트 통과 확인
+- [x] `services/postmortem_store.py` 생성
+- [x] `_healing_incidents` 리스트 이동
+- [x] `add_healing_incident()` 함수 이동
+- [x] `get_healing_incidents()` 함수 이동
+- [x] `get_healing_incidents_count()` 함수 이동
+- [x] `event_bus.py` import 경로 수정
+- [x] 테스트 통과 확인
 
 ### 9.2 Phase 2
 
-- [ ] `views/postmortem.py` 생성
-- [ ] `PostmortemGeneratorView` 이동
-- [ ] `XTestModeMixin` 제거
-- [ ] 권한 클래스 변경 (`IsAuthenticated`)
-- [ ] `GetHealingIncidentsView` 이동
-- [ ] `urls.py`에 새 경로 추가
-- [ ] 테스트 통과 확인
+- [x] `views/postmortem.py` 생성
+- [x] `PostmortemGeneratorView` 이동
+- [x] `XTestModeMixin` 제거
+- [x] 권한 클래스 변경 (`IsAuthenticated`)
+- [x] `GetHealingIncidentsView` 이동
+- [x] `urls.py`에 새 경로 추가
+- [x] 테스트 통과 확인
 
 ### 9.3 Phase 3
 
-- [ ] Settings 필드명 변경
-- [ ] 기존 필드명 deprecated alias 추가
-- [ ] 환경 변수명 변경 문서화
-- [ ] 테스트 통과 확인
+- [x] Settings 필드명 변경
+- [x] 기존 필드명 deprecated alias 추가
+- [x] 환경 변수명 변경 문서화
+- [x] 테스트 통과 확인
 
 ### 9.4 Phase 4
 
-- [ ] `observability.py`에서 View 제거
-- [ ] `xtest/__init__.py` export 정리
-- [ ] Deprecated URL 경로 추가
-- [ ] 마이그레이션 가이드 문서화
+- [x] `observability.py`에서 View 제거
+- [x] `xtest/__init__.py` export 정리
+- [x] Deprecated URL 경로 추가
+- [x] 마이그레이션 가이드 문서화
 
 ---
 

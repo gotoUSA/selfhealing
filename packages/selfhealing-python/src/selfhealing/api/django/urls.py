@@ -266,6 +266,12 @@ from selfhealing.api.django.views.tiering import (
     TierResolveLookupView,
 )
 
+# Post-mortem Views (분리된 실제 장애 분석 API)
+from selfhealing.api.django.views.postmortem import (
+    GetHealingIncidentsView as PostmortemIncidentsView,
+    PostmortemGeneratorView as PostmortemGenerateView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -1033,6 +1039,24 @@ try:
 except ImportError:
     # DNA 서비스가 설치되지 않은 경우 스킵
     pass
+
+# =============================================================================
+# Post-mortem Endpoints (실제 장애 분석 - X-Test 헤더 불필요)
+# =============================================================================
+urlpatterns += [
+    # Post-mortem 리포트 생성 (인증 필요, X-Test 헤더 불필요)
+    path(
+        "postmortem/generate/",
+        PostmortemGenerateView.as_view(),
+        name="postmortem-generate",
+    ),
+    # Post-mortem 인시던트 목록 조회
+    path(
+        "postmortem/incidents/",
+        PostmortemIncidentsView.as_view(),
+        name="postmortem-incidents",
+    ),
+]
 
 # =============================================================================
 # X-Test-Mode Endpoints (Chaos Proof)

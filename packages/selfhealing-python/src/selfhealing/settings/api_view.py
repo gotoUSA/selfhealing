@@ -141,34 +141,60 @@ class ApiViewSettings(BaseSettings):
         description="XTest 타임라인 조회 기본 limit",
     )
 
-    xtest_postmortem_history_limit: int = Field(
+    # Postmortem 히스토리 limit (새 필드명)
+    postmortem_history_limit: int = Field(
         default=100,
         ge=50,
         le=500,
         description="Postmortem 생성 시 히스토리 조회 limit",
     )
 
-    xtest_incidents_default_limit: int = Field(
+    # Postmortem 인시던트 기본 limit (새 필드명)
+    postmortem_incidents_default_limit: int = Field(
         default=10,
         ge=5,
         le=100,
-        description="XTest 인시던트 목록 조회 기본 limit",
+        description="Postmortem 인시던트 목록 조회 기본 limit",
     )
 
     # ==========================================================================
-    # XTest Auto Postmortem - CB CLOSED 시 자동 Post-mortem 생성
+    # Auto Postmortem - CB CLOSED 시 자동 Post-mortem 생성 (새 필드명)
     # ==========================================================================
-    xtest_auto_postmortem_enabled: bool = Field(
+    auto_postmortem_enabled: bool = Field(
         default=False,
         description="CB CLOSED 시 자동 Post-mortem 생성 활성화",
     )
 
-    xtest_auto_postmortem_min_duration: int = Field(
+    auto_postmortem_min_duration: int = Field(
         default=30,
         ge=0,
         le=3600,
         description="자동 Post-mortem 생성 최소 인시던트 지속 시간 (초)",
     )
+
+    # ==========================================================================
+    # Deprecated Aliases (3개월 후 제거 예정)
+    # xtest_ 접두사 필드들은 새 필드명으로 자동 매핑됨
+    # ==========================================================================
+    @property
+    def xtest_postmortem_history_limit(self) -> int:
+        """Deprecated: Use postmortem_history_limit instead."""
+        return self.postmortem_history_limit
+
+    @property
+    def xtest_incidents_default_limit(self) -> int:
+        """Deprecated: Use postmortem_incidents_default_limit instead."""
+        return self.postmortem_incidents_default_limit
+
+    @property
+    def xtest_auto_postmortem_enabled(self) -> bool:
+        """Deprecated: Use auto_postmortem_enabled instead."""
+        return self.auto_postmortem_enabled
+
+    @property
+    def xtest_auto_postmortem_min_duration(self) -> int:
+        """Deprecated: Use auto_postmortem_min_duration instead."""
+        return self.auto_postmortem_min_duration
 
     # ==========================================================================
     # Post-mortem Notification - CB 복구 후 Post-mortem 알림

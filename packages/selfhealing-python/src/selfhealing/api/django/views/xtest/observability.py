@@ -1,16 +1,20 @@
 """
-X-Test-Mode Observability & Blast Radius Views (Stage 51)
+X-Test-Mode Observability & Blast Radius Views
 
-Stage 51 Observability 관련 API:
+테스트용 Observability 관련 API:
 - HealingTimelineView: 힐링 타임라인 조회
 - BlastRadiusTestView: 단일 서비스 Blast Radius 격리 테스트
 - MultiServiceBlastRadiusView: 다중 서비스 격리 매트릭스 테스트
-- PostmortemGeneratorView: Post-mortem 자동 생성
 - RecordHealingEventView: 힐링 이벤트 기록
-- GetHealingIncidentsView: 인시던트 목록 조회
+
+DEPRECATED (3개월 후 제거 예정):
+- PostmortemGeneratorView: views/postmortem.py로 이동됨
+- GetHealingIncidentsView: views/postmortem.py로 이동됨
+  새 경로: /postmortem/generate/, /postmortem/incidents/
 """
 
 import logging
+import warnings
 
 from django.utils import timezone
 from rest_framework import status
@@ -540,7 +544,9 @@ def _generate_postmortem_data(
 
 class PostmortemGeneratorView(XTestModeMixin, APIView):
     """
-    Stage 51: 자동 Post-mortem 리포트 생성 API.
+    DEPRECATED: /postmortem/generate/ 경로를 사용하세요.
+
+    자동 Post-mortem 리포트 생성 API (X-Test 전용, 3개월 후 제거 예정).
 
     POST /api/self-healing/xtest/generate-postmortem/
     Body: {"incident_id": "HEAL-2025-1226-001"} (optional)
@@ -549,6 +555,12 @@ class PostmortemGeneratorView(XTestModeMixin, APIView):
     """
 
     def post(self, request: Request) -> Response:
+        warnings.warn(
+            "xtest/generate-postmortem/ is deprecated. Use /postmortem/generate/ instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
@@ -673,12 +685,20 @@ class RecordHealingEventView(XTestModeMixin, APIView):
 
 class GetHealingIncidentsView(XTestModeMixin, APIView):
     """
-    Stage 51: 힐링 인시던트 목록 조회 API.
+    DEPRECATED: /postmortem/incidents/ 경로를 사용하세요.
+
+    힐링 인시던트 목록 조회 API (X-Test 전용, 3개월 후 제거 예정).
 
     GET /api/self-healing/xtest/healing-incidents/?limit=10
     """
 
     def get(self, request: Request) -> Response:
+        warnings.warn(
+            "xtest/healing-incidents/ is deprecated. Use /postmortem/incidents/ instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         denied = self.check_chaos_permission(request)
         if denied:
             return denied
