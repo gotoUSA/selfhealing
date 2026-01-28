@@ -3,7 +3,7 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-27
 **선행 문서:** [127_POSTMORTEM_ACTION_ITEMS.md](127_POSTMORTEM_ACTION_ITEMS.md)
-**상태:** 구현 준비
+**상태:** ✅ 구현 완료 (2026-01-28)
 
 ---
 
@@ -164,32 +164,35 @@ CB CLOSED 이벤트만으로는 인시던트 시작 시점(CB OPEN)을 알 수 �
 
 ### 8.1 Settings 확장
 
-- [ ] `xtest_auto_postmortem_enabled` 설정 추가
-- [ ] `xtest_auto_postmortem_min_duration` 설정 추가
-- [ ] 환경 변수 문서화
+- [x] `xtest_auto_postmortem_enabled` 설정 추가
+- [x] `xtest_auto_postmortem_min_duration` 설정 추가
+- [x] 환경 변수 문서화
 
 ### 8.2 로직 추출
 
-- [ ] `generate_postmortem_for_service()` 함수 추출
-- [ ] `PostmortemGeneratorView.post()`에서 추출 함수 호출하도록 리팩토링
+- [x] `_generate_postmortem_data()` 함수 추출 (observability.py)
+- [x] `PostmortemGeneratorView.post()`에서 추출 함수 호출하도록 리팩토링
 
 ### 8.3 핸들러 구현
 
-- [ ] `_on_circuit_breaker_closed_postmortem()` 함수 생성
-- [ ] Settings에서 활성화 여부 확인
-- [ ] 최소 duration 확인 (선택적)
-- [ ] Post-mortem 생성 및 저장
+- [x] `_on_circuit_breaker_closed_postmortem()` 함수 생성
+- [x] Settings에서 활성화 여부 확인
+- [x] 최소 duration 확인 (선택적)
+- [x] Post-mortem 생성 및 저장
 
 ### 8.4 핸들러 등록
 
-- [ ] `register_default_handlers()`에 새 핸들러 등록
-- [ ] Priority LOW로 설정
+- [x] `register_default_handlers()`에 새 핸들러 등록
+- [x] Priority LOW로 설정
 
 ### 8.5 테스트
 
-- [ ] 설정 비활성화 시 Post-mortem 미생성 확인
-- [ ] 설정 활성화 시 자동 생성 확인
-- [ ] 저장된 인시던트 조회 확인
+- [x] 설정 비활성화 시 Post-mortem 미생성 확인
+- [x] 설정 활성화 시 자동 생성 확인
+- [x] 저장된 인시던트 조회 확인
+
+**테스트 파일:** `packages/selfhealing-python/tests/unit/resilience/test_postmortem_auto_trigger.py`
+**테스트 결과:** 10개 테스트 전체 통과
 
 ---
 
