@@ -84,24 +84,11 @@ class SnapshotBuilder:
     def _get_redis_client(self):
         """Redis 클라이언트 반환."""
         try:
-            from django_redis import get_redis_connection
+            from selfhealing.adapters.redis import get_redis_client
 
-            return get_redis_connection("default")
+            return get_redis_client()
         except ImportError:
-            pass
-
-        # Fallback: direct redis from settings
-        try:
-            import redis
-            from django.conf import settings
-
-            redis_url = getattr(settings, "SELFHEALING_REDIS_URL", None)
-            if redis_url:
-                return redis.from_url(redis_url)
-        except (ImportError, Exception):
-            pass
-
-        return None
+            return None
 
     def _get_open_snapshot(self) -> dict[str, Any]:
         """Redis에서 CB OPEN 시점 스냅샷 조회."""
@@ -380,24 +367,11 @@ def delete_open_snapshot_from_redis(service_name: str) -> bool:
 def get_redis_client():
     """Redis 클라이언트를 가져옵니다. 모킹 용이성을 위한 래퍼."""
     try:
-        from django_redis import get_redis_connection
+        from selfhealing.adapters.redis import get_redis_client as _get_redis_client
 
-        return get_redis_connection("default")
+        return _get_redis_client()
     except ImportError:
-        pass
-
-    # Fallback: direct redis from settings
-    try:
-        import redis
-        from django.conf import settings
-
-        redis_url = getattr(settings, "SELFHEALING_REDIS_URL", None)
-        if redis_url:
-            return redis.from_url(redis_url)
-    except (ImportError, Exception):
-        pass
-
-    return None
+        return None
 
 
 # =============================================================================
