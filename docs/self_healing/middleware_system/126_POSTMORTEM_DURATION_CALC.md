@@ -159,7 +159,71 @@ event.data.state_change 존재
 
 ---
 
-## 8. 에러 처리
+## 8. 상태별 소요시간 세분화
+
+### 8.1 필요성
+
+단순 전체 duration만으로는 장애 분석에 한계가 있음:
+
+| 구간 | 의미 | 활용 |
+|------|------|------|
+| OPEN → HALF_OPEN | 실제 서비스 중단 시간 | SLA 위반 계산 |
+| HALF_OPEN → CLOSED | 복구 검증 시간 | 복구 전략 효율성 평가 |
+
+### 8.2 현재 데이터 소스 분석
+
+**CircuitBreakerStateData (interfaces/repositories.py):**
+
+| 필드 | 존재 | 설명 |
+|------|------|------|
+| `opened_at` | ✅ | OPEN 상태 진입 시각 |
+| `half_open_request_count` | ✅ | HALF_OPEN 요청 카운트 |
+| `half_open_at` | ❌ | HALF_OPEN 진입 시각 미기록 |
+| `closed_at` | ❌ | CLOSED 진입 시각 미기록 |
+
+**EventBus 이벤트 (services/event_bus.py):**
+
+| EventType | 활용 |
+|-----------|------|
+| `CIRCUIT_BREAKER_OPENED` | `opened_at` 추출 가능 |
+| `CIRCUIT_BREAKER_HALF_OPENED` | `half_opened_at` 추출 가능 |
+| `CIRCUIT_BREAKER_CLOSED` | `closed_at` 추출 가능 |
+
+### 8.3 세분화된 필드 설계
+
+| 필드명 | 타입 | 계산 방법 |
+|--------|------|----------|
+| `duration_seconds` | `float` | 전체 (OPEN → CLOSED) |
+| `downtime_seconds` | `float` | OPEN → HALF_OPEN |
+| `validation_seconds` | `float` | HALF_OPEN → CLOSED |
+
+### 8.4 타임스탬프 추출 로직
+
+| 단계 | 동작 |
+|------|------|
+| 1 | 타임라인에서 `CIRCUIT_BREAKER_OPENED` 이벤트 첫 번째 찾기 |
+| 2 | 타임라인에서 `CIRCUIT_BREAKER_HALF_OPENED` 이벤트 첫 번째 찾기 |
+| 3 | 타임라인에서 `CIRCUIT_BREAKER_CLOSED` 이벤트 마지막 찾기 |
+| 4 | 각 구간 시간차 계산 |
+
+### 8.5 예외 처리
+
+| 상황 | 처리 |
+|------|------|
+| HALF_OPEN 없이 직접 CLOSED | `downtime_seconds = duration_seconds`, `validation_seconds = 0` |
+| HALF_OPEN만 있고 CLOSED 없음 | 진행 중 인시던트로 처리 |
+| 여러 번 HALF_OPEN 진입 | 첫 번째 HALF_OPEN 사용 |
+
+### 8.6 구현 체크리스트 (추가)
+
+- [ ] 타임라인에서 HALF_OPEN 이벤트 추출 로직 추가
+- [ ] `_calculate_incident_duration()` 함수에 세분화 필드 추가
+- [ ] 반환 타입 확장: `tuple[str, str, float, float, float]`
+- [ ] Postmortem 스키마에 `downtime_seconds`, `validation_seconds` 추가
+
+---
+
+## 9. 에러 처리
 
 | 상황 | 처리 |
 |------|------|
@@ -170,6 +234,6 @@ event.data.state_change 존재
 
 ---
 
-## 9. 다음 단계
+## 10. 다음 단계
 
 이 문서 완료 후 → [127_POSTMORTEM_ACTION_ITEMS.md](127_POSTMORTEM_ACTION_ITEMS.md)

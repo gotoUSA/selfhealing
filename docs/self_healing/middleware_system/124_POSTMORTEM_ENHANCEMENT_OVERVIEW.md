@@ -107,6 +107,7 @@
 
 - 타임라인 첫 이벤트와 마지막 이벤트 간 시간 계산
 - 인시던트 시작/종료 시점 정확히 기록
+- 상태별 소요시간 세분화 (`downtime_seconds`, `validation_seconds`)
 
 ### Phase 3: 동적 Action Items (124-C)
 
@@ -142,18 +143,105 @@
 | 4 | Phase 4 (자동 트리거) | 중간 | 높음 | ✅ 권장 |
 | 5 | Phase 5 (Root Cause) | 중간 | 중간 | ⚪ 선택 |
 
+### Phase 6: 생명주기 통합 (124-F)
+
+**문서:** [146_POSTMORTEM_LIFECYCLE_INTEGRATION.md](146_POSTMORTEM_LIFECYCLE_INTEGRATION.md)
+
+- Emergency 복구 완료 시 Postmortem 자동 생성
+- WAL Fallback 연동 (`services/audit/base.py`)
+- RedisDistributedLock 연동 (`adapters/cache/redis_adapter.py`)
+
+### Phase 7: 인시던트 병합 (124-G)
+
+**문서:** [147_POSTMORTEM_INCIDENT_GROUP.md](147_POSTMORTEM_INCIDENT_GROUP.md)
+
+- 연쇄 CB 이벤트 그룹화
+- Redis ZSET + In-Memory Hybrid 저장
+- HashChainManager 무결성 봉인 (`audit/integrity/local_manager.py`)
+- 알림 집계 NotificationAggregator (`AntiFlappingWindow` 패턴 재사용)
+
+### Phase 8: 타임라인 스냅샷 (124-H)
+
+**문서:** [148_POSTMORTEM_TIMELINE_SNAPSHOT.md](148_POSTMORTEM_TIMELINE_SNAPSHOT.md)
+
+- Prometheus 메트릭 캡처
+- 시스템 상태 스냅샷
+
+### Phase 9: 배포 연관성 (124-I)
+
+**문서:** [149_POSTMORTEM_DEPLOYMENT_CORRELATOR.md](149_POSTMORTEM_DEPLOYMENT_CORRELATOR.md)
+
+- Kubernetes/ArgoCD 배포 이력 연동
+- 배포-인시던트 상관관계 분석
+- DeploymentCorrelator 어댑터 패턴
+
+### Phase 10: 버전 관리 (124-J)
+
+**문서:** [150_POSTMORTEM_VERSIONING.md](150_POSTMORTEM_VERSIONING.md)
+
+- PostmortemRevision 리비전 관리
+- 변경 이력 추적 및 롤백
+- 봉인(Sealing) 메커니즘
+
+### Phase 11: 딥링크 및 알림 (124-K)
+
+**문서:** [151_POSTMORTEM_DEEP_LINKS.md](151_POSTMORTEM_DEEP_LINKS.md)
+
+- ActionableAlertUrlBuilder 패턴 재사용 (`services/circuit_breaker/actionable_alert_urls.py`)
+- Grafana/Prometheus 시간 범위 링크
+- Slack 알림 연동- CascadeEvent 감사 증적 연결 (`audit/cascade_event.py`)
 ---
 
-## 6. 관련 문서
+## 6. 구현 우선순위 (전체)
+
+| 순서 | Phase | 문서 | 난이도 | 영향도 | 상태 |
+|------|-------|------|--------|--------|------|
+| 1 | Phase 1 (도메인 프리) | 125 | 쉬움 | 높음 | ✅ 설계 완료 |
+| 2 | Phase 2 (duration) | 126 | 쉬움 | 중간 | ✅ 설계 완료 |
+| 3 | Phase 3 (Action Items) | 127 | 중간 | 높음 | ✅ 설계 완료 |
+| 4 | Phase 4 (자동 트리거) | 128 | 중간 | 높음 | ✅ 설계 완료 |
+| 5 | Phase 5 (Root Cause) | 129 | 중간 | 중간 | ✅ 설계 완료 |
+| 6 | Phase 6 (생명주기) | 146 | 중간 | 높음 | ✅ 설계 완료 |
+| 7 | Phase 7 (인시던트 병합) | 147 | 높음 | 높음 | ✅ 설계 완료 |
+| 8 | Phase 8 (타임라인 스냅샷) | 148 | 중간 | 중간 | ✅ 설계 완료 |
+| 9 | Phase 9 (배포 연관성) | 149 | 높음 | 높음 | ✅ 설계 완료 |
+| 10 | Phase 10 (버전 관리) | 150 | 높음 | 중간 | ✅ 설계 완료 |
+| 11 | Phase 11 (딥링크) | 151 | 중간 | 중간 | ✅ 설계 완료 |
+
+---
+
+## 7. 관련 문서
+
+### 7.1 Part 1: 기본 기능
+
+- [125_POSTMORTEM_DOMAIN_FREE.md](125_POSTMORTEM_DOMAIN_FREE.md) - 도메인 프리 변환
+- [126_POSTMORTEM_DURATION_CALC.md](126_POSTMORTEM_DURATION_CALC.md) - 지속시간 계산
+- [127_POSTMORTEM_ACTION_ITEMS.md](127_POSTMORTEM_ACTION_ITEMS.md) - 동적 Action Items
+- [128_POSTMORTEM_AUTO_TRIGGER.md](128_POSTMORTEM_AUTO_TRIGGER.md) - 자동 트리거
+- [129_POSTMORTEM_ROOT_CAUSE.md](129_POSTMORTEM_ROOT_CAUSE.md) - Root Cause 분석
+
+### 7.2 Part 2: 고급 기능
+
+- [146_POSTMORTEM_LIFECYCLE_INTEGRATION.md](146_POSTMORTEM_LIFECYCLE_INTEGRATION.md) - 생명주기 통합
+- [147_POSTMORTEM_INCIDENT_GROUP.md](147_POSTMORTEM_INCIDENT_GROUP.md) - 인시던트 병합
+- [148_POSTMORTEM_TIMELINE_SNAPSHOT.md](148_POSTMORTEM_TIMELINE_SNAPSHOT.md) - 타임라인 스냅샷
+- [149_POSTMORTEM_DEPLOYMENT_CORRELATOR.md](149_POSTMORTEM_DEPLOYMENT_CORRELATOR.md) - 배포 연관성
+- [150_POSTMORTEM_VERSIONING.md](150_POSTMORTEM_VERSIONING.md) - 버전 관리
+- [151_POSTMORTEM_DEEP_LINKS.md](151_POSTMORTEM_DEEP_LINKS.md) - 딥링크
+
+### 7.3 인프라 문서
 
 - [116_XTEST_MODE_OVERVIEW.md](116_XTEST_MODE_OVERVIEW.md) - X-Test Mode 전체 개요
 - [123_XTEST_AUDIT_INTEGRATION.md](123_XTEST_AUDIT_INTEGRATION.md) - X-Test Audit 통합
 - [19_CHAOS_PROOF_ROADMAP.md](../19_CHAOS_PROOF_ROADMAP.md) - 원본 로드맵 문서
+- [20_AUDIT_UNIFICATION_PLAN.md](20_AUDIT_UNIFICATION_PLAN.md) - WAL/무결성 설계
 
 ---
 
-## 7. 변경 이력
+## 8. 변경 이력
 
 | 버전 | 일자 | 변경 내용 | 작성자 |
 |------|------|----------|--------|
 | 1.0 | 2026-01-27 | 초안 작성 | GitHub Copilot |
+| 1.1 | 2026-01-28 | Phase 6-11 추가 (146-151 문서) | GitHub Copilot |
+| 1.2 | 2026-01-28 | Q2/Q7/Q10 세부 기능 반영 | GitHub Copilot |
