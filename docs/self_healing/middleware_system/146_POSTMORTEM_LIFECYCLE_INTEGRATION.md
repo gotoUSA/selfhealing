@@ -5,7 +5,7 @@
 **수정일:** 2026-01-28
 **선행 문서:** [128_POSTMORTEM_AUTO_TRIGGER.md](128_POSTMORTEM_AUTO_TRIGGER.md), [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md)
 **관련 코드:** `services/audit/base.py`, `adapters/cache/redis_adapter.py`, `settings/distributed_lock.py`
-**상태:** 설계 완료
+**상태:** 구현 완료
 
 ---
 
@@ -212,33 +212,33 @@ Emergency 복구의 경우:
 
 ### 9.1 이벤트 발행
 
-- [ ] `recovery_coordinator.py` → `_complete_session()`에 이벤트 발행 추가
-- [ ] `recovery_coordinator.py` → `approve_recovery()`에 이벤트 발행 추가
-- [ ] EventBus import 추가
+- [x] `recovery_coordinator.py` → `_complete_session()`에 이벤트 발행 추가
+- [x] `recovery_coordinator.py` → `approve_recovery()`에 이벤트 발행 추가
+- [x] EventBus import 추가
 
 ### 9.2 핸들러 구현
 
-- [ ] `_on_emergency_recovery_completed_postmortem()` 함수 생성
-- [ ] RecoverySession 데이터 수집
-- [ ] Emergency Postmortem 데이터 생성
-- [ ] `add_healing_incident()` 호출
+- [x] `_on_emergency_recovery_completed_postmortem()` 함수 생성
+- [x] RecoverySession 데이터 수집
+- [x] Emergency Postmortem 데이터 생성
+- [x] `add_healing_incident()` 호출
 
 ### 9.3 핸들러 등록
 
-- [ ] `register_default_handlers()`에 새 핸들러 등록
-- [ ] Priority LOW로 설정
+- [x] `register_default_handlers()`에 새 핸들러 등록
+- [x] Priority LOW로 설정
 
 ### 9.4 헬퍼 함수
 
-- [ ] `_generate_emergency_postmortem_data()` 구현
-- [ ] 타임라인 병합 로직 구현
-- [ ] 동적 Action Items 생성 (복구 단계 기반)
+- [x] `_generate_emergency_postmortem_data()` 구현
+- [x] 타임라인 병합 로직 구현
+- [x] 동적 Action Items 생성 (복구 단계 기반)
 
 ### 9.5 테스트
 
-- [ ] Recovery COMPLETED 시 Postmortem 생성 확인
-- [ ] 수동 승인 후 Postmortem 생성 확인
-- [ ] Emergency Postmortem 고유 필드 확인
+- [x] Recovery COMPLETED 시 Postmortem 생성 확인
+- [x] 수동 승인 후 Postmortem 생성 확인
+- [x] Emergency Postmortem 고유 필드 확인
 
 ---
 
@@ -345,15 +345,15 @@ from selfhealing.services.event_bus import get_event_bus, EventType
 
 ### 13.1 WAL 연동
 
-- [ ] Postmortem 생성 전 WAL 기록 추가
-- [ ] 저장 실패 시 WAL fallback 로직
-- [ ] synced 플래그 업데이트
+- [x] Postmortem 생성 전 WAL 기록 추가
+- [x] 저장 실패 시 WAL fallback 로직
+- [x] synced 플래그 업데이트
 
 ### 13.2 분산 락
 
-- [ ] `RedisDistributedLock` import
-- [ ] Postmortem 생성 시 락 획득/해제
-- [ ] 그룹 종료 시 락 획득/해제
+- [x] `RedisDistributedLock` import
+- [x] Postmortem 생성 시 락 획득/해제
+- [x] 그룹 종료 시 락 획득/해제
 
 ---
 

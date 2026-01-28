@@ -843,6 +843,264 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         logger.error(f"[EventHandler] Failed to generate auto postmortem: {e}")
 
 
+def _generate_emergency_postmortem_data(
+    session_data: dict,
+    event_bus_history: list,
+    snapshot: dict,
+) -> dict:
+    """
+    Emergency 복구 완료 시 Postmortem 데이터 생성.
+
+    CB Postmortem과 달리 Emergency Postmortem은 리전/글로벌 장애에 대한
+    복구 세션 정보를 기반으로 생성됩니다.
+
+    Args:
+        session_data: EMERGENCY_RECOVERY_COMPLETED 이벤트에서 전달된 세션 정보
+        event_bus_history: EventBus 히스토리
+        snapshot: 시스템 스냅샷
+
+    Returns:
+        Emergency Postmortem 데이터 딕셔너리
+    """
+    from datetime import datetime, timezone as dt_timezone
+
+    session_id = session_data.get("session_id", "unknown")
+    namespace = session_data.get("namespace", "global")
+    trigger_level = session_data.get("trigger_level", "UNKNOWN")
+    started_at = session_data.get("started_at")
+    completed_at = session_data.get("completed_at")
+    duration_seconds = session_data.get("duration_seconds")
+    steps_executed = session_data.get("steps_executed", 0)
+    total_steps = session_data.get("total_steps", 0)
+    requires_approval = session_data.get("requires_approval", False)
+    approved_by = session_data.get("approved_by")
+
+    now = datetime.now(dt_timezone.utc)
+    current_time = now.isoformat()
+
+    # 인시던트 ID 생성 (Emergency 전용 접두사)
+    incident_id = f"EMERGENCY-{namespace}-{now.strftime('%Y%m%d-%H%M%S')}"
+
+    # 타임라인 구성: Emergency 관련 이벤트 필터링
+    timeline = []
+    emergency_event_types = [
+        "emergency_activated",
+        "emergency_recovery_started",
+        "emergency_recovery_completed",
+        "emergency_level_changed",
+    ]
+
+    for event in event_bus_history:
+        event_type = event.get("event_type", "").lower()
+        if any(etype in event_type for etype in emergency_event_types):
+            timeline.append(
+                {
+                    "timestamp": event.get("timestamp"),
+                    "event_type": event.get("event_type"),
+                    "details": event.get("data", {}),
+                }
+            )
+
+    # CB 이벤트도 포함 (Emergency 중 발생한 것)
+    cb_events = [e for e in event_bus_history if "circuit_breaker" in e.get("event_type", "").lower()]
+    for event in cb_events[:10]:
+        timeline.append(
+            {
+                "timestamp": event.get("timestamp"),
+                "event_type": event.get("event_type"),
+                "details": event.get("data", {}),
+            }
+        )
+
+    # 시간순 정렬
+    timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
+
+    # 복구 단계 정보 추출
+    recovery_steps = []
+    step_types = ["BUDGET_RESET", "HEALTH_CHECK", "CANARY_RESUME", "GOVERNANCE_NORMAL"]
+    for i in range(min(steps_executed, len(step_types))):
+        recovery_steps.append(
+            {
+                "step_order": i + 1,
+                "step_type": step_types[i] if i < len(step_types) else f"STEP_{i+1}",
+                "status": "COMPLETED",
+            }
+        )
+
+    # 동적 Action Items 생성
+    auto_actions = []
+    recommendations = []
+
+    if trigger_level == "LEVEL_3":
+        auto_actions.append(
+            {
+                "action": "GOVERNANCE_NORMALIZED",
+                "description": "자동화 재활성화 (STRICT → NORMAL)",
+                "status": "completed",
+            }
+        )
+        recommendations.append("LEVEL_3 장애 원인 분석 및 재발 방지 대책 수립")
+
+    if steps_executed > 0:
+        auto_actions.append(
+            {
+                "action": "BUDGET_RESET",
+                "description": "Crisis Multiplier 정상화 (1.0x)",
+                "status": "completed",
+            }
+        )
+
+    if requires_approval:
+        auto_actions.append(
+            {
+                "action": "MANUAL_APPROVAL",
+                "description": f"수동 승인 완료 (승인자: {approved_by or 'unknown'})",
+                "status": "completed",
+            }
+        )
+        recommendations.append("수동 승인 프로세스 검토 및 자동화 가능 여부 평가")
+
+    recommendations.append(f"Emergency {trigger_level} 발생 원인 분석")
+    recommendations.append("복구 프로세스 시간 단축 방안 검토")
+
+    return {
+        "incident_id": incident_id,
+        "generated_at": current_time,
+        "started_at": started_at,
+        "resolved_at": completed_at,
+        "duration_seconds": duration_seconds,
+        # Emergency 전용 필드
+        "recovery_type": "emergency",
+        "namespace": namespace,
+        "trigger_level": trigger_level,
+        "recovery_session_id": session_id,
+        "recovery_steps": recovery_steps,
+        "requires_approval": requires_approval,
+        "approved_by": approved_by,
+        # 공통 필드
+        "summary": {
+            "affected_services": [],  # Emergency는 리전/글로벌 범위
+            "unaffected_services": [],
+            "fast_fail_count": 0,
+            "total_events": len(timeline),
+            "steps_executed": steps_executed,
+            "total_steps": total_steps,
+        },
+        "timeline": timeline[:30],
+        "system_snapshot": snapshot,
+        "auto_actions": auto_actions,
+        "recommendations": recommendations,
+    }
+
+
+def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
+    """
+    Emergency 복구 완료 시 자동 Postmortem 생성.
+
+    RecoveryCoordinator가 복구를 완료하면 EMERGENCY_RECOVERY_COMPLETED 이벤트가
+    발행되고, 이 핸들러가 Emergency Postmortem을 자동 생성합니다.
+
+    Settings에서 auto_enabled가 True인 경우에만 동작합니다.
+    """
+    session_id = event.data.get("session_id", "unknown")
+    namespace = event.data.get("namespace", "global")
+    trigger_level = event.data.get("trigger_level", "UNKNOWN")
+    duration = event.data.get("duration_seconds")
+
+    # Settings에서 자동 생성 활성화 여부 확인
+    try:
+        from selfhealing.settings.postmortem import get_postmortem_settings
+
+        settings = get_postmortem_settings()
+
+        if not settings.auto_enabled:
+            logger.debug(f"[EventHandler] Auto postmortem disabled, " f"skipping for Emergency session {session_id}")
+            return
+
+        min_duration = settings.auto_min_duration
+        history_limit = settings.history_limit
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to get postmortem settings: {e}")
+        return
+
+    # 최소 duration 확인
+    if duration is not None and duration < min_duration:
+        logger.debug(
+            f"[EventHandler] Emergency postmortem skipped for {session_id}: " f"duration {duration:.0f}s < min {min_duration}s"
+        )
+        return
+
+    # Postmortem 생성
+    try:
+        from selfhealing.api.django.views.xtest.base import collect_system_snapshot
+        from selfhealing.services.postmortem_store import add_healing_incident
+
+        # 히스토리 및 스냅샷 수집
+        bus = get_event_bus()
+        history = bus.get_history(limit=history_limit)
+        snapshot = collect_system_snapshot()
+
+        # Emergency Postmortem 데이터 생성
+        postmortem = _generate_emergency_postmortem_data(
+            session_data=event.data,
+            event_bus_history=history,
+            snapshot=snapshot,
+        )
+
+        # 저장
+        add_healing_incident(postmortem)
+
+        incident_id = postmortem.get("incident_id")
+        logger.info(
+            f"[EventHandler] Emergency postmortem generated: {incident_id} "
+            f"(session={session_id}, level={trigger_level}, duration={duration}s)"
+        )
+
+        # WAL Audit 기록
+        try:
+            from selfhealing.services.audit.base import _write_to_wal
+
+            _write_to_wal(
+                event_type="EMERGENCY_POSTMORTEM_AUTO_GENERATED",
+                source="EventHandler.EmergencyPostmortem",
+                details={
+                    "incident_id": incident_id,
+                    "session_id": session_id,
+                    "namespace": namespace,
+                    "trigger_level": trigger_level,
+                    "duration_seconds": duration,
+                    "requires_approval": event.data.get("requires_approval", False),
+                    "approved_by": event.data.get("approved_by"),
+                },
+                success=True,
+                domain="selfhealing",
+                target_id=incident_id,
+            )
+        except Exception as audit_error:
+            logger.warning(f"[EventHandler] Failed to log emergency postmortem audit: {audit_error}")
+
+        # Postmortem 알림 발송
+        try:
+            from selfhealing.settings.postmortem import get_postmortem_settings
+
+            settings = get_postmortem_settings()
+            _send_postmortem_notification(
+                settings=settings,
+                postmortem=postmortem,
+                incident_id=incident_id,
+                service_name=f"emergency-{namespace}",
+                duration=duration,
+                affected_services=[],
+            )
+        except Exception as notify_error:
+            logger.warning(f"[EventHandler] Failed to send emergency postmortem notification: " f"{notify_error}")
+
+    except ImportError as e:
+        logger.debug(f"[EventHandler] Module not available for Emergency postmortem: {e}")
+    except Exception as e:
+        logger.error(f"[EventHandler] Failed to generate Emergency postmortem: {e}")
+
+
 def register_default_handlers():
     """
     기본 이벤트 핸들러 등록.
@@ -887,6 +1145,13 @@ def register_default_handlers():
         EventType.CIRCUIT_BREAKER_OPENED,
         _on_circuit_breaker_opened_notify,
         priority=EventPriority.HIGH,  # 지연 없이 처리
+    )
+
+    # Emergency Recovery 완료 시 자동 Postmortem 핸들러 (낮은 우선순위)
+    bus.subscribe(
+        EventType.EMERGENCY_RECOVERY_COMPLETED,
+        _on_emergency_recovery_completed_postmortem,
+        priority=EventPriority.LOW,
     )
 
     bus._handlers_registered = True

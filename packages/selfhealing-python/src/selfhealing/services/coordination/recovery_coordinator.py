@@ -296,10 +296,7 @@ class RecoveryCoordinator:
         """
         cascade_auditor = self._get_cascade_auditor()
         if not cascade_auditor:
-            logger.debug(
-                f"[Recovery] CascadeEvent skipped: no auditor, "
-                f"trigger={trigger_type}, session={session.id}"
-            )
+            logger.debug(f"[Recovery] CascadeEvent skipped: no auditor, " f"trigger={trigger_type}, session={session.id}")
             return None
 
         try:
@@ -309,11 +306,7 @@ class RecoveryCoordinator:
                 "trigger_level": session.trigger_level,
                 "initiated_by": session.initiated_by,
                 "current_step_index": session.current_step_index,
-                "status": (
-                    session.status.value
-                    if hasattr(session.status, "value")
-                    else str(session.status)
-                ),
+                "status": (session.status.value if hasattr(session.status, "value") else str(session.status)),
             }
 
             cascade_event = cascade_auditor.record(
@@ -325,17 +318,13 @@ class RecoveryCoordinator:
             )
 
             logger.debug(
-                f"[Recovery] CascadeEvent recorded: id={cascade_event.id}, "
-                f"trigger={trigger_type}, session={session.id}"
+                f"[Recovery] CascadeEvent recorded: id={cascade_event.id}, " f"trigger={trigger_type}, session={session.id}"
             )
 
             return cascade_event.id
 
         except Exception as e:
-            logger.warning(
-                f"[Recovery] CascadeEvent recording failed: {e}, "
-                f"trigger={trigger_type}, session={session.id}"
-            )
+            logger.warning(f"[Recovery] CascadeEvent recording failed: {e}, " f"trigger={trigger_type}, session={session.id}")
             return None
 
     def _get_backend(self) -> StateBackend:
@@ -430,10 +419,7 @@ class RecoveryCoordinator:
             # 4. 분산 락 획득
             if not self._recovery_lock.acquire(namespace, session_id):
                 current_owner = self._recovery_lock.get_lock_owner(namespace)
-                raise ValueError(
-                    f"Failed to acquire recovery lock. "
-                    f"Current owner: {current_owner}"
-                )
+                raise ValueError(f"Failed to acquire recovery lock. " f"Current owner: {current_owner}")
 
             # 5. 세션 생성
             session = RecoverySession(
@@ -509,9 +495,7 @@ class RecoveryCoordinator:
                 # Phase 2.7: 멱등성 핸들러 사용 시도
                 idempotent_registry = self._get_idempotent_registry()
 
-                if idempotent_registry and idempotent_registry.has_handler(
-                    step.step_type
-                ):
+                if idempotent_registry and idempotent_registry.has_handler(step.step_type):
                     # 멱등성 핸들러 실행
                     result = idempotent_registry.execute(session, step)
                 else:
@@ -534,13 +518,10 @@ class RecoveryCoordinator:
                         idempotent_info = " (already applied)"
 
                     # Phase 5.3: 단계 완료 감사 기록
-                    self._record_step_executed(
-                        session, step, success=True, result=result
-                    )
+                    self._record_step_executed(session, step, success=True, result=result)
 
                     logger.info(
-                        f"[Recovery] Step completed: {step.step_type.value}, "
-                        f"session={session.id}{idempotent_info}"
+                        f"[Recovery] Step completed: {step.step_type.value}, " f"session={session.id}{idempotent_info}"
                     )
                 else:
                     step.status = RecoveryStatus.FAILED
@@ -558,8 +539,7 @@ class RecoveryCoordinator:
                     self._fail_session(session, step.error_message)
 
                     logger.error(
-                        f"[Recovery] Step failed: {step.step_type.value}, "
-                        f"session={session.id}, error={step.error_message}"
+                        f"[Recovery] Step failed: {step.step_type.value}, " f"session={session.id}, error={step.error_message}"
                     )
 
             except Exception as e:
@@ -567,16 +547,11 @@ class RecoveryCoordinator:
                 step.error_message = str(e)
 
                 # Phase 5.3: 예외 발생 감사 기록
-                self._record_step_executed(
-                    session, step, success=False, error_message=str(e), result=None
-                )
+                self._record_step_executed(session, step, success=False, error_message=str(e), result=None)
 
                 self._fail_session(session, str(e))
 
-                logger.exception(
-                    f"[Recovery] Step exception: {step.step_type.value}, "
-                    f"session={session.id}"
-                )
+                logger.exception(f"[Recovery] Step exception: {step.step_type.value}, " f"session={session.id}")
 
             self._save_session(session)
             return step
@@ -741,10 +716,7 @@ class RecoveryCoordinator:
                 provider = get_crisis_multiplier_provider()
                 provider.reset_multiplier(session.namespace)
             except ImportError:
-                logger.warning(
-                    "[Recovery] CrisisMultiplierProvider not available, "
-                    "skipping budget reset"
-                )
+                logger.warning("[Recovery] CrisisMultiplierProvider not available, " "skipping budget reset")
 
             return {"success": True, "multiplier": target}
         except Exception as e:
@@ -763,12 +735,8 @@ class RecoveryCoordinator:
         settings = get_recovery_coordinator_settings()
 
         # step.params에서 값이 없으면 settings에서 기본값 사용
-        duration_minutes = step.params.get(
-            "duration_minutes", settings.stability_check_duration_minutes
-        )
-        error_rate_threshold = step.params.get(
-            "error_rate_threshold", settings.stability_check_error_rate_threshold
-        )
+        duration_minutes = step.params.get("duration_minutes", settings.stability_check_duration_minutes)
+        error_rate_threshold = step.params.get("error_rate_threshold", settings.stability_check_error_rate_threshold)
 
         # Health Check 상태로 전환
         session.status = RecoveryStatus.HEALTH_CHECK
@@ -819,10 +787,7 @@ class RecoveryCoordinator:
                     "resumed_count": len(resumed) if resumed else 0,
                 }
             except (ImportError, AttributeError):
-                logger.warning(
-                    "[Recovery] CanaryService not available or missing method, "
-                    "skipping canary resume"
-                )
+                logger.warning("[Recovery] CanaryService not available or missing method, " "skipping canary resume")
                 return {"success": True, "resumed_count": 0, "skipped": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -853,10 +818,7 @@ class RecoveryCoordinator:
                     reason=reason,
                 )
             except (ImportError, AttributeError):
-                logger.warning(
-                    "[Recovery] EmergencyModeTracker not available, "
-                    "skipping governance normal"
-                )
+                logger.warning("[Recovery] EmergencyModeTracker not available, " "skipping governance normal")
                 return {"success": True, "mode": "NORMAL", "skipped": True}
 
             return {"success": True, "mode": "NORMAL"}
@@ -998,10 +960,7 @@ class RecoveryCoordinator:
             # 승인 요청 생성
             self._create_approval_request(session)
 
-            logger.info(
-                f"[Recovery] Waiting for approval: id={session.id}, "
-                f"namespace={session.namespace}"
-            )
+            logger.info(f"[Recovery] Waiting for approval: id={session.id}, " f"namespace={session.namespace}")
         else:
             # 일반 완료 처리
             self._complete_session(session)
@@ -1051,8 +1010,7 @@ class RecoveryCoordinator:
 
             if session.status != RecoveryStatus.READY_TO_RESTORE:
                 logger.warning(
-                    f"[Recovery] Cannot approve: session not in READY_TO_RESTORE state. "
-                    f"Current: {session.status}"
+                    f"[Recovery] Cannot approve: session not in READY_TO_RESTORE state. " f"Current: {session.status}"
                 )
                 return None
 
@@ -1082,9 +1040,10 @@ class RecoveryCoordinator:
             except Exception:
                 pass
 
-            logger.info(
-                f"[Recovery] Approved: id={session.id}, " f"approved_by={approved_by}"
-            )
+            # EMERGENCY_RECOVERY_COMPLETED 이벤트 발행 (Postmortem 자동 생성 트리거)
+            self._publish_emergency_recovery_completed_event(session, approved_by)
+
+            logger.info(f"[Recovery] Approved: id={session.id}, " f"approved_by={approved_by}")
 
             return session
 
@@ -1121,10 +1080,7 @@ class RecoveryCoordinator:
             budget_info = self._get_budget_info(namespace)
 
             # 안정성 판단: 가중치가 1.0이고 버짓 잔여량이 충분하면 안정
-            is_stable = (
-                abs(current_multiplier - 1.0) < 0.001
-                and budget_info.get("remaining_percent", 100) > 10
-            )
+            is_stable = abs(current_multiplier - 1.0) < 0.001 and budget_info.get("remaining_percent", 100) > 10
 
             return {
                 "stable": is_stable,
@@ -1135,10 +1091,7 @@ class RecoveryCoordinator:
                 "budget_used_minutes": budget_info.get("used_minutes", 0),
             }
         except ImportError:
-            logger.warning(
-                "[Recovery] CrisisMultiplierProvider not available for "
-                "weighted budget verification"
-            )
+            logger.warning("[Recovery] CrisisMultiplierProvider not available for " "weighted budget verification")
             return {
                 "stable": True,
                 "current_multiplier": 1.0,
@@ -1221,11 +1174,7 @@ class RecoveryCoordinator:
                 "error_rate": current_error_rate,
                 "threshold": error_rate_threshold,
                 "duration_minutes": duration_minutes,
-                "reason": (
-                    None
-                    if stable
-                    else f"Error rate {current_error_rate:.2%} >= {error_rate_threshold:.2%}"
-                ),
+                "reason": (None if stable else f"Error rate {current_error_rate:.2%} >= {error_rate_threshold:.2%}"),
             }
         except (ImportError, AttributeError, Exception) as e:
             # MetricsCollector 없으면 안정으로 가정 (테스트/개발 환경)
@@ -1278,9 +1227,10 @@ class RecoveryCoordinator:
         # 락 해제
         self._recovery_lock.release(session.namespace, session.id)
 
-        logger.info(
-            f"[Recovery] Completed: id={session.id}, " f"namespace={session.namespace}"
-        )
+        # EMERGENCY_RECOVERY_COMPLETED 이벤트 발행 (Postmortem 자동 생성 트리거)
+        self._publish_emergency_recovery_completed_event(session)
+
+        logger.info(f"[Recovery] Completed: id={session.id}, " f"namespace={session.namespace}")
 
     def _fail_session(
         self,
@@ -1434,11 +1384,7 @@ class RecoveryCoordinator:
         """
         # 1. RecoveryAuditRecorder에 기록
         audit_recorder = self._get_audit_recorder()
-        event_type = (
-            RecoveryAuditEventType.RECOVERY_STEP_EXECUTED
-            if success
-            else RecoveryAuditEventType.RECOVERY_STEP_FAILED
-        )
+        event_type = RecoveryAuditEventType.RECOVERY_STEP_EXECUTED if success else RecoveryAuditEventType.RECOVERY_STEP_FAILED
 
         metadata = {
             "trigger_level": session.trigger_level,
@@ -1564,6 +1510,61 @@ class RecoveryCoordinator:
             trigger_type="RECOVERY_ABORTED",
             effects=effects,
         )
+
+    def _publish_emergency_recovery_completed_event(
+        self,
+        session: RecoverySession,
+        approved_by: str | None = None,
+    ) -> None:
+        """
+        EMERGENCY_RECOVERY_COMPLETED 이벤트 발행.
+
+        EventBus를 통해 Emergency 복구 완료 이벤트를 발행합니다.
+        이 이벤트는 Emergency Postmortem 자동 생성을 트리거합니다.
+
+        Args:
+            session: 완료된 RecoverySession 인스턴스
+            approved_by: 승인자 ID (수동 승인인 경우)
+        """
+        try:
+            # 지연 import (순환 import 방지)
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            # duration 계산
+            duration_seconds = None
+            if session.started_at and session.completed_at:
+                try:
+                    from datetime import datetime
+
+                    started = datetime.fromisoformat(session.started_at.replace("Z", "+00:00"))
+                    completed = datetime.fromisoformat(session.completed_at.replace("Z", "+00:00"))
+                    duration_seconds = (completed - started).total_seconds()
+                except (ValueError, TypeError):
+                    pass
+
+            event_bus = get_event_bus()
+            event_bus.emit(
+                event_type=EventType.EMERGENCY_RECOVERY_COMPLETED,
+                data={
+                    "session_id": session.id,
+                    "namespace": session.namespace,
+                    "trigger_level": session.trigger_level,
+                    "started_at": session.started_at,
+                    "completed_at": session.completed_at,
+                    "duration_seconds": duration_seconds,
+                    "steps_executed": session.current_step_index,
+                    "total_steps": len(session.steps),
+                    "requires_approval": bool(session.metadata and session.metadata.get("requires_approval")),
+                    "approved_by": approved_by,
+                },
+                source="recovery_coordinator",
+            )
+
+            logger.info(f"[Recovery] Published EMERGENCY_RECOVERY_COMPLETED: {session.id}")
+
+        except Exception as e:
+            # 이벤트 발행 실패가 복구 완료에 영향을 주지 않도록 함
+            logger.warning(f"[Recovery] Failed to publish EMERGENCY_RECOVERY_COMPLETED: {e}")
 
 
 # =============================================================================
