@@ -191,8 +191,8 @@ CB CLOSED 이벤트만으로는 인시던트 시작 시점(CB OPEN)을 알 수 �
 - [x] 설정 활성화 시 자동 생성 확인
 - [x] 저장된 인시던트 조회 확인
 
-**테스트 파일:** `packages/selfhealing-python/tests/unit/resilience/test_postmortem_auto_trigger.py`
-**테스트 결과:** 10개 테스트 전체 통과
+**단위 테스트:** `packages/selfhealing-python/tests/unit/resilience/test_postmortem_auto_trigger.py` (10개 통과)
+**통합 테스트:** `tests/integration/selfhealing/test_postmortem_auto_trigger_integration.py` (5개 통과)
 
 ---
 
