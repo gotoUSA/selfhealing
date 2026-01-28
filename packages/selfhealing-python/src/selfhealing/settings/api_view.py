@@ -170,6 +170,21 @@ class ApiViewSettings(BaseSettings):
         description="자동 Post-mortem 생성 최소 인시던트 지속 시간 (초)",
     )
 
+    # ==========================================================================
+    # Post-mortem Notification - CB 복구 후 Post-mortem 알림
+    # ==========================================================================
+    postmortem_notification_enabled: bool = Field(
+        default=True,
+        description="Post-mortem 생성 시 알림 발송 활성화",
+    )
+
+    postmortem_notification_min_duration: int = Field(
+        default=60,
+        ge=0,
+        le=3600,
+        description="Post-mortem 알림 발송 최소 인시던트 지속 시간 (초)",
+    )
+
     @model_validator(mode="after")
     def validate_limits(self) -> "ApiViewSettings":
         """default_limit이 max_limit보다 작은지 검증."""

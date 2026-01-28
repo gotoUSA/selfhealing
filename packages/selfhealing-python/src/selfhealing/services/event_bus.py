@@ -597,6 +597,99 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
         logger.warning(f"[Notification] Failed to send CB notification: {e}")
 
 
+def _send_postmortem_notification(
+    settings,
+    postmortem: dict,
+    incident_id: str,
+    service_name: str,
+    duration: int | None,
+    affected_services: list[str],
+) -> None:
+    """
+    Post-mortem 생성 완료 알림 발송.
+
+    Settings에서 postmortem_notification_enabled가 True이고,
+    duration이 postmortem_notification_min_duration 이상인 경우에만 발송합니다.
+
+    알림 우선순위 결정:
+    - duration >= 300초 (5분) 또는 affected_services >= 3: HIGH
+    - 그 외: MEDIUM
+    """
+    try:
+        # 알림 활성화 여부 확인
+        if not settings.postmortem_notification_enabled:
+            logger.debug(f"[Notification] Postmortem notification disabled for {incident_id}")
+            return
+
+        # 최소 duration 확인
+        notification_min_duration = settings.postmortem_notification_min_duration
+        if duration is not None and duration < notification_min_duration:
+            logger.debug(
+                f"[Notification] Postmortem notification skipped for {incident_id}: "
+                f"duration {duration}s < min {notification_min_duration}s"
+            )
+            return
+
+        from selfhealing.services.unified_notification import (
+            NotificationCategory,
+            NotificationPayload,
+            NotificationPriority,
+            UnifiedNotificationManager,
+        )
+
+        # 우선순위 결정: 5분 이상 또는 3개 이상 서비스 영향 → HIGH
+        affected_count = len(affected_services) if affected_services else 0
+        if (duration is not None and duration >= 300) or affected_count >= 3:
+            priority = NotificationPriority.HIGH
+        else:
+            priority = NotificationPriority.MEDIUM
+
+        # 알림 본문 생성
+        resolved_at = postmortem.get("resolved_at", "N/A")
+        started_at = postmortem.get("started_at", "N/A")
+        recommendations = postmortem.get("recommendations", [])
+        recommendations_summary = ", ".join(recommendations[:3]) if recommendations else "없음"
+
+        message = (
+            f"인시던트 시작: {started_at}\n"
+            f"인시던트 종료: {resolved_at}\n"
+            f"지속 시간: {duration}초\n"
+            f"영향 서비스: {', '.join(affected_services) if affected_services else '없음'}\n"
+            f"권장 조치: {recommendations_summary}"
+        )
+
+        payload = NotificationPayload(
+            title=f"📋 Post-mortem 생성: {incident_id}",
+            message=message,
+            priority=priority,
+            category=NotificationCategory.OPERATIONS,
+            source="EventHandler.Postmortem",
+            metadata={
+                "incident_id": incident_id,
+                "service_name": service_name,
+                "duration_seconds": duration,
+                "affected_services": affected_services,
+                "resolved_at": resolved_at,
+                "postmortem_url": f"/api/xtest/incidents/{incident_id}/",
+            },
+            dedup_key=f"postmortem:{incident_id}",
+        )
+
+        manager = UnifiedNotificationManager()
+        result = manager.notify(payload)
+
+        if result.success and not result.suppressed:
+            logger.info(f"[Notification] Postmortem notification sent for {incident_id}")
+        elif result.suppressed:
+            logger.debug(
+                f"[Notification] Postmortem notification suppressed for {incident_id}: " f"{result.suppression_reason}"
+            )
+
+    except Exception as e:
+        # 알림 실패가 시스템에 영향을 주지 않도록 함
+        logger.warning(f"[Notification] Failed to send postmortem notification: {e}")
+
+
 def _on_circuit_breaker_closed(event: SelfHealingEvent):
     """
     CB 복구 시 자동 Replay 트리거 (Track 1).
@@ -717,6 +810,9 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         add_healing_incident(postmortem)
 
         logger.info(f"[EventHandler] Auto postmortem generated: {incident_id} " f"(duration={duration}s)")
+
+        # Post-mortem 알림 발송
+        _send_postmortem_notification(settings, postmortem, incident_id, service_name, duration, affected)
 
         # WAL Audit 기록 - 자동 Post-mortem 생성 이벤트
         try:
