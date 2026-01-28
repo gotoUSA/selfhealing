@@ -3,7 +3,7 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-27
 **선행 문서:** [124_POSTMORTEM_ENHANCEMENT_OVERVIEW.md](124_POSTMORTEM_ENHANCEMENT_OVERVIEW.md)
-**상태:** 구현 준비
+**상태:** ✅ 구현 완료
 
 ---
 
@@ -89,26 +89,26 @@ SELFHEALING_API_VIEW_XTEST_DEFAULT_TEST_SERVICES=["service_a","service_b"]
 
 ### 5.1 BlastRadiusTestView
 
-- [ ] `affected_service` 파라미터 필수화
-- [ ] `affected_service` 누락 시 400 응답
-- [ ] `check_services` 빈 배열 시 동적 조회
-- [ ] Docstring 예시 범용화
+- [x] `affected_service` 파라미터 필수화
+- [x] `affected_service` 누락 시 400 응답
+- [x] `check_services` 빈 배열 시 동적 조회
+- [x] Docstring 예시 범용화
 
 ### 5.2 MultiServiceBlastRadiusView
 
-- [ ] `test_services` 빈 배열 시 동적 조회
-- [ ] `expected_isolation` 메시지 동적 생성 또는 제거
-- [ ] Docstring 예시 범용화
+- [x] `test_services` 빈 배열 시 동적 조회
+- [x] `expected_isolation` 메시지 동적 생성 또는 제거
+- [x] Docstring 예시 범용화
 
 ### 5.3 RecordHealingEventView
 
-- [ ] Docstring 예시 범용화
+- [x] Docstring 예시 범용화
 
 ### 5.4 테스트
 
-- [ ] 기존 테스트 업데이트 (필수 파라미터 추가)
-- [ ] 동적 조회 테스트 추가
-- [ ] 400 응답 테스트 추가
+- [x] 기존 테스트 업데이트 (필수 파라미터 추가)
+- [x] 동적 조회 테스트 추가
+- [x] 400 응답 테스트 추가
 
 ---
 
