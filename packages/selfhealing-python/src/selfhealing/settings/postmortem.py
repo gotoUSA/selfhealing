@@ -207,6 +207,33 @@ class PostmortemSettings(BaseSettings):
         description="Grafana 대시보드 UID",
     )
 
+    # ==========================================================================
+    # Deployment Correlator - 배포 연관성 분석
+    # ==========================================================================
+    deployment_correlator_enabled: bool = Field(
+        default=True,
+        description="배포 연관성 분석 기능 활성화",
+    )
+
+    deployment_adapter: str = Field(
+        default="mock",
+        description="배포 어댑터 선택 (mock/kubernetes)",
+    )
+
+    deployment_pre_window_minutes: int = Field(
+        default=60,
+        ge=10,
+        le=180,
+        description="인시던트 전 배포 조회 범위 (분)",
+    )
+
+    deployment_post_window_minutes: int = Field(
+        default=30,
+        ge=5,
+        le=60,
+        description="인시던트 후 배포 조회 범위 (분)",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

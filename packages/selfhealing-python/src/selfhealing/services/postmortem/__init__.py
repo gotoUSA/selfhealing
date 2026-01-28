@@ -10,10 +10,18 @@ Components:
 - PrometheusMetricsCollector: Prometheus에서 인시던트 기간 메트릭 수집
 - IncidentLogBuffer: 에러 로그 버퍼링
 - SnapshotBuilder: 타임라인 스냅샷 빌드
+- DeploymentCorrelator: 배포 연관성 분석
 """
 
 from __future__ import annotations
 
+from .deployment_correlator import (
+    CorrelationType,
+    DeploymentCorrelationResult,
+    DeploymentCorrelator,
+    get_deployment_correlator,
+    reset_deployment_correlator,
+)
 from .incident_group import (
     IncidentGroup,
     IncidentGroupEntry,
@@ -53,6 +61,12 @@ from .snapshot_builder import (
 )
 
 __all__ = [
+    # Deployment Correlator
+    "DeploymentCorrelator",
+    "DeploymentCorrelationResult",
+    "CorrelationType",
+    "get_deployment_correlator",
+    "reset_deployment_correlator",
     # Incident Group
     "IncidentGroupManager",
     "IncidentGroup",

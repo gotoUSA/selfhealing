@@ -3,8 +3,8 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-28
 **선행 문서:** [146_POSTMORTEM_LIFECYCLE_INTEGRATION.md](146_POSTMORTEM_LIFECYCLE_INTEGRATION.md), [147_POSTMORTEM_INCIDENT_GROUP.md](147_POSTMORTEM_INCIDENT_GROUP.md)
-**관련 코드:** `services/canary/rollback_resolver.py`, `services/runtime_config/base.py`
-**상태:** 설계 완료
+**관련 코드:** `services/postmortem/deployment_correlator.py`, `adapters/deployment/`
+**상태:** 구현 완료
 
 ---
 
@@ -341,28 +341,28 @@ SELFHEALING_DEPLOYMENT_POST_WINDOW_MINUTES=30
 
 ### 15.1 코어 구현
 
-- [ ] `DeploymentCorrelator` 클래스 구현
-- [ ] `ExternalDeploymentAdapter` 인터페이스 정의
-- [ ] `MockDeploymentAdapter` 구현
-- [ ] Settings 추가
+- [x] `DeploymentCorrelator` 클래스 구현
+- [x] `ExternalDeploymentAdapter` 인터페이스 정의
+- [x] `MockDeploymentAdapter` 구현
+- [x] Settings 추가
 
 ### 15.2 어댑터 구현
 
-- [ ] `KubernetesDeploymentAdapter` 구현
-- [ ] K8s RBAC 설정 문서화
-- [ ] 연결 테스트
+- [x] `KubernetesDeploymentAdapter` 구현
+- [x] K8s RBAC 설정 문서화
+- [x] 연결 테스트
 
 ### 15.3 Postmortem 통합
 
-- [ ] `_generate_postmortem_data()` 수정
-- [ ] 배포 컨텍스트 필드 추가
-- [ ] 타임라인에 배포 이벤트 삽입
+- [x] `_generate_postmortem_data()` 수정
+- [x] 배포 컨텍스트 필드 추가
+- [x] 타임라인에 배포 이벤트 삽입
 
 ### 15.4 테스트
 
-- [ ] Mock 어댑터 테스트
-- [ ] 상관관계 분석 테스트
-- [ ] Fallback 동작 테스트
+- [x] Mock 어댑터 테스트
+- [x] 상관관계 분석 테스트
+- [x] Fallback 동작 테스트
 
 ---
 

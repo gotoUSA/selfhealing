@@ -86,10 +86,12 @@ def _generate_postmortem_data(
     unaffected: list,
     fast_fail_count: int,
     snapshot: dict,
+    service_name: str | None = None,
 ) -> dict:
     """Generate postmortem data structure with dynamic calculations.
 
     Google SRE 표준에 맞춰 trigger, detection, resolution, root_cause_hypothesis 필드 포함.
+    배포 연관성 분석을 통해 인시던트 전후 배포 이력을 수집합니다.
     """
     from selfhealing.utils.duration import calculate_incident_duration
 
@@ -112,6 +114,55 @@ def _generate_postmortem_data(
     # Root cause 관련 필드 추출
     root_cause_fields = build_postmortem_root_cause_fields(timeline, affected)
 
+    # 서비스 이름 추출
+    target_service = service_name or (affected[0] if affected else "unknown")
+
+    # 시작/종료 시각 파싱
+    start_time = None
+    end_time = None
+    if duration_result.started_at:
+        try:
+            from datetime import datetime
+
+            start_time = datetime.fromisoformat(duration_result.started_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    if duration_result.resolved_at:
+        try:
+            from datetime import datetime
+
+            end_time = datetime.fromisoformat(duration_result.resolved_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+
+    # 배포 연관성 분석 (deployment_context)
+    deployment_context = None
+    deployment_timeline_events = []
+    try:
+        from selfhealing.services.postmortem.deployment_correlator import get_deployment_correlator
+
+        correlator = get_deployment_correlator()
+
+        if start_time and correlator.is_enabled():
+            deployment_context = correlator.get_deployments_for_postmortem(
+                incident_time=start_time,
+                service_name=target_service,
+            )
+            deployment_timeline_events = correlator.get_deployment_timeline_events(
+                incident_time=start_time,
+                service_name=target_service,
+            )
+    except ImportError:
+        pass  # DeploymentCorrelator 없으면 무시
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(f"Failed to collect deployment context: {e}")
+
+    # 타임라인에 배포 이벤트 삽입
+    merged_timeline = timeline[:30] + deployment_timeline_events
+    merged_timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
+
     return {
         "incident_id": incident_id,
         "generated_at": current_time,
@@ -131,8 +182,10 @@ def _generate_postmortem_data(
             "fast_fail_count": fast_fail_count,
             "total_events": len(timeline),
         },
-        "timeline": timeline[:30],
+        "timeline": merged_timeline[:30],
         "system_snapshot": snapshot,
+        # 배포 연관성 분석
+        "deployment_context": deployment_context,
         "auto_actions": auto_actions,
         "recommendations": recommendations,
     }
