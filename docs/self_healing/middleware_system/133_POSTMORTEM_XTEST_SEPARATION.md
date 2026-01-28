@@ -135,12 +135,15 @@ Post-mortem은 **실제 장애**에 대한 사후 분석 리포트이나, 현재
 | `POST /xtest/generate-postmortem/` | `POST /postmortem/generate/` |
 | `GET /xtest/healing-incidents/` | `GET /postmortem/incidents/` |
 
-### 6.2 Deprecated 경로 (호환성)
+### 6.2 기존 경로 제거
 
-| Deprecated 경로 | 리다이렉트 대상 | 제거 예정 |
-|----------------|---------------|----------|
-| `/xtest/generate-postmortem/` | `/postmortem/generate/` | 3개월 후 |
-| `/xtest/healing-incidents/` | `/postmortem/incidents/` | 3개월 후 |
+기존 `/xtest/` 경로는 완전히 제거되었습니다:
+- `/xtest/generate-postmortem/` → 제거됨
+- `/xtest/healing-incidents/` → 제거됨
+
+새 경로만 사용하세요:
+- `POST /postmortem/generate/`
+- `GET /postmortem/incidents/`
 
 ---
 
@@ -218,7 +221,7 @@ Post-mortem은 **실제 장애**에 대한 사후 분석 리포트이나, 현재
 ### 9.3 Phase 3
 
 - [x] Settings 필드명 변경
-- [x] 기존 필드명 deprecated alias 추가
+- [x] ~~기존 필드명 deprecated alias 추가~~ (제거됨 - 깔끔한 분리)
 - [x] 환경 변수명 변경 문서화
 - [x] 테스트 통과 확인
 
@@ -226,7 +229,7 @@ Post-mortem은 **실제 장애**에 대한 사후 분석 리포트이나, 현재
 
 - [x] `observability.py`에서 View 제거
 - [x] `xtest/__init__.py` export 정리
-- [x] Deprecated URL 경로 추가
+- [x] ~~Deprecated URL 경로 추가~~ (제거됨 - 깔끔한 분리)
 - [x] 마이그레이션 가이드 문서화
 
 ---
@@ -245,9 +248,14 @@ Post-mortem은 **실제 장애**에 대한 사후 분석 리포트이나, 현재
 
 | 항목 | 처리 |
 |------|------|
-| 기존 `/xtest/` 경로 | Deprecated 유지 (3개월) |
-| 기존 Settings 변수명 | Deprecated alias 유지 |
-| 기존 환경 변수 | Deprecated 유지 |
+| 기존 `/xtest/` 경로 | 완전 제거됨 |
+| 기존 Settings 변수명 | 완전 제거됨 |
+| 기존 환경 변수 | 완전 제거됨 |
+
+새 API만 사용:
+- `POST /postmortem/generate/`
+- `GET /postmortem/incidents/`
+- `auto_postmortem_enabled`, `postmortem_history_limit` 등
 
 ---
 

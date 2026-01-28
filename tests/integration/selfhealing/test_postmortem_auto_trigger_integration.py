@@ -77,10 +77,10 @@ class TestPostmortemAutoTriggerIntegration:
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.api.django.views.xtest.base import get_healing_incidents
+        from selfhealing.services.postmortem_store import get_healing_incidents
 
         # 설정: 자동 Post-mortem 비활성화 (기본값)
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "false")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "false")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -115,8 +115,8 @@ class TestPostmortemAutoTriggerIntegration:
         )
 
         # 설정: 자동 Post-mortem 활성화, 최소 duration 0으로 설정
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -162,11 +162,11 @@ class TestPostmortemAutoTriggerIntegration:
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.api.django.views.xtest.base import get_healing_incidents
+        from selfhealing.services.postmortem_store import get_healing_incidents
 
         # 설정: 자동 Post-mortem 활성화, 최소 duration 3600초 (1시간)
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "3600")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "3600")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -204,8 +204,8 @@ class TestPostmortemAutoTriggerIntegration:
         )
 
         # 설정: 자동 Post-mortem 활성화
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -349,8 +349,8 @@ class TestPostmortemNotificationIntegration:
         )
 
         # 설정: 자동 Post-mortem 및 알림 활성화
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
         monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "true")
         monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_MIN_DURATION", "0")
 
@@ -390,8 +390,8 @@ class TestPostmortemNotificationIntegration:
         )
 
         # 설정: Post-mortem 활성화, 알림 비활성화
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
         monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "false")
 
         # 기본 핸들러 등록

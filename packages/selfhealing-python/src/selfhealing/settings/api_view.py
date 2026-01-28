@@ -173,30 +173,6 @@ class ApiViewSettings(BaseSettings):
     )
 
     # ==========================================================================
-    # Deprecated Aliases (3개월 후 제거 예정)
-    # xtest_ 접두사 필드들은 새 필드명으로 자동 매핑됨
-    # ==========================================================================
-    @property
-    def xtest_postmortem_history_limit(self) -> int:
-        """Deprecated: Use postmortem_history_limit instead."""
-        return self.postmortem_history_limit
-
-    @property
-    def xtest_incidents_default_limit(self) -> int:
-        """Deprecated: Use postmortem_incidents_default_limit instead."""
-        return self.postmortem_incidents_default_limit
-
-    @property
-    def xtest_auto_postmortem_enabled(self) -> bool:
-        """Deprecated: Use auto_postmortem_enabled instead."""
-        return self.auto_postmortem_enabled
-
-    @property
-    def xtest_auto_postmortem_min_duration(self) -> int:
-        """Deprecated: Use auto_postmortem_min_duration instead."""
-        return self.auto_postmortem_min_duration
-
-    # ==========================================================================
     # Post-mortem Notification - CB 복구 후 Post-mortem 알림
     # ==========================================================================
     postmortem_notification_enabled: bool = Field(

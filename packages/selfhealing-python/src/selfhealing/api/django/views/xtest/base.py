@@ -585,21 +585,11 @@ def collect_system_snapshot() -> dict[str, Any]:
 
 # =============================================================================
 # In-Memory Event Storage (테스트용 이벤트만 여기서 관리)
-# 인시던트 저장소는 services/postmortem_store.py로 이동됨
 # =============================================================================
 
 _healing_events_lock = threading.Lock()
 _healing_events: list[dict[str, Any]] = []
 _max_events = 500
-
-# Incident 관련 함수는 postmortem_store에서 re-export (Backward Compatibility)
-from selfhealing.services.postmortem_store import (
-    add_healing_incident,
-    get_healing_incidents,
-    get_healing_incidents_count,
-    set_db_persistence_enabled,
-    get_db_persistence_enabled,
-)
 
 
 def add_healing_event(event: dict[str, Any]) -> None:
@@ -627,4 +617,3 @@ def get_healing_events_count() -> int:
 # Legacy alias for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
-_add_healing_incident = add_healing_incident

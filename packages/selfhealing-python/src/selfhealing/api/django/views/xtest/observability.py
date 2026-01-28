@@ -7,14 +7,12 @@ X-Test-Mode Observability & Blast Radius Views
 - MultiServiceBlastRadiusView: 다중 서비스 격리 매트릭스 테스트
 - RecordHealingEventView: 힐링 이벤트 기록
 
-DEPRECATED (3개월 후 제거 예정):
-- PostmortemGeneratorView: views/postmortem.py로 이동됨
-- GetHealingIncidentsView: views/postmortem.py로 이동됨
-  새 경로: /postmortem/generate/, /postmortem/incidents/
+Production Post-mortem API는 views/postmortem.py를 참조하세요:
+- POST /postmortem/generate/ - Post-mortem 생성
+- GET /postmortem/incidents/ - 인시던트 목록 조회
 """
 
 import logging
-import warnings
 
 from django.utils import timezone
 from rest_framework import status
@@ -25,12 +23,9 @@ from rest_framework.views import APIView
 from .base import (
     XTestModeMixin,
     add_healing_event,
-    add_healing_incident,
     collect_system_snapshot,
     get_healing_events,
     get_healing_events_count,
-    get_healing_incidents,
-    get_healing_incidents_count,
 )
 
 logger = logging.getLogger(__name__)
@@ -542,90 +537,6 @@ def _generate_postmortem_data(
     }
 
 
-class PostmortemGeneratorView(XTestModeMixin, APIView):
-    """
-    DEPRECATED: /postmortem/generate/ 경로를 사용하세요.
-
-    자동 Post-mortem 리포트 생성 API (X-Test 전용, 3개월 후 제거 예정).
-
-    POST /api/self-healing/xtest/generate-postmortem/
-    Body: {"incident_id": "HEAL-2025-1226-001"} (optional)
-
-    최근 힐링 이벤트를 기반으로 자동 Post-mortem 리포트를 생성합니다.
-    """
-
-    def post(self, request: Request) -> Response:
-        warnings.warn(
-            "xtest/generate-postmortem/ is deprecated. Use /postmortem/generate/ instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        denied = self.check_chaos_permission(request)
-        if denied:
-            return denied
-
-        # Exception은 exception handler가 처리
-        incident_id = request.data.get("incident_id")
-
-        from selfhealing.services.circuit_breaker_service import (
-            get_circuit_breaker_service,
-        )
-        from selfhealing.services.event_bus import get_event_bus
-
-        bus = get_event_bus()
-        history_limit = self._get_postmortem_history_limit()
-        history = bus.get_history(limit=history_limit)
-        cb_service = get_circuit_breaker_service()
-
-        affected, unaffected = _collect_service_states(cb_service)
-        snapshot = collect_system_snapshot()
-        local_events = get_healing_events(20)
-        timeline = _build_timeline(history, local_events)
-
-        if not incident_id:
-            incident_id = f"HEAL-{timezone.now().strftime('%Y-%m%d-%H%M')}"
-
-        fast_fail_count = len([e for e in history if e.get("data", {}).get("fast_fail")])
-
-        postmortem = _generate_postmortem_data(incident_id, timeline, affected, unaffected, fast_fail_count, snapshot)
-
-        add_healing_incident(postmortem)
-
-        logger.info(f"[Stage 51] Postmortem generated: {incident_id}")
-
-        # WAL Audit 기록
-        self.log_xtest_audit(
-            request=request,
-            action="generate_postmortem",
-            component="observability",
-            details={
-                "incident_id": incident_id,
-                "affected_services": affected,
-                "duration_seconds": postmortem.get("duration_seconds"),
-            },
-            result="success",
-        )
-
-        return Response(
-            {
-                "status": "success",
-                "postmortem": postmortem,
-                "timestamp": timezone.now().isoformat(),
-            }
-        )
-
-    @staticmethod
-    def _get_postmortem_history_limit() -> int:
-        """Settings에서 postmortem_history_limit 조회."""
-        try:
-            from selfhealing.settings.api_view import get_api_view_settings
-
-            return get_api_view_settings().xtest_postmortem_history_limit
-        except Exception:
-            return 100  # 기본값
-
-
 class RecordHealingEventView(XTestModeMixin, APIView):
     """
     Stage 51: 힐링 이벤트 기록 API.
@@ -683,56 +594,9 @@ class RecordHealingEventView(XTestModeMixin, APIView):
         )
 
 
-class GetHealingIncidentsView(XTestModeMixin, APIView):
-    """
-    DEPRECATED: /postmortem/incidents/ 경로를 사용하세요.
-
-    힐링 인시던트 목록 조회 API (X-Test 전용, 3개월 후 제거 예정).
-
-    GET /api/self-healing/xtest/healing-incidents/?limit=10
-    """
-
-    def get(self, request: Request) -> Response:
-        warnings.warn(
-            "xtest/healing-incidents/ is deprecated. Use /postmortem/incidents/ instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        denied = self.check_chaos_permission(request)
-        if denied:
-            return denied
-
-        default_limit = self._get_incidents_default_limit()
-        limit = int(request.query_params.get("limit", default_limit))
-
-        incidents = get_healing_incidents(limit)
-
-        return Response(
-            {
-                "status": "success",
-                "incidents": incidents,
-                "total_count": get_healing_incidents_count(),
-                "timestamp": timezone.now().isoformat(),
-            }
-        )
-
-    @staticmethod
-    def _get_incidents_default_limit() -> int:
-        """Settings에서 incidents_default_limit 조회."""
-        try:
-            from selfhealing.settings.api_view import get_api_view_settings
-
-            return get_api_view_settings().xtest_incidents_default_limit
-        except Exception:
-            return 10  # 기본값
-
-
 __all__ = [
     "HealingTimelineView",
     "BlastRadiusTestView",
     "MultiServiceBlastRadiusView",
-    "PostmortemGeneratorView",
     "RecordHealingEventView",
-    "GetHealingIncidentsView",
 ]

@@ -50,10 +50,14 @@ from .base import (
     GLOBAL_SCOPE_ENDPOINT_PATTERNS,
     XTestModeMixin,
     add_healing_event,
-    add_healing_incident,
     collect_system_snapshot,
     get_healing_events,
     get_healing_events_count,
+)
+
+# Incident functions from postmortem_store
+from selfhealing.services.postmortem_store import (
+    add_healing_incident,
     get_healing_incidents,
     get_healing_incidents_count,
 )
@@ -112,10 +116,8 @@ from .integration_scenarios import (
 # Observability views (Stage 51)
 from .observability import (
     BlastRadiusTestView,
-    GetHealingIncidentsView,
     HealingTimelineView,
     MultiServiceBlastRadiusView,
-    PostmortemGeneratorView,
     RecordHealingEventView,
 )
 
@@ -181,9 +183,7 @@ __all__ = [
     "HealingTimelineView",
     "BlastRadiusTestView",
     "MultiServiceBlastRadiusView",
-    "PostmortemGeneratorView",
     "RecordHealingEventView",
-    "GetHealingIncidentsView",
     # DLQ X-Test views
     "InjectDLQEntryView",
     "DLQXTestStatusView",

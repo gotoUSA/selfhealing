@@ -49,7 +49,7 @@ class TestPostmortemViewAudit:
             patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service") as mock_cb,
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
             patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
-            patch("selfhealing.api.django.views.xtest.base.add_healing_incident"),
+            patch("selfhealing.services.postmortem_store.add_healing_incident"),
         ):
             mock_bus.return_value.get_history.return_value = []
             mock_cb.return_value.repository.get_all_states.return_value = []
@@ -191,8 +191,8 @@ class TestAutoPostmortemAuditIntegration:
             EventType,
         )
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -211,7 +211,7 @@ class TestAutoPostmortemAuditIntegration:
 
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus_fn,
-            patch("selfhealing.api.django.views.xtest.base.add_healing_incident"),
+            patch("selfhealing.services.postmortem_store.add_healing_incident"),
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
             patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
             patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
@@ -239,8 +239,8 @@ class TestAutoPostmortemAuditIntegration:
             EventType,
         )
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -262,7 +262,7 @@ class TestAutoPostmortemAuditIntegration:
 
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus_fn,
-            patch("selfhealing.api.django.views.xtest.base.add_healing_incident"),
+            patch("selfhealing.services.postmortem_store.add_healing_incident"),
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
             patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
             patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
@@ -300,8 +300,8 @@ class TestAutoPostmortemAuditIntegration:
             EventType,
         )
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -320,7 +320,7 @@ class TestAutoPostmortemAuditIntegration:
 
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus_fn,
-            patch("selfhealing.api.django.views.xtest.base.add_healing_incident"),
+            patch("selfhealing.services.postmortem_store.add_healing_incident"),
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
             patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
             patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),

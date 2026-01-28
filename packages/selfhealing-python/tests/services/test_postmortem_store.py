@@ -139,22 +139,8 @@ class TestPostmortemStoreDbPersistence:
         clear_healing_incidents()
 
 
-class TestPostmortemStoreBackwardCompatibility:
-    """Backward Compatibility 테스트."""
-
-    @pytest.mark.django_db
-    def test_import_from_xtest_base(self):
-        """xtest/base.py에서 incident 함수 import 가능한지 확인."""
-        from selfhealing.api.django.views.xtest.base import (
-            add_healing_incident,
-            get_healing_incidents,
-            get_healing_incidents_count,
-        )
-
-        # 함수가 정상적으로 import 되는지만 확인
-        assert callable(add_healing_incident)
-        assert callable(get_healing_incidents)
-        assert callable(get_healing_incidents_count)
+class TestPostmortemStoreImport:
+    """Import 테스트."""
 
     def test_import_from_postmortem_store(self):
         """postmortem_store.py에서 직접 import 가능한지 확인."""

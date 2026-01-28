@@ -25,19 +25,6 @@ class TestApiViewSettingsPostmortem:
         assert hasattr(settings, "postmortem_history_limit")
         assert hasattr(settings, "postmortem_incidents_default_limit")
 
-    def test_deprecated_xtest_aliases_work(self):
-        """xtest_ 접두사 deprecated alias가 작동하는지 확인."""
-        from selfhealing.settings.api_view import get_api_view_settings, reset_api_view_settings
-
-        reset_api_view_settings()
-        settings = get_api_view_settings()
-
-        # Deprecated alias가 새 필드와 동일한 값을 반환해야 함
-        assert settings.xtest_auto_postmortem_enabled == settings.auto_postmortem_enabled
-        assert settings.xtest_auto_postmortem_min_duration == settings.auto_postmortem_min_duration
-        assert settings.xtest_postmortem_history_limit == settings.postmortem_history_limit
-        assert settings.xtest_incidents_default_limit == settings.postmortem_incidents_default_limit
-
     def test_default_values(self):
         """기본값이 올바른지 확인."""
         from selfhealing.settings.api_view import get_api_view_settings, reset_api_view_settings
