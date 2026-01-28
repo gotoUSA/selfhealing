@@ -52,10 +52,34 @@ def get_db_persistence_enabled() -> bool:
 
 
 def _get_postmortem_model():
-    """PostmortemRecord 모델을 동적으로 가져옴 (순환 import 방지)."""
+    """
+    PostmortemRecord 모델을 동적으로 가져옴.
+
+    우선순위:
+    1. ProviderRegistry에 등록된 모델 (권장)
+    2. 하위 호환성을 위한 직접 import (deprecated)
+
+    Returns:
+        PostmortemRecord 모델 클래스, 또는 None
+    """
+    # 1. ProviderRegistry 우선 조회 (권장 방식)
+    try:
+        from selfhealing.factory import ProviderRegistry
+
+        model = ProviderRegistry.get_postmortem_model()
+        if model is not None:
+            return model
+    except ImportError:
+        pass
+
+    # 2. 하위 호환성: 직접 import (deprecated, 향후 제거 예정)
     try:
         from shopping.models import PostmortemRecord
 
+        logger.warning(
+            "[Postmortem] Using direct shopping.models import is deprecated. "
+            "Please register model via ProviderRegistry.register_postmortem_model()"
+        )
         return PostmortemRecord
     except ImportError:
         return None

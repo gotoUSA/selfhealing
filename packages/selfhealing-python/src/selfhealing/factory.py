@@ -57,6 +57,9 @@ class ProviderRegistry:
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
 
+    # Model class registry (registered by host app, not by selfhealing)
+    _postmortem_model: type | None = None
+
     # Default provider names
     _default_cache: str = "memory"
     _default_queue: str = "sync"
@@ -133,6 +136,49 @@ class ProviderRegistry:
         """
         cls._statistics_adapter = adapter
         logger.info(f"[Registry] Statistics adapter registered: {type(adapter).__name__}")
+
+    @classmethod
+    def register_postmortem_model(cls, model_class: type) -> None:
+        """
+        Register the PostmortemRecord model class.
+
+        This allows selfhealing package to use the host app's concrete model
+        without hardcoding import paths. Should be called during app initialization.
+
+        Args:
+            model_class: Concrete Django model inheriting AbstractPostmortemRecord
+
+        Example (Django):
+            # shopping/apps.py
+            from selfhealing.factory import ProviderRegistry
+
+            class ShoppingConfig(AppConfig):
+                def ready(self):
+                    from shopping.models import PostmortemRecord
+                    ProviderRegistry.register_postmortem_model(PostmortemRecord)
+        """
+        cls._postmortem_model = model_class
+        logger.info(f"[Registry] Postmortem model registered: {model_class.__name__}")
+
+    @classmethod
+    def get_postmortem_model(cls) -> type | None:
+        """
+        Get the registered PostmortemRecord model class.
+
+        Returns:
+            The registered model class, or None if not registered.
+        """
+        return cls._postmortem_model
+
+    @classmethod
+    def has_postmortem_model(cls) -> bool:
+        """
+        Check if a PostmortemRecord model is registered.
+
+        Returns:
+            True if a model is registered.
+        """
+        return cls._postmortem_model is not None
 
     # =========================================================================
     # Provider Getters
@@ -439,13 +485,21 @@ class ProviderRegistry:
 
     @classmethod
     def clear_instances(cls) -> None:
-        """Clear all cached instances (useful for testing)."""
+        """
+        Clear all cached instances.
+
+        For testing only. Use to reset singleton instances between tests.
+        """
         cls._instances.clear()
         logger.debug("[Registry] Cleared all cached instances")
 
     @classmethod
     def reset(cls) -> None:
-        """Reset registry to initial state (useful for testing)."""
+        """
+        Reset registry to initial state.
+
+        For testing only. Clears all registered providers and instances.
+        """
         cls._instances.clear()
         cls._cache_providers.clear()
         cls._task_queues.clear()
@@ -454,6 +508,7 @@ class ProviderRegistry:
         cls._security_repos.clear()
         cls._audit_adapters.clear()
         cls._statistics_adapter = None  # Reset statistics adapter
+        cls._postmortem_model = None  # Reset postmortem model
         cls._default_cache = "memory"
         cls._default_queue = "sync"
         cls._default_repo = "redis"  # Changed from "django" to "redis"

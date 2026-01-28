@@ -128,9 +128,7 @@ class TestSlackBlockKitBuilder:
         assert len(buttons) >= 1
 
         # 상세 보기 버튼 (primary style)
-        detail_button = next(
-            (b for b in buttons if "상세 보기" in b["text"]["text"]), None
-        )
+        detail_button = next((b for b in buttons if "상세 보기" in b["text"]["text"]), None)
         assert detail_button is not None
         assert detail_button["style"] == "primary"
         assert detail_button["url"] == "https://pm.internal/PM-20260128-001"
@@ -232,9 +230,7 @@ class TestSlackBlockKitBuilder:
         )
 
         message = SlackBlockKitBuilder.build_postmortem_message(payload)
-        actions_block = next(
-            (b for b in message["blocks"] if b["type"] == "actions"), None
-        )
+        actions_block = next((b for b in message["blocks"] if b["type"] == "actions"), None)
 
         assert actions_block is not None
         assert len(actions_block["elements"]) <= 4
