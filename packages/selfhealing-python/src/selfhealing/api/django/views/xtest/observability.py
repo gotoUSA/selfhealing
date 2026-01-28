@@ -416,68 +416,19 @@ def _generate_dynamic_actions(
     """
     타임라인과 분석 결과를 기반으로 동적 action items 및 recommendations 생성.
 
+    순수 함수 generate_dynamic_actions를 래핑하여 Django timezone을 사용.
+
     Returns:
         tuple: (auto_actions, recommendations)
     """
-    auto_actions = []
-    recommendations = []
+    from selfhealing.utils.postmortem_actions import generate_dynamic_actions
 
-    # 이벤트 타입별 액션 매핑
-    action_map = {
-        "circuit_breaker_opened": "Circuit Breaker OPEN 전환",
-        "circuit_breaker_half_opened": "Circuit Breaker 복구 시도 (HALF_OPEN)",
-        "circuit_breaker_closed": "Circuit Breaker 정상 복구 (CLOSED)",
-        "error_budget_critical": "Error Budget 임계치 경고",
-        "error_budget_exhausted": "Error Budget 소진",
-        "emergency_activated": "비상 모드 활성화",
-        "kill_switch_activated": "Kill Switch 활성화",
-    }
-
-    seen_actions = set()
-
-    for event in timeline:
-        event_type = event.get("event_type", "").lower()
-        service = event.get("details", {}).get("service_name", "")
-        timestamp = event.get("timestamp", "")
-
-        for key, action_text in action_map.items():
-            if key in event_type and (key, service) not in seen_actions:
-                seen_actions.add((key, service))
-                auto_actions.append(
-                    {
-                        "action": action_text,
-                        "status": "completed",
-                        "timestamp": timestamp,
-                        "service": service,
-                    }
-                )
-                break
-
-    # 액션이 없으면 기본 메시지
-    if not auto_actions:
-        auto_actions.append(
-            {
-                "action": "인시던트 기록됨",
-                "status": "completed",
-                "timestamp": timezone.now().isoformat(),
-                "service": None,
-            }
-        )
-
-    # Recommendations 생성
-    if duration_seconds is not None:
-        if duration_seconds > 120:
-            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 2분을 초과함 - SLA 검토 필요")
-        elif duration_seconds > 60:
-            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 목표(60초) 초과 - 개선 검토 권장")
-
-    if len(affected_services) > 3:
-        recommendations.append(f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요")
-
-    if not recommendations:
-        recommendations.append("장애 근본 원인 분석 및 재발 방지 검토 권장")
-
-    return auto_actions, recommendations
+    return generate_dynamic_actions(
+        timeline=timeline,
+        affected_services=affected_services,
+        duration_seconds=duration_seconds,
+        current_timestamp=timezone.now().isoformat(),
+    )
 
 
 def _build_timeline(history: list, local_events: list) -> list:

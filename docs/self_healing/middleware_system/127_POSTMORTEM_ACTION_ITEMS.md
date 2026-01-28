@@ -3,7 +3,7 @@
 **문서 버전:** 1.0
 **작성일:** 2026-01-27
 **선행 문서:** [126_POSTMORTEM_DURATION_CALC.md](126_POSTMORTEM_DURATION_CALC.md)
-**상태:** 구현 준비
+**상태:** ✅ 구현 완료
 
 ---
 
@@ -138,27 +138,27 @@ Google SRE 표준에 맞춘 구조:
 
 ### 7.1 헬퍼 함수
 
-- [ ] `_generate_dynamic_actions()` 함수 생성
-- [ ] 타임라인에서 이벤트 타입별 분류
-- [ ] 이벤트 → Action 매핑
-- [ ] 조건 기반 Recommendation 생성
+- [x] `_generate_dynamic_actions()` 함수 생성
+- [x] 타임라인에서 이벤트 타입별 분류
+- [x] 이벤트 → Action 매핑
+- [x] 조건 기반 Recommendation 생성
 
 ### 7.2 _generate_postmortem_data 수정
 
-- [ ] 헬퍼 함수 호출
-- [ ] `auto_actions` 필드에 동적 리스트 설정
-- [ ] `recommendations` 필드에 동적 리스트 설정
+- [x] 헬퍼 함수 호출
+- [x] `auto_actions` 필드에 동적 리스트 설정
+- [x] `recommendations` 필드에 동적 리스트 설정
 
 ### 7.3 하드코딩 제거
 
-- [ ] 기존 하드코딩된 `auto_actions` 제거
-- [ ] 기존 하드코딩된 `recommendations` 제거
+- [x] 기존 하드코딩된 `auto_actions` 제거
+- [x] 기존 하드코딩된 `recommendations` 제거
 
 ### 7.4 테스트
 
-- [ ] CB OPEN 이벤트 있을 때 Action 생성 확인
-- [ ] 빈 타임라인일 때 빈 리스트 반환
-- [ ] 느린 복구 시 Recommendation 생성 확인
+- [x] CB OPEN 이벤트 있을 때 Action 생성 확인
+- [x] 빈 타임라인일 때 빈 리스트 반환
+- [x] 느린 복구 시 Recommendation 생성 확인
 
 ---
 
