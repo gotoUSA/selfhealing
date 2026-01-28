@@ -196,6 +196,7 @@ SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_MIN_DURATION=60
 - [x] 알림 비활성화 시 미발송 확인
 - [x] 알림 활성화 시 정상 발송 확인
 - [x] 중복 알림 방지 확인
+- [x] 통합 테스트 추가 (`TestPostmortemNotificationIntegration`)
 
 ---
 

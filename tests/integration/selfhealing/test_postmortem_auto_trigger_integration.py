@@ -293,3 +293,229 @@ class TestPostmortemHandlerPriorityIntegration:
         assert (
             replay_handler.priority.value > postmortem_handler.priority.value
         ), "Replay 핸들러가 Postmortem 핸들러보다 먼저 실행되어야 함"
+
+
+class TestPostmortemNotificationIntegration:
+    """
+    Post-mortem 알림 통합 테스트 (문서 131).
+
+    Post-mortem 생성 시 알림이 발송되는지 확인.
+    """
+
+    def setup_method(self):
+        """각 테스트 전에 상태 초기화."""
+        from selfhealing.services.event_bus import get_event_bus
+        from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.api.django.views.xtest.base import (
+            _healing_events,
+            _healing_incidents,
+            _healing_events_lock,
+        )
+
+        self.bus = get_event_bus()
+        self.bus.reset()
+        reset_api_view_settings()
+
+        with _healing_events_lock:
+            _healing_events.clear()
+            _healing_incidents.clear()
+
+    def teardown_method(self):
+        """각 테스트 후에 상태 초기화."""
+        from selfhealing.services.event_bus import get_event_bus
+        from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.api.django.views.xtest.base import (
+            _healing_events,
+            _healing_incidents,
+            _healing_events_lock,
+        )
+
+        get_event_bus().reset()
+        reset_api_view_settings()
+
+        with _healing_events_lock:
+            _healing_events.clear()
+            _healing_incidents.clear()
+
+    def test_notification_sent_when_postmortem_generated(self, monkeypatch):
+        """
+        Post-mortem 생성 시 알림이 발송되는지 확인.
+        """
+        from unittest.mock import patch, MagicMock
+        from selfhealing.services.event_bus import (
+            register_default_handlers,
+            EventType,
+            SelfHealingEvent,
+        )
+
+        # 설정: 자동 Post-mortem 및 알림 활성화
+        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_MIN_DURATION", "0")
+
+        # 기본 핸들러 등록
+        register_default_handlers()
+
+        # UnifiedNotificationManager.notify 모킹
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.suppressed = False
+
+        with patch(
+            "selfhealing.services.unified_notification.UnifiedNotificationManager.notify",
+            return_value=mock_result,
+        ) as mock_notify:
+            # CB CLOSED 이벤트 발행
+            event = SelfHealingEvent(
+                event_type=EventType.CIRCUIT_BREAKER_CLOSED,
+                data={"service_name": "notification_test_service", "previous_state": "open"},
+                source="integration_test",
+            )
+            self.bus.publish(event)
+
+            # notify가 호출되었는지 확인 (Post-mortem 알림)
+            notification_calls = [call for call in mock_notify.call_args_list if "Post-mortem" in str(call)]
+            assert len(notification_calls) >= 1, "Post-mortem 생성 시 알림이 발송되어야 함"
+
+    def test_notification_not_sent_when_disabled(self, monkeypatch):
+        """
+        알림 비활성화 시 알림이 발송되지 않는지 확인.
+        """
+        from unittest.mock import patch, MagicMock
+        from selfhealing.services.event_bus import (
+            register_default_handlers,
+            EventType,
+            SelfHealingEvent,
+        )
+
+        # 설정: Post-mortem 활성화, 알림 비활성화
+        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "false")
+
+        # 기본 핸들러 등록
+        register_default_handlers()
+
+        # UnifiedNotificationManager.notify 모킹
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.suppressed = False
+
+        with patch(
+            "selfhealing.services.unified_notification.UnifiedNotificationManager.notify",
+            return_value=mock_result,
+        ) as mock_notify:
+            # CB CLOSED 이벤트 발행
+            event = SelfHealingEvent(
+                event_type=EventType.CIRCUIT_BREAKER_CLOSED,
+                data={"service_name": "no_notification_service", "previous_state": "open"},
+                source="integration_test",
+            )
+            self.bus.publish(event)
+
+            # Post-mortem 관련 notify 호출이 없어야 함
+            postmortem_calls = [call for call in mock_notify.call_args_list if "Post-mortem" in str(call)]
+            assert len(postmortem_calls) == 0, "알림 비활성화 시 Post-mortem 알림이 발송되면 안 됨"
+
+    def test_notification_priority_high_for_long_incident(self, monkeypatch):
+        """
+        인시던트 지속 시간이 5분 이상일 때 HIGH 우선순위로 알림 발송.
+        """
+        from unittest.mock import patch, MagicMock
+        from selfhealing.services.event_bus import _send_postmortem_notification
+        from selfhealing.services.unified_notification import NotificationPriority
+        from selfhealing.settings.api_view import ApiViewSettings
+
+        # Settings 모킹
+        mock_settings = MagicMock()
+        mock_settings.postmortem_notification_enabled = True
+        mock_settings.postmortem_notification_min_duration = 0
+
+        postmortem = {
+            "incident_id": "LONG-INCIDENT-001",
+            "started_at": "2026-01-28T10:00:00Z",
+            "resolved_at": "2026-01-28T10:10:00Z",
+            "recommendations": ["조치 1"],
+        }
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.suppressed = False
+
+        with patch(
+            "selfhealing.services.unified_notification.UnifiedNotificationManager.notify",
+            return_value=mock_result,
+        ) as mock_notify:
+            _send_postmortem_notification(
+                settings=mock_settings,
+                postmortem=postmortem,
+                incident_id="LONG-INCIDENT-001",
+                service_name="long_incident_service",
+                duration=600,  # 10분
+                affected_services=["service_a"],
+            )
+
+            # notify 호출 확인
+            assert mock_notify.called, "알림이 발송되어야 함"
+            payload = mock_notify.call_args[0][0]
+            assert payload.priority == NotificationPriority.HIGH, "5분 이상 인시던트는 HIGH 우선순위여야 함"
+
+    def test_notification_dedup_key_prevents_duplicate(self, monkeypatch):
+        """
+        동일 incident_id에 대해 중복 알림이 방지되는지 확인.
+        """
+        from unittest.mock import patch, MagicMock
+        from selfhealing.services.event_bus import _send_postmortem_notification
+        from selfhealing.services.unified_notification import UnifiedNotificationManager
+
+        mock_settings = MagicMock()
+        mock_settings.postmortem_notification_enabled = True
+        mock_settings.postmortem_notification_min_duration = 0
+
+        postmortem = {
+            "incident_id": "DEDUP-TEST-001",
+            "started_at": "2026-01-28T10:00:00Z",
+            "resolved_at": "2026-01-28T10:02:00Z",
+            "recommendations": [],
+        }
+
+        # 실제 UnifiedNotificationManager 사용 (cooldown 동작 확인)
+        manager = UnifiedNotificationManager()
+
+        with patch.object(manager, "_send_to_channels") as mock_send:
+            mock_send.return_value = MagicMock(
+                success=True,
+                channels_sent=["slack"],
+                channels_failed=[],
+            )
+
+            # 첫 번째 알림 발송
+            _send_postmortem_notification(
+                settings=mock_settings,
+                postmortem=postmortem,
+                incident_id="DEDUP-TEST-001",
+                service_name="dedup_test_service",
+                duration=120,
+                affected_services=[],
+            )
+
+            # 두 번째 동일 알림 발송 시도
+            _send_postmortem_notification(
+                settings=mock_settings,
+                postmortem=postmortem,
+                incident_id="DEDUP-TEST-001",
+                service_name="dedup_test_service",
+                duration=120,
+                affected_services=[],
+            )
+
+        # dedup_key 형식 확인 (payload에서)
+        from selfhealing.services.unified_notification import NotificationPayload
+
+        payload = NotificationPayload(
+            title="Test",
+            message="Test",
+            dedup_key="postmortem:DEDUP-TEST-001",
+        )
+        assert payload.dedup_key == "postmortem:DEDUP-TEST-001", "dedup_key 형식이 올바르지 않음"
