@@ -29,6 +29,7 @@ from selfhealing.services.postmortem_store import (
     add_healing_incident,
     get_healing_incidents,
     get_healing_incidents_count,
+    get_incident_by_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -283,7 +284,44 @@ class GetHealingIncidentsView(APIView):
             return 10  # 기본값
 
 
+class PostmortemDetailView(APIView):
+    """
+    단일 Post-mortem 인시던트 상세 조회 API.
+
+    GET /api/self-healing/postmortem/incidents/{incident_id}/
+
+    URL Parameters:
+    - incident_id: 조회할 인시던트 ID
+    """
+
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, incident_id: str) -> Response:
+        """단일 Post-mortem 인시던트 상세 조회."""
+        incident = get_incident_by_id(incident_id)
+
+        if incident is None:
+            return Response(
+                {
+                    "status": "error",
+                    "error": "incident_not_found",
+                    "message": f"Incident with ID '{incident_id}' not found",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "status": "success",
+                "incident": incident,
+                "timestamp": timezone.now().isoformat(),
+            }
+        )
+
+
 __all__ = [
     "PostmortemGeneratorView",
     "GetHealingIncidentsView",
+    "PostmortemDetailView",
 ]

@@ -301,6 +301,49 @@ def clear_healing_incidents() -> int:
         return count
 
 
+def get_incident_by_id(incident_id: str, use_db: bool = True) -> dict[str, Any] | None:
+    """
+    ID로 단일 인시던트 조회.
+
+    PostgreSQL에서 조회를 시도하고, 실패 시 In-Memory fallback.
+
+    Args:
+        incident_id: 조회할 인시던트 ID
+        use_db: DB 조회 사용 여부
+
+    Returns:
+        인시던트 딕셔너리 또는 None (미발견 시)
+    """
+    # DB 조회 시도
+    if use_db and _db_persistence_enabled:
+        try:
+            incident = _get_incident_by_id_from_db(incident_id)
+            if incident is not None:
+                return incident
+        except Exception as e:
+            logger.warning(f"[Postmortem] DB query by ID failed, using in-memory: {e}")
+
+    # In-Memory fallback
+    with _healing_incidents_lock:
+        for incident in _healing_incidents:
+            if incident.get("incident_id") == incident_id:
+                return incident.copy()
+        return None
+
+
+def _get_incident_by_id_from_db(incident_id: str) -> dict[str, Any] | None:
+    """PostgreSQL에서 ID로 인시던트 조회."""
+    PostmortemRecord = _get_postmortem_model()
+    if PostmortemRecord is None:
+        raise ImportError("PostmortemRecord model not available")
+
+    try:
+        record = PostmortemRecord.objects.get(incident_id=incident_id)
+        return record.to_dict()
+    except PostmortemRecord.DoesNotExist:
+        return None
+
+
 # =============================================================================
 # Module Exports
 # =============================================================================
@@ -309,6 +352,7 @@ __all__ = [
     "add_healing_incident",
     "get_healing_incidents",
     "get_healing_incidents_count",
+    "get_incident_by_id",
     "clear_healing_incidents",
     "set_db_persistence_enabled",
     "get_db_persistence_enabled",

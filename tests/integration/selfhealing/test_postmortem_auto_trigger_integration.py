@@ -32,11 +32,12 @@ class TestPostmortemAutoTriggerIntegration:
         """각 테스트 전에 상태 초기화."""
         from selfhealing.services.event_bus import get_event_bus
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
         from selfhealing.api.django.views.xtest.base import (
             _healing_events,
-            _healing_incidents,
             _healing_events_lock,
         )
+        from selfhealing.services.postmortem_store import clear_healing_incidents
 
         # 이벤트 버스 리셋
         self.bus = get_event_bus()
@@ -44,28 +45,31 @@ class TestPostmortemAutoTriggerIntegration:
 
         # Settings 리셋
         reset_api_view_settings()
+        reset_postmortem_settings()
 
         # In-memory 저장소 클리어
         with _healing_events_lock:
             _healing_events.clear()
-            _healing_incidents.clear()
+        clear_healing_incidents()
 
     def teardown_method(self):
         """각 테스트 후에 상태 초기화."""
         from selfhealing.services.event_bus import get_event_bus
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
         from selfhealing.api.django.views.xtest.base import (
             _healing_events,
-            _healing_incidents,
             _healing_events_lock,
         )
+        from selfhealing.services.postmortem_store import clear_healing_incidents
 
         get_event_bus().reset()
         reset_api_view_settings()
+        reset_postmortem_settings()
 
         with _healing_events_lock:
             _healing_events.clear()
-            _healing_incidents.clear()
+        clear_healing_incidents()
 
     def test_cb_closed_event_does_not_generate_postmortem_when_disabled(self, monkeypatch):
         """
@@ -80,7 +84,7 @@ class TestPostmortemAutoTriggerIntegration:
         from selfhealing.services.postmortem_store import get_healing_incidents
 
         # 설정: 자동 Post-mortem 비활성화 (기본값)
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "false")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "false")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -109,14 +113,12 @@ class TestPostmortemAutoTriggerIntegration:
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.api.django.views.xtest.base import (
-            get_healing_incidents,
-            add_healing_event,
-        )
+        from selfhealing.services.postmortem_store import get_healing_incidents
+        from selfhealing.api.django.views.xtest.base import add_healing_event
 
         # 설정: 자동 Post-mortem 활성화, 최소 duration 0으로 설정
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -165,8 +167,8 @@ class TestPostmortemAutoTriggerIntegration:
         from selfhealing.services.postmortem_store import get_healing_incidents
 
         # 설정: 자동 Post-mortem 활성화, 최소 duration 3600초 (1시간)
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "3600")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "3600")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -198,14 +200,14 @@ class TestPostmortemAutoTriggerIntegration:
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.api.django.views.xtest.base import (
+        from selfhealing.services.postmortem_store import (
             get_healing_incidents,
             get_healing_incidents_count,
         )
 
         # 설정: 자동 Post-mortem 활성화
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -246,18 +248,22 @@ class TestPostmortemHandlerPriorityIntegration:
         """각 테스트 전에 상태 초기화."""
         from selfhealing.services.event_bus import get_event_bus
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
 
         self.bus = get_event_bus()
         self.bus.reset()
         reset_api_view_settings()
+        reset_postmortem_settings()
 
     def teardown_method(self):
         """각 테스트 후에 상태 초기화."""
         from selfhealing.services.event_bus import get_event_bus
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
 
         get_event_bus().reset()
         reset_api_view_settings()
+        reset_postmortem_settings()
 
     def test_handlers_registered_in_correct_priority_order(self):
         """
@@ -306,36 +312,40 @@ class TestPostmortemNotificationIntegration:
         """각 테스트 전에 상태 초기화."""
         from selfhealing.services.event_bus import get_event_bus
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
         from selfhealing.api.django.views.xtest.base import (
             _healing_events,
-            _healing_incidents,
             _healing_events_lock,
         )
+        from selfhealing.services.postmortem_store import clear_healing_incidents
 
         self.bus = get_event_bus()
         self.bus.reset()
         reset_api_view_settings()
+        reset_postmortem_settings()
 
         with _healing_events_lock:
             _healing_events.clear()
-            _healing_incidents.clear()
+        clear_healing_incidents()
 
     def teardown_method(self):
         """각 테스트 후에 상태 초기화."""
         from selfhealing.services.event_bus import get_event_bus
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
         from selfhealing.api.django.views.xtest.base import (
             _healing_events,
-            _healing_incidents,
             _healing_events_lock,
         )
+        from selfhealing.services.postmortem_store import clear_healing_incidents
 
         get_event_bus().reset()
         reset_api_view_settings()
+        reset_postmortem_settings()
 
         with _healing_events_lock:
             _healing_events.clear()
-            _healing_incidents.clear()
+        clear_healing_incidents()
 
     def test_notification_sent_when_postmortem_generated(self, monkeypatch):
         """
@@ -347,12 +357,14 @@ class TestPostmortemNotificationIntegration:
             EventType,
             SelfHealingEvent,
         )
+        from selfhealing.settings.postmortem import reset_postmortem_settings
 
         # 설정: 자동 Post-mortem 및 알림 활성화
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_MIN_DURATION", "0")
+        reset_postmortem_settings()
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -390,9 +402,9 @@ class TestPostmortemNotificationIntegration:
         )
 
         # 설정: Post-mortem 활성화, 알림 비활성화
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "false")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED", "false")
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -429,8 +441,8 @@ class TestPostmortemNotificationIntegration:
 
         # Settings 모킹
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "LONG-INCIDENT-001",
@@ -470,8 +482,8 @@ class TestPostmortemNotificationIntegration:
         from selfhealing.services.unified_notification import UnifiedNotificationManager
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "DEDUP-TEST-001",

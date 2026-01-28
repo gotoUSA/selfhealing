@@ -20,41 +20,41 @@ class TestPostmortemNotificationSettings:
     """Post-mortem 알림 설정 테스트."""
 
     def test_default_settings_enabled(self):
-        """기본 설정에서 postmortem_notification_enabled가 True인지 확인."""
-        from selfhealing.settings.api_view import ApiViewSettings, reset_api_view_settings
+        """기본 설정에서 notification_enabled가 True인지 확인."""
+        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
 
-        reset_api_view_settings()
+        reset_postmortem_settings()
 
-        settings = ApiViewSettings()
+        settings = PostmortemSettings()
 
-        assert settings.postmortem_notification_enabled is True
-        assert settings.postmortem_notification_min_duration == 60
+        assert settings.notification_enabled is True
+        assert settings.notification_min_duration == 60
 
     def test_settings_with_env_disabled(self, monkeypatch):
         """환경변수로 postmortem_notification 비활성화 테스트."""
-        from selfhealing.settings.api_view import ApiViewSettings, reset_api_view_settings
+        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
 
-        reset_api_view_settings()
+        reset_postmortem_settings()
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_ENABLED", "false")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_POSTMORTEM_NOTIFICATION_MIN_DURATION", "120")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED", "false")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_MIN_DURATION", "120")
 
-        settings = ApiViewSettings()
+        settings = PostmortemSettings()
 
-        assert settings.postmortem_notification_enabled is False
-        assert settings.postmortem_notification_min_duration == 120
+        assert settings.notification_enabled is False
+        assert settings.notification_min_duration == 120
 
 
 class TestSendPostmortemNotification:
     """_send_postmortem_notification 함수 테스트."""
 
     def test_notification_skipped_when_disabled(self):
-        """postmortem_notification_enabled=False일 때 알림 미발송 확인."""
+        """notification_enabled=False일 때 알림 미발송 확인."""
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         # Mock settings with notification disabled
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = False
+        mock_settings.notification_enabled = False
 
         postmortem = {
             "incident_id": "TEST-001",
@@ -78,13 +78,13 @@ class TestSendPostmortemNotification:
             assert any("notification disabled" in call for call in debug_calls)
 
     def test_notification_skipped_when_duration_below_min(self):
-        """duration이 postmortem_notification_min_duration 미만일 때 알림 미발송 확인."""
+        """duration이 notification_min_duration 미만일 때 알림 미발송 확인."""
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         # Mock settings with min_duration = 60
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 60
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 60
 
         postmortem = {
             "incident_id": "TEST-002",
@@ -112,8 +112,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 60
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 60
 
         postmortem = {
             "incident_id": "TEST-003",
@@ -156,8 +156,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.unified_notification import NotificationPriority
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 60
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 60
 
         postmortem = {
             "incident_id": "TEST-004",
@@ -194,8 +194,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.unified_notification import NotificationPriority
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 60
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 60
 
         postmortem = {
             "incident_id": "TEST-005",
@@ -232,8 +232,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.unified_notification import NotificationPriority
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 60
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 60
 
         postmortem = {
             "incident_id": "TEST-006",
@@ -269,8 +269,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "TEST-007",
@@ -306,8 +306,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "TEST-008",
@@ -351,8 +351,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.unified_notification import NotificationCategory
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "TEST-009",
@@ -388,8 +388,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "TEST-010",
@@ -422,8 +422,8 @@ class TestSendPostmortemNotification:
         from selfhealing.services.event_bus import _send_postmortem_notification
 
         mock_settings = MagicMock()
-        mock_settings.postmortem_notification_enabled = True
-        mock_settings.postmortem_notification_min_duration = 0
+        mock_settings.notification_enabled = True
+        mock_settings.notification_min_duration = 0
 
         postmortem = {
             "incident_id": "TEST-011",
@@ -492,14 +492,14 @@ class TestCircuitBreakerClosedPostmortemWithNotification:
         assert "duration" in params
         assert "affected_services" in params
 
-    def test_notification_settings_exposed_in_api_view(self):
-        """ApiViewSettings에 postmortem_notification 관련 설정이 포함되어 있는지 확인."""
-        from selfhealing.settings.api_view import ApiViewSettings
+    def test_notification_settings_exposed_in_postmortem_settings(self):
+        """PostmortemSettings에 notification 관련 설정이 포함되어 있는지 확인."""
+        from selfhealing.settings.postmortem import PostmortemSettings
 
-        settings = ApiViewSettings()
+        settings = PostmortemSettings()
 
         # 기본값 확인
-        assert hasattr(settings, "postmortem_notification_enabled")
-        assert hasattr(settings, "postmortem_notification_min_duration")
-        assert settings.postmortem_notification_enabled is True
-        assert settings.postmortem_notification_min_duration == 60
+        assert hasattr(settings, "notification_enabled")
+        assert hasattr(settings, "notification_min_duration")
+        assert settings.notification_enabled is True
+        assert settings.notification_min_duration == 60

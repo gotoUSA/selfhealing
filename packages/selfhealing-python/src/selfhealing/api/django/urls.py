@@ -269,6 +269,7 @@ from selfhealing.api.django.views.tiering import (
 # Post-mortem Views (분리된 실제 장애 분석 API)
 from selfhealing.api.django.views.postmortem import (
     GetHealingIncidentsView as PostmortemIncidentsView,
+    PostmortemDetailView,
     PostmortemGeneratorView as PostmortemGenerateView,
 )
 
@@ -1055,6 +1056,12 @@ urlpatterns += [
         "postmortem/incidents/",
         PostmortemIncidentsView.as_view(),
         name="postmortem-incidents",
+    ),
+    # Post-mortem 단일 인시던트 상세 조회
+    path(
+        "postmortem/incidents/<str:incident_id>/",
+        PostmortemDetailView.as_view(),
+        name="postmortem-incident-detail",
     ),
 ]
 

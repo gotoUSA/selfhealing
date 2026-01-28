@@ -148,10 +148,113 @@ class TestPostmortemStoreImport:
             add_healing_incident,
             get_healing_incidents,
             get_healing_incidents_count,
+            get_incident_by_id,
             clear_healing_incidents,
         )
 
         assert callable(add_healing_incident)
         assert callable(get_healing_incidents)
         assert callable(get_healing_incidents_count)
+        assert callable(get_incident_by_id)
         assert callable(clear_healing_incidents)
+
+
+class TestGetIncidentById:
+    """get_incident_by_id() 함수 테스트."""
+
+    def test_get_incident_by_id_found(self):
+        """ID로 인시던트 조회 성공 테스트."""
+        from selfhealing.services.postmortem_store import (
+            add_healing_incident,
+            get_incident_by_id,
+            clear_healing_incidents,
+            set_db_persistence_enabled,
+        )
+
+        set_db_persistence_enabled(False)
+        clear_healing_incidents()
+
+        incident = {
+            "incident_id": "FIND-ME-001",
+            "affected_services": ["test_service"],
+            "duration_seconds": 60,
+        }
+        add_healing_incident(incident)
+
+        result = get_incident_by_id("FIND-ME-001")
+
+        assert result is not None
+        assert result["incident_id"] == "FIND-ME-001"
+        assert result["affected_services"] == ["test_service"]
+
+        # cleanup
+        clear_healing_incidents()
+
+    def test_get_incident_by_id_not_found(self):
+        """ID로 인시던트 조회 실패 테스트 (없는 ID)."""
+        from selfhealing.services.postmortem_store import (
+            get_incident_by_id,
+            clear_healing_incidents,
+            set_db_persistence_enabled,
+        )
+
+        set_db_persistence_enabled(False)
+        clear_healing_incidents()
+
+        result = get_incident_by_id("NON-EXISTENT-ID")
+
+        assert result is None
+
+    def test_get_incident_by_id_returns_dict(self):
+        """반환된 인시던트가 dict인지 확인."""
+        from selfhealing.services.postmortem_store import (
+            add_healing_incident,
+            get_incident_by_id,
+            clear_healing_incidents,
+            set_db_persistence_enabled,
+        )
+
+        set_db_persistence_enabled(False)
+        clear_healing_incidents()
+
+        incident = {
+            "incident_id": "DICT-TEST-001",
+            "data": {"key": "value"},
+        }
+        add_healing_incident(incident)
+
+        result = get_incident_by_id("DICT-TEST-001")
+        assert isinstance(result, dict)
+        assert result["incident_id"] == "DICT-TEST-001"
+
+        # cleanup
+        clear_healing_incidents()
+
+    def test_get_incident_by_id_multiple_incidents(self):
+        """여러 인시던트 중 정확한 ID 조회 테스트."""
+        from selfhealing.services.postmortem_store import (
+            add_healing_incident,
+            get_incident_by_id,
+            clear_healing_incidents,
+            set_db_persistence_enabled,
+        )
+
+        set_db_persistence_enabled(False)
+        clear_healing_incidents()
+
+        for i in range(5):
+            add_healing_incident(
+                {
+                    "incident_id": f"MULTI-{i:03d}",
+                    "index": i,
+                }
+            )
+
+        result = get_incident_by_id("MULTI-003")
+
+        assert result is not None
+        assert result["incident_id"] == "MULTI-003"
+        assert result["index"] == 3
+
+        # cleanup
+        clear_healing_incidents()

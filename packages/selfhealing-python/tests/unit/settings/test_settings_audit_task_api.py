@@ -10,6 +10,7 @@ Tests:
 4. New Settings files: intelligence_task.py, drift_detection.py
 5. Source file Settings integration
 """
+
 import os
 from unittest import mock
 
@@ -22,11 +23,13 @@ class TestAuditSettingsPhase3Extension:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.audit_settings import reset_audit_settings
+
         reset_audit_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.audit_settings import reset_audit_settings
+
         reset_audit_settings()
 
     def test_self_audit_default_values(self):
@@ -34,7 +37,7 @@ class TestAuditSettingsPhase3Extension:
         from selfhealing.settings.audit_settings import get_audit_settings
 
         settings = get_audit_settings()
-        
+
         assert settings.self_audit_max_recent_events == 100
         assert settings.self_audit_default_limit == 20
         assert settings.self_audit_max_failure_rate == 0.1
@@ -44,7 +47,7 @@ class TestAuditSettingsPhase3Extension:
         from selfhealing.settings.audit_settings import get_audit_settings
 
         settings = get_audit_settings()
-        
+
         assert settings.cascade_rate_window_seconds == 1.0
 
     def test_self_audit_env_override(self):
@@ -54,14 +57,17 @@ class TestAuditSettingsPhase3Extension:
             get_audit_settings,
         )
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_AUDIT_SELF_AUDIT_MAX_RECENT_EVENTS": "200",
-            "SELFHEALING_AUDIT_SELF_AUDIT_DEFAULT_LIMIT": "50",
-            "SELFHEALING_AUDIT_SELF_AUDIT_MAX_FAILURE_RATE": "0.2",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_AUDIT_SELF_AUDIT_MAX_RECENT_EVENTS": "200",
+                "SELFHEALING_AUDIT_SELF_AUDIT_DEFAULT_LIMIT": "50",
+                "SELFHEALING_AUDIT_SELF_AUDIT_MAX_FAILURE_RATE": "0.2",
+            },
+        ):
             reset_audit_settings()
             settings = get_audit_settings()
-            
+
             assert settings.self_audit_max_recent_events == 200
             assert settings.self_audit_default_limit == 50
             assert settings.self_audit_max_failure_rate == 0.2
@@ -73,11 +79,13 @@ class TestCanarySettingsPhase3Extension:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.canary import reset_canary_settings
+
         reset_canary_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.canary import reset_canary_settings
+
         reset_canary_settings()
 
     def test_api_view_defaults(self):
@@ -85,7 +93,7 @@ class TestCanarySettingsPhase3Extension:
         from selfhealing.settings.canary import get_canary_settings
 
         settings = get_canary_settings()
-        
+
         assert settings.default_completed_rollouts_limit == 20
         assert settings.default_history_limit == 20
 
@@ -96,13 +104,16 @@ class TestCanarySettingsPhase3Extension:
             get_canary_settings,
         )
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_CANARY_DEFAULT_COMPLETED_ROLLOUTS_LIMIT": "50",
-            "SELFHEALING_CANARY_DEFAULT_HISTORY_LIMIT": "100",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_CANARY_DEFAULT_COMPLETED_ROLLOUTS_LIMIT": "50",
+                "SELFHEALING_CANARY_DEFAULT_HISTORY_LIMIT": "100",
+            },
+        ):
             reset_canary_settings()
             settings = get_canary_settings()
-            
+
             assert settings.default_completed_rollouts_limit == 50
             assert settings.default_history_limit == 100
 
@@ -113,11 +124,13 @@ class TestApiViewSettingsPhase3Extension:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.api_view import reset_api_view_settings
+
         reset_api_view_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.api_view import reset_api_view_settings
+
         reset_api_view_settings()
 
     def test_auto_tuning_defaults(self):
@@ -125,7 +138,7 @@ class TestApiViewSettingsPhase3Extension:
         from selfhealing.settings.api_view import get_api_view_settings
 
         settings = get_api_view_settings()
-        
+
         assert settings.auto_tuning_export_limit == 1000
         assert settings.auto_tuning_default_page_size == 20
 
@@ -134,10 +147,10 @@ class TestApiViewSettingsPhase3Extension:
         from selfhealing.settings.api_view import get_api_view_settings
 
         settings = get_api_view_settings()
-        
+
         assert settings.xtest_timeline_default_limit == 50
-        assert settings.xtest_postmortem_history_limit == 100
-        assert settings.xtest_incidents_default_limit == 10
+        assert settings.postmortem_history_limit == 100
+        assert settings.postmortem_incidents_default_limit == 10
 
     def test_env_override(self):
         """Test environment variable override."""
@@ -146,13 +159,16 @@ class TestApiViewSettingsPhase3Extension:
             get_api_view_settings,
         )
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_API_VIEW_AUTO_TUNING_EXPORT_LIMIT": "5000",
-            "SELFHEALING_API_VIEW_XTEST_TIMELINE_DEFAULT_LIMIT": "100",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_API_VIEW_AUTO_TUNING_EXPORT_LIMIT": "5000",
+                "SELFHEALING_API_VIEW_XTEST_TIMELINE_DEFAULT_LIMIT": "100",
+            },
+        ):
             reset_api_view_settings()
             settings = get_api_view_settings()
-            
+
             assert settings.auto_tuning_export_limit == 5000
             assert settings.xtest_timeline_default_limit == 100
 
@@ -163,11 +179,13 @@ class TestIntelligenceTaskSettings:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+
         reset_intelligence_task_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+
         reset_intelligence_task_settings()
 
     def test_default_values(self):
@@ -175,7 +193,7 @@ class TestIntelligenceTaskSettings:
         from selfhealing.settings.intelligence_task import get_intelligence_task_settings
 
         settings = get_intelligence_task_settings()
-        
+
         assert settings.default_cooldown_seconds == 3600
         assert settings.recovery_check_cooldown_seconds == 120
         assert settings.execution_threshold == 10
@@ -193,13 +211,16 @@ class TestIntelligenceTaskSettings:
             get_intelligence_task_settings,
         )
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_INTELLIGENCE_TASK_DEFAULT_COOLDOWN_SECONDS": "7200",
-            "SELFHEALING_INTELLIGENCE_TASK_BATCH_SIZE": "200",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_INTELLIGENCE_TASK_DEFAULT_COOLDOWN_SECONDS": "7200",
+                "SELFHEALING_INTELLIGENCE_TASK_BATCH_SIZE": "200",
+            },
+        ):
             reset_intelligence_task_settings()
             settings = get_intelligence_task_settings()
-            
+
             assert settings.default_cooldown_seconds == 7200
             assert settings.batch_size == 200
 
@@ -209,7 +230,7 @@ class TestIntelligenceTaskSettings:
 
         settings1 = get_intelligence_task_settings()
         settings2 = get_intelligence_task_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -219,11 +240,13 @@ class TestDriftDetectionSettings:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.drift_detection import reset_drift_detection_settings
+
         reset_drift_detection_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.drift_detection import reset_drift_detection_settings
+
         reset_drift_detection_settings()
 
     def test_default_values(self):
@@ -231,7 +254,7 @@ class TestDriftDetectionSettings:
         from selfhealing.settings.drift_detection import get_drift_detection_settings
 
         settings = get_drift_detection_settings()
-        
+
         assert settings.analysis_window_hours == 24
         assert settings.sla_breach_rate_threshold == 10.0
         assert settings.sla_breach_rate_critical_threshold == 25.0
@@ -245,13 +268,16 @@ class TestDriftDetectionSettings:
             get_drift_detection_settings,
         )
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_DRIFT_DETECTION_ANALYSIS_WINDOW_HOURS": "48",
-            "SELFHEALING_DRIFT_DETECTION_SLA_BREACH_RATE_THRESHOLD": "15.0",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_DRIFT_DETECTION_ANALYSIS_WINDOW_HOURS": "48",
+                "SELFHEALING_DRIFT_DETECTION_SLA_BREACH_RATE_THRESHOLD": "15.0",
+            },
+        ):
             reset_drift_detection_settings()
             settings = get_drift_detection_settings()
-            
+
             assert settings.analysis_window_hours == 48
             assert settings.sla_breach_rate_threshold == 15.0
 
@@ -261,7 +287,7 @@ class TestDriftDetectionSettings:
 
         settings1 = get_drift_detection_settings()
         settings2 = get_drift_detection_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -274,13 +300,13 @@ class TestSLOSettingsIntegration:
         from selfhealing.settings.slo import get_slo_settings
 
         settings = get_slo_settings()
-        
+
         slo = SLO(
             name="test",
             sli=SLI.AVAILABILITY,
             target=0.999,
         )
-        
+
         # fast_burn_rate와 slow_burn_rate가 settings에서 온 값인지 확인
         assert slo.fast_burn_rate == settings.default_fast_burn_rate
         assert slo.slow_burn_rate == settings.default_slow_burn_rate
@@ -293,6 +319,7 @@ class TestSelfAuditSettingsIntegration:
         """Reset settings before each test."""
         from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.self_audit import SelfAuditLogger
+
         SelfAuditLogger.reset_instance()
         reset_audit_settings()
 
@@ -300,6 +327,7 @@ class TestSelfAuditSettingsIntegration:
         """Reset settings after each test."""
         from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.self_audit import SelfAuditLogger
+
         SelfAuditLogger.reset_instance()
         reset_audit_settings()
 
@@ -308,7 +336,7 @@ class TestSelfAuditSettingsIntegration:
         from selfhealing.audit.self_audit import self_audit
 
         logger = self_audit()
-        
+
         # Settings에서 가져온 값이 적용되었는지 확인
         assert logger._max_recent_events == 100
 
@@ -317,7 +345,7 @@ class TestSelfAuditSettingsIntegration:
         from selfhealing.audit.self_audit import self_audit
 
         logger = self_audit()
-        
+
         # 기본 max_failure_rate가 0.1인지 확인
         # 실패 없이 시작하므로 healthy여야 함
         assert logger.is_healthy() is True
@@ -330,6 +358,7 @@ class TestCascadeLoadSheddingSettingsIntegration:
         """Reset settings before each test."""
         from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.cascade_load_shedding import reset_cascade_load_shedding
+
         reset_cascade_load_shedding()
         reset_audit_settings()
 
@@ -337,6 +366,7 @@ class TestCascadeLoadSheddingSettingsIntegration:
         """Reset settings after each test."""
         from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.cascade_load_shedding import reset_cascade_load_shedding
+
         reset_cascade_load_shedding()
         reset_audit_settings()
 
@@ -345,7 +375,7 @@ class TestCascadeLoadSheddingSettingsIntegration:
         from selfhealing.audit.cascade_load_shedding import CascadeLoadShedding
 
         shedding = CascadeLoadShedding()
-        
+
         # Settings에서 가져온 값이 적용되었는지 확인
         assert shedding._rate_window_seconds == 1.0
 
@@ -357,9 +387,12 @@ class TestCascadeLoadSheddingSettingsIntegration:
             reset_cascade_load_shedding,
         )
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_AUDIT_CASCADE_RATE_WINDOW_SECONDS": "2.5",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_AUDIT_CASCADE_RATE_WINDOW_SECONDS": "2.5",
+            },
+        ):
             reset_audit_settings()
             reset_cascade_load_shedding()
             shedding = CascadeLoadShedding()
@@ -372,11 +405,13 @@ class TestDriftDetectionTaskSettingsIntegration:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.drift_detection import reset_drift_detection_settings
+
         reset_drift_detection_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.drift_detection import reset_drift_detection_settings
+
         reset_drift_detection_settings()
 
     def test_detector_uses_settings_analysis_window(self):
@@ -392,9 +427,12 @@ class TestDriftDetectionTaskSettingsIntegration:
         from selfhealing.settings.drift_detection import reset_drift_detection_settings
         from selfhealing.tasks.drift_detection import SLADriftDetector
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_DRIFT_DETECTION_ANALYSIS_WINDOW_HOURS": "48",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_DRIFT_DETECTION_ANALYSIS_WINDOW_HOURS": "48",
+            },
+        ):
             reset_drift_detection_settings()
             hours = SLADriftDetector._get_analysis_window_hours()
             assert hours == 48
@@ -406,11 +444,13 @@ class TestIntelligenceTasksSettingsIntegration:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+
         reset_intelligence_task_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+
         reset_intelligence_task_settings()
 
     def test_check_sla_drift_task_notification_policy(self):
@@ -419,7 +459,7 @@ class TestIntelligenceTasksSettingsIntegration:
 
         task = CheckSLADriftTask()
         policy = task.notification_policy
-        
+
         # default_cooldown_seconds가 Settings에서 온 값인지 확인
         assert policy.cooldown_seconds == 3600  # 기본값
 
@@ -429,7 +469,7 @@ class TestIntelligenceTasksSettingsIntegration:
 
         task = AnalyzeForensicPendingTask()
         policy = task.notification_policy
-        
+
         # execution_threshold가 Settings에서 온 값인지 확인
         assert policy.threshold == 10  # 기본값
 
@@ -439,7 +479,7 @@ class TestIntelligenceTasksSettingsIntegration:
 
         task = AnalyzeCrossStageInsightsTask()
         policy = task.notification_policy
-        
+
         # insight_threshold가 Settings에서 온 값인지 확인
         assert policy.threshold == 3  # 기본값
 
@@ -449,7 +489,7 @@ class TestIntelligenceTasksSettingsIntegration:
 
         task = CheckRecoveryTransitionsTask()
         policy = task.notification_policy
-        
+
         # recovery_check_cooldown_seconds가 Settings에서 온 값인지 확인
         assert policy.cooldown_seconds == 120  # 기본값
 
@@ -467,9 +507,12 @@ class TestIntelligenceTasksSettingsIntegration:
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
         from selfhealing.tasks.intelligence_tasks import CheckSLADriftTask
 
-        with mock.patch.dict(os.environ, {
-            "SELFHEALING_INTELLIGENCE_TASK_DEFAULT_COOLDOWN_SECONDS": "7200",
-        }):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_INTELLIGENCE_TASK_DEFAULT_COOLDOWN_SECONDS": "7200",
+            },
+        ):
             reset_intelligence_task_settings()
             task = CheckSLADriftTask()
             policy = task.notification_policy
@@ -482,11 +525,13 @@ class TestTrafficAwareReplaySettingsIntegration:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+
         reset_intelligence_task_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+
         reset_intelligence_task_settings()
 
     def test_traffic_aware_replay_notification_policy(self):
@@ -495,7 +540,7 @@ class TestTrafficAwareReplaySettingsIntegration:
 
         task = TrafficAwareReplayTask()
         policy = task.notification_policy
-        
+
         # cooldown_seconds가 기본값인지 확인
         assert policy.cooldown_seconds == 300  # 5분
 
@@ -512,4 +557,3 @@ class TestTrafficAwareReplaySettingsIntegration:
 # 위치: tests/self_healing/api/test_api_view_settings_integration.py
 # 이유: Django REST Framework 컨텍스트 필요
 # =============================================================================
-

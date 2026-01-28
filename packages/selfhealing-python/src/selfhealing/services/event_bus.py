@@ -608,8 +608,8 @@ def _send_postmortem_notification(
     """
     Post-mortem 생성 완료 알림 발송.
 
-    Settings에서 postmortem_notification_enabled가 True이고,
-    duration이 postmortem_notification_min_duration 이상인 경우에만 발송합니다.
+    Settings에서 notification_enabled가 True이고,
+    duration이 notification_min_duration 이상인 경우에만 발송합니다.
 
     알림 우선순위 결정:
     - duration >= 300초 (5분) 또는 affected_services >= 3: HIGH
@@ -617,12 +617,12 @@ def _send_postmortem_notification(
     """
     try:
         # 알림 활성화 여부 확인
-        if not settings.postmortem_notification_enabled:
+        if not settings.notification_enabled:
             logger.debug(f"[Notification] Postmortem notification disabled for {incident_id}")
             return
 
         # 최소 duration 확인
-        notification_min_duration = settings.postmortem_notification_min_duration
+        notification_min_duration = settings.notification_min_duration
         if duration is not None and duration < notification_min_duration:
             logger.debug(
                 f"[Notification] Postmortem notification skipped for {incident_id}: "
@@ -742,24 +742,25 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
     """
     CB 복구 시 자동 Post-mortem 생성.
 
-    Settings에서 auto_postmortem_enabled가 True인 경우에만 동작합니다.
+    Settings에서 auto_enabled가 True인 경우에만 동작합니다.
     실제 프로덕션 장애에 대한 자동 Post-mortem 리포트를 생성합니다.
     """
     service_name = event.data.get("service_name", "unknown")
 
     # Settings에서 자동 생성 활성화 여부 확인
     try:
-        from selfhealing.settings.api_view import get_api_view_settings
+        from selfhealing.settings.postmortem import get_postmortem_settings
 
-        settings = get_api_view_settings()
+        settings = get_postmortem_settings()
 
-        if not settings.auto_postmortem_enabled:
+        if not settings.auto_enabled:
             logger.debug(f"[EventHandler] Auto postmortem disabled, skipping for {service_name}")
             return
 
-        min_duration = settings.auto_postmortem_min_duration
+        min_duration = settings.auto_min_duration
+        history_limit = settings.history_limit
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to get api_view settings: {e}")
+        logger.warning(f"[EventHandler] Failed to get postmortem settings: {e}")
         return
 
     # Post-mortem 생성
@@ -768,7 +769,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
             collect_system_snapshot,
             get_healing_events,
         )
-        from selfhealing.api.django.views.xtest.observability import (
+        from selfhealing.api.django.views.postmortem import (
             _build_timeline,
             _collect_service_states,
             _generate_postmortem_data,
@@ -780,7 +781,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
 
         # 히스토리 및 상태 수집
         bus = get_event_bus()
-        history = bus.get_history(limit=100)
+        history = bus.get_history(limit=history_limit)
         cb_service = get_circuit_breaker_service()
         affected, unaffected = _collect_service_states(cb_service)
         local_events = get_healing_events(20)
