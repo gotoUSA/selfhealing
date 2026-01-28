@@ -4,7 +4,7 @@
 **작성일:** 2026-01-28
 **선행 문서:** [146_POSTMORTEM_LIFECYCLE_INTEGRATION.md](146_POSTMORTEM_LIFECYCLE_INTEGRATION.md)
 **관련 코드:** `services/circuit_breaker/actionable_alert_urls.py`, `services/chaos/notification.py`
-**상태:** 설계 완료
+**상태:** 구현 완료
 
 ---
 
@@ -294,34 +294,34 @@ Postmortem 생성 시 외부 시스템 링크 부재:
 
 ### 12.1 URL 빌더
 
-- [ ] `PostmortemDeepLinks` 데이터클래스 정의
-- [ ] `PostmortemDeepLinkBuilder` 클래스 구현
-- [ ] `ActionableAlertUrlBuilder` 재사용
-- [ ] 시간 범위 포함 Grafana URL 생성
-- [ ] Prometheus 쿼리 URL 생성
+- [x] `PostmortemDeepLinks` 데이터클래스 정의
+- [x] `PostmortemDeepLinkBuilder` 클래스 구현
+- [x] `ActionableAlertUrlBuilder` 재사용
+- [x] 시간 범위 포함 Grafana URL 생성
+- [x] Prometheus 쿼리 URL 생성
 
 ### 12.2 Postmortem 통합
 
-- [ ] `_generate_postmortem_data()` 수정
-- [ ] `deep_links` 필드 추가
-- [ ] Emergency Postmortem 통합
+- [x] `_generate_postmortem_data()` 수정
+- [x] `deep_links` 필드 추가
+- [x] Emergency Postmortem 통합
 
 ### 12.3 알림 구현
 
-- [ ] `PostmortemNotifier` 클래스 구현
-- [ ] Slack Block Kit 메시지 생성
-- [ ] Webhook 발송 로직
+- [x] `PostmortemNotifier` 클래스 구현
+- [x] Slack Block Kit 메시지 생성
+- [x] Webhook 발송 로직
 
 ### 12.4 설정
 
-- [ ] 환경 변수 추가
-- [ ] Settings 클래스 확장
+- [x] 환경 변수 추가
+- [x] Settings 클래스 확장
 
 ### 12.5 테스트
 
-- [ ] URL 생성 테스트
-- [ ] 시간 범위 파라미터 테스트
-- [ ] 알림 발송 테스트 (Mock)
+- [x] URL 생성 테스트
+- [x] 시간 범위 파라미터 테스트
+- [x] 알림 발송 테스트 (Mock)
 
 ---
 
@@ -429,10 +429,10 @@ Postmortem은 장애 분석 문서지만, 기술적 증거(Audit Trail)와의 �
 
 ### 14.9 구현 체크리스트 (추가)
 
-- [ ] Postmortem 스키마에 `cascade_event_id`, `causation_chain`, `evidence_hash` 필드 추가
-- [ ] `_generate_postmortem_data()`에서 CascadeEvent 조회 로직 추가
-- [ ] `PostmortemDeepLinks`에 `audit_evidence_link` 필드 추가
-- [ ] `build_postmortem_links()`에서 증적 링크 생성
+- [x] Postmortem 스키마에 `cascade_event_id`, `causation_chain`, `evidence_hash` 필드 추가
+- [x] `_generate_postmortem_data()`에서 CascadeEvent 조회 로직 추가
+- [x] `PostmortemDeepLinks`에 `audit_evidence_link` 필드 추가
+- [x] `build_postmortem_links()`에서 증적 링크 생성
 
 ---
 

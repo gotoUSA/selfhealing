@@ -11,6 +11,8 @@ Components:
 - IncidentLogBuffer: 에러 로그 버퍼링
 - SnapshotBuilder: 타임라인 스냅샷 빌드
 - DeploymentCorrelator: 배포 연관성 분석
+- PostmortemDeepLinkBuilder: Postmortem 딥링크 URL 생성
+- PostmortemNotifier: Postmortem 알림 발송
 """
 
 from __future__ import annotations
@@ -68,6 +70,20 @@ from .revision import (
     get_postmortem_revision_manager,
     reset_postmortem_revision_manager,
 )
+from .deep_links import (
+    PostmortemDeepLinks,
+    PostmortemDeepLinkBuilder,
+    get_postmortem_deep_link_builder,
+    reset_postmortem_deep_link_builder,
+)
+from .notifier import (
+    PostmortemNotificationConfig,
+    PostmortemNotificationPayload,
+    SlackBlockKitBuilder,
+    PostmortemNotifier,
+    get_postmortem_notifier,
+    reset_postmortem_notifier,
+)
 
 __all__ = [
     # Deployment Correlator
@@ -115,4 +131,16 @@ __all__ = [
     "compute_diff",
     "get_postmortem_revision_manager",
     "reset_postmortem_revision_manager",
+    # Deep Links
+    "PostmortemDeepLinks",
+    "PostmortemDeepLinkBuilder",
+    "get_postmortem_deep_link_builder",
+    "reset_postmortem_deep_link_builder",
+    # Notifier
+    "PostmortemNotificationConfig",
+    "PostmortemNotificationPayload",
+    "SlackBlockKitBuilder",
+    "PostmortemNotifier",
+    "get_postmortem_notifier",
+    "reset_postmortem_notifier",
 ]

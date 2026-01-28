@@ -261,6 +261,55 @@ class PostmortemSettings(BaseSettings):
         description="리비전 저장소 유형 (redis/postgresql/hybrid)",
     )
 
+    # ==========================================================================
+    # Deep Links - Postmortem 딥링크 URL 설정
+    # ==========================================================================
+    deep_links_enabled: bool = Field(
+        default=True,
+        description="딥링크 생성 활성화",
+    )
+
+    postmortem_base_url: str = Field(
+        default="",
+        description="Postmortem 상세 페이지 기본 URL",
+    )
+
+    postmortem_timeline_url: str = Field(
+        default="",
+        description="Postmortem 타임라인 뷰 URL",
+    )
+
+    audit_log_base_url: str = Field(
+        default="",
+        description="감사 로그 UI 기본 URL",
+    )
+
+    audit_evidence_base_url: str = Field(
+        default="",
+        description="CascadeEvent 증적 페이지 기본 URL",
+    )
+
+    # ==========================================================================
+    # Notification Channels - 알림 채널 설정
+    # ==========================================================================
+    slack_webhook_url: str = Field(
+        default="",
+        description="Postmortem 알림용 Slack Webhook URL",
+    )
+
+    notification_channels: str = Field(
+        default="slack",
+        description="활성화할 알림 채널 (쉼표 구분)",
+    )
+
+    # ==========================================================================
+    # CascadeEvent Integration - 감사 증적 연결
+    # ==========================================================================
+    cascade_event_integration_enabled: bool = Field(
+        default=True,
+        description="CascadeEvent 감사 증적 연결 활성화",
+    )
+
 
 # ==========================================================================
 # Singleton 관리
