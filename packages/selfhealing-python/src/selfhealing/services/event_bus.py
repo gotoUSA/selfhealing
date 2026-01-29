@@ -1291,8 +1291,7 @@ def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
         throttle.adjust_for_emergency(level)
 
         logger.info(
-            f"[Throttle] Emergency level {previous_level} → {level}, "
-            f"limit: {previous_limit} → {throttle.current_limit}"
+            f"[Throttle] Emergency level {previous_level} → {level}, " f"limit: {previous_limit} → {throttle.current_limit}"
         )
     except ImportError:
         logger.debug("[EventHandler] Throttle module not available")
@@ -1320,10 +1319,7 @@ def _on_emergency_deactivated_throttle(event: SelfHealingEvent) -> None:
         # level 0으로 복구
         throttle.adjust_for_emergency(0)
 
-        logger.info(
-            f"[Throttle] Emergency deactivated, "
-            f"limit restored: {previous_limit} → {throttle.current_limit}"
-        )
+        logger.info(f"[Throttle] Emergency deactivated, " f"limit restored: {previous_limit} → {throttle.current_limit}")
     except ImportError:
         logger.debug("[EventHandler] Throttle module not available")
     except Exception as e:
@@ -1344,13 +1340,33 @@ def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
     service_name = event.data.get("service_name", "unknown")
 
     try:
-        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+        from selfhealing.services.throttle.adaptive import (
+            get_adaptive_throttle,
+            _record_throttle_metrics,
+            _record_audit_safe,
+        )
 
         throttle = get_adaptive_throttle()
         previous_limit = throttle.current_limit
 
         # min_limit으로 강등
         throttle.current_limit = throttle.config.min_limit
+
+        # CB 조정 메트릭 기록
+        _record_throttle_metrics(
+            service=service_name,
+            limit=throttle.current_limit,
+            cb_state="open",
+        )
+
+        # CB 조정 감사 로그 기록
+        _record_audit_safe(
+            action="throttle_cb_sync",
+            old_limit=previous_limit,
+            new_limit=throttle.current_limit,
+            service_name=service_name,
+            cb_state="open",
+        )
 
         logger.info(f"[Throttle] CB OPEN for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit}")
     except ImportError:
@@ -1381,6 +1397,18 @@ def _on_circuit_breaker_half_opened_throttle(event: SelfHealingEvent) -> None:
         # initial_limit × 0.5 (제한적 트래픽 허용)
         half_open_limit = int(throttle.config.initial_limit * 0.5)
         throttle.current_limit = half_open_limit
+
+        # CB 조정 메트릭 기록
+        try:
+            from selfhealing.services.throttle.adaptive import _record_throttle_metrics
+
+            _record_throttle_metrics(
+                service=service_name,
+                limit=throttle.current_limit,
+                cb_state="half_open",
+            )
+        except ImportError:
+            pass
 
         logger.info(
             f"[Throttle] CB HALF_OPEN for {service_name}, "
@@ -1413,6 +1441,18 @@ def _on_circuit_breaker_closed_throttle(event: SelfHealingEvent) -> None:
 
         # initial_limit으로 복원 (점진적 증가 시작점)
         throttle.current_limit = throttle.config.initial_limit
+
+        # CB 조정 메트릭 기록
+        try:
+            from selfhealing.services.throttle.adaptive import _record_throttle_metrics
+
+            _record_throttle_metrics(
+                service=service_name,
+                limit=throttle.current_limit,
+                cb_state="closed",
+            )
+        except ImportError:
+            pass
 
         logger.info(
             f"[Throttle] CB CLOSED for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit} (recovery mode)"

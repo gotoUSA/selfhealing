@@ -45,6 +45,116 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# 감사 로그 헬퍼 (Fail-Open)
+# =============================================================================
+
+
+def _record_audit_safe(
+    action: str,
+    **kwargs,
+) -> None:
+    """
+    감사 로그 기록 (Fail-Open).
+
+    실패해도 주요 기능에 영향 없음.
+    """
+    try:
+        from selfhealing.services.throttle.audit import record_throttle_audit
+
+        record_throttle_audit(action=action, **kwargs)
+    except ImportError:
+        logger.debug("[AdaptiveThrottle] Audit module not available")
+    except Exception as e:
+        logger.debug(f"[AdaptiveThrottle] Failed to record audit: {e}")
+
+
+def _record_limit_history(
+    previous_limit: int,
+    new_limit: int,
+    reason: str,
+    trigger_source: str | None = None,
+) -> None:
+    """
+    Limit 변경 이력 기록 (Postmortem용).
+
+    실패해도 주요 기능에 영향 없음.
+    """
+    try:
+        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+
+        collector = get_throttle_history_collector()
+        collector.record_limit_change(
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            reason=reason,
+            trigger_source=trigger_source,
+        )
+    except ImportError:
+        logger.debug("[AdaptiveThrottle] Postmortem module not available")
+    except Exception as e:
+        logger.debug(f"[AdaptiveThrottle] Failed to record limit history: {e}")
+
+
+# =============================================================================
+# Prometheus 메트릭 헬퍼 (Fail-Open)
+# =============================================================================
+
+
+def _record_throttle_metrics(
+    service: str,
+    limit: int | None = None,
+    rtt_ms: float | None = None,
+    gradient: float | None = None,
+    denied_reason: str | None = None,
+    emergency_level: int | None = None,
+    cb_state: str | None = None,
+) -> None:
+    """
+    Throttle 관련 Prometheus 메트릭 기록.
+
+    메트릭:
+    - selfhealing_throttle_limit: 현재 limit 값
+    - selfhealing_throttle_rtt_ms: RTT 히스토그램
+    - selfhealing_throttle_gradient: 현재 gradient 값
+    - selfhealing_throttle_denied_total: 거부된 요청 카운터
+    - selfhealing_throttle_emergency_adjustments_total: Emergency 조정 카운터
+    - selfhealing_throttle_cb_adjustments_total: CB 조정 카운터
+    """
+    try:
+        from selfhealing.services.metrics.definitions import (
+            throttle_current_limit,
+            throttle_rtt_ms as throttle_rtt_histogram,
+            throttle_gradient as throttle_gradient_gauge,
+            throttle_denied_total,
+            throttle_emergency_adjustments_total,
+            throttle_cb_adjustments_total,
+        )
+
+        if limit is not None:
+            throttle_current_limit.labels(service=service).set(limit)
+
+        if rtt_ms is not None:
+            throttle_rtt_histogram.labels(service=service).observe(rtt_ms)
+
+        if gradient is not None:
+            throttle_gradient_gauge.labels(service=service).set(gradient)
+
+        if denied_reason is not None:
+            throttle_denied_total.labels(service=service, reason=denied_reason).inc()
+
+        if emergency_level is not None:
+            throttle_emergency_adjustments_total.labels(level=str(emergency_level)).inc()
+
+        if cb_state is not None:
+            throttle_cb_adjustments_total.labels(service=service, cb_state=cb_state).inc()
+
+    except ImportError:
+        logger.debug("[AdaptiveThrottle] Metrics module not available")
+    except Exception as e:
+        logger.debug(f"[AdaptiveThrottle] Failed to record metrics: {e}")
+
+
+# =============================================================================
 # EventBus Integration Helper (Fail-Open)
 # =============================================================================
 
@@ -295,6 +405,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._gradient_calculator.add_sample(rtt_ms)
         self._maybe_adjust_limit(rtt_ms)
 
+        # Prometheus 메트릭 기록: RTT, gradient, limit
+        gradient = self._gradient_calculator.get_gradient()
+        _record_throttle_metrics(
+            service="default",
+            limit=self._current_limit,
+            rtt_ms=rtt_ms,
+            gradient=gradient,
+        )
+
         # Check if limit was at min and has now recovered
         current_at_min = self._current_limit <= self.config.min_limit
         self._was_at_min_limit = current_at_min
@@ -471,6 +590,13 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         result.current_rtt_ms = self._gradient_calculator.get_current_rtt()
         result.rtt_gradient = self._gradient_calculator.get_gradient()
 
+        # 거부 시 메트릭 기록
+        if not result.allowed:
+            _record_throttle_metrics(
+                service="default",
+                denied_reason=result.reason or "rate_limit_exceeded",
+            )
+
         return result
 
     def get_stats(self) -> dict:
@@ -543,6 +669,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 # LEVEL_3: min_limit 고정 + Gradient Freeze
                 self._gradient_frozen = True
                 new_limit = self.config.min_limit
+                previous_limit = self._current_limit
 
                 # Full Stop 3중 조건 확인
                 is_full_stop, reason = self.check_full_stop_conditions()
@@ -554,16 +681,59 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                     f"[AdaptiveThrottle] Emergency LEVEL_3, " f"limit frozen to min_limit={new_limit}, Gradient frozen"
                 )
                 self.current_limit = new_limit
+                # Emergency 조정 메트릭 기록
+                _record_throttle_metrics(
+                    service="default",
+                    limit=new_limit,
+                    emergency_level=level,
+                )
+                # Emergency 조정 감사 로그 기록
+                _record_audit_safe(
+                    action="throttle_emergency_sync",
+                    old_limit=previous_limit,
+                    new_limit=new_limit,
+                    emergency_level=level,
+                    applied_multiplier=0.0,
+                )
+                # Postmortem용 이력 기록
+                _record_limit_history(
+                    previous_limit=previous_limit,
+                    new_limit=new_limit,
+                    reason=f"emergency_level_{level}",
+                    trigger_source="emergency_mode",
+                )
             else:
                 # LEVEL_1, LEVEL_2: 배율 적용
                 self._gradient_frozen = False
                 multiplier = EMERGENCY_LEVEL_LIMIT_MULTIPLIERS.get(level, 1.0)
+                previous_limit = self._current_limit
                 new_limit = int(self._base_limit_before_emergency * multiplier)
                 logger.info(
                     f"[AdaptiveThrottle] Emergency level {previous_level} → {level}, "
                     f"limit: {self._current_limit} → {new_limit} (×{multiplier})"
                 )
                 self.current_limit = new_limit
+                # Emergency 조정 메트릭 기록
+                _record_throttle_metrics(
+                    service="default",
+                    limit=new_limit,
+                    emergency_level=level,
+                )
+                # Emergency 조정 감사 로그 기록
+                _record_audit_safe(
+                    action="throttle_emergency_sync",
+                    old_limit=previous_limit,
+                    new_limit=new_limit,
+                    emergency_level=level,
+                    applied_multiplier=multiplier,
+                )
+                # Postmortem용 이력 기록
+                _record_limit_history(
+                    previous_limit=previous_limit,
+                    new_limit=new_limit,
+                    reason=f"emergency_level_{level}",
+                    trigger_source="emergency_mode",
+                )
 
         self._cache_emergency_tier_multipliers(level)
 

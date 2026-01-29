@@ -583,6 +583,20 @@ def _generate_postmortem_data(
     merged_timeline = timeline[:30] + deployment_timeline_events
     merged_timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
 
+    # Throttle 상태 데이터 수집
+    throttle_data = {}
+    try:
+        from selfhealing.services.throttle.postmortem import collect_throttle_postmortem_data
+
+        throttle_data = collect_throttle_postmortem_data(
+            start_time=start_time,
+            end_time=end_time,
+        )
+    except ImportError:
+        pass  # Throttle 모듈 없으면 무시
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Failed to collect throttle data: {e}")
+
     return {
         "incident_id": incident_id,
         "generated_at": timezone.now().isoformat(),
@@ -608,6 +622,8 @@ def _generate_postmortem_data(
         "timeline_snapshot": timeline_snapshot,
         # 배포 연관성 분석
         "deployment_context": deployment_context,
+        # Throttle 상태 데이터
+        "throttle_data": throttle_data,
         "auto_actions": auto_actions,
         "recommendations": recommendations,
     }

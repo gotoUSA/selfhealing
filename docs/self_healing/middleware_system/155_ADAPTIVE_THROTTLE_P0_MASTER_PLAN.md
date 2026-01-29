@@ -454,5 +454,76 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 
 **작성일**: 2026-01-29
 **수정일**: 2026-01-29 (15개 설계 결정, Sync/Async, Safe-Open, Phase 2 상세 추가)
-**버전**: 1.2
-**상태**: 설계 완료, 구현 대기
+**버전**: 1.3
+**상태**: P0 구현 완료
+
+---
+
+## 구현 현황
+
+### 구현 완료 항목 (2026-01-29)
+
+| 항목 | 상태 | 구현 파일 | 테스트 파일 |
+|------|------|----------|------------|
+| ThrottleSettings 확장 필드 (14개) | ✅ 완료 | `settings/throttle.py` | `test_throttle_settings_extension.py` |
+| Prometheus 메트릭 (6개) | ✅ 완료 | `services/metrics/definitions.py`, `services/throttle/adaptive.py` | `test_throttle_metrics.py` |
+| 감사 로그/CascadeEvent (4개) | ✅ 완료 | `services/throttle/audit.py` | `test_throttle_audit.py` |
+| Postmortem 연동 | ✅ 완료 | `services/throttle/postmortem.py` | `test_throttle_postmortem.py` |
+
+### ThrottleSettings 확장 필드 상세
+
+| 필드 | 기본값 | 용도 |
+|------|--------|------|
+| `emergency_level_0_multiplier` | 1.0 | NORMAL 상태 배율 |
+| `emergency_level_1_multiplier` | 0.8 | LEVEL_1 상태 배율 |
+| `emergency_level_2_multiplier` | 0.5 | LEVEL_2 상태 배율 |
+| `emergency_level_3_multiplier` | 0.0 | LEVEL_3 상태 배율 (Full Stop) |
+| `cb_open_limit_percent` | 0.0 | CB OPEN 시 limit 비율 |
+| `cb_half_open_limit_percent` | 0.5 | CB HALF_OPEN 시 limit 비율 |
+| `enable_event_integration` | True | 이벤트 연동 활성화 |
+| `sync_on_startup` | True | 시작 시 상태 동기화 |
+| `recovery_dampening_enabled` | True | Recovery Dampening 활성화 |
+| `recovery_step_1_percent` | 0.8 | 복구 1단계 비율 |
+| `recovery_step_2_percent` | 0.9 | 복구 2단계 비율 |
+| `recovery_step_3_percent` | 1.0 | 복구 3단계 비율 |
+| `recovery_step_interval_seconds` | 30.0 | 복구 단계 간격 (초) |
+| `gradient_freeze_on_level_3` | True | LEVEL_3에서 Gradient 중단 |
+| `full_stop_conditions_enabled` | True | 3중 조건 Full Stop |
+| `safe_open_fallback_enabled` | True | Redis 다운 시 Safe-Open |
+| `static_safe_limit_percent` | 0.5 | Safe-Open 시 용량 50% |
+| `redis_last_safe_limit_key_pattern` | `throttle:last_safe_limit:{service}` | Cold Start 복구 키 |
+| `sync_callback_enabled` | True | CB OPEN Sync 콜백 활성화 |
+
+### Prometheus 메트릭 상세
+
+| 메트릭 이름 | 타입 | 레이블 |
+|-----------|------|--------|
+| `throttle_current_limit` | Gauge | `service` |
+| `throttle_rtt_ms` | Histogram | `service` |
+| `throttle_gradient` | Gauge | `service` |
+| `throttle_denied_total` | Counter | `service`, `reason` |
+| `throttle_emergency_adjustments_total` | Counter | `level` |
+| `throttle_cb_adjustments_total` | Counter | `service`, `cb_state` |
+
+### 감사 로그 이벤트 상세
+
+| 이벤트 | 함수 | CascadeEvent 기록 |
+|--------|------|------------------|
+| `throttle_limit_adjusted` | `record_throttle_limit_adjusted()` | ❌ (메트릭만) |
+| `throttle_emergency_sync` | `record_throttle_emergency_sync()` | ✅ |
+| `throttle_cb_sync` | `record_throttle_cb_sync()` | ✅ |
+| `throttle_sla_breach` | `record_throttle_sla_breach()` | ❌ (메트릭만) |
+
+### Postmortem 데이터 상세
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `throttle_limit_history` | `list[dict]` | 인시던트 기간 limit 변화 이력 |
+| `throttle_min_limit` | `int` | 기간 중 최저 limit |
+| `throttle_max_limit` | `int` | 기간 중 최고 limit |
+| `throttle_adjustment_count` | `int` | 조정 횟수 |
+| `throttle_current_limit` | `int` | 현재 limit |
+| `throttle_emergency_adjustments` | `int` | Emergency 조정 횟수 |
+| `throttle_cb_adjustments` | `int` | CB 조정 횟수 |
+| `throttle_sla_warnings` | `int` | SLA 경고 횟수 |
+| `throttle_sla_criticals` | `int` | SLA 위험 횟수 |

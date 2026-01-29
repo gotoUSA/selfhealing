@@ -265,3 +265,44 @@ failsafe_mode_active = get_or_create_gauge(
     "Whether fail-safe mode is currently active (1=yes, 0=no)",
     ["component"],
 )
+
+# =============================================================================
+# Adaptive Throttle Metrics
+# =============================================================================
+
+throttle_current_limit = get_or_create_gauge(
+    "selfhealing_throttle_limit",
+    "Current throttle limit value",
+    ["service"],
+)
+
+throttle_rtt_ms = get_or_create_histogram(
+    "selfhealing_throttle_rtt_ms",
+    "Response time (RTT) in milliseconds",
+    ["service"],
+    buckets=(10, 25, 50, 100, 200, 500, 1000, 2000, 5000),
+)
+
+throttle_gradient = get_or_create_gauge(
+    "selfhealing_throttle_gradient",
+    "Current RTT gradient (positive=slowing, negative=improving)",
+    ["service"],
+)
+
+throttle_denied_total = get_or_create_counter(
+    "selfhealing_throttle_denied_total",
+    "Total requests denied by throttle",
+    ["service", "reason"],
+)
+
+throttle_emergency_adjustments_total = get_or_create_counter(
+    "selfhealing_throttle_emergency_adjustments_total",
+    "Total throttle limit adjustments due to emergency mode",
+    ["level"],
+)
+
+throttle_cb_adjustments_total = get_or_create_counter(
+    "selfhealing_throttle_cb_adjustments_total",
+    "Total throttle limit adjustments due to circuit breaker state",
+    ["service", "cb_state"],
+)

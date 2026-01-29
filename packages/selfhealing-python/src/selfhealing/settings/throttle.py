@@ -149,6 +149,147 @@ class ThrottleSettings(BaseSettings):
     )
 
     # ==========================================================================
+    # Emergency Level Multipliers (Level별 limit 배율)
+    # ==========================================================================
+    emergency_level_0_multiplier: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="NORMAL(0) 레벨 limit 배율 (100%)",
+    )
+
+    emergency_level_1_multiplier: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="LEVEL_1(1) limit 배율 (80%)",
+    )
+
+    emergency_level_2_multiplier: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="LEVEL_2(2) limit 배율 (50%)",
+    )
+
+    emergency_level_3_multiplier: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="LEVEL_3(3) limit 배율 (min_limit 사용, 0.0)",
+    )
+
+    # ==========================================================================
+    # Circuit Breaker 연동 설정
+    # ==========================================================================
+    cb_open_limit_percent: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="CB OPEN 시 limit 비율 (0.0 = min_limit 사용)",
+    )
+
+    cb_half_open_limit_percent: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="CB HALF_OPEN 시 limit 비율 (50%)",
+    )
+
+    # ==========================================================================
+    # EventBus 연동 설정
+    # ==========================================================================
+    enable_event_integration: bool = Field(
+        default=True,
+        description="EventBus 이벤트 연동 활성화",
+    )
+
+    sync_on_startup: bool = Field(
+        default=True,
+        description="시작 시 Emergency/CB 상태 동기화",
+    )
+
+    # ==========================================================================
+    # Recovery Dampening 설정 (점진적 복구)
+    # ==========================================================================
+    recovery_dampening_enabled: bool = Field(
+        default=True,
+        description="Recovery Dampening 활성화 (Thundering Herd 방지)",
+    )
+
+    recovery_step_1_percent: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="복구 1단계 비율 (80%)",
+    )
+
+    recovery_step_2_percent: float = Field(
+        default=0.9,
+        ge=0.0,
+        le=1.0,
+        description="복구 2단계 비율 (90%)",
+    )
+
+    recovery_step_3_percent: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="복구 3단계 비율 (100%)",
+    )
+
+    recovery_step_interval_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="복구 단계 간격 (초)",
+    )
+
+    # ==========================================================================
+    # Gradient Freeze 설정
+    # ==========================================================================
+    gradient_freeze_on_level_3: bool = Field(
+        default=True,
+        description="LEVEL_3에서 Gradient 적용 중단 (계산은 유지)",
+    )
+
+    # ==========================================================================
+    # Full Stop 설정 (3중 조건)
+    # ==========================================================================
+    full_stop_conditions_enabled: bool = Field(
+        default=True,
+        description="Full Stop 3중 조건 활성화 (LEVEL_3 + DB_CB + Budget)",
+    )
+
+    # ==========================================================================
+    # Safe-Open 폴백 설정
+    # ==========================================================================
+    safe_open_fallback_enabled: bool = Field(
+        default=True,
+        description="Redis 다운 시 Safe-Open 폴백 활성화",
+    )
+
+    static_safe_limit_percent: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Safe-Open 시 정적 limit 비율 (50%)",
+    )
+
+    redis_last_safe_limit_key_pattern: str = Field(
+        default="throttle:last_safe_limit:{service}",
+        description="Cold Start 복구용 Redis 키 패턴",
+    )
+
+    # ==========================================================================
+    # Sync 콜백 설정
+    # ==========================================================================
+    sync_callback_enabled: bool = Field(
+        default=True,
+        description="CB OPEN Sync 콜백 활성화 (로컬 즉시 적용)",
+    )
+
+    # ==========================================================================
     # Redis Key Prefix
     # ==========================================================================
     key_prefix: str = Field(
@@ -171,10 +312,25 @@ class ThrottleSettings(BaseSettings):
         """sla_critical_ms가 sla_warning_ms보다 커야 함."""
         # 기본값 200과 비교
         if v < 200:
-            logger.warning(
-                f"[SafeDefault] sla_critical_ms={v} is lower than typical warning threshold"
-            )
+            logger.warning(f"[SafeDefault] sla_critical_ms={v} is lower than typical warning threshold")
         return v
+
+    def get_emergency_level_multipliers(self) -> dict[int, float]:
+        """Emergency Level별 limit 배율 딕셔너리 반환."""
+        return {
+            0: self.emergency_level_0_multiplier,
+            1: self.emergency_level_1_multiplier,
+            2: self.emergency_level_2_multiplier,
+            3: self.emergency_level_3_multiplier,
+        }
+
+    def get_recovery_steps(self) -> tuple[float, ...]:
+        """Recovery Dampening 단계 비율 튜플 반환."""
+        return (
+            self.recovery_step_1_percent,
+            self.recovery_step_2_percent,
+            self.recovery_step_3_percent,
+        )
 
 
 # =============================================================================
