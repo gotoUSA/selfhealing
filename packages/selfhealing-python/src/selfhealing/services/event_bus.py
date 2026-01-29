@@ -97,6 +97,21 @@ class EventType(Enum):
     SECURITY_VIOLATION_CRITICAL = "security_violation_critical"
     """CRITICAL 보안 위반 - Emergency Mode 및 Error Budget 연동 트리거."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Adaptive Throttle Events
+    # ═══════════════════════════════════════════════════════════════════════════
+    THROTTLE_LIMIT_CHANGED = "throttle_limit_changed"
+    """Throttle limit 변경됨 (previous_limit, new_limit, reason 포함)."""
+
+    THROTTLE_SLA_WARNING = "throttle_sla_warning"
+    """SLA Warning 임계값 도달 (current_rtt_ms, threshold_ms, current_limit 포함)."""
+
+    THROTTLE_SLA_CRITICAL = "throttle_sla_critical"
+    """SLA Critical 임계값 도달 (current_rtt_ms, threshold_ms, current_limit 포함)."""
+
+    THROTTLE_LIMIT_RECOVERED = "throttle_limit_recovered"
+    """Throttle limit 정상 범위 회복 (previous_limit, new_limit 포함)."""
+
 
 class EventPriority(Enum):
     """이벤트 처리 우선순위."""

@@ -45,6 +45,7 @@ class EventChannel(Enum):
     CONFIG = "config"
     EMERGENCY = "emergency"
     CIRCUIT_BREAKER = "circuit_breaker"
+    THROTTLE = "throttle"
     GLOBAL = "global"
 
 
@@ -54,6 +55,7 @@ SELFHEALING_EVENT_CHANNELS: dict[str, str] = {
     EventChannel.CONFIG.value: "selfhealing:events:config",
     EventChannel.EMERGENCY.value: "selfhealing:events:emergency",
     EventChannel.CIRCUIT_BREAKER.value: "selfhealing:events:cb",
+    EventChannel.THROTTLE.value: "selfhealing:events:throttle",
     EventChannel.GLOBAL.value: "selfhealing:global:events",
 }
 
@@ -84,6 +86,11 @@ EVENT_TYPE_TO_CHANNEL: dict[EventType, EventChannel] = {
     # Security → Global
     EventType.SECURITY_VIOLATION_DETECTED: EventChannel.GLOBAL,
     EventType.SECURITY_VIOLATION_CRITICAL: EventChannel.GLOBAL,
+    # Throttle Events
+    EventType.THROTTLE_LIMIT_CHANGED: EventChannel.THROTTLE,
+    EventType.THROTTLE_SLA_WARNING: EventChannel.THROTTLE,
+    EventType.THROTTLE_SLA_CRITICAL: EventChannel.GLOBAL,
+    EventType.THROTTLE_LIMIT_RECOVERED: EventChannel.THROTTLE,
 }
 
 # 기존 호환성을 위한 기본 채널
@@ -170,14 +177,10 @@ class RedisEventBus:
             logger.info("[RedisEventBus] Connected to Redis")
             return True
         except ImportError:
-            logger.warning(
-                "[RedisEventBus] redis package not installed, using local bus"
-            )
+            logger.warning("[RedisEventBus] redis package not installed, using local bus")
             return False
         except Exception as e:
-            logger.warning(
-                f"[RedisEventBus] Redis connection failed: {e}, using local bus"
-            )
+            logger.warning(f"[RedisEventBus] Redis connection failed: {e}, using local bus")
             self._redis_client = None
             return False
 
@@ -211,10 +214,7 @@ class RedisEventBus:
                 name="RedisEventBusListener",
             )
             self._listener_thread.start()
-            logger.info(
-                f"[RedisEventBus] Listener started on channels: "
-                f"{list(self._subscribed_redis_channels)}"
-            )
+            logger.info(f"[RedisEventBus] Listener started on channels: " f"{list(self._subscribed_redis_channels)}")
 
     def stop_listener(self) -> None:
         """Redis Pub/Sub 리스너 중지."""
@@ -287,9 +287,7 @@ class RedisEventBus:
     def _get_channel_for_event(self, event_type: EventType) -> str:
         """EventType에 맞는 Redis 채널 반환."""
         channel_enum = EVENT_TYPE_TO_CHANNEL.get(event_type, EventChannel.GLOBAL)
-        return self._channels.get(
-            channel_enum.value, self._channels[EventChannel.GLOBAL.value]
-        )
+        return self._channels.get(channel_enum.value, self._channels[EventChannel.GLOBAL.value])
 
     def get_channel(self, channel: EventChannel) -> str:
         """특정 채널의 Redis 키 반환."""

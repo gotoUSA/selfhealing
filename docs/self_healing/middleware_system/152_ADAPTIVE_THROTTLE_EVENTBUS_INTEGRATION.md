@@ -221,14 +221,14 @@ def _on_xxx_throttle(event):
 ## 구현 체크리스트
 
 ### Phase 1: EventType 추가
-- [ ] `EventType` Enum에 Throttle 관련 이벤트 4개 추가
-- [ ] `EVENT_TYPE_TO_CHANNEL`에 Throttle → THROTTLE 채널 매핑 추가
-- [ ] 이벤트별 데이터 스키마 문서화
+- [x] `EventType` Enum에 Throttle 관련 이벤트 4개 추가
+- [x] `EVENT_TYPE_TO_CHANNEL`에 Throttle → THROTTLE 채널 매핑 추가
+- [x] 이벤트별 데이터 스키마 문서화
 
 ### Phase 2: 분산 EventBus 연동
-- [ ] `SELFHEALING_EVENT_CHANNELS`에 `throttle` 채널 추가
-- [ ] `EventChannel` Enum에 `THROTTLE` 추가
-- [ ] 분산 모드 활성화 시 `get_event_bus(distributed=True)` 사용
+- [x] `SELFHEALING_EVENT_CHANNELS`에 `throttle` 채널 추가
+- [x] `EventChannel` Enum에 `THROTTLE` 추가
+- [x] 분산 모드 활성화 시 `get_event_bus(distributed=True)` 사용
 
 ### Phase 3: Throttle 발행 로직
 - [ ] `AdaptiveThrottle._maybe_adjust_limit()`에 이벤트 발행 추가
@@ -264,5 +264,5 @@ def _on_xxx_throttle(event):
 ---
 
 **작성일**: 2026-01-29
-**수정일**: 2026-01-29 (Sync/Async 전파 방식 설계 결정 추가)
+**수정일**: 2026-01-29 (Phase 1, 2 구현 완료)
 **관련 문서**: 23_ADAPTIVE_THROTTLING.md
