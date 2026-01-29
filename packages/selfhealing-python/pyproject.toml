@@ -55,8 +55,14 @@ celery = [
 prometheus = [
     "prometheus-client>=0.17",
 ]
+opentelemetry = [
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "opentelemetry-instrumentation-django>=0.41b0",
+]
 all = [
-    "selfhealing[django,celery,prometheus]",
+    "selfhealing[django,celery,prometheus,opentelemetry]",
 ]
 dev = [
     "selfhealing[all]",
