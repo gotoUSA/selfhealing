@@ -106,9 +106,7 @@ class ThrottleCircuitBreakerBridge:
         """
         self.sla_warning_ms = sla_warning_ms or self.SLA_WARNING_MS
         self.sla_critical_ms = sla_critical_ms or self.SLA_CRITICAL_MS
-        self.gradient_warning_threshold = (
-            gradient_warning_threshold or self.GRADIENT_WARNING_THRESHOLD
-        )
+        self.gradient_warning_threshold = gradient_warning_threshold or self.GRADIENT_WARNING_THRESHOLD
 
         # 서비스별 메트릭 저장
         self._metrics: dict[str, ServiceHealthMetrics] = {}
@@ -121,9 +119,7 @@ class ThrottleCircuitBreakerBridge:
     def _get_or_create_metrics(self, service_name: str) -> ServiceHealthMetrics:
         """서비스별 메트릭 가져오기 또는 생성."""
         if service_name not in self._metrics:
-            self._metrics[service_name] = ServiceHealthMetrics(
-                service_name=service_name
-            )
+            self._metrics[service_name] = ServiceHealthMetrics(service_name=service_name)
         return self._metrics[service_name]
 
     def record_rtt(
@@ -194,10 +190,7 @@ class ThrottleCircuitBreakerBridge:
         RTT가 지속적으로 Critical이면 CB failure로 카운트할 수 있습니다.
         단, 단일 RTT Critical로 바로 CB를 열지는 않습니다.
         """
-        logger.warning(
-            f"[ThrottleCBBridge] RTT CRITICAL for '{service_name}': "
-            f"{rtt_ms:.1f}ms >= {self.sla_critical_ms}ms"
-        )
+        logger.warning(f"[ThrottleCBBridge] RTT CRITICAL for '{service_name}': " f"{rtt_ms:.1f}ms >= {self.sla_critical_ms}ms")
 
         # 이벤트 발행 (CB에서 구독하여 처리)
         try:
@@ -357,10 +350,7 @@ class ThrottleCircuitBreakerBridge:
             서비스별 메트릭 리스트
         """
         with self._lock:
-            return [
-                self.get_service_health(name)
-                for name in list(self._metrics.keys())
-            ]
+            return [self.get_service_health(name) for name in list(self._metrics.keys())]
 
     def reset(self) -> None:
         """브릿지 초기화 (테스트용)."""

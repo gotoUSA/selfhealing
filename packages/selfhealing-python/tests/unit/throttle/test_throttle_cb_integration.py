@@ -103,11 +103,13 @@ class TestCircuitBreakerSyncCallback:
         callback_called = []
 
         def test_callback(service_name, old_state, new_state):
-            callback_called.append({
-                "service_name": service_name,
-                "old_state": old_state,
-                "new_state": new_state,
-            })
+            callback_called.append(
+                {
+                    "service_name": service_name,
+                    "old_state": old_state,
+                    "new_state": new_state,
+                }
+            )
 
         service.register_state_change_callback("open", test_callback)
 

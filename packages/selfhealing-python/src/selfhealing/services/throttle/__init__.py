@@ -40,6 +40,25 @@ from selfhealing.services.throttle.cb_bridge import (
     reset_throttle_cb_bridge,
 )
 from selfhealing.services.throttle.config import ThrottleConfig
+from selfhealing.services.throttle.dlq_integration import (
+    ThrottleDeniedRequest,
+    ThrottleDLQConfig,
+    ThrottleDLQIntegration,
+    get_throttle_dlq_integration,
+    reset_throttle_dlq_integration,
+)
+from selfhealing.services.throttle.recovery_dampening import (
+    RecoveryDampeningConfig,
+    RecoveryDampeningManager,
+    RecoveryPhase,
+    ServiceRecoveryState,
+    get_recovery_dampening_manager,
+    reset_recovery_dampening_manager,
+)
+from selfhealing.services.throttle.redis_lua import (
+    RedisThrottleLimitManager,
+    ThrottleLuaScripts,
+)
 from selfhealing.services.throttle.registry import (
     CircuitBreakerState,
     ServiceThrottleConfig,
@@ -47,6 +66,14 @@ from selfhealing.services.throttle.registry import (
     ThrottleRegistry,
     get_throttle_registry,
     reset_throttle_registry,
+)
+from selfhealing.services.throttle.safe_open_fallback import (
+    RedisConnectionState,
+    SafeOpenConfig,
+    SafeOpenFallbackManager,
+    ServiceSafeLimitState,
+    get_safe_open_fallback_manager,
+    reset_safe_open_fallback_manager,
 )
 
 __all__ = [
@@ -71,4 +98,27 @@ __all__ = [
     "ServiceHealthMetrics",
     "get_throttle_cb_bridge",
     "reset_throttle_cb_bridge",
+    # DLQ Integration
+    "ThrottleDeniedRequest",
+    "ThrottleDLQConfig",
+    "ThrottleDLQIntegration",
+    "get_throttle_dlq_integration",
+    "reset_throttle_dlq_integration",
+    # Recovery Dampening
+    "RecoveryDampeningConfig",
+    "RecoveryDampeningManager",
+    "RecoveryPhase",
+    "ServiceRecoveryState",
+    "get_recovery_dampening_manager",
+    "reset_recovery_dampening_manager",
+    # Redis Lua Scripts
+    "ThrottleLuaScripts",
+    "RedisThrottleLimitManager",
+    # Safe-Open Fallback
+    "SafeOpenConfig",
+    "SafeOpenFallbackManager",
+    "ServiceSafeLimitState",
+    "RedisConnectionState",
+    "get_safe_open_fallback_manager",
+    "reset_safe_open_fallback_manager",
 ]

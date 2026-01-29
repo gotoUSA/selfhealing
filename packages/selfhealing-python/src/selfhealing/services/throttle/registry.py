@@ -199,8 +199,7 @@ class ThrottleRegistry:
 
                 throttle.current_limit = new_limit
                 logger.warning(
-                    f"[ThrottleRegistry] CB OPEN for '{service_name}', "
-                    f"limit: {previous_limit} → {throttle.current_limit}"
+                    f"[ThrottleRegistry] CB OPEN for '{service_name}', " f"limit: {previous_limit} → {throttle.current_limit}"
                 )
 
             elif new_cb_state == CircuitBreakerState.HALF_OPEN:
@@ -308,11 +307,7 @@ class ThrottleRegistry:
             상태 정보 리스트
         """
         with self._throttle_lock:
-            return [
-                self.get_service_state(name)
-                for name in self._throttles
-                if self.get_service_state(name) is not None
-            ]
+            return [self.get_service_state(name) for name in self._throttles if self.get_service_state(name) is not None]
 
     def reset(self) -> None:
         """레지스트리 초기화 (테스트용)."""

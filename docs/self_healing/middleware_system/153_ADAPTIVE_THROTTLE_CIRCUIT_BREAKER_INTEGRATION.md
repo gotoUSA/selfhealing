@@ -324,30 +324,30 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 **즉시 100% 복구하지 않음** 
 - [x] 공유 메트릭 정의 (`RTTMetrics`, `ServiceHealthMetrics`)
 
 ### Phase 4: DLQ 연계
-- [ ] Throttle deny 시 DLQ 저장 옵션
-- [ ] CB CLOSE 시 Throttle deny 항목 replay
+- [x] Throttle deny 시 DLQ 저장 옵션
+- [x] CB CLOSE 시 Throttle deny 항목 replay
 
 ### Phase 5: Recovery Dampening
-- [ ] `_recovery_dampening_active` 플래그 추가
-- [ ] `recovery_dampening_multiplier` 설정 (기본 0.8)
-- [ ] 30초 댐핑 구간 타이머 구현
-- [ ] Gradient 계산 유지, 적용만 지연
+- [x] `_recovery_dampening_active` 플래그 추가
+- [x] `recovery_dampening_multiplier` 설정 (기본 0.8)
+- [x] 30초 댐핑 구간 타이머 구현
+- [x] Gradient 계산 유지, 적용만 지연
 
 ### Phase 6: Redis 원자적 업데이트
-- [ ] Throttle Limit 업데이트 Lua 스크립트 작성
-- [ ] `throttle:last_safe_limit:{service}` 키 저장
-- [ ] Cold Start 시 마지막 안전 limit 복구 로직
+- [x] Throttle Limit 업데이트 Lua 스크립트 작성
+- [x] `throttle:last_safe_limit:{service}` 키 저장
+- [x] Cold Start 시 마지막 안전 limit 복구 로직
 
 ### Phase 7: Safe-Open 폴백
-- [ ] `_last_known_safe_limit` 필드 추가
-- [ ] Redis 연결 정상 시 limit 주기적 저장
-- [ ] Redis 장애 감지 시 `_last_known_safe_limit` 사용
-- [ ] `LocalMemoryRateLimiter` 패턴 적용
+- [x] `_last_known_safe_limit` 필드 추가
+- [x] Redis 연결 정상 시 limit 주기적 저장
+- [x] Redis 장애 감지 시 `_last_known_safe_limit` 사용
+- [x] `LocalMemoryRateLimiter` 패턴 적용
 
 ### Phase 8: 테스트
-- [ ] CB OPEN → Throttle limit 감소 테스트
-- [ ] CB CLOSE → Throttle limit 복구 테스트
-- [ ] Recovery Dampening 테스트 (30초 댐핑)
+- [x] CB OPEN → Throttle limit 감소 테스트
+- [x] CB CLOSE → Throttle limit 복구 테스트
+- [x] Recovery Dampening 테스트 (30초 댐핑)
 - [ ] 통합 시나리오 테스트
 - [ ] 분산 환경 Race Condition 테스트
 
@@ -393,6 +393,10 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 **즉시 100% 복구하지 않음** 
 | `services/throttle/adaptive.py` | AdaptiveThrottle 클래스 |
 | `services/throttle/registry.py` | ThrottleRegistry, 서비스별 Throttle 관리 |
 | `services/throttle/cb_bridge.py` | ThrottleCircuitBreakerBridge, RTT 데이터 공유 |
+| `services/throttle/dlq_integration.py` | Throttle DLQ 연계, deny 요청 저장 및 replay |
+| `services/throttle/recovery_dampening.py` | Recovery Dampening, 점진적 복구 관리 |
+| `services/throttle/redis_lua.py` | Redis Lua 스크립트, 원자적 limit 업데이트 |
+| `services/throttle/safe_open_fallback.py` | Safe-Open 폴백, Redis 장애 시 로컬 캐시 사용 |
 | `services/event_bus.py` | CB 이벤트 핸들러, HALF_OPENED 핸들러 포함 |
 | `services/emergency_mode/recovery_gate.py` | RecoveryGate (복구 허용 체크 패턴) |
 | `audit/performance/lua_atomic.py` | Lua 스크립트 원자적 연산 패턴 |
@@ -400,5 +404,5 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 **즉시 100% 복구하지 않음** 
 ---
 
 **작성일**: 2026-01-29
-**수정일**: 2026-01-29 (Sync/Async 분리, Safe-Open 폴백 추가)
+**수정일**: 2026-01-29 (Phase 4-7 구현 완료)
 **관련 문서**: 23_ADAPTIVE_THROTTLING.md, 21_CB_ADVANCED_PROTECTION.md
