@@ -303,25 +303,25 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 **즉시 100% 복구하지 않음** 
 ## 구현 체크리스트
 
 ### Phase 1: 이벤트 핸들러 구현
-- [ ] `_on_circuit_breaker_opened_throttle()` 핸들러
-- [ ] `_on_circuit_breaker_closed_throttle()` 핸들러
-- [ ] `_on_circuit_breaker_half_opened_throttle()` 핸들러
-- [ ] `register_default_handlers()`에 등록
+- [x] `_on_circuit_breaker_opened_throttle()` 핸들러
+- [x] `_on_circuit_breaker_closed_throttle()` 핸들러
+- [x] `_on_circuit_breaker_half_opened_throttle()` 핸들러
+- [x] `register_default_handlers()`에 등록
 
 ### Phase 1.5: Sync 콜백 구현
-- [ ] `CircuitBreakerService.register_open_callback()` 인터페이스 추가
-- [ ] `AdaptiveThrottleManager.on_cb_opened_sync()` 동기 콜백 메서드
-- [ ] CB OPEN 시 로컬 Throttle 즉시 강등 (EventBus 우회)
+- [x] `CircuitBreakerService.register_state_change_callback()` 인터페이스 추가
+- [x] `ThrottleRegistry.on_circuit_breaker_state_changed()` 동기 콜백 메서드
+- [x] CB OPEN 시 로컬 Throttle 즉시 강등 (EventBus 우회)
 
 ### Phase 2: 서비스별 Throttle
-- [ ] `ThrottleRegistry` 클래스 설계
-- [ ] 서비스별 `ThrottleConfig` 지원
-- [ ] CB 상태별 limit 자동 조정 로직
+- [x] `ThrottleRegistry` 클래스 설계
+- [x] 서비스별 `ServiceThrottleConfig` 지원
+- [x] CB 상태별 limit 자동 조정 로직
 
 ### Phase 3: RTT 데이터 공유
-- [ ] Throttle RTT → CB 피드백 인터페이스
-- [ ] CB 상태 → Throttle 조정 로직
-- [ ] 공유 메트릭 정의
+- [x] Throttle RTT → CB 피드백 인터페이스 (`ThrottleCircuitBreakerBridge`)
+- [x] CB 상태 → Throttle 조정 로직
+- [x] 공유 메트릭 정의 (`RTTMetrics`, `ServiceHealthMetrics`)
 
 ### Phase 4: DLQ 연계
 - [ ] Throttle deny 시 DLQ 저장 옵션
@@ -386,11 +386,14 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 **즉시 100% 복구하지 않음** 
 
 | 파일 | 역할 |
 |-----|------|
-| `services/circuit_breaker/service.py` | CircuitBreakerService 메인 클래스 |
+| `services/circuit_breaker/service.py` | CircuitBreakerService 메인 클래스, 동기 콜백 지원 |
 | `services/circuit_breaker/config.py` | CircuitBreakerConfig 설정 |
 | `services/circuit_breaker/protection.py` | Rate Limit Cascade 감지 |
 | `services/circuit_breaker/rate_limit_tracker.py` | 429 응답 추적 |
 | `services/throttle/adaptive.py` | AdaptiveThrottle 클래스 |
+| `services/throttle/registry.py` | ThrottleRegistry, 서비스별 Throttle 관리 |
+| `services/throttle/cb_bridge.py` | ThrottleCircuitBreakerBridge, RTT 데이터 공유 |
+| `services/event_bus.py` | CB 이벤트 핸들러, HALF_OPENED 핸들러 포함 |
 | `services/emergency_mode/recovery_gate.py` | RecoveryGate (복구 허용 체크 패턴) |
 | `audit/performance/lua_atomic.py` | Lua 스크립트 원자적 연산 패턴 |
 

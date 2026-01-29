@@ -90,6 +90,88 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         self.config = config or CircuitBreakerConfig.from_settings()
         self._repository = repository
 
+        # 동기 콜백 저장소: {상태: [콜백 함수들]}
+        # 이벤트 버스 비동기 전파보다 먼저 동일 프로세스 내에서 즉시 실행됨
+        self._state_change_callbacks: dict[str, list] = {
+            "open": [],
+            "closed": [],
+            "half_open": [],
+        }
+
+    def register_state_change_callback(
+        self,
+        state: str,
+        callback: "Callable[[str, str, str], None]",
+    ) -> None:
+        """
+        CB 상태 변경 시 호출될 동기 콜백 등록.
+
+        이벤트 버스 비동기 전파보다 먼저 동일 프로세스에서 즉시 실행됩니다.
+        Throttle 등 즉각적인 제동이 필요한 컴포넌트에서 사용합니다.
+
+        Args:
+            state: 대상 상태 ("open", "closed", "half_open")
+            callback: 콜백 함수 (service_name, old_state, new_state) -> None
+        """
+        if state not in self._state_change_callbacks:
+            logger.warning(f"[CircuitBreaker] Invalid state for callback: {state}")
+            return
+
+        if callback not in self._state_change_callbacks[state]:
+            self._state_change_callbacks[state].append(callback)
+            logger.debug(
+                f"[CircuitBreaker] Registered sync callback for state '{state}': "
+                f"{getattr(callback, '__name__', str(callback))}"
+            )
+
+    def unregister_state_change_callback(
+        self,
+        state: str,
+        callback: "Callable[[str, str, str], None]",
+    ) -> bool:
+        """
+        등록된 동기 콜백 해제.
+
+        Args:
+            state: 대상 상태
+            callback: 해제할 콜백 함수
+
+        Returns:
+            해제 성공 여부
+        """
+        if state not in self._state_change_callbacks:
+            return False
+
+        if callback in self._state_change_callbacks[state]:
+            self._state_change_callbacks[state].remove(callback)
+            return True
+        return False
+
+    def _invoke_state_change_callbacks(
+        self,
+        service_name: str,
+        old_state: str,
+        new_state: str,
+    ) -> None:
+        """
+        상태 변경 시 등록된 동기 콜백들을 즉시 호출.
+
+        이벤트 버스 전파보다 먼저 실행되어 즉각적인 제동을 보장합니다.
+
+        Args:
+            service_name: 서비스 이름
+            old_state: 이전 상태
+            new_state: 새 상태
+        """
+        callbacks = self._state_change_callbacks.get(new_state, [])
+        for callback in callbacks:
+            try:
+                callback(service_name, old_state, new_state)
+            except Exception as e:
+                logger.error(
+                    f"[CircuitBreaker] Sync callback failed for '{new_state}': {e}"
+                )
+
     @property
     def repository(self) -> CircuitBreakerStateRepository:
         """Get the repository using ProviderRegistry (Redis by default)."""
@@ -176,6 +258,34 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                         )
                     except Exception as e:
                         logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+
+                    # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
+                    self._invoke_state_change_callbacks(
+                        service_name=service_name,
+                        old_state="open",
+                        new_state="half_open",
+                    )
+
+                    # HALF_OPEN 이벤트 발행 (비동기 전파)
+                    try:
+                        from selfhealing.services.event_bus import (
+                            EventType,
+                            get_event_bus,
+                        )
+
+                        bus = get_event_bus()
+                        bus.emit(
+                            EventType.CIRCUIT_BREAKER_HALF_OPENED,
+                            {
+                                "service_name": service_name,
+                                "previous_state": "open",
+                                "timestamp": now().isoformat(),
+                            },
+                            source="circuit_breaker_service",
+                        )
+                    except Exception as e:
+                        logger.debug(f"[CircuitBreaker] Event publish failed: {e}")
+
                     return True
             return False
 
@@ -397,6 +507,13 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 f"[CircuitBreaker] Circuit auto-opened for '{service_name}' "
                 f"(failures: {updated_state.failure_count}, "
                 f"total_calls: {self.get_total_calls(service_name)})"
+            )
+
+            # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
+            self._invoke_state_change_callbacks(
+                service_name=service_name,
+                old_state="closed",
+                new_state="open",
             )
 
             # Save audit log with snapshot
@@ -663,6 +780,14 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 f"[CircuitBreaker] Circuit auto-closed for '{service_name}' "
                 f"(successes: {self.config.success_threshold})"
             )
+
+            # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
+            self._invoke_state_change_callbacks(
+                service_name=service_name,
+                old_state="half_open",
+                new_state="closed",
+            )
+
             # Audit 기록 - 자동 복구 완료 (HALF_OPEN → CLOSED)
             try:
                 from selfhealing.services.audit_helpers import log_cb_state_change_audit

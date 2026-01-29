@@ -31,7 +31,23 @@ from selfhealing.services.throttle.adaptive import (
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.base import BaseThrottle, SlidingWindowThrottle
+from selfhealing.services.throttle.cb_bridge import (
+    RTTMetrics,
+    RTTSeverity,
+    ServiceHealthMetrics,
+    ThrottleCircuitBreakerBridge,
+    get_throttle_cb_bridge,
+    reset_throttle_cb_bridge,
+)
 from selfhealing.services.throttle.config import ThrottleConfig
+from selfhealing.services.throttle.registry import (
+    CircuitBreakerState,
+    ServiceThrottleConfig,
+    ServiceThrottleState,
+    ThrottleRegistry,
+    get_throttle_registry,
+    reset_throttle_registry,
+)
 
 __all__ = [
     "ThrottleConfig",
@@ -41,4 +57,18 @@ __all__ = [
     "GradientCalculator",
     "get_adaptive_throttle",
     "reset_adaptive_throttle",
+    # Registry
+    "ThrottleRegistry",
+    "ServiceThrottleConfig",
+    "ServiceThrottleState",
+    "CircuitBreakerState",
+    "get_throttle_registry",
+    "reset_throttle_registry",
+    # CB Bridge
+    "ThrottleCircuitBreakerBridge",
+    "RTTMetrics",
+    "RTTSeverity",
+    "ServiceHealthMetrics",
+    "get_throttle_cb_bridge",
+    "reset_throttle_cb_bridge",
 ]

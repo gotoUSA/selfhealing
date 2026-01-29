@@ -1341,6 +1341,39 @@ def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
         logger.warning(f"[EventHandler] Failed to adjust throttle for CB OPEN: {e}")
 
 
+def _on_circuit_breaker_half_opened_throttle(event: SelfHealingEvent) -> None:
+    """
+    Circuit Breaker HALF_OPEN 시 limit을 initial_limit의 50%로 설정.
+
+    CB가 OPEN에서 HALF_OPEN으로 전이되면 서비스 복구를 테스트하는 단계이므로
+    제한적인 트래픽만 허용합니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    service_name = event.data.get("service_name", "unknown")
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # initial_limit × 0.5 (제한적 트래픽 허용)
+        half_open_limit = int(throttle.config.initial_limit * 0.5)
+        throttle.current_limit = half_open_limit
+
+        logger.info(
+            f"[Throttle] CB HALF_OPEN for {service_name}, "
+            f"limit: {previous_limit} → {throttle.current_limit} (recovery test mode)"
+        )
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for CB HALF_OPEN: {e}")
+
+
 def _on_circuit_breaker_closed_throttle(event: SelfHealingEvent) -> None:
     """
     Circuit Breaker CLOSED 시 limit 제한 해제.
@@ -1542,6 +1575,13 @@ def register_default_handlers():
         EventType.CIRCUIT_BREAKER_CLOSED,
         _on_circuit_breaker_closed_throttle,
         priority=EventPriority.NORMAL,
+    )
+
+    # Circuit Breaker HALF_OPEN 시 Throttle limit 제한적 허용
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_HALF_OPENED,
+        _on_circuit_breaker_half_opened_throttle,
+        priority=EventPriority.HIGH,
     )
 
     # Error Budget Critical 시 Throttle limit 보수적 조정
