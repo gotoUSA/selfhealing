@@ -311,20 +311,20 @@ Emergency Mode의 Recovery Gate 연동 + Dampening:
 ## 구현 체크리스트
 
 ### Phase 1: 이벤트 핸들러
-- [ ] `_on_emergency_level_changed_throttle()` 핸들러 구현
-- [ ] `_on_emergency_deactivated_throttle()` 핸들러 구현
-- [ ] `register_default_handlers()`에 등록
+- [x] `_on_emergency_level_changed_throttle()` 핸들러 구현
+- [x] `_on_emergency_deactivated_throttle()` 핸들러 구현
+- [x] `register_default_handlers()`에 등록
 
 ### Phase 2: Throttle 확장
-- [ ] `AdaptiveThrottle.adjust_for_emergency(level)` 메서드 추가
-- [ ] Emergency Level → limit 배율 매핑 테이블
-- [ ] `_emergency_mode_active` 플래그 추가
-- [ ] **`_gradient_frozen` 플래그 추가 (LEVEL_3 시 Freeze)**
+- [x] `AdaptiveThrottle.adjust_for_emergency(level)` 메서드 추가
+- [x] Emergency Level → limit 배율 매핑 테이블
+- [x] `_emergency_mode_active` 플래그 추가
+- [x] **`_gradient_frozen` 플래그 추가 (LEVEL_3 시 Freeze)**
 
 ### Phase 3: Hard-Cap 로직
-- [ ] `_apply_emergency_cap(gradient_limit)` 메서드 구현
-- [ ] Effective Limit 공식 적용: `min(gradient, cb_min) × em_multiplier`
-- [ ] 티어별 배율 캐싱 (EMERGENCY_LEVEL_RULES 참조)
+- [x] `_apply_emergency_cap(gradient_limit)` 메서드 구현
+- [x] Effective Limit 공식 적용: `min(gradient, cb_min) × em_multiplier`
+- [x] 티어별 배율 캐싱 (EMERGENCY_LEVEL_RULES 참조)
 
 ### Phase 4: Full Stop 조건
 - [ ] 3중 조건 체크 로직 구현 (LEVEL_3 + DB_CB_OPEN + BUDGET_EXHAUSTED)

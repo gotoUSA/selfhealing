@@ -1265,11 +1265,14 @@ def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
     """
     Emergency 레벨 변경 시 Throttle limit 자동 조정.
 
-    Emergency Level에 따른 limit 조정:
-    - LEVEL_0: 제한 해제 (max_limit 복원)
-    - LEVEL_1: limit × 0.8
-    - LEVEL_2: limit × 0.6
-    - LEVEL_3+: min_limit으로 고정
+    AdaptiveThrottle.adjust_for_emergency() 메서드를 호출하여
+    Emergency Level에 따른 limit 배율 및 Gradient Freeze를 처리합니다.
+
+    Emergency Level별 limit 배율:
+    - NORMAL (0): 1.0 (전체 용량, 복구)
+    - LEVEL_1 (1): 0.8 (80% 용량)
+    - LEVEL_2 (2): 0.5 (50% 용량)
+    - LEVEL_3 (3): min_limit 고정 + Gradient Freeze
     """
     # 순환 참조 방지: 자기 이벤트 무시
     if event.source == "throttle":
@@ -1282,34 +1285,49 @@ def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
         from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
         throttle = get_adaptive_throttle()
-        current_limit = throttle.current_limit
-        config = throttle.config
+        previous_limit = throttle.current_limit
 
-        if level == 0:
-            # 정상 모드 복귀: max_limit 복원
-            new_limit = config.max_limit
-            reason = "emergency_deactivated"
-        elif level == 1:
-            new_limit = int(current_limit * 0.8)
-            reason = "emergency_level_1"
-        elif level == 2:
-            new_limit = int(current_limit * 0.6)
-            reason = "emergency_level_2"
-        else:  # level >= 3
-            new_limit = config.min_limit
-            reason = f"emergency_level_{level}"
-
-        # limit 적용 (bounds checking은 property에서 수행)
-        throttle.current_limit = new_limit
+        # adjust_for_emergency 메서드로 통합 처리
+        throttle.adjust_for_emergency(level)
 
         logger.info(
             f"[Throttle] Emergency level {previous_level} → {level}, "
-            f"limit: {current_limit} → {throttle.current_limit} ({reason})"
+            f"limit: {previous_limit} → {throttle.current_limit}"
         )
     except ImportError:
         logger.debug("[EventHandler] Throttle module not available")
     except Exception as e:
         logger.warning(f"[EventHandler] Failed to adjust throttle for emergency: {e}")
+
+
+def _on_emergency_deactivated_throttle(event: SelfHealingEvent) -> None:
+    """
+    Emergency 비활성화 시 Throttle limit 복구.
+
+    Emergency Mode가 완전히 비활성화될 때 호출됩니다.
+    adjust_for_emergency(0)을 호출하여 limit을 복구합니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # level 0으로 복구
+        throttle.adjust_for_emergency(0)
+
+        logger.info(
+            f"[Throttle] Emergency deactivated, "
+            f"limit restored: {previous_limit} → {throttle.current_limit}"
+        )
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to restore throttle after emergency: {e}")
 
 
 def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
@@ -1560,6 +1578,13 @@ def register_default_handlers():
     bus.subscribe(
         EventType.EMERGENCY_LEVEL_CHANGED,
         _on_emergency_level_changed_throttle,
+        priority=EventPriority.HIGH,
+    )
+
+    # Emergency 비활성화 시 Throttle limit 복구
+    bus.subscribe(
+        EventType.EMERGENCY_DEACTIVATED,
+        _on_emergency_deactivated_throttle,
         priority=EventPriority.HIGH,
     )
 

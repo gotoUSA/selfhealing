@@ -206,12 +206,30 @@ class GradientCalculator:
             self._previous_smoothed_rtt = None
 
 
+# =============================================================================
+# Emergency Level → Throttle Limit 배율 매핑
+# =============================================================================
+
+# 문서 기준: NORMAL=1.0, LEVEL_1=0.8, LEVEL_2=0.5, LEVEL_3=min_limit
+EMERGENCY_LEVEL_LIMIT_MULTIPLIERS: dict[int, float] = {
+    0: 1.0,  # NORMAL: 전체 용량
+    1: 0.8,  # LEVEL_1: 80% 용량
+    2: 0.5,  # LEVEL_2: 50% 용량
+    3: 0.0,  # LEVEL_3: min_limit 고정 (배율 0은 min_limit 사용 표시)
+}
+
+
 class AdaptiveThrottle(SlidingWindowThrottle):
     """
     Netflix Gradient-based Adaptive Throttle.
 
     Dynamically adjusts rate limits based on response time trends.
     Extends SlidingWindowThrottle with gradient-based limit adjustment.
+
+    Emergency Mode 연동:
+    - Emergency Level에 따라 limit 자동 조정
+    - LEVEL_3에서 Gradient 계산은 유지하되 적용만 Freeze
+    - Hard-Cap으로 Emergency 배율 최종 적용
     """
 
     def __init__(self, config: ThrottleConfig | None = None):
@@ -235,6 +253,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
 
         # Track recovery state (for THROTTLE_LIMIT_RECOVERED event)
         self._was_at_min_limit: bool = False
+
+        # =====================================================================
+        # Emergency Mode 연동 상태
+        # =====================================================================
+        self._emergency_mode_active: bool = False
+        self._emergency_level: int = 0
+        self._gradient_frozen: bool = False  # LEVEL_3 시 Gradient 적용 Freeze
+        self._base_limit_before_emergency: int = self.config.initial_limit
+        self._emergency_tier_multipliers: dict[str, float] = {}  # 티어별 배율 캐시
 
     def record_response(self, rtt_ms: float) -> None:
         """
@@ -270,10 +297,20 @@ class AdaptiveThrottle(SlidingWindowThrottle):
             )
 
     def _maybe_adjust_limit(self, rtt_ms: float) -> None:
-        """Adjust limit based on gradient and SLA thresholds."""
+        """Adjust limit based on gradient and SLA thresholds.
+
+        LEVEL_3 Emergency 상태에서는 Gradient 계산은 유지하되 limit 적용만 Freeze.
+        """
         now = time.time()
 
         with self._adjustment_lock:
+            # LEVEL_3 Freeze: Gradient 계산은 유지하되 limit 적용 스킵
+            if self._gradient_frozen:
+                logger.debug(
+                    "[AdaptiveThrottle] Gradient frozen (LEVEL_3), " "skipping limit adjustment but RTT data collected"
+                )
+                return
+
             # Only adjust every sample_interval_ms
             interval_seconds = self.config.sample_interval_ms / 1000.0
             if now - self._last_adjustment_time < interval_seconds:
@@ -423,10 +460,153 @@ class AdaptiveThrottle(SlidingWindowThrottle):
             **base_stats,
             "gradient": gradient_stats,
             "adaptive": self._adaptive_stats.copy(),
+            "emergency": {
+                "active": self._emergency_mode_active,
+                "level": self._emergency_level,
+                "gradient_frozen": self._gradient_frozen,
+                "base_limit_before_emergency": self._base_limit_before_emergency,
+                "tier_multipliers": self._emergency_tier_multipliers.copy(),
+            },
         }
 
+    # =========================================================================
+    # Emergency Mode 연동 메서드
+    # =========================================================================
+
+    def adjust_for_emergency(self, level: int) -> None:
+        """
+        Emergency Level에 따라 limit을 자동 조정.
+
+        배율 매핑:
+        - NORMAL (0): 1.0 (전체 용량)
+        - LEVEL_1 (1): 0.8 (80% 용량)
+        - LEVEL_2 (2): 0.5 (50% 용량)
+        - LEVEL_3 (3): min_limit 고정 + Gradient Freeze
+
+        Args:
+            level: Emergency Level (0-3)
+        """
+        previous_level = self._emergency_level
+        self._emergency_level = level
+
+        if level == 0:
+            # NORMAL: Emergency 모드 해제
+            self._emergency_mode_active = False
+            self._gradient_frozen = False
+            # 이전 base_limit으로 복구
+            new_limit = self._base_limit_before_emergency
+            logger.info(f"[AdaptiveThrottle] Emergency deactivated, " f"restoring limit to {new_limit}")
+        else:
+            # Emergency 활성화
+            if not self._emergency_mode_active:
+                # 최초 활성화 시 현재 limit 저장
+                self._base_limit_before_emergency = self._current_limit
+            self._emergency_mode_active = True
+
+            if level >= 3:
+                # LEVEL_3: min_limit 고정 + Gradient Freeze
+                self._gradient_frozen = True
+                new_limit = self.config.min_limit
+                logger.warning(
+                    f"[AdaptiveThrottle] Emergency LEVEL_3, " f"limit frozen to min_limit={new_limit}, Gradient frozen"
+                )
+            else:
+                # LEVEL_1, LEVEL_2: 배율 적용
+                self._gradient_frozen = False
+                multiplier = EMERGENCY_LEVEL_LIMIT_MULTIPLIERS.get(level, 1.0)
+                new_limit = int(self._base_limit_before_emergency * multiplier)
+                logger.info(
+                    f"[AdaptiveThrottle] Emergency level {previous_level} → {level}, "
+                    f"limit: {self._current_limit} → {new_limit} (×{multiplier})"
+                )
+
+        self.current_limit = new_limit
+        self._cache_emergency_tier_multipliers(level)
+
+    def _cache_emergency_tier_multipliers(self, level: int) -> None:
+        """
+        Emergency Level에 대응하는 티어별 배율을 캐싱.
+
+        EMERGENCY_LEVEL_RULES에서 티어별 배율을 가져와 캐시합니다.
+
+        Args:
+            level: Emergency Level (0-3)
+        """
+        try:
+            from selfhealing.services.emergency_mode.enums import (
+                EMERGENCY_LEVEL_RULES,
+                EmergencyLevel,
+            )
+
+            level_enum = EmergencyLevel(level)
+            rules = EMERGENCY_LEVEL_RULES.get(level_enum, EMERGENCY_LEVEL_RULES[EmergencyLevel.NORMAL])
+            self._emergency_tier_multipliers = rules.copy()
+            logger.debug(f"[AdaptiveThrottle] Cached tier multipliers for level {level}: {rules}")
+        except (ImportError, ValueError) as e:
+            logger.debug(f"[AdaptiveThrottle] Could not cache tier multipliers: {e}")
+            self._emergency_tier_multipliers = {}
+
+    def _apply_emergency_cap(self, gradient_limit: int, tier_id: str = "standard") -> int:
+        """
+        Gradient limit에 Emergency 배율을 Hard-Cap으로 적용.
+
+        공식: EffectiveLimit = min(gradient_limit, CB_min) × EmergencyMultiplier
+
+        Args:
+            gradient_limit: Gradient 계산으로 결정된 limit
+            tier_id: 티어 ID (critical, standard, non_essential)
+
+        Returns:
+            Emergency 배율이 적용된 최종 limit
+        """
+        if not self._emergency_mode_active:
+            return gradient_limit
+
+        # 티어별 배율 조회 (기본값 1.0)
+        multiplier = self._emergency_tier_multipliers.get(tier_id, 1.0)
+
+        # Hard-Cap 적용
+        effective_limit = int(gradient_limit * multiplier)
+
+        # min_limit 이상 보장
+        effective_limit = max(effective_limit, self.config.min_limit)
+
+        logger.debug(
+            f"[AdaptiveThrottle] Hard-Cap applied: "
+            f"gradient_limit={gradient_limit}, tier={tier_id}, "
+            f"multiplier={multiplier}, effective_limit={effective_limit}"
+        )
+
+        return effective_limit
+
+    def get_effective_limit(self, tier_id: str = "standard") -> int:
+        """
+        티어별 실효 limit 조회.
+
+        Emergency 모드 시 티어별 배율이 적용된 limit을 반환합니다.
+
+        Args:
+            tier_id: 티어 ID (critical, standard, non_essential)
+
+        Returns:
+            실효 limit
+        """
+        return self._apply_emergency_cap(self._current_limit, tier_id)
+
+    def is_emergency_active(self) -> bool:
+        """Emergency 모드 활성화 여부."""
+        return self._emergency_mode_active
+
+    def is_gradient_frozen(self) -> bool:
+        """Gradient 적용이 Freeze 상태인지 여부."""
+        return self._gradient_frozen
+
+    def get_emergency_level(self) -> int:
+        """현재 Emergency Level 조회."""
+        return self._emergency_level
+
     def reset_all(self) -> None:
-        """Reset all state including gradient calculator."""
+        """Reset all state including gradient calculator and emergency state."""
         super().reset_all()
         self._gradient_calculator.reset()
         self._adaptive_stats = {
@@ -435,6 +615,12 @@ class AdaptiveThrottle(SlidingWindowThrottle):
             "sla_warnings": 0,
             "sla_criticals": 0,
         }
+        # Emergency 상태 초기화
+        self._emergency_mode_active = False
+        self._emergency_level = 0
+        self._gradient_frozen = False
+        self._base_limit_before_emergency = self.config.initial_limit
+        self._emergency_tier_multipliers = {}
 
 
 # =============================================================================

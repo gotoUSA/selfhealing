@@ -41,22 +41,33 @@ class TestEmergencyLevelChangedThrottleHandler:
 
         reset_adaptive_throttle()
 
-    def test_level_0_restores_max_limit(self):
-        """Emergency Level 0 시 max_limit 복원."""
+    def test_level_0_restores_base_limit(self):
+        """Emergency Level 0 시 이전 base_limit으로 복구."""
         from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
         throttle = get_adaptive_throttle()
-        throttle.current_limit = 50  # 낮은 limit 설정
+        throttle.current_limit = 100  # 원래 limit
 
-        event = SelfHealingEvent(
+        # 먼저 Emergency 활성화
+        event1 = SelfHealingEvent(
+            event_type=EventType.EMERGENCY_LEVEL_CHANGED,
+            data={"level": 1, "previous_level": 0},
+            source="emergency_manager",
+        )
+        _on_emergency_level_changed_throttle(event1)
+        assert throttle.current_limit == 80  # 100 × 0.8
+
+        # Emergency 해제
+        event2 = SelfHealingEvent(
             event_type=EventType.EMERGENCY_LEVEL_CHANGED,
             data={"level": 0, "previous_level": 1},
             source="emergency_manager",
         )
 
-        _on_emergency_level_changed_throttle(event)
+        _on_emergency_level_changed_throttle(event2)
 
-        assert throttle.current_limit == throttle.config.max_limit
+        # 원래 limit (100)으로 복구
+        assert throttle.current_limit == 100
 
     def test_level_1_reduces_limit_by_20_percent(self):
         """Emergency Level 1 시 limit × 0.8."""
@@ -75,8 +86,8 @@ class TestEmergencyLevelChangedThrottleHandler:
 
         assert throttle.current_limit == 80
 
-    def test_level_2_reduces_limit_by_40_percent(self):
-        """Emergency Level 2 시 limit × 0.6."""
+    def test_level_2_reduces_limit_by_50_percent(self):
+        """Emergency Level 2 시 limit × 0.5 (문서 기준)."""
         from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
         throttle = get_adaptive_throttle()
@@ -90,7 +101,7 @@ class TestEmergencyLevelChangedThrottleHandler:
 
         _on_emergency_level_changed_throttle(event)
 
-        assert throttle.current_limit == 60
+        assert throttle.current_limit == 50  # 100 × 0.5
 
     def test_level_3_sets_min_limit(self):
         """Emergency Level 3+ 시 min_limit으로 고정."""
