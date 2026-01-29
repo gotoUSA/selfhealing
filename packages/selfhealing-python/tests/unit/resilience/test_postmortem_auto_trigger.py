@@ -26,8 +26,8 @@ class TestAutoPostmortemSettings:
 
         settings = ApiViewSettings()
 
-        assert settings.xtest_auto_postmortem_enabled is False
-        assert settings.xtest_auto_postmortem_min_duration == 30
+        assert settings.auto_postmortem_enabled is False
+        assert settings.auto_postmortem_min_duration == 30
 
     def test_settings_with_env_enabled(self, monkeypatch):
         """환경변수로 auto_postmortem 활성화 테스트."""
@@ -35,13 +35,13 @@ class TestAutoPostmortemSettings:
 
         reset_api_view_settings()
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "60")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "60")
 
         settings = ApiViewSettings()
 
-        assert settings.xtest_auto_postmortem_enabled is True
-        assert settings.xtest_auto_postmortem_min_duration == 60
+        assert settings.auto_postmortem_enabled is True
+        assert settings.auto_postmortem_min_duration == 60
 
 
 class TestCircuitBreakerClosedPostmortemHandler:
@@ -73,7 +73,7 @@ class TestCircuitBreakerClosedPostmortemHandler:
         from selfhealing.settings.api_view import reset_api_view_settings
 
         reset_api_view_settings()
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "false")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "false")
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -98,11 +98,14 @@ class TestCircuitBreakerClosedPostmortemHandler:
             SelfHealingEvent,
             EventType,
         )
-        from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
 
-        reset_api_view_settings()
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        # 핸들러는 PostmortemSettings (SELFHEALING_POSTMORTEM_ prefix) 사용
+        # 환경변수 먼저 설정한 후 reset 호출해야 새 인스턴스에서 반영됨
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+        reset_postmortem_settings()
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -133,19 +136,22 @@ class TestCircuitBreakerClosedPostmortemHandler:
 
         # Create mock module for selfhealing.api.django.views.xtest.base
         mock_base_module = ModuleType("selfhealing.api.django.views.xtest.base")
-        mock_base_module.add_healing_incident = mock_add_healing_incident
         mock_base_module.collect_system_snapshot = lambda: {"cpu": 50}
         mock_base_module.get_healing_events = lambda limit: []
 
-        # Create mock module for observability
-        mock_obs_module = ModuleType("selfhealing.api.django.views.xtest.observability")
-        mock_obs_module._build_timeline = lambda h, l: mock_timeline
-        mock_obs_module._collect_service_states = lambda cb: ([], [])
-        mock_obs_module._generate_postmortem_data = lambda *args, **kwargs: {
+        # Create mock module for selfhealing.api.django.views.postmortem (핸들러가 실제 import하는 경로)
+        mock_postmortem_module = ModuleType("selfhealing.api.django.views.postmortem")
+        mock_postmortem_module._build_timeline = lambda h, l: mock_timeline
+        mock_postmortem_module._collect_service_states = lambda cb: ([], [])
+        mock_postmortem_module._generate_postmortem_data = lambda *args, **kwargs: {
             "incident_id": "AUTO-test-123",
             "duration_seconds": 120,
             "timeline": mock_timeline,
         }
+
+        # Create mock module for selfhealing.services.postmortem_store
+        mock_store_module = ModuleType("selfhealing.services.postmortem_store")
+        mock_store_module.add_healing_incident = mock_add_healing_incident
 
         # Mock django.utils.timezone
         mock_timezone_module = MagicMock()
@@ -156,7 +162,8 @@ class TestCircuitBreakerClosedPostmortemHandler:
                 sys.modules,
                 {
                     "selfhealing.api.django.views.xtest.base": mock_base_module,
-                    "selfhealing.api.django.views.xtest.observability": mock_obs_module,
+                    "selfhealing.api.django.views.postmortem": mock_postmortem_module,
+                    "selfhealing.services.postmortem_store": mock_store_module,
                     "django.utils.timezone": mock_timezone_module,
                 },
             ),
@@ -181,8 +188,8 @@ class TestCircuitBreakerClosedPostmortemHandler:
         from selfhealing.settings.api_view import reset_api_view_settings
 
         reset_api_view_settings()
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_MIN_DURATION", "60")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "60")
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
