@@ -60,6 +60,7 @@ opentelemetry = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
     "opentelemetry-instrumentation-django>=0.41b0",
+    "opentelemetry-instrumentation-logging>=0.41b0",
 ]
 all = [
     "selfhealing[django,celery,prometheus,opentelemetry]",
