@@ -280,6 +280,38 @@ services:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
+  # Django Web 서비스 (Grafana Webhook 테스트용)
+  # ---------------------------------------------------------------------------
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/code
+    working_dir: /code
+    ports:
+      - "18000:8000"
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
   # Grafana Tempo - 분산 추적 저장소 (테스트용)
   # ---------------------------------------------------------------------------
   tempo:
@@ -637,6 +669,40 @@ services:
       tempo:
         condition: service_healthy
       loki:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Grafana 검증 기준 통합 테스트 (web 서비스 포함)
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-grafana-verification
+  # ---------------------------------------------------------------------------
+  test-grafana-verification:
+    build: .
+    command: >
+      sh -c "sleep 5 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_grafana_verification_criteria.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - LOKI_ENDPOINT=http://loki:3100
+      - WEB_ENDPOINT=http://web:8000
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      web:
         condition: service_healthy
 
 volumes:

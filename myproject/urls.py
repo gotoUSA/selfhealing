@@ -34,7 +34,14 @@ def root_view(request):
     return redirect("swagger-ui")
 
 
+def health_view(request):
+    """헬스 체크 엔드포인트 - Docker/Kubernetes 프로브용"""
+    return JsonResponse({"status": "ok"})
+
+
 urlpatterns = [
+    # 헬스 체크
+    path("health/", health_view, name="health"),
     # 루트 경로 (API 문서로 리다이렉트)
     path("", root_view, name="root"),
     # 관리자 페이지
