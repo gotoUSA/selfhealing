@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 _initialized: bool = False
 _tracer_provider = None
 _tracer = None
+_requests_instrumented: bool = False
+_celery_instrumented: bool = False
 
 
 def _is_otel_available() -> bool:
@@ -258,7 +260,129 @@ def reset_opentelemetry() -> None:
 
     This forces re-initialization on next use.
     """
-    global _initialized, _tracer_provider, _tracer
+    global _initialized, _tracer_provider, _tracer, _requests_instrumented, _celery_instrumented
     _initialized = False
     _tracer_provider = None
     _tracer = None
+    _requests_instrumented = False
+    _celery_instrumented = False
+
+
+def instrument_requests() -> bool:
+    """
+    Enable automatic instrumentation for requests library.
+
+    Adds automatic span creation and traceparent header injection
+    for all outgoing HTTP requests made via the requests library.
+
+    Returns:
+        bool: True if instrumentation was successful, False otherwise
+    """
+    global _requests_instrumented
+
+    if _requests_instrumented:
+        return True
+
+    if not is_otel_enabled():
+        return False
+
+    try:
+        from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+        RequestsInstrumentor().instrument()
+        _requests_instrumented = True
+        logger.info("OpenTelemetry requests instrumentation enabled")
+        return True
+
+    except ImportError:
+        logger.debug("opentelemetry-instrumentation-requests not installed")
+        return False
+    except Exception as e:
+        logger.warning("Failed to instrument requests: %s", e)
+        return False
+
+
+def uninstrument_requests() -> None:
+    """
+    Disable automatic instrumentation for requests library.
+
+    Used primarily for testing to ensure clean state.
+    """
+    global _requests_instrumented
+
+    if not _requests_instrumented:
+        return
+
+    try:
+        from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+        RequestsInstrumentor().uninstrument()
+        _requests_instrumented = False
+        logger.debug("OpenTelemetry requests instrumentation disabled")
+    except Exception:
+        pass
+
+
+def instrument_celery() -> bool:
+    """
+    Enable automatic instrumentation for Celery tasks.
+
+    Adds automatic span creation for Celery task execution
+    and propagates trace context between task producers and consumers.
+
+    Returns:
+        bool: True if instrumentation was successful, False otherwise
+    """
+    global _celery_instrumented
+
+    if _celery_instrumented:
+        return True
+
+    if not is_otel_enabled():
+        return False
+
+    try:
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
+
+        CeleryInstrumentor().instrument()
+        _celery_instrumented = True
+        logger.info("OpenTelemetry Celery instrumentation enabled")
+        return True
+
+    except ImportError:
+        logger.debug("opentelemetry-instrumentation-celery not installed")
+        return False
+    except Exception as e:
+        logger.warning("Failed to instrument Celery: %s", e)
+        return False
+
+
+def uninstrument_celery() -> None:
+    """
+    Disable automatic instrumentation for Celery.
+
+    Used primarily for testing to ensure clean state.
+    """
+    global _celery_instrumented
+
+    if not _celery_instrumented:
+        return
+
+    try:
+        from opentelemetry.instrumentation.celery import CeleryInstrumentor
+
+        CeleryInstrumentor().uninstrument()
+        _celery_instrumented = False
+        logger.debug("OpenTelemetry Celery instrumentation disabled")
+    except Exception:
+        pass
+
+
+def is_requests_instrumented() -> bool:
+    """Check if requests library is instrumented."""
+    return _requests_instrumented
+
+
+def is_celery_instrumented() -> bool:
+    """Check if Celery is instrumented."""
+    return _celery_instrumented

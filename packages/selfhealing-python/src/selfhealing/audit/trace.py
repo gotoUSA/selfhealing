@@ -337,7 +337,8 @@ def generate_celery_trace_id(task_id: str) -> str:
     """
     Celery Task ID를 기반으로 trace_id를 생성합니다.
 
-    Format: "CELERY_{task_id}"
+    OTEL이 활성화된 경우 OTEL의 trace_id를 우선 사용합니다.
+    OTEL이 비활성화된 경우 "CELERY_{task_id}" 형식을 사용합니다.
 
     이 형식을 사용하면:
     - Flower UI에서 task_id로 직접 검색 가능
@@ -348,16 +349,64 @@ def generate_celery_trace_id(task_id: str) -> str:
         task_id: Celery Task ID (예: "7483abc-1234-...")
 
     Returns:
-        str: "CELERY_{task_id}" 형식의 trace_id
+        str: trace_id (OTEL 형식 또는 "CELERY_{task_id}" 형식)
 
     Example:
         >>> generate_celery_trace_id("7483abc-1234-5678-90ab-cdef12345678")
-        "CELERY_7483abc-1234-5678-90ab-cdef12345678"
+        "CELERY_7483abc-1234-5678-90ab-cdef12345678"  # OTEL 비활성화 시
+        "req-a1b2c3d4"  # OTEL 활성화 시 (현재 span에서 추출)
     """
+    # OTEL 활성화 시 현재 span의 trace_id 우선 사용
+    otel_trace_id = _get_trace_id_from_otel()
+    if otel_trace_id:
+        return otel_trace_id
+
     if not task_id:
         # Fallback: task_id가 없으면 기존 방식으로 생성
         return f"CELERY_{generate_trace_id()}"
     return f"CELERY_{task_id}"
+
+
+def get_celery_trace_id_with_otel_context(task_id: str) -> dict[str, str | None]:
+    """
+    Celery Task의 trace 정보를 OTEL 컨텍스트와 함께 반환합니다.
+
+    OTEL이 활성화된 경우 전체 W3C trace_id와 span_id도 포함합니다.
+
+    Args:
+        task_id: Celery Task ID
+
+    Returns:
+        dict: {
+            "trace_id": 표시용 trace_id (req-xxx 또는 CELERY_xxx),
+            "trace_id_full": 전체 W3C trace_id (32자 hex, OTEL 활성화 시),
+            "span_id": 현재 span_id (16자 hex, OTEL 활성화 시),
+            "celery_task_id": 원본 Celery task_id
+        }
+    """
+    result: dict[str, str | None] = {
+        "trace_id": generate_celery_trace_id(task_id),
+        "trace_id_full": None,
+        "span_id": None,
+        "celery_task_id": task_id,
+    }
+
+    try:
+        from selfhealing.observability import (
+            get_current_trace_id_from_otel,
+            get_current_span_id_from_otel,
+            is_otel_enabled,
+        )
+
+        if is_otel_enabled():
+            result["trace_id_full"] = get_current_trace_id_from_otel()
+            result["span_id"] = get_current_span_id_from_otel()
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    return result
 
 
 def set_celery_context(

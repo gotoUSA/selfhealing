@@ -21,7 +21,7 @@ from selfhealing.audit.masking import (
     mask_ip,
     mask_sensitive_fields,
 )
-from selfhealing.audit.trace import get_trace_id
+from selfhealing.audit.trace import get_trace_id, get_trace_id_full
 
 logger = logging.getLogger(__name__)
 
@@ -267,9 +267,14 @@ class AuditLogger:
                 self._sensitive_fields,
             )
 
+        # Get trace IDs (short for display, full for storage/correlation)
+        trace_id = get_trace_id()
+        trace_id_full = get_trace_id_full()  # 32자 hex (OTEL 활성화 시)
+
         entry = {
             "timestamp": now.isoformat(),
-            "trace_id": get_trace_id(),
+            "trace_id": trace_id,
+            "trace_id_full": trace_id_full,  # 전체 W3C trace_id (글로벌 통합용)
             "event_type": "config_change",
             "actor": {
                 "user": event_dict.get("user") or "system",
@@ -354,10 +359,7 @@ class AuditLogger:
         if isinstance(self._backend, CompositeBackend):
             return {
                 "composite": True,
-                "backends": [
-                    {"name": b.name, "health": b.health_check().__dict__}
-                    for b in self._backend._backends
-                ],
+                "backends": [{"name": b.name, "health": b.health_check().__dict__} for b in self._backend._backends],
             }
 
         health = self._backend.health_check()

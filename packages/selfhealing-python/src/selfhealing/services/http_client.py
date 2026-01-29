@@ -2,14 +2,16 @@
 Self-Healing HTTP Client
 
 Chaos 실험 플래그 자동 전파 기능이 포함된 HTTP 클라이언트.
-OpenTelemetry 의존 없이 수동으로 헤더를 전파합니다.
+OpenTelemetry 활성화 시 자동 계측을 활용하고,
+비활성화 시 수동으로 헤더를 전파합니다.
 """
 
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generator
 
 if TYPE_CHECKING:
     import requests
@@ -21,17 +23,64 @@ logger = logging.getLogger(__name__)
 # Context variable for chaos experiment status
 _is_chaos_request: ContextVar[bool] = ContextVar("is_chaos_request", default=False)
 
+# Context variable for suppressing OTEL instrumentation (internal calls)
+_suppress_otel_instrumentation: ContextVar[bool] = ContextVar("suppress_otel_instrumentation", default=False)
+
 # Header names for chaos context propagation
 SYNTHETIC_HEADER = "X-Self-Healing-Synthetic"
 CHAOS_EXPERIMENT_ID_HEADER = "X-Chaos-Experiment-Id"
+
+
+def _is_otel_enabled() -> bool:
+    """Check if OpenTelemetry is enabled."""
+    try:
+        from selfhealing.observability import is_otel_enabled
+
+        return is_otel_enabled()
+    except ImportError:
+        return False
+
+
+@contextmanager
+def suppress_otel_instrumentation() -> Generator[None, None, None]:
+    """
+    Context manager to suppress OpenTelemetry automatic instrumentation.
+
+    Use this for internal health checks or calls that should not generate spans.
+
+    Usage:
+        with suppress_otel_instrumentation():
+            # HTTP calls in this block won't create OTEL spans
+            response = client.get(internal_health_url)
+    """
+    if not _is_otel_enabled():
+        yield
+        return
+
+    try:
+        from opentelemetry.context import attach, detach
+        from opentelemetry.context import _SUPPRESS_INSTRUMENTATION_KEY
+        from opentelemetry import context
+
+        # Create context with suppression flag
+        token = attach(context.set_value(_SUPPRESS_INSTRUMENTATION_KEY, True))
+        try:
+            yield
+        finally:
+            detach(token)
+    except ImportError:
+        yield
+    except Exception:
+        yield
 
 
 class SelfHealingHttpClient:
     """
     Self-Healing 시스템용 HTTP 클라이언트.
 
-    Chaos 실험 플래그 자동 전파 (OTel 의존 없음).
-    기존 requests 라이브러리를 래핑하여 헤더를 자동으로 추가합니다.
+    Chaos 실험 플래그 자동 전파 기능 제공.
+    OpenTelemetry 활성화 시 자동 계측을 활용하여 traceparent 헤더 자동 주입.
+    OTEL 비활성화 시 수동으로 헤더를 전파합니다.
 
     Usage:
         client = SelfHealingHttpClient(base_headers={"Authorization": "Bearer xxx"})
@@ -41,12 +90,17 @@ class SelfHealingHttpClient:
 
         # 요청 시 자동으로 X-Self-Healing-Synthetic 헤더 추가
         response = client.post(url, json=data, timeout=30)
+
+        # 내부 헬스체크 등 OTEL span 생성 불필요 시
+        with suppress_otel_instrumentation():
+            response = client.get(health_check_url)
     """
 
     def __init__(
         self,
         base_headers: dict[str, str] | None = None,
         timeout: float | None = None,
+        suppress_internal_spans: bool = False,
     ):
         """
         초기화.
@@ -54,11 +108,13 @@ class SelfHealingHttpClient:
         Args:
             base_headers: 모든 요청에 포함할 기본 헤더
             timeout: 기본 타임아웃 (초). None이면 Settings에서 로드.
+            suppress_internal_spans: 내부 호출 시 OTEL span 생성 억제 여부
         """
         _settings = get_http_client_settings()
         self.base_headers = base_headers or {}
         self.default_timeout = timeout if timeout is not None else _settings.default_timeout
         self._experiment_id: str | None = None
+        self._suppress_internal_spans = suppress_internal_spans
 
     def _get_headers(
         self,
@@ -66,6 +122,9 @@ class SelfHealingHttpClient:
     ) -> dict[str, str]:
         """
         요청 헤더 생성 (chaos 플래그 자동 포함).
+
+        OTEL 활성화 시 traceparent 헤더는 자동 계측에서 주입되므로 생략.
+        OTEL 비활성화 시에도 Chaos 플래그는 항상 전파됩니다.
 
         Args:
             extra_headers: 추가 헤더
@@ -78,7 +137,7 @@ class SelfHealingHttpClient:
         if extra_headers:
             headers.update(extra_headers)
 
-        # Chaos 실험 컨텍스트 전파
+        # Chaos 실험 컨텍스트 전파 (OTEL 상태와 무관하게 항상 전파)
         if _is_chaos_request.get():
             headers[SYNTHETIC_HEADER] = "chaos-experiment"
 
@@ -88,11 +147,43 @@ class SelfHealingHttpClient:
 
         return headers
 
+    def _execute_request(
+        self,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> "requests.Response":
+        """
+        HTTP 요청 실행 (공통 로직).
+
+        suppress_internal_spans가 True이면 OTEL span 생성을 억제합니다.
+
+        Args:
+            method: HTTP 메서드 (get, post, put, delete, patch)
+            url: 요청 URL
+            **kwargs: requests 추가 인자
+
+        Returns:
+            Response 객체
+        """
+        import requests as req_lib
+
+        headers = self._get_headers(kwargs.pop("headers", None))
+        timeout = kwargs.pop("timeout", self.default_timeout)
+
+        request_func = getattr(req_lib, method.lower())
+
+        if self._suppress_internal_spans and _is_otel_enabled():
+            with suppress_otel_instrumentation():
+                return request_func(url, headers=headers, timeout=timeout, **kwargs)
+
+        return request_func(url, headers=headers, timeout=timeout, **kwargs)
+
     def get(
         self,
         url: str,
         **kwargs: Any,
-    ) -> requests.Response:
+    ) -> "requests.Response":
         """
         GET 요청.
 
@@ -103,18 +194,13 @@ class SelfHealingHttpClient:
         Returns:
             Response 객체
         """
-        import requests
-
-        headers = self._get_headers(kwargs.pop("headers", None))
-        timeout = kwargs.pop("timeout", self.default_timeout)
-
-        return requests.get(url, headers=headers, timeout=timeout, **kwargs)
+        return self._execute_request("get", url, **kwargs)
 
     def post(
         self,
         url: str,
         **kwargs: Any,
-    ) -> requests.Response:
+    ) -> "requests.Response":
         """
         POST 요청.
 
@@ -125,51 +211,31 @@ class SelfHealingHttpClient:
         Returns:
             Response 객체
         """
-        import requests
-
-        headers = self._get_headers(kwargs.pop("headers", None))
-        timeout = kwargs.pop("timeout", self.default_timeout)
-
-        return requests.post(url, headers=headers, timeout=timeout, **kwargs)
+        return self._execute_request("post", url, **kwargs)
 
     def put(
         self,
         url: str,
         **kwargs: Any,
-    ) -> requests.Response:
+    ) -> "requests.Response":
         """PUT 요청."""
-        import requests
-
-        headers = self._get_headers(kwargs.pop("headers", None))
-        timeout = kwargs.pop("timeout", self.default_timeout)
-
-        return requests.put(url, headers=headers, timeout=timeout, **kwargs)
+        return self._execute_request("put", url, **kwargs)
 
     def delete(
         self,
         url: str,
         **kwargs: Any,
-    ) -> requests.Response:
+    ) -> "requests.Response":
         """DELETE 요청."""
-        import requests
-
-        headers = self._get_headers(kwargs.pop("headers", None))
-        timeout = kwargs.pop("timeout", self.default_timeout)
-
-        return requests.delete(url, headers=headers, timeout=timeout, **kwargs)
+        return self._execute_request("delete", url, **kwargs)
 
     def patch(
         self,
         url: str,
         **kwargs: Any,
-    ) -> requests.Response:
+    ) -> "requests.Response":
         """PATCH 요청."""
-        import requests
-
-        headers = self._get_headers(kwargs.pop("headers", None))
-        timeout = kwargs.pop("timeout", self.default_timeout)
-
-        return requests.patch(url, headers=headers, timeout=timeout, **kwargs)
+        return self._execute_request("patch", url, **kwargs)
 
     # =========================================================================
     # Class Methods for Context Management

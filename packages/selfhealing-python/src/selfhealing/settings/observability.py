@@ -99,6 +99,20 @@ class OpenTelemetrySettings(BaseSettings):
         description="Enable automatic Django request/response instrumentation",
     )
 
+    # Requests Instrumentation Settings
+    requests_instrument_enabled: bool = Field(
+        default=True,
+        validation_alias="OTEL_REQUESTS_INSTRUMENT_ENABLED",
+        description="Enable automatic HTTP client (requests library) instrumentation",
+    )
+
+    # Celery Instrumentation Settings
+    celery_instrument_enabled: bool = Field(
+        default=True,
+        validation_alias="OTEL_CELERY_INSTRUMENT_ENABLED",
+        description="Enable automatic Celery task instrumentation",
+    )
+
     # Excluded URLs (for health checks, etc.)
     excluded_urls: str = Field(
         default="/health,/health/,/health/ready,/health/live,/health/l3,/metrics",

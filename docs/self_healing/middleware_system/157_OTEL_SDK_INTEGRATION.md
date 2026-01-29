@@ -305,36 +305,36 @@ CascadeEvent 발생 시 OTEL trace_id와 span_id를 감사 로그에 포함:
 
 ### 4.3 Phase 3: HTTP 클라이언트 계측
 
-- [ ] **3.1** requirements.txt에 requests instrumentation 추가
+- [x] **3.1** requirements.txt에 requests instrumentation 추가
   - opentelemetry-instrumentation-requests
-- [ ] **3.2** requests 자동 계측 활성화
-- [ ] **3.3** `SelfHealingHttpClient` 수정
+- [x] **3.2** requests 자동 계측 활성화
+- [x] **3.3** `SelfHealingHttpClient` 수정
   - OTEL 활성화 시 수동 헤더 주입 생략
   - Chaos 플래그 전파는 유지
-- [ ] **3.4** 외부 호출 Span 생성 검증
-- [ ] **3.5** traceparent 헤더 자동 주입 검증
+- [x] **3.4** 외부 호출 Span 생성 검증
+- [x] **3.5** traceparent 헤더 자동 주입 검증
 
 ### 4.4 Phase 4: Celery 계측
 
-- [ ] **4.1** requirements.txt에 celery instrumentation 추가
+- [x] **4.1** requirements.txt에 celery instrumentation 추가
   - opentelemetry-instrumentation-celery
-- [ ] **4.2** Celery 자동 계측 활성화
-- [ ] **4.3** `generate_celery_trace_id()` 호환 레이어 추가
-- [ ] **4.4** Task 실행 Span 생성 검증
-- [ ] **4.5** 부모-자식 Span 연결 검증
+- [x] **4.2** Celery 자동 계측 활성화
+- [x] **4.3** `generate_celery_trace_id()` 호환 레이어 추가
+- [x] **4.4** Task 실행 Span 생성 검증
+- [x] **4.5** 부모-자식 Span 연결 검증
 
 ### 4.5 Phase 5: Circuit Breaker 및 Audit 연동
 
-- [ ] **5.1** `TracingConfig` 수정
+- [x] **5.1** `TracingConfig` 수정
   - OTEL Span 생성 로직 추가
-- [ ] **5.2** `TriggeringRequestInfo` 확장
+- [x] **5.2** `TriggeringRequestInfo` 확장
   - OTEL trace_id/span_id 자동 채움
-- [ ] **5.3** `ExternalTraceContext` OTEL 연동
+- [x] **5.3** `ExternalTraceContext` OTEL 연동
   - 현재 Span에서 컨텍스트 추출
-- [ ] **5.4** `AuditLogger` 수정
+- [x] **5.4** `AuditLogger` 수정
   - OTEL trace_id 자동 포함
-- [ ] **5.5** CB 상태 변화 Span 검증
-- [ ] **5.6** Audit 로그에 trace_id 포함 검증
+- [x] **5.5** CB 상태 변화 Span 검증
+- [x] **5.6** Audit 로그에 trace_id 포함 검증
 
 ---
 

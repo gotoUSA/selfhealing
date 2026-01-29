@@ -162,6 +162,10 @@ class ExternalTraceContext:
     correlation_id: str | None = None
     """X-Correlation-ID 헤더 값."""
 
+    # 표시용 축약 trace_id (UI 표시용)
+    trace_id_short: str | None = None
+    """축약 trace_id (req-xxx 형식, UI 표시용)."""
+
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리 변환."""
         return {
@@ -172,6 +176,7 @@ class ExternalTraceContext:
             "aws_xray_trace_id": self.aws_xray_trace_id,
             "request_id": self.request_id,
             "correlation_id": self.correlation_id,
+            "trace_id_short": self.trace_id_short,
         }
 
     @classmethod
@@ -185,6 +190,7 @@ class ExternalTraceContext:
             aws_xray_trace_id=data.get("aws_xray_trace_id"),
             request_id=data.get("request_id"),
             correlation_id=data.get("correlation_id"),
+            trace_id_short=data.get("trace_id_short"),
         )
 
     @classmethod
@@ -200,6 +206,8 @@ class ExternalTraceContext:
                 ctx.trace_id = parts[1]
                 ctx.span_id = parts[2]
                 ctx.trace_flags = parts[3]
+                # 축약 trace_id 생성
+                ctx.trace_id_short = f"req-{parts[1][:8]}"
 
         # 기타 헤더
         ctx.aws_xray_trace_id = headers.get("x-amzn-trace-id")
@@ -213,6 +221,54 @@ class ExternalTraceContext:
                 if "=" in item:
                     key, value = item.strip().split("=", 1)
                     ctx.baggage[key] = value
+
+        return ctx
+
+    @classmethod
+    def from_current_otel_context(cls) -> ExternalTraceContext:
+        """
+        현재 OpenTelemetry span 컨텍스트에서 ExternalTraceContext 생성.
+
+        OTEL이 활성화된 경우 현재 span의 trace_id, span_id를 추출합니다.
+        OTEL이 비활성화된 경우 빈 컨텍스트를 반환합니다.
+        """
+        ctx = cls()
+
+        try:
+            from selfhealing.observability import (
+                get_current_trace_id_from_otel,
+                get_current_span_id_from_otel,
+                is_otel_enabled,
+                get_current_span,
+            )
+
+            if not is_otel_enabled():
+                return ctx
+
+            trace_id = get_current_trace_id_from_otel()
+            span_id = get_current_span_id_from_otel()
+
+            if trace_id:
+                ctx.trace_id = trace_id
+                ctx.trace_id_short = f"req-{trace_id[:8]}"
+
+            if span_id:
+                ctx.span_id = span_id
+
+            # trace_flags 추출
+            span = get_current_span()
+            if span is not None:
+                try:
+                    span_context = span.get_span_context()
+                    if span_context and span_context.is_valid:
+                        ctx.trace_flags = format(span_context.trace_flags, "02x")
+                except Exception:
+                    pass
+
+        except ImportError:
+            pass
+        except Exception:
+            pass
 
         return ctx
 

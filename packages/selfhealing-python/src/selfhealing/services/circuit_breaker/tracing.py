@@ -69,14 +69,38 @@ class TracingConfig:
         """환경변수에서 설정 로드."""
         return cls(
             enabled=os.environ.get("CB_TRACING_ENABLED", "true").lower() == "true",
-            record_triggering_request=os.environ.get(
-                "CB_TRACING_RECORD_REQUEST", "true"
-            ).lower()
-            == "true",
-            create_spans=os.environ.get("CB_TRACING_CREATE_SPANS", "true").lower()
-            == "true",
+            record_triggering_request=os.environ.get("CB_TRACING_RECORD_REQUEST", "true").lower() == "true",
+            create_spans=os.environ.get("CB_TRACING_CREATE_SPANS", "true").lower() == "true",
             trace_url_template=os.environ.get("CB_TRACE_URL_TEMPLATE", ""),
         )
+
+
+def _is_otel_enabled() -> bool:
+    """Check if OpenTelemetry is enabled."""
+    try:
+        from selfhealing.observability import is_otel_enabled
+
+        return is_otel_enabled()
+    except ImportError:
+        return False
+
+
+def _get_otel_trace_context() -> tuple[str | None, str | None]:
+    """
+    Get current OTEL trace_id and span_id.
+
+    Returns:
+        Tuple of (trace_id, span_id) or (None, None) if OTEL is not active.
+    """
+    try:
+        from selfhealing.observability import (
+            get_current_trace_id_from_otel,
+            get_current_span_id_from_otel,
+        )
+
+        return get_current_trace_id_from_otel(), get_current_span_id_from_otel()
+    except ImportError:
+        return None, None
 
 
 # =============================================================================
@@ -92,9 +116,12 @@ class TriggeringRequestInfo:
     CB가 CLOSED → OPEN으로 전환될 때, 해당 전환을 유발한
     마지막 요청의 trace 정보를 캡처합니다.
 
+    OTEL이 활성화된 경우 trace_id_full, span_id가 자동으로 채워집니다.
+
     Attributes:
-        trace_id: 요청의 Trace ID
-        span_id: 요청의 Span ID (선택)
+        trace_id: 요청의 Trace ID (표시용, req-xxx 또는 8자 축약)
+        trace_id_full: 전체 W3C trace_id (32자 hex, OTEL 활성화 시)
+        span_id: 요청의 Span ID (16자 hex, OTEL 활성화 시)
         request_id: X-Request-ID 헤더 값 (선택)
         correlation_id: X-Correlation-ID 헤더 값 (선택)
         timestamp: 요청 시간
@@ -113,14 +140,13 @@ class TriggeringRequestInfo:
     """
 
     trace_id: str
+    trace_id_full: str | None = None  # 전체 W3C trace_id (32자 hex)
     span_id: str | None = None
     request_id: str | None = None
     correlation_id: str | None = None
 
     # 요청 메타데이터
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     endpoint: str | None = None
     method: str | None = None
     error_message: str | None = None
@@ -128,10 +154,20 @@ class TriggeringRequestInfo:
     # 전체 추적 가능한 링크
     trace_url: str | None = None  # Jaeger/Zipkin URL
 
+    def __post_init__(self) -> None:
+        """OTEL 활성화 시 trace_id_full, span_id 자동 채움."""
+        if _is_otel_enabled() and (self.trace_id_full is None or self.span_id is None):
+            otel_trace_id, otel_span_id = _get_otel_trace_context()
+            if self.trace_id_full is None:
+                self.trace_id_full = otel_trace_id
+            if self.span_id is None:
+                self.span_id = otel_span_id
+
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
             "trace_id": self.trace_id,
+            "trace_id_full": self.trace_id_full,
             "span_id": self.span_id,
             "request_id": self.request_id,
             "correlation_id": self.correlation_id,
@@ -147,6 +183,7 @@ class TriggeringRequestInfo:
         """딕셔너리에서 생성."""
         return cls(
             trace_id=data.get("trace_id", ""),
+            trace_id_full=data.get("trace_id_full"),
             span_id=data.get("span_id"),
             request_id=data.get("request_id"),
             correlation_id=data.get("correlation_id"),
@@ -155,6 +192,46 @@ class TriggeringRequestInfo:
             method=data.get("method"),
             error_message=data.get("error_message"),
             trace_url=data.get("trace_url"),
+        )
+
+    @classmethod
+    def from_current_otel_context(
+        cls,
+        endpoint: str | None = None,
+        method: str | None = None,
+        error_message: str | None = None,
+    ) -> TriggeringRequestInfo:
+        """
+        현재 OTEL 컨텍스트에서 TriggeringRequestInfo 생성.
+
+        OTEL이 활성화된 경우 현재 span의 trace_id, span_id를 자동으로 추출합니다.
+        """
+        trace_id = ""
+        trace_id_full = None
+        span_id = None
+
+        if _is_otel_enabled():
+            trace_id_full, span_id = _get_otel_trace_context()
+            if trace_id_full:
+                trace_id = f"req-{trace_id_full[:8]}"
+
+        if not trace_id:
+            try:
+                from selfhealing.audit.trace import get_trace_id
+
+                trace_id = get_trace_id()
+            except ImportError:
+                import uuid
+
+                trace_id = f"req-{uuid.uuid4().hex[:8]}"
+
+        return cls(
+            trace_id=trace_id,
+            trace_id_full=trace_id_full,
+            span_id=span_id,
+            endpoint=endpoint,
+            method=method,
+            error_message=error_message,
         )
 
 
@@ -433,10 +510,7 @@ class CircuitBreakerTracingManager:
         # 마지막 실패 요청 정보 저장
         self._triggering_requests[service_id] = info
 
-        logger.debug(
-            f"[CBTracing] Recorded failure trace for {service_id}: "
-            f"trace_id={info.trace_id}"
-        )
+        logger.debug(f"[CBTracing] Recorded failure trace for {service_id}: " f"trace_id={info.trace_id}")
 
         return info
 
@@ -508,9 +582,7 @@ class CircuitBreakerTracingManager:
                 trigger=trigger,
                 reason=reason,
                 trace_id=current_trace.trace_id,
-                triggering_request_info=(
-                    triggering_info.to_dict() if triggering_info else None
-                ),
+                triggering_request_info=(triggering_info.to_dict() if triggering_info else None),
                 request=request,
             )
 
@@ -550,14 +622,10 @@ class CircuitBreakerTracingManager:
         trigger: str,
     ) -> Any:
         """
-        [DEPRECATED] OpenTelemetry Span 생성.
+        CB 상태 변화에 대한 OpenTelemetry Span 생성.
 
-        OpenTelemetry SDK 의존성이 제거되어 항상 None을 반환합니다.
-        CB 상태 변화는 Prometheus 메트릭과 Event Bus를 통해 추적하세요.
-
-        분산 추적이 필요한 경우:
-        - trace_url_template을 설정하여 Jaeger/Zipkin UI 링크 생성
-        - audit/trace.py의 trace_id 전파 기능 활용
+        OTEL SDK가 활성화된 경우 실제 Span을 생성하고,
+        비활성화된 경우 None을 반환합니다.
 
         Args:
             service_id: 서비스 ID
@@ -566,15 +634,46 @@ class CircuitBreakerTracingManager:
             trigger: 트리거 유형
 
         Returns:
-            None (OTel SDK 제거됨)
+            Span 객체 (OTEL 활성화 시) 또는 None
         """
-        # OTel SDK 의존성 제거 - minimal dependency policy
-        # Prometheus 메트릭 및 Event Bus로 대체
-        logger.debug(
-            "[CBTracing] OTel span creation disabled (SDK removed). "
-            "Use trace_url_template for Jaeger/Zipkin links."
-        )
-        return None
+        if not self.config.create_spans:
+            return None
+
+        if not _is_otel_enabled():
+            logger.debug("[CBTracing] OTEL not enabled. " "Use trace_url_template for Jaeger/Zipkin links.")
+            return None
+
+        try:
+            from selfhealing.observability import get_tracer
+
+            tracer = get_tracer()
+            if tracer is None:
+                return None
+
+            span = tracer.start_span(
+                name=f"circuit_breaker.state_change.{service_id}",
+                attributes={
+                    "circuit_breaker.service_id": service_id,
+                    "circuit_breaker.previous_state": previous_state,
+                    "circuit_breaker.new_state": new_state,
+                    "circuit_breaker.trigger": trigger,
+                },
+            )
+
+            logger.debug(
+                "[CBTracing] Created OTEL span for %s: %s -> %s",
+                service_id,
+                previous_state,
+                new_state,
+            )
+
+            return span
+
+        except ImportError:
+            return None
+        except Exception as e:
+            logger.warning("[CBTracing] Failed to create OTEL span: %s", e)
+            return None
 
 
 # =============================================================================
