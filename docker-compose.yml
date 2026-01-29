@@ -162,8 +162,17 @@ services:
   # ---------------------------------------------------------------------------
   # OpenTelemetry Collector - 텔레메트리 수집 및 분배
   # ---------------------------------------------------------------------------
+  # 참고: 원본 이미지(otel/opentelemetry-collector-contrib)는 scratch 기반으로
+  # wget/curl/sh가 없어 Docker Compose 헬스체크 불가능.
+  # Alpine 기반 커스텀 이미지로 빌드하여 wget 헬스체크 지원.
+  # Kubernetes 환경에서는 외부 livenessProbe로 원본 이미지 사용 가능.
+  # ---------------------------------------------------------------------------
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.96.0
+    build:
+      context: ./docker/otel-collector
+      dockerfile: Dockerfile
+      args:
+        OTEL_VERSION: "0.96.0"
     container_name: otel-collector
     command: ["--config=/etc/otelcol/otel-collector-config.yml"]
     volumes:
@@ -189,7 +198,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     depends_on:
       tempo:
         condition: service_healthy

@@ -341,8 +341,14 @@ services:
   # ---------------------------------------------------------------------------
   # OpenTelemetry Collector - 텔레메트리 수집기 (테스트용)
   # ---------------------------------------------------------------------------
+  # 참고: Alpine 기반 커스텀 이미지로 wget 헬스체크 지원
+  # ---------------------------------------------------------------------------
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.96.0
+    build:
+      context: ./docker/otel-collector
+      dockerfile: Dockerfile
+      args:
+        OTEL_VERSION: "0.96.0"
     container_name: otel-collector-test
     user: "0"
     command: ["--config=/etc/otelcol/otel-collector-config.yml"]
@@ -356,8 +362,12 @@ services:
       - "23133:13133"
     environment:
       - OTEL_RESOURCE_ATTRIBUTES=service.name=selfhealing-test,deployment.environment=test
-    # Note: otel-collector-contrib is a scratch-based image without shell commands
-    # We rely on depends_on for service ordering and add a startup delay in tests
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       tempo:
         condition: service_healthy
@@ -373,7 +383,7 @@ services:
   test-otel-collector:
     build: .
     command: >
-      sh -c "sleep 10 && pip install requests pytest -q &&
+      sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_otel_collector_integration.py -v --tb=short --no-cov --override-ini='addopts='"
     volumes:
       - .:/code
@@ -387,7 +397,7 @@ services:
       - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
     depends_on:
       otel-collector:
-        condition: service_started
+        condition: service_healthy
       tempo:
         condition: service_healthy
       mimir:
@@ -402,7 +412,7 @@ services:
   test-otel-metrics:
     build: .
     command: >
-      sh -c "sleep 10 && pip install requests pytest -q &&
+      sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_metrics_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
     volumes:
       - .:/code
@@ -416,7 +426,7 @@ services:
       - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
     depends_on:
       otel-collector:
-        condition: service_started
+        condition: service_healthy
       mimir:
         condition: service_healthy
 
@@ -427,7 +437,7 @@ services:
   test-otel-logs:
     build: .
     command: >
-      sh -c "sleep 10 && pip install requests pytest -q &&
+      sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_logs_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
     volumes:
       - .:/code
@@ -441,7 +451,7 @@ services:
       - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
     depends_on:
       otel-collector:
-        condition: service_started
+        condition: service_healthy
       loki:
         condition: service_healthy
 
@@ -452,7 +462,7 @@ services:
   test-otel-all:
     build: .
     command: >
-      sh -c "sleep 10 && pip install requests pytest -q &&
+      sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/ -v --tb=short --no-cov --override-ini='addopts='"
     volumes:
       - .:/code
@@ -468,7 +478,7 @@ services:
       - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
     depends_on:
       otel-collector:
-        condition: service_started
+        condition: service_healthy
       tempo:
         condition: service_healthy
       mimir:
