@@ -279,5 +279,70 @@ services:
       redis:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Grafana Tempo - 분산 추적 저장소 (테스트용)
+  # ---------------------------------------------------------------------------
+  tempo:
+    image: grafana/tempo:2.3.1
+    container_name: tempo-test
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./docker/tempo:/etc/tempo
+      - tempo_data_test:/var/tempo
+    ports:
+      - "13200:3200"
+      - "19095:9095"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector - 텔레메트리 수집기 (테스트용)
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: otel-collector-test
+    command: ["--config=/etc/otelcol/otel-collector-config.yml"]
+    volumes:
+      - ./docker/otel-collector:/etc/otelcol
+    ports:
+      - "14317:4317"
+      - "14318:4318"
+      - "18888:8888"
+      - "23133:13133"
+    environment:
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=selfhealing-test,deployment.environment=test
+    depends_on:
+      tempo:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # OTEL Collector 및 Tempo 통합 테스트
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-collector
+  # ---------------------------------------------------------------------------
+  test-otel-collector:
+    build: .
+    command: >
+      sh -c "sleep 10 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_otel_collector_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      - otel-collector
+      - tempo
+
 volumes:
   postgres_test_data:
+  otel_buffer_test:
+  tempo_data_test:

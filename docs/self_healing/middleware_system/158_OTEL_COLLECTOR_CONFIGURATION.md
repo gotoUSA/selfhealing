@@ -327,25 +327,26 @@ exporters: [loki]
 
 ### 5.1 Phase 1: Collector 기본 배포
 
-- [ ] **1.1** Collector 설정 디렉토리 생성
+- [x] **1.1** Collector 설정 디렉토리 생성
   - `docker/otel-collector/` 디렉토리
-- [ ] **1.2** Collector 기본 설정 파일 작성
+- [x] **1.2** Collector 기본 설정 파일 작성
   - `docker/otel-collector/otel-collector-config.yml`
-- [ ] **1.3** docker-compose.yml에 otel-collector 서비스 추가
-- [ ] **1.4** Collector 헬스체크 설정
-- [ ] **1.5** Collector 시작 검증
+- [x] **1.3** docker-compose.yml에 otel-collector 서비스 추가
+- [x] **1.4** Collector 헬스체크 설정
+- [x] **1.5** Collector 시작 검증
 
 ### 5.2 Phase 2: Traces 파이프라인 구성
 
-- [ ] **2.1** otlp receiver 설정
+- [x] **2.1** otlp receiver 설정
   - gRPC: 4317 포트
   - HTTP: 4318 포트
-- [ ] **2.2** Tempo 서비스 추가
+- [x] **2.2** Tempo 서비스 추가
   - `docker/tempo/tempo.yml` 설정
   - docker-compose.yml에 tempo 서비스
-- [ ] **2.3** otlp exporter (Tempo) 설정
-- [ ] **2.4** traces 파이프라인 설정
-- [ ] **2.5** Trace 수신 검증
+- [x] **2.3** otlp exporter (Tempo) 설정
+- [x] **2.4** traces 파이프라인 설정
+- [x] **2.5** Trace 수신 검증
+  - 통합 테스트: `tests/integration/otel/test_otel_collector_integration.py`
 
 ### 5.3 Phase 3: Metrics 파이프라인 구성
 

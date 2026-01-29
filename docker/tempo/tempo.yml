@@ -1,0 +1,54 @@
+# Grafana Tempo 설정
+# 분산 추적 저장소
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+# OTLP 수신 설정
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+# 인제스터 설정
+ingester:
+  max_block_duration: 5m
+
+# 압축기 설정
+compactor:
+  compaction:
+    block_retention: 24h
+
+# 저장소 설정 (로컬 파일)
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+
+# 쿼리 프론트엔드 설정
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09
+
+# 메트릭 생성기 설정
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator/wal
+
+# 오버라이드 설정
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]
