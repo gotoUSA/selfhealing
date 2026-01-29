@@ -71,11 +71,11 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              Self-Healing System                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
-│  │   Django     │  │   Celery     │  │   Circuit    │  │   Audit      │        │
-│  │   Web        │  │   Worker     │  │   Breaker    │  │   Logger     │        │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
+│                              Self-Healing System                                │
+│  ┌──────────────┐   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │   Django     │   │   Celery     │  │   Circuit    │  │   Audit      │        │
+│  │   Web        │   │   Worker     │  │   Breaker    │  │   Logger     │        │
+│  └──────┬───────┘   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
 │         │                  │                  │                  │              │
 │         └──────────────────┴──────────────────┴──────────────────┘              │
 │                                      │                                          │
@@ -160,6 +160,30 @@ OTEL 기반 아키텍처 도입 시 AI/ML 파이프라인에 유리한 점:
 | Cascade Event 체인 | 인과관계 추적 | 근본 원인 자동 분석 |
 | RTT/Latency 메트릭 | SLA 위반 감지 | 성능 이상 예측 |
 | Recovery 시간 | 해결 소요 시간 | 복구 시간 예측 |
+
+### 3.3 RPS 및 처리 용량 목표
+
+**근거**: 현재 시스템 Rate Limiting 설정 (L2 Redis 100 req/min, L1 Fallback 10 req/min)
+
+OTEL Collector 및 백엔드 시스템은 다음 목표 처리량을 지원해야 함:
+
+| 항목 | 목표 용량 | 산정 근거 |
+|------|----------|----------|
+| Span 처리 | 1000 spans/s | 피크 타임 RPS 예상치 |
+| 메트릭 수집 | 50 metrics/s | 현재 정의된 메트릭 수 기반 |
+| 로그 수집 | 500 lines/s | 서비스별 로그 생성량 |
+
+### 3.4 멀티 리전 고려사항
+
+**근거**: `cascade_event_archive.py`의 `namespace` 필드, `trace.py`의 `cluster_prefix`
+
+현재 코드밤이스가 이미 리전 식별을 지원하므로, OTEL 도입 시 다음을 고려:
+
+| 항목 | 현재 | OTEL 연동 |
+|------|------|------------|
+| trace_id 패턴 | `req-{cluster_prefix}-*` | Resource attribute로 `deployment.region` 추가 |
+| namespace | "seoul, global" 형식 | OTEL Resource `service.namespace` 매핑 |
+| 저장소 | 리전별 분리 | Collector per-region, Grafana Global View |
 
 ---
 

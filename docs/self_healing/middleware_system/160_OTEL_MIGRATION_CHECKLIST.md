@@ -335,6 +335,24 @@ Phase 7: 검증 및 문서화 (1일)
 
 ## 9. 롤백 계획
 
+### 8.5 보안 및 데이터 보호 검증
+
+| # | 검증 항목 | 상태 | 기준 | 비고 |
+|---|----------|------|------|------|
+| 7.5.1 | password/token/api_key 마스킹 | ☐ | 로그에 평문 없음 | Redaction Processor |
+| 7.5.2 | gRPC 인증 활성화 | ☐ | Agent→Gateway TLS | |
+| 7.5.3 | 외부 접근 차단 | ☐ | Collector 포트 내부만 | |
+| 7.5.4 | PII 데이터 마스킹 | ☐ | email, phone 패턴 | |
+
+### 8.6 멀티 리전 준비도 검증
+
+| # | 검증 항목 | 상태 | 비고 |
+|---|----------|------|------|
+| 7.6.1 | Resource attribute에 `deployment.region` 포함 | ☐ | |
+| 7.6.2 | trace_id에 cluster_prefix 반영 | ☐ | seop, tokp 등 |
+| 7.6.3 | Grafana 멀티 Datasource 설정 | ☐ | 리전별 Tempo/Mimir/Loki |
+| 7.6.4 | Cross-region 상관관계 테스트 | ☐ | trace_id로 리전 간 추적 |
+
 ### 9.1 단계별 롤백
 
 | 상황 | 롤백 방법 | 영향 |

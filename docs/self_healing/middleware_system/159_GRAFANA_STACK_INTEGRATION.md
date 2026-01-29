@@ -102,7 +102,7 @@ Grafana의 Correlations 기능을 통해 세 가지 텔레메트리 데이터를
 | CB 상태 변화 | `TriggeringRequestInfo.trace_id` | `selfhealing/services/circuit_breaker/tracing.py` |
 | Cascade Event | `ExternalTraceContext.trace_id` | `selfhealing/audit/cascade_event.py` |
 
-### 3.3 Exemplar 지원
+### 3.3 Exemplar 지원 (Metrics → Traces)
 
 Prometheus/Mimir Exemplar를 통해 메트릭에서 직접 Trace로 이동:
 
@@ -111,6 +111,32 @@ Prometheus/Mimir Exemplar를 통해 메트릭에서 직접 Trace로 이동:
 | `http_request_duration_seconds` | trace_id | 느린 요청 추적 |
 | `circuit_breaker_failures_total` | trace_id | 실패 원인 추적 |
 | `retry_outcomes_total` | trace_id | 재시도 흐름 추적 |
+
+### 3.3.1 CascadeEvent Exemplar 설정
+
+**근거**: 76번 문서의 `CausationChain` 및 `ExternalTraceContext` 구조
+
+CascadeEvent 발생 시 해당 시점의 OTEL trace_id와 span_id를 감사 로그(Audit)에 포함:
+
+| 필드 | 소스 | Grafana 연동 |
+|------|------|-------------|
+| `trace_id` | OTEL Span context | Loki 로그 클릭 → Tempo 점프 |
+| `span_id` | OTEL Span context | 특정 Span으로 직접 이동 |
+| `cascade_id` | CascadeEvent.id | 연관 이벤트 묶음 조회 |
+
+**Grafana Exemplar 설정:**
+
+| 단계 | 설정 위치 | 값 |
+|------|----------|---|
+| Mimir Datasource | exemplarTraceIdDestinations | Tempo |
+| Tempo Datasource | TraceID lookup | 자동 연결 |
+| Dashboard Panel | Exemplars 표시 | 활성화 |
+
+**사용 시나리오:**
+1. Grafana 대시보드에서 `selfhealing_circuit_breaker_failures_total` 메트릭 확인
+2. 그래프 위의 Exemplar 점 클릭
+3. 해당 trace_id로 Tempo 트레이스 자동 이동
+4. Trace 상세에서 관련 Loki 로그 확인
 
 ---
 
@@ -363,7 +389,109 @@ Grafana는 AI 연동 시에도 핵심 역할:
 
 ---
 
-## 8. 검증 기준
+## 8. 멀티 리전 통합 전략
+
+### 8.1 Regional Storage + Global Visualization
+
+**근거**: `cascade_event_archive.py`의 `namespace` 필드 ("seoul, global" 예시)
+
+데이터는 각 리전에 저장하되, Grafana에서 여러 리전의 Mimir/Tempo를 동시에 쿼리하여 리전 간 장애 파급(Cascading Failure)을 한 화면에서 보게 구성:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Grafana (Global)                     │
+│                                                         │
+│    ┌────────────────────────────────────────────┐      │
+│    │  Multi-Region Dashboard                    │      │
+│    │  - ${region} 변수로 리전 선택               │      │
+│    │  - Cross-region correlation                │      │
+│    └────────────────────────────────────────────┘      │
+│                        │                               │
+└────────────────────────┼───────────────────────────────┘
+                         │
+      ┌──────────────────┼──────────────────┐
+      ▼                  ▼                  ▼
+┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│ Seoul Stack │ │ Tokyo Stack │ │ Global Stack│
+│             │ │             │ │             │
+│ Mimir-Seoul │ │ Mimir-Tokyo │ │ Mimir-Global│
+│ Tempo-Seoul │ │ Tempo-Tokyo │ │ Tempo-Global│
+│ Loki-Seoul  │ │ Loki-Tokyo  │ │ Loki-Global │
+└─────────────┘ └─────────────┘ └─────────────┘
+```
+
+### 8.2 Datasource 구성
+
+| Datasource | Type | URL | 용도 |
+|------------|------|-----|------|
+| Mimir-Seoul | prometheus | http://mimir-seoul:9009/prometheus | 서울 리전 메트릭 |
+| Mimir-Tokyo | prometheus | http://mimir-tokyo:9009/prometheus | 도쿄 리전 메트릭 |
+| Tempo-Seoul | tempo | http://tempo-seoul:3200 | 서울 리전 트레이스 |
+| Tempo-Tokyo | tempo | http://tempo-tokyo:3200 | 도쿄 리전 트레이스 |
+
+### 8.3 Cross-Region Trace 추적
+
+**근거**: `trace.py`의 `cluster_prefix` ("seop" = seoul + production)
+
+trace_id에 포함된 cluster_prefix로 리전 식별:
+
+| trace_id 패턴 | 의미 |
+|---------------|------|
+| `req-seop-*` | Seoul Production |
+| `req-tokp-*` | Tokyo Production |
+| `req-seos-*` | Seoul Staging |
+
+---
+
+## 9. Latency 기반 알림 연동
+
+### 9.1 Grafana Alerting → UnifiedNotificationManager
+
+**근거**: 155번 문서의 `THROTTLE_SLA_CRITICAL` 이벤트 및 `sla_critical_ms=500ms` 설정
+
+"특정 요청이 RTT 500ms를 넘으면 비상 모드 검토 시작" 연동:
+
+| 단계 | 시스템 | 동작 |
+|------|--------|------|
+| 1 | Tempo | P95 Latency > 500ms 감지 |
+| 2 | Grafana Alerting | Alert Rule 트리거 |
+| 3 | Webhook | UnifiedNotificationManager.notify() 호출 |
+| 4 | Emergency Mode | Level 상승 검토 |
+
+### 9.2 Alert Rule 설정
+
+| 설정 | 값 | 설명 |
+|------|---|------|
+| Metric | `histogram_quantile(0.95, http_request_duration_seconds)` | P95 Latency |
+| Threshold | 0.5 (500ms) | SLA_CRITICAL 임계치 |
+| For | 1m | 지속 시간 |
+| Contact Point | Webhook to UnifiedNotificationManager | 알림 대상 |
+
+### 9.3 Webhook Payload
+
+```json
+{
+  "title": "SLA Critical: P95 Latency Exceeded",
+  "message": "Payment API P95 latency 650ms > 500ms threshold",
+  "priority": "HIGH",
+  "category": "SLA",
+  "source": "grafana_alerting",
+  "metadata": {
+    "current_latency_ms": 650,
+    "threshold_ms": 500,
+    "affected_service": "payment"
+  }
+}
+```
+
+**UnifiedNotificationManager 처리:**
+- Priority: HIGH → Slack + Email 채널
+- Emergency Level 2 이상 시 우선순위 에스컬레이션
+- Cooldown: 동일 서비스 5분 내 중복 알림 억제
+
+---
+
+## 10. 검증 기준
 
 ### 8.1 기능 검증
 
@@ -387,7 +515,7 @@ Grafana는 AI 연동 시에도 핵심 역할:
 
 ---
 
-## 9. 관련 문서
+## 11. 관련 문서
 
 - [156_OTEL_OBSERVABILITY_OVERVIEW.md](156_OTEL_OBSERVABILITY_OVERVIEW.md): 전체 아키텍처 개요
 - [157_OTEL_SDK_INTEGRATION.md](157_OTEL_SDK_INTEGRATION.md): SDK 도입 계획

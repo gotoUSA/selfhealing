@@ -97,6 +97,103 @@
 | `memory_limiter` | 메모리 사용량 제한 | limit_mib: 512, check_interval: 1s |
 | `resource` | 리소스 속성 추가 | service.name, deployment.environment |
 | `attributes` | 속성 변환/필터링 | 민감 정보 마스킹 |
+| `redaction` | 민감 정보 2중 마스킹 | 패턴 기반 필터링 |
+
+### 2.2.1 리소스 제한 (Resource Limits)
+
+**근거**: docker-compose.yml에 현재 CPU 제한 미정의
+
+Collector가 가용 자원을 무제한 사용하여 애플리케이션 성능에 영향을 주는 상황(Resource Starvation) 방지:
+
+| 설정 | 개발 환경 | 프로덕션 환경 | 비고 |
+|------|---------|------------|------|
+| `cpus` | 0.25 | 0.5 ~ 1.0 | Docker Compose deploy |
+| `mem_limit` | 256mb | 512mb | memory_limiter와 일치 |
+| `mem_reservation` | 128mb | 256mb | 최소 보장 메모리 |
+
+**Docker Compose 설정 예시:**
+```yaml
+otel-collector:
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 512M
+      reservations:
+        cpus: "0.25"
+        memory: 256M
+```
+
+**처리량 기준**: 100 req/min Rate Limit (L2 Redis) 기준, 1,000 RPS 처리 가능 목표
+
+### 2.2.2 민감 정보 2중 마스킹 (Redaction Processor)
+
+**근거**: 115번 문서의 `_mask_error_message` 및 `sensitive_key_patterns` 설정
+
+개발자가 실수로 로그에 토큰을 찍더라도 Collector가 중앙 저장소(Loki/Tempo)로 보내기 전에 필터링하는 '최후의 보루':
+
+| 마스킹 대상 | 패턴 | 대체 값 |
+|-------------|--------|----------|
+| password | `password`, `passwd`, `pwd` | `[REDACTED]` |
+| token | `token`, `access_token`, `refresh_token` | `[REDACTED]` |
+| api_key | `api_key`, `apikey`, `secret` | `[REDACTED]` |
+| authorization | `authorization`, `auth` | `[REDACTED]` |
+| 내부 IP | `10.*`, `192.168.*`, `172.16-31.*` | `[INTERNAL_IP]` |
+| 서버 경로 | `/home/*`, `/var/*`, `C:\*` | `[SERVER_PATH]` |
+
+**구성 예시:**
+```yaml
+processors:
+  redaction:
+    allow_all_keys: false
+    blocked_values:
+      - "password"
+      - "token"
+      - "api_key"
+      - "secret"
+      - "authorization"
+    summary: debug
+```
+
+### 2.2.3 Fail-Safe 관측성 (Resilient Observability)
+
+**근거**: 155번 문서의 `_last_known_safe_limit` FAIL-SAFE 패턴
+
+관측성 시스템(Collector/Tempo 등) 장애가 실제 서비스 성능에 영향을 주지 않도록:
+
+| 설정 | 값 | 목적 |
+|------|---|------|
+| `export_timeout` | 5s | 매우 짧은 타임아웃 |
+| `retry_on_failure.max_elapsed_time` | 30s | 최대 재시도 시간 |
+| `sending_queue.storage` | file_storage | 로컬 디스크 스풀링 |
+
+**file_storage 익스텐션:**
+```yaml
+extensions:
+  file_storage:
+    directory: /var/lib/otelcol/buffer
+    timeout: 1s
+    compaction:
+      directory: /var/lib/otelcol/buffer/compaction
+      on_start: true
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage  # Collector 장애 시 로컬 스풀링
+```
+
+**동작**: Tempo/Mimir 장애 시 데이터를 로컬 디스크에 임시 저장 후 복구 시 재전송
 
 **리소스 속성 (현재 코드 기반):**
 
@@ -338,15 +435,105 @@ exporters: [loki]
 | Loki | 로컬 파일 저장 |
 | 보존 기간 | 1일 |
 
+### 7.1.1 Tiered Storage 전략
+
+**근거**: `cascade_retention.py`의 Hot/Warm/Cold 계층별 보관 정책
+
+OTEL 데이터에도 동일한 Tiered Storage 전략 적용:
+
+| 계층 | 보존 기간 | 저장소 | 용도 | 코드 근거 |
+|------|---------|--------|------|----------|
+| **Hot** | 7일 | Mimir/Tempo (SSD) | 실시간 조회 | `hot_retention_days=7` |
+| **Warm** | 30일 | Loki (HDD) | 복잡한 쿼리 | `warm_retention_days=90` |
+| **Cold** | 1년 | S3/GCS Archive | 법적 요구사항 | `cold_retention_days=365` |
+
+**비용 최적화 효과:**
+- Hot (7일): 빠른 SSD 저장, 높은 비용
+- Warm (30일): 일반 HDD, 중간 비용
+- Cold (1년): 객체 스토리지, 낮은 비용
+
+**데이터 유형별 보존:**
+
+| 데이터 | Hot | Warm | Cold |
+|--------|-----|------|------|
+| Traces (Tempo) | 7일 | - | - |
+| Logs (Loki) | 7일 | 30일 | 1년 |
+| Metrics (Mimir) | 7일 | 30일 | 1년 |
+
 ### 7.2 프로덕션 환경
 
 | 구성요소 | 설정 |
 |---------|------|
-| Collector | 복제본 2개 이상 |
+| Collector | Agent + Gateway 2단계 |
 | Tempo | 객체 스토리지 (S3/GCS) |
 | Loki | 객체 스토리지 (S3/GCS) |
 | Mimir | 객체 스토리지 (S3/GCS) |
 | 보존 기간 | 30일+ |
+
+### 7.2.1 Agent-Gateway 2단계 아키텍처
+
+각 파드가 직접 중앙 Mimir/Tempo로 쏘지 않고 로컬 사이드카로 쏠야 애플리케이션 Latency 영향 최소화:
+
+```
+┌───────────────────────────────────────────┐
+│              Application Pod                │
+│  ┌───────────┐  ┌──────────────────┐  │
+│  │  Django   │  │ OTEL Collector │  │
+│  │  (App)    │─▶│ (Agent/Sidecar)│  │
+│  └───────────┘  └────────┬─────────┘  │
+└───────────────────────┬───────────────────┘
+                       │ (localhost)
+                       ▼
+┌───────────────────────────────────────────┐
+│           OTEL Collector (Gateway)           │
+│           - 복제본 2개 이상                   │
+│           - 중앙 배치                        │
+└───────────────────┬───────────────────────┘
+                   │
+     ┌─────────────┼─────────────┐
+     ▼             ▼             ▼
+┌─────────┐ ┌─────────┐ ┌─────────┐
+│  Mimir  │ │  Tempo  │ │  Loki   │
+└─────────┘ └─────────┘ └─────────┘
+```
+
+| 단계 | 역할 | 리소스 | 위치 |
+|------|------|---------|------|
+| Agent (Sidecar) | 로컬 수집, 배치 | CPU 0.1, Mem 64MB | 각 Pod 내부 |
+| Gateway (Cluster) | 중앙 집계, 라우팅 | CPU 0.5, Mem 512MB | 중앙 배치 |
+
+**장점:**
+- 애플리케이션 → Sidecar: localhost 통신으로 Latency 최소
+- Sidecar → Gateway: 배치 처리로 네트워크 효율화
+- Gateway 장애 시 Agent의 file_storage로 로컬 버퍼링
+
+### 7.2.2 gRPC 인증 및 보안
+
+관측성 데이터가 외부로 유출되거나 오염되는 것을 방지:
+
+| 설정 | 값 | 목적 |
+|------|---|------|
+| `headers.Authorization` | Bearer {API_KEY} | API Key 인증 |
+| `tls.insecure` | false (prod) | TLS 활성화 |
+| `tls.ca_file` | /etc/ssl/certs/ca.crt | CA 인증서 |
+
+**Gateway 설정 예시:**
+```yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        auth:
+          authenticator: headers_auth
+
+extensions:
+  headers_auth:
+    headers:
+      - header: Authorization
+        action: validate
+        regex: "Bearer [a-zA-Z0-9]+"
+```
 
 ---
 

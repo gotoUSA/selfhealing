@@ -102,8 +102,28 @@
 | `OTEL_ENABLED` | false | OTEL 활성화 여부 |
 | `OTEL_SERVICE_NAME` | selfhealing | 서비스 이름 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | http://localhost:4317 | Collector 엔드포인트 |
-| `OTEL_TRACES_SAMPLER` | parentbased_always_on | 샘플링 전략 |
+| `OTEL_TRACES_SAMPLER` | parentbased_traceidratio | 샘플링 전략 |
+| `OTEL_TRACES_SAMPLER_ARG` | 0.01 | 기본 샘플링 비율 (1%) |
 | `OTEL_RESOURCE_ATTRIBUTES` | - | 추가 리소스 속성 |
+| `OTEL_EXPORTER_OTLP_TIMEOUT` | 5000 | Exporter 타임아웃 (ms) |
+
+### 3.1.1 상태 기반 가변 샘플링 (Adaptive Sampling)
+
+**근거**: `EmergencyLevel` enum이 0~3 레벨 정의 (`services/emergency_mode/enums.py`)
+
+평시에는 1%만 샘플링하되, Emergency Level 2 이상 또는 SLA 위반(Throttle 발생) 시 100%로 즉시 전환:
+
+| 상태 | 샘플링 비율 | 근거 |
+|------|------------|------|
+| `EmergencyLevel.NORMAL` | 1% | 저장소 비용 최적화 |
+| `EmergencyLevel.LEVEL_1` | 10% | 경미한 장애 모니터링 |
+| `EmergencyLevel.LEVEL_2` 이상 | 100% | 전체 추적 필요 |
+| SLA_CRITICAL (500ms 초과) | 100% | RTT 임계치 위반 시 |
+| 429 응답 발생 | 100% | Throttle 발생 시 |
+
+**구현 위치**: `selfhealing/observability/sampler.py` (신규)
+
+샘플러는 현재 `EmergencyLevel`과 `sla_critical_ms` 설정을 참조하여 동적으로 비율 결정
 
 ### 3.2 Phase 2: Django 자동 계측
 
@@ -142,6 +162,32 @@
 - OTEL 활성화 시: OTEL 자동 계측 활용
 - OTEL 비활성화 시: 기존 수동 헤더 주입 유지
 
+### 3.3.1 중복 기록 방지 (Suppress Instrumentation)
+
+**근거**: `event_buffer.py`의 `has_event_from_source()` 메서드로 중복 확인 패턴 존재
+
+`opentelemetry-instrumentation-requests` 사용 시 기존 Audit 시스템과 중복 기록 방지:
+
+| 상황 | 처리 방법 |
+|------|----------|
+| OTEL + Audit 동시 기록 | `suppress_instrumentation` 컨텍스트 활용 |
+| 내부 헬스체크 호출 | Span 생성 제외 |
+| Collector 전송 호출 | 자체 Span 생성 안함 |
+
+**구현 패턴:**
+```python
+from opentelemetry.context import suppress_instrumentation
+
+# 특정 호출에서 자동 계측 억제
+with suppress_instrumentation():
+    # 이 블록 내 HTTP 호출은 Span 생성 안함
+    internal_health_check()
+```
+
+**Audit 연동 주의사항:**
+- 111번 문서의 Audit 시스템과 OTEL이 동일 요청을 중복 기록하지 않도록 주의
+- `source="ExceptionHandler"` 등 소스별 중복 확인 로직 활용
+
 ### 3.4 Phase 4: Celery 계측
 
 **목표**: Celery Task 자동 Span 생성 및 컨텍스트 전파
@@ -161,6 +207,20 @@
 - 기존 trace_id: "CELERY_{task_id}" (커스텀)
 - 호환 레이어에서 양쪽 형식 모두 지원
 
+### 3.4.1 contextvars 기반 컨텍스트 보장
+
+**근거**: `trace.py`에 `contextvars.ContextVar` + `threading.local` 하이브리드 이미 구현
+
+Celery/비동기 경계에서 컨텍스트 유실 방지:
+
+| 환경 | 컨텍스트 저장 | 코드 위치 |
+|------|-------------|----------|
+| Async/Await | `contextvars.ContextVar` | `trace.py#L19-21` |
+| Thread Pool | `threading.local` 폴백 | `trace.py#L24` |
+| Celery Task | `set_celery_task_context()` | `trace.py#L303-327` |
+
+OTEL SDK는 내부적으로 `contextvars`를 사용하므로 기존 패턴과 자연스럽게 통합
+
 ### 3.5 Phase 5: Circuit Breaker 및 Audit 연동
 
 **목표**: CB 상태 변화 및 Audit 이벤트에 OTEL Span 정보 포함
@@ -179,6 +239,35 @@
 `TracingConfig`에 이미 `create_spans` 플래그가 있음:
 - 현재: `create_spans=True`이지만 실제 OTEL Span 생성 코드 없음
 - 변경: OTEL SDK를 사용하여 실제 Span 생성
+
+### 3.5.1 CausationChain의 OTEL Span 승격
+
+**근거**: 76번 문서의 `CausationChain` 및 `ExternalTraceContext` 구조
+
+CascadeEvent 발생 시 OTEL trace_id와 span_id를 감사 로그에 포함:
+
+| 필드 | 소스 | 저장 위치 |
+|------|------|----------|
+| `trace_id` | OTEL Span context | `ExternalTraceContext.trace_id` |
+| `span_id` | OTEL Span context | `ExternalTraceContext.span_id` |
+| `causation_chain` | 이벤트 ID 체인 | `CascadeEventArchive.causation_chain` |
+
+**연동 방식:**
+- Span Link: causation_chain의 각 이벤트를 OTEL Span Link로 연결
+- Span Attribute: `cascade.event_id`, `cascade.trigger_type` 등 속성 추가
+
+### 3.5.2 Trace ID 형식 정책 (Display-only Truncation)
+
+**근거**: `trace.py`에서 W3C traceparent 파싱 시 앞 8자만 추출 (`req-{parts[1][:8]}`)
+
+| 용도 | ID 형식 | 예시 |
+|------|---------|------|
+| 내부 저장 (Loki/Tempo) | 전체 W3C ID (32자 hex) | `a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6` |
+| 로그 기록 | 전체 W3C ID (32자 hex) | 글로벌 통합 시 충돌 방지 |
+| UI 표시/대시보드 | `req-*` 형식 (8자) | `req-a1b2c3d4` |
+| Audit 로그 | 전체 + 표시용 병기 | `trace_id` 필드에 전체, `trace_id_short`에 8자 |
+
+**주의**: $16^8 \approx 42억$ 조합으로 충돌 확률은 낮지만, 글로벌 로그 통합 시 위험할 수 있으므로 내부 저장은 항상 전체 ID 사용
 
 ---
 
