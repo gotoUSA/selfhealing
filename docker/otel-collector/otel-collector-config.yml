@@ -1,5 +1,5 @@
 # OpenTelemetry Collector 설정
-# OTLP 수신, 배치 처리, Tempo로 Trace 전송
+# OTLP 수신, 배치 처리, Tempo/Mimir/Loki로 텔레메트리 전송
 
 extensions:
   health_check:
@@ -14,13 +14,32 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
-  # 기존 Prometheus 호환 메트릭 scrape
+  # Prometheus 메트릭 scrape (기존 설정 마이그레이션)
   prometheus:
     config:
       scrape_configs:
         - job_name: 'django'
           static_configs:
             - targets: ['web:8000']
+          metrics_path: /metrics
+          scrape_interval: 15s
+          scrape_timeout: 10s
+
+        - job_name: 'celery'
+          static_configs:
+            - targets: ['celery_worker:9808']
+          metrics_path: /metrics
+          scrape_interval: 15s
+
+        - job_name: 'redis'
+          static_configs:
+            - targets: ['redis:9121']
+          metrics_path: /metrics
+          scrape_interval: 15s
+
+        - job_name: 'postgres'
+          static_configs:
+            - targets: ['postgres-exporter:9187']
           metrics_path: /metrics
           scrape_interval: 15s
 
@@ -47,8 +66,8 @@ processors:
         value: development
         action: upsert
 
-  # 민감 정보 마스킹
-  attributes:
+  # Trace 속성 민감 정보 마스킹
+  attributes/traces:
     actions:
       - key: password
         action: delete
@@ -60,6 +79,40 @@ processors:
         action: delete
       - key: authorization
         action: delete
+
+  # 로그 속성 민감 정보 마스킹
+  attributes/logs:
+    actions:
+      # 민감 정보 패턴 삭제
+      - key: password
+        action: delete
+      - key: passwd
+        action: delete
+      - key: pwd
+        action: delete
+      - key: token
+        action: delete
+      - key: access_token
+        action: delete
+      - key: refresh_token
+        action: delete
+      - key: api_key
+        action: delete
+      - key: apikey
+        action: delete
+      - key: secret
+        action: delete
+      - key: authorization
+        action: delete
+      - key: auth
+        action: delete
+      # trace_id 추출 (로그-트레이스 연동용)
+      - key: trace_id
+        from_attribute: traceId
+        action: upsert
+      - key: span_id
+        from_attribute: spanId
+        action: upsert
 
 exporters:
   # Tempo로 Trace 전송
@@ -78,6 +131,37 @@ exporters:
       num_consumers: 10
       queue_size: 5000
 
+  # Mimir로 메트릭 전송 (Prometheus Remote Write)
+  prometheusremotewrite:
+    endpoint: http://mimir:9009/api/v1/push
+    tls:
+      insecure: true
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Loki로 로그 전송
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    tls:
+      insecure: true
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    default_labels_enabled:
+      exporter: true
+      job: true
+      instance: true
+      level: true
+
   # 디버그 로깅 (개발 환경용)
   debug:
     verbosity: basic
@@ -86,17 +170,23 @@ service:
   extensions: [health_check]
 
   pipelines:
-    # Traces 파이프라인
+    # Traces 파이프라인 (Tempo로 전송)
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch, resource, attributes]
+      processors: [memory_limiter, batch, resource, attributes/traces]
       exporters: [otlp/tempo, debug]
 
-    # Metrics 파이프라인 (Prometheus scrape 포함)
+    # Metrics 파이프라인 (Mimir로 전송)
     metrics:
       receivers: [otlp, prometheus]
       processors: [memory_limiter, batch, resource]
-      exporters: [debug]
+      exporters: [prometheusremotewrite, debug]
+
+    # Logs 파이프라인 (Loki로 전송)
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes/logs]
+      exporters: [loki, debug]
 
   telemetry:
     logs:

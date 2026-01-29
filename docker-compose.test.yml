@@ -300,14 +300,55 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
+  # Grafana Mimir - 메트릭 장기 저장소 (테스트용)
+  # ---------------------------------------------------------------------------
+  mimir:
+    image: grafana/mimir:2.11.0
+    container_name: mimir-test
+    command: ["-config.file=/etc/mimir/mimir.yml"]
+    volumes:
+      - ./docker/mimir:/etc/mimir
+      - mimir_data_test:/var/mimir
+    ports:
+      - "19009:9009"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9009/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Grafana Loki - 로그 저장소 (테스트용)
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki-test
+    user: "0"
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./docker/loki:/etc/loki
+      - loki_data_test:/var/loki
+    ports:
+      - "13100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
   # OpenTelemetry Collector - 텔레메트리 수집기 (테스트용)
   # ---------------------------------------------------------------------------
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
     container_name: otel-collector-test
+    user: "0"
     command: ["--config=/etc/otelcol/otel-collector-config.yml"]
     volumes:
       - ./docker/otel-collector:/etc/otelcol
+      - otel_buffer_test:/var/lib/otelcol/buffer
     ports:
       - "14317:4317"
       - "14318:4318"
@@ -315,8 +356,14 @@ services:
       - "23133:13133"
     environment:
       - OTEL_RESOURCE_ATTRIBUTES=service.name=selfhealing-test,deployment.environment=test
+    # Note: otel-collector-contrib is a scratch-based image without shell commands
+    # We rely on depends_on for service ordering and add a startup delay in tests
     depends_on:
       tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
@@ -339,10 +386,99 @@ services:
       - TEMPO_ENDPOINT=http://tempo:3200
       - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
     depends_on:
-      - otel-collector
-      - tempo
+      otel-collector:
+        condition: service_started
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # OTEL Collector Metrics 파이프라인 통합 테스트
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-metrics
+  # ---------------------------------------------------------------------------
+  test-otel-metrics:
+    build: .
+    command: >
+      sh -c "sleep 10 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_metrics_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_started
+      mimir:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # OTEL Collector Logs 파이프라인 통합 테스트
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-logs
+  # ---------------------------------------------------------------------------
+  test-otel-logs:
+    build: .
+    command: >
+      sh -c "sleep 10 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_logs_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - LOKI_ENDPOINT=http://loki:3100
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_started
+      loki:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # OTEL 전체 파이프라인 통합 테스트 (Traces, Metrics, Logs)
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-all
+  # ---------------------------------------------------------------------------
+  test-otel-all:
+    build: .
+    command: >
+      sh -c "sleep 10 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/ -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - LOKI_ENDPOINT=http://loki:3100
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_started
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
 
 volumes:
   postgres_test_data:
   otel_buffer_test:
   tempo_data_test:
+  mimir_data_test:
+  loki_data_test:

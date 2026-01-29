@@ -1,0 +1,67 @@
+# Grafana Mimir 설정
+# 메트릭 장기 저장소 (Prometheus 호환)
+
+# 멀티테넌트 비활성화 (단일 테넌트)
+multitenancy_enabled: false
+
+# 서버 설정
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+  log_level: info
+
+# 분산기 설정
+distributor:
+  pool:
+    health_check_ingesters: true
+
+# 인제스터 설정
+ingester:
+  ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+
+# 스토리지 설정 (로컬 파일)
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /var/mimir/blocks
+  tsdb:
+    dir: /var/mimir/tsdb
+
+# 컴팩터 설정
+compactor:
+  data_dir: /var/mimir/compactor
+  sharding_ring:
+    kvstore:
+      store: inmemory
+
+# 보존 정책 설정 (7일 Hot 계층)
+limits:
+  max_label_names_per_series: 30
+  max_global_series_per_user: 0
+  compactor_blocks_retention_period: 168h  # 7일
+
+# 쿼리 프론트엔드 설정
+frontend:
+  log_queries_longer_than: 10s
+
+# 스토어 게이트웨이 설정
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+
+# 알림 관리자 저장소 (사용하지 않음)
+alertmanager_storage:
+  backend: filesystem
+  filesystem:
+    dir: /var/mimir/alertmanager
+
+# 룰러 저장소 (사용하지 않음)
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /var/mimir/ruler

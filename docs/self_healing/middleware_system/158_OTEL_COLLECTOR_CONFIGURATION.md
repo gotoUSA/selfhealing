@@ -350,25 +350,27 @@ exporters: [loki]
 
 ### 5.3 Phase 3: Metrics 파이프라인 구성
 
-- [ ] **3.1** prometheus receiver 설정
+- [x] **3.1** prometheus receiver 설정
   - 기존 scrape_configs 마이그레이션
-- [ ] **3.2** Mimir 서비스 추가 (선택)
+- [x] **3.2** Mimir 서비스 추가 (선택)
   - 또는 기존 Prometheus 유지
-- [ ] **3.3** prometheusremotewrite exporter 설정
-- [ ] **3.4** metrics 파이프라인 설정
-- [ ] **3.5** 기존 메트릭 수집 검증
+- [x] **3.3** prometheusremotewrite exporter 설정
+- [x] **3.4** metrics 파이프라인 설정
+- [x] **3.5** 기존 메트릭 수집 검증
+  - 통합 테스트: `tests/integration/otel/test_metrics_pipeline_integration.py`
 
 ### 5.4 Phase 4: Logs 파이프라인 구성
 
-- [ ] **4.1** Loki 서비스 추가
+- [x] **4.1** Loki 서비스 추가
   - `docker/loki/loki.yml` 설정
   - docker-compose.yml에 loki 서비스
-- [ ] **4.2** loki exporter 설정
-- [ ] **4.3** logs 파이프라인 설정
-- [ ] **4.4** 속성 프로세서 설정
+- [x] **4.2** loki exporter 설정
+- [x] **4.3** logs 파이프라인 설정
+- [x] **4.4** 속성 프로세서 설정
   - trace_id 추출
   - 민감 정보 마스킹
-- [ ] **4.5** 로그 수신 검증
+- [x] **4.5** 로그 수신 검증
+  - 통합 테스트: `tests/integration/otel/test_logs_pipeline_integration.py`
 
 ### 5.5 Phase 5: 통합 검증
 

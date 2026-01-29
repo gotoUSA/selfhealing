@@ -191,7 +191,12 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      - tempo
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
 
   # ---------------------------------------------------------------------------
   # Grafana Tempo - 분산 추적 저장소
@@ -213,9 +218,50 @@ services:
       retries: 3
       start_period: 15s
 
+  # ---------------------------------------------------------------------------
+  # Grafana Mimir - 메트릭 장기 저장소 (Prometheus 호환)
+  # ---------------------------------------------------------------------------
+  mimir:
+    image: grafana/mimir:2.11.0
+    container_name: mimir
+    command: ["-config.file=/etc/mimir/mimir.yml"]
+    volumes:
+      - ./docker/mimir:/etc/mimir
+      - mimir_data:/var/mimir
+    ports:
+      - "9009:9009"   # HTTP API
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9009/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Grafana Loki - 로그 저장소
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    user: "0"
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./docker/loki:/etc/loki
+      - loki_data:/var/loki
+    ports:
+      - "3100:3100"   # HTTP API
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 volumes:
   postgres_data:
   static_volume:
   media_volume:
   otel_buffer:
   tempo_data:
+  mimir_data:
+  loki_data:
