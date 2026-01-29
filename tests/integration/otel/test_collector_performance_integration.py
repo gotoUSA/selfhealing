@@ -278,11 +278,16 @@ class TestCollectorMemoryLimits:
 
             metrics_text = response.text
 
-            # process_resident_memory_bytes 메트릭 파싱
-            # 예: process_resident_memory_bytes 1.2345e+08
+            # OTEL Collector v0.96.0+는 otelcol_ 접두사 사용
+            # otelcol_process_memory_rss 또는 process_resident_memory_bytes 파싱
             import re
 
-            match = re.search(r"process_resident_memory_bytes\s+([0-9.e+]+)", metrics_text)
+            # otelcol_process_memory_rss 먼저 시도 (최신 버전)
+            match = re.search(r"otelcol_process_memory_rss[^}]*}\s+([0-9.e+]+)", metrics_text)
+            if not match:
+                # 레거시 메트릭 이름 시도
+                match = re.search(r"process_resident_memory_bytes\s+([0-9.e+]+)", metrics_text)
+
             if match:
                 memory_bytes = float(match.group(1))
                 memory_mb = memory_bytes / (1024 * 1024)
@@ -291,8 +296,8 @@ class TestCollectorMemoryLimits:
                 max_memory_mb = 512
                 assert memory_mb < max_memory_mb, f"메모리 사용량 초과: {memory_mb:.2f}MB >= {max_memory_mb}MB"
             else:
-                # 메트릭이 없으면 테스트 스킵
-                pytest.skip("process_resident_memory_bytes 메트릭을 찾을 수 없음")
+                # 메트릭이 없으면 테스트 실패 (skip이 아닌 fail)
+                pytest.fail("otelcol_process_memory_rss 또는 process_resident_memory_bytes 메트릭을 찾을 수 없음")
 
         except requests.RequestException as e:
             pytest.skip(f"메트릭 조회 실패: {e}")
