@@ -335,6 +335,30 @@ exporters: [loki]
 - [x] **1.4** Collector 헬스체크 설정
 - [x] **1.5** Collector 시작 검증
 
+#### 1.4 구현 노트: 커스텀 Alpine 기반 이미지
+
+**배경**: 공식 `otel/opentelemetry-collector-contrib` 이미지는 scratch 기반으로 셸/wget/curl이 없음.
+Docker Compose 환경에서 헬스체크는 컨테이너 내부에서 명령을 실행해야 하므로 커스텀 이미지가 필요.
+
+**구현** (`docker/otel-collector/Dockerfile`):
+```dockerfile
+ARG OTEL_VERSION=0.96.0
+FROM otel/opentelemetry-collector-contrib:${OTEL_VERSION} AS collector
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates wget
+COPY --from=collector /otelcol-contrib /otelcol-contrib
+RUN adduser -D -u 10001 otel
+USER otel
+ENTRYPOINT ["/otelcol-contrib"]
+```
+
+**wget 선택 이유**:
+- Alpine/busybox에 기본 포함 (curl은 별도 설치 필요)
+- Grafana 스택(Tempo, Mimir, Loki)이 동일하게 wget 사용
+- 헬스체크 명령: `wget --spider -q http://localhost:13133/`
+
+**참고**: Kubernetes 환경에서는 kubelet이 외부에서 HTTP 프로브를 수행하므로 원본 scratch 이미지 사용 가능.
+
 ### 5.2 Phase 2: Traces 파이프라인 구성
 
 - [x] **2.1** otlp receiver 설정

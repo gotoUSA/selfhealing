@@ -50,7 +50,7 @@ python_functions = ["test_*"]
 addopts = """
     -n auto
     --dist=loadscope
-    --cov=shopping
+    --cov=packages/selfhealing-python/src/selfhealing
     --cov-report=html
     --cov-report=term-missing:skip-covered
     --cov-fail-under=70
@@ -112,7 +112,7 @@ PYTHONIOENCODING = "utf-8"
 # coverage Configuration
 # ==========================================
 [tool.coverage.run]
-source = ["shopping"]
+source = ["packages/selfhealing-python/src/selfhealing"]
 omit = [
     "*/migrations/*",
     "*/tests/*",
