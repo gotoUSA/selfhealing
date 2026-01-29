@@ -8,6 +8,49 @@ import pytest
 class TestProviderRegistry:
     """Tests for ProviderRegistry with In-Memory repositories."""
 
+    @pytest.fixture(autouse=True)
+    def reset_registry(self):
+        """Reset ProviderRegistry before and after each test for isolation."""
+        from selfhealing.factory import ProviderRegistry
+        from selfhealing.adapters.memory import (
+            InMemoryFailedOperationRepository,
+            InMemoryCircuitBreakerStateRepository,
+            InMemorySecurityIncidentRepository,
+        )
+
+        # Store original state
+        original_instances = ProviderRegistry._instances.copy()
+        original_defaults = {
+            "cache": ProviderRegistry._default_cache,
+            "queue": ProviderRegistry._default_queue,
+            "repo": ProviderRegistry._default_repo,
+        }
+        original_failed_op_repos = ProviderRegistry._failed_op_repos.copy()
+        original_cb_repos = ProviderRegistry._circuit_breaker_repos.copy()
+        original_security_repos = ProviderRegistry._security_repos.copy()
+
+        # Clear instances for fresh test
+        ProviderRegistry.clear_instances()
+
+        # Ensure memory adapters are registered (병렬 테스트에서 reset()으로 초기화될 수 있음)
+        if "memory" not in ProviderRegistry._failed_op_repos:
+            ProviderRegistry.register_failed_operation_repo("memory", InMemoryFailedOperationRepository)
+        if "memory" not in ProviderRegistry._circuit_breaker_repos:
+            ProviderRegistry.register_circuit_breaker_repo("memory", InMemoryCircuitBreakerStateRepository)
+        if "memory" not in ProviderRegistry._security_repos:
+            ProviderRegistry.register_security_repo("memory", InMemorySecurityIncidentRepository)
+
+        yield
+
+        # Restore original state
+        ProviderRegistry._instances = original_instances
+        ProviderRegistry._default_cache = original_defaults["cache"]
+        ProviderRegistry._default_queue = original_defaults["queue"]
+        ProviderRegistry._default_repo = original_defaults["repo"]
+        ProviderRegistry._failed_op_repos = original_failed_op_repos
+        ProviderRegistry._circuit_breaker_repos = original_cb_repos
+        ProviderRegistry._security_repos = original_security_repos
+
     def test_registry_has_inmemory_repositories_registered(self):
         """Test that in-memory repositories are auto-registered."""
         from selfhealing.factory import ProviderRegistry

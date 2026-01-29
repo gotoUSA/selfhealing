@@ -39,6 +39,15 @@ def auto_reset_audit_settings():
 
 def _reset_all_audit_settings():
     """모든 Audit 관련 Settings 싱글톤을 리셋합니다."""
+    # CausationContext 리셋 (병렬 테스트 격리용)
+    try:
+        from selfhealing.context.causation_context import _current_causation
+
+        # ContextVar를 기본값(None)으로 설정
+        _current_causation.set(None)
+    except (ImportError, LookupError):
+        pass
+
     try:
         from selfhealing.settings import hash_chain
 
@@ -130,6 +139,22 @@ def _reset_all_audit_settings():
         )
 
         reset_recovery_coordinator()
+    except (ImportError, AttributeError):
+        pass
+
+    # ProviderRegistry 인스턴스 캐시 리셋 (병렬 테스트 격리용)
+    try:
+        from selfhealing.factory import ProviderRegistry
+
+        ProviderRegistry.clear_instances()
+    except (ImportError, AttributeError):
+        pass
+
+    # AdaptiveThrottle 싱글톤 리셋 (병렬 테스트 격리용)
+    try:
+        from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+
+        reset_adaptive_throttle()
     except (ImportError, AttributeError):
         pass
 

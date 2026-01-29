@@ -165,8 +165,11 @@ class TestGetCurrentEmergencyLevel:
         """Test fallback to NORMAL (0) when emergency mode is unavailable."""
         from selfhealing.observability.sampler import _get_current_emergency_level
 
-        # Mock the import to fail
-        with patch.dict("sys.modules", {"selfhealing.services.emergency_mode.emergency_mode": None}):
+        # Mock get_emergency_manager to raise an exception
+        with patch(
+            "selfhealing.services.emergency_mode.get_emergency_manager",
+            side_effect=ImportError("Emergency mode not available"),
+        ):
             level = _get_current_emergency_level()
             # Should return 0 (NORMAL) on any exception
             assert level == 0

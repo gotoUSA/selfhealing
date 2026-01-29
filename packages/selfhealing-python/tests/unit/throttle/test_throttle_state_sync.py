@@ -70,13 +70,13 @@ class TestSyncEmergencyStateOnInit:
     def test_handles_import_error_gracefully(self):
         """EmergencyMode Import 실패 시 graceful 처리."""
         throttle = get_adaptive_throttle()
-        throttle.current_limit = 100
+        initial_limit = throttle.current_limit  # 실제 초기값 저장
 
         # 실제로 메서드가 예외를 처리하는지 확인
         throttle.sync_emergency_state_on_init()
 
-        # 기존 상태 유지
-        assert throttle.current_limit == 100
+        # 기존 상태 유지 (예외 발생해도 변경 없음)
+        assert throttle.current_limit == initial_limit
 
     @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
     def test_updates_last_check_time(self, mock_manager_class):

@@ -90,25 +90,29 @@ include = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/selfhealing"]
 
-[tool.pytest.ini_options]
-minversion = "7.0"
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_functions = ["test_*"]
-addopts = "-v --tb=short"
-filterwarnings = [
-    "ignore::DeprecationWarning",
-]
-markers = [
-    "django_db: mark test as requiring database access",
-    "tier1: fundamental functionality tests",
-    "tier2: integration tests",
-    "tier3_chaos: chaos engineering tests",
-]
-# Django 통합 테스트는 Django 프로젝트 환경에서만 실행
-# selfhealing-python 패키지 단독 테스트 시 제외
-norecursedirs = ["tests/integration/django"]
-DJANGO_SETTINGS_MODULE = ""
+# pytest 설정은 루트 pyproject.toml에서 통합 관리
+# 패키지 단독 테스트 시:
+#   cd packages/selfhealing-python && python -m pytest tests -v --tb=short
+# 루트에서 통합 테스트 시:
+#   python -m pytest (testpaths에 packages/selfhealing-python/tests 포함)
+#
+# [tool.pytest.ini_options]
+# minversion = "7.0"
+# testpaths = ["tests"]
+# python_files = ["test_*.py", "*_test.py"]
+# python_functions = ["test_*"]
+# addopts = "-v --tb=short"
+# filterwarnings = [
+#     "ignore::DeprecationWarning",
+# ]
+# markers = [
+#     "django_db: mark test as requiring database access",
+#     "tier1: fundamental functionality tests",
+#     "tier2: integration tests",
+#     "tier3_chaos: chaos engineering tests",
+# ]
+# norecursedirs = ["tests/integration/django"]
+# DJANGO_SETTINGS_MODULE = ""
 
 [tool.coverage.run]
 source = ["src/selfhealing"]
