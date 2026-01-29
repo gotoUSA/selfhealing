@@ -60,6 +60,9 @@ opentelemetry-exporter-otlp>=1.20.0
 opentelemetry-instrumentation-django>=0.41b0
 opentelemetry-instrumentation-requests>=0.41b0
 opentelemetry-instrumentation-celery>=0.41b0
+opentelemetry-instrumentation-redis>=0.41b0
+opentelemetry-instrumentation-psycopg2>=0.41b0
+opentelemetry-instrumentation-logging>=0.41b0
 sqlparse==0.5.3
 tenacity==9.1.2
 tornado==6.5.2

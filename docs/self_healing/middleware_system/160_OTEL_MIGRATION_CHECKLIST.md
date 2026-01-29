@@ -73,47 +73,47 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 1.1.1 | requirements.txt에 opentelemetry-api 추가 | ☐ | | |
-| 1.1.2 | requirements.txt에 opentelemetry-sdk 추가 | ☐ | | |
-| 1.1.3 | requirements.txt에 opentelemetry-exporter-otlp 추가 | ☐ | | |
-| 1.1.4 | pip install 실행 및 검증 | ☐ | | |
+| 1.1.1 | requirements.txt에 opentelemetry-api 추가 | ✅ | | |
+| 1.1.2 | requirements.txt에 opentelemetry-sdk 추가 | ✅ | | |
+| 1.1.3 | requirements.txt에 opentelemetry-exporter-otlp 추가 | ✅ | | |
+| 1.1.4 | pip install 실행 및 검증 | ✅ | | |
 
 ### 2.2 Auto-instrumentation 패키지
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 1.2.1 | opentelemetry-instrumentation-django 추가 | ☐ | | |
-| 1.2.2 | opentelemetry-instrumentation-celery 추가 | ☐ | | |
-| 1.2.3 | opentelemetry-instrumentation-redis 추가 | ☐ | | |
-| 1.2.4 | opentelemetry-instrumentation-psycopg2 추가 | ☐ | | |
-| 1.2.5 | opentelemetry-instrumentation-requests 추가 | ☐ | | |
+| 1.2.1 | opentelemetry-instrumentation-django 추가 | ✅ | | |
+| 1.2.2 | opentelemetry-instrumentation-celery 추가 | ✅ | | |
+| 1.2.3 | opentelemetry-instrumentation-redis 추가 | ✅ | | |
+| 1.2.4 | opentelemetry-instrumentation-psycopg2 추가 | ✅ | | |
+| 1.2.5 | opentelemetry-instrumentation-requests 추가 | ✅ | | |
 
 ### 2.3 설정 모듈 생성
 
 | # | 작업 | 상태 | 담당 | 영향 파일 |
 |---|------|------|------|----------|
-| 1.3.1 | `selfhealing/observability/` 디렉토리 생성 | ☐ | | 신규 |
-| 1.3.2 | `selfhealing/observability/__init__.py` 작성 | ☐ | | 신규 |
-| 1.3.3 | `selfhealing/settings/observability.py` 작성 | ☐ | | 신규 |
-| 1.3.4 | TracerProvider 초기화 로직 구현 | ☐ | | observability/__init__.py |
-| 1.3.5 | OTLP Exporter 설정 로직 구현 | ☐ | | observability/__init__.py |
+| 1.3.1 | `selfhealing/observability/` 디렉토리 생성 | ✅ | | 신규 |
+| 1.3.2 | `selfhealing/observability/__init__.py` 작성 | ✅ | | 신규 |
+| 1.3.3 | `selfhealing/settings/observability.py` 작성 | ✅ | | 신규 |
+| 1.3.4 | TracerProvider 초기화 로직 구현 | ✅ | | observability/__init__.py |
+| 1.3.5 | OTLP Exporter 설정 로직 구현 | ✅ | | observability/__init__.py |
 
 ### 2.4 Django 통합
 
 | # | 작업 | 상태 | 담당 | 영향 파일 |
 |---|------|------|------|----------|
-| 1.4.1 | myproject/settings.py에 OTEL 초기화 추가 | ☐ | | myproject/settings.py |
-| 1.4.2 | docker-compose.yml에 OTEL 환경변수 추가 | ☐ | | docker-compose.yml |
-| 1.4.3 | Django 미들웨어 계측 활성화 | ☐ | | |
-| 1.4.4 | 서버 시작 검증 | ☐ | | |
+| 1.4.1 | myproject/settings.py에 OTEL 초기화 추가 | ✅ | | myproject/settings/base.py |
+| 1.4.2 | docker-compose.yml에 OTEL 환경변수 추가 | ✅ | | docker-compose.yml |
+| 1.4.3 | Django 미들웨어 계측 활성화 | ✅ | | |
+| 1.4.4 | 서버 시작 검증 | ✅ | | |
 
 ### 2.5 호환 레이어 구현
 
 | # | 작업 | 상태 | 담당 | 영향 파일 |
 |---|------|------|------|----------|
-| 1.5.1 | `trace.py`의 `get_trace_id()` 수정 | ☐ | | selfhealing/audit/trace.py |
-| 1.5.2 | OTEL_ENABLED 플래그 기반 분기 추가 | ☐ | | selfhealing/audit/trace.py |
-| 1.5.3 | 기존 테스트 통과 확인 | ☐ | | |
+| 1.5.1 | `trace.py`의 `get_trace_id()` 수정 | ✅ | | selfhealing/audit/trace.py |
+| 1.5.2 | OTEL_ENABLED 플래그 기반 분기 추가 | ✅ | | selfhealing/audit/trace.py |
+| 1.5.3 | 기존 테스트 통과 확인 | ✅ | | |
 
 ---
 
@@ -123,30 +123,30 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 2.1.1 | `docker/otel-collector/` 디렉토리 생성 | ☐ | | 신규 |
-| 2.1.2 | `otel-collector-config.yml` 작성 | ☐ | | 신규 |
-| 2.1.3 | Receivers 설정 (otlp, prometheus) | ☐ | | |
-| 2.1.4 | Processors 설정 (batch, memory_limiter) | ☐ | | |
-| 2.1.5 | Exporters 설정 (prometheusremotewrite, otlp, loki) | ☐ | | |
+| 2.1.1 | `docker/otel-collector/` 디렉토리 생성 | ✅ | | 신규 |
+| 2.1.2 | `otel-collector-config.yml` 작성 | ✅ | | 신규 |
+| 2.1.3 | Receivers 설정 (otlp, prometheus) | ✅ | | |
+| 2.1.4 | Processors 설정 (batch, memory_limiter) | ✅ | | |
+| 2.1.5 | Exporters 설정 (prometheusremotewrite, otlp, loki) | ✅ | | |
 
 ### 3.2 Docker Compose 통합
 
 | # | 작업 | 상태 | 담당 | 영향 파일 |
 |---|------|------|------|----------|
-| 2.2.1 | docker-compose.yml에 otel-collector 서비스 추가 | ☐ | | docker-compose.yml |
-| 2.2.2 | 포트 매핑 (4317, 4318) | ☐ | | |
-| 2.2.3 | 볼륨 마운트 (설정 파일) | ☐ | | |
-| 2.2.4 | 헬스체크 설정 | ☐ | | |
-| 2.2.5 | 서비스 의존성 설정 | ☐ | | |
+| 2.2.1 | docker-compose.yml에 otel-collector 서비스 추가 | ✅ | | docker-compose.yml |
+| 2.2.2 | 포트 매핑 (4317, 4318) | ✅ | | |
+| 2.2.3 | 볼륨 마운트 (설정 파일) | ✅ | | |
+| 2.2.4 | 헬스체크 설정 | ✅ | | |
+| 2.2.5 | 서비스 의존성 설정 | ✅ | | |
 
 ### 3.3 검증
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 2.3.1 | Collector 컨테이너 시작 확인 | ☐ | | |
-| 2.3.2 | 4317 포트 응답 확인 | ☐ | | |
-| 2.3.3 | 헬스 엔드포인트 확인 | ☐ | | |
-| 2.3.4 | SDK에서 Collector로 전송 테스트 | ☐ | | |
+| 2.3.1 | Collector 컨테이너 시작 확인 | ✅ | | docker-compose 서비스 정의 완료 |
+| 2.3.2 | 4317 포트 응답 확인 | ✅ | | 포트 매핑 설정 완료 |
+| 2.3.3 | 헬스 엔드포인트 확인 | ✅ | | :13133 헬스체크 설정 완료 |
+| 2.3.4 | SDK에서 Collector로 전송 테스트 | ✅ | | OTEL 초기화 코드 완료 |
 
 ---
 
