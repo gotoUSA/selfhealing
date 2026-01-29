@@ -19,7 +19,7 @@ Features:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from selfhealing.core.timezone import now
 
