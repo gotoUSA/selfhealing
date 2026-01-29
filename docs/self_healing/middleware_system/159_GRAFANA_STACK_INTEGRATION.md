@@ -246,17 +246,39 @@ Prometheus/Mimir Exemplar를 통해 메트릭에서 직접 Trace로 이동:
 
 ## 6. Datasource 프로비저닝
 
-### 6.1 확장된 datasource.yml 구조
+### 6.1 현재 datasource.yml 상태 (코드 확인)
 
-현재 파일에 추가될 Datasource 정의:
+**파일 위치**: `docker/grafana/provisioning/datasources/datasource.yml`
 
-| Datasource | Type | 필수 설정 |
-|------------|------|----------|
-| Tempo | tempo | url: http://tempo:3200 |
-| Loki | loki | url: http://loki:3100 |
-| Mimir (선택) | prometheus | url: http://mimir:9009/prometheus |
+**현재 내용:**
+```yaml
+apiVersion: 1
 
-### 6.2 Derived Fields 설정 (Loki → Tempo)
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+```
+
+**문제점**: Prometheus만 정의되어 있어 Tempo, Loki 연동 불가
+
+### 6.2 필수 수정: datasource.yml 확장
+
+**추가해야 할 Datasource:**
+
+| Datasource | Type | URL | 필수 여부 |
+|------------|------|-----|----------|
+| Tempo | tempo | http://tempo:3200 | 필수 (Traces) |
+| Loki | loki | http://loki:3100 | 필수 (Logs) |
+| Mimir | prometheus | http://mimir:9009/prometheus | 선택 (장기 Metrics) |
+
+### 6.3 Derived Fields 설정 (Loki → Tempo)
 
 Loki 로그에서 trace_id 추출하여 Tempo로 연결:
 
@@ -266,7 +288,16 @@ Loki 로그에서 trace_id 추출하여 Tempo로 연결:
 | Regex | `trace_id=([a-f0-9]+)` | 추출 패턴 |
 | Internal link | Tempo datasource | 연결 대상 |
 
-### 6.3 TraceID 연결 설정 (Tempo → Loki)
+**코드 근거**: `selfhealing/audit/trace.py`의 `generate_trace_id()` 형식:
+- 형식: `req-{cluster_prefix}-{uuid8}` 또는 `req-{uuid8}`
+- 예: `req-seop-a1b2c3d4`
+
+**Loki Derived Field regex 패턴:**
+```
+req-[a-z]*-?([a-f0-9]{8})
+```
+
+### 6.4 TraceID 연결 설정 (Tempo → Loki)
 
 Tempo에서 Loki 로그 검색 연결:
 
@@ -274,6 +305,27 @@ Tempo에서 Loki 로그 검색 연결:
 |------|---|------|
 | Trace to logs | Loki datasource | 연결 대상 |
 | Filter by trace ID | 활성화 | trace_id 자동 필터 |
+
+### 6.5 기존 대시보드 호환성 (수정 불필요)
+
+**코드 확인 결과**: 기존 대시보드들은 변수 기반 Datasource 사용
+
+**확인된 패턴** (`self_healing_overview.json` 등):
+```json
+"datasource": { "type": "prometheus", "uid": "${datasource}" }
+```
+
+**장점:**
+- Mimir 전환 시 PromQL 쿼리 수정 불필요
+- Datasource 선택 변수로 동적 전환 가능
+- 기존 대시보드 5개 모두 동일 패턴 사용
+
+**기존 대시보드 목록** (`docker/grafana/provisioning/dashboards/`):
+1. self_healing_overview.json
+2. dlq_monitoring.json
+3. cascade_event_audit.json
+4. error_budget.json
+5. error_budget_gate.json
 
 ---
 

@@ -251,14 +251,18 @@ Phase 7: 검증 및 문서화 (1일)
 
 ## 7. Phase 6: Grafana 통합 및 상관관계
 
-### 7.1 Datasource 추가
+### 7.1 Datasource 추가 (필수 수정)
 
-| # | 작업 | 상태 | 담당 | 영향 파일 |
-|---|------|------|------|----------|
-| 6.1.1 | Tempo Datasource 추가 | ☐ | | docker/grafana/provisioning/datasources/datasource.yml |
-| 6.1.2 | Loki Datasource 추가 | ☐ | | docker/grafana/provisioning/datasources/datasource.yml |
-| 6.1.3 | Mimir Datasource 추가 (선택) | ☐ | | docker/grafana/provisioning/datasources/datasource.yml |
-| 6.1.4 | Datasource 연결 검증 | ☐ | | |
+**현재 상태**: `docker/grafana/provisioning/datasources/datasource.yml`에 Prometheus만 정의됨
+
+| # | 작업 | 상태 | 담당 | 영향 파일 | 비고 |
+|---|------|------|------|----------|------|
+| 6.1.1 | Tempo Datasource 추가 | ☐ | | datasource.yml | url: http://tempo:3200 |
+| 6.1.2 | Loki Datasource 추가 | ☐ | | datasource.yml | url: http://loki:3100 |
+| 6.1.3 | Loki Derived Fields 설정 | ☐ | | datasource.yml | trace_id → Tempo 링크 |
+| 6.1.4 | Tempo Trace to Logs 설정 | ☐ | | datasource.yml | → Loki 연결 |
+| 6.1.5 | Mimir Datasource 추가 (선택) | ☐ | | datasource.yml | url: http://mimir:9009/prometheus |
+| 6.1.6 | Datasource 연결 검증 | ☐ | | | Grafana Explore 테스트 |
 
 ### 7.2 상관관계 설정
 
@@ -271,13 +275,16 @@ Phase 7: 검증 및 문서화 (1일)
 
 ### 7.3 대시보드 업데이트
 
-| # | 작업 | 상태 | 담당 | 영향 파일 |
-|---|------|------|------|----------|
-| 6.3.1 | request_tracing.json 생성 | ☐ | | 신규 |
-| 6.3.2 | log_explorer.json 생성 | ☐ | | 신규 |
-| 6.3.3 | unified_view.json 생성 | ☐ | | 신규 |
-| 6.3.4 | 기존 대시보드에 Trace 링크 추가 | ☐ | | 기존 대시보드 |
-| 6.3.5 | 기존 대시보드에 Log 패널 추가 | ☐ | | 기존 대시보드 |
+**기존 대시보드 호환성**: `${datasource}` 변수 사용으로 PromQL 수정 불필요 (코드 확인됨)
+
+| # | 작업 | 상태 | 담당 | 영향 파일 | 비고 |
+|---|------|------|------|----------|------|
+| 6.3.1 | request_tracing.json 생성 | ☐ | | 신규 | Tempo 기반 |
+| 6.3.2 | log_explorer.json 생성 | ☐ | | 신규 | Loki 기반 |
+| 6.3.3 | unified_view.json 생성 | ☐ | | 신규 | 상관관계 통합 |
+| 6.3.4 | 기존 대시보드에 Trace 링크 추가 | ☐ | | 5개 대시보드 | 선택적 ||
+| 6.3.5 | 기존 대시보드에 Log 패널 추가 | ☐ | | 5개 대시보드 | 선택적 |
+| 6.3.6 | dashboard.yml 검증 | ☐ | | dashboard.yml | 프로비저닝 경로 확인 |
 
 ---
 
