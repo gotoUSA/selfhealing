@@ -81,14 +81,91 @@ datasources:
     editable: true
     jsonData:
       derivedFields:
+        # W3C 32자리 hex trace_id (OTEL 표준)
         - datasourceUid: tempo
-          matcherRegex: '"trace_id":"([a-f0-9]+)"'
-          name: TraceID
+          matcherRegex: '"trace_id":"([a-f0-9]{32})"'
+          name: TraceID_W3C
           url: "$${__value.raw}"
           urlDisplayLabel: "View Trace"
+        # req- 접두사 형식 (클러스터 prefix 있음: req-seop-a1b2c3d4)
+        - datasourceUid: tempo
+          matcherRegex: 'req-([a-z]{3,4})-([a-f0-9]{8})'
+          name: TraceID_Clustered
+          url: "req-$${__value.raw}"
+          urlDisplayLabel: "View Trace (Cluster)"
+        # req- 접두사 형식 (클러스터 prefix 없음: req-a1b2c3d4)
+        - datasourceUid: tempo
+          matcherRegex: 'req-([a-f0-9]{8})(?![a-f0-9])'
+          name: TraceID_Simple
+          url: "req-$${__value.raw}"
+          urlDisplayLabel: "View Trace"
+        # JSON 형식 trace_id (일반)
         - datasourceUid: tempo
           matcherRegex: 'trace_id=([a-f0-9]+)'
           name: TraceID_Plain
           url: "$${__value.raw}"
           urlDisplayLabel: "View Trace"
       maxLines: 1000
+
+  # =========================================================================
+  # 멀티 리전 Datasource 템플릿 (주석 처리 - 필요 시 활성화)
+  # Seoul, Tokyo 등 리전별 Mimir/Tempo/Loki 엔드포인트 구성 예시
+  # =========================================================================
+  # - name: Mimir-Seoul
+  #   uid: mimir-seoul
+  #   type: prometheus
+  #   access: proxy
+  #   url: http://mimir-seoul:9009/prometheus
+  #   isDefault: false
+  #   editable: true
+  #   jsonData:
+  #     timeInterval: "15s"
+  #     httpMethod: POST
+  #     exemplarTraceIdDestinations:
+  #       - name: trace_id
+  #         datasourceUid: tempo-seoul
+  #         urlDisplayLabel: "View Trace in Tempo (Seoul)"
+  #
+  # - name: Tempo-Seoul
+  #   uid: tempo-seoul
+  #   type: tempo
+  #   access: proxy
+  #   url: http://tempo-seoul:3200
+  #   isDefault: false
+  #   editable: true
+  #   jsonData:
+  #     tracesToLogsV2:
+  #       datasourceUid: loki-seoul
+  #       filterByTraceID: true
+  #
+  # - name: Loki-Seoul
+  #   uid: loki-seoul
+  #   type: loki
+  #   access: proxy
+  #   url: http://loki-seoul:3100
+  #   isDefault: false
+  #   editable: true
+  #
+  # - name: Mimir-Tokyo
+  #   uid: mimir-tokyo
+  #   type: prometheus
+  #   access: proxy
+  #   url: http://mimir-tokyo:9009/prometheus
+  #   isDefault: false
+  #   editable: true
+  #
+  # - name: Tempo-Tokyo
+  #   uid: tempo-tokyo
+  #   type: tempo
+  #   access: proxy
+  #   url: http://tempo-tokyo:3200
+  #   isDefault: false
+  #   editable: true
+  #
+  # - name: Loki-Tokyo
+  #   uid: loki-tokyo
+  #   type: loki
+  #   access: proxy
+  #   url: http://loki-tokyo:3100
+  #   isDefault: false
+  #   editable: true

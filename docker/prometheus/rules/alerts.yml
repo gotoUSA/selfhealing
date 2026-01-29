@@ -1,5 +1,5 @@
 # Self-Healing Prometheus Alert Rules
-# 
+#
 # 이 파일은 Self-Healing 시스템의 핵심 알림 규칙을 정의합니다.
 # Prometheus에서 이 규칙들을 평가하여 문제 발생 시 알림을 발생시킵니다.
 
@@ -40,8 +40,8 @@ groups:
       - alert: DLQSpikeDetected
         expr: |
           (
-            sum(selfhealing_dlq_pending_count) 
-            / 
+            sum(selfhealing_dlq_pending_count)
+            /
             sum(selfhealing_dlq_pending_count offset 5m)
           ) > 2
         for: 2m
@@ -180,8 +180,8 @@ groups:
         expr: |
           (
             1 - (
-              sum(rate(selfhealing_dlq_items_total[30d])) 
-              / 
+              sum(rate(selfhealing_dlq_items_total[30d]))
+              /
               sum(rate(selfhealing_requests_total[30d]))
             )
           ) < 0.999
@@ -199,8 +199,8 @@ groups:
         expr: |
           100 * (
             1 - (
-              sum(increase(selfhealing_dlq_items_total[30d])) 
-              / 
+              sum(increase(selfhealing_dlq_items_total[30d]))
+              /
               (sum(increase(selfhealing_requests_total[30d])) * 0.001)
             )
           ) < 25
@@ -218,8 +218,8 @@ groups:
         expr: |
           100 * (
             1 - (
-              sum(increase(selfhealing_dlq_items_total[30d])) 
-              / 
+              sum(increase(selfhealing_dlq_items_total[30d]))
+              /
               (sum(increase(selfhealing_requests_total[30d])) * 0.001)
             )
           ) < 50
@@ -235,7 +235,7 @@ groups:
       - alert: ErrorBudgetFastBurn
         expr: |
           (
-            (sum(rate(selfhealing_dlq_items_total[1h])) / sum(rate(selfhealing_requests_total[1h]))) 
+            (sum(rate(selfhealing_dlq_items_total[1h])) / sum(rate(selfhealing_requests_total[1h])))
             / 0.001 * 720
           ) > 14.4
         for: 5m
@@ -250,7 +250,7 @@ groups:
       - alert: ErrorBudgetSlowBurn
         expr: |
           (
-            (sum(rate(selfhealing_dlq_items_total[6h])) / sum(rate(selfhealing_requests_total[6h]))) 
+            (sum(rate(selfhealing_dlq_items_total[6h])) / sum(rate(selfhealing_requests_total[6h])))
             / 0.001 * 720
           ) > 3
         for: 30m
@@ -260,6 +260,77 @@ groups:
         annotations:
           summary: "🌡️ Error Budget 느린 소진"
           description: "6시간 Burn Rate가 {{ $value | printf \"%.1f\" }}입니다. 지속적인 모니터링이 필요합니다."
+
+  # =========================================================================
+  # Latency SLA 알림 (159 문서 섹션 9)
+  # P95 Latency > 500ms 시 SLA Critical 알림
+  # UnifiedNotificationManager Webhook 연동
+  # =========================================================================
+  - name: latency_sla_alerts
+    interval: 15s
+    rules:
+      # P95 Latency SLA Critical (500ms 초과)
+      - alert: LatencyP95SlaCritical
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)
+          ) * 1000 > 500
+        for: 1m
+        labels:
+          severity: critical
+          category: sla
+          alert_type: latency_sla_critical
+        annotations:
+          summary: "🚨 SLA Critical: P95 Latency 초과"
+          description: "{{ $labels.service_name }} 서비스의 P95 응답 시간이 {{ $value | printf \"%.0f\" }}ms입니다. (임계값: 500ms)"
+          current_latency_ms: "{{ $value | printf \"%.0f\" }}"
+          threshold_ms: "500"
+          affected_service: "{{ $labels.service_name }}"
+          runbook_url: "https://docs.example.com/runbooks/latency-sla-critical"
+          dashboard_url: "/d/unified-view/unified-view"
+          webhook_payload: |
+            {
+              "title": "SLA Critical: P95 Latency Exceeded",
+              "message": "{{ $labels.service_name }} P95 latency {{ $value | printf \"%.0f\" }}ms > 500ms threshold",
+              "priority": "HIGH",
+              "category": "SLA",
+              "source": "grafana_alerting",
+              "metadata": {
+                "current_latency_ms": {{ $value | printf "%.0f" }},
+                "threshold_ms": 500,
+                "affected_service": "{{ $labels.service_name }}"
+              }
+            }
+
+      # P95 Latency 경고 (300ms 초과)
+      - alert: LatencyP95Warning
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)
+          ) * 1000 > 300
+        for: 3m
+        labels:
+          severity: warning
+          category: sla
+          alert_type: latency_warning
+        annotations:
+          summary: "⚠️ Latency 경고: P95 응답 시간 증가"
+          description: "{{ $labels.service_name }} 서비스의 P95 응답 시간이 {{ $value | printf \"%.0f\" }}ms입니다. (경고 임계값: 300ms)"
+          dashboard_url: "/d/unified-view/unified-view"
+
+      # P99 Latency 높음 (1초 초과)
+      - alert: LatencyP99High
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)
+          ) * 1000 > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: sla
+        annotations:
+          summary: "P99 Latency 높음"
+          description: "{{ $labels.service_name }} 서비스의 P99 응답 시간이 {{ $value | printf \"%.0f\" }}ms입니다. (임계값: 1000ms)"
 
   # =========================================================================
   # 시스템 상태 알림
@@ -282,8 +353,8 @@ groups:
       - alert: RequestThroughputDrop
         expr: |
           (
-            sum(rate(selfhealing_requests_total[5m])) 
-            / 
+            sum(rate(selfhealing_requests_total[5m]))
+            /
             sum(rate(selfhealing_requests_total[5m] offset 1h))
           ) < 0.5
         for: 5m

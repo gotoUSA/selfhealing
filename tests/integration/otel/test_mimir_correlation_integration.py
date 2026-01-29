@@ -93,9 +93,7 @@ class TestMimirMetricIngestion:
                                             {
                                                 "asDouble": value,
                                                 "timeUnixNano": str(current_time_ns),
-                                                "attributes": [
-                                                    {"key": "test_id", "value": {"stringValue": metric_name}}
-                                                ],
+                                                "attributes": [{"key": "test_id", "value": {"stringValue": metric_name}}],
                                             }
                                         ]
                                     },
@@ -443,11 +441,13 @@ class TestMetricsTracesLogsCorrelation:
         service_name = "logs-to-traces-test"
 
         # JSON 형식 trace_id를 포함한 로그 전송
-        json_message = json.dumps({
-            "message": "Test log with trace_id in JSON",
-            "trace_id": trace_id_hex,
-            "level": "INFO",
-        })
+        json_message = json.dumps(
+            {
+                "message": "Test log with trace_id in JSON",
+                "trace_id": trace_id_hex,
+                "level": "INFO",
+            }
+        )
 
         current_time_ns = int(time.time() * 1e9)
         log_payload = {
@@ -586,7 +586,7 @@ class TestUnifiedViewDashboardDataSources:
 
     def test_mimir_metrics_for_error_rate_panel(self):
         """Error Rate 패널용 메트릭 쿼리 검증"""
-        query = "100 * sum(rate(http_server_request_duration_seconds_count{http_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count[5m]))"
+        query = '100 * sum(rate(http_server_request_duration_seconds_count{http_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_seconds_count[5m]))'
 
         response = requests.get(
             f"{MIMIR_ENDPOINT}/prometheus/api/v1/query",
@@ -600,7 +600,9 @@ class TestUnifiedViewDashboardDataSources:
 
     def test_mimir_metrics_for_latency_p95_panel(self):
         """Latency P95 패널용 메트릭 쿼리 검증 (Exemplar 연동 대상)"""
-        query = "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)) * 1000"
+        query = (
+            "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, service_name)) * 1000"
+        )
 
         response = requests.get(
             f"{MIMIR_ENDPOINT}/prometheus/api/v1/query",

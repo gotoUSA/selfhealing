@@ -1,0 +1,590 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["self-healing"],
+      "targetBlank": true,
+      "title": "Self-Healing Dashboard",
+      "type": "dashboards"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": [],
+      "title": "🌏 리전별 요청 처리량 비교",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Requests/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*seoul.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*tokyo.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "sum(rate(http_server_request_duration_seconds_count{cluster=~\"$region\", service_name=~\"$service\"}[5m])) by (cluster)",
+          "legendFormat": "{{cluster}}",
+          "refId": "A",
+          "exemplar": true
+        }
+      ],
+      "title": "📈 리전별 요청 처리량 (Request Rate by Region)",
+      "description": "각 리전(클러스터)별 초당 요청 처리량. cluster 라벨 기반 필터링.",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Error Rate (%)",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 2,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{cluster=~\"$region\", http_status_code=~\"5..\"}[5m])) by (cluster) / sum(rate(http_server_request_duration_seconds_count{cluster=~\"$region\"}[5m])) by (cluster)",
+          "legendFormat": "{{cluster}}",
+          "refId": "A",
+          "exemplar": true
+        }
+      ],
+      "title": "❌ 리전별 오류율 (Error Rate by Region)",
+      "description": "각 리전별 HTTP 5xx 오류율. 리전 간 장애 파급 확인용.",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "panels": [],
+      "title": "⏱️ 리전별 응답 시간 (Latency)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Duration (ms)",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 300 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 10 },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": ["mean", "max", "p95"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{cluster=~\"$region\", service_name=~\"$service\"}[5m])) by (le, cluster)) * 1000",
+          "legendFormat": "p95 - {{cluster}}",
+          "refId": "A",
+          "exemplar": true
+        }
+      ],
+      "title": "⏱️ 리전별 P95 응답 시간",
+      "description": "각 리전별 P95 응답 시간. 500ms 이상은 SLA Critical 임계치.",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 102,
+      "panels": [],
+      "title": "🔗 Cross-Region Trace 추적 (trace_id 기반 리전 식별)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "description": "trace_id의 클러스터 prefix(seop=Seoul-Prod, tokp=Tokyo-Prod 등)로 리전 식별. 예: req-seop-a1b2c3d4",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "mappings": [
+            {
+              "options": { "seop": { "color": "blue", "text": "Seoul-Production" } },
+              "type": "value"
+            },
+            {
+              "options": { "tokp": { "color": "orange", "text": "Tokyo-Production" } },
+              "type": "value"
+            },
+            {
+              "options": { "seos": { "color": "light-blue", "text": "Seoul-Staging" } },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "trace_id" },
+            "properties": [
+              { "id": "custom.width", "value": 200 },
+              { "id": "links", "value": [{ "title": "View Full Trace", "url": "/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Tempo%22,%7B%22queryType%22:%22traceId%22,%22query%22:%22${__value.text}%22%7D%5D" }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cluster_prefix" },
+            "properties": [
+              { "id": "custom.width", "value": 120 },
+              { "id": "displayName", "value": "Region" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 19 },
+      "id": 4,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "countRows": false, "fields": "" },
+        "sortBy": [{ "desc": true, "displayName": "timestamp" }]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service_name=~\"$service\"} | json | trace_id=~\"req-.*\" | line_format \"{{.timestamp}} | {{.trace_id}} | {{.level}} | {{.message}}\"",
+          "refId": "A"
+        }
+      ],
+      "title": "📋 리전별 Trace 로그 (trace_id prefix로 리전 식별)",
+      "type": "logs"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "id": 103,
+      "panels": [],
+      "title": "🚨 Cascade Failure 감지 (리전 간 장애 파급)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "description": "리전 간 Circuit Breaker 상태를 비교하여 장애 파급(Cascading Failure) 감지",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "text": "CLOSED" } }, "type": "value" },
+            { "options": { "1": { "color": "yellow", "text": "HALF_OPEN" } }, "type": "value" },
+            { "options": { "2": { "color": "red", "text": "OPEN" } }, "type": "value" }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 2 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 30 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "selfhealing_circuit_breaker_state{cluster=~\"$region\", service_name=~\"$service\"}",
+          "legendFormat": "{{cluster}} - {{service_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "🔌 리전별 Circuit Breaker 상태",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "description": "리전 간 DLQ 메시지 수 비교. 특정 리전에 DLQ가 급증하면 장애 파급 가능성.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Count",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "normal" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 30 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "selfhealing_dlq_pending_count{cluster=~\"$region\", domain=~\"$domain\"}",
+          "legendFormat": "{{cluster}} - {{domain}}",
+          "refId": "A"
+        }
+      ],
+      "title": "📬 리전별 DLQ 대기 메시지",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "id": 104,
+      "panels": [],
+      "title": "📊 리전 간 메트릭 비교 테이블",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+      "description": "리전별 주요 메트릭을 테이블 형태로 비교. 이상치 리전을 빠르게 식별.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Error Rate" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } },
+              { "id": "custom.displayMode", "value": "color-background-solid" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P95 Latency" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 300 }, { "color": "red", "value": 500 }] } },
+              { "id": "custom.displayMode", "value": "color-background-solid" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 37 },
+      "id": 7,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "countRows": false, "fields": "" },
+        "sortBy": [{ "desc": false, "displayName": "Region" }]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "sum(rate(http_server_request_duration_seconds_count{cluster=~\"$region\"}[5m])) by (cluster)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "RequestRate"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{cluster=~\"$region\", http_status_code=~\"5..\"}[5m])) by (cluster) / sum(rate(http_server_request_duration_seconds_count{cluster=~\"$region\"}[5m])) by (cluster)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "ErrorRate"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{cluster=~\"$region\"}[5m])) by (le, cluster)) * 1000",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "P95Latency"
+        }
+      ],
+      "title": "📊 리전별 메트릭 요약 (Summary Table)",
+      "type": "table",
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "indexByName": { "cluster": 0, "Value #RequestRate": 1, "Value #ErrorRate": 2, "Value #P95Latency": 3 },
+            "renameByName": {
+              "cluster": "Region",
+              "Value #RequestRate": "Request Rate (req/s)",
+              "Value #ErrorRate": "Error Rate",
+              "Value #P95Latency": "P95 Latency"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["self-healing", "multi-region", "observability"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "Mimir", "value": "mimir" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Metrics Datasource",
+        "multi": false,
+        "name": "metrics_datasource",
+        "options": [],
+        "query": "prometheus",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+        "definition": "label_values(http_server_request_duration_seconds_count, cluster)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Region",
+        "multi": true,
+        "name": "region",
+        "options": [],
+        "query": { "query": "label_values(http_server_request_duration_seconds_count, cluster)", "refId": "region" },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+        "definition": "label_values(http_server_request_duration_seconds_count, service_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": { "query": "label_values(http_server_request_duration_seconds_count, service_name)", "refId": "service" },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${metrics_datasource}" },
+        "definition": "label_values(selfhealing_dlq_pending_count, domain)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Domain",
+        "multi": true,
+        "name": "domain",
+        "options": [],
+        "query": { "query": "label_values(selfhealing_dlq_pending_count, domain)", "refId": "domain" },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Multi-Region View (멀티 리전 통합 관제)",
+  "uid": "multi-region-view",
+  "version": 1,
+  "weekStart": ""
+}

@@ -376,6 +376,17 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
         "selfhealing.api.django.views.auto_tuning",
         "AutoTuningMetricsView",
     ),
+    # -------------------------------------------------------------------------
+    # grafana_webhook.py (2 symbols)
+    # -------------------------------------------------------------------------
+    "GrafanaAlertWebhookView": (
+        "selfhealing.api.django.views.grafana_webhook",
+        "GrafanaAlertWebhookView",
+    ),
+    "GrafanaAlertWebhookTestView": (
+        "selfhealing.api.django.views.grafana_webhook",
+        "GrafanaAlertWebhookTestView",
+    ),
 }
 
 # Cache for lazily loaded symbols
@@ -690,4 +701,7 @@ __all__ = [
     "AutoTuningHistoryView",
     "AutoTuningOverrideView",
     "AutoTuningMetricsView",
+    # Grafana Webhook Views
+    "GrafanaAlertWebhookView",
+    "GrafanaAlertWebhookTestView",
 ]

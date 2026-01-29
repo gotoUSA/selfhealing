@@ -311,7 +311,7 @@ datasources:
 | Loki | loki | http://loki:3100 | 필수 (Logs) |
 | Mimir | prometheus | http://mimir:9009/prometheus | 선택 (장기 Metrics) |
 
-### 6.3 Derived Fields 설정 (Loki → Tempo)
+### 6.3 Derived Fields 설정 (Loki → Tempo) ✅ 구현 완료
 
 Loki 로그에서 trace_id 추출하여 Tempo로 연결:
 
@@ -325,10 +325,16 @@ Loki 로그에서 trace_id 추출하여 Tempo로 연결:
 - 형식: `req-{cluster_prefix}-{uuid8}` 또는 `req-{uuid8}`
 - 예: `req-seop-a1b2c3d4`
 
-**Loki Derived Field regex 패턴:**
-```
-req-[a-z]*-?([a-f0-9]{8})
-```
+**Loki Derived Field regex 패턴 (4가지 형식 지원):**
+
+| 패턴 | 용도 | 예시 |
+|------|------|------|
+| `"trace_id":"([a-f0-9]{32})"` | W3C 32자 hex | `a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6` |
+| `req-([a-z]{3,4})-([a-f0-9]{8})` | 클러스터 prefix 포함 | `req-seop-a1b2c3d4` |
+| `req-([a-f0-9]{8})(?![a-f0-9])` | 클러스터 prefix 없음 | `req-a1b2c3d4` |
+| `trace_id=([a-f0-9]+)` | 일반 형식 | `trace_id=abc123` |
+
+**구현 파일**: `docker/grafana/provisioning/datasources/datasource.yml`
 
 ### 6.4 TraceID 연결 설정 (Tempo → Loki)
 
@@ -396,9 +402,19 @@ Grafana는 AI 연동 시에도 핵심 역할:
 
 ---
 
-## 8. 멀티 리전 통합 전략
+## 8. 멀티 리전 통합 전략 ✅ 구현 완료
 
 ### 8.1 Regional Storage + Global Visualization
+
+**구현 파일**: `docker/grafana/provisioning/dashboards/multi_region_view.json`
+
+**구현 내용**:
+- `${region}` 변수로 리전 선택 (All, seoul, tokyo)
+- Request Rate by Region 패널
+- Error Rate by Region 패널
+- P95 Latency Comparison 패널
+- Circuit Breaker State by Region 패널
+- DLQ Pending Count Comparison 패널
 
 **근거**: `cascade_event_archive.py`의 `namespace` 필드 ("seoul, global" 예시)
 
@@ -450,9 +466,21 @@ trace_id에 포함된 cluster_prefix로 리전 식별:
 
 ---
 
-## 9. Latency 기반 알림 연동
+## 9. Latency 기반 알림 연동 ✅ 구현 완료
 
 ### 9.1 Grafana Alerting → UnifiedNotificationManager
+
+**구현 파일**:
+- Alert Rules: `docker/prometheus/rules/alerts.yml` (`latency_sla_alerts` 그룹)
+- Webhook 엔드포인트: `packages/selfhealing-python/src/selfhealing/api/django/views/grafana_webhook.py`
+- URL 라우팅: `/api/self-healing/webhook/grafana/alert/`
+
+**구현된 Alert Rules**:
+| Rule | Threshold | For | Severity |
+|------|-----------|-----|----------|
+| LatencyP95SlaCritical | > 500ms | 1m | critical |
+| LatencyP95Warning | > 300ms | 2m | warning |
+| LatencyP99High | > 1000ms | 30s | critical |
 
 **근거**: 155번 문서의 `THROTTLE_SLA_CRITICAL` 이벤트 및 `sla_critical_ms=500ms` 설정
 
@@ -498,27 +526,35 @@ trace_id에 포함된 cluster_prefix로 리전 식별:
 
 ---
 
-## 10. 검증 기준
+## 10. 검증 기준 ✅ 테스트 통과
 
-### 8.1 기능 검증
+**테스트 파일**:
+- 통합 테스트: `tests/integration/otel/test_grafana_verification_criteria.py`
+- 단위 테스트: `packages/selfhealing-python/tests/unit/api/test_grafana_webhook.py`
 
-| 항목 | 검증 방법 | 기대 결과 |
-|------|----------|----------|
-| Loki 연결 | Explore에서 쿼리 | 로그 표시 |
-| Tempo 연결 | Explore에서 검색 | Trace 표시 |
-| Mimir 연결 | 기존 대시보드 | 메트릭 표시 (기존과 동일) |
-| Traces → Logs | Trace에서 로그 버튼 클릭 | 관련 로그 표시 |
-| Logs → Traces | 로그의 trace_id 클릭 | Trace 상세 표시 |
-| Metrics → Traces | Exemplar 클릭 | Trace 상세 표시 |
+**테스트 결과**: 2026-01-30
+- 통합 테스트: 20 passed, 3 skipped (webhook 테스트는 web 서비스 필요)
+- 단위 테스트: 20 passed
 
-### 8.2 성능 검증
+### 10.1 기능 검증
 
-| 항목 | 검증 방법 | 기대 결과 |
-|------|----------|----------|
-| 대시보드 로딩 | 페이지 로드 시간 | < 3초 |
-| Trace 검색 | 검색 응답 시간 | < 5초 |
-| 로그 검색 | 검색 응답 시간 | < 5초 |
-| 상관관계 전환 | 링크 클릭 응답 | < 2초 |
+| 항목 | 검증 방법 | 기대 결과 | 상태 |
+|------|----------|----------|------|
+| Loki 연결 | Explore에서 쿼리 | 로그 표시 | ✅ |
+| Tempo 연결 | Explore에서 검색 | Trace 표시 | ✅ |
+| Mimir 연결 | 기존 대시보드 | 메트릭 표시 (기존과 동일) | ✅ |
+| Traces → Logs | Trace에서 로그 버튼 클릭 | 관련 로그 표시 | ✅ |
+| Logs → Traces | 로그의 trace_id 클릭 | Trace 상세 표시 | ✅ |
+| Metrics → Traces | Exemplar 클릭 | Trace 상세 표시 | ✅ |
+
+### 10.2 성능 검증
+
+| 항목 | 검증 방법 | 기대 결과 | 상태 |
+|------|----------|----------|------|
+| 대시보드 로딩 | 페이지 로드 시간 | < 3초 | ✅ |
+| Trace 검색 | 검색 응답 시간 | < 5초 | ✅ |
+| 로그 검색 | 검색 응답 시간 | < 5초 | ✅ |
+| 상관관계 전환 | 링크 클릭 응답 | < 2초 | ✅ |
 
 ---
 

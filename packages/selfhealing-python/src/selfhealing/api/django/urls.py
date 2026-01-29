@@ -273,6 +273,12 @@ from selfhealing.api.django.views.postmortem import (
     PostmortemGeneratorView as PostmortemGenerateView,
 )
 
+# Grafana Alert Webhook Views
+from selfhealing.api.django.views.grafana_webhook import (
+    GrafanaAlertWebhookView,
+    GrafanaAlertWebhookTestView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -1062,6 +1068,25 @@ urlpatterns += [
         "postmortem/incidents/<str:incident_id>/",
         PostmortemDetailView.as_view(),
         name="postmortem-incident-detail",
+    ),
+]
+
+# =============================================================================
+# Grafana Alert Webhook Endpoints
+# Grafana Alerting에서 발생하는 Alert를 수신하여 UnifiedNotificationManager로 전달
+# =============================================================================
+urlpatterns += [
+    # Grafana Alert Webhook 수신 (CSRF 제외, 외부 시스템 연동)
+    path(
+        "webhook/grafana/alert/",
+        GrafanaAlertWebhookView.as_view(),
+        name="grafana-alert-webhook",
+    ),
+    # Grafana Webhook 테스트 엔드포인트
+    path(
+        "webhook/grafana/test/",
+        GrafanaAlertWebhookTestView.as_view(),
+        name="grafana-alert-webhook-test",
     ),
 ]
 
