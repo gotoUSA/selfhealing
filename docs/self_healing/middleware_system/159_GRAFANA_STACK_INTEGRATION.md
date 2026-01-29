@@ -475,6 +475,12 @@ trace_id에 포함된 cluster_prefix로 리전 식별:
 - Webhook 엔드포인트: `packages/selfhealing-python/src/selfhealing/api/django/views/grafana_webhook.py`
 - URL 라우팅: `/api/self-healing/webhook/grafana/alert/`
 
+**아키텍처 변경 (2026-01-30)**:
+- Django View → **DRF APIView**로 리팩토링
+- `selfhealing.api.django.exceptions.selfhealing_exception_handler` 자동 적용
+- 표준 에러 응답 (StandardErrorResponse) 형식
+- Audit buffer, Prometheus 메트릭 자동 통합
+
 **구현된 Alert Rules**:
 | Rule | Threshold | For | Severity |
 |------|-----------|-----|----------|

@@ -6,19 +6,25 @@ UnifiedNotificationManager로 전달합니다.
 
 Endpoints:
     POST /api/self-healing/webhook/grafana/alert/ - Grafana Alert 수신
+    GET  /api/self-healing/webhook/grafana/test/  - Webhook 연결 테스트
+
+Note:
+    - DRF APIView 사용으로 selfhealing_exception_handler 자동 적용
+    - Audit 버퍼 연동, Prometheus 메트릭 자동 기록
+    - 인증 없이 접근 가능 (Grafana에서 Webhook 전송용)
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from django.http import JsonResponse
-from django.utils.decorators import method_decorator
-from django.views import View
-from django.views.decorators.csrf import csrf_exempt
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from selfhealing.services.unified_notification import (
     NotificationCategory,
@@ -107,12 +113,12 @@ def _extract_metadata_from_annotations(annotations: dict[str, Any]) -> dict[str,
     return metadata
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class GrafanaAlertWebhookView(View):
+class GrafanaAlertWebhookView(APIView):
     """
     Grafana Alert Webhook 수신 뷰.
 
     Grafana Alerting의 Webhook contact point에서 전송되는 Alert를 수신합니다.
+    DRF APIView 사용으로 selfhealing_exception_handler가 자동 적용됩니다.
 
     요청 형식 (Grafana Alert Webhook):
     {
@@ -147,62 +153,49 @@ class GrafanaAlertWebhookView(View):
     }
     """
 
-    def post(self, request):
+    # Grafana에서 Webhook 전송 시 인증 없이 접근 가능
+    permission_classes = [AllowAny]
+    # CSRF 면제 (DRF가 기본적으로 처리)
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
         """Grafana Alert Webhook 수신 및 처리."""
-        try:
-            # JSON 파싱
+        # Alert 목록 추출 (DRF가 자동으로 JSON 파싱)
+        alerts = request.data.get("alerts", [])
+        if not alerts:
+            logger.info("Grafana webhook: 빈 Alert 목록 수신")
+            return Response(
+                {"status": "ok", "message": "No alerts to process"},
+                status=status.HTTP_200_OK,
+            )
+
+        # UnifiedNotificationManager 인스턴스
+        notification_manager = UnifiedNotificationManager()
+        processed_count = 0
+        error_count = 0
+
+        for alert in alerts:
             try:
-                payload = json.loads(request.body)
-            except json.JSONDecodeError as e:
-                logger.warning("Grafana webhook: 잘못된 JSON 형식 - %s", str(e))
-                return JsonResponse(
-                    {"status": "error", "message": "Invalid JSON payload"},
-                    status=400,
-                )
+                self._process_single_alert(alert, notification_manager)
+                processed_count += 1
+            except Exception as e:
+                logger.error("Grafana webhook: Alert 처리 실패 - %s", str(e))
+                error_count += 1
 
-            # Alert 목록 추출
-            alerts = payload.get("alerts", [])
-            if not alerts:
-                logger.info("Grafana webhook: 빈 Alert 목록 수신")
-                return JsonResponse(
-                    {"status": "ok", "message": "No alerts to process"},
-                    status=200,
-                )
+        logger.info(
+            "Grafana webhook: %d개 Alert 처리 완료 (실패: %d개)",
+            processed_count,
+            error_count,
+        )
 
-            # UnifiedNotificationManager 인스턴스
-            notification_manager = UnifiedNotificationManager()
-            processed_count = 0
-            error_count = 0
-
-            for alert in alerts:
-                try:
-                    self._process_single_alert(alert, notification_manager)
-                    processed_count += 1
-                except Exception as e:
-                    logger.error("Grafana webhook: Alert 처리 실패 - %s", str(e))
-                    error_count += 1
-
-            logger.info(
-                "Grafana webhook: %d개 Alert 처리 완료 (실패: %d개)",
-                processed_count,
-                error_count,
-            )
-
-            return JsonResponse(
-                {
-                    "status": "ok",
-                    "processed": processed_count,
-                    "errors": error_count,
-                },
-                status=200,
-            )
-
-        except Exception as e:
-            logger.exception("Grafana webhook: 예기치 않은 오류 - %s", str(e))
-            return JsonResponse(
-                {"status": "error", "message": str(e)},
-                status=500,
-            )
+        return Response(
+            {
+                "status": "ok",
+                "processed": processed_count,
+                "errors": error_count,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def _process_single_alert(
         self,
@@ -279,39 +272,41 @@ class GrafanaAlertWebhookView(View):
             )
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class GrafanaAlertWebhookTestView(View):
+class GrafanaAlertWebhookTestView(APIView):
     """
     Grafana Alert Webhook 테스트 뷰.
 
     Webhook 엔드포인트 연결 테스트 용도입니다.
+    DRF APIView 사용으로 selfhealing_exception_handler가 자동 적용됩니다.
     """
 
-    def get(self, request):
+    # Grafana에서 연결 테스트 시 인증 없이 접근 가능
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request: Request) -> Response:
         """Webhook 엔드포인트 상태 확인."""
-        return JsonResponse(
+        return Response(
             {
                 "status": "ok",
                 "endpoint": "grafana_alert_webhook",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
-            status=200,
+            status=status.HTTP_200_OK,
         )
 
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         """테스트 Alert 전송."""
-        try:
-            payload = json.loads(request.body) if request.body else {}
-        except json.JSONDecodeError:
-            payload = {}
+        # DRF가 자동으로 JSON 파싱 (request.data)
+        payload = request.data if request.data else {}
 
         logger.info("Grafana webhook 테스트: 수신된 페이로드 - %s", payload)
 
-        return JsonResponse(
+        return Response(
             {
                 "status": "ok",
                 "message": "Test webhook received",
                 "received_payload": payload,
             },
-            status=200,
+            status=status.HTTP_200_OK,
         )
