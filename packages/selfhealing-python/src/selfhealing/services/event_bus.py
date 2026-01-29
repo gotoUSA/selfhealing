@@ -1256,6 +1256,209 @@ def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
         logger.error(f"[EventHandler] Failed to generate Emergency postmortem: {e}")
 
 
+# =============================================================================
+# Throttle Event Handlers
+# =============================================================================
+
+
+def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
+    """
+    Emergency 레벨 변경 시 Throttle limit 자동 조정.
+
+    Emergency Level에 따른 limit 조정:
+    - LEVEL_0: 제한 해제 (max_limit 복원)
+    - LEVEL_1: limit × 0.8
+    - LEVEL_2: limit × 0.6
+    - LEVEL_3+: min_limit으로 고정
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    level = event.data.get("level", 0)
+    previous_level = event.data.get("previous_level", 0)
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        current_limit = throttle.current_limit
+        config = throttle.config
+
+        if level == 0:
+            # 정상 모드 복귀: max_limit 복원
+            new_limit = config.max_limit
+            reason = "emergency_deactivated"
+        elif level == 1:
+            new_limit = int(current_limit * 0.8)
+            reason = "emergency_level_1"
+        elif level == 2:
+            new_limit = int(current_limit * 0.6)
+            reason = "emergency_level_2"
+        else:  # level >= 3
+            new_limit = config.min_limit
+            reason = f"emergency_level_{level}"
+
+        # limit 적용 (bounds checking은 property에서 수행)
+        throttle.current_limit = new_limit
+
+        logger.info(
+            f"[Throttle] Emergency level {previous_level} → {level}, "
+            f"limit: {current_limit} → {throttle.current_limit} ({reason})"
+        )
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for emergency: {e}")
+
+
+def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
+    """
+    Circuit Breaker OPEN 시 해당 서비스 limit을 min_limit으로 고정.
+
+    CB가 열리면 해당 서비스가 불안정한 상태이므로
+    Throttle limit을 min_limit으로 즉시 강등합니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    service_name = event.data.get("service_name", "unknown")
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # min_limit으로 강등
+        throttle.current_limit = throttle.config.min_limit
+
+        logger.info(f"[Throttle] CB OPEN for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit}")
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for CB OPEN: {e}")
+
+
+def _on_circuit_breaker_closed_throttle(event: SelfHealingEvent) -> None:
+    """
+    Circuit Breaker CLOSED 시 limit 제한 해제.
+
+    CB가 닫히면 서비스가 정상화되었으므로
+    limit 제한을 해제하고 점진적 복구를 시작합니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    service_name = event.data.get("service_name", "unknown")
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # initial_limit으로 복원 (점진적 증가 시작점)
+        throttle.current_limit = throttle.config.initial_limit
+
+        logger.info(
+            f"[Throttle] CB CLOSED for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit} (recovery mode)"
+        )
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for CB CLOSED: {e}")
+
+
+def _on_error_budget_critical_throttle(event: SelfHealingEvent) -> None:
+    """
+    Error Budget Critical 시 limit을 보수적으로 조정 (×0.5).
+
+    Error Budget이 임계치 이하로 떨어지면
+    추가 오류 발생을 방지하기 위해 limit을 절반으로 줄입니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    budget_percent = event.data.get("budget_percent", 0)
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # limit × 0.5 (보수적 조정)
+        new_limit = int(previous_limit * 0.5)
+        throttle.current_limit = new_limit
+
+        logger.warning(
+            f"[Throttle] Error budget critical ({budget_percent:.1f}%), "
+            f"limit: {previous_limit} → {throttle.current_limit} (×0.5)"
+        )
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for error budget: {e}")
+
+
+def _on_error_budget_recovered_throttle(event: SelfHealingEvent) -> None:
+    """
+    Error Budget 회복 시 limit 제한 해제.
+
+    Error Budget이 정상 범위로 회복되면
+    limit 제한을 해제합니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # initial_limit으로 복원
+        throttle.current_limit = throttle.config.initial_limit
+
+        logger.info(f"[Throttle] Error budget recovered, " f"limit: {previous_limit} → {throttle.current_limit}")
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for error budget recovery: {e}")
+
+
+def _on_kill_switch_activated_throttle(event: SelfHealingEvent) -> None:
+    """
+    Kill Switch 활성화 시 Throttle 기능 일시 중지.
+
+    Kill Switch가 활성화되면 모든 자동화 기능이 중지되어야 하므로
+    Throttle도 min_limit으로 고정합니다.
+    """
+    # 순환 참조 방지: 자기 이벤트 무시
+    if event.source == "throttle":
+        return
+
+    try:
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+
+        # min_limit으로 고정
+        throttle.current_limit = throttle.config.min_limit
+
+        logger.warning(f"[Throttle] Kill switch activated, " f"limit: {previous_limit} → {throttle.current_limit}")
+    except ImportError:
+        logger.debug("[EventHandler] Throttle module not available")
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to adjust throttle for kill switch: {e}")
+
+
 def register_default_handlers():
     """
     기본 이벤트 핸들러 등록.
@@ -1314,6 +1517,52 @@ def register_default_handlers():
         EventType.EMERGENCY_RECOVERY_COMPLETED,
         _on_emergency_recovery_completed_postmortem,
         priority=EventPriority.LOW,
+    )
+
+    # =========================================================================
+    # Throttle Event Handlers
+    # =========================================================================
+
+    # Emergency 레벨 변경 시 Throttle limit 자동 조정
+    bus.subscribe(
+        EventType.EMERGENCY_LEVEL_CHANGED,
+        _on_emergency_level_changed_throttle,
+        priority=EventPriority.HIGH,
+    )
+
+    # Circuit Breaker OPEN 시 Throttle limit 강등
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_OPENED,
+        _on_circuit_breaker_opened_throttle,
+        priority=EventPriority.HIGH,
+    )
+
+    # Circuit Breaker CLOSED 시 Throttle limit 복원
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_CLOSED,
+        _on_circuit_breaker_closed_throttle,
+        priority=EventPriority.NORMAL,
+    )
+
+    # Error Budget Critical 시 Throttle limit 보수적 조정
+    bus.subscribe(
+        EventType.ERROR_BUDGET_CRITICAL,
+        _on_error_budget_critical_throttle,
+        priority=EventPriority.HIGH,
+    )
+
+    # Error Budget 회복 시 Throttle limit 제한 해제
+    bus.subscribe(
+        EventType.ERROR_BUDGET_RECOVERED,
+        _on_error_budget_recovered_throttle,
+        priority=EventPriority.NORMAL,
+    )
+
+    # Kill Switch 활성화 시 Throttle 기능 일시 중지
+    bus.subscribe(
+        EventType.KILL_SWITCH_ACTIVATED,
+        _on_kill_switch_activated_throttle,
+        priority=EventPriority.CRITICAL,
     )
 
     bus._handlers_registered = True

@@ -231,24 +231,27 @@ def _on_xxx_throttle(event):
 - [x] 분산 모드 활성화 시 `get_event_bus(distributed=True)` 사용
 
 ### Phase 3: Throttle 발행 로직
-- [ ] `AdaptiveThrottle._maybe_adjust_limit()`에 이벤트 발행 추가
-- [ ] `AdaptiveThrottle.record_response()`에 회복 이벤트 발행 추가
-- [ ] EventBus import 실패 시 Fail-Open 처리
-- [ ] 이벤트 발행 시 `source="throttle"` 명시
+- [x] `AdaptiveThrottle._maybe_adjust_limit()`에 이벤트 발행 추가
+- [x] `AdaptiveThrottle.record_response()`에 회복 이벤트 발행 추가
+- [x] EventBus import 실패 시 Fail-Open 처리
+- [x] 이벤트 발행 시 `source="throttle"` 명시
 
 ### Phase 4: Throttle 구독 핸들러
-- [ ] `_on_emergency_level_changed_throttle()` 핸들러 구현
-- [ ] `_on_circuit_breaker_opened_throttle()` 핸들러 구현
-- [ ] `_on_circuit_breaker_closed_throttle()` 핸들러 구현
-- [ ] **순환 참조 방지**: 모든 핸들러에 `event.source` 체크 추가
-- [ ] `register_default_handlers()`에 등록
+- [x] `_on_emergency_level_changed_throttle()` 핸들러 구현
+- [x] `_on_circuit_breaker_opened_throttle()` 핸들러 구현
+- [x] `_on_circuit_breaker_closed_throttle()` 핸들러 구현
+- [x] `_on_error_budget_critical_throttle()` 핸들러 구현
+- [x] `_on_error_budget_recovered_throttle()` 핸들러 구현
+- [x] `_on_kill_switch_activated_throttle()` 핸들러 구현
+- [x] **순환 참조 방지**: 모든 핸들러에 `event.source` 체크 추가
+- [x] `register_default_handlers()`에 등록
 
 ### Phase 5: 테스트
-- [ ] 이벤트 발행 단위 테스트
-- [ ] 핸들러 동작 단위 테스트
+- [x] 이벤트 발행 단위 테스트
+- [x] 핸들러 동작 단위 테스트
 - [ ] 통합 테스트 (EventBus ↔ Throttle)
 - [ ] 분산 환경 테스트 (Redis Pub/Sub 전파)
-- [ ] 순환 참조 방지 테스트
+- [x] 순환 참조 방지 테스트
 
 ---
 
@@ -264,5 +267,5 @@ def _on_xxx_throttle(event):
 ---
 
 **작성일**: 2026-01-29
-**수정일**: 2026-01-29 (Phase 1, 2 구현 완료)
+**수정일**: 2026-01-29 (Phase 3, 4 구현 완료)
 **관련 문서**: 23_ADAPTIVE_THROTTLING.md
