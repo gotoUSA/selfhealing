@@ -197,33 +197,33 @@ CascadeEvent 발생 시 해당 시점의 OTEL trace_id와 span_id를 감사 로�
 
 ### 5.1 Phase 1: Loki 통합
 
-- [ ] **1.1** Loki 서비스 설정
+- [x] **1.1** Loki 서비스 설정
   - `docker/loki/loki.yml` 생성
   - docker-compose.yml에 loki 서비스 추가
-- [ ] **1.2** Grafana Loki Datasource 추가
+- [x] **1.2** Grafana Loki Datasource 추가
   - `docker/grafana/provisioning/datasources/datasource.yml` 수정
   - Loki datasource 정의 추가
-- [ ] **1.3** Loki 연결 검증
+- [x] **1.3** Loki 연결 검증
   - Grafana Explore에서 Loki 쿼리 테스트
-- [ ] **1.4** Log Explorer 대시보드 생성
+- [x] **1.4** Log Explorer 대시보드 생성
   - `docker/grafana/provisioning/dashboards/log_explorer.json`
-- [ ] **1.5** 기존 로그 필터 검증
+- [x] **1.5** 기존 로그 필터 검증
   - level 필터
   - source 필터
   - trace_id 필터
 
 ### 5.2 Phase 2: Tempo 통합
 
-- [ ] **2.1** Tempo 서비스 설정
+- [x] **2.1** Tempo 서비스 설정
   - `docker/tempo/tempo.yml` 생성
   - docker-compose.yml에 tempo 서비스 추가
-- [ ] **2.2** Grafana Tempo Datasource 추가
+- [x] **2.2** Grafana Tempo Datasource 추가
   - `docker/grafana/provisioning/datasources/datasource.yml` 수정
-- [ ] **2.3** Tempo 연결 검증
+- [x] **2.3** Tempo 연결 검증
   - Grafana Explore에서 Trace 검색 테스트
-- [ ] **2.4** Request Tracing 대시보드 생성
+- [x] **2.4** Request Tracing 대시보드 생성
   - `docker/grafana/provisioning/dashboards/request_tracing.json`
-- [ ] **2.5** Service Graph 패널 설정
+- [x] **2.5** Service Graph 패널 설정
 
 ### 5.3 Phase 3: Mimir 통합 (선택)
 
