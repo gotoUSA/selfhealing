@@ -366,7 +366,7 @@ def sample_config():
 @pytest.fixture
 def failure_injector():
     """Provides a configurable failure injector for chaos tests."""
-    from tests.chaos.conftest import FailureInjector
+    from .chaos.conftest import FailureInjector
 
     return FailureInjector(failure_rate=0.3)
 
@@ -374,7 +374,7 @@ def failure_injector():
 @pytest.fixture
 def burst_failure_injector():
     """Provides a burst failure pattern injector."""
-    from tests.chaos.conftest import BurstFailureInjector
+    from .chaos.conftest import BurstFailureInjector
 
     return BurstFailureInjector(burst_size=10, burst_interval=50)
 
@@ -382,7 +382,7 @@ def burst_failure_injector():
 @pytest.fixture
 def latency_injector():
     """Provides a latency injector for slow degradation tests."""
-    from tests.chaos.conftest import LatencyInjector
+    from .chaos.conftest import LatencyInjector
 
     return LatencyInjector(
         min_latency_ms=100,
@@ -394,7 +394,7 @@ def latency_injector():
 @pytest.fixture
 def resource_simulator():
     """Provides a resource exhaustion simulator."""
-    from tests.chaos.conftest import ResourceExhaustionSimulator
+    from .chaos.conftest import ResourceExhaustionSimulator
 
     return ResourceExhaustionSimulator(max_connections=100)
 
