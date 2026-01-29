@@ -262,6 +262,21 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._gradient_frozen: bool = False  # LEVEL_3 시 Gradient 적용 Freeze
         self._base_limit_before_emergency: int = self.config.initial_limit
         self._emergency_tier_multipliers: dict[str, float] = {}  # 티어별 배율 캐시
+        self._full_stop_active: bool = False  # 3중 조건 충족 시 Full Stop
+
+        # =====================================================================
+        # 상태 동기화 (Check on Use 패턴)
+        # =====================================================================
+        self._emergency_cache_ttl_seconds: int = 30
+        self._last_emergency_check_time: float = 0.0
+
+        # =====================================================================
+        # Recovery Dampening 상태
+        # =====================================================================
+        self._recovery_dampening_active: bool = False
+        self._recovery_dampening_step: int = 0  # 0=80%, 1=90%, 2=100%
+        self._recovery_dampening_last_time: float = 0.0
+        self._recovery_dampening_interval_seconds: float = 30.0
 
     def record_response(self, rtt_ms: float) -> None:
         """
@@ -443,6 +458,13 @@ class AdaptiveThrottle(SlidingWindowThrottle):
 
     def check(self, key: str) -> ThrottleResult:
         """Check if request is allowed with adaptive info."""
+        # Check on Use 패턴: TTL 만료 시 Emergency 상태 동기화
+        self.check_and_sync_emergency_state()
+
+        # Recovery Dampening 진행 확인
+        if self._recovery_dampening_active:
+            self.advance_recovery_dampening()
+
         result = super().check(key)
 
         # Add adaptive info to result
@@ -466,6 +488,11 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 "gradient_frozen": self._gradient_frozen,
                 "base_limit_before_emergency": self._base_limit_before_emergency,
                 "tier_multipliers": self._emergency_tier_multipliers.copy(),
+                "full_stop_active": self._full_stop_active,
+            },
+            "recovery": {
+                "dampening_active": self._recovery_dampening_active,
+                "dampening_step": self._recovery_dampening_step,
             },
         }
 
@@ -493,9 +520,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
             # NORMAL: Emergency 모드 해제
             self._emergency_mode_active = False
             self._gradient_frozen = False
-            # 이전 base_limit으로 복구
-            new_limit = self._base_limit_before_emergency
-            logger.info(f"[AdaptiveThrottle] Emergency deactivated, " f"restoring limit to {new_limit}")
+
+            # Full Stop 해제 (활성화되어 있었다면)
+            if self._full_stop_active:
+                self.deactivate_full_stop()
+                return  # Recovery Dampening이 limit 복구 처리
+
+            # Recovery Dampening으로 점진적 복구
+            self.start_recovery_dampening()
+            logger.info(f"[AdaptiveThrottle] Emergency deactivated, " f"starting recovery dampening")
         else:
             # Emergency 활성화
             if not self._emergency_mode_active:
@@ -503,13 +536,24 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 self._base_limit_before_emergency = self._current_limit
             self._emergency_mode_active = True
 
+            # Recovery Dampening 중이라면 중단
+            self._recovery_dampening_active = False
+
             if level >= 3:
                 # LEVEL_3: min_limit 고정 + Gradient Freeze
                 self._gradient_frozen = True
                 new_limit = self.config.min_limit
+
+                # Full Stop 3중 조건 확인
+                is_full_stop, reason = self.check_full_stop_conditions()
+                if is_full_stop:
+                    self.activate_full_stop(reason)
+                    return  # Full Stop이 limit을 0으로 설정
+
                 logger.warning(
                     f"[AdaptiveThrottle] Emergency LEVEL_3, " f"limit frozen to min_limit={new_limit}, Gradient frozen"
                 )
+                self.current_limit = new_limit
             else:
                 # LEVEL_1, LEVEL_2: 배율 적용
                 self._gradient_frozen = False
@@ -519,8 +563,8 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                     f"[AdaptiveThrottle] Emergency level {previous_level} → {level}, "
                     f"limit: {self._current_limit} → {new_limit} (×{multiplier})"
                 )
+                self.current_limit = new_limit
 
-        self.current_limit = new_limit
         self._cache_emergency_tier_multipliers(level)
 
     def _cache_emergency_tier_multipliers(self, level: int) -> None:
@@ -621,6 +665,403 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._gradient_frozen = False
         self._base_limit_before_emergency = self.config.initial_limit
         self._emergency_tier_multipliers = {}
+        self._full_stop_active = False
+        # Recovery Dampening 초기화
+        self._recovery_dampening_active = False
+        self._recovery_dampening_step = 0
+        self._recovery_dampening_last_time = 0.0
+        # 상태 동기화 초기화
+        self._last_emergency_check_time = 0.0
+
+    # =========================================================================
+    # Phase 4: Full Stop 조건 (3중 조건: LEVEL_3 + DB_CB_OPEN + BUDGET_EXHAUSTED)
+    # =========================================================================
+
+    def check_full_stop_conditions(self) -> tuple[bool, str]:
+        """
+        Full Stop 3중 조건 확인.
+
+        조건:
+        1. Emergency LEVEL_3 상태
+        2. 핵심 DB Circuit Breaker OPEN 상태
+        3. Error Budget 소진 (0% 이하)
+
+        Returns:
+            (is_full_stop, reason): Full Stop 여부와 사유
+        """
+        reasons = []
+
+        # 조건 1: Emergency LEVEL_3
+        is_level_3 = self._emergency_level >= 3
+        if is_level_3:
+            reasons.append("EMERGENCY_LEVEL_3")
+
+        # 조건 2: DB Circuit Breaker OPEN 확인
+        db_cb_open = self._check_db_circuit_breaker_open()
+        if db_cb_open:
+            reasons.append("DB_CB_OPEN")
+
+        # 조건 3: Error Budget 소진 확인
+        budget_exhausted = self._check_error_budget_exhausted()
+        if budget_exhausted:
+            reasons.append("BUDGET_EXHAUSTED")
+
+        # 3중 조건 모두 충족 시 Full Stop
+        is_full_stop = is_level_3 and db_cb_open and budget_exhausted
+        reason = " + ".join(reasons) if reasons else "NORMAL"
+
+        return is_full_stop, reason
+
+    def _check_db_circuit_breaker_open(self) -> bool:
+        """
+        핵심 DB Circuit Breaker OPEN 상태 확인.
+
+        Returns:
+            True if any DB circuit breaker is OPEN
+        """
+        try:
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
+
+            cb_service = get_circuit_breaker_service()
+
+            # 핵심 DB 서비스 목록 (설정 가능하도록 확장 가능)
+            db_services = ["database", "db", "postgres", "mysql", "redis", "mongodb"]
+
+            for service_name in db_services:
+                try:
+                    state = cb_service.get_state(service_name)
+                    if state == "open":
+                        logger.debug(f"[AdaptiveThrottle] DB CB OPEN detected: {service_name}")
+                        return True
+                except Exception:
+                    # 서비스가 존재하지 않으면 스킵
+                    pass
+
+            return False
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] CircuitBreakerService not available")
+            return False
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to check DB CB: {e}")
+            return False
+
+    def _check_error_budget_exhausted(self) -> bool:
+        """
+        Error Budget 소진 상태 확인.
+
+        Returns:
+            True if error budget is exhausted (0% or less)
+        """
+        try:
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
+
+            service = get_error_budget_service()
+            status = service.get_budget_status()
+
+            is_exhausted = status.budget_remaining_percent <= 0
+            if is_exhausted:
+                logger.debug(f"[AdaptiveThrottle] Budget exhausted: " f"{status.budget_remaining_percent:.1f}%")
+            return is_exhausted
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] ErrorBudgetService not available")
+            return False
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to check error budget: {e}")
+            return False
+
+    def activate_full_stop(self, reason: str) -> None:
+        """
+        Full Stop 활성화: min_limit=0으로 모든 요청 차단.
+
+        Args:
+            reason: Full Stop 사유
+        """
+        if self._full_stop_active:
+            return
+
+        self._full_stop_active = True
+
+        # min_limit을 0으로 설정하여 완전 차단
+        previous_limit = self._current_limit
+        self._current_limit = 0
+
+        logger.critical(
+            f"[AdaptiveThrottle] FULL STOP ACTIVATED: {reason}, " f"limit: {previous_limit} → 0 (all requests blocked)"
+        )
+
+        # KILL_SWITCH_ACTIVATED 이벤트 발행
+        _emit_throttle_event(
+            "THROTTLE_LIMIT_CHANGED",
+            {
+                "previous_limit": previous_limit,
+                "new_limit": 0,
+                "reason": f"full_stop:{reason}",
+                "full_stop": True,
+            },
+            priority_name="CRITICAL",
+        )
+
+        # Kill Switch 이벤트도 발행하여 다른 컴포넌트에 알림
+        try:
+            from selfhealing.services.event_bus import (
+                EventPriority,
+                EventType,
+                get_event_bus,
+            )
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.KILL_SWITCH_ACTIVATED,
+                data={
+                    "reason": f"throttle_full_stop:{reason}",
+                    "activated_by": "throttle",
+                    "conditions": reason,
+                },
+                source="throttle",
+                priority=EventPriority.CRITICAL,
+            )
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to emit KILL_SWITCH: {e}")
+
+    def deactivate_full_stop(self) -> None:
+        """
+        Full Stop 비활성화: limit 복구 시작.
+        """
+        if not self._full_stop_active:
+            return
+
+        self._full_stop_active = False
+
+        # Recovery Dampening으로 복구 시작
+        self.start_recovery_dampening()
+
+        logger.warning(f"[AdaptiveThrottle] FULL STOP DEACTIVATED, " f"starting recovery dampening")
+
+    def is_full_stop_active(self) -> bool:
+        """Full Stop 활성화 여부."""
+        return self._full_stop_active
+
+    # =========================================================================
+    # Phase 5: 상태 동기화 (Check on Use 패턴, TTL 캐싱, Drift 감지)
+    # =========================================================================
+
+    def sync_emergency_state_on_init(self) -> None:
+        """
+        Throttle 초기화 시 현재 Emergency Level 확인 및 동기화.
+
+        애플리케이션 시작 시 또는 리셋 후 호출됩니다.
+        """
+        try:
+            from selfhealing.services.emergency_mode.manager import (
+                GracefulDegradationManager,
+            )
+
+            manager = GracefulDegradationManager()
+            level = manager.get_current_level()
+
+            if level.value > 0:
+                logger.info(f"[AdaptiveThrottle] Syncing emergency state on init: " f"level={level.name}")
+                self.adjust_for_emergency(level.value)
+
+            self._last_emergency_check_time = time.time()
+
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] EmergencyMode not available for sync")
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to sync emergency state: {e}")
+
+    def check_and_sync_emergency_state(self) -> bool:
+        """
+        Check on Use 패턴: TTL 만료 시 Emergency 상태 재확인 및 동기화.
+
+        Returns:
+            True if state was synced (drift detected), False otherwise
+        """
+        now = time.time()
+
+        # TTL 확인
+        if now - self._last_emergency_check_time < self._emergency_cache_ttl_seconds:
+            return False
+
+        self._last_emergency_check_time = now
+
+        try:
+            from selfhealing.services.emergency_mode.manager import (
+                GracefulDegradationManager,
+            )
+
+            manager = GracefulDegradationManager()
+            current_level = manager.get_current_level().value
+
+            # Drift 감지: 캐시된 레벨과 실제 레벨이 다른 경우
+            if current_level != self._emergency_level:
+                logger.warning(
+                    f"[AdaptiveThrottle] Emergency state drift detected: "
+                    f"cached={self._emergency_level}, actual={current_level}"
+                )
+                self.adjust_for_emergency(current_level)
+                return True
+
+            # Full Stop 조건 재확인
+            if self._emergency_level >= 3:
+                is_full_stop, reason = self.check_full_stop_conditions()
+                if is_full_stop and not self._full_stop_active:
+                    self.activate_full_stop(reason)
+                elif not is_full_stop and self._full_stop_active:
+                    self.deactivate_full_stop()
+
+            return False
+
+        except ImportError:
+            return False
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Emergency sync check failed: {e}")
+            return False
+
+    # =========================================================================
+    # Phase 6: Recovery Dampening (80% → 90% → 100% 점진적 복구)
+    # =========================================================================
+
+    # Recovery Dampening 단계별 배율
+    RECOVERY_DAMPENING_MULTIPLIERS: tuple[float, ...] = (0.8, 0.9, 1.0)
+
+    def start_recovery_dampening(self) -> None:
+        """
+        Recovery Dampening 시작: 80%부터 점진적으로 복구.
+
+        Emergency 비활성화 후 Thundering Herd 방지를 위해
+        limit을 80% → 90% → 100%로 점진적으로 복구합니다.
+        """
+        self._recovery_dampening_active = True
+        self._recovery_dampening_step = 0
+        self._recovery_dampening_last_time = time.time()
+
+        # 첫 단계: 80% 적용
+        target_limit = int(self._base_limit_before_emergency * self.RECOVERY_DAMPENING_MULTIPLIERS[0])
+        self.current_limit = target_limit
+
+        logger.info(f"[AdaptiveThrottle] Recovery dampening started: " f"step=0 (80%), limit={target_limit}")
+
+    def advance_recovery_dampening(self) -> bool:
+        """
+        Recovery Dampening 다음 단계로 진행.
+
+        Returns:
+            True if advanced to next step, False if already complete
+        """
+        if not self._recovery_dampening_active:
+            return False
+
+        now = time.time()
+        elapsed = now - self._recovery_dampening_last_time
+
+        # 인터벌 확인 (기본 30초)
+        if elapsed < self._recovery_dampening_interval_seconds:
+            return False
+
+        self._recovery_dampening_step += 1
+        self._recovery_dampening_last_time = now
+
+        if self._recovery_dampening_step >= len(self.RECOVERY_DAMPENING_MULTIPLIERS):
+            # 복구 완료
+            self._recovery_dampening_active = False
+            self._recovery_dampening_step = 0
+            logger.info("[AdaptiveThrottle] Recovery dampening completed: 100%")
+            return False
+
+        # 다음 단계 적용
+        multiplier = self.RECOVERY_DAMPENING_MULTIPLIERS[self._recovery_dampening_step]
+        target_limit = int(self._base_limit_before_emergency * multiplier)
+        self.current_limit = target_limit
+
+        logger.info(
+            f"[AdaptiveThrottle] Recovery dampening advanced: "
+            f"step={self._recovery_dampening_step} ({int(multiplier * 100)}%), "
+            f"limit={target_limit}"
+        )
+
+        return True
+
+    def complete_recovery_dampening(self) -> None:
+        """
+        Recovery Dampening 즉시 완료: 100%로 복구.
+
+        수동 복구 또는 테스트용.
+        """
+        if not self._recovery_dampening_active:
+            return
+
+        self._recovery_dampening_active = False
+        self._recovery_dampening_step = 0
+
+        # 100%로 복구
+        self.current_limit = self._base_limit_before_emergency
+
+        logger.info(
+            f"[AdaptiveThrottle] Recovery dampening completed immediately: " f"limit={self._base_limit_before_emergency}"
+        )
+
+    def is_recovery_dampening_active(self) -> bool:
+        """Recovery Dampening 활성화 여부."""
+        return self._recovery_dampening_active
+
+    def get_recovery_dampening_progress(self) -> dict:
+        """
+        Recovery Dampening 진행 상황 조회.
+
+        Returns:
+            진행 상황 정보
+        """
+        if not self._recovery_dampening_active:
+            return {
+                "active": False,
+                "step": 0,
+                "multiplier": 1.0,
+                "percent": 100,
+            }
+
+        step = self._recovery_dampening_step
+        multiplier = self.RECOVERY_DAMPENING_MULTIPLIERS[step]
+
+        return {
+            "active": True,
+            "step": step,
+            "multiplier": multiplier,
+            "percent": int(multiplier * 100),
+            "elapsed_seconds": time.time() - self._recovery_dampening_last_time,
+            "interval_seconds": self._recovery_dampening_interval_seconds,
+        }
+
+    # =========================================================================
+    # 롤백 시나리오 지원
+    # =========================================================================
+
+    def rollback_to_base_limit(self) -> int:
+        """
+        Emergency 이전 base limit으로 즉시 롤백.
+
+        Returns:
+            롤백된 limit
+        """
+        previous = self._current_limit
+
+        # Emergency 상태 해제
+        self._emergency_mode_active = False
+        self._emergency_level = 0
+        self._gradient_frozen = False
+        self._full_stop_active = False
+        self._recovery_dampening_active = False
+
+        # base limit으로 복구
+        self.current_limit = self._base_limit_before_emergency
+
+        logger.warning(f"[AdaptiveThrottle] Rolled back to base limit: " f"{previous} → {self._base_limit_before_emergency}")
+
+        return self._base_limit_before_emergency
 
 
 # =============================================================================

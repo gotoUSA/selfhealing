@@ -327,28 +327,28 @@ Emergency Mode의 Recovery Gate 연동 + Dampening:
 - [x] 티어별 배율 캐싱 (EMERGENCY_LEVEL_RULES 참조)
 
 ### Phase 4: Full Stop 조건
-- [ ] 3중 조건 체크 로직 구현 (LEVEL_3 + DB_CB_OPEN + BUDGET_EXHAUSTED)
-- [ ] `KILL_SWITCH_ACTIVATED` 이벤트 연동
-- [ ] min_limit=0 적용 시 경고 로그 + 알림
+- [x] 3중 조건 체크 로직 구현 (LEVEL_3 + DB_CB_OPEN + BUDGET_EXHAUSTED)
+- [x] `KILL_SWITCH_ACTIVATED` 이벤트 연동
+- [x] min_limit=0 적용 시 경고 로그 + 알림
 
 ### Phase 5: 상태 동기화
-- [ ] Throttle 초기화 시 현재 Emergency Level 확인
-- [ ] Check on Use 패턴 적용 (TTL 캐싱)
-- [ ] Drift 감지 및 자동 동기화
+- [x] Throttle 초기화 시 현재 Emergency Level 확인
+- [x] Check on Use 패턴 적용 (TTL 캐싱)
+- [x] Drift 감지 및 자동 동기화
 
 ### Phase 6: 복구 로직
-- [ ] Emergency 비활성화 시 limit 복구
-- [ ] **Recovery Dampening 적용 (80% → 90% → 100%)**
-- [ ] Gradual Recovery 지원
-- [ ] 롤백 시나리오 처리
+- [x] Emergency 비활성화 시 limit 복구
+- [x] **Recovery Dampening 적용 (80% → 90% → 100%)**
+- [x] Gradual Recovery 지원
+- [x] 롤백 시나리오 처리
 
 ### Phase 7: 테스트
-- [ ] Level 변경 → limit 조정 테스트
-- [ ] LEVEL_3 Gradient Freeze 테스트
-- [ ] Hard-Cap 적용 테스트
-- [ ] Full Stop 조건 테스트
-- [ ] Recovery Dampening 테스트
-- [ ] Chaos Experiment 시나리오 테스트
+- [x] Level 변경 → limit 조정 테스트
+- [x] LEVEL_3 Gradient Freeze 테스트
+- [x] Hard-Cap 적용 테스트
+- [x] Full Stop 조건 테스트
+- [x] Recovery Dampening 테스트
+- [x] Chaos Experiment 시나리오 테스트
 
 ---
 
