@@ -472,7 +472,7 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 | Prometheus 메트릭 (6개) | ✅ 완료 | `services/metrics/definitions.py`, `services/throttle/adaptive.py` | `test_throttle_metrics.py` |
 | 감사 로그/CascadeEvent (4개) | ✅ 완료 | `services/throttle/audit.py` | `test_throttle_audit.py` |
 | Postmortem 연동 | ✅ 완료 | `services/throttle/postmortem.py` | `test_throttle_postmortem.py` |
-| **X-Test Throttle 시뮬레이션 API (5개)** | ✅ 완료 | `api/django/views/xtest/throttle_simulation.py` | `test_xtest_throttle_simulation.py` |
+| **X-Test Throttle 시뮬레이션 API (5개)** | ✅ 완료 | `api/django/views/xtest/throttle_simulation.py` | `test_xtest_throttle_simulation.py`, `test_throttle_xtest_integration.py` |
 | **RuntimeConfig Throttle 설정** | ✅ 완료 | `config/runtime_config.py` | `test_runtime_config_throttle.py` |
 | **Time-Bucketed RTT Window** | ✅ 완료 | `services/throttle/time_bucketed_window.py` | `test_time_bucketed_window.py` |
 
@@ -536,13 +536,15 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 
 ### X-Test Throttle 시뮬레이션 API 상세 (2026-01-30)
 
+**Exception Handler 위임**: 모든 뷰에서 try/except 제거, DRF `selfhealing_exception_handler`가 예외 처리
+
 | 엔드포인트 | 메서드 | 파라미터 | 설명 |
 |-----------|--------|----------|------|
-| `/api/xtest/throttle/emergency/simulate/` | POST | `level` (0-3) | EM 레벨 강제 변경 시뮬레이션 |
-| `/api/xtest/throttle/cb/simulate/` | POST | `state` (open/half_open/closed), `service` | CB 상태 강제 변경 시뮬레이션 |
-| `/api/xtest/throttle/rtt/inject/` | POST | `rtt_ms`, `count` (optional) | RTT 지연 주입 |
-| `/api/xtest/throttle/status/` | GET | - | 현재 Throttle 상태 조회 |
-| `/api/xtest/throttle/reset/` | POST | - | Throttle 상태 초기화 |
+| `/api/self-healing/xtest/throttle/simulate-emergency/` | POST | `level` (0-3), `service` (optional) | EM 레벨 강제 변경 시뮬레이션 |
+| `/api/self-healing/xtest/throttle/simulate-cb-open/` | POST | `state` (open/half_open/closed), `service` | CB 상태 강제 변경 시뮬레이션 |
+| `/api/self-healing/xtest/throttle/inject-rtt-delay/` | POST | `rtt_ms`, `count` (optional), `interval_ms` (optional) | RTT 지연 주입 |
+| `/api/self-healing/xtest/throttle/status/` | GET | - | 현재 Throttle 상태 조회 |
+| `/api/self-healing/xtest/throttle/reset/` | POST | - | Throttle 상태 초기화 |
 
 **X-Test 모드 보호**: 모든 뷰는 `XTestModeMixin` 상속, `XTEST_MODE=true` 설정 필요
 

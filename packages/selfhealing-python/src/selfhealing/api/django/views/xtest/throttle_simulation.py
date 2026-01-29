@@ -77,70 +77,60 @@ class ThrottleEmergencySimulationView(XTestModeMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+        # Exception은 DRF exception handler가 처리
+        # settings.py: EXCEPTION_HANDLER = 'selfhealing.api.django.exceptions.handler.selfhealing_exception_handler'
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
-            throttle = get_adaptive_throttle()
-            previous_limit = throttle.current_limit
-            previous_level = throttle.get_emergency_level()
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+        previous_level = throttle.get_emergency_level()
 
-            # Emergency 레벨 조정 시뮬레이션
-            throttle.adjust_for_emergency(level)
+        # Emergency 레벨 조정 시뮬레이션
+        throttle.adjust_for_emergency(level)
 
-            new_limit = throttle.current_limit
-            gradient_frozen = throttle.is_gradient_frozen()
+        new_limit = throttle.current_limit
+        gradient_frozen = throttle.is_gradient_frozen()
 
-            # 배율 계산
-            multiplier_map = {0: 1.0, 1: 0.8, 2: 0.5, 3: 0.0}
-            multiplier = multiplier_map.get(level, 1.0)
+        # 배율 계산
+        multiplier_map = {0: 1.0, 1: 0.8, 2: 0.5, 3: 0.0}
+        multiplier = multiplier_map.get(level, 1.0)
 
-            logger.info(
-                f"[X-Test-Mode] Throttle emergency simulation: "
-                f"level {previous_level} → {level}, limit {previous_limit} → {new_limit}"
-            )
+        logger.info(
+            f"[X-Test-Mode] Throttle emergency simulation: "
+            f"level {previous_level} → {level}, limit {previous_limit} → {new_limit}"
+        )
 
-            # 감사 로그 기록
-            self.log_xtest_audit(
-                request=request,
-                action="simulate_emergency",
-                component="throttle",
-                details={
-                    "level": level,
-                    "previous_level": previous_level,
-                    "previous_limit": previous_limit,
-                    "new_limit": new_limit,
-                    "service": service,
-                },
-                result="success",
-            )
+        # 감사 로그 기록
+        self.log_xtest_audit(
+            request=request,
+            action="simulate_emergency",
+            component="throttle",
+            details={
+                "level": level,
+                "previous_level": previous_level,
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "service": service,
+            },
+            result="success",
+        )
 
-            return Response(
-                {
-                    "status": "success",
-                    "simulation": "emergency_level_change",
-                    "level": level,
-                    "previous_level": previous_level,
-                    "previous_limit": previous_limit,
-                    "new_limit": new_limit,
-                    "multiplier": multiplier,
-                    "gradient_frozen": gradient_frozen,
-                    "full_stop_active": throttle.is_full_stop_active(),
-                    "recovery_dampening": throttle.get_recovery_dampening_progress(),
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[X-Test-Mode] Throttle emergency simulation failed: {e}")
-            return Response(
-                {
-                    "status": "error",
-                    "error": "simulation_failed",
-                    "message": str(e),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "simulation": "emergency_level_change",
+                "level": level,
+                "previous_level": previous_level,
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "multiplier": multiplier,
+                "gradient_frozen": gradient_frozen,
+                "full_stop_active": throttle.is_full_stop_active(),
+                "recovery_dampening": throttle.get_recovery_dampening_progress(),
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ThrottleCBOpenSimulationView(XTestModeMixin, APIView):
@@ -190,80 +180,69 @@ class ThrottleCBOpenSimulationView(XTestModeMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            from selfhealing.services.throttle.adaptive import get_adaptive_throttle
-            from selfhealing.settings import get_throttle_settings
+        # Exception은 DRF exception handler가 처리
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+        from selfhealing.settings import get_throttle_settings
 
-            throttle = get_adaptive_throttle()
-            settings = get_throttle_settings()
+        throttle = get_adaptive_throttle()
+        settings = get_throttle_settings()
 
-            previous_limit = throttle.current_limit
-            base_limit = throttle._base_limit_before_emergency
+        previous_limit = throttle.current_limit
+        base_limit = throttle._base_limit_before_emergency
 
-            # CB 상태에 따른 limit 계산
-            if cb_state == "open":
-                # CB OPEN: cb_open_limit_percent (기본 0 = min_limit)
-                percent = settings.cb_open_limit_percent
-                if percent == 0.0:
-                    new_limit = settings.min_limit
-                else:
-                    new_limit = int(base_limit * percent)
-            elif cb_state == "half_open":
-                # CB HALF_OPEN: cb_half_open_limit_percent (기본 50%)
-                percent = settings.cb_half_open_limit_percent
-                new_limit = int(base_limit * percent)
+        # CB 상태에 따른 limit 계산
+        if cb_state == "open":
+            # CB OPEN: cb_open_limit_percent (기본 0 = min_limit)
+            percent = settings.cb_open_limit_percent
+            if percent == 0.0:
+                new_limit = settings.min_limit
             else:
-                # CB CLOSED: 정상 limit 복구
-                new_limit = base_limit
+                new_limit = int(base_limit * percent)
+        elif cb_state == "half_open":
+            # CB HALF_OPEN: cb_half_open_limit_percent (기본 50%)
+            percent = settings.cb_half_open_limit_percent
+            new_limit = int(base_limit * percent)
+        else:
+            # CB CLOSED: 정상 limit 복구
+            new_limit = base_limit
 
-            # limit 적용
-            throttle.current_limit = max(new_limit, settings.min_limit)
-            actual_new_limit = throttle.current_limit
+        # limit 적용
+        throttle.current_limit = max(new_limit, settings.min_limit)
+        actual_new_limit = throttle.current_limit
 
-            logger.info(
-                f"[X-Test-Mode] Throttle CB simulation: "
-                f"service={service}, state={cb_state}, "
-                f"limit {previous_limit} → {actual_new_limit}"
-            )
+        logger.info(
+            f"[X-Test-Mode] Throttle CB simulation: "
+            f"service={service}, state={cb_state}, "
+            f"limit {previous_limit} → {actual_new_limit}"
+        )
 
-            # 감사 로그 기록
-            self.log_xtest_audit(
-                request=request,
-                action="simulate_cb_open",
-                component="throttle",
-                details={
-                    "service": service,
-                    "cb_state": cb_state,
-                    "previous_limit": previous_limit,
-                    "new_limit": actual_new_limit,
-                },
-                result="success",
-            )
+        # 감사 로그 기록
+        self.log_xtest_audit(
+            request=request,
+            action="simulate_cb_open",
+            component="throttle",
+            details={
+                "service": service,
+                "cb_state": cb_state,
+                "previous_limit": previous_limit,
+                "new_limit": actual_new_limit,
+            },
+            result="success",
+        )
 
-            return Response(
-                {
-                    "status": "success",
-                    "simulation": "cb_state_change",
-                    "service": service,
-                    "cb_state": cb_state,
-                    "previous_limit": previous_limit,
-                    "new_limit": actual_new_limit,
-                    "base_limit": base_limit,
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[X-Test-Mode] Throttle CB simulation failed: {e}")
-            return Response(
-                {
-                    "status": "error",
-                    "error": "simulation_failed",
-                    "message": str(e),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "simulation": "cb_state_change",
+                "service": service,
+                "cb_state": cb_state,
+                "previous_limit": previous_limit,
+                "new_limit": actual_new_limit,
+                "base_limit": base_limit,
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ThrottleRTTDelayInjectionView(XTestModeMixin, APIView):
@@ -325,87 +304,76 @@ class ThrottleRTTDelayInjectionView(XTestModeMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            from selfhealing.services.throttle.adaptive import get_adaptive_throttle
-            from selfhealing.settings import get_throttle_settings
+        # Exception은 DRF exception handler가 처리
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+        from selfhealing.settings import get_throttle_settings
 
-            throttle = get_adaptive_throttle()
-            settings = get_throttle_settings()
+        throttle = get_adaptive_throttle()
+        settings = get_throttle_settings()
 
-            previous_limit = throttle.current_limit
-            previous_gradient = throttle._gradient_calculator.get_gradient()
+        previous_limit = throttle.current_limit
+        previous_gradient = throttle._gradient_calculator.get_gradient()
 
-            # RTT 샘플 주입
-            interval_seconds = interval_ms / 1000.0
-            for i in range(count):
-                throttle.record_response(float(rtt_ms))
-                if interval_seconds > 0 and i < count - 1:
-                    time.sleep(interval_seconds)
+        # RTT 샘플 주입
+        interval_seconds = interval_ms / 1000.0
+        for i in range(count):
+            throttle.record_response(float(rtt_ms))
+            if interval_seconds > 0 and i < count - 1:
+                time.sleep(interval_seconds)
 
-            new_limit = throttle.current_limit
-            new_gradient = throttle._gradient_calculator.get_gradient()
-            current_rtt = throttle._gradient_calculator.get_current_rtt()
+        new_limit = throttle.current_limit
+        new_gradient = throttle._gradient_calculator.get_gradient()
+        current_rtt = throttle._gradient_calculator.get_current_rtt()
 
-            # SLA 상태 판단
-            if rtt_ms >= settings.sla_critical_ms:
-                sla_status = "critical"
-            elif rtt_ms >= settings.sla_warning_ms:
-                sla_status = "warning"
-            else:
-                sla_status = "normal"
+        # SLA 상태 판단
+        if rtt_ms >= settings.sla_critical_ms:
+            sla_status = "critical"
+        elif rtt_ms >= settings.sla_warning_ms:
+            sla_status = "warning"
+        else:
+            sla_status = "normal"
 
-            logger.info(
-                f"[X-Test-Mode] Throttle RTT injection: "
-                f"rtt={rtt_ms}ms×{count}, limit {previous_limit} → {new_limit}, "
-                f"gradient={new_gradient:.4f}"
-            )
+        logger.info(
+            f"[X-Test-Mode] Throttle RTT injection: "
+            f"rtt={rtt_ms}ms×{count}, limit {previous_limit} → {new_limit}, "
+            f"gradient={new_gradient:.4f}"
+        )
 
-            # 감사 로그 기록
-            self.log_xtest_audit(
-                request=request,
-                action="inject_rtt_delay",
-                component="throttle",
-                details={
-                    "rtt_ms": rtt_ms,
-                    "count": count,
-                    "previous_limit": previous_limit,
-                    "new_limit": new_limit,
-                    "gradient": new_gradient,
+        # 감사 로그 기록
+        self.log_xtest_audit(
+            request=request,
+            action="inject_rtt_delay",
+            component="throttle",
+            details={
+                "rtt_ms": rtt_ms,
+                "count": count,
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "gradient": new_gradient,
+            },
+            result="success",
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "simulation": "rtt_delay_injection",
+                "rtt_ms": rtt_ms,
+                "samples_injected": count,
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "previous_gradient": previous_gradient,
+                "new_gradient": new_gradient,
+                "current_rtt": current_rtt,
+                "sla_status": sla_status,
+                "sla_thresholds": {
+                    "warning_ms": settings.sla_warning_ms,
+                    "critical_ms": settings.sla_critical_ms,
                 },
-                result="success",
-            )
-
-            return Response(
-                {
-                    "status": "success",
-                    "simulation": "rtt_delay_injection",
-                    "rtt_ms": rtt_ms,
-                    "samples_injected": count,
-                    "previous_limit": previous_limit,
-                    "new_limit": new_limit,
-                    "previous_gradient": previous_gradient,
-                    "new_gradient": new_gradient,
-                    "current_rtt": current_rtt,
-                    "sla_status": sla_status,
-                    "sla_thresholds": {
-                        "warning_ms": settings.sla_warning_ms,
-                        "critical_ms": settings.sla_critical_ms,
-                    },
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[X-Test-Mode] Throttle RTT injection failed: {e}")
-            return Response(
-                {
-                    "status": "error",
-                    "error": "injection_failed",
-                    "message": str(e),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ThrottleStatusView(XTestModeMixin, APIView):
@@ -436,60 +404,49 @@ class ThrottleStatusView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        try:
-            from selfhealing.services.throttle.adaptive import get_adaptive_throttle
-            from selfhealing.settings import get_throttle_settings
+        # Exception은 DRF exception handler가 처리
+        from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+        from selfhealing.settings import get_throttle_settings
 
-            throttle = get_adaptive_throttle()
-            settings = get_throttle_settings()
-            stats = throttle.get_stats()
+        throttle = get_adaptive_throttle()
+        settings = get_throttle_settings()
+        stats = throttle.get_stats()
 
-            logger.info("[X-Test-Mode] Throttle status query")
+        logger.info("[X-Test-Mode] Throttle status query")
 
-            self.log_xtest_audit(
-                request=request,
-                action="query_status",
-                component="throttle",
-                details={"current_limit": throttle.current_limit},
-                result="success",
-            )
+        self.log_xtest_audit(
+            request=request,
+            action="query_status",
+            component="throttle",
+            details={"current_limit": throttle.current_limit},
+            result="success",
+        )
 
-            return Response(
-                {
-                    "status": "success",
-                    "throttle": {
-                        "current_limit": throttle.current_limit,
-                        "min_limit": settings.min_limit,
-                        "max_limit": settings.max_limit,
-                        "initial_limit": settings.initial_limit,
-                        "gradient": throttle._gradient_calculator.get_gradient(),
-                        "current_rtt_ms": throttle._gradient_calculator.get_current_rtt(),
-                        "emergency": stats.get("emergency", {}),
-                        "recovery": stats.get("recovery", {}),
-                        "adaptive": stats.get("adaptive", {}),
-                        "gradient_stats": stats.get("gradient", {}),
-                    },
-                    "settings": {
-                        "sla_warning_ms": settings.sla_warning_ms,
-                        "sla_critical_ms": settings.sla_critical_ms,
-                        "recovery_dampening_enabled": settings.recovery_dampening_enabled,
-                        "full_stop_conditions_enabled": settings.full_stop_conditions_enabled,
-                    },
-                    "timestamp": timezone.now().isoformat(),
+        return Response(
+            {
+                "status": "success",
+                "throttle": {
+                    "current_limit": throttle.current_limit,
+                    "min_limit": settings.min_limit,
+                    "max_limit": settings.max_limit,
+                    "initial_limit": settings.initial_limit,
+                    "gradient": throttle._gradient_calculator.get_gradient(),
+                    "current_rtt_ms": throttle._gradient_calculator.get_current_rtt(),
+                    "emergency": stats.get("emergency", {}),
+                    "recovery": stats.get("recovery", {}),
+                    "adaptive": stats.get("adaptive", {}),
+                    "gradient_stats": stats.get("gradient", {}),
                 },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[X-Test-Mode] Throttle status query failed: {e}")
-            return Response(
-                {
-                    "status": "error",
-                    "error": "query_failed",
-                    "message": str(e),
+                "settings": {
+                    "sla_warning_ms": settings.sla_warning_ms,
+                    "sla_critical_ms": settings.sla_critical_ms,
+                    "recovery_dampening_enabled": settings.recovery_dampening_enabled,
+                    "full_stop_conditions_enabled": settings.full_stop_conditions_enabled,
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ThrottleResetView(XTestModeMixin, APIView):
@@ -516,60 +473,49 @@ class ThrottleResetView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        try:
-            from selfhealing.services.throttle.adaptive import (
-                get_adaptive_throttle,
-                reset_adaptive_throttle,
-            )
+        # Exception은 DRF exception handler가 처리
+        from selfhealing.services.throttle.adaptive import (
+            get_adaptive_throttle,
+            reset_adaptive_throttle,
+        )
 
-            # 현재 상태 저장
-            throttle = get_adaptive_throttle()
-            previous_limit = throttle.current_limit
-            previous_level = throttle.get_emergency_level()
+        # 현재 상태 저장
+        throttle = get_adaptive_throttle()
+        previous_limit = throttle.current_limit
+        previous_level = throttle.get_emergency_level()
 
-            # 리셋
-            reset_adaptive_throttle()
+        # 리셋
+        reset_adaptive_throttle()
 
-            # 새로운 인스턴스 가져오기
-            new_throttle = get_adaptive_throttle()
-            new_limit = new_throttle.current_limit
+        # 새로운 인스턴스 가져오기
+        new_throttle = get_adaptive_throttle()
+        new_limit = new_throttle.current_limit
 
-            logger.info(f"[X-Test-Mode] Throttle reset: " f"limit {previous_limit} → {new_limit}, level {previous_level} → 0")
+        logger.info(f"[X-Test-Mode] Throttle reset: " f"limit {previous_limit} → {new_limit}, level {previous_level} → 0")
 
-            self.log_xtest_audit(
-                request=request,
-                action="reset",
-                component="throttle",
-                details={
-                    "previous_limit": previous_limit,
-                    "new_limit": new_limit,
-                    "previous_level": previous_level,
-                },
-                result="success",
-            )
+        self.log_xtest_audit(
+            request=request,
+            action="reset",
+            component="throttle",
+            details={
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "previous_level": previous_level,
+            },
+            result="success",
+        )
 
-            return Response(
-                {
-                    "status": "success",
-                    "action": "throttle_reset",
-                    "previous_limit": previous_limit,
-                    "new_limit": new_limit,
-                    "previous_level": previous_level,
-                    "timestamp": timezone.now().isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-
-        except Exception as e:
-            logger.error(f"[X-Test-Mode] Throttle reset failed: {e}")
-            return Response(
-                {
-                    "status": "error",
-                    "error": "reset_failed",
-                    "message": str(e),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(
+            {
+                "status": "success",
+                "action": "throttle_reset",
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "previous_level": previous_level,
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 __all__ = [

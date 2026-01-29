@@ -1069,7 +1069,7 @@ urlpatterns += [
 # X-Test-Mode Endpoints (Chaos Proof)
 # =============================================================================
 # Always available but protected by X-Test-Mode header + environment checks
-from selfhealing.api.django.views.xtest import (  # Stage 51: Observability & Blast Radius; DLQ X-Test Views; Replay X-Test Views; Retry X-Test Views; Rate Limit X-Test Views; Idempotency X-Test Views; Integration X-Test Views
+from selfhealing.api.django.views.xtest import (  # Stage 51: Observability & Blast Radius; DLQ X-Test Views; Replay X-Test Views; Retry X-Test Views; Rate Limit X-Test Views; Idempotency X-Test Views; Integration X-Test Views; Throttle X-Test Views
     BackoffPreviewView,
     BlastRadiusTestView,
     CBStatusDetailView,
@@ -1106,6 +1106,11 @@ from selfhealing.api.django.views.xtest import (  # Stage 51: Observability & Bl
     ScenarioStatusView,
     SwitchToAutoModeView,
     SystemSnapshotView,
+    ThrottleCBOpenSimulationView,
+    ThrottleEmergencySimulationView,
+    ThrottleRTTDelayInjectionView,
+    ThrottleXTestResetView,
+    ThrottleXTestStatusView,
     TriggerCBRecoveryView,
     TriggerReplayOnCBCloseView,
     TryRecoveryTransitionView,
@@ -1267,6 +1272,32 @@ urlpatterns += [
         name="xtest-integration-full-snapshot",
     ),
     path("xtest/integration/reset/", ResetView.as_view(), name="xtest-integration-reset"),
+    # Throttle X-Test Endpoints
+    path(
+        "xtest/throttle/simulate-emergency/",
+        ThrottleEmergencySimulationView.as_view(),
+        name="xtest-throttle-simulate-emergency",
+    ),
+    path(
+        "xtest/throttle/simulate-cb-open/",
+        ThrottleCBOpenSimulationView.as_view(),
+        name="xtest-throttle-simulate-cb-open",
+    ),
+    path(
+        "xtest/throttle/inject-rtt-delay/",
+        ThrottleRTTDelayInjectionView.as_view(),
+        name="xtest-throttle-inject-rtt-delay",
+    ),
+    path(
+        "xtest/throttle/status/",
+        ThrottleXTestStatusView.as_view(),
+        name="xtest-throttle-status",
+    ),
+    path(
+        "xtest/throttle/reset/",
+        ThrottleXTestResetView.as_view(),
+        name="xtest-throttle-reset",
+    ),
     # =========================================================================
     # Recovery Coordinator API - 복구 프로세스 관리
     # =========================================================================
