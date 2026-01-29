@@ -486,9 +486,104 @@ services:
       loki:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # OTEL 전체 파이프라인 E2E 테스트 (Phase 5.1)
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-e2e
+  # ---------------------------------------------------------------------------
+  test-otel-e2e:
+    build: .
+    command: >
+      sh -c "sleep 5 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_e2e_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - LOKI_ENDPOINT=http://loki:3100
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # OTEL 텔레메트리 상관관계 테스트 (Phase 5.3)
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-correlation
+  # ---------------------------------------------------------------------------
+  test-otel-correlation:
+    build: .
+    command: >
+      sh -c "sleep 5 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_telemetry_correlation_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - LOKI_ENDPOINT=http://loki:3100
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # OTEL Collector 성능 테스트 (Phase 5.4)
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-performance
+  # ---------------------------------------------------------------------------
+  test-otel-performance:
+    build: .
+    command: >
+      sh -c "sleep 5 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_collector_performance_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - LOKI_ENDPOINT=http://loki:3100
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      - COLLECTOR_METRICS_ENDPOINT=http://otel-collector:8888
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
   otel_buffer_test:
   tempo_data_test:
   mimir_data_test:
   loki_data_test:
+

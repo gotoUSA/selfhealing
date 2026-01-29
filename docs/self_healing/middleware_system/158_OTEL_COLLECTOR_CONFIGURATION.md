@@ -398,17 +398,24 @@ ENTRYPOINT ["/otelcol-contrib"]
 
 ### 5.5 Phase 5: 통합 검증
 
-- [ ] **5.1** 전체 파이프라인 E2E 테스트
-- [ ] **5.2** Grafana 데이터소스 추가
-  - Tempo datasource
-  - Loki datasource
-  - Mimir datasource (또는 기존 Prometheus 유지)
-- [ ] **5.3** 상관관계 검증
-  - Trace → Logs 연동
-  - Metrics → Traces 연동
-- [ ] **5.4** 성능 테스트
-  - 부하 시 데이터 손실 없음
-  - 메모리 사용량 제한 동작
+- [x] **5.1** 전체 파이프라인 E2E 테스트
+  - 통합 테스트: `tests/integration/otel/test_e2e_pipeline_integration.py`
+  - 실행: `docker-compose -f docker-compose.test.yml run --rm test-otel-e2e`
+- [x] **5.2** Grafana 데이터소스 추가
+  - Tempo datasource: `docker/grafana/provisioning/datasources/datasource.yml`
+  - Loki datasource: trace_id 기반 Trace 연동 설정
+  - Mimir datasource: PromQL 쿼리 지원
+- [x] **5.3** 상관관계 검증
+  - 통합 테스트: `tests/integration/otel/test_telemetry_correlation_integration.py`
+  - Trace → Logs 연동 (trace_id 기반)
+  - Metrics → Traces 연동 (service.name 기반)
+  - 실행: `docker-compose -f docker-compose.test.yml run --rm test-otel-correlation`
+- [x] **5.4** 성능 테스트
+  - 통합 테스트: `tests/integration/otel/test_collector_performance_integration.py`
+  - 부하 시 데이터 손실 없음 (100개 Trace/Metric/Log 연속 전송)
+  - 메모리 사용량 제한 동작 검증
+  - 동시 다발적 요청 처리 안정성
+  - 실행: `docker-compose -f docker-compose.test.yml run --rm test-otel-performance`
 
 ---
 
