@@ -75,6 +75,12 @@ from selfhealing.services.throttle.safe_open_fallback import (
     get_safe_open_fallback_manager,
     reset_safe_open_fallback_manager,
 )
+from selfhealing.services.throttle.time_bucketed_window import (
+    BucketData,
+    RTTWindowStats,
+    TimeBucketedGradientCalculator,
+    TimeBucketedRTTWindow,
+)
 
 __all__ = [
     "ThrottleConfig",
@@ -121,4 +127,9 @@ __all__ = [
     "RedisConnectionState",
     "get_safe_open_fallback_manager",
     "reset_safe_open_fallback_manager",
+    # Time-Bucketed Window
+    "TimeBucketedRTTWindow",
+    "TimeBucketedGradientCalculator",
+    "RTTWindowStats",
+    "BucketData",
 ]

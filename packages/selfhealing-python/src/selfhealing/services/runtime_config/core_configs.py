@@ -198,6 +198,65 @@ class CoreConfigMixin:
         return self._update_config("notification", **updates)
 
     # =========================================================================
+    # Throttle Config (SLA 동적 배포, Netflix Gradient)
+    # =========================================================================
+
+    def get_throttle_config(self) -> dict[str, Any]:
+        """
+        Get throttle configuration for adaptive throttling.
+
+        3단계 폴백:
+        1. RuntimeConfigManager (런타임 동적 설정)
+        2. ThrottleSettings (환경변수 기반)
+        3. 하드코딩 fallback 상수
+
+        Returns:
+            dict with keys:
+            - sla_warning_ms: int (SLA 경고 임계값)
+            - sla_critical_ms: int (SLA 위험 임계값)
+            - initial_limit: int (초기 limit)
+            - min_limit: int (최소 limit)
+            - max_limit: int (최대 limit)
+            - etc.
+        """
+        return self._get_config("throttle")
+
+    def update_throttle_config(
+        self,
+        # SLA 임계값
+        sla_warning_ms: int | None = None,
+        sla_critical_ms: int | None = None,
+        # 기본 limit 설정
+        initial_limit: int | None = None,
+        min_limit: int | None = None,
+        max_limit: int | None = None,
+        # Gradient 계산 설정
+        smoothing_factor: float | None = None,
+        sample_interval_ms: int | None = None,
+        # 조정 비율
+        decrease_ratio: float | None = None,
+        increase_step: int | None = None,
+        # Emergency 배율
+        emergency_level_0_multiplier: float | None = None,
+        emergency_level_1_multiplier: float | None = None,
+        emergency_level_2_multiplier: float | None = None,
+        emergency_level_3_multiplier: float | None = None,
+        # CB 연동
+        cb_open_limit_percent: float | None = None,
+        cb_half_open_limit_percent: float | None = None,
+        # Recovery Dampening
+        recovery_dampening_enabled: bool | None = None,
+        recovery_step_interval_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        """
+        Update throttle configuration.
+
+        SLA 임계값, limit 설정, Gradient 파라미터 등을 런타임에 업데이트합니다.
+        """
+        updates = {k: v for k, v in locals().items() if k != "self" and v is not None}
+        return self._update_config("throttle", **updates)
+
+    # =========================================================================
     # Forensic Config
     # =========================================================================
 

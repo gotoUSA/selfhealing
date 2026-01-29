@@ -151,6 +151,15 @@ from .snapshot import (
     SystemSnapshotView,
 )
 
+# Throttle Simulation X-Test views
+from .throttle_simulation import (
+    ThrottleCBOpenSimulationView,
+    ThrottleEmergencySimulationView,
+    ThrottleResetView as ThrottleXTestResetView,
+    ThrottleRTTDelayInjectionView,
+    ThrottleStatusView as ThrottleXTestStatusView,
+)
+
 # Legacy aliases for backward compatibility
 _collect_system_snapshot = collect_system_snapshot
 _add_healing_event = add_healing_event
@@ -223,6 +232,12 @@ __all__ = [
     "ScenarioStatus",
     "get_scenario_class",
     "list_available_scenarios",
+    # Throttle Simulation X-Test views
+    "ThrottleEmergencySimulationView",
+    "ThrottleCBOpenSimulationView",
+    "ThrottleRTTDelayInjectionView",
+    "ThrottleXTestStatusView",
+    "ThrottleXTestResetView",
     # Legacy aliases
     "_collect_system_snapshot",
     "_add_healing_event",

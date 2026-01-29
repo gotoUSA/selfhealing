@@ -380,12 +380,12 @@ And: KILL_SWITCH 수준 알림 발송
 
 ## Phase 2 연기 항목
 
-| 항목 | 이유 | 대안 | 코드 근거 |
-|-----|------|------|----------|
-| Netflix Min RTT (24h 최저) | Redis 저장소 설계 필요 | 현재 EMA 충분 | `deque(maxlen=100)` |
-| SLA 임계치 Canary Rollout | 71번 문서와 별도 연동 | settings 기반 | `get_rate_limit_config()` |
-| **SLA 동적 배포 (DynamicConfig)** | RuntimeConfig 패턴 적용 필요 | settings 기반 | `RuntimeConfigManager` |
-| **Time-Bucketed Window** | 메모리 관리 개선 필요 | maxlen=100 유지 | `sample_window_seconds` |
+| 항목 | 이유 | 대안 | 코드 근거 | 상태 |
+|-----|------|------|----------|------|
+| Netflix Min RTT (24h 최저) | Redis 저장소 설계 필요 | 현재 EMA 충분 | `deque(maxlen=100)` | 연기 |
+| SLA 임계치 Canary Rollout | 71번 문서와 별도 연동 | settings 기반 | `get_rate_limit_config()` | 연기 |
+| **SLA 동적 배포 (DynamicConfig)** | RuntimeConfig 패턴 적용 필요 | settings 기반 | `RuntimeConfigManager` | ✅ 완료 |
+| **Time-Bucketed Window** | 메모리 관리 개선 필요 | maxlen=100 유지 | `sample_window_seconds` | ✅ 완료 |
 
 ---
 
@@ -406,9 +406,10 @@ And: KILL_SWITCH 수준 알림 발송
 **근거 코드**: `get_rate_limit_config()` - 3단계 폴백 패턴 이미 구현
 
 **Phase 2 작업**:
-- [ ] `get_throttle_config()` 함수 구현
+- [x] `get_throttle_config()` 함수 구현
+- [x] `update_throttle_config()` 함수 구현
 - [ ] Canary Rollout 연동 (71번 문서)
-- [ ] SLA 임계치 변경 시 자동 적용
+- [x] SLA 임계치 변경 시 자동 적용
 
 ---
 
@@ -431,9 +432,11 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 | **Time-Bucket** | 시간 기반 정확도 | 구현 복잡도 |
 
 **Phase 2 작업**:
-- [ ] 초당 1개 버킷 (1초 평균 RTT 저장)
-- [ ] 10초 윈도우 = 10개 버킷
-- [ ] `array.array('f')` 사용으로 메모리 절감
+- [x] 초당 1개 버킷 (1초 평균 RTT 저장)
+- [x] 10초 윈도우 = 10개 버킷
+- [x] `array.array('f')` 사용으로 메모리 절감
+- [x] `TimeBucketedRTTWindow` 클래스 구현
+- [x] `TimeBucketedGradientCalculator` 클래스 구현
 
 ---
 
@@ -461,7 +464,7 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 
 ## 구현 현황
 
-### 구현 완료 항목 (2026-01-29)
+### 구현 완료 항목 (2026-01-30)
 
 | 항목 | 상태 | 구현 파일 | 테스트 파일 |
 |------|------|----------|------------|
@@ -469,6 +472,9 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 | Prometheus 메트릭 (6개) | ✅ 완료 | `services/metrics/definitions.py`, `services/throttle/adaptive.py` | `test_throttle_metrics.py` |
 | 감사 로그/CascadeEvent (4개) | ✅ 완료 | `services/throttle/audit.py` | `test_throttle_audit.py` |
 | Postmortem 연동 | ✅ 완료 | `services/throttle/postmortem.py` | `test_throttle_postmortem.py` |
+| **X-Test Throttle 시뮬레이션 API (5개)** | ✅ 완료 | `api/django/views/xtest/throttle_simulation.py` | `test_xtest_throttle_simulation.py` |
+| **RuntimeConfig Throttle 설정** | ✅ 완료 | `config/runtime_config.py` | `test_runtime_config_throttle.py` |
+| **Time-Bucketed RTT Window** | ✅ 완료 | `services/throttle/time_bucketed_window.py` | `test_time_bucketed_window.py` |
 
 ### ThrottleSettings 확장 필드 상세
 
@@ -527,3 +533,45 @@ sample_window_seconds = 10.0  # 시간 기반 (get_stats()에서 사용)
 | `throttle_cb_adjustments` | `int` | CB 조정 횟수 |
 | `throttle_sla_warnings` | `int` | SLA 경고 횟수 |
 | `throttle_sla_criticals` | `int` | SLA 위험 횟수 |
+
+### X-Test Throttle 시뮬레이션 API 상세 (2026-01-30)
+
+| 엔드포인트 | 메서드 | 파라미터 | 설명 |
+|-----------|--------|----------|------|
+| `/api/xtest/throttle/emergency/simulate/` | POST | `level` (0-3) | EM 레벨 강제 변경 시뮬레이션 |
+| `/api/xtest/throttle/cb/simulate/` | POST | `state` (open/half_open/closed), `service` | CB 상태 강제 변경 시뮬레이션 |
+| `/api/xtest/throttle/rtt/inject/` | POST | `rtt_ms`, `count` (optional) | RTT 지연 주입 |
+| `/api/xtest/throttle/status/` | GET | - | 현재 Throttle 상태 조회 |
+| `/api/xtest/throttle/reset/` | POST | - | Throttle 상태 초기화 |
+
+**X-Test 모드 보호**: 모든 뷰는 `XTestModeMixin` 상속, `XTEST_MODE=true` 설정 필요
+
+### RuntimeConfig Throttle 설정 상세 (2026-01-30)
+
+| 메서드 | 설명 | 지원 필드 |
+|--------|------|----------|
+| `get_throttle_config()` | 현재 Throttle 설정 반환 (dict) | 19개 필드 전체 |
+| `update_throttle_config(**kwargs)` | 런타임 Throttle 설정 업데이트 | 19개 필드 부분 업데이트 |
+
+**지원 설정 필드 카테고리**:
+- SLA 임계치: `sla_critical_ms`, `sla_warning_ms`
+- Limit 설정: `initial_limit`, `min_limit`, `max_limit`
+- Gradient 설정: `gradient_threshold`, `limit_step`
+- Emergency 배율: `emergency_level_*_multiplier` (0-3)
+- CB 설정: `cb_open_limit_percent`, `cb_half_open_limit_percent`
+- Recovery Dampening: `recovery_dampening_enabled`, `recovery_step_*_percent`
+- 기타: `enable_event_integration`, `gradient_freeze_on_level_3`, `full_stop_conditions_enabled`
+
+### Time-Bucketed RTT Window 상세 (2026-01-30)
+
+| 클래스 | 설명 | 핵심 기능 |
+|--------|------|----------|
+| `TimeBucketedRTTWindow` | 초당 버킷 기반 RTT 윈도우 | 메모리 효율적 RTT 저장 |
+| `TimeBucketedGradientCalculator` | 버킷 기반 Gradient 계산 | EMA 호환 Gradient 계산 |
+
+**주요 특징**:
+- 초당 1개 버킷 (평균 RTT 저장)
+- 10초 윈도우 = 10개 버킷 (고정 메모리)
+- `array.array('f')` 사용으로 메모리 절감
+- 오래된 버킷 자동 만료
+- EMA 호환 `get_stats()` 제공

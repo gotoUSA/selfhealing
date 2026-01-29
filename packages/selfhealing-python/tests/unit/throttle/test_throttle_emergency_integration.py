@@ -121,7 +121,11 @@ class TestAdjustForEmergency:
         assert stats["emergency"]["base_limit_before_emergency"] == 150
 
     def test_restores_base_limit_on_deactivation(self):
-        """Emergency 해제 시 저장된 base_limit으로 복구."""
+        """Emergency 해제 시 Recovery Dampening 단계적 복구 시작 (80%→90%→100%).
+
+        Recovery Dampening이 활성화되어 있으면 즉시 base_limit으로 복구되지 않고
+        첫 단계(80%)부터 시작합니다.
+        """
         throttle = get_adaptive_throttle()
         throttle.current_limit = 150
 
@@ -129,9 +133,11 @@ class TestAdjustForEmergency:
         throttle.adjust_for_emergency(2)
         assert throttle.current_limit == 75  # 150 × 0.5
 
-        # 해제
+        # 해제 - Recovery Dampening 시작 (80% = 120)
         throttle.adjust_for_emergency(0)
-        assert throttle.current_limit == 150  # 원래 값 복구
+        # Recovery Dampening 첫 단계: base_limit × 0.8 = 150 × 0.8 = 120
+        assert throttle.current_limit == 120
+        assert throttle.is_recovery_dampening_active()
 
 
 class TestGradientFrozen:
@@ -312,7 +318,7 @@ class TestEmergencyDeactivatedThrottleHandler:
         reset_adaptive_throttle()
 
     def test_restores_limit_on_emergency_deactivated(self):
-        """Emergency 비활성화 이벤트 시 limit 복구."""
+        """Emergency 비활성화 이벤트 시 Recovery Dampening 시작 (80%→90%→100%)."""
         throttle = get_adaptive_throttle()
         throttle.current_limit = 100
 
@@ -329,8 +335,10 @@ class TestEmergencyDeactivatedThrottleHandler:
 
         _on_emergency_deactivated_throttle(event)
 
-        assert throttle.current_limit == 100
+        # Recovery Dampening 첫 단계: base_limit × 0.8 = 100 × 0.8 = 80
+        assert throttle.current_limit == 80
         assert not throttle.is_emergency_active()
+        assert throttle.is_recovery_dampening_active()
 
     def test_ignores_self_source_events(self):
         """source='throttle' 이벤트 무시."""

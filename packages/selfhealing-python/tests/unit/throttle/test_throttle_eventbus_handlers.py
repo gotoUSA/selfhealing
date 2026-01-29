@@ -66,8 +66,10 @@ class TestEmergencyLevelChangedThrottleHandler:
 
         _on_emergency_level_changed_throttle(event2)
 
-        # 원래 limit (100)으로 복구
-        assert throttle.current_limit == 100
+        # Recovery Dampening 첫 단계: base_limit × 0.8 = 100 × 0.8 = 80
+        # (Emergency Level 1의 80%와 동일한 값이지만 Recovery Dampening 상태)
+        assert throttle.current_limit == 80
+        assert throttle.is_recovery_dampening_active()
 
     def test_level_1_reduces_limit_by_20_percent(self):
         """Emergency Level 1 시 limit × 0.8."""
