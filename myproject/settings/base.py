@@ -442,3 +442,20 @@ SELF_HEALING_DOMAIN_MAPPING = {
 
 from myproject.settings.components.social_auth import *  # noqa: F401, F403, E402
 from myproject.settings.components.payment import *  # noqa: F401, F403, E402
+
+# ==========================================================================
+# OpenTelemetry SDK Initialization
+# ==========================================================================
+# OTEL_ENABLED=true 시 TracerProvider 및 OTLP Exporter 자동 초기화
+# 비활성화 시 기존 trace_id_middleware가 자체 트레이싱 수행
+
+try:
+    from selfhealing.observability import initialize_opentelemetry
+
+    _otel_initialized = initialize_opentelemetry()
+except ImportError:
+    # OpenTelemetry packages not installed
+    _otel_initialized = False
+except Exception:
+    # Initialization failed - fallback to legacy tracing
+    _otel_initialized = False

@@ -16,9 +16,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Context variable for async-safe trace ID storage
-_trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "trace_id", default=None
-)
+_trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
 
 # Thread-local fallback for non-async code
 _thread_local = threading.local()
@@ -92,14 +90,20 @@ def get_trace_id() -> str:
     Get the current trace ID.
 
     Checks in order:
-    1. Context variable (async-safe)
-    2. Thread-local storage
-    3. Generates new if none exists
+    1. OpenTelemetry span context (if OTEL enabled)
+    2. Context variable (async-safe)
+    3. Thread-local storage
+    4. Generates new if none exists
 
     Returns:
         Current trace ID
     """
-    # Try context variable first (async-safe)
+    # Try OpenTelemetry first (if enabled)
+    otel_trace_id = _get_trace_id_from_otel()
+    if otel_trace_id:
+        return otel_trace_id
+
+    # Try context variable (async-safe)
     trace_id = _trace_id_var.get()
     if trace_id:
         return trace_id
@@ -113,6 +117,60 @@ def get_trace_id() -> str:
     new_id = generate_trace_id()
     set_trace_id(new_id)
     return new_id
+
+
+def _get_trace_id_from_otel() -> str | None:
+    """
+    Extract trace ID from OpenTelemetry span context.
+
+    Returns:
+        Full W3C trace_id (32 hex chars) prefixed with 'req-' for UI display,
+        or None if OTEL is not enabled or no active span.
+    """
+    try:
+        from selfhealing.observability import (
+            get_current_trace_id_from_otel,
+            is_otel_enabled,
+        )
+
+        if not is_otel_enabled():
+            return None
+
+        full_trace_id = get_current_trace_id_from_otel()
+        if full_trace_id:
+            # Return short format for display compatibility
+            # Full ID stored in OTEL context, short for logs
+            return f"req-{full_trace_id[:8]}"
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    return None
+
+
+def get_trace_id_full() -> str | None:
+    """
+    Get the full W3C format trace ID (32 hex characters) from OTEL.
+
+    Returns:
+        Full 32-character hex trace_id if OTEL enabled, None otherwise.
+        Use this for internal storage (Loki/Tempo) to avoid collision.
+    """
+    try:
+        from selfhealing.observability import (
+            get_current_trace_id_from_otel,
+            is_otel_enabled,
+        )
+
+        if is_otel_enabled():
+            return get_current_trace_id_from_otel()
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    return None
 
 
 def set_trace_id(trace_id: str) -> None:
@@ -138,12 +196,13 @@ def extract_trace_id_from_request(request) -> str | None:
     """
     Extract trace ID from a Django request.
 
-    Checks common tracing headers in order:
-    1. X-Request-ID
-    2. X-Trace-ID
-    3. X-Correlation-ID
-    4. traceparent (W3C Trace Context)
-    5. X-Amzn-Trace-Id (AWS X-Ray)
+    Checks in order:
+    1. OpenTelemetry span context (if OTEL enabled and has active span)
+    2. X-Request-ID header
+    3. X-Trace-ID header
+    4. X-Correlation-ID header
+    5. traceparent (W3C Trace Context)
+    6. X-Amzn-Trace-Id (AWS X-Ray)
 
     Args:
         request: Django HttpRequest object
@@ -151,6 +210,12 @@ def extract_trace_id_from_request(request) -> str | None:
     Returns:
         Trace ID if found, None otherwise
     """
+    # Try OpenTelemetry first (if Django instrumentation created a span)
+    otel_trace_id = _get_trace_id_from_otel()
+    if otel_trace_id:
+        return otel_trace_id
+
+    # Fallback to header-based extraction
     headers_to_check = [
         "HTTP_X_REQUEST_ID",
         "HTTP_X_TRACE_ID",
@@ -265,9 +330,7 @@ def trace_id_middleware(get_response):
 # =============================================================================
 
 # Celery 컨텍스트 저장용 변수
-_celery_context_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
-    "celery_context", default=None
-)
+_celery_context_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar("celery_context", default=None)
 
 
 def generate_celery_trace_id(task_id: str) -> str:

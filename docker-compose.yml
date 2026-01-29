@@ -71,6 +71,14 @@ services:
       # Stage 48: X-Test-Mode Configuration
       - CHAOS_ENABLED=true
       - ENVIRONMENT=development
+      # OpenTelemetry SDK Configuration
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-selfhealing}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}
+      - OTEL_TRACES_SAMPLER=${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+      - OTEL_TRACES_SAMPLER_ARG=${OTEL_TRACES_SAMPLER_ARG:-0.01}
+      - OTEL_ADAPTIVE_SAMPLING_ENABLED=${OTEL_ADAPTIVE_SAMPLING_ENABLED:-true}
+      - OTEL_SLA_CRITICAL_MS=${OTEL_SLA_CRITICAL_MS:-500}
     depends_on:
       db:
         condition: service_healthy

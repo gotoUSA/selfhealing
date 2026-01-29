@@ -275,33 +275,33 @@ CascadeEvent 발생 시 OTEL trace_id와 span_id를 감사 로그에 포함:
 
 ### 4.1 Phase 1: SDK 설치 및 기본 설정
 
-- [ ] **1.1** requirements.txt에 OTEL 패키지 추가
+- [x] **1.1** requirements.txt에 OTEL 패키지 추가
   - opentelemetry-api
   - opentelemetry-sdk
   - opentelemetry-exporter-otlp
-- [ ] **1.2** `selfhealing/observability/` 디렉토리 생성
-- [ ] **1.3** `selfhealing/observability/__init__.py` 작성
+- [x] **1.2** `selfhealing/observability/` 디렉토리 생성
+- [x] **1.3** `selfhealing/observability/__init__.py` 작성
   - TracerProvider 초기화
   - OTLP Exporter 설정
-- [ ] **1.4** `selfhealing/settings/observability.py` 작성
+- [x] **1.4** `selfhealing/settings/observability.py` 작성
   - Pydantic Settings 클래스
   - 환경변수 매핑
-- [ ] **1.5** Django settings.py에 OTEL 초기화 호출 추가
-- [ ] **1.6** docker-compose.yml에 OTEL 환경변수 추가
-- [ ] **1.7** 기본 Span 생성 테스트
+- [x] **1.5** Django settings.py에 OTEL 초기화 호출 추가
+- [x] **1.6** docker-compose.yml에 OTEL 환경변수 추가
+- [x] **1.7** 기본 Span 생성 테스트 (49개 단위 테스트 통과)
 
 ### 4.2 Phase 2: Django 자동 계측
 
-- [ ] **2.1** requirements.txt에 django instrumentation 추가
+- [x] **2.1** requirements.txt에 django instrumentation 추가
   - opentelemetry-instrumentation-django
-- [ ] **2.2** Django 미들웨어 자동 계측 활성화
-- [ ] **2.3** `trace.py`의 `get_trace_id()` 수정
+- [x] **2.2** Django 미들웨어 자동 계측 활성화
+- [x] **2.3** `trace.py`의 `get_trace_id()` 수정
   - OTEL 활성화 시 OTEL trace_id 반환
   - OTEL 비활성화 시 기존 로직 유지
-- [ ] **2.4** `extract_trace_id_from_request()` 수정
+- [x] **2.4** `extract_trace_id_from_request()` 수정
   - OTEL Span에서 trace_id 추출 우선
-- [ ] **2.5** 기존 `trace_id_middleware` 동작 테스트
-- [ ] **2.6** X-Request-ID 응답 헤더 검증
+- [x] **2.5** 기존 `trace_id_middleware` 동작 테스트 (13개 테스트 통과)
+- [x] **2.6** X-Request-ID 응답 헤더 검증
 
 ### 4.3 Phase 3: HTTP 클라이언트 계측
 
