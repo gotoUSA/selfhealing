@@ -156,27 +156,27 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 3.1.1 | `docker/tempo/` 디렉토리 생성 | ☐ | | 신규 |
-| 3.1.2 | `tempo.yml` 설정 파일 작성 | ☐ | | 신규 |
-| 3.1.3 | docker-compose.yml에 tempo 서비스 추가 | ☐ | | docker-compose.yml |
-| 3.1.4 | 포트 매핑 (3200) | ☐ | | |
-| 3.1.5 | 볼륨 마운트 (데이터 저장) | ☐ | | |
+| 3.1.1 | `docker/tempo/` 디렉토리 생성 | ✅ | | 완료 |
+| 3.1.2 | `tempo.yml` 설정 파일 작성 | ✅ | | 완료 |
+| 3.1.3 | docker-compose.yml에 tempo 서비스 추가 | ✅ | | docker-compose.yml |
+| 3.1.4 | 포트 매핑 (3200) | ✅ | | |
+| 3.1.5 | 볼륨 마운트 (데이터 저장) | ✅ | | |
 
 ### 4.2 Collector → Tempo 연결
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 3.2.1 | Collector에 otlp exporter (Tempo) 추가 | ☐ | | otel-collector-config.yml |
-| 3.2.2 | traces 파이프라인 설정 | ☐ | | |
-| 3.2.3 | Trace 전송 검증 | ☐ | | |
+| 3.2.1 | Collector에 otlp exporter (Tempo) 추가 | ✅ | | otel-collector-config.yml |
+| 3.2.2 | traces 파이프라인 설정 | ✅ | | |
+| 3.2.3 | Trace 전송 검증 | ✅ | | 통합테스트 통과 |
 
 ### 4.3 Tempo 검증
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 3.3.1 | Tempo API 응답 확인 | ☐ | | curl http://tempo:3200/ready |
-| 3.3.2 | Trace 쿼리 테스트 | ☐ | | |
-| 3.3.3 | Trace 저장 확인 | ☐ | | |
+| 3.3.1 | Tempo API 응답 확인 | ✅ | | test_tempo_ready_endpoint_returns_ok 통과 |
+| 3.3.2 | Trace 쿼리 테스트 | ✅ | | test_trace_reaches_tempo_after_ingestion 통과 |
+| 3.3.3 | Trace 저장 확인 | ✅ | | 7 tests passed |
 
 ---
 
@@ -186,36 +186,36 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 4.1.1 | `docker/loki/` 디렉토리 생성 | ☐ | | 신규 |
-| 4.1.2 | `loki.yml` 설정 파일 작성 | ☐ | | 신규 |
-| 4.1.3 | docker-compose.yml에 loki 서비스 추가 | ☐ | | docker-compose.yml |
-| 4.1.4 | 포트 매핑 (3100) | ☐ | | |
-| 4.1.5 | 볼륨 마운트 (데이터 저장) | ☐ | | |
+| 4.1.1 | `docker/loki/` 디렉토리 생성 | ✅ | | 완료 |
+| 4.1.2 | `loki.yml` 설정 파일 작성 | ✅ | | 완료 |
+| 4.1.3 | docker-compose.yml에 loki 서비스 추가 | ✅ | | docker-compose.yml |
+| 4.1.4 | 포트 매핑 (3100) | ✅ | | |
+| 4.1.5 | 볼륨 마운트 (데이터 저장) | ✅ | | |
 
 ### 5.2 Collector → Loki 연결
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 4.2.1 | Collector에 loki exporter 추가 | ☐ | | otel-collector-config.yml |
-| 4.2.2 | logs 파이프라인 설정 | ☐ | | |
-| 4.2.3 | 속성 프로세서 설정 (trace_id 추출) | ☐ | | |
-| 4.2.4 | 로그 전송 검증 | ☐ | | |
+| 4.2.1 | Collector에 loki exporter 추가 | ✅ | | otel-collector-config.yml |
+| 4.2.2 | logs 파이프라인 설정 | ✅ | | |
+| 4.2.3 | 속성 프로세서 설정 (trace_id 추출) | ✅ | | attributes/logs 프로세서 |
+| 4.2.4 | 로그 전송 검증 | ✅ | | 통합테스트 통과 |
 
 ### 5.3 SDK Log Exporter 설정
 
 | # | 작업 | 상태 | 담당 | 영향 파일 |
 |---|------|------|------|----------|
-| 4.3.1 | opentelemetry-instrumentation-logging 추가 | ☐ | | requirements.txt |
-| 4.3.2 | LoggerProvider 초기화 | ☐ | | observability/__init__.py |
-| 4.3.3 | 기존 logging 설정과 통합 | ☐ | | settings/logging_config.py |
+| 4.3.1 | opentelemetry-instrumentation-logging 추가 | ✅ | | requirements.txt |
+| 4.3.2 | LoggerProvider 초기화 | ✅ | | observability/__init__.py |
+| 4.3.3 | 기존 logging 설정과 통합 | ✅ | | instrument_logging() 함수 |
 
 ### 5.4 Loki 검증
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 4.4.1 | Loki API 응답 확인 | ☐ | | curl http://loki:3100/ready |
-| 4.4.2 | LogQL 쿼리 테스트 | ☐ | | |
-| 4.4.3 | trace_id 라벨 확인 | ☐ | | |
+| 4.4.1 | Loki API 응답 확인 | ✅ | | test_loki_ready_endpoint_returns_ok 통과 |
+| 4.4.2 | LogQL 쿼리 테스트 | ✅ | | test_loki_supports_stream_query 통과 |
+| 4.4.3 | trace_id 라벨 확인 | ✅ | | 11 tests passed |
 
 ---
 
