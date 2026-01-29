@@ -608,6 +608,37 @@ services:
       loki:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Mimir PromQL 호환성 및 상관관계 E2E 테스트
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-mimir-correlation
+  # ---------------------------------------------------------------------------
+  test-mimir-correlation:
+    build: .
+    command: >
+      sh -c "sleep 5 && pip install requests pytest -q &&
+             python -m pytest tests/integration/otel/test_mimir_correlation_integration.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
+      - MIMIR_ENDPOINT=http://mimir:9009
+      - TEMPO_ENDPOINT=http://tempo:3200
+      - LOKI_ENDPOINT=http://loki:3100
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
   otel_buffer_test:

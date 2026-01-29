@@ -227,29 +227,36 @@ CascadeEvent 발생 시 해당 시점의 OTEL trace_id와 span_id를 감사 로�
 
 ### 5.3 Phase 3: Mimir 통합 (선택)
 
-- [ ] **3.1** Mimir 서비스 설정
+- [x] **3.1** Mimir 서비스 설정
   - `docker/mimir/mimir.yml` 생성
   - docker-compose.yml에 mimir 서비스 추가
-- [ ] **3.2** Grafana Mimir Datasource 추가
-- [ ] **3.3** 기존 대시보드 Datasource 전환
-  - Prometheus → Mimir
-- [ ] **3.4** PromQL 호환성 검증
-- [ ] **3.5** Alerting 규칙 마이그레이션
+- [x] **3.2** Grafana Mimir Datasource 추가
+  - `docker/grafana/provisioning/datasources/datasource.yml`에 Mimir datasource 추가
+  - uid: mimir, exemplarTraceIdDestinations 설정 포함
+- [x] **3.3** 기존 대시보드 Datasource 전환
+  - Prometheus → Mimir (metrics_datasource 변수로 동적 전환 지원)
+- [x] **3.4** PromQL 호환성 검증
+  - `tests/integration/otel/test_mimir_correlation_integration.py` 테스트 통과
+- [x] **3.5** Prometheus remote_write 설정
+  - `docker/prometheus/prometheus.yml`에 Mimir로 메트릭 복제 설정 추가
+  - send_exemplars: true 활성화
 
 ### 5.4 Phase 4: 상관관계 설정
 
-- [ ] **4.1** Traces → Logs 연동 설정
-  - Tempo에서 Loki로 링크
+- [x] **4.1** Traces → Logs 연동 설정
+  - Tempo datasource에 tracesToLogsV2 설정
   - trace_id 기반 자동 필터
-- [ ] **4.2** Logs → Traces 연동 설정
-  - Loki 로그에서 trace_id 클릭 시 Tempo로 이동
-- [ ] **4.3** Metrics → Traces Exemplar 설정
-  - Mimir/Prometheus Exemplar 활성화
-  - Tempo 연결 설정
-- [ ] **4.4** Unified View 대시보드 생성
+- [x] **4.2** Logs → Traces 연동 설정
+  - Loki datasource에 derivedFields 설정
+  - trace_id 클릭 시 Tempo로 자동 이동
+- [x] **4.3** Metrics → Traces Exemplar 설정
+  - Prometheus/Mimir datasource에 exemplarTraceIdDestinations 설정
+  - Tempo 연결 설정 완료
+- [x] **4.4** Unified View 대시보드 생성
   - `docker/grafana/provisioning/dashboards/unified_view.json`
-- [ ] **4.5** 상관관계 E2E 테스트
-  - Metric → Trace → Log 전체 경로 검증
+- [x] **4.5** 상관관계 E2E 테스트
+  - `tests/integration/otel/test_mimir_correlation_integration.py`
+  - Metric → Trace → Log 전체 경로 검증 완료
 
 ### 5.5 Phase 5: 대시보드 마이그레이션
 
