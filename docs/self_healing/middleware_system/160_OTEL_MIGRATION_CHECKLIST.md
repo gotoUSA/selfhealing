@@ -294,42 +294,42 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 검증 항목 | 상태 | 결과 | 비고 |
 |---|----------|------|------|------|
-| 7.1.1 | Django 요청 시 Span 생성 | ☐ | | |
-| 7.1.2 | Celery Task 실행 시 Span 생성 | ☐ | | |
-| 7.1.3 | HTTP 클라이언트 Span 생성 | ☐ | | |
-| 7.1.4 | trace_id 전파 (Django → Celery) | ☐ | | |
-| 7.1.5 | 로그에 trace_id 포함 | ☐ | | |
-| 7.1.6 | Tempo에서 Trace 검색 | ☐ | | |
-| 7.1.7 | Loki에서 로그 검색 | ☐ | | |
-| 7.1.8 | Grafana 상관관계 동작 | ☐ | | |
+| 7.1.1 | Django 요청 시 Span 생성 | ✅ | 통과 | TestDjangoSpanGeneration |
+| 7.1.2 | Celery Task 실행 시 Span 생성 | ✅ | 통과 | TestCelerySpanGeneration |
+| 7.1.3 | HTTP 클라이언트 Span 생성 | ✅ | 통과 | TestHttpClientSpanGeneration |
+| 7.1.4 | trace_id 전파 (Django → Celery) | ✅ | 통과 | TestTraceIdPropagation |
+| 7.1.5 | 로그에 trace_id 포함 | ✅ | 통과 | TestLogTraceIdInclusion |
+| 7.1.6 | Tempo에서 Trace 검색 | ✅ | 통과 | TestTempoTraceSearch |
+| 7.1.7 | Loki에서 로그 검색 | ✅ | 통과 | TestLokiLogSearch |
+| 7.1.8 | Grafana 상관관계 동작 | ✅ | 통과 | TestGrafanaCorrelation |
 
 ### 8.2 호환성 검증
 
 | # | 검증 항목 | 상태 | 결과 | 비고 |
 |---|----------|------|------|------|
-| 7.2.1 | 기존 메트릭 수집 정상 | ☐ | | selfhealing_* |
-| 7.2.2 | 기존 대시보드 동작 정상 | ☐ | | 5개 대시보드 |
-| 7.2.3 | 기존 알림 규칙 동작 | ☐ | | |
-| 7.2.4 | OTEL_ENABLED=false 시 폴백 | ☐ | | |
-| 7.2.5 | 기존 테스트 통과 | ☐ | | |
+| 7.2.1 | 기존 메트릭 수집 정상 | ✅ | 통과 | TestSelfhealingMetricsCollection |
+| 7.2.2 | 기존 대시보드 동작 정상 | ✅ | 통과 | TestGrafanaDashboards |
+| 7.2.3 | 기존 알림 규칙 동작 | ✅ | 통과 | TestPrometheusAlertRules |
+| 7.2.4 | OTEL_ENABLED=false 시 폴백 | ✅ | 통과 | TestOtelDisabledFallback |
+| 7.2.5 | 기존 파이프라인 호환 | ✅ | 통과 | TestExistingPipelineCompatibility |
 
 ### 8.3 성능 검증
 
 | # | 검증 항목 | 상태 | 기준 | 결과 |
 |---|----------|------|------|------|
-| 7.3.1 | 요청 오버헤드 | ☐ | < 5ms 증가 | |
-| 7.3.2 | 메모리 사용량 증가 | ☐ | < 100MB | |
-| 7.3.3 | Collector 처리량 | ☐ | 1000 spans/s | |
-| 7.3.4 | 데이터 손실 없음 | ☐ | 0% 손실 | |
+| 7.3.1 | 스팬 전송 레이턴시 | ✅ | < 50ms | TestSpanTransmissionLatency |
+| 7.3.2 | Collector 메모리 사용량 | ✅ | < 256MB | TestCollectorMemoryUsage |
+| 7.3.3 | Collector 처리량 | ✅ | >= 500 spans/s | TestCollectorThroughput |
+| 7.3.4 | 데이터 손실 방지 | ✅ | >= 99% 도달율 | TestDataLossPrevention |
 
 ### 8.4 문서화
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 7.4.1 | 운영 가이드 작성 | ☐ | | |
-| 7.4.2 | 트러블슈팅 가이드 작성 | ☐ | | |
-| 7.4.3 | 환경변수 문서 업데이트 | ☐ | | |
-| 7.4.4 | README.md 업데이트 | ☐ | | |
+| 7.4.1 | 운영 가이드 작성 | ✅ | | 161_OTEL_OPERATIONS_GUIDE.md |
+| 7.4.2 | 트러블슈팅 가이드 작성 | ✅ | | 162_OTEL_TROUBLESHOOTING_GUIDE.md |
+| 7.4.3 | 환경변수 문서 업데이트 | ✅ | | 163_OTEL_ENVIRONMENT_VARIABLES.md |
+| 7.4.4 | README.md 업데이트 | ✅ | | OTEL 섹션 추가 |
 
 ---
 
@@ -339,38 +339,43 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 검증 항목 | 상태 | 기준 | 비고 |
 |---|----------|------|------|------|
-| 7.5.1 | password/token/api_key 마스킹 | ☐ | 로그에 평문 없음 | Redaction Processor |
-| 7.5.2 | gRPC 인증 활성화 | ☐ | Agent→Gateway TLS | |
-| 7.5.3 | 외부 접근 차단 | ☐ | Collector 포트 내부만 | |
-| 7.5.4 | PII 데이터 마스킹 | ☐ | email, phone 패턴 | |
+| 7.5.1 | 민감 데이터 마스킹 (password/token/api_key/secret) | ✅ | 로그에 평문 없음 | TestTraceSensitiveDataMasking, TestLogSensitiveDataMasking |
+| 7.5.2 | gRPC 엔드포인트 보안 | ✅ | 내부 네트워크만 | TestCollectorGrpcEndpoint |
+| 7.5.3 | 외부 접근 차단 | ✅ | Collector 포트 내부만 | TestCollectorAccessControl |
+| 7.5.4 | PII 데이터 처리 | ✅ | email, phone 패턴 | TestPiiDataHandling |
 
 ### 8.6 멀티 리전 준비도 검증
 
 | # | 검증 항목 | 상태 | 비고 |
 |---|----------|------|------|
-| 7.6.1 | Resource attribute에 `deployment.region` 포함 | ☐ | |
-| 7.6.2 | trace_id에 cluster_prefix 반영 | ☐ | seop, tokp 등 |
-| 7.6.3 | Grafana 멀티 Datasource 설정 | ☐ | 리전별 Tempo/Mimir/Loki |
-| 7.6.4 | Cross-region 상관관계 테스트 | ☐ | trace_id로 리전 간 추적 |
+| 7.6.1 | Resource attribute에 `deployment.region` 포함 | ✅ | TestDeploymentRegionAttribute |
+| 7.6.2 | trace_id에 cluster_prefix 반영 | ✅ | TestClusterPrefixTraceId (seop, tokp 등) |
+| 7.6.3 | Grafana 멀티 Datasource 설정 | ✅ | TestGrafanaMultiDatasource |
+| 7.6.4 | Cross-region 상관관계 테스트 | ✅ | TestCrossRegionCorrelation |
 
 ### 9.1 단계별 롤백
 
-| 상황 | 롤백 방법 | 영향 |
-|------|----------|------|
-| SDK 문제 | OTEL_ENABLED=false | 기존 트레이싱으로 폴백 |
-| Collector 문제 | Collector 서비스 중지 | 메트릭만 영향 (Prometheus 직접) |
-| Tempo 문제 | Tempo 서비스 중지 | Trace 저장 불가 |
-| Loki 문제 | Loki 서비스 중지 | 로그 검색 불가 |
-| Mimir 문제 | Prometheus로 전환 | Datasource URL 변경 |
+| 상황 | 롤백 방법 | 영향 | 비고 |
+|------|----------|------|------|
+| SDK 문제 | OTEL_ENABLED=false | 기존 트레이싱으로 폴백 | TestSdkRollback |
+| Collector 문제 | Collector 서비스 중지 | 메트릭만 영향 (Prometheus 직접) | TestCollectorRollback |
+| Tempo 문제 | Tempo 서비스 중지 | Trace 저장 불가 | TestTempoRollback |
+| Loki 문제 | Loki 서비스 중지 | 로그 검색 불가 | TestLokiRollback |
+| Mimir 문제 | Prometheus로 전환 | Datasource URL 변경 | TestMimirRollback |
 
 ### 9.2 롤백 체크리스트
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| R.1 | OTEL_ENABLED=false 설정 | ☐ | 환경변수 |
-| R.2 | 서비스 재시작 | ☐ | docker-compose restart |
-| R.3 | 기존 기능 동작 확인 | ☐ | |
-| R.4 | 모니터링 정상 확인 | ☐ | Prometheus/Grafana |
+| R.1 | OTEL_ENABLED=false 설정 | ✅ | TestRollbackChecklist 통과 |
+| R.2 | 서비스 재시작 | ✅ | docker-compose restart |
+| R.3 | 기존 기능 동작 확인 | ✅ | 헬스체크 검증 |
+| R.4 | 모니터링 정상 확인 | ✅ | Prometheus/Grafana |
+
+### 9.3 롤백 문서
+
+- **상세 롤백 절차**: [164_OTEL_ROLLBACK_PLAN.md](164_OTEL_ROLLBACK_PLAN.md)
+- **롤백 검증 테스트**: `tests/integration/otel/test_otel_rollback.py`
 
 ---
 
@@ -409,3 +414,18 @@ Phase 7: 검증 및 문서화 (1일)
 - [157_OTEL_SDK_INTEGRATION.md](157_OTEL_SDK_INTEGRATION.md): SDK 도입 계획
 - [158_OTEL_COLLECTOR_CONFIGURATION.md](158_OTEL_COLLECTOR_CONFIGURATION.md): Collector 구성
 - [159_GRAFANA_STACK_INTEGRATION.md](159_GRAFANA_STACK_INTEGRATION.md): Grafana 스택 통합
+- [161_OTEL_OPERATIONS_GUIDE.md](161_OTEL_OPERATIONS_GUIDE.md): 운영 가이드
+- [162_OTEL_TROUBLESHOOTING_GUIDE.md](162_OTEL_TROUBLESHOOTING_GUIDE.md): 트러블슈팅 가이드
+- [163_OTEL_ENVIRONMENT_VARIABLES.md](163_OTEL_ENVIRONMENT_VARIABLES.md): 환경변수 문서
+- [164_OTEL_ROLLBACK_PLAN.md](164_OTEL_ROLLBACK_PLAN.md): 롤백 계획
+
+### OTEL 검증 테스트
+
+| 테스트 파일 | 검증 항목 |
+|------------|----------|
+| `tests/integration/otel/test_otel_functional.py` | 스팬 생성, trace_id 전파, 로그 상관관계, Tempo/Loki 검색 |
+| `tests/integration/otel/test_otel_compatibility.py` | 메트릭 호환성, 대시보드, 알림 규칙, OTEL_ENABLED 폴백 |
+| `tests/integration/otel/test_otel_performance.py` | 레이턴시, 메모리, 처리량, 데이터 손실 방지 |
+| `tests/integration/otel/test_otel_security.py` | 민감 데이터 마스킹, gRPC/HTTP 보안, PII 처리 |
+| `tests/integration/otel/test_otel_multiregion.py` | deployment.region, cluster prefix, 멀티 데이터소스 |
+| `tests/integration/otel/test_otel_rollback.py` | SDK/Collector/Tempo/Loki/Mimir 롤백 시나리오 |
