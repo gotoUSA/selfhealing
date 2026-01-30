@@ -5,6 +5,17 @@ extensions:
   health_check:
     endpoint: 0.0.0.0:13133
 
+  # 디스크 기반 버퍼링 (백엔드 장애 시 데이터 보존)
+  file_storage:
+    directory: /var/lib/otelcol/buffer
+    timeout: 1s
+    compaction:
+      directory: /var/lib/otelcol/buffer/compaction
+      on_start: true
+      on_rebound: true
+      rebound_needed_threshold_mib: 50
+      rebound_trigger_threshold_mib: 10
+
 receivers:
   # OTLP gRPC 및 HTTP 수신
   otlp:
@@ -130,6 +141,7 @@ exporters:
       enabled: true
       num_consumers: 10
       queue_size: 5000
+      storage: file_storage
 
   # Mimir로 메트릭 전송 (Prometheus Remote Write)
   prometheusremotewrite:
@@ -156,6 +168,11 @@ exporters:
       initial_interval: 1s
       max_interval: 10s
       max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage
     default_labels_enabled:
       exporter: true
       job: true
@@ -167,7 +184,7 @@ exporters:
     verbosity: basic
 
 service:
-  extensions: [health_check]
+  extensions: [health_check, file_storage]
 
   pipelines:
     # Traces 파이프라인 (Tempo로 전송)

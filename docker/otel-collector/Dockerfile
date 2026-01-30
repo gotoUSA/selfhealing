@@ -20,8 +20,12 @@ RUN apk add --no-cache ca-certificates wget
 # 바이너리 복사
 COPY --from=collector /otelcol-contrib /otelcol-contrib
 
+# file_storage 익스텐션용 버퍼 디렉토리 생성
+RUN mkdir -p /var/lib/otelcol/buffer/compaction
+
 # 비root 사용자로 실행 (보안)
-RUN adduser -D -u 10001 otel
+RUN adduser -D -u 10001 otel && \
+    chown -R otel:otel /var/lib/otelcol
 USER otel
 
 # 헬스체크 포트

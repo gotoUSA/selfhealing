@@ -155,7 +155,7 @@ processors:
     summary: debug
 ```
 
-### 2.2.3 Fail-Safe 관측성 (Resilient Observability)
+### 2.2.3 Fail-Safe 관측성 (Resilient Observability) ✅ 구현 완료
 
 **근거**: 155번 문서의 `_last_known_safe_limit` FAIL-SAFE 패턴
 
@@ -168,6 +168,9 @@ processors:
 | `sending_queue.storage` | file_storage | 로컬 디스크 스풀링 |
 
 **file_storage 익스텐션:**
+
+**구현 파일**: `docker/otel-collector/otel-collector-config.yml`
+
 ```yaml
 extensions:
   file_storage:
@@ -176,6 +179,9 @@ extensions:
     compaction:
       directory: /var/lib/otelcol/buffer/compaction
       on_start: true
+      on_rebound: true
+      rebound_needed_threshold_mib: 50
+      rebound_trigger_threshold_mib: 10
 
 exporters:
   otlp/tempo:
@@ -191,9 +197,23 @@ exporters:
       num_consumers: 10
       queue_size: 5000
       storage: file_storage  # Collector 장애 시 로컬 스풀링
+
+  loki:
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage  # Loki 장애 시 로컬 스풀링
 ```
 
-**동작**: Tempo/Mimir 장애 시 데이터를 로컬 디스크에 임시 저장 후 복구 시 재전송
+**통합 테스트**: `tests/integration/otel/test_file_storage_extension.py`
+
+**실행 방법**:
+```bash
+docker-compose -f docker-compose.test.yml run --rm test-otel-file-storage
+```
+
+**동작**: Tempo/Mimir/Loki 장애 시 데이터를 로컬 디스크에 임시 저장 후 복구 시 재전송
 
 **리소스 속성 (현재 코드 기반):**
 
