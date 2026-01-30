@@ -126,7 +126,7 @@ otel-collector:
 
 **처리량 기준**: 100 req/min Rate Limit (L2 Redis) 기준, 1,000 RPS 처리 가능 목표
 
-### 2.2.2 민감 정보 2중 마스킹 (Redaction Processor)
+### 2.2.2 민감 정보 2중 마스킹 (Redaction Processor) ✅ 구현 완료
 
 **근거**: 115번 문서의 `_mask_error_message` 및 `sensitive_key_patterns` 설정
 
@@ -134,25 +134,40 @@ otel-collector:
 
 | 마스킹 대상 | 패턴 | 대체 값 |
 |-------------|--------|----------|
-| password | `password`, `passwd`, `pwd` | `[REDACTED]` |
-| token | `token`, `access_token`, `refresh_token` | `[REDACTED]` |
-| api_key | `api_key`, `apikey`, `secret` | `[REDACTED]` |
-| authorization | `authorization`, `auth` | `[REDACTED]` |
-| 내부 IP | `10.*`, `192.168.*`, `172.16-31.*` | `[INTERNAL_IP]` |
-| 서버 경로 | `/home/*`, `/var/*`, `C:\*` | `[SERVER_PATH]` |
+| 내부 IP | `10.*`, `192.168.*`, `172.16-31.*` | `****` |
+| 서버 경로 | `/home/*`, `/var/*`, `C:\*` | `****` |
+| Bearer 토큰 | `Bearer ...` | `****` |
+| JWT 토큰 | `eyJ...` | `****` |
+| API Key | `sk-*`, `pk-*` | `****` |
 
-**구성 예시:**
+**참고**: v0.96.0에서 redaction processor는 traces 파이프라인만 지원. logs/metrics는 `attributes` processor로 키 기반 삭제 처리.
+
+**구현 파일**: `docker/otel-collector/otel-collector-config.yml`
+
 ```yaml
 processors:
   redaction:
-    allow_all_keys: false
+    allow_all_keys: true
     blocked_values:
-      - "password"
-      - "token"
-      - "api_key"
-      - "secret"
-      - "authorization"
+      # 내부 IP 주소 (RFC 1918)
+      - "10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
+      - "192\\.168\\.\\d{1,3}\\.\\d{1,3}"
+      - "172\\.(1[6-9]|2[0-9]|3[0-1])\\.\\d{1,3}\\.\\d{1,3}"
+      # 서버 경로
+      - "/home/[^\\s]+"
+      - "/var/[^\\s]+"
+      - "C:\\\\[^\\s]+"
+      # Bearer/JWT 토큰
+      - "Bearer\\s+[A-Za-z0-9\\-_.]+"
+      - "eyJ[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+"
     summary: debug
+```
+
+**통합 테스트**: `tests/integration/otel/test_redaction_processor.py`
+
+**실행 방법**:
+```bash
+docker-compose -f docker-compose.test.yml run --rm test-otel-redaction
 ```
 
 ### 2.2.3 Fail-Safe 관측성 (Resilient Observability) ✅ 구현 완료

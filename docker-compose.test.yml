@@ -734,6 +734,29 @@ services:
       loki:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # OTEL Collector redaction processor 및 prometheusremotewrite 통합 테스트
+  # 민감정보 마스킹 및 Mimir file_storage 연동 검증
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-redaction
+  # ---------------------------------------------------------------------------
+  test-otel-redaction:
+    build: .
+    command: >
+      sh -c "sleep 5 && pip install pyyaml requests pytest -q &&
+             python -m pytest tests/integration/otel/test_redaction_processor.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      - COLLECTOR_METRICS_ENDPOINT=http://otel-collector:8888/metrics
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
   otel_buffer_test:
