@@ -1,0 +1,629 @@
+# 166. RingBuffer + WAL을 Audit 이벤트에 적용 (데이터 유실 0%)
+
+> **버전**: 1.1.0
+> **작성일**: 2026-01-31
+> **수정일**: 2026-01-31 (WAL 통합 추가)
+> **의존성**: 없음 (첫 번째 구현)
+> **예상 소요**: 2-3일
+
+---
+
+## 1. 현재 문제점 (코드 근거)
+
+### 1.1 RequestAuditBuffer의 이벤트 DROP
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/event_buffer.py`
+**라인**: 305-345
+
+```python
+class RequestAuditBuffer:
+    # 단일 요청당 최대 이벤트 수 (메모리 폭발 방지)
+    DEFAULT_MAX_EVENTS = 100
+
+    def __init__(self, max_events: int | None = None):
+        self.events: list[AuditEvent] = []  # 일반 list 사용
+        # ...
+        self._max_events = int(os.environ.get(
+            "SELFHEALING_MAX_EVENTS_PER_REQUEST",
+            str(self.DEFAULT_MAX_EVENTS)
+        ))
+        self._truncated_count: int = 0
+
+    def add_event(self, event: AuditEvent) -> bool:
+        if len(self.events) >= self._max_events:
+            self._truncated_count += 1  # 초과 이벤트는 DROP!
+            self._mark_last_event_truncated()
+            return False
+        self.events.append(event)
+        return True
+```
+
+**문제점**:
+1. 100개 초과 이벤트는 **완전히 유실**됨
+2. `list` 사용으로 메모리 무한 증가 가능성
+3. Back-pressure 전략 없음
+
+---
+
+### 1.2 이미 존재하는 RingBuffer 구현
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/ring_buffer.py`
+**라인**: 40-145
+
+```python
+class RingBuffer(Generic[T]):
+    """
+    Thread-Safe Ring Buffer with Backpressure.
+    Shadow Logging을 위한 비침투 버퍼.
+    메인 애플리케이션을 절대 블로킹하지 않음.
+    """
+
+    def __init__(
+        self,
+        capacity: int = 10000,
+        strategy: BackpressureStrategy = BackpressureStrategy.DROP_OLDEST,
+    ):
+        if capacity < 1:
+            raise ValueError("capacity must be at least 1")
+
+        self._capacity = capacity
+        self._strategy = strategy
+        self._buffer: deque = deque(maxlen=capacity)
+        self._lock = Lock()
+        self._total_enqueued = 0
+        self._total_dropped = 0
+
+    def put(self, item: T) -> bool:
+        """Add item to buffer. Non-blocking."""
+        with self._lock:
+            self._total_enqueued += 1
+
+            if len(self._buffer) >= self._capacity:
+                if self._strategy == BackpressureStrategy.DROP_OLDEST:
+                    # deque with maxlen automatically drops oldest
+                    self._total_dropped += 1
+                    self._buffer.append(item)
+                    return True  # 오래된 것 DROP, 새 것 추가
+                else:
+                    # DROP_NEWEST: reject new item
+                    self._total_dropped += 1
+                    return False
+
+            self._buffer.append(item)
+            return True
+```
+
+**장점**:
+1. **Non-blocking**: 메인 스레드 블로킹 없음
+2. **Back-pressure**: DROP_OLDEST 전략으로 새 이벤트 우선
+3. **Thread-safe**: Lock 사용
+4. **통계 제공**: `total_enqueued`, `total_dropped` 추적
+
+---
+
+### 1.3 RingBufferSettings 존재
+
+**파일**: `packages/selfhealing-python/src/selfhealing/settings/ring_buffer.py`
+**라인**: 25-65
+
+```python
+class RingBufferSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_RING_BUFFER_",
+    )
+
+    capacity: int = Field(
+        default=10000,
+        ge=100,
+        le=1000000,  # 최대 100만!
+        description="Ring Buffer 최대 용량",
+    )
+
+    batch_max_size: int = Field(
+        default=100,
+        ge=1,
+        le=10000,
+        description="배치 처리 시 최대 항목 수",
+    )
+
+    strategy: Literal["drop_oldest", "drop_newest"] = Field(
+        default="drop_oldest",
+        description="배압 전략. drop_oldest (권장: 비침투) 또는 drop_newest.",
+    )
+```
+
+---
+
+## 2. 구현 계획
+
+### 2.1 수정 대상 파일
+
+| 파일 | 변경 내용 |
+|-----|----------|
+| `audit/event_buffer.py` | `RequestAuditBuffer`가 `RingBuffer` 사용하도록 변경 |
+| `settings/audit_settings.py` | RingBuffer 설정 통합 (선택) |
+
+### 2.2 변경하지 않는 파일
+
+| 파일 | 이유 |
+|-----|------|
+| `audit/ring_buffer.py` | 이미 완성된 구현, 수정 불필요 |
+| `settings/ring_buffer.py` | 이미 완성된 설정, 수정 불필요 |
+
+---
+
+## 3. 구현 상세
+
+### 3.1 RequestAuditBuffer 수정
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/event_buffer.py`
+
+**Before** (라인 300-345):
+```python
+class RequestAuditBuffer:
+    META_KEY = "X-AUDIT-EVENTS"
+    DEFAULT_MAX_EVENTS = 100
+
+    def __init__(self, max_events: int | None = None):
+        self.events: list[AuditEvent] = []
+        # ...
+```
+
+**After**:
+```python
+from selfhealing.audit.ring_buffer import RingBuffer, BackpressureStrategy
+from selfhealing.settings.ring_buffer import get_ring_buffer_settings
+
+class RequestAuditBuffer:
+    META_KEY = "X-AUDIT-EVENTS"
+    DEFAULT_MAX_EVENTS = 100  # 하위 호환성 유지
+
+    def __init__(self, max_events: int | None = None):
+        # RingBuffer 사용으로 변경
+        settings = get_ring_buffer_settings()
+        capacity = max_events or settings.capacity
+
+        self._ring_buffer: RingBuffer[AuditEvent] = RingBuffer(
+            capacity=capacity,
+            strategy=BackpressureStrategy.DROP_OLDEST,
+        )
+
+        self.request_id: str | None = None
+        self.start_time: datetime = datetime.now(timezone.utc)
+        self._path: str | None = None
+        self._method: str | None = None
+        self._user_id: str | None = None
+
+    @property
+    def events(self) -> list[AuditEvent]:
+        """하위 호환성: events 속성으로 접근 가능."""
+        return list(self._ring_buffer.get_all())
+
+    def add_event(self, event: AuditEvent) -> bool:
+        """
+        이벤트 추가. Non-blocking.
+
+        RingBuffer 사용으로 DROP_OLDEST 전략 적용:
+        - 버퍼가 가득 차면 가장 오래된 이벤트 제거
+        - 새 이벤트는 항상 추가됨 (return True)
+        """
+        return self._ring_buffer.put(event)
+
+    @property
+    def stats(self) -> dict:
+        """버퍼 통계 (모니터링용)."""
+        rb_stats = self._ring_buffer.get_stats()
+        return {
+            "capacity": rb_stats.capacity,
+            "size": rb_stats.size,
+            "total_enqueued": rb_stats.total_enqueued,
+            "total_dropped": rb_stats.total_dropped,
+            "drop_rate": rb_stats.drop_rate,
+        }
+
+    @property
+    def truncated_count(self) -> int:
+        """하위 호환성: truncated_count는 dropped와 동일."""
+        return self._ring_buffer.get_stats().total_dropped
+```
+
+---
+
+### 3.2 RingBuffer에 get_all() 메서드 추가 (필요 시)
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/ring_buffer.py`
+
+현재 코드 확인 필요. 없다면 추가:
+
+```python
+def get_all(self) -> list[T]:
+    """모든 항목 반환 (비파괴적)."""
+    with self._lock:
+        return list(self._buffer)
+```
+
+---
+
+## 4. 테스트 계획
+
+### 4.1 단위 테스트
+
+**파일**: `tests/unit/audit/test_request_audit_buffer_ringbuffer.py`
+
+```python
+import pytest
+from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEvent, AuditEventType
+
+
+class TestRequestAuditBufferWithRingBuffer:
+    """RingBuffer 통합 후 RequestAuditBuffer 테스트."""
+
+    def test_add_event_within_capacity(self):
+        """용량 내 이벤트 추가."""
+        buffer = RequestAuditBuffer(max_events=100)
+
+        for i in range(50):
+            event = AuditEvent(
+                event_type=AuditEventType.DLQ_STORE,
+                source="test",
+                details={"idx": i},
+            )
+            result = buffer.add_event(event)
+            assert result is True
+
+        assert len(buffer.events) == 50
+        assert buffer.stats["total_dropped"] == 0
+
+    def test_add_event_exceeds_capacity_drop_oldest(self):
+        """용량 초과 시 DROP_OLDEST 전략."""
+        buffer = RequestAuditBuffer(max_events=10)
+
+        # 15개 추가 (5개 DROP)
+        for i in range(15):
+            event = AuditEvent(
+                event_type=AuditEventType.DLQ_STORE,
+                source="test",
+                details={"idx": i},
+            )
+            buffer.add_event(event)
+
+        # 최신 10개만 남음
+        assert len(buffer.events) == 10
+        assert buffer.stats["total_dropped"] == 5
+
+        # 가장 오래된 것(0-4)이 DROP됨
+        assert buffer.events[0].details["idx"] == 5
+
+    def test_non_blocking_under_load(self):
+        """고부하에서 Non-blocking 확인."""
+        import time
+
+        buffer = RequestAuditBuffer(max_events=10000)
+
+        start = time.time()
+        for i in range(10000):
+            event = AuditEvent(
+                event_type=AuditEventType.DLQ_STORE,
+                source="test",
+            )
+            buffer.add_event(event)
+        elapsed = time.time() - start
+
+        # 10,000개 추가가 100ms 이내
+        assert elapsed < 0.1, f"10k events took {elapsed}s (should be < 0.1s)"
+
+    def test_backward_compatibility_events_property(self):
+        """하위 호환성: events 속성 접근."""
+        buffer = RequestAuditBuffer(max_events=100)
+
+        event = AuditEvent(
+            event_type=AuditEventType.CB_STATE_CHANGE,
+            source="test",
+        )
+        buffer.add_event(event)
+
+        # 기존 코드처럼 events 속성 접근 가능
+        assert len(buffer.events) == 1
+        assert buffer.events[0].event_type == AuditEventType.CB_STATE_CHANGE
+
+    def test_stats_property(self):
+        """통계 속성 확인."""
+        buffer = RequestAuditBuffer(max_events=10)
+
+        for i in range(15):
+            buffer.add_event(AuditEvent(
+                event_type=AuditEventType.DLQ_STORE,
+                source="test",
+            ))
+
+        stats = buffer.stats
+        assert stats["capacity"] == 10
+        assert stats["size"] == 10
+        assert stats["total_enqueued"] == 15
+        assert stats["total_dropped"] == 5
+        assert stats["drop_rate"] == pytest.approx(5/15, rel=0.01)
+```
+
+---
+
+### 4.2 통합 테스트
+
+**파일**: `tests/integration/selfhealing/test_audit_buffer_ringbuffer_integration.py`
+
+```python
+class TestAuditBufferRingBufferIntegration:
+    """AuditMiddleware + RingBuffer 통합 테스트."""
+
+    def test_middleware_uses_ringbuffer(self, rf):
+        """미들웨어가 RingBuffer 기반 버퍼 사용."""
+        from selfhealing.api.django.audit_middleware import AuditMiddleware
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
+
+        request = rf.get("/api/test/")
+        buffer = RequestAuditBuffer.get_or_create(request)
+
+        # 200개 이벤트 추가 (기본 capacity 10,000)
+        for i in range(200):
+            buffer.add(
+                event_type=AuditEventType.DLQ_STORE,
+                source="test",
+                details={"idx": i},
+            )
+
+        # 모든 이벤트 유지됨 (기존: 100개 초과 시 DROP)
+        assert len(buffer.events) == 200
+        assert buffer.stats["total_dropped"] == 0
+
+    def test_high_volume_no_blocking(self, rf):
+        """고용량에서 블로킹 없음 확인."""
+        import time
+
+        request = rf.get("/api/test/")
+        buffer = RequestAuditBuffer.get_or_create(request)
+
+        start = time.time()
+        for i in range(10000):
+            buffer.add(
+                event_type=AuditEventType.CONFIG_CHANGE,
+                source="stress_test",
+            )
+        elapsed = time.time() - start
+
+        assert elapsed < 0.5, f"10k adds took {elapsed}s"
+```
+
+---
+
+## 5. 환경 변수
+
+| 변수명 | 기본값 | 설명 |
+|-------|-------|------|
+| `SELFHEALING_RING_BUFFER_CAPACITY` | 10000 | 버퍼 최대 용량 |
+| `SELFHEALING_RING_BUFFER_STRATEGY` | drop_oldest | 배압 전략 |
+| `SELFHEALING_RING_BUFFER_BATCH_MAX_SIZE` | 100 | 배치 크기 |
+
+---
+
+## 6. 마이그레이션 체크리스트
+
+### 6.1 코드 변경
+
+- [ ] `event_buffer.py`: `RequestAuditBuffer`가 `RingBuffer` 사용
+- [ ] `ring_buffer.py`: `get_all()` 메서드 추가 (필요 시)
+- [ ] 하위 호환성: `events` 속성, `truncated_count` 속성 유지
+
+### 6.2 테스트
+
+- [ ] 단위 테스트 추가 (`test_request_audit_buffer_ringbuffer.py`)
+- [ ] 통합 테스트 추가
+- [ ] 기존 테스트 통과 확인
+
+### 6.3 배포
+
+- [ ] 환경 변수 설정 문서화
+- [ ] 모니터링: `buffer.stats["drop_rate"]` 메트릭 추가
+
+---
+
+## 7. 예상 효과
+
+| 지표 | Before | After |
+|-----|--------|-------|
+| 최대 이벤트 수 | 100 (고정) | 100만 (설정 가능) |
+| 초과 이벤트 처리 | 완전 DROP | DROP_OLDEST (최신 우선) |
+| 메모리 관리 | 무한 증가 가능 | 고정 용량 |
+| 통계 제공 | truncated_count만 | capacity, size, drop_rate 등 |
+
+---
+
+## 8. ⚠️ 중요: WAL 통합으로 데이터 유실 0% 달성
+
+### 8.1 현재 RingBuffer의 한계
+
+**문제점**: RingBuffer만 사용 시 데이터 유실 가능성 존재
+
+| 유실 지점 | 코드 근거 | 발생 조건 |
+|----------|----------|----------|
+| DROP_OLDEST | `ring_buffer.py#L152-L155` | 버퍼 가득 시 오래된 데이터 삭제 |
+| daemon=True | `async_logger.py#L111` | 프로세스 종료 시 미처리 데이터 유실 |
+| 플러시 실패 | `async_logger.py#L227-L231` | 재시도 없이 폐기 |
+
+### 8.2 WAL이 이미 존재함
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/wal.py`
+
+```python
+class WriteAheadLog:
+    """CRC32 체크섬으로 무결성 검증, 디스크 영속화"""
+
+    def write(self, data: dict[str, Any]) -> int:
+        """WAL에 기록 (sync_on_write=True면 os.fsync 호출)"""
+        # ...
+        if self._config.sync_on_write:
+            self._current_handle.flush()
+            os.fsync(self._current_handle.fileno())  # ✅ 디스크 영속화!
+
+    def recover_unprocessed(self, last_processed_seq: int = 0) -> list[WALEntry]:
+        """미처리 엔트리 복구"""
+
+    def cleanup_processed(self, last_processed_seq: int) -> int:
+        """처리 완료된 엔트리 정리"""
+```
+
+### 8.3 AuditSyncWorker가 이미 존재함
+
+**파일**: `packages/selfhealing-python/src/selfhealing/audit/sync_worker.py`
+
+```python
+class AuditSyncWorker:
+    """
+    Background Sync Worker - WAL → 중앙 저장소 동기화.
+    ADR-005 (Fail-Open + WAL 기반 누락 0 보장) 구현의 핵심 컴포넌트.
+
+    동작 원리:
+    1. WAL에서 미동기화 엔트리 조회
+    2. 중앙 저장소에 기록 시도
+    3. 성공 시 WAL 엔트리 정리 (cleanup_processed)
+    4. 실패 시 재시도 (exponential backoff)
+    """
+```
+
+### 8.4 데이터 유실 0% 아키텍처
+
+```
+현재 (유실 가능):
+  이벤트 → RingBuffer (메모리) → AsyncLogger → Redis/DB
+               ↓ 유실              ↓ 유실
+
+개선 후 (유실 0%):
+  이벤트 → WAL.write() → RingBuffer → AsyncLogger → Redis/DB
+              ↓                                         ↓
+         os.fsync()                              성공 시 WAL 정리
+              ↓                                         ↓
+         디스크 영속화                      실패 시 WAL에서 재시도
+              ↓
+         프로세스 재시작 시
+         recover_unprocessed()로 복구
+```
+
+### 8.5 구현 필요 사항
+
+**수정 대상**: `RequestAuditBuffer.add_event()`
+
+```python
+# 현재 (유실 가능)
+def add_event(self, event: AuditEvent) -> bool:
+    return self._ring_buffer.put(event)  # 메모리만
+
+# 수정 후 (유실 0%)
+def add_event(self, event: AuditEvent) -> bool:
+    # 1. WAL에 먼저 기록 (디스크 영속화)
+    seq = self._wal.write(event.to_dict())
+
+    # 2. 메모리 버퍼에 추가 (빠른 접근용)
+    self._ring_buffer.put((seq, event))
+
+    return True  # WAL 기록 성공 = 유실 0%
+```
+
+### 8.6 필요한 추가 컴포넌트
+
+| 컴포넌트 | 파일 | 역할 | 현재 상태 |
+|---------|-----|------|----------|
+| WriteAheadLog | `audit/wal.py` | 디스크 영속화 | ✅ 존재 |
+| AuditSyncWorker | `audit/sync_worker.py` | WAL → 중앙 동기화 | ✅ 존재 |
+| CheckpointManager | 신규 필요 | last_processed_seq 저장 | ❌ 미존재 |
+| GracefulShutdown | 신규 필요 | 종료 시 플러시 보장 | ⚠️ 부분 존재 |
+
+### 8.7 CheckpointManager 구현 예시 (신규 필요)
+
+```python
+class CheckpointManager:
+    """마지막 처리 시퀀스를 디스크에 저장."""
+
+    def __init__(self, checkpoint_path: str = "/var/log/audit/checkpoint"):
+        self._path = Path(checkpoint_path)
+
+    def save(self, last_seq: int) -> None:
+        """체크포인트 저장."""
+        self._path.write_text(str(last_seq))
+        os.fsync(...)  # 디스크 영속화
+
+    def load(self) -> int:
+        """체크포인트 로드."""
+        if self._path.exists():
+            return int(self._path.read_text())
+        return 0
+```
+
+### 8.8 시작/종료 시퀀스
+
+**시작 시**:
+```python
+def startup():
+    # 1. 체크포인트 로드
+    last_seq = checkpoint_manager.load()
+
+    # 2. 미처리 WAL 엔트리 복구
+    entries = wal.recover_unprocessed(last_seq)
+
+    # 3. 복구된 엔트리 재처리
+    for entry in entries:
+        process_entry(entry)
+        checkpoint_manager.save(entry.sequence)
+
+    # 4. 정상 동작 시작
+    sync_worker.start()
+```
+
+**종료 시**:
+```python
+def shutdown():
+    # 1. 새 이벤트 수신 중단
+    stop_accepting_events()
+
+    # 2. 메모리 버퍼 WAL 플러시
+    wal.flush()
+
+    # 3. 동기화 워커 정상 종료
+    sync_worker.stop(timeout=30)
+
+    # 4. 체크포인트 저장
+    checkpoint_manager.save(last_processed_seq)
+```
+
+---
+
+## 9. 메시지 큐(Kafka)와의 관계
+
+### 9.1 각 컴포넌트의 역할 (코드 근거)
+
+| 컴포넌트 | 역할 | 대체 가능? |
+|---------|------|-----------|
+| **WAL** | 로컬 디스크 영속화 (유실 0%) | ❌ 필수 |
+| **RingBuffer** | 메모리 백프레셔 (Non-blocking) | ❌ 필수 |
+| **AsyncLogger** | 배치 I/O 최적화 | ⚠️ 선택 |
+| **Redis** | 분산 버퍼링 | ⚠️ Kafka로 대체 가능 |
+| **Kafka** | 분산 스트리밍 + 수평 확장 | ⚠️ Redis로 대체 가능 |
+
+### 9.2 Kafka 사용 시에도 WAL 필요
+
+```
+Kafka만 사용 (유실 가능):
+  이벤트 → Kafka Producer.send()
+              ↓
+         네트워크 실패 시 유실!
+
+WAL + Kafka (유실 0%):
+  이벤트 → WAL.write() → Kafka Producer.send()
+              ↓              ↓
+         영속화 완료    실패해도 WAL에서 재시도
+```
+
+**결론**: Kafka는 **분산 전송**용, WAL은 **로컬 영속화**용. 둘은 **상호 보완** 관계.
+
+---
+
+## 10. 다음 단계
+
+→ [167_ASYNC_AUDIT_PIPELINE.md](167_ASYNC_AUDIT_PIPELINE.md): AsyncHealingLogger 미들웨어 연동
