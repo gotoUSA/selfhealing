@@ -758,6 +758,26 @@ services:
       otel-collector:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Agent-Gateway 2단계 아키텍처 설정 검증 테스트
+  # 프로덕션 환경용 Agent/Gateway 설정 파일 유효성 검증
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-agent-gateway
+  # ---------------------------------------------------------------------------
+  test-otel-agent-gateway:
+    build: .
+    command: >
+      sh -c "pip install pyyaml requests pytest -q &&
+             python -m pytest tests/integration/otel/test_agent_gateway_architecture.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      # 통합 테스트 비활성화 (설정 파일 검증만)
+      - OTEL_AGENT_GATEWAY_TEST=false
+
 volumes:
   postgres_test_data:
   otel_buffer_test:

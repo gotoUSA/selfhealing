@@ -618,9 +618,9 @@ OTEL 데이터에도 동일한 Tiered Storage 전략 적용:
 | Mimir | 객체 스토리지 (S3/GCS) |
 | 보존 기간 | 30일+ |
 
-### 7.2.1 Agent-Gateway 2단계 아키텍처
+### 7.2.1 Agent-Gateway 2단계 아키텍처 ✅ 구현 완료
 
-각 파드가 직접 중앙 Mimir/Tempo로 쏘지 않고 로컬 사이드카로 쏠야 애플리케이션 Latency 영향 최소화:
+각 파드가 직접 중앙 Mimir/Tempo로 쏘지 않고 로컬 사이드카로 쏴야 애플리케이션 Latency 영향 최소화:
 
 ```
 ┌───────────────────────────────────────────┐
@@ -655,7 +655,21 @@ OTEL 데이터에도 동일한 Tiered Storage 전략 적용:
 - Sidecar → Gateway: 배치 처리로 네트워크 효율화
 - Gateway 장애 시 Agent의 file_storage로 로컬 버퍼링
 
-### 7.2.2 gRPC 인증 및 보안
+**구현 파일:**
+
+| 파일 | 용도 |
+|------|------|
+| `docker/otel-collector/otel-collector-agent.yml` | Agent(사이드카) 설정 - 경량 Collector |
+| `docker/otel-collector/otel-collector-gateway.yml` | Gateway(중앙) 설정 - 인증, redaction, 백엔드 export |
+
+**통합 테스트**: `tests/integration/otel/test_agent_gateway_architecture.py`
+
+**실행 방법**:
+```bash
+docker-compose -f docker-compose.test.yml run --rm test-otel-agent-gateway
+```
+
+### 7.2.2 gRPC 인증 및 보안 ✅ 구현 완료
 
 관측성 데이터가 외부로 유출되거나 오염되는 것을 방지:
 
@@ -665,22 +679,20 @@ OTEL 데이터에도 동일한 Tiered Storage 전략 적용:
 | `tls.insecure` | false (prod) | TLS 활성화 |
 | `tls.ca_file` | /etc/ssl/certs/ca.crt | CA 인증서 |
 
-**Gateway 설정 예시:**
-```yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-        auth:
-          authenticator: headers_auth
+**구현 파일**: `docker/otel-collector/otel-collector-gateway.yml`
 
+**Gateway 인증 설정:**
+```yaml
 extensions:
-  headers_auth:
+  # API Key 기반 인증 (Agent → Gateway)
+  bearertokenauth:
+    token: ${env:OTEL_GATEWAY_API_KEY:-development-api-key}
+
+exporters:
+  otlp/gateway:
+    # API Key 인증 헤더
     headers:
-      - header: Authorization
-        action: validate
-        regex: "Bearer [a-zA-Z0-9]+"
+      Authorization: ${env:OTEL_API_KEY:-}
 ```
 
 ---

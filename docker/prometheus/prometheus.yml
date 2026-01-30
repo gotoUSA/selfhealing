@@ -53,7 +53,7 @@ scrape_configs:
   # Celery Worker 메트릭 (선택사항)
   - job_name: 'celery'
     static_configs:
-      - targets: ['celery:9808']
+      - targets: ['celery_worker:9808']
     metrics_path: /metrics
 
   # Redis 메트릭 (선택사항)

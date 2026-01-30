@@ -1,0 +1,240 @@
+# OpenTelemetry Collector Gateway 설정 (중앙 집계용)
+# =======================================================================
+# 프로덕션 환경에서 클러스터 중앙에 2+ 복제본으로 배포
+#
+# 역할:
+# - Agent(사이드카)로부터 gRPC로 텔레메트리 수신
+# - API Key 인증 (Bearer Token)
+# - 민감 정보 마스킹 (redaction processor)
+# - 백엔드(Tempo/Mimir/Loki)로 전송
+#
+# 리소스 요구사항: CPU 0.5, Memory 512MB
+# =======================================================================
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # 백엔드 장애 시 디스크 버퍼링
+  file_storage:
+    directory: /var/lib/otelcol/buffer
+    timeout: 1s
+    compaction:
+      directory: /var/lib/otelcol/buffer/compaction
+      on_start: true
+      on_rebound: true
+      rebound_needed_threshold_mib: 50
+      rebound_trigger_threshold_mib: 10
+
+  # API Key 기반 인증 (Agent → Gateway)
+  # 유효한 API Key 목록은 환경변수로 주입
+  bearertokenauth:
+    token: ${env:OTEL_GATEWAY_API_KEY:-development-api-key}
+
+receivers:
+  # Agent로부터 gRPC 수신 (인증 활성화)
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        # 프로덕션 TLS 설정
+        # tls:
+        #   cert_file: /etc/ssl/certs/otel-gateway.crt
+        #   key_file: /etc/ssl/private/otel-gateway.key
+        #   client_ca_file: /etc/ssl/certs/otel-ca.crt
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # 직접 Prometheus scrape (선택)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-gateway'
+          static_configs:
+            - targets: ['localhost:8888']
+          metrics_path: /metrics
+          scrape_interval: 15s
+
+processors:
+  # 메모리 제한 (512MB 환경)
+  memory_limiter:
+    limit_mib: 400
+    check_interval: 1s
+    spike_limit_mib: 100
+
+  # 배치 처리 (백엔드로 효율적 전송)
+  batch:
+    send_batch_size: 1000
+    timeout: 10s
+    send_batch_max_size: 1500
+
+  # 리소스 속성 추가
+  resource:
+    attributes:
+      - key: collector.role
+        value: gateway
+        action: upsert
+
+  # Trace 속성 민감 정보 삭제
+  attributes/traces:
+    actions:
+      - key: password
+        action: delete
+      - key: token
+        action: delete
+      - key: api_key
+        action: delete
+      - key: secret
+        action: delete
+      - key: authorization
+        action: delete
+
+  # 로그 속성 민감 정보 삭제
+  attributes/logs:
+    actions:
+      - key: password
+        action: delete
+      - key: passwd
+        action: delete
+      - key: pwd
+        action: delete
+      - key: token
+        action: delete
+      - key: access_token
+        action: delete
+      - key: refresh_token
+        action: delete
+      - key: api_key
+        action: delete
+      - key: apikey
+        action: delete
+      - key: secret
+        action: delete
+      - key: authorization
+        action: delete
+      - key: auth
+        action: delete
+      # trace_id 추출 (로그-트레이스 연동용)
+      - key: trace_id
+        from_attribute: traceId
+        action: upsert
+      - key: span_id
+        from_attribute: spanId
+        action: upsert
+
+  # 민감 정보 값 기반 마스킹 (최후의 보루)
+  # 키 이름과 무관하게 값 패턴으로 마스킹
+  redaction:
+    allow_all_keys: true
+    blocked_values:
+      # 내부 IP 주소 (RFC 1918)
+      - "10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"
+      - "192\\.168\\.\\d{1,3}\\.\\d{1,3}"
+      - "172\\.(1[6-9]|2[0-9]|3[0-1])\\.\\d{1,3}\\.\\d{1,3}"
+      # 서버 경로
+      - "/home/[^\\s]+"
+      - "/var/[^\\s]+"
+      - "C:\\\\[^\\s]+"
+      # Bearer 토큰
+      - "Bearer\\s+[A-Za-z0-9\\-_.]+"
+      # JWT 토큰 (eyJ로 시작)
+      - "eyJ[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+"
+      # API Key 패턴
+      - "sk-[A-Za-z0-9]{20,}"
+      - "pk-[A-Za-z0-9]{20,}"
+    summary: debug
+
+exporters:
+  # Tempo로 Trace 전송
+  otlp/tempo:
+    endpoint: ${env:TEMPO_ENDPOINT:-tempo:4317}
+    tls:
+      insecure: ${env:OTEL_TLS_INSECURE:-true}
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage
+
+  # Mimir로 메트릭 전송
+  prometheusremotewrite:
+    endpoint: ${env:MIMIR_ENDPOINT:-http://mimir:9009/api/v1/push}
+    tls:
+      insecure: ${env:OTEL_TLS_INSECURE:-true}
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    remote_write_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+    # WAL 디스크 버퍼링
+    wal:
+      directory: /var/lib/otelcol/wal
+      buffer_size: 300
+      truncate_frequency: 60s
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Loki로 로그 전송 (OTLP)
+  otlphttp/loki:
+    endpoint: ${env:LOKI_ENDPOINT:-http://loki:3100/otlp}
+    tls:
+      insecure: ${env:OTEL_TLS_INSECURE:-true}
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 5000
+      storage: file_storage
+
+  # 디버그 (개발 환경)
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check, file_storage, bearertokenauth]
+
+  pipelines:
+    # Traces: Agent → Gateway → Tempo
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes/traces, redaction]
+      exporters: [otlp/tempo]
+
+    # Metrics: Agent → Gateway → Mimir
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch, resource, redaction]
+      exporters: [prometheusremotewrite]
+
+    # Logs: Agent → Gateway → Loki
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes/logs, redaction]
+      exporters: [otlphttp/loki]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888

@@ -1,0 +1,126 @@
+# OpenTelemetry Collector Agent 설정 (사이드카용)
+# =======================================================================
+# 프로덕션 환경에서 각 Application Pod 내부에 사이드카로 배포
+#
+# 역할:
+# - 애플리케이션으로부터 localhost로 텔레메트리 수신
+# - 경량 처리 (memory_limiter, batch)
+# - Gateway로 OTLP 전송 (gRPC)
+# - Gateway 장애 시 file_storage로 로컬 버퍼링
+#
+# 리소스 요구사항: CPU 0.1, Memory 64MB
+# =======================================================================
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Gateway 장애 시 로컬 디스크 버퍼링
+  file_storage:
+    directory: /var/lib/otelcol/buffer
+    timeout: 1s
+    compaction:
+      directory: /var/lib/otelcol/buffer/compaction
+      on_start: true
+      on_rebound: true
+      rebound_needed_threshold_mib: 20
+      rebound_trigger_threshold_mib: 5
+
+receivers:
+  # 애플리케이션으로부터 localhost 수신
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # 경량 메모리 제한 (64MB 환경)
+  memory_limiter:
+    limit_mib: 48
+    check_interval: 1s
+    spike_limit_mib: 16
+
+  # 배치 처리 (Gateway로 효율적 전송)
+  batch:
+    send_batch_size: 500
+    timeout: 5s
+    send_batch_max_size: 1000
+
+  # 서비스 리소스 속성 (Pod 정보)
+  resource:
+    attributes:
+      - key: service.name
+        value: selfhealing
+        action: upsert
+      - key: deployment.environment
+        from_attribute: DEPLOYMENT_ENVIRONMENT
+        action: upsert
+      - key: collector.role
+        value: agent
+        action: upsert
+
+exporters:
+  # Gateway로 OTLP gRPC 전송
+  # 프로덕션 환경변수: OTEL_GATEWAY_ENDPOINT
+  otlp/gateway:
+    endpoint: ${env:OTEL_GATEWAY_ENDPOINT:-otel-gateway:4317}
+    tls:
+      # 프로덕션: false, 개발: true
+      insecure: ${env:OTEL_TLS_INSECURE:-true}
+      # 프로덕션 TLS 인증서
+      # ca_file: /etc/ssl/certs/otel-ca.crt
+    timeout: 5s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 500ms
+      max_interval: 5s
+      max_elapsed_time: 30s
+    # Gateway 장애 시 로컬 버퍼링
+    sending_queue:
+      enabled: true
+      num_consumers: 5
+      queue_size: 2000
+      storage: file_storage
+    # API Key 인증 (프로덕션)
+    headers:
+      # 환경변수로 주입: OTEL_API_KEY
+      Authorization: ${env:OTEL_API_KEY:-}
+
+  # 디버그 (개발 환경)
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check, file_storage]
+
+  pipelines:
+    # Traces: App → Agent → Gateway
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [otlp/gateway]
+
+    # Metrics: App → Agent → Gateway
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [otlp/gateway]
+
+    # Logs: App → Agent → Gateway
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [otlp/gateway]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
