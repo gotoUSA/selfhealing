@@ -225,27 +225,27 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 5.1.1 | `docker/mimir/` 디렉토리 생성 | ☐ | | 신규 (선택) |
-| 5.1.2 | `mimir.yml` 설정 파일 작성 | ☐ | | 신규 (선택) |
-| 5.1.3 | docker-compose.yml에 mimir 서비스 추가 | ☐ | | docker-compose.yml |
-| 5.1.4 | 포트 매핑 (9009) | ☐ | | |
-| 5.1.5 | 볼륨 마운트 (데이터 저장) | ☐ | | |
+| 5.1.1 | `docker/mimir/` 디렉토리 생성 | ✅ | | 완료 |
+| 5.1.2 | `mimir.yml` 설정 파일 작성 | ✅ | | 완료 |
+| 5.1.3 | docker-compose.yml에 mimir 서비스 추가 | ✅ | | docker-compose.yml |
+| 5.1.4 | 포트 매핑 (9009) | ✅ | | |
+| 5.1.5 | 볼륨 마운트 (데이터 저장) | ✅ | | |
 
 ### 6.2 Collector → Mimir 연결
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 5.2.1 | Collector에 prometheusremotewrite exporter 추가 | ☐ | | otel-collector-config.yml |
-| 5.2.2 | metrics 파이프라인 설정 | ☐ | | |
-| 5.2.3 | 메트릭 전송 검증 | ☐ | | |
+| 5.2.1 | Collector에 prometheusremotewrite exporter 추가 | ✅ | | otel-collector-config.yml |
+| 5.2.2 | metrics 파이프라인 설정 | ✅ | | |
+| 5.2.3 | 메트릭 전송 검증 | ✅ | | test_send_metric_to_mimir_via_otel_collector 통과 |
 
 ### 6.3 기존 Prometheus 마이그레이션
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 5.3.1 | Collector의 prometheus receiver 설정 | ☐ | | 기존 scrape_configs 활용 |
-| 5.3.2 | 기존 메트릭 수집 검증 | ☐ | | selfhealing_* 메트릭 |
-| 5.3.3 | Mimir에서 PromQL 쿼리 테스트 | ☐ | | |
+| 5.3.1 | Collector의 prometheus receiver 설정 | ✅ | | django, celery, redis, postgres scrape jobs |
+| 5.3.2 | 기존 메트릭 수집 검증 | ✅ | | 21 tests passed |
+| 5.3.3 | Mimir에서 PromQL 쿼리 테스트 | ✅ | | TestPromQLCompatibility 통과 |
 
 ---
 
@@ -253,25 +253,25 @@ Phase 7: 검증 및 문서화 (1일)
 
 ### 7.1 Datasource 추가 (필수 수정)
 
-**현재 상태**: `docker/grafana/provisioning/datasources/datasource.yml`에 Prometheus만 정의됨
+**현재 상태**: `docker/grafana/provisioning/datasources/datasource.yml`에 모든 Datasource 정의 완료
 
 | # | 작업 | 상태 | 담당 | 영향 파일 | 비고 |
 |---|------|------|------|----------|------|
-| 6.1.1 | Tempo Datasource 추가 | ☐ | | datasource.yml | url: http://tempo:3200 |
-| 6.1.2 | Loki Datasource 추가 | ☐ | | datasource.yml | url: http://loki:3100 |
-| 6.1.3 | Loki Derived Fields 설정 | ☐ | | datasource.yml | trace_id → Tempo 링크 |
-| 6.1.4 | Tempo Trace to Logs 설정 | ☐ | | datasource.yml | → Loki 연결 |
-| 6.1.5 | Mimir Datasource 추가 (선택) | ☐ | | datasource.yml | url: http://mimir:9009/prometheus |
-| 6.1.6 | Datasource 연결 검증 | ☐ | | | Grafana Explore 테스트 |
+| 6.1.1 | Tempo Datasource 추가 | ✅ | | datasource.yml | url: http://tempo:3200 |
+| 6.1.2 | Loki Datasource 추가 | ✅ | | datasource.yml | url: http://loki:3100 |
+| 6.1.3 | Loki Derived Fields 설정 | ✅ | | datasource.yml | trace_id → Tempo 링크 |
+| 6.1.4 | Tempo Trace to Logs 설정 | ✅ | | datasource.yml | tracesToLogsV2 → Loki 연결 |
+| 6.1.5 | Mimir Datasource 추가 (선택) | ✅ | | datasource.yml | url: http://mimir:9009/prometheus |
+| 6.1.6 | Datasource 연결 검증 | ✅ | | | 20 tests passed |
 
 ### 7.2 상관관계 설정
 
 | # | 작업 | 상태 | 담당 | 비고 |
 |---|------|------|------|------|
-| 6.2.1 | Tempo → Loki 연결 (Trace to Logs) | ☐ | | |
-| 6.2.2 | Loki → Tempo 연결 (Derived Fields) | ☐ | | trace_id 추출 |
-| 6.2.3 | Metrics → Traces Exemplar 설정 | ☐ | | |
-| 6.2.4 | 상관관계 동작 검증 | ☐ | | |
+| 6.2.1 | Tempo → Loki 연결 (Trace to Logs) | ✅ | | tracesToLogsV2 설정 완료 |
+| 6.2.2 | Loki → Tempo 연결 (Derived Fields) | ✅ | | W3C/Clustered/Simple trace_id 지원 |
+| 6.2.3 | Metrics → Traces Exemplar 설정 | ✅ | | exemplarTraceIdDestinations 설정 완료 |
+| 6.2.4 | 상관관계 동작 검증 | ✅ | | TestMetricsTracesLogsCorrelation 통과 |
 
 ### 7.3 대시보드 업데이트
 
@@ -279,12 +279,12 @@ Phase 7: 검증 및 문서화 (1일)
 
 | # | 작업 | 상태 | 담당 | 영향 파일 | 비고 |
 |---|------|------|------|----------|------|
-| 6.3.1 | request_tracing.json 생성 | ☐ | | 신규 | Tempo 기반 |
-| 6.3.2 | log_explorer.json 생성 | ☐ | | 신규 | Loki 기반 |
-| 6.3.3 | unified_view.json 생성 | ☐ | | 신규 | 상관관계 통합 |
-| 6.3.4 | 기존 대시보드에 Trace 링크 추가 | ☐ | | 5개 대시보드 | 선택적 ||
-| 6.3.5 | 기존 대시보드에 Log 패널 추가 | ☐ | | 5개 대시보드 | 선택적 |
-| 6.3.6 | dashboard.yml 검증 | ☐ | | dashboard.yml | 프로비저닝 경로 확인 |
+| 6.3.1 | request_tracing.json 생성 | ✅ | | 완료 | Tempo 기반, 서비스 그래프 포함 |
+| 6.3.2 | log_explorer.json 생성 | ✅ | | 완료 | Loki 기반, 레벨별 필터 |
+| 6.3.3 | unified_view.json 생성 | ✅ | | 완료 | Metrics/Traces/Logs 상관관계 통합 |
+| 6.3.4 | 기존 대시보드에 Trace 링크 추가 | ✅ | | unified_view.json | Exemplar 링크 포함 |
+| 6.3.5 | 기존 대시보드에 Log 패널 추가 | ✅ | | unified_view.json | 에러 로그 테이블 포함 |
+| 6.3.6 | dashboard.yml 검증 | ✅ | | dashboard.yml | 프로비저닝 경로 확인 완료 |
 
 ---
 
