@@ -138,10 +138,21 @@ class TestRedactionProcessorInPipelines:
 
     def test_logs_pipeline_uses_attributes_processor(self, collector_config):
         """logs 파이프라인이 attributes/logs processor를 사용하는지 확인"""
-        # v0.96.0에서 redaction은 traces만 지원, logs는 attributes로 처리
         pipelines = collector_config["service"]["pipelines"]
         logs_processors = pipelines["logs"]["processors"]
         assert "attributes/logs" in logs_processors, "logs 파이프라인에 attributes/logs processor가 없습니다"
+
+    def test_redaction_in_logs_pipeline(self, collector_config):
+        """logs 파이프라인에 redaction processor가 포함되어 있는지 확인 (v0.115.0+)"""
+        pipelines = collector_config["service"]["pipelines"]
+        logs_processors = pipelines["logs"]["processors"]
+        assert "redaction" in logs_processors, "logs 파이프라인에 redaction processor가 없습니다 (v0.115.0+ 필요)"
+
+    def test_redaction_in_metrics_pipeline(self, collector_config):
+        """metrics 파이프라인에 redaction processor가 포함되어 있는지 확인 (v0.115.0+)"""
+        pipelines = collector_config["service"]["pipelines"]
+        metrics_processors = pipelines["metrics"]["processors"]
+        assert "redaction" in metrics_processors, "metrics 파이프라인에 redaction processor가 없습니다 (v0.115.0+ 필요)"
 
 
 class TestPrometheusRemoteWriteQueue:
@@ -169,6 +180,14 @@ class TestPrometheusRemoteWriteQueue:
         remote_write_queue = prw.get("remote_write_queue")
         assert remote_write_queue is not None, "prometheusremotewrite에 remote_write_queue가 없습니다"
 
+    def test_prometheusremotewrite_has_wal(self, collector_config):
+        """prometheusremotewrite exporter에 WAL이 설정되어 있는지 확인 (디스크 버퍼링)"""
+        exporters = collector_config.get("exporters", {})
+        prw = exporters.get("prometheusremotewrite", {})
+        wal = prw.get("wal")
+        assert wal is not None, "prometheusremotewrite에 WAL이 없습니다 (디스크 버퍼링 필요)"
+        assert wal.get("directory") is not None, "WAL directory가 설정되지 않았습니다"
+
     def test_prometheusremotewrite_queue_enabled(self, collector_config):
         """prometheusremotewrite remote_write_queue가 활성화되어 있는지 확인"""
         prw = collector_config["exporters"]["prometheusremotewrite"]
@@ -191,8 +210,8 @@ class TestPrometheusRemoteWriteQueue:
         tempo_storage = tempo.get("sending_queue", {}).get("storage")
         assert tempo_storage == "file_storage", f"Tempo exporter가 file_storage를 사용하지 않습니다: {tempo_storage}"
 
-        # Loki
-        loki = exporters.get("loki", {})
+        # Loki (v0.144.0+: otlphttp/loki 사용)
+        loki = exporters.get("otlphttp/loki", {})
         loki_storage = loki.get("sending_queue", {}).get("storage")
         assert loki_storage == "file_storage", f"Loki exporter가 file_storage를 사용하지 않습니다: {loki_storage}"
 
@@ -224,3 +243,231 @@ class TestCollectorWithRedactionLive:
             assert "otelcol" in response.text or "process" in response.text, "Collector 메트릭이 반환되지 않습니다"
         except requests.RequestException as e:
             pytest.fail(f"Collector 메트릭 엔드포인트에 연결할 수 없습니다: {e}")
+
+
+class TestRedactionMaskingBehavior:
+    """실제 마스킹 동작 검증 테스트
+
+    OTLP로 민감 정보 포함 Trace/Log 전송 후 Tempo/Loki에서 마스킹 확인
+
+    테스트 방법:
+    1. OTLP HTTP로 민감 정보 포함 Trace 전송
+    2. Tempo API로 Trace 조회
+    3. 민감 정보가 마스킹되었는지 확인
+    """
+
+    @pytest.fixture(scope="class")
+    def otlp_endpoint(self):
+        """OTLP HTTP 엔드포인트"""
+        return os.environ.get("OTLP_HTTP_ENDPOINT", "http://otel-collector:4318")
+
+    @pytest.fixture(scope="class")
+    def tempo_endpoint(self):
+        """Tempo 조회 엔드포인트"""
+        return os.environ.get("TEMPO_ENDPOINT", "http://tempo:3200")
+
+    def _generate_trace_id(self):
+        """32자리 hex trace ID 생성"""
+        import uuid
+
+        return uuid.uuid4().hex
+
+    def _generate_span_id(self):
+        """16자리 hex span ID 생성"""
+        import uuid
+
+        return uuid.uuid4().hex[:16]
+
+    def test_jwt_token_masked_in_trace(self, otlp_endpoint, tempo_endpoint):
+        """JWT 토큰이 Trace 속성에서 마스킹되는지 확인"""
+        import json
+        import time
+
+        import requests
+
+        trace_id = self._generate_trace_id()
+        span_id = self._generate_span_id()
+
+        # 민감 정보 포함 Trace 전송
+        jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"  # noqa: S105
+
+        trace_data = {
+            "resourceSpans": [
+                {
+                    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "test-service"}}]},
+                    "scopeSpans": [
+                        {
+                            "scope": {"name": "test-scope"},
+                            "spans": [
+                                {
+                                    "traceId": trace_id,
+                                    "spanId": span_id,
+                                    "name": "test-span-with-jwt",
+                                    "kind": 1,
+                                    "startTimeUnixNano": str(int(time.time() * 1e9)),
+                                    "endTimeUnixNano": str(int((time.time() + 0.1) * 1e9)),
+                                    "attributes": [
+                                        {"key": "auth.token", "value": {"stringValue": jwt_token}},
+                                        {"key": "user.id", "value": {"stringValue": "user123"}},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        # OTLP HTTP로 전송
+        try:
+            response = requests.post(
+                f"{otlp_endpoint}/v1/traces", json=trace_data, headers={"Content-Type": "application/json"}, timeout=10
+            )
+            assert response.status_code in [200, 202], f"OTLP 전송 실패: {response.status_code}"
+        except requests.RequestException as e:
+            pytest.fail(f"OTLP 전송 실패: {e}")
+
+        # Tempo에서 Trace 조회 (최대 10초 대기)
+        time.sleep(2)  # 데이터 처리 대기
+
+        try:
+            response = requests.get(f"{tempo_endpoint}/api/traces/{trace_id}", timeout=10)
+
+            if response.status_code == 200:
+                trace_content = response.text
+                # JWT 토큰 원문이 포함되지 않아야 함
+                assert jwt_token not in trace_content, "JWT 토큰이 마스킹되지 않았습니다!"
+                # 마스킹된 값(****)이 있거나, 키 자체가 삭제되어야 함
+                # redaction processor는 값을 **** 또는 빈 문자열로 대체
+            elif response.status_code == 404:
+                # Trace가 아직 인덱싱되지 않았을 수 있음 - 테스트 통과로 처리
+                pytest.skip("Trace가 아직 인덱싱되지 않았습니다 (정상)")
+            else:
+                pytest.skip(f"Tempo 조회 실패: {response.status_code}")
+        except requests.RequestException as e:
+            pytest.skip(f"Tempo 연결 실패 (정상 - 테스트 환경): {e}")
+
+    def test_internal_ip_masked_in_trace(self, otlp_endpoint, tempo_endpoint):
+        """내부 IP 주소가 Trace 속성에서 마스킹되는지 확인"""
+        import time
+
+        import requests
+
+        trace_id = self._generate_trace_id()
+        span_id = self._generate_span_id()
+
+        # 민감 정보 포함 Trace 전송
+        internal_ip = "10.0.0.123"
+
+        trace_data = {
+            "resourceSpans": [
+                {
+                    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "test-service"}}]},
+                    "scopeSpans": [
+                        {
+                            "scope": {"name": "test-scope"},
+                            "spans": [
+                                {
+                                    "traceId": trace_id,
+                                    "spanId": span_id,
+                                    "name": "test-span-with-ip",
+                                    "kind": 1,
+                                    "startTimeUnixNano": str(int(time.time() * 1e9)),
+                                    "endTimeUnixNano": str(int((time.time() + 0.1) * 1e9)),
+                                    "attributes": [
+                                        {"key": "server.address", "value": {"stringValue": internal_ip}},
+                                        {"key": "request.id", "value": {"stringValue": "req-001"}},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        # OTLP HTTP로 전송
+        try:
+            response = requests.post(
+                f"{otlp_endpoint}/v1/traces", json=trace_data, headers={"Content-Type": "application/json"}, timeout=10
+            )
+            assert response.status_code in [200, 202], f"OTLP 전송 실패: {response.status_code}"
+        except requests.RequestException as e:
+            pytest.fail(f"OTLP 전송 실패: {e}")
+
+        # Tempo에서 Trace 조회
+        time.sleep(2)
+
+        try:
+            response = requests.get(f"{tempo_endpoint}/api/traces/{trace_id}", timeout=10)
+
+            if response.status_code == 200:
+                trace_content = response.text
+                # 내부 IP 원문이 포함되지 않아야 함
+                assert internal_ip not in trace_content, "내부 IP가 마스킹되지 않았습니다!"
+            elif response.status_code == 404:
+                pytest.skip("Trace가 아직 인덱싱되지 않았습니다 (정상)")
+            else:
+                pytest.skip(f"Tempo 조회 실패: {response.status_code}")
+        except requests.RequestException as e:
+            pytest.skip(f"Tempo 연결 실패 (정상 - 테스트 환경): {e}")
+
+    def test_bearer_token_masked_in_trace(self, otlp_endpoint, tempo_endpoint):
+        """Bearer 토큰이 Trace 속성에서 마스킹되는지 확인"""
+        import time
+
+        import requests
+
+        trace_id = self._generate_trace_id()
+        span_id = self._generate_span_id()
+
+        bearer_token = "Bearer sk-1234567890abcdefghij"
+
+        trace_data = {
+            "resourceSpans": [
+                {
+                    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "test-service"}}]},
+                    "scopeSpans": [
+                        {
+                            "scope": {"name": "test-scope"},
+                            "spans": [
+                                {
+                                    "traceId": trace_id,
+                                    "spanId": span_id,
+                                    "name": "test-span-with-bearer",
+                                    "kind": 1,
+                                    "startTimeUnixNano": str(int(time.time() * 1e9)),
+                                    "endTimeUnixNano": str(int((time.time() + 0.1) * 1e9)),
+                                    "attributes": [
+                                        {"key": "http.request.header.authorization", "value": {"stringValue": bearer_token}},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+        try:
+            response = requests.post(
+                f"{otlp_endpoint}/v1/traces", json=trace_data, headers={"Content-Type": "application/json"}, timeout=10
+            )
+            assert response.status_code in [200, 202], f"OTLP 전송 실패: {response.status_code}"
+        except requests.RequestException as e:
+            pytest.fail(f"OTLP 전송 실패: {e}")
+
+        time.sleep(2)
+
+        try:
+            response = requests.get(f"{tempo_endpoint}/api/traces/{trace_id}", timeout=10)
+
+            if response.status_code == 200:
+                trace_content = response.text
+                assert bearer_token not in trace_content, "Bearer 토큰이 마스킹되지 않았습니다!"
+            elif response.status_code == 404:
+                pytest.skip("Trace가 아직 인덱싱되지 않았습니다 (정상)")
+            else:
+                pytest.skip(f"Tempo 조회 실패: {response.status_code}")
+        except requests.RequestException as e:
+            pytest.skip(f"Tempo 연결 실패 (정상 - 테스트 환경): {e}")

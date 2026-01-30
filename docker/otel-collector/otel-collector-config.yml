@@ -1,4 +1,16 @@
-# OpenTelemetry Collector 설정
+# OpenTelemetry Collector 설정 (셀프힐링 프로젝트 전용)
+# =======================================================================
+# 이 설정은 셀프힐링 시스템의 텔레메트리(Traces, Metrics, Logs) 수집을 위해
+# 특화되어 있습니다. 범용 Collector로 사용하지 마세요.
+#
+# 하드코딩된 설정 (셀프힐링 전용):
+# - service.name: selfhealing (고정)
+# - 엔드포인트: web:8000, tempo:4317, mimir:9009, loki:3100 (Docker Compose 내부)
+# - scrape 대상: django, celery, redis, postgres (셀프힐링 스택)
+#
+# 범용화가 필요하면 환경변수로 엔드포인트/서비스명을 주입하세요.
+# =======================================================================
+#
 # OTLP 수신, 배치 처리, Tempo/Mimir/Loki로 텔레메트리 전송
 
 extensions:
@@ -125,9 +137,9 @@ processors:
         from_attribute: spanId
         action: upsert
 
-  # 민감 정보 값 기반 마스킹 (최후의 보루) - traces 전용
+  # 민감 정보 값 기반 마스킹 (최후의 보루)
   # 키 이름과 무관하게 값 패턴으로 마스킹하여 누출 방지
-  # 참고: v0.96.0에서는 traces만 지원, logs/metrics는 attributes processor로 처리
+  # v0.115.0+: traces, logs, metrics 모두 지원 (v0.96.0은 traces만 지원)
   redaction:
     # 모든 키 허용 (blocked_values로만 필터링)
     allow_all_keys: true
@@ -170,7 +182,8 @@ exporters:
       storage: file_storage
 
   # Mimir로 메트릭 전송 (Prometheus Remote Write)
-  # 참고: prometheusremotewrite는 sending_queue 대신 remote_write_queue 사용
+  # 참고: prometheusremotewrite는 sending_queue 미지원, remote_write_queue 사용
+  # WAL(Write-Ahead Log)로 디스크 기반 버퍼링 지원
   prometheusremotewrite:
     endpoint: http://mimir:9009/api/v1/push
     tls:
@@ -185,12 +198,20 @@ exporters:
       enabled: true
       num_consumers: 10
       queue_size: 5000
+    # WAL(Write-Ahead Log) - 디스크 기반 버퍼링 (Mimir 장애 시 데이터 보존)
+    # remote_write_queue는 file_storage 연동 미지원하므로 WAL 사용
+    wal:
+      directory: /var/lib/otelcol/wal
+      buffer_size: 300
+      truncate_frequency: 60s
     resource_to_telemetry_conversion:
       enabled: true
 
-  # Loki로 로그 전송
-  loki:
-    endpoint: http://loki:3100/loki/api/v1/push
+  # Loki로 로그 전송 (OTLP 프로토콜)
+  # v0.144.0+: 전용 loki exporter 제거됨, Loki 3.0+는 OTLP 네이티브 지원
+  # 업계 표준: otlphttp로 Loki OTLP 엔드포인트 사용
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
     tls:
       insecure: true
     timeout: 5s
@@ -204,11 +225,6 @@ exporters:
       num_consumers: 10
       queue_size: 5000
       storage: file_storage
-    default_labels_enabled:
-      exporter: true
-      job: true
-      instance: true
-      level: true
 
   # 디버그 로깅 (개발 환경용)
   debug:
@@ -219,28 +235,35 @@ service:
 
   pipelines:
     # Traces 파이프라인 (Tempo로 전송)
-    # redaction processor로 민감 값 마스킹 (v0.96.0에서 traces만 지원)
+    # redaction processor로 민감 값 마스킹
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch, resource, attributes/traces, redaction]
       exporters: [otlp/tempo, debug]
 
     # Metrics 파이프라인 (Mimir로 전송)
-    # 참고: redaction은 v0.96.0에서 traces만 지원하여 미포함
+    # v0.115.0+에서 redaction 지원
     metrics:
       receivers: [otlp, prometheus]
-      processors: [memory_limiter, batch, resource]
+      processors: [memory_limiter, batch, resource, redaction]
       exporters: [prometheusremotewrite, debug]
 
     # Logs 파이프라인 (Loki로 전송)
-    # 참고: redaction은 v0.96.0에서 traces만 지원, attributes/logs로 키 기반 삭제 처리
+    # v0.115.0+에서 redaction 지원
+    # v0.144.0+에서 otlphttp로 Loki OTLP 엔드포인트 사용
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch, resource, attributes/logs]
-      exporters: [loki, debug]
+      processors: [memory_limiter, batch, resource, attributes/logs, redaction]
+      exporters: [otlphttp/loki, debug]
 
   telemetry:
     logs:
       level: info
     metrics:
-      address: 0.0.0.0:8888
+      # v0.144.0+: address 대신 readers 구조 사용
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888

@@ -374,13 +374,14 @@ services:
   # OpenTelemetry Collector - 텔레메트리 수집기 (테스트용)
   # ---------------------------------------------------------------------------
   # 참고: Alpine 기반 커스텀 이미지로 wget 헬스체크 지원
+  # v0.115.0: redaction processor가 traces, logs, metrics 모두 지원
   # ---------------------------------------------------------------------------
   otel-collector:
     build:
       context: ./docker/otel-collector
       dockerfile: Dockerfile
       args:
-        OTEL_VERSION: "0.96.0"
+        OTEL_VERSION: "0.144.0"
     container_name: otel-collector-test
     user: "0"
     command: ["--config=/etc/otelcol/otel-collector-config.yml"]

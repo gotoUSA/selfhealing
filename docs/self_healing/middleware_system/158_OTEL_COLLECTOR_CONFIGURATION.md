@@ -75,6 +75,32 @@
 
 ## 2. Collector 구성 요소
 
+### 2.0 셀프힐링 전용 설정 (범용화 불필요)
+
+**결론**: 이 OTEL Collector는 셀프힐링 프로젝트 **전용**으로 범용화가 불필요합니다.
+
+**하드코딩된 설정 (의도적)**:
+
+| 설정 | 값 | 근거 |
+|------|---|------|
+| `service.name` | selfhealing | 단일 서비스 운영 |
+| `deployment.environment` | development | Docker Compose 환경 |
+| 백엔드 엔드포인트 | tempo:4317, mimir:9009, loki:3100 | Docker 내부 네트워크 |
+| scrape 대상 | web:8000, celery_worker:9808 | 셀프힐링 스택 고정 |
+
+**범용화가 필요한 경우**:
+```yaml
+# 환경변수로 주입
+environment:
+  - SERVICE_NAME=${SERVICE_NAME:-selfhealing}
+  - TEMPO_ENDPOINT=${TEMPO_ENDPOINT:-tempo:4317}
+```
+
+**범용화하지 않는 이유**:
+1. 다른 서비스 추가 계획 없음
+2. 환경변수화는 복잡성만 증가
+3. Docker Compose 환경 고정
+
 ### 2.1 Receivers (데이터 수신)
 
 | Receiver | 용도 | 포트 |
@@ -140,7 +166,20 @@ otel-collector:
 | JWT 토큰 | `eyJ...` | `****` |
 | API Key | `sk-*`, `pk-*` | `****` |
 
-**참고**: v0.96.0에서 redaction processor는 traces 파이프라인만 지원. logs/metrics는 `attributes` processor로 키 기반 삭제 처리.
+**버전 선택 근거 (v0.144.0)**:
+
+| 버전 | redaction 지원 | loki exporter | 비고 |
+|------|---------------|---------------|------|
+| v0.96.0 | traces만 | loki 전용 exporter | logs/metrics 미보호 |
+| v0.115.0 | traces, logs, metrics | loki 전용 exporter | 완전한 보호 |
+| **v0.144.0** | 모든 기능 | otlphttp (Loki OTLP 지원) | **권장 - 최신 안정** |
+
+**v0.144.0 주요 변경사항**:
+1. `loki` exporter 제거 → `otlphttp`로 Loki OTLP 엔드포인트 사용
+2. `telemetry.metrics.address` → `telemetry.metrics.readers` 구조 변경
+3. `otlp` alias deprecated → `otlp_grpc` 권장 (경고만, 동작함)
+
+**업계 관행**: OpenTelemetry는 LTS 없이 빠르게 발전. 6개월 이전 버전은 보안 패치 미지원. 최신 안정 버전 사용 권장.
 
 **구현 파일**: `docker/otel-collector/otel-collector-config.yml`
 
@@ -161,6 +200,16 @@ processors:
       - "Bearer\\s+[A-Za-z0-9\\-_.]+"
       - "eyJ[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+"
     summary: debug
+
+# v0.115.0에서 모든 파이프라인에 redaction 적용
+service:
+  pipelines:
+    traces:
+      processors: [..., redaction]
+    metrics:
+      processors: [..., redaction]
+    logs:
+      processors: [..., redaction]
 ```
 
 **통합 테스트**: `tests/integration/otel/test_redaction_processor.py`
@@ -213,7 +262,9 @@ exporters:
       queue_size: 5000
       storage: file_storage  # Collector 장애 시 로컬 스풀링
 
-  loki:
+  # v0.144.0+: loki exporter 제거됨, otlphttp로 Loki OTLP 엔드포인트 사용
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
     sending_queue:
       enabled: true
       num_consumers: 10
@@ -243,8 +294,36 @@ docker-compose -f docker-compose.test.yml run --rm test-otel-file-storage
 | Exporter | 대상 | 용도 |
 |----------|------|------|
 | `prometheusremotewrite` | Mimir | 메트릭 장기 저장 |
-| `otlp` | Tempo | 분산 추적 저장 |
-| `loki` | Loki | 로그 저장 |
+| `otlp/tempo` | Tempo | 분산 추적 저장 |
+| `otlphttp/loki` | Loki (OTLP) | 로그 저장 (v0.144.0+) |
+
+#### 2.3.1 prometheusremotewrite 버퍼링 전략 ✅ 구현 완료
+
+**참고**: `prometheusremotewrite`는 `sending_queue` 미지원. `remote_write_queue`만 지원하며, `file_storage` 연동 불가.
+
+| 설정 | 지원 여부 | 비고 |
+|------|----------|------|
+| `sending_queue.storage` | ❌ 미지원 | Tempo/Loki에서만 사용 |
+| `remote_write_queue` | ✅ 지원 | 메모리 기반 큐 |
+| **`wal` (Write-Ahead Log)** | ✅ 지원 | **디스크 기반 버퍼링** |
+
+**해결책: WAL(Write-Ahead Log) 사용**
+
+```yaml
+prometheusremotewrite:
+  endpoint: http://mimir:9009/api/v1/push
+  remote_write_queue:
+    enabled: true
+    num_consumers: 10
+    queue_size: 5000
+  # WAL - 디스크 기반 버퍼링 (Mimir 장애 시 데이터 보존)
+  wal:
+    directory: /var/lib/otelcol/wal
+    buffer_size: 300
+    truncate_frequency: 60s
+```
+
+**통합 테스트**: `tests/integration/otel/test_redaction_processor.py::TestPrometheusRemoteWriteQueue`
 
 ---
 
@@ -303,17 +382,17 @@ exporters: [prometheusremotewrite]
 receivers: [otlp]
     │
     ▼
-processors: [memory_limiter, batch, resource, attributes]
+processors: [memory_limiter, batch, resource, attributes/logs, redaction]
     │
     ▼
-exporters: [loki]
+exporters: [otlphttp/loki]  # v0.144.0+: Loki OTLP 엔드포인트 사용
 ```
 
 **Logs 데이터 흐름:**
 1. Django 로깅 → OTEL Log Exporter
 2. OTLP로 Collector에 전송
-3. 속성 처리 (trace_id 추출 등)
-4. Loki로 전송
+3. 속성 처리 (trace_id 추출 등) 및 민감정보 마스킹
+4. Loki OTLP 엔드포인트(`/otlp`)로 전송
 
 **현재 로깅과의 연동:**
 

@@ -172,7 +172,7 @@ services:
       context: ./docker/otel-collector
       dockerfile: Dockerfile
       args:
-        OTEL_VERSION: "0.96.0"
+        OTEL_VERSION: "0.144.0"
     container_name: otel-collector
     command: ["--config=/etc/otelcol/otel-collector-config.yml"]
     volumes:
