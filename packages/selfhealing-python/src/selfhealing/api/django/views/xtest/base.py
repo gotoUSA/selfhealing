@@ -627,7 +627,7 @@ def collect_system_snapshot() -> dict[str, Any]:
 
 
 # =============================================================================
-# In-Memory Event Storage (테스트용 이벤트만 여기서 관리)
+# In-Memory Event Storage + Redis Persistence
 # =============================================================================
 
 _healing_events_lock = threading.Lock()
@@ -636,25 +636,112 @@ _max_events = 500
 
 
 def add_healing_event(event: dict[str, Any]) -> None:
-    """힐링 이벤트 기록 (테스트용)."""
+    """
+    힐링 이벤트 기록.
+
+    Redis에 저장하여 다중 워커 간 동기화를 지원합니다.
+    Redis 실패 시 In-Memory에만 저장됩니다.
+    """
     global _healing_events
+
+    # Redis 저장 시도
+    try:
+        from selfhealing.services.healing_events_store import add_healing_event_redis
+
+        add_healing_event_redis(event)
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"[X-Test-Mode] Redis event save failed: {e}")
+
+    # In-Memory에도 저장 (빠른 조회용 캐시)
     with _healing_events_lock:
-        event["recorded_at"] = timezone.now().isoformat()
+        if "recorded_at" not in event:
+            event["recorded_at"] = timezone.now().isoformat()
         _healing_events.append(event)
         if len(_healing_events) > _max_events:
             _healing_events = _healing_events[-_max_events:]
 
 
-def get_healing_events(limit: int = 50) -> list[dict[str, Any]]:
-    """힐링 이벤트 조회 (테스트용)."""
+def get_healing_events(limit: int = 50, use_redis: bool = True) -> list[dict[str, Any]]:
+    """
+    힐링 이벤트 조회.
+
+    Redis에서 조회를 시도하고, 실패 시 In-Memory에서 조회합니다.
+
+    Args:
+        limit: 반환할 최대 이벤트 수
+        use_redis: Redis 조회 사용 여부
+
+    Returns:
+        이벤트 딕셔너리 리스트 (최신순)
+    """
+    if use_redis:
+        try:
+            from selfhealing.services.healing_events_store import get_healing_events_redis
+
+            return get_healing_events_redis(limit=limit, days_back=1)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"[X-Test-Mode] Redis event query failed: {e}")
+
+    # In-Memory fallback
     with _healing_events_lock:
         return list(_healing_events[-limit:])
 
 
-def get_healing_events_count() -> int:
-    """힐링 이벤트 총 개수 (테스트용)."""
+def get_healing_events_count(use_redis: bool = True) -> int:
+    """
+    힐링 이벤트 총 개수.
+
+    Args:
+        use_redis: Redis 조회 사용 여부
+
+    Returns:
+        이벤트 총 개수
+    """
+    if use_redis:
+        try:
+            from selfhealing.services.healing_events_store import (
+                get_healing_events_count_redis,
+            )
+
+            return get_healing_events_count_redis(days_back=1)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"[X-Test-Mode] Redis event count failed: {e}")
+
+    # In-Memory fallback
     with _healing_events_lock:
         return len(_healing_events)
+
+
+def clear_healing_events() -> int:
+    """
+    힐링 이벤트 초기화 (테스트용).
+
+    Returns:
+        초기화된 이벤트 개수
+    """
+    global _healing_events
+
+    # Redis 초기화 시도
+    try:
+        from selfhealing.services.healing_events_store import clear_healing_events_redis
+
+        clear_healing_events_redis()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"[X-Test-Mode] Redis event clear failed: {e}")
+
+    # In-Memory 초기화
+    with _healing_events_lock:
+        count = len(_healing_events)
+        _healing_events = []
+        return count
 
 
 # Legacy alias for backward compatibility

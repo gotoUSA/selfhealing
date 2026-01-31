@@ -8,6 +8,8 @@ Provides:
 - SelfHealingConfig: Django AppConfig for Self-Healing system
 - create_selfhealing_groups: RBAC group creation signal handler
 - AbstractFailedOperation: Domain-free abstract model for DLQ entries
+- AbstractPostmortemRecord: Domain-free abstract model for Postmortem records
+- BasePostmortemRecordAdmin: Base Admin class for Postmortem records
 - DjangoStatisticsAdapter: Statistics adapter using Django ORM
 """
 
@@ -37,6 +39,40 @@ def get_abstract_failed_operation():
     return AbstractFailedOperation
 
 
+def get_abstract_postmortem_record():
+    """
+    Get AbstractPostmortemRecord model class.
+
+    This is a lazy import to avoid Django dependency at module load time.
+
+    Returns:
+        AbstractPostmortemRecord class
+
+    Raises:
+        ImportError: If Django is not installed
+    """
+    from selfhealing.adapters.django.models import AbstractPostmortemRecord
+
+    return AbstractPostmortemRecord
+
+
+def get_base_postmortem_admin():
+    """
+    Get BasePostmortemRecordAdmin class.
+
+    This is a lazy import to avoid Django dependency at module load time.
+
+    Returns:
+        BasePostmortemRecordAdmin class
+
+    Raises:
+        ImportError: If Django is not installed
+    """
+    from selfhealing.adapters.django.admin import BasePostmortemRecordAdmin
+
+    return BasePostmortemRecordAdmin
+
+
 __all__ = [
     # AppConfig
     "SelfHealingConfig",
@@ -44,5 +80,8 @@ __all__ = [
     "SELFHEALING_GROUPS",
     # Adapters
     "DjangoStatisticsAdapter",
+    # Lazy imports for models
     "get_abstract_failed_operation",
+    "get_abstract_postmortem_record",
+    "get_base_postmortem_admin",
 ]

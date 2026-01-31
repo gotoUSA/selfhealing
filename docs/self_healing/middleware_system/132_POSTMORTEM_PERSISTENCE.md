@@ -194,7 +194,31 @@ GET /api/self-healing/postmortem/stats/?period=30d
   - `AbstractPostmortemRecord` 추상 모델: `selfhealing/adapters/django/models.py`
   - `PostmortemRecord` 구체 모델: `shopping/models/postmortem_record.py`
 - [x] Migration 파일 생성: `shopping/migrations/0032_add_postmortem_record.py`
-- [ ] Admin 등록 (선택적)
+- [x] Admin 등록
+  - `BasePostmortemRecordAdmin` 기본 클래스: `selfhealing/adapters/django/admin.py`
+  - `PostmortemRecordAdmin` 상속 구현: `shopping/admin/postmortem_admin.py`
+  - 25개 selfhealing 패키지 테스트 통과: `packages/selfhealing-python/tests/unit/adapters/django/test_base_postmortem_admin.py`
+  - 15개 shopping 앱 테스트 통과: `tests/self_healing/admin/test_postmortem_admin.py`
+
+#### Admin 상속 구조 (리팩토링 완료)
+
+호스트 앱에서 상속만 하면 되도록 설계:
+
+```python
+# selfhealing 패키지 (재사용 가능한 기본 클래스)
+# packages/selfhealing-python/src/selfhealing/adapters/django/admin.py
+class BasePostmortemRecordAdmin(admin.ModelAdmin):
+    list_display = ["incident_id", "started_at", "duration_display", ...]
+    list_filter = ["source", "started_at", "created_at"]
+    search_fields = ["incident_id", "affected_services"]
+    # ... 모든 Admin 설정과 메서드
+
+# 호스트 앱 (상속만 수행)
+# shopping/admin/postmortem_admin.py
+@admin.register(PostmortemRecord)
+class PostmortemRecordAdmin(BasePostmortemRecordAdmin):
+    pass  # 모든 설정 상속
+```
 
 ### 7.2 저장 함수 수정
 
@@ -210,11 +234,15 @@ GET /api/self-healing/postmortem/stats/?period=30d
 - [x] 필터링 파라미터 지원 (start_date, end_date, service, min_duration)
 - [x] 페이지네이션 지원 (offset 파라미터)
 
-### 7.4 Redis 통합 (선택적)
+### 7.4 Redis 통합
 
-- [ ] Healing Events Redis 저장
-- [ ] TTL 설정
-- [ ] 다중 워커 동기화
+- [x] Healing Events Redis 저장
+  - `packages/selfhealing-python/src/selfhealing/services/healing_events_store.py`
+  - `selfhealing/services/healing_events_store.py`
+- [x] TTL 설정 (7일 = 604800초)
+- [x] 다중 워커 동기화 (Redis LPUSH/LRANGE)
+- [x] In-Memory fallback 지원
+- [x] 18개 단위 테스트 통과: `packages/selfhealing-python/tests/unit/resilience/test_healing_events_redis_store.py`
 
 ### 7.5 테스트
 

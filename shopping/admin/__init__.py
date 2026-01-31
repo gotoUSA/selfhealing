@@ -46,6 +46,9 @@ from .circuit_breaker_admin import CircuitBreakerStateAdmin
 # DLQ (Dead Letter Queue) domain
 from .dlq_admin import FailedOperationAdmin
 
+# Postmortem domain
+from .postmortem_admin import PostmortemRecordAdmin
+
 
 __all__ = [
     # User
@@ -76,6 +79,8 @@ __all__ = [
     # Security
     "CircuitBreakerStateAdmin",
     "FailedOperationAdmin",
+    # Postmortem
+    "PostmortemRecordAdmin",
 ]
 
 
