@@ -10,6 +10,8 @@ Provides:
 - AbstractFailedOperation: Domain-free abstract model for DLQ entries
 - AbstractPostmortemRecord: Domain-free abstract model for Postmortem records
 - BasePostmortemRecordAdmin: Base Admin class for Postmortem records
+- BaseDLQEntryAdmin: Base Admin class for DLQ (FailedOperation) entries
+- BaseCircuitBreakerStateAdmin: Base Admin class for Circuit Breaker states
 - DjangoStatisticsAdapter: Statistics adapter using Django ORM
 """
 
@@ -73,6 +75,40 @@ def get_base_postmortem_admin():
     return BasePostmortemRecordAdmin
 
 
+def get_base_dlq_admin():
+    """
+    Get BaseDLQEntryAdmin class.
+
+    This is a lazy import to avoid Django dependency at module load time.
+
+    Returns:
+        BaseDLQEntryAdmin class
+
+    Raises:
+        ImportError: If Django is not installed
+    """
+    from selfhealing.adapters.django.admin import BaseDLQEntryAdmin
+
+    return BaseDLQEntryAdmin
+
+
+def get_base_circuit_breaker_admin():
+    """
+    Get BaseCircuitBreakerStateAdmin class.
+
+    This is a lazy import to avoid Django dependency at module load time.
+
+    Returns:
+        BaseCircuitBreakerStateAdmin class
+
+    Raises:
+        ImportError: If Django is not installed
+    """
+    from selfhealing.adapters.django.admin import BaseCircuitBreakerStateAdmin
+
+    return BaseCircuitBreakerStateAdmin
+
+
 __all__ = [
     # AppConfig
     "SelfHealingConfig",
@@ -83,5 +119,8 @@ __all__ = [
     # Lazy imports for models
     "get_abstract_failed_operation",
     "get_abstract_postmortem_record",
+    # Lazy imports for admin
     "get_base_postmortem_admin",
+    "get_base_dlq_admin",
+    "get_base_circuit_breaker_admin",
 ]
