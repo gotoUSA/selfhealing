@@ -129,7 +129,10 @@ X-Test-Mode에서 수동으로 Post-mortem을 생성할 때는 다른 X-Test 작
 
 ### 5.1 수동 API
 
-- [x] `PostmortemGeneratorView.post()` 끝에 `self.log_xtest_audit()` 추가
+- [x] `PostmortemGeneratorView.post()` 끝에 Audit 로깅 추가
+  - **참고:** 문서 133에 따라 `views/postmortem.py`로 분리됨 (XTest 분리)
+  - `_log_postmortem_audit()` 정적 메서드 사용, `_write_to_wal()` 호출
+  - event_type: `POSTMORTEM_MANUAL_GENERATED`, source: `API.Postmortem`
 - [x] `BlastRadiusTestView.post()` 끝에 `self.log_xtest_audit()` 추가
 - [x] `MultiServiceBlastRadiusView.post()` 끝에 `self.log_xtest_audit()` 추가
 - [x] `RecordHealingEventView.post()` 끝에 `self.log_xtest_audit()` 추가

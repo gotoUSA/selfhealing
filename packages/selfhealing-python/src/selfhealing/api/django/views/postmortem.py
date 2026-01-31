@@ -250,6 +250,14 @@ class PostmortemGeneratorView(APIView):
 
         logger.info(f"[Postmortem] Postmortem generated: {incident_id}")
 
+        # Audit 기록: 수동 Post-mortem 생성
+        self._log_postmortem_audit(
+            incident_id=incident_id,
+            affected_services=affected,
+            duration_seconds=postmortem.get("duration_seconds"),
+            user=str(request.user) if request.user.is_authenticated else "anonymous",
+        )
+
         return Response(
             {
                 "status": "success",
@@ -257,6 +265,33 @@ class PostmortemGeneratorView(APIView):
                 "timestamp": timezone.now().isoformat(),
             }
         )
+
+    @staticmethod
+    def _log_postmortem_audit(
+        incident_id: str,
+        affected_services: list,
+        duration_seconds: float | None,
+        user: str,
+    ) -> None:
+        """수동 Post-mortem 생성에 대한 Audit 기록."""
+        try:
+            from selfhealing.services.audit.base import _write_to_wal
+
+            _write_to_wal(
+                event_type="POSTMORTEM_MANUAL_GENERATED",
+                source="API.Postmortem",
+                details={
+                    "incident_id": incident_id,
+                    "affected_services": affected_services,
+                    "duration_seconds": duration_seconds,
+                    "triggered_by": user,
+                },
+                success=True,
+                domain="selfhealing",
+                target_id=incident_id,
+            )
+        except Exception as e:
+            logger.warning(f"[Postmortem] Failed to log audit: {e}")
 
     @staticmethod
     def _get_postmortem_history_limit() -> int:
