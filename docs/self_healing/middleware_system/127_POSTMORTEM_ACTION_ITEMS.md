@@ -128,9 +128,11 @@ Google SRE 표준에 맞춘 구조:
 | `CIRCUIT_BREAKER_HALF_OPENED` | "Circuit Breaker 복구 시도 (HALF_OPEN)" |
 | `CIRCUIT_BREAKER_CLOSED` | "Circuit Breaker 정상 복구 (CLOSED)" |
 | `ERROR_BUDGET_CRITICAL` | "Error Budget 임계치 경고" |
-| `ERROR_BUDGET_EXHAUSTED` | "Error Budget 소진" |
+| `ERROR_BUDGET_WARNING` | "Error Budget 경고 수준 도달" |
 | `EMERGENCY_ACTIVATED` | "비상 모드 활성화" |
 | `KILL_SWITCH_ACTIVATED` | "Kill Switch 활성화" |
+| `DLQ_ITEM_ADDED` | "DLQ에 항목 적재됨" |
+| `DLQ_REPLAY_BLOCKED` | "DLQ Replay 차단됨" |
 
 ---
 
@@ -159,6 +161,11 @@ Google SRE 표준에 맞춘 구조:
 - [x] CB OPEN 이벤트 있을 때 Action 생성 확인
 - [x] 빈 타임라인일 때 빈 리스트 반환
 - [x] 느린 복구 시 Recommendation 생성 확인
+- [x] DLQ_ITEM_ADDED 이벤트 Action 생성 확인
+- [x] DLQ_REPLAY_BLOCKED 이벤트 Action 생성 확인
+- [x] Fast Fail 미발생 시 Recommendation 생성 확인
+- [x] CB OPEN 후 복구 시 Fast Fail 경고 없음 확인
+- [x] ERROR_BUDGET_WARNING 이벤트 Action 생성 확인
 
 ---
 

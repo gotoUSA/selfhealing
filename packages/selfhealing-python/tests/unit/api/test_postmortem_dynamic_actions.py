@@ -163,11 +163,16 @@ class TestGenerateDynamicActions:
         assert any("Error Budget" in text for text in action_texts)
 
     def test_no_duration_with_no_affected_services_returns_default_recommendation(self):
-        """duration이 None이고 affected_services가 없을 때 기본 recommendation 반환."""
+        """duration이 None이고 affected_services가 없고 정상 복구됐을 때 기본 recommendation 반환."""
         timeline = [
             {
                 "timestamp": "2026-01-27T14:00:00+09:00",
                 "event_type": "circuit_breaker_opened",
+                "details": {"service_name": "test"},
+            },
+            {
+                "timestamp": "2026-01-27T14:00:30+09:00",
+                "event_type": "circuit_breaker_closed",
                 "details": {"service_name": "test"},
             },
         ]
@@ -238,3 +243,110 @@ class TestGenerateDynamicActions:
         services = [a["service"] for a in cb_open_actions]
         assert "database" in services
         assert "api" in services
+
+    def test_dlq_item_added_event_creates_action(self):
+        """DLQ 항목 적재 이벤트가 있을 때 Action 생성."""
+        timeline = [
+            {
+                "timestamp": "2026-01-27T14:00:00+09:00",
+                "event_type": "dlq_item_added",
+                "details": {"service_name": "payment", "count": 5},
+            },
+        ]
+
+        actions, _ = generate_dynamic_actions(timeline, [], 30.0)
+
+        dlq_action = next(
+            (a for a in actions if "DLQ" in a["action"]),
+            None,
+        )
+        assert dlq_action is not None
+        assert dlq_action["status"] == "completed"
+        assert dlq_action["service"] == "payment"
+
+    def test_dlq_replay_blocked_event_creates_action(self):
+        """DLQ Replay 차단 이벤트가 있을 때 Action 생성."""
+        timeline = [
+            {
+                "timestamp": "2026-01-27T14:00:00+09:00",
+                "event_type": "dlq_replay_blocked",
+                "details": {"service_name": "order"},
+            },
+        ]
+
+        actions, _ = generate_dynamic_actions(timeline, [], 30.0)
+
+        dlq_action = next(
+            (a for a in actions if "DLQ" in a["action"] and "Replay" in a["action"]),
+            None,
+        )
+        assert dlq_action is not None
+        assert dlq_action["status"] == "completed"
+
+    def test_cb_open_without_recovery_generates_fast_fail_recommendation(self):
+        """CB OPEN 후 복구(HALF_OPEN/CLOSED) 없으면 Fast Fail 점검 권장."""
+        timeline = [
+            {
+                "timestamp": "2026-01-27T14:00:00+09:00",
+                "event_type": "circuit_breaker_opened",
+                "details": {"service_name": "database"},
+            },
+        ]
+
+        _, recommendations = generate_dynamic_actions(timeline, [], 30.0)
+
+        assert any("Fast Fail 미동작" in r for r in recommendations)
+        assert any("CB 설정 점검" in r for r in recommendations)
+
+    def test_cb_open_with_recovery_no_fast_fail_recommendation(self):
+        """CB OPEN 후 복구되면 Fast Fail 점검 권장 없음."""
+        timeline = [
+            {
+                "timestamp": "2026-01-27T14:00:00+09:00",
+                "event_type": "circuit_breaker_opened",
+                "details": {"service_name": "database"},
+            },
+            {
+                "timestamp": "2026-01-27T14:00:30+09:00",
+                "event_type": "circuit_breaker_half_opened",
+                "details": {"service_name": "database"},
+            },
+        ]
+
+        _, recommendations = generate_dynamic_actions(timeline, [], 30.0)
+
+        assert not any("Fast Fail 미동작" in r for r in recommendations)
+
+    def test_cb_open_with_closed_no_fast_fail_recommendation(self):
+        """CB OPEN 후 CLOSED 되면 Fast Fail 점검 권장 없음."""
+        timeline = [
+            {
+                "timestamp": "2026-01-27T14:00:00+09:00",
+                "event_type": "circuit_breaker_opened",
+                "details": {"service_name": "database"},
+            },
+            {
+                "timestamp": "2026-01-27T14:00:35+09:00",
+                "event_type": "circuit_breaker_closed",
+                "details": {"service_name": "database"},
+            },
+        ]
+
+        _, recommendations = generate_dynamic_actions(timeline, [], 30.0)
+
+        assert not any("Fast Fail 미동작" in r for r in recommendations)
+
+    def test_error_budget_warning_event_creates_action(self):
+        """Error Budget 경고 이벤트 Action 생성."""
+        timeline = [
+            {
+                "timestamp": "2026-01-27T14:00:00+09:00",
+                "event_type": "error_budget_warning",
+                "details": {"remaining": 15.0},
+            },
+        ]
+
+        actions, _ = generate_dynamic_actions(timeline, [], 30.0)
+
+        action_texts = [a["action"] for a in actions]
+        assert any("Error Budget" in text for text in action_texts)

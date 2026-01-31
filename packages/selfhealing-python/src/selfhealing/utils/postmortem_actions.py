@@ -17,9 +17,11 @@ EVENT_ACTION_MAP = {
     "circuit_breaker_half_opened": "Circuit Breaker 복구 시도 (HALF_OPEN)",
     "circuit_breaker_closed": "Circuit Breaker 정상 복구 (CLOSED)",
     "error_budget_critical": "Error Budget 임계치 경고",
-    "error_budget_exhausted": "Error Budget 소진",
+    "error_budget_warning": "Error Budget 경고 수준 도달",
     "emergency_activated": "비상 모드 활성화",
     "kill_switch_activated": "Kill Switch 활성화",
+    "dlq_item_added": "DLQ에 항목 적재됨",
+    "dlq_replay_blocked": "DLQ Replay 차단됨",
 }
 
 
@@ -88,6 +90,13 @@ def generate_dynamic_actions(
     # Recommendations 생성 (다중 서비스 장애 기준)
     if len(affected_services) > 3:
         recommendations.append(f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요")
+
+    # Recommendations 생성 (Fast Fail 미발생 검사)
+    # CB OPEN이 발생했으나 HALF_OPEN 또는 CLOSED로 전환되지 않은 경우
+    has_cb_open = any("circuit_breaker_opened" in (key, "") for key, _ in seen_actions)
+    has_cb_recovery = any(key in ("circuit_breaker_half_opened", "circuit_breaker_closed") for key, _ in seen_actions)
+    if has_cb_open and not has_cb_recovery:
+        recommendations.append("Fast Fail 미동작 - CB 설정 점검 필요")
 
     # 기본 recommendation
     if not recommendations:
