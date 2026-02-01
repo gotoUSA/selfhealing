@@ -308,6 +308,12 @@ SELFHEALING_DEPLOYMENT_POST_WINDOW_MINUTES=30
 | `replicasets` | `get`, `list` |
 | `events` | `get`, `list` |
 
+**RBAC 설정 파일:** `k8s/deployment-correlator-rbac.yaml`
+
+```bash
+kubectl apply -f k8s/deployment-correlator-rbac.yaml
+```
+
 ### 13.2 데이터 추출
 
 | K8s 필드 | 매핑 |

@@ -1,0 +1,108 @@
+# =============================================================================
+# Deployment Correlator RBAC Configuration
+# =============================================================================
+# DeploymentCorrelator의 KubernetesDeploymentAdapter가 필요로 하는 권한 정의
+#
+# 문서: docs/self_healing/middleware_system/149_POSTMORTEM_DEPLOYMENT_CORRELATOR.md
+# 관련 코드: adapters/deployment/kubernetes.py
+#
+# 적용 방법:
+#   kubectl apply -f k8s/deployment-correlator-rbac.yaml
+#
+# 필요 권한:
+#   - deployments: get, list (배포 상태 조회)
+#   - replicasets: get, list (배포 이력 추적)
+#   - events: get, list (배포 이벤트 수집, 선택)
+# =============================================================================
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployment-correlator
+  namespace: selfhealing
+  labels:
+    app.kubernetes.io/name: deployment-correlator
+    app.kubernetes.io/component: postmortem
+    app.kubernetes.io/part-of: selfhealing
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: deployment-correlator
+  labels:
+    app.kubernetes.io/name: deployment-correlator
+    app.kubernetes.io/component: postmortem
+    app.kubernetes.io/part-of: selfhealing
+rules:
+  # Deployment 조회 - 현재 배포 상태 확인
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+
+  # ReplicaSet 조회 - 배포 이력 추적 (revision 정보)
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list"]
+
+  # Events 조회 - 배포 관련 이벤트 수집 (선택적)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list"]
+
+  # ConfigMaps 조회 - Helm Release 이력 (선택적)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: deployment-correlator
+  labels:
+    app.kubernetes.io/name: deployment-correlator
+    app.kubernetes.io/component: postmortem
+    app.kubernetes.io/part-of: selfhealing
+subjects:
+  - kind: ServiceAccount
+    name: deployment-correlator
+    namespace: selfhealing
+roleRef:
+  kind: ClusterRole
+  name: deployment-correlator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# =============================================================================
+# Namespace-scoped Role (특정 네임스페이스만 접근 시)
+# =============================================================================
+# ClusterRole 대신 특정 네임스페이스만 접근해야 하는 경우 아래 Role 사용
+#
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   name: deployment-correlator
+#   namespace: production  # 대상 네임스페이스
+# rules:
+#   - apiGroups: ["apps"]
+#     resources: ["deployments", "replicasets"]
+#     verbs: ["get", "list"]
+#   - apiGroups: [""]
+#     resources: ["events"]
+#     verbs: ["get", "list"]
+#
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: deployment-correlator
+#   namespace: production
+# subjects:
+#   - kind: ServiceAccount
+#     name: deployment-correlator
+#     namespace: selfhealing
+# roleRef:
+#   kind: Role
+#   name: deployment-correlator
+#   apiGroup: rbac.authorization.k8s.io
