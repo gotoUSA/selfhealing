@@ -6,21 +6,36 @@ Post-mortem Incident Storage Service.
 X-Test 모듈과 분리된 독립적인 저장소로, 실제 프로덕션 인시던트를 관리합니다.
 - In-Memory 캐시: 빠른 읽기 지원
 - PostgreSQL 영속성: 영구 저장 및 필터링 쿼리 지원
+- Redis 분산 락: 중복 생성 방지
 
 Features:
 - add_healing_incident(): 인시던트 저장 (DB + In-Memory)
 - get_healing_incidents(): 인시던트 조회 (필터링 지원)
 - get_healing_incidents_count(): 인시던트 카운트
+- add_healing_incident_with_lock(): 분산 락 적용 인시던트 저장
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Distributed Lock Configuration for Postmortem
+# =============================================================================
+
+# 락 키 패턴 (문서 146 섹션 12.2)
+LOCK_KEY_POSTMORTEM_GENERATE = "postmortem:generate:{incident_id}"
+LOCK_KEY_POSTMORTEM_GROUP = "postmortem:group:{group_id}"
+
+# 락 TTL (초)
+LOCK_TTL_POSTMORTEM_GENERATE = 30
+LOCK_TTL_POSTMORTEM_GROUP = 60
 
 
 def _get_current_timestamp() -> str:
@@ -138,6 +153,143 @@ def add_healing_incident(incident: dict[str, Any]) -> None:
         logger.debug("[Postmortem] Incident saved to DB and cache")
     else:
         logger.debug("[Postmortem] Incident saved to in-memory cache only")
+
+
+def _get_redis_client():
+    """
+    Redis 클라이언트 획득 (분산 락용).
+
+    ProviderRegistry를 통해 등록된 Redis 클라이언트를 반환합니다.
+
+    Returns:
+        Redis 클라이언트 인스턴스 또는 None
+    """
+    try:
+        from selfhealing.factory import ProviderRegistry
+
+        return ProviderRegistry.get_cache_provider()
+    except ImportError:
+        return None
+    except Exception as e:
+        logger.debug(f"[Postmortem] Redis client not available: {e}")
+        return None
+
+
+def _acquire_postmortem_lock(incident_id: str, timeout_seconds: int = LOCK_TTL_POSTMORTEM_GENERATE):
+    """
+    Postmortem 생성용 분산 락 획득.
+
+    Redis가 사용 가능한 경우 RedisDistributedLock을 사용하고,
+    그렇지 않으면 None을 반환합니다 (락 없이 진행).
+
+    Args:
+        incident_id: 인시던트 ID
+        timeout_seconds: 락 TTL (초)
+
+    Returns:
+        DistributedLock 인스턴스 또는 None
+    """
+    redis_client = _get_redis_client()
+    if redis_client is None:
+        return None
+
+    try:
+        from selfhealing.adapters.cache.redis_adapter import RedisDistributedLock
+
+        lock_name = LOCK_KEY_POSTMORTEM_GENERATE.format(incident_id=incident_id)
+        lock = RedisDistributedLock(
+            redis_client=redis_client,
+            name=lock_name,
+            timeout=timedelta(seconds=timeout_seconds),
+            blocking_timeout=1.0,  # 최대 1초 대기
+            sleep_interval=0.05,
+        )
+        return lock
+    except ImportError:
+        logger.debug("[Postmortem] RedisDistributedLock not available")
+        return None
+    except Exception as e:
+        logger.debug(f"[Postmortem] Failed to create lock: {e}")
+        return None
+
+
+def add_healing_incident_with_lock(incident: dict[str, Any]) -> bool:
+    """
+    분산 락을 사용한 힐링 인시던트 저장.
+
+    Redis 분산 락으로 동일 incident_id에 대한 중복 생성을 방지합니다.
+    락 획득 실패 시 저장을 스킵합니다.
+
+    Args:
+        incident: 인시던트 데이터 딕셔너리 (incident_id 필수)
+
+    Returns:
+        저장 성공 여부 (락 획득 실패 시 False)
+    """
+    incident_id = incident.get("incident_id")
+    if not incident_id:
+        logger.warning("[Postmortem] incident_id is required for locked save")
+        add_healing_incident(incident)
+        return True
+
+    lock = _acquire_postmortem_lock(incident_id)
+
+    # Redis 미사용 환경: 락 없이 저장
+    if lock is None:
+        add_healing_incident(incident)
+        return True
+
+    # 락 획득 시도
+    if not lock.acquire(blocking=True, timeout=1.0):
+        logger.info(f"[Postmortem] Skip duplicate save, lock held: {incident_id}")
+        return False
+
+    try:
+        add_healing_incident(incident)
+        logger.debug(f"[Postmortem] Saved with lock: {incident_id}")
+        return True
+    finally:
+        try:
+            lock.release()
+        except Exception as e:
+            logger.debug(f"[Postmortem] Lock release error: {e}")
+
+
+def acquire_group_close_lock(group_id: str, timeout_seconds: int = LOCK_TTL_POSTMORTEM_GROUP):
+    """
+    IncidentGroup 종료용 분산 락 획득.
+
+    그룹 종료 및 Postmortem 생성 시 중복 처리를 방지합니다.
+
+    Args:
+        group_id: 그룹 ID
+        timeout_seconds: 락 TTL (초)
+
+    Returns:
+        DistributedLock 인스턴스 또는 None
+    """
+    redis_client = _get_redis_client()
+    if redis_client is None:
+        return None
+
+    try:
+        from selfhealing.adapters.cache.redis_adapter import RedisDistributedLock
+
+        lock_name = LOCK_KEY_POSTMORTEM_GROUP.format(group_id=group_id)
+        lock = RedisDistributedLock(
+            redis_client=redis_client,
+            name=lock_name,
+            timeout=timedelta(seconds=timeout_seconds),
+            blocking_timeout=2.0,  # 최대 2초 대기
+            sleep_interval=0.1,
+        )
+        return lock
+    except ImportError:
+        logger.debug("[Postmortem] RedisDistributedLock not available")
+        return None
+    except Exception as e:
+        logger.debug(f"[Postmortem] Failed to create group lock: {e}")
+        return None
 
 
 def get_healing_incidents(
@@ -595,12 +747,20 @@ _generate_postmortem_data = generate_postmortem_data
 __all__ = [
     # Storage functions
     "add_healing_incident",
+    "add_healing_incident_with_lock",
     "get_healing_incidents",
     "get_healing_incidents_count",
     "get_incident_by_id",
     "clear_healing_incidents",
     "set_db_persistence_enabled",
     "get_db_persistence_enabled",
+    # Distributed lock functions
+    "acquire_group_close_lock",
+    # Lock key patterns
+    "LOCK_KEY_POSTMORTEM_GENERATE",
+    "LOCK_KEY_POSTMORTEM_GROUP",
+    "LOCK_TTL_POSTMORTEM_GENERATE",
+    "LOCK_TTL_POSTMORTEM_GROUP",
     # Helper functions (new)
     "collect_service_states",
     "build_timeline",

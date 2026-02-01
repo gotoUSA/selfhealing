@@ -1,10 +1,10 @@
 # 146. Postmortem 인시던트 생명주기 통합
 
-**문서 버전:** 1.1
+**문서 버전:** 1.2
 **작성일:** 2026-01-28
-**수정일:** 2026-01-28
+**수정일:** 2026-02-01
 **선행 문서:** [128_POSTMORTEM_AUTO_TRIGGER.md](128_POSTMORTEM_AUTO_TRIGGER.md), [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md)
-**관련 코드:** `services/audit/base.py`, `adapters/cache/redis_adapter.py`, `settings/distributed_lock.py`
+**관련 코드:** `services/audit/base.py`, `adapters/cache/redis_adapter.py`, `settings/distributed_lock.py`, `services/postmortem_store.py`, `services/postmortem/incident_group.py`
 **상태:** 구현 완료
 
 ---

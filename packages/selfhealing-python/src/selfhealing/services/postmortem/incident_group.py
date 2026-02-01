@@ -539,6 +539,8 @@ class IncidentGroupManager:
         """
         그룹 종료 및 Postmortem 생성 트리거.
 
+        분산 락을 사용하여 동시 종료 요청을 방지합니다.
+
         Args:
             group_id: 그룹 ID
             namespace: 네임스페이스
@@ -546,13 +548,47 @@ class IncidentGroupManager:
         Returns:
             종료된 IncidentGroup 또는 None
         """
-        if self._redis_client:
-            try:
-                return self._close_group_redis(group_id, namespace)
-            except Exception as e:
-                logger.warning(f"[IncidentGroupManager] Redis error, fallback to memory: {e}")
+        # 분산 락 획득 시도
+        lock = self._acquire_group_close_lock(group_id)
+        if lock is not None:
+            if not lock.acquire(blocking=True, timeout=2.0):
+                logger.info(f"[IncidentGroupManager] Skip duplicate close, lock held: {group_id}")
+                return None
 
-        return self._close_group_memory(group_id, namespace)
+        try:
+            if self._redis_client:
+                try:
+                    return self._close_group_redis(group_id, namespace)
+                except Exception as e:
+                    logger.warning(f"[IncidentGroupManager] Redis error, fallback to memory: {e}")
+
+            return self._close_group_memory(group_id, namespace)
+        finally:
+            if lock is not None:
+                try:
+                    lock.release()
+                except Exception as e:
+                    logger.debug(f"[IncidentGroupManager] Lock release error: {e}")
+
+    def _acquire_group_close_lock(self, group_id: str):
+        """
+        그룹 종료용 분산 락 획득.
+
+        Args:
+            group_id: 그룹 ID
+
+        Returns:
+            DistributedLock 인스턴스 또는 None
+        """
+        try:
+            from selfhealing.services.postmortem_store import acquire_group_close_lock
+
+            return acquire_group_close_lock(group_id)
+        except ImportError:
+            return None
+        except Exception as e:
+            logger.debug(f"[IncidentGroupManager] Failed to acquire lock: {e}")
+            return None
 
     def _close_group_redis(
         self,
