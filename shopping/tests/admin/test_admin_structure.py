@@ -112,7 +112,6 @@ class TestAdminModuleStructure:
             "shopping.admin.point_admin",
             "shopping.admin.return_admin",
             "shopping.admin.notification_admin",
-            "shopping.admin.circuit_breaker_admin",
             "shopping.admin.dlq_admin",
         ]
 
@@ -147,12 +146,11 @@ class TestAdminRegistrations:
             ReturnItem,
             User,
         )
-        from shopping.models import CircuitBreakerState, FailedOperation, SellerProfile
+        from shopping.models import FailedOperation, SellerProfile
 
         models_to_check = [
             Cart,
             Category,
-            CircuitBreakerState,
             EmailLog,
             EmailVerificationToken,
             FailedOperation,

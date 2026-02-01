@@ -264,17 +264,19 @@ def get_django_audit_adapter(
     DjangoAuditLogAdapter 팩토리 함수.
 
     Args:
-        model_class: AbstractAuditLog 상속 모델 (None이면 shopping.models.AuditLog)
+        model_class: AbstractAuditLog 상속 모델 (필수)
 
     Returns:
         DjangoAuditLogAdapter 인스턴스
+
+    Raises:
+        ValueError: model_class가 None인 경우
     """
     if model_class is None:
-        try:
-            from shopping.models import AuditLog
-
-            model_class = AuditLog
-        except ImportError:
-            raise ImportError("shopping.models.AuditLog not found. " "Provide model_class explicitly.")
+        raise ValueError(
+            "model_class is required. "
+            "Provide a Django model class that inherits from AbstractAuditLog. "
+            "Example: DjangoAuditLogAdapter(model_class=YourAuditLogModel)"
+        )
 
     return DjangoAuditLogAdapter(model_class=model_class)

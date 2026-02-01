@@ -366,7 +366,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
 
     def check_circuit_breaker(self, service_name: str = "toss_payment") -> bool:
         """
-        Circuit Breaker 상태 확인
+        Circuit Breaker 상태 확인 (Redis 기반)
 
         Returns:
             True: 요청 허용
@@ -376,41 +376,44 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         if not self.config.get("CIRCUIT_BREAKER_ENABLED", False):
             return True
 
-        from ..models.failed_external_request import CircuitBreakerState
+        from selfhealing.factory import ProviderRegistry
 
-        state, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name,
-            defaults={"state": "closed"},
-        )
-
-        return state.should_allow_request()
+        try:
+            repo = ProviderRegistry.get_circuit_breaker_repo()
+            state = repo.get_by_service_name(service_name)
+            if state is None:
+                return True  # 상태 없으면 허용
+            return state.state == "closed" or state.state == "half_open"
+        except Exception:
+            return True  # 조회 실패 시 허용 (fail-open)
 
     def record_circuit_breaker_result(
         self,
         service_name: str = "toss_payment",
         success: bool = True,
     ) -> None:
-        """Circuit Breaker에 결과 기록"""
+        """Circuit Breaker에 결과 기록 (Redis 기반)"""
         if not self.config.get("CIRCUIT_BREAKER_ENABLED", False):
             return
 
-        from ..models.failed_external_request import CircuitBreakerState
+        from selfhealing.factory import ProviderRegistry
 
-        state, _ = CircuitBreakerState.objects.get_or_create(
-            service_name=service_name,
-            defaults={"state": "closed"},
-        )
+        try:
+            repo = ProviderRegistry.get_circuit_breaker_repo()
+            if success:
+                previous_state = repo.get_by_service_name(service_name)
+                repo.record_success(service_name)
+            else:
+                previous_state = repo.get_by_service_name(service_name)
+                current = repo.record_failure(service_name)
 
-        if success:
-            state.record_success()
-        else:
-            previous_state = state.state
-            state.record_failure()
-
-            # Open 상태로 전환된 경우 알림
-            if previous_state != "open" and state.state == "open":
-                if self.config.get("NOTIFY_ON_CIRCUIT_OPEN", True):
-                    self._notify_circuit_open(service_name)
+                # Open 상태로 전환된 경우 알림
+                prev_state_str = previous_state.state if previous_state else "closed"
+                if prev_state_str != "open" and current.state == "open":
+                    if self.config.get("NOTIFY_ON_CIRCUIT_OPEN", True):
+                        self._notify_circuit_open(service_name)
+        except Exception:
+            pass  # 기록 실패해도 비즈니스 로직 진행
 
     def check_sla_timeout(self, created_at) -> bool:
         """

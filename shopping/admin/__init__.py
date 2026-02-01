@@ -40,9 +40,6 @@ from .notification_admin import (
     NotificationAdmin,
 )
 
-# Circuit Breaker domain
-from .circuit_breaker_admin import CircuitBreakerStateAdmin
-
 # DLQ (Dead Letter Queue) domain
 from .dlq_admin import FailedOperationAdmin
 
@@ -77,7 +74,6 @@ __all__ = [
     "EmailVerificationTokenAdmin",
     "EmailLogAdmin",
     # Security
-    "CircuitBreakerStateAdmin",
     "FailedOperationAdmin",
     # Postmortem
     "PostmortemRecordAdmin",

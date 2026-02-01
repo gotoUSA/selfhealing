@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from unittest.mock import patch, MagicMock
 
-from shopping.models import CircuitBreakerState, FailedOperation
+from shopping.models import FailedOperation
 from shopping.tests.factories import (
     OrderFactory,
     PaymentFactory,
@@ -34,28 +34,6 @@ def admin_client(client, admin_user):
 
 
 @pytest.fixture
-def circuit_breaker_state_closed(db):
-    """Create a closed circuit breaker state."""
-    return CircuitBreakerState.objects.create(
-        service_name="test_service",
-        state="closed",
-        failure_count=0,
-        success_count=0,
-    )
-
-
-@pytest.fixture
-def circuit_breaker_state_open(db):
-    """Create an open circuit breaker state."""
-    return CircuitBreakerState.objects.create(
-        service_name="test_service_open",
-        state="open",
-        failure_count=10,
-        success_count=0,
-    )
-
-
-@pytest.fixture
 def failed_operation_pending(db):
     """Create a pending failed operation."""
     return FailedOperation.objects.create(
@@ -64,66 +42,6 @@ def failed_operation_pending(db):
         error_message="Test error",
         status="pending",
     )
-
-
-@pytest.mark.django_db
-class TestCircuitBreakerAdminActions:
-    """Tests for circuit breaker admin actions."""
-
-    def test_force_open_action(self, admin_client, circuit_breaker_state_closed):
-        """Test force open circuit breaker action."""
-        cb_state = circuit_breaker_state_closed
-
-        url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.post(
-            url,
-            {
-                "action": "force_open_selected",
-                "_selected_action": [cb_state.pk],
-            },
-            follow=True,
-        )
-
-        assert response.status_code == 200
-        cb_state.refresh_from_db()
-        assert cb_state.state == "open"
-
-    def test_force_close_action(self, admin_client, circuit_breaker_state_open):
-        """Test force close circuit breaker action."""
-        cb_state = circuit_breaker_state_open
-
-        url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.post(
-            url,
-            {
-                "action": "force_close_selected",
-                "_selected_action": [cb_state.pk],
-            },
-            follow=True,
-        )
-
-        assert response.status_code == 200
-        cb_state.refresh_from_db()
-        assert cb_state.state == "closed"
-
-    def test_reset_circuit_action(self, admin_client, circuit_breaker_state_open):
-        """Test reset circuit breaker action."""
-        cb_state = circuit_breaker_state_open
-
-        url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.post(
-            url,
-            {
-                "action": "reset_selected",
-                "_selected_action": [cb_state.pk],
-            },
-            follow=True,
-        )
-
-        assert response.status_code == 200
-        cb_state.refresh_from_db()
-        assert cb_state.state == "closed"
-        assert cb_state.failure_count == 0
 
 
 @pytest.mark.django_db
