@@ -273,6 +273,14 @@ from selfhealing.api.django.views.postmortem import (
     PostmortemGeneratorView as PostmortemGenerateView,
 )
 
+# Post-mortem Revision Views (리비전 관리 API)
+from selfhealing.api.django.views.postmortem_revision import (
+    PostmortemRevisionCompareView,
+    PostmortemRevisionDetailView,
+    PostmortemRevisionListView,
+    PostmortemSealView,
+)
+
 # Grafana Alert Webhook Views
 from selfhealing.api.django.views.grafana_webhook import (
     GrafanaAlertWebhookView,
@@ -1068,6 +1076,30 @@ urlpatterns += [
         "postmortem/incidents/<str:incident_id>/",
         PostmortemDetailView.as_view(),
         name="postmortem-incident-detail",
+    ),
+    # Post-mortem 리비전 목록 조회/생성
+    path(
+        "postmortem/<str:incident_id>/revisions/",
+        PostmortemRevisionListView.as_view(),
+        name="postmortem-revision-list",
+    ),
+    # Post-mortem 리비전 비교
+    path(
+        "postmortem/<str:incident_id>/revisions/compare/",
+        PostmortemRevisionCompareView.as_view(),
+        name="postmortem-revision-compare",
+    ),
+    # Post-mortem 특정 리비전 조회
+    path(
+        "postmortem/<str:incident_id>/revisions/<int:revision_number>/",
+        PostmortemRevisionDetailView.as_view(),
+        name="postmortem-revision-detail",
+    ),
+    # Post-mortem 봉인/봉인해제
+    path(
+        "postmortem/<str:incident_id>/seal/",
+        PostmortemSealView.as_view(),
+        name="postmortem-seal",
     ),
 ]
 

@@ -815,6 +815,94 @@ def reset_postmortem_revision_manager() -> None:
     _postmortem_revision_manager = None
 
 
+# ==========================================================================
+# Migration Utility
+# ==========================================================================
+
+
+def migrate_existing_postmortems(
+    manager: PostmortemRevisionManager | None = None,
+    batch_size: int = 100,
+) -> dict[str, int]:
+    """
+    기존 Postmortem 데이터에 초기 리비전 생성.
+
+    이미 리비전이 존재하는 Postmortem은 건너뜁니다.
+
+    Args:
+        manager: PostmortemRevisionManager 인스턴스 (없으면 싱글턴 사용)
+        batch_size: 한 번에 처리할 Postmortem 수
+
+    Returns:
+        마이그레이션 결과 통계:
+        - total: 전체 Postmortem 수
+        - migrated: 마이그레이션된 수
+        - skipped: 건너뛴 수 (이미 리비전 존재)
+        - failed: 실패 수
+    """
+    if manager is None:
+        manager = get_postmortem_revision_manager()
+
+    result = {"total": 0, "migrated": 0, "skipped": 0, "failed": 0}
+
+    try:
+        from selfhealing.services.postmortem_store import get_healing_incidents
+    except ImportError:
+        logger.warning("[Migration] postmortem_store not available")
+        return result
+
+    offset = 0
+    while True:
+        incidents = get_healing_incidents(
+            limit=batch_size,
+            offset=offset,
+            use_db=True,
+        )
+
+        if not incidents:
+            break
+
+        for incident in incidents:
+            result["total"] += 1
+            incident_id = incident.get("incident_id")
+
+            if not incident_id:
+                logger.warning("[Migration] Postmortem missing incident_id, skipping")
+                result["failed"] += 1
+                continue
+
+            # 이미 리비전 존재 여부 확인
+            existing = manager.get_latest_revision(incident_id)
+            if existing is not None:
+                result["skipped"] += 1
+                continue
+
+            # 초기 리비전 생성
+            try:
+                manager.create_revision(
+                    incident_id=incident_id,
+                    new_data=incident,
+                    changed_by="system:migration",
+                    change_reason="Initial revision created during migration",
+                    change_type=RevisionChangeType.INITIAL,
+                )
+                result["migrated"] += 1
+                logger.debug(f"[Migration] Created initial revision: {incident_id}")
+            except Exception as e:
+                logger.warning(f"[Migration] Failed to migrate {incident_id}: {e}")
+                result["failed"] += 1
+
+        offset += batch_size
+
+    logger.info(
+        f"[Migration] Complete: total={result['total']}, "
+        f"migrated={result['migrated']}, skipped={result['skipped']}, "
+        f"failed={result['failed']}"
+    )
+
+    return result
+
+
 __all__ = [
     "RevisionChangeType",
     "RevisionDiff",
@@ -823,4 +911,5 @@ __all__ = [
     "compute_diff",
     "get_postmortem_revision_manager",
     "reset_postmortem_revision_manager",
+    "migrate_existing_postmortems",
 ]

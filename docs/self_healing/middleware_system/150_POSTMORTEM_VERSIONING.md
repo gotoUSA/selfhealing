@@ -332,10 +332,10 @@ SELFHEALING_POSTMORTEM_REVISION_STORAGE=hybrid
 
 ### 12.4 API
 
-- [ ] 리비전 조회 엔드포인트
-- [ ] 리비전 생성 엔드포인트
-- [ ] 비교 엔드포인트
-- [ ] 봉인 엔드포인트
+- [x] 리비전 조회 엔드포인트
+- [x] 리비전 생성 엔드포인트
+- [x] 비교 엔드포인트
+- [x] 봉인 엔드포인트
 
 ### 12.5 테스트
 
@@ -343,6 +343,14 @@ SELFHEALING_POSTMORTEM_REVISION_STORAGE=hybrid
 - [x] diff 계산 테스트
 - [x] 봉인 테스트
 - [x] 롤백 테스트
+- [x] API 뷰 테스트
+- [x] 마이그레이션 테스트
+
+### 12.6 마이그레이션 유틸리티
+
+- [x] `migrate_existing_postmortems()` 함수 구현
+- [x] 배치 처리 지원
+- [x] 이미 리비전 존재 시 건너뛰기
 
 ---
 
@@ -356,6 +364,8 @@ SELFHEALING_POSTMORTEM_REVISION_STORAGE=hybrid
 | 2 | 각각에 대해 초기 리비전 생성 (revision_number=1) |
 | 3 | `change_type=initial` 설정 |
 | 4 | 무결성 해시 추가 |
+
+**구현:** `migrate_existing_postmortems()` 함수 (`services/postmortem/revision.py`)
 
 ### 13.2 하위 호환성
 
