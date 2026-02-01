@@ -348,8 +348,8 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 **즉시 100% 복구하지 않음** 
 - [x] CB OPEN → Throttle limit 감소 테스트
 - [x] CB CLOSE → Throttle limit 복구 테스트
 - [x] Recovery Dampening 테스트 (30초 댐핑)
-- [ ] 통합 시나리오 테스트
-- [ ] 분산 환경 Race Condition 테스트
+- [x] 통합 시나리오 테스트
+- [x] 분산 환경 Race Condition 테스트
 
 ---
 

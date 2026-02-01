@@ -803,6 +803,64 @@ services:
       # 통합 테스트 비활성화 (설정 파일 검증만)
       - OTEL_AGENT_GATEWAY_TEST=false
 
+  # ---------------------------------------------------------------------------
+  # Throttle ↔ Circuit Breaker 통합 시나리오 테스트
+  # CB OPEN/CLOSE 전체 라이프사이클, Recovery Dampening, 다중 서비스 처리
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-throttle-cb-scenario
+  # ---------------------------------------------------------------------------
+  test-throttle-cb-scenario:
+    build: .
+    command: >
+      sh -c "pip install redis pytest -q &&
+             python manage.py migrate --noinput &&
+             python -m pytest tests/integration/selfhealing/test_throttle_cb_full_scenario.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Throttle Redis Race Condition 분산 환경 테스트
+  # Lua 스크립트 원자성, CAS 업데이트, Cold Start 복구, 동시 RTT 샘플 기록
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-throttle-race-condition
+  # ---------------------------------------------------------------------------
+  test-throttle-race-condition:
+    build: .
+    command: >
+      sh -c "pip install redis pytest -q &&
+             python manage.py migrate --noinput &&
+             python -m pytest tests/integration/selfhealing/test_throttle_redis_race_condition.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
   otel_buffer_test:
