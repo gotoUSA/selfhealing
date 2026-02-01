@@ -247,4 +247,34 @@ ALERTING_RULES: dict = {
         ),
         "runbook_url": "https://docs.internal/runbooks/override-escalation-high",
     },
+    # =========================================================================
+    # X-Test Regional Boundary Alerting Rules
+    # =========================================================================
+    "XTestCrossRegionDeniedRateHigh": {
+        "expr": "rate(selfhealing_xtest_cross_region_denied_total[1m]) > 10",
+        "for": "1m",
+        "severity": "warning",
+        "team": "security",
+        "summary": "⚠️ High rate of cross-region X-Test denials",
+        "description": (
+            "Cross-region X-Test denial rate exceeds 10/min. "
+            "Current region: {{ $labels.current_region }}, "
+            "Target region: {{ $labels.target_region }}. "
+            "This may indicate misconfigured clients or attempted cross-region access."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/xtest-cross-region-denied",
+    },
+    "XTestCrossRegionDeniedFromSameSource": {
+        "expr": ("sum by (current_region, target_region) " "(increase(selfhealing_xtest_cross_region_denied_total[5m])) > 5"),
+        "for": "0m",
+        "severity": "warning",
+        "team": "security",
+        "summary": "🔒 Repeated cross-region X-Test denials detected",
+        "description": (
+            "More than 5 cross-region denials in 5 minutes from the same source. "
+            "This may indicate a security issue or misconfigured automation. "
+            "Investigate the source of these requests immediately."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/xtest-cross-region-repeated",
+    },
 }

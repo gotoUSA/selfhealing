@@ -163,6 +163,67 @@ class XTestModeMixin:
 
         return False
 
+    def _get_endpoint_pattern_name(self, request: Request) -> str:
+        """
+        GLOBAL scope 엔드포인트 패턴 이름 추출.
+
+        Args:
+            request: HTTP 요청 객체
+
+        Returns:
+            패턴 이름 (e.g., 'emergency', 'isolation', 'governance')
+        """
+        path = request.path.lower()
+        if "emergency" in path:
+            return "emergency"
+        elif "isolation" in path:
+            return "isolation"
+        elif "governance" in path:
+            return "governance"
+        return "unknown"
+
+    def _record_regional_scope_metrics(
+        self,
+        request: Request,
+        current_region: str | None,
+        target_region: str | None,
+        result: str,
+    ) -> None:
+        """
+        리전 스코프 관련 메트릭 기록.
+
+        Args:
+            request: HTTP 요청 객체
+            current_region: 현재 클러스터 리전
+            target_region: 요청된 타겟 리전
+            result: 결과 ('allowed', 'denied_no_header', 'denied_mismatch', 'denied_no_region')
+        """
+        try:
+            from selfhealing.services.metrics.recorders import (
+                record_xtest_cross_region_denied,
+                record_xtest_global_scope_request,
+            )
+
+            pattern_name = self._get_endpoint_pattern_name(request)
+            region = current_region or "unknown"
+
+            # GLOBAL scope 요청 메트릭 기록
+            record_xtest_global_scope_request(
+                endpoint_pattern=pattern_name,
+                region=region,
+                result=result,
+            )
+
+            # cross-region 거부 시 추가 메트릭
+            if result == "denied_mismatch" and current_region and target_region:
+                record_xtest_cross_region_denied(
+                    current_region=current_region,
+                    target_region=target_region,
+                )
+
+        except Exception as e:
+            logger.warning(f"[X-Test-Mode] Failed to record regional metrics: {e}")
+
     def check_regional_scope(self, request: Request) -> tuple[bool, Response | None]:
         """
         GLOBAL scope API에 대한 리전 경계 검증.
@@ -214,6 +275,7 @@ class XTestModeMixin:
                 f"[X-Test-Mode] Missing X-Region header for GLOBAL scope API. "
                 f"current_region={current_region}, path={request.path}"
             )
+            self._record_regional_scope_metrics(request, current_region, None, "denied_no_header")
             return False, Response(
                 {
                     "status": "error",
@@ -231,6 +293,7 @@ class XTestModeMixin:
                 f"[X-Test-Mode] Cross-region X-Test denied: "
                 f"current={current_region}, target={target_region}, path={request.path}"
             )
+            self._record_regional_scope_metrics(request, current_region, target_region, "denied_mismatch")
             return False, Response(
                 {
                     "status": "error",
@@ -246,6 +309,7 @@ class XTestModeMixin:
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        self._record_regional_scope_metrics(request, current_region, target_region, "allowed")
         logger.debug(f"[X-Test-Mode] Regional scope check passed: " f"region={current_region}, path={request.path}")
         return True, None
 

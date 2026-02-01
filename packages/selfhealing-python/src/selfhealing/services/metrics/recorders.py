@@ -458,3 +458,59 @@ def record_recovery_alert(component: str) -> None:
         logger.info(f"[Metrics] Recovery alert recorded: component={component}")
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record recovery alert: {e}")
+
+
+# =============================================================================
+# X-Test Regional Boundary Recording Functions
+# =============================================================================
+
+
+def record_xtest_cross_region_denied(
+    current_region: str,
+    target_region: str,
+) -> None:
+    """
+    Record a cross-region X-Test request denial.
+
+    Called when X-Region header does not match current cluster region.
+
+    Args:
+        current_region: Current cluster region (e.g., 'seoul')
+        target_region: Requested target region from X-Region header
+    """
+    try:
+        from .definitions import xtest_cross_region_denied_total
+
+        xtest_cross_region_denied_total.labels(
+            current_region=current_region,
+            target_region=target_region,
+        ).inc()
+        logger.warning(f"[Metrics] Cross-region X-Test denied: " f"current={current_region}, target={target_region}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record cross-region denial: {e}")
+
+
+def record_xtest_global_scope_request(
+    endpoint_pattern: str,
+    region: str,
+    result: str,
+) -> None:
+    """
+    Record a GLOBAL scope X-Test API request.
+
+    Args:
+        endpoint_pattern: Matched GLOBAL scope pattern (e.g., 'emergency', 'isolation')
+        region: Current or target region
+        result: Request result ('allowed', 'denied_no_header', 'denied_mismatch')
+    """
+    try:
+        from .definitions import xtest_global_scope_requests_total
+
+        xtest_global_scope_requests_total.labels(
+            endpoint_pattern=endpoint_pattern,
+            region=region,
+            result=result,
+        ).inc()
+        logger.debug(f"[Metrics] GLOBAL scope request: " f"pattern={endpoint_pattern}, region={region}, result={result}")
+    except Exception as e:
+        logger.warning(f"[Metrics] Failed to record global scope request: {e}")

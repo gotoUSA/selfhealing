@@ -306,3 +306,20 @@ throttle_cb_adjustments_total = get_or_create_counter(
     "Total throttle limit adjustments due to circuit breaker state",
     ["service", "cb_state"],
 )
+
+
+# =============================================================================
+# X-Test Regional Boundary Metrics
+# =============================================================================
+
+xtest_cross_region_denied_total = get_or_create_counter(
+    "selfhealing_xtest_cross_region_denied_total",
+    "Total cross-region X-Test requests denied (region mismatch)",
+    ["current_region", "target_region"],
+)
+
+xtest_global_scope_requests_total = get_or_create_counter(
+    "selfhealing_xtest_global_scope_requests_total",
+    "Total GLOBAL scope X-Test API requests",
+    ["endpoint_pattern", "region", "result"],
+)
