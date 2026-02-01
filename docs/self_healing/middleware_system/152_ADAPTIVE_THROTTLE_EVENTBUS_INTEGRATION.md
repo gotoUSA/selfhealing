@@ -249,8 +249,8 @@ def _on_xxx_throttle(event):
 ### Phase 5: 테스트
 - [x] 이벤트 발행 단위 테스트
 - [x] 핸들러 동작 단위 테스트
-- [ ] 통합 테스트 (EventBus ↔ Throttle)
-- [ ] 분산 환경 테스트 (Redis Pub/Sub 전파)
+- [x] 통합 테스트 (EventBus ↔ Throttle)
+- [x] 분산 환경 테스트 (Redis Pub/Sub 전파)
 - [x] 순환 참조 방지 테스트
 
 ---
@@ -263,9 +263,10 @@ def _on_xxx_throttle(event):
 | `services/event_bus_redis.py` | RedisEventBus 분산 이벤트 버스 (이미 구현됨) |
 | `services/throttle/adaptive.py` | AdaptiveThrottle 클래스 |
 | `services/throttle/config.py` | ThrottleConfig, ThrottleResult |
+| `tests/integration/selfhealing/test_throttle_eventbus_integration.py` | EventBus ↔ Throttle 통합 테스트 |
 
 ---
 
 **작성일**: 2026-01-29
-**수정일**: 2026-01-29 (Phase 3, 4 구현 완료)
+**수정일**: 2026-01-29 (Phase 5 통합 테스트 완료)
 **관련 문서**: 23_ADAPTIVE_THROTTLING.md
