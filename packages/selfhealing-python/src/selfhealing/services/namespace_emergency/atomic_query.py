@@ -83,10 +83,20 @@ if precedence >= 2 then
     }
 end
 
+-- is_active 판단: emergency_level이 0이 아니면 활성화
+-- ScopedEmergencyState.to_dict()는 is_active를 저장하지 않으므로 emergency_level 사용
+local function is_active(state)
+    local level = state.emergency_level
+    if level == nil then
+        return state.is_active == true
+    end
+    return level ~= 0
+end
+
 -- 2순위: Safety-Max (둘 중 더 엄격한 상태 선택)
-local global_is_strict = (global_state.is_active == true) and 
+local global_is_strict = is_active(global_state) and
                          (global_state.governance_mode == "STRICT")
-local regional_is_strict = (regional_state.is_active == true) and 
+local regional_is_strict = is_active(regional_state) and
                            (regional_state.governance_mode == "STRICT")
 
 if global_is_strict and regional_is_strict then
@@ -236,10 +246,7 @@ class AtomicStateQuery:
 
             state = json.loads(state_json)
 
-            logger.debug(
-                f"[AtomicStateQuery] namespace={namespace}, "
-                f"decision={decision_type}, reason={decision_reason}"
-            )
+            logger.debug(f"[AtomicStateQuery] namespace={namespace}, " f"decision={decision_type}, reason={decision_reason}")
 
             return (state, decision_type, decision_reason)
 
@@ -320,9 +327,7 @@ class AtomicStateQuery:
             return (json.loads(state_json), decision_type, decision_reason)
 
         except Exception as e:
-            logger.warning(
-                f"[AtomicStateQuery] EVALSHA failed, falling back to EVAL: {e}"
-            )
+            logger.warning(f"[AtomicStateQuery] EVALSHA failed, falling back to EVAL: {e}")
             return self.query_effective_state(namespace, precedence)
 
 

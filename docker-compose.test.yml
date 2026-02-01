@@ -99,6 +99,31 @@ services:
       db:
         condition: service_healthy
 
+  # X-Test Cross-Region Conflict 통합 테스트 (144 문서)
+  # AtomicStateQuery Lua 스크립트 실제 검증
+  test-cross-region:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python -m pytest tests/integration/selfhealing/test_xtest_cross_region_integration.py -v --tb=short --no-cov"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Hybrid Storage Architecture integration tests (Phase 7)
   test-hybrid-storage:
     build: .

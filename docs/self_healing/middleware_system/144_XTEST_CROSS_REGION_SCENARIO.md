@@ -239,6 +239,61 @@
 
 ---
 
+## 10. 구현 완료 현황
+
+### 10.1 Step 1-5 구현 완료
+
+| Step | 파일 | 구현 내용 |
+|------|------|----------|
+| Step 1 | `scenarios/regional.py` | `RegionalOverrideConflictScenario`, `MultiRegionIsolationTestScenario` 클래스 |
+| Step 2 | `scenarios/regional.py` | `_set_global_state()`, `_set_regional_state()`, `_set_admin_override()` 헬퍼 |
+| Step 3 | `scenarios/regional.py` | `AtomicStateQuery.query_effective_state()` 연동 및 우선순위 검증 |
+| Step 4 | `scenarios/__init__.py` | `SCENARIO_REGISTRY`에 `regional_override_conflict`, `multi_region_isolation_test` 등록 |
+| Step 5 | `tests/unit/api/test_xtest_regional_scenarios.py` | 32개 단위 테스트 (MockRedisClient 사용) |
+
+### 10.2 추가 구현 항목
+
+| 항목 | 파일 | 설명 |
+|------|------|------|
+| 통합 테스트 | `tests/integration/selfhealing/test_xtest_cross_region_integration.py` | Real Redis 기반 13개 통합 테스트 |
+| Docker 서비스 | `docker-compose.test.yml` | `test-cross-region` 서비스 추가 |
+| Lua 스크립트 버그 수정 | `services/namespace_emergency/atomic_query.py` | `is_active()` 함수로 `emergency_level` 기반 판단 |
+
+### 10.3 테스트 결과
+
+| 테스트 유형 | 개수 | 결과 |
+|------------|------|------|
+| 단위 테스트 (MockRedisClient) | 32개 | ✅ 모두 통과 |
+| 통합 테스트 (Real Redis) | 12개 | ✅ 모두 통과 |
+
+### 10.4 검증된 우선순위 규칙
+
+| 상황 | 결과 | 검증 테스트 |
+|------|------|------------|
+| Global NORMAL + Regional NORMAL | REGIONAL_DEFAULT | `test_global_normal_regional_normal` |
+| Global NORMAL + Regional STRICT | REGIONAL_STRICT | `test_regional_strict_takes_priority` |
+| Global STRICT + Regional NORMAL | GLOBAL_OVERRIDE | `test_global_strict_overrides_regional` |
+| Global STRICT + Regional STRICT | GLOBAL_OVERRIDE | `test_global_strict_wins_over_regional_strict` |
+| Any + ADMIN_OVERRIDE | ADMIN_OVERRIDE | `test_admin_override_wins_over_global_strict` |
+
+### 10.5 핵심 버그 수정
+
+**문제:** `AtomicStateQuery` Lua 스크립트가 `state.is_active == true` 체크했으나, `ScopedEmergencyState.to_dict()`는 `is_active` 필드를 저장하지 않음.
+
+**해결:** `is_active()` 헬퍼 함수 추가 - `emergency_level != 0`으로 활성화 상태 판단.
+
+```lua
+local function is_active(state)
+    local level = state.emergency_level
+    if level == nil then
+        return state.is_active == true  -- 하위 호환성
+    end
+    return level ~= 0
+end
+```
+
+---
+
 **다음 문서:** 145_XTEST_CASCADE_EVENT_IS_TEST.md
 
 ---
@@ -249,3 +304,4 @@
 |------|--------|------|
 | 2026-01-27 | - | 초기 설계 |
 | 2026-02-01 | - | 문서대로 재구현: MockStateBackend, AtomicStateQuery 실제 연동, 32개 테스트 통과 |
+| 2026-02-01 | - | Lua 스크립트 `is_active` 버그 수정, Real Redis 통합 테스트 12개 추가, 모든 테스트 통과 확인 |
