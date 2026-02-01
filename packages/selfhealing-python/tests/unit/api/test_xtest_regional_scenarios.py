@@ -2,6 +2,7 @@
 X-Test Regional 시나리오 단위 테스트.
 
 Global vs Regional 상태 우선순위 검증 및 다중 리전 격리 시나리오를 테스트합니다.
+Redis Mock을 사용하여 실제 AtomicStateQuery와 NamespacedEmergencyTracker를 검증합니다.
 
 테스트 케이스:
 - test_regional_override_conflict_scenario_execution: 8단계 전체 시나리오 실행
@@ -14,6 +15,7 @@ Global vs Regional 상태 우선순위 검증 및 다중 리전 격리 시나리
 - test_scenario_registry_contains_regional_scenarios: 레지스트리 등록 확인
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -36,19 +38,156 @@ if not settings.configured:
     django.setup()
 
 
+class MockRedisClient:
+    """
+    Redis Mock 클라이언트.
+
+    AtomicStateQuery Lua 스크립트 동작을 시뮬레이션합니다.
+    실제 Redis 없이 우선순위 로직을 테스트할 수 있습니다.
+    """
+
+    def __init__(self):
+        self._storage: dict[str, str] = {}
+
+    def get(self, key: str) -> bytes | None:
+        """키 조회."""
+        value = self._storage.get(key)
+        return value.encode("utf-8") if value else None
+
+    def set(self, key: str, value: str, ex: int = None) -> bool:
+        """키 저장."""
+        self._storage[key] = value if isinstance(value, str) else value.decode("utf-8")
+        return True
+
+    def delete(self, key: str) -> int:
+        """키 삭제."""
+        if key in self._storage:
+            del self._storage[key]
+            return 1
+        return 0
+
+    def keys(self, pattern: str) -> list[bytes]:
+        """패턴 매칭 키 조회."""
+        import fnmatch
+
+        matched = []
+        for key in self._storage.keys():
+            if fnmatch.fnmatch(key, pattern.replace("*", "*")):
+                matched.append(key.encode("utf-8"))
+        return matched
+
+    def eval(self, script: str, num_keys: int, *args) -> list:
+        """
+        Lua 스크립트 실행 시뮬레이션.
+
+        AtomicStateQuery의 우선순위 로직을 Python으로 구현.
+        """
+        global_key = args[0]
+        regional_key = args[1]
+        precedence_level = int(args[2]) if len(args) > 2 else 0
+
+        # 상태 조회
+        global_data = self._storage.get(global_key)
+        regional_data = self._storage.get(regional_key)
+
+        # 기본값 설정
+        if global_data:
+            global_state = json.loads(global_data)
+        else:
+            global_state = {
+                "namespace": "global",
+                "scope": "global",
+                "governance_mode": "NORMAL",
+                "is_active": False,
+                "emergency_level": 0,
+            }
+
+        if regional_data:
+            regional_state = json.loads(regional_data)
+        else:
+            # namespace 추출
+            ns = regional_key.split(":")[1] if ":" in regional_key else "unknown"
+            regional_state = {
+                "namespace": ns,
+                "scope": "regional",
+                "governance_mode": "NORMAL",
+                "is_active": False,
+                "emergency_level": 0,
+            }
+
+        # 우선순위 로직 (AtomicStateQuery Lua 스크립트와 동일)
+        # 1순위: Admin Override (precedence >= 2)
+        if precedence_level >= 2:
+            return [
+                json.dumps(regional_state).encode("utf-8"),
+                b"ADMIN_OVERRIDE",
+                b"Admin override active, using regional state",
+            ]
+
+        # 2순위: Safety-Max
+        # is_active는 emergency_level != 0 (NORMAL) 으로 판단
+        # ScopedEmergencyState.to_dict()는 is_active를 저장하지 않음
+        def is_active(state: dict) -> bool:
+            """상태가 활성화되어 있는지 확인 (emergency_level 기반)."""
+            level = state.get("emergency_level", 0)
+            # emergency_level이 0 (NORMAL) 이 아니면 활성화
+            return level != 0 and level is not None
+
+        global_is_strict = is_active(global_state) and global_state.get("governance_mode") == "STRICT"
+        regional_is_strict = is_active(regional_state) and regional_state.get("governance_mode") == "STRICT"
+
+        if global_is_strict and regional_is_strict:
+            return [
+                json.dumps(global_state).encode("utf-8"),
+                b"GLOBAL_OVERRIDE",
+                b"Both Global and Regional STRICT, using Global state",
+            ]
+        elif global_is_strict:
+            return [
+                json.dumps(global_state).encode("utf-8"),
+                b"GLOBAL_OVERRIDE",
+                f"Global STRICT overrides regional {regional_state.get('namespace', 'unknown')}".encode("utf-8"),
+            ]
+        elif regional_is_strict:
+            return [
+                json.dumps(regional_state).encode("utf-8"),
+                b"REGIONAL_STRICT",
+                b"Regional STRICT active",
+            ]
+        else:
+            return [
+                json.dumps(regional_state).encode("utf-8"),
+                b"REGIONAL_DEFAULT",
+                b"Both states NORMAL, using regional",
+            ]
+
+    def script_load(self, script: str) -> str:
+        """스크립트 로드 (SHA 반환)."""
+        return "mock_script_sha"
+
+
+@pytest.fixture
+def mock_redis_client():
+    """Mock Redis 클라이언트 fixture."""
+    return MockRedisClient()
+
+
 class TestRegionalOverrideConflictScenario:
     """Regional Override Conflict 시나리오 테스트."""
 
     @pytest.fixture
-    def scenario(self):
-        """RegionalOverrideConflictScenario 인스턴스 생성."""
+    def scenario(self, mock_redis_client):
+        """RegionalOverrideConflictScenario 인스턴스 생성 (Redis Mock 주입)."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
 
         return RegionalOverrideConflictScenario(
             service_name="test-service",
-            config={"target_region": "seoul"},
+            config={
+                "target_region": "seoul",
+                "redis_client": mock_redis_client,
+            },
         )
 
     def test_scenario_name_is_correct(self, scenario):
@@ -151,7 +290,7 @@ class TestRegionalOverrideConflictScenario:
         assert result.config is not None
         assert "state_transitions" in result.config
         transitions = result.config["state_transitions"]
-        assert len(transitions) >= 4  # init, set_regional, set_global, admin_override, restore_all
+        assert len(transitions) >= 4  # get_effective_state 호출 기록들
 
     def test_timeline_has_all_events(self, scenario):
         """타임라인에 모든 이벤트가 기록되는지 확인."""
@@ -166,15 +305,19 @@ class TestMultiRegionIsolationTestScenario:
     """Multi-Region Isolation Test 시나리오 테스트."""
 
     @pytest.fixture
-    def scenario(self):
-        """MultiRegionIsolationTestScenario 인스턴스 생성."""
+    def scenario(self, mock_redis_client):
+        """MultiRegionIsolationTestScenario 인스턴스 생성 (Redis Mock 주입)."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             MultiRegionIsolationTestScenario,
         )
 
         return MultiRegionIsolationTestScenario(
             service_name="test-service",
-            config={"target_region": "seoul", "other_region": "tokyo"},
+            config={
+                "target_region": "seoul",
+                "other_region": "tokyo",
+                "redis_client": mock_redis_client,
+            },
         )
 
     def test_scenario_name_is_correct(self, scenario):
@@ -286,9 +429,14 @@ class TestScenarioRegistry:
 
 
 class TestStateTransitionMatrix:
-    """상태 전환 매트릭스 테스트 (문서 6.1 검증)."""
+    """상태 전환 매트릭스 테스트 (AtomicStateQuery 우선순위 로직 검증)."""
 
-    def test_global_normal_regional_normal_returns_normal(self):
+    @pytest.fixture
+    def mock_redis_client(self):
+        """Mock Redis 클라이언트 fixture."""
+        return MockRedisClient()
+
+    def test_global_normal_regional_normal_returns_normal(self, mock_redis_client):
         """Global NORMAL + Regional NORMAL → NORMAL."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
@@ -296,7 +444,10 @@ class TestStateTransitionMatrix:
 
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
-            config={"target_region": "seoul"},
+            config={
+                "target_region": "seoul",
+                "redis_client": mock_redis_client,
+            },
         )
         result = scenario.run()
 
@@ -304,7 +455,7 @@ class TestStateTransitionMatrix:
         step1 = result.steps[0]
         assert "NORMAL" in step1.actual
 
-    def test_global_normal_regional_strict_returns_strict(self):
+    def test_global_normal_regional_strict_returns_strict(self, mock_redis_client):
         """Global NORMAL + Regional STRICT → STRICT."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
@@ -312,7 +463,10 @@ class TestStateTransitionMatrix:
 
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
-            config={"target_region": "seoul"},
+            config={
+                "target_region": "seoul",
+                "redis_client": mock_redis_client,
+            },
         )
         result = scenario.run()
 
@@ -321,7 +475,7 @@ class TestStateTransitionMatrix:
         assert "STRICT" in step3.actual
         assert "regional" in step3.actual
 
-    def test_global_strict_regional_normal_returns_strict(self):
+    def test_global_strict_regional_normal_returns_strict(self, mock_redis_client):
         """Global STRICT + Regional NORMAL → STRICT (Global 오버라이드)."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
@@ -329,7 +483,10 @@ class TestStateTransitionMatrix:
 
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
-            config={"target_region": "seoul"},
+            config={
+                "target_region": "seoul",
+                "redis_client": mock_redis_client,
+            },
         )
         result = scenario.run()
 
@@ -338,7 +495,7 @@ class TestStateTransitionMatrix:
         assert "STRICT" in step5.actual
         assert "global" in step5.actual
 
-    def test_admin_override_returns_regional_state(self):
+    def test_admin_override_returns_regional_state(self, mock_redis_client):
         """Admin Override 시 Regional 상태 반환."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
@@ -346,7 +503,10 @@ class TestStateTransitionMatrix:
 
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
-            config={"target_region": "seoul"},
+            config={
+                "target_region": "seoul",
+                "redis_client": mock_redis_client,
+            },
         )
         result = scenario.run()
 
@@ -354,3 +514,208 @@ class TestStateTransitionMatrix:
         step7 = result.steps[6]
         assert "NORMAL" in step7.actual
         assert "regional" in step7.actual
+
+
+class TestAtomicStateQueryIntegration:
+    """AtomicStateQuery 통합 검증 테스트."""
+
+    @pytest.fixture
+    def mock_redis_client(self):
+        """Mock Redis 클라이언트 fixture."""
+        return MockRedisClient()
+
+    def test_atomic_query_uses_lua_script_logic(self, mock_redis_client):
+        """AtomicStateQuery가 Lua 스크립트 로직을 사용하는지 검증."""
+        from selfhealing.services.namespace_emergency.atomic_query import (
+            AtomicStateQuery,
+        )
+
+        atomic_query = AtomicStateQuery(redis_client=mock_redis_client)
+
+        # 초기 상태 (둘 다 NORMAL)
+        state, decision_type, reason = atomic_query.query_effective_state("seoul")
+
+        assert state["governance_mode"] == "NORMAL"
+        assert decision_type == "REGIONAL_DEFAULT"
+
+    def test_atomic_query_global_override(self, mock_redis_client):
+        """Global STRICT가 Regional을 오버라이드하는지 검증."""
+        import json
+        from selfhealing.services.namespace_emergency.atomic_query import (
+            AtomicStateQuery,
+        )
+
+        # Global STRICT 상태 설정
+        mock_redis_client.set(
+            "selfhealing:governance:emergency_state",
+            json.dumps(
+                {
+                    "namespace": "global",
+                    "scope": "global",
+                    "governance_mode": "STRICT",
+                    "is_active": True,
+                    "emergency_level": 3,
+                }
+            ),
+        )
+
+        atomic_query = AtomicStateQuery(redis_client=mock_redis_client)
+        state, decision_type, reason = atomic_query.query_effective_state("seoul")
+
+        assert state["governance_mode"] == "STRICT"
+        assert decision_type == "GLOBAL_OVERRIDE"
+
+    def test_atomic_query_admin_override(self, mock_redis_client):
+        """Admin Override가 작동하는지 검증."""
+        import json
+        from selfhealing.services.namespace_emergency.atomic_query import (
+            AtomicStateQuery,
+        )
+
+        # Global STRICT 상태 설정
+        mock_redis_client.set(
+            "selfhealing:governance:emergency_state",
+            json.dumps(
+                {
+                    "namespace": "global",
+                    "scope": "global",
+                    "governance_mode": "STRICT",
+                    "is_active": True,
+                    "emergency_level": 3,
+                }
+            ),
+        )
+
+        # Regional NORMAL 상태 설정
+        mock_redis_client.set(
+            "selfhealing:seoul:governance:emergency_state",
+            json.dumps(
+                {
+                    "namespace": "seoul",
+                    "scope": "regional",
+                    "governance_mode": "NORMAL",
+                    "is_active": False,
+                    "emergency_level": 0,
+                }
+            ),
+        )
+
+        atomic_query = AtomicStateQuery(redis_client=mock_redis_client)
+        state, decision_type, reason = atomic_query.query_effective_state("seoul", precedence="ADMIN_OVERRIDE")
+
+        assert state["governance_mode"] == "NORMAL"
+        assert state["namespace"] == "seoul"
+        assert decision_type == "ADMIN_OVERRIDE"
+
+
+class TestHelperMethods:
+    """헬퍼 메서드 테스트."""
+
+    @pytest.fixture
+    def mock_redis_client(self):
+        """Mock Redis 클라이언트 fixture."""
+        return MockRedisClient()
+
+    def test_set_global_state_helper(self, mock_redis_client):
+        """_set_global_state() 헬퍼 메서드 테스트."""
+        from selfhealing.api.django.views.xtest.integration_scenarios import (
+            RegionalOverrideConflictScenario,
+        )
+        from selfhealing.api.django.views.xtest.scenarios.regional import (
+            MockStateBackend,
+        )
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
+        )
+        from selfhealing.services.namespace_emergency.atomic_query import (
+            AtomicStateQuery,
+        )
+
+        scenario = RegionalOverrideConflictScenario(
+            service_name="test-service",
+            config={"target_region": "seoul", "redis_client": mock_redis_client},
+        )
+
+        backend = MockStateBackend(redis_client=mock_redis_client)
+        atomic_query = AtomicStateQuery(redis_client=mock_redis_client)
+        tracker = NamespacedEmergencyTracker(
+            backend=backend,
+            atomic_query=atomic_query,
+        )
+
+        # _set_global_state 호출
+        transition = scenario._set_global_state(tracker, EmergencyLevel.LEVEL_3)
+
+        assert transition["action"] == "set_global_state"
+        assert transition["new_state"] == "STRICT"
+        assert transition["region"] == "global"
+
+    def test_set_regional_state_helper(self, mock_redis_client):
+        """_set_regional_state() 헬퍼 메서드 테스트."""
+        from selfhealing.api.django.views.xtest.integration_scenarios import (
+            RegionalOverrideConflictScenario,
+        )
+        from selfhealing.api.django.views.xtest.scenarios.regional import (
+            MockStateBackend,
+        )
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
+        )
+        from selfhealing.services.namespace_emergency.atomic_query import (
+            AtomicStateQuery,
+        )
+
+        scenario = RegionalOverrideConflictScenario(
+            service_name="test-service",
+            config={"target_region": "seoul", "redis_client": mock_redis_client},
+        )
+
+        backend = MockStateBackend(redis_client=mock_redis_client)
+        atomic_query = AtomicStateQuery(redis_client=mock_redis_client)
+        tracker = NamespacedEmergencyTracker(
+            backend=backend,
+            atomic_query=atomic_query,
+        )
+
+        # _set_regional_state 호출
+        transition = scenario._set_regional_state(tracker, "seoul", EmergencyLevel.LEVEL_2)
+
+        assert transition["action"] == "set_regional_state"
+        assert transition["new_state"] == "STRICT"
+        assert transition["region"] == "seoul"
+
+    def test_set_admin_override_helper(self, mock_redis_client):
+        """_set_admin_override() 헬퍼 메서드 테스트."""
+        from selfhealing.api.django.views.xtest.integration_scenarios import (
+            RegionalOverrideConflictScenario,
+        )
+        from selfhealing.api.django.views.xtest.scenarios.regional import (
+            MockStateBackend,
+        )
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
+        )
+        from selfhealing.services.namespace_emergency.atomic_query import (
+            AtomicStateQuery,
+        )
+
+        scenario = RegionalOverrideConflictScenario(
+            service_name="test-service",
+            config={"target_region": "seoul", "redis_client": mock_redis_client},
+        )
+
+        backend = MockStateBackend(redis_client=mock_redis_client)
+        atomic_query = AtomicStateQuery(redis_client=mock_redis_client)
+        tracker = NamespacedEmergencyTracker(
+            backend=backend,
+            atomic_query=atomic_query,
+        )
+
+        # _set_admin_override 호출
+        transition = scenario._set_admin_override(tracker, "seoul", True)
+
+        assert transition["action"] == "set_admin_override"
+        assert transition["new_state"] == "ON"
+        assert transition["region"] == "seoul"
