@@ -33,13 +33,13 @@ from unittest.mock import patch, MagicMock
 def reset_throttle_and_eventbus():
     """각 테스트 전/후 Throttle 및 EventBus 상태 리셋."""
     from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
-    from selfhealing.services.event_bus import reset_event_bus
+    from selfhealing.services.event_bus import get_event_bus
 
     reset_adaptive_throttle()
-    reset_event_bus()
+    get_event_bus().reset()
     yield
     reset_adaptive_throttle()
-    reset_event_bus()
+    get_event_bus().reset()
 
 
 # =============================================================================
@@ -93,11 +93,10 @@ class TestEventBusThrottleIntegration:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         # 기본 핸들러 등록 (Throttle 핸들러 포함)
         bus = get_event_bus()
@@ -130,11 +129,10 @@ class TestEventBusThrottleIntegration:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         bus = get_event_bus()
         register_default_handlers()
@@ -164,11 +162,10 @@ class TestEventBusThrottleIntegration:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         bus = get_event_bus()
         register_default_handlers()
@@ -198,11 +195,10 @@ class TestEventBusThrottleIntegration:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         bus = get_event_bus()
         register_default_handlers()
@@ -307,8 +303,8 @@ class TestThrottleRedisEventPropagation:
         from selfhealing.services.event_bus_redis import RedisEventBus
         from selfhealing.services.event_bus import EventType, SelfHealingEvent
 
-        # Redis 연결 실패 시뮬레이션
-        with patch("selfhealing.services.event_bus_redis.redis.Redis") as mock_redis:
+        # Redis 연결 실패 시뮬레이션 (redis 모듈 자체를 mock)
+        with patch("redis.Redis") as mock_redis:
             mock_redis.side_effect = Exception("Connection refused")
 
             # RedisEventBus가 폴백해서 예외 없이 동작해야 함
@@ -344,11 +340,10 @@ class TestEndToEndThrottleEventFlow:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         bus = get_event_bus()
         register_default_handlers()
@@ -387,11 +382,10 @@ class TestEndToEndThrottleEventFlow:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         bus = get_event_bus()
         register_default_handlers()
@@ -418,11 +412,10 @@ class TestEndToEndThrottleEventFlow:
             EventType,
             SelfHealingEvent,
             register_default_handlers,
-            reset_event_bus,
         )
 
         reset_adaptive_throttle()
-        reset_event_bus()
+        get_event_bus().reset()
 
         bus = get_event_bus()
         register_default_handlers()

@@ -1118,6 +1118,50 @@ def _generate_emergency_postmortem_data(
     recommendations.append(f"Emergency {trigger_level} 발생 원인 분석")
     recommendations.append("복구 프로세스 시간 단축 방안 검토")
 
+    # CascadeEvent 감사 증적 연결
+    cascade_event_id = None
+    causation_chain: list[str] = []
+    evidence_hash = None
+    try:
+        from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
+
+        auditor = get_cascade_event_auditor()
+        # Emergency 관련 CascadeEvent 조회
+        recent_events = auditor.get_recent_events(namespace=namespace, limit=50)
+
+        for event in recent_events:
+            # Emergency 트리거 타입의 이벤트 찾기
+            if "EMERGENCY" in event.trigger.trigger_type:
+                cascade_event_id = event.id
+                causation_chain = event.get_causation_chain()
+                evidence_hash = event.current_hash
+                break
+    except ImportError:
+        pass  # CascadeAuditor 없으면 무시
+    except Exception as e:
+        logger.debug(f"Failed to collect cascade event data: {e}")
+
+    # 딥링크 생성
+    deep_links = {}
+    try:
+        from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
+
+        deep_link_builder = get_postmortem_deep_link_builder()
+        postmortem_links = deep_link_builder.build_postmortem_links(
+            incident_id=incident_id,
+            service_name=f"emergency-{namespace}",
+            start_time=started_at,
+            end_time=completed_at,
+            namespace=namespace,
+            cascade_event_id=cascade_event_id,
+            evidence_hash=evidence_hash,
+        )
+        deep_links = postmortem_links.to_dict()
+    except ImportError:
+        pass  # PostmortemDeepLinkBuilder 없으면 무시
+    except Exception as e:
+        logger.debug(f"Failed to build deep links: {e}")
+
     return {
         "incident_id": incident_id,
         "generated_at": current_time,
@@ -1145,6 +1189,12 @@ def _generate_emergency_postmortem_data(
         "system_snapshot": snapshot,
         "auto_actions": auto_actions,
         "recommendations": recommendations,
+        # 딥링크 (Grafana, Runbook, Postmortem 상세 등)
+        "deep_links": deep_links,
+        # CascadeEvent 감사 증적 연결
+        "cascade_event_id": cascade_event_id,
+        "causation_chain": causation_chain,
+        "evidence_hash": evidence_hash,
     }
 
 

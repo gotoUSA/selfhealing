@@ -702,6 +702,53 @@ def generate_postmortem_data(
     except Exception as e:
         logger.debug(f"Failed to collect throttle data: {e}")
 
+    # CascadeEvent 감사 증적 연결
+    cascade_event_id = None
+    causation_chain: list[str] = []
+    evidence_hash = None
+    try:
+        from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
+
+        auditor = get_cascade_event_auditor()
+        # 해당 서비스의 최근 CascadeEvent 조회 (Postmortem 생성 시점 기준)
+        recent_events = auditor.get_recent_events(namespace="default", limit=50)
+
+        for event in recent_events:
+            # 서비스명과 관련된 이벤트 찾기
+            trigger_service = event.trigger.details.get("service_name")
+            effect_services = [e.target for e in event.effects if e.target]
+
+            if target_service in [trigger_service] + effect_services:
+                cascade_event_id = event.id
+                causation_chain = event.get_causation_chain()
+                evidence_hash = event.current_hash
+                break
+    except ImportError:
+        pass  # CascadeAuditor 없으면 무시
+    except Exception as e:
+        logger.debug(f"Failed to collect cascade event data: {e}")
+
+    # 딥링크 생성
+    deep_links = {}
+    try:
+        from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
+
+        deep_link_builder = get_postmortem_deep_link_builder()
+        postmortem_links = deep_link_builder.build_postmortem_links(
+            incident_id=incident_id,
+            service_name=target_service,
+            start_time=duration_result.started_at,
+            end_time=duration_result.resolved_at,
+            namespace="default",
+            cascade_event_id=cascade_event_id,
+            evidence_hash=evidence_hash,
+        )
+        deep_links = postmortem_links.to_dict()
+    except ImportError:
+        pass  # PostmortemDeepLinkBuilder 없으면 무시
+    except Exception as e:
+        logger.debug(f"Failed to build deep links: {e}")
+
     return {
         "incident_id": incident_id,
         "generated_at": current_time,
@@ -731,6 +778,12 @@ def generate_postmortem_data(
         "throttle_data": throttle_data,
         "auto_actions": auto_actions,
         "recommendations": recommendations,
+        # 딥링크 (Grafana, Runbook, Postmortem 상세 등)
+        "deep_links": deep_links,
+        # CascadeEvent 감사 증적 연결
+        "cascade_event_id": cascade_event_id,
+        "causation_chain": causation_chain,
+        "evidence_hash": evidence_hash,
     }
 
 
