@@ -4,6 +4,24 @@
 **작성일:** 2026-01-27
 **상태:** 구현 완료
 **선행 문서:** 144_XTEST_CROSS_REGION_SCENARIO.md, 76_CASCADE_EVENT.md
+**최종 수정:** 2026-02-01
+
+---
+
+## 구현 완료 현황
+
+| Step | 항목 | 파일 | 상태 |
+|------|------|------|------|
+| 1 | Dataclass `is_test` 필드 | `audit/cascade_event.py` | ✅ |
+| 2 | Django Model `is_test` BooleanField | `models/cascade_event_archive.py` | ✅ |
+| 3 | 복합 인덱스 `idx_cascade_test_ts` | `models/cascade_event_archive.py` | ✅ |
+| 4-1 | `to_dict()` is_test 포함 | `audit/cascade_event.py` | ✅ |
+| 4-2 | `from_dict()` is_test 파싱 | `audit/cascade_event.py` | ✅ |
+| 4-3 | `from_dataclass()` is_test 전달 | `models/cascade_event_archive.py` | ✅ |
+| 5 | `TestModeContext.is_synthetic()` 연동 | `audit/cascade_auditor.py` | ✅ |
+| 6 | 마이그레이션 생성 | `shopping/migrations/0033_cascade_event_is_test_field.py` | ✅ |
+| 8 (Sec 6) | API 응답 `is_test` 포함 | `api/django/views/cascade.py` | ✅ |
+| 8 (Sec 6) | API `?is_test` 필터 | `api/django/views/cascade.py` | ✅ |
 
 ---
 

@@ -46,6 +46,7 @@ class CascadeEventListView(APIView):
         - limit: 최대 조회 개수 (기본: 100, 최대: 1000)
         - offset: 시작 위치 (기본: 0)
         - trigger_type: 트리거 유형 필터 (선택)
+        - is_test: 테스트 데이터 필터 (true/false, 생략 시 전체)
 
     Response:
         {
@@ -57,7 +58,8 @@ class CascadeEventListView(APIView):
                     "timestamp": "2026-01-23T15:30:00Z",
                     "trigger_type": "EMERGENCY_LEVEL_CHANGED",
                     "effects_count": 3,
-                    "namespace": "seoul"
+                    "namespace": "seoul",
+                    "is_test": false
                 },
                 ...
             ],
@@ -74,6 +76,7 @@ class CascadeEventListView(APIView):
         limit = min(int(request.query_params.get("limit", 100)), 1000)
         offset = int(request.query_params.get("offset", 0))
         trigger_type = request.query_params.get("trigger_type")
+        is_test_param = request.query_params.get("is_test")
 
         # Exception은 exception handler가 처리
         auditor = _get_cascade_auditor()
@@ -89,6 +92,11 @@ class CascadeEventListView(APIView):
         if trigger_type:
             events = [e for e in events if e.trigger.trigger_type == trigger_type]
 
+        # is_test 필터 (true/false 문자열 → bool 변환)
+        if is_test_param is not None:
+            is_test_filter = is_test_param.lower() == "true"
+            events = [e for e in events if e.is_test == is_test_filter]
+
         # 응답 형식 변환
         event_list = []
         for event in events:
@@ -101,6 +109,7 @@ class CascadeEventListView(APIView):
                     "effects_count": len(event.effects),
                     "namespace": event.namespace,
                     "has_external_trace": event.external_trace is not None,
+                    "is_test": event.is_test,
                 }
             )
 
