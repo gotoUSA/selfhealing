@@ -1,9 +1,10 @@
 # 134. Postmortem 신규 모듈 구조
 
-**문서 버전:** 1.0
+**문서 버전:** 1.1
 **작성일:** 2026-01-27
+**수정일:** 2026-02-01
 **선행 문서:** [133_POSTMORTEM_XTEST_SEPARATION.md](133_POSTMORTEM_XTEST_SEPARATION.md)
-**상태:** 설계 완료
+**상태:** ✅ 구현 완료
 
 ---
 
@@ -104,15 +105,18 @@ SELFHEALING_POSTMORTEM_HISTORY_LIMIT=100
 
 ## 4. 헬퍼 함수 이동
 
-### 4.1 현재 위치: views/xtest/observability.py
+### 4.1 이동 완료: services/postmortem_store.py
 
-| 함수 | 이동 후 |
-|------|--------|
-| `_collect_service_states()` | `services/postmortem_store.py` |
-| `_calculate_incident_duration()` | `services/postmortem_store.py` |
-| `_generate_dynamic_actions()` | `services/postmortem_store.py` |
-| `_build_timeline()` | `services/postmortem_store.py` |
-| `_generate_postmortem_data()` | `services/postmortem_store.py` |
+| 함수 | 상태 | 설명 |
+|------|------|------|
+| `collect_service_states()` | ✅ 완료 | CB 상태에서 affected/unaffected 서비스 수집 |
+| `build_timeline()` | ✅ 완료 | 이벤트 히스토리와 로컬 이벤트로 타임라인 구성 |
+| `generate_postmortem_data()` | ✅ 완료 | Post-mortem 데이터 구조 생성 |
+
+**Deprecated Aliases (하위 호환성):**
+- `_collect_service_states` → `collect_service_states`
+- `_build_timeline` → `build_timeline`
+- `_generate_postmortem_data` → `generate_postmortem_data`
 
 ### 4.2 이동 이유
 
@@ -121,6 +125,27 @@ SELFHEALING_POSTMORTEM_HISTORY_LIMIT=100
 | 재사용성 | `event_bus.py` 자동 트리거에서도 사용 |
 | 단일 책임 | View에서 비즈니스 로직 분리 |
 | 테스트 용이성 | View 없이 함수 단위 테스트 가능 |
+
+### 4.3 import 경로 변경
+
+**views/postmortem.py, xtest/observability.py:**
+```python
+from selfhealing.services.postmortem_store import (
+    collect_service_states as _collect_service_states,
+    build_timeline as _build_timeline,
+    generate_postmortem_data as _generate_postmortem_data,
+)
+```
+
+**event_bus.py:**
+```python
+from selfhealing.services.postmortem_store import (
+    add_healing_incident,
+    build_timeline as _build_timeline,
+    collect_service_states as _collect_service_states,
+    generate_postmortem_data as _generate_postmortem_data,
+)
+```
 
 ---
 
@@ -249,16 +274,16 @@ settings.auto_min_duration
 
 ## 10. 구현 순서
 
-| 순서 | 작업 | 파일 |
-|------|------|------|
-| 1 | Settings 생성 | `settings/postmortem.py` |
-| 2 | 저장소 생성 | `services/postmortem_store.py` |
-| 3 | 헬퍼 함수 이동 | `services/postmortem_store.py` |
-| 4 | View 생성 | `views/postmortem.py` |
-| 5 | URL 등록 | `urls.py` |
-| 6 | event_bus.py 수정 | import 경로 변경 |
-| 7 | X-Test 정리 | export 제거, deprecated URL |
-| 8 | 테스트 작성 | 단위/통합 테스트 |
+| 순서 | 작업 | 파일 | 상태 |
+|------|------|------|------|
+| 1 | Settings 생성 | `settings/postmortem.py` | ✅ 완료 |
+| 2 | 저장소 생성 | `services/postmortem_store.py` | ✅ 완료 |
+| 3 | 헬퍼 함수 이동 | `services/postmortem_store.py` | ✅ 완료 |
+| 4 | View 생성 | `views/postmortem.py` | ✅ 완료 |
+| 5 | URL 등록 | `urls.py` | ✅ 완료 |
+| 6 | event_bus.py 수정 | import 경로 변경 | ✅ 완료 |
+| 7 | X-Test 정리 | export 제거, deprecated URL | ✅ 완료 |
+| 8 | 테스트 작성 | 단위/통합 테스트 | ✅ 완료 (317 tests passed) |
 
 ---
 

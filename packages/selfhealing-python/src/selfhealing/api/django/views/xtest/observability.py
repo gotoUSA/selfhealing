@@ -383,15 +383,16 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
 
 # =============================================================================
 # Postmortem Generation Helpers (Complexity Reduction)
+# - Moved to services/postmortem_store.py for reusability
+# - Re-exported here for backward compatibility
 # =============================================================================
 
-
-def _collect_service_states(cb_service) -> tuple[list, list]:
-    """Collect affected and unaffected services from CB states."""
-    all_states = cb_service.repository.get_all_states()
-    affected = [s.service_name for s in all_states if s.state == "open"]
-    unaffected = [s.service_name for s in all_states if s.state != "open"]
-    return affected, unaffected
+# Import from centralized postmortem_store
+from selfhealing.services.postmortem_store import (
+    collect_service_states as _collect_service_states,
+    build_timeline as _build_timeline,
+    generate_postmortem_data as _generate_postmortem_data,
+)
 
 
 # Re-export from utils for backward compatibility
@@ -455,178 +456,6 @@ def _generate_dynamic_actions(
         duration_seconds=duration_seconds,
         current_timestamp=timezone.now().isoformat(),
     )
-
-
-def _build_timeline(history: list, local_events: list) -> list:
-    """Build sorted timeline from history and local events."""
-    timeline = []
-
-    # CB 상태 변경 이벤트 필터링
-    cb_events = [
-        e for e in history if "circuit_breaker" in e.get("event_type", "").lower() or e.get("data", {}).get("state_change")
-    ]
-
-    for e in cb_events[:20]:
-        timeline.append(
-            {
-                "timestamp": e.get("timestamp"),
-                "event_type": e.get("event_type"),
-                "details": e.get("data", {}),
-            }
-        )
-
-    for e in local_events:
-        timeline.append(
-            {
-                "timestamp": e.get("recorded_at"),
-                "event_type": e.get("event_type"),
-                "details": e,
-            }
-        )
-
-    timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
-    return timeline
-
-
-def _generate_postmortem_data(
-    incident_id: str,
-    timeline: list,
-    affected: list,
-    unaffected: list,
-    fast_fail_count: int,
-    snapshot: dict,
-    service_name: str | None = None,
-) -> dict:
-    """Generate postmortem data structure with dynamic calculations.
-
-    Google SRE 표준에 맞춰 trigger, detection, resolution, root_cause_hypothesis 필드 포함.
-    타임라인 스냅샷을 확장하여 CB OPEN/CLOSE 시점 메트릭, 피크 메트릭, 에러 로그 등을 포함합니다.
-    배포 연관성 분석을 통해 인시던트 전후 배포 이력을 수집합니다.
-    """
-    # duration 계산 (세분화된 정보 포함)
-    duration_result = calculate_incident_duration_detailed(timeline)
-
-    # 동적 action items 생성
-    auto_actions, recommendations = _generate_dynamic_actions(timeline, affected, duration_result.duration_seconds)
-
-    # Root cause 관련 필드 추출
-    from selfhealing.utils.postmortem_root_cause import build_postmortem_root_cause_fields
-
-    root_cause_fields = build_postmortem_root_cause_fields(timeline, affected)
-
-    # 서비스 이름 추출 (affected에서 첫 번째 또는 명시적으로 전달된 것)
-    target_service = service_name or (affected[0] if affected else "unknown")
-
-    # 시작/종료 시각 파싱
-    start_time = None
-    end_time = None
-    if duration_result.started_at:
-        try:
-            from datetime import datetime
-
-            start_time = datetime.fromisoformat(duration_result.started_at.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            pass
-    if duration_result.resolved_at:
-        try:
-            from datetime import datetime
-
-            end_time = datetime.fromisoformat(duration_result.resolved_at.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            pass
-
-    # 배포 연관성 분석 (deployment_context)
-    deployment_context = None
-    deployment_timeline_events = []
-    try:
-        from selfhealing.services.postmortem.deployment_correlator import get_deployment_correlator
-
-        correlator = get_deployment_correlator()
-
-        if start_time and correlator.is_enabled():
-            deployment_context = correlator.get_deployments_for_postmortem(
-                incident_time=start_time,
-                service_name=target_service,
-            )
-            deployment_timeline_events = correlator.get_deployment_timeline_events(
-                incident_time=start_time,
-                service_name=target_service,
-            )
-    except ImportError:
-        pass  # DeploymentCorrelator 없으면 무시
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning(f"Failed to collect deployment context: {e}")
-
-    # 타임라인 스냅샷 빌드 (확장)
-    timeline_snapshot = {}
-    try:
-        from selfhealing.services.postmortem.snapshot_builder import SnapshotBuilder
-
-        # 스냅샷 빌드
-        builder = SnapshotBuilder(
-            service_name=target_service,
-            start_time=start_time,
-            end_time=end_time,
-        )
-        timeline_snapshot = builder.build_dict(timeline[:30])
-
-    except ImportError:
-        pass  # SnapshotBuilder 없으면 기본 방식 유지
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning(f"Failed to build timeline snapshot: {e}")
-
-    # 타임라인에 배포 이벤트 삽입
-    merged_timeline = timeline[:30] + deployment_timeline_events
-    merged_timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
-
-    # Throttle 상태 데이터 수집
-    throttle_data = {}
-    try:
-        from selfhealing.services.throttle.postmortem import collect_throttle_postmortem_data
-
-        throttle_data = collect_throttle_postmortem_data(
-            start_time=start_time,
-            end_time=end_time,
-        )
-    except ImportError:
-        pass  # Throttle 모듈 없으면 무시
-    except Exception as e:
-        logging.getLogger(__name__).debug(f"Failed to collect throttle data: {e}")
-
-    return {
-        "incident_id": incident_id,
-        "generated_at": timezone.now().isoformat(),
-        "started_at": duration_result.started_at,
-        "resolved_at": duration_result.resolved_at,
-        "duration_seconds": duration_result.duration_seconds,
-        "downtime_seconds": duration_result.downtime_seconds,
-        "validation_seconds": duration_result.validation_seconds,
-        # Google SRE 표준 필드 (trigger, detection, resolution, root_cause_hypothesis)
-        "trigger": root_cause_fields.get("trigger"),
-        "detection": root_cause_fields.get("detection"),
-        "resolution": root_cause_fields.get("resolution"),
-        "root_cause_hypothesis": root_cause_fields.get("root_cause_hypothesis"),
-        "summary": {
-            "affected_services": affected,
-            "unaffected_services": unaffected,
-            "fast_fail_count": fast_fail_count,
-            "total_events": len(timeline),
-        },
-        "timeline": merged_timeline[:30],
-        "system_snapshot": snapshot,
-        # 확장된 타임라인 스냅샷
-        "timeline_snapshot": timeline_snapshot,
-        # 배포 연관성 분석
-        "deployment_context": deployment_context,
-        # Throttle 상태 데이터
-        "throttle_data": throttle_data,
-        "auto_actions": auto_actions,
-        "recommendations": recommendations,
-    }
 
 
 class RecordHealingEventView(XTestModeMixin, APIView):

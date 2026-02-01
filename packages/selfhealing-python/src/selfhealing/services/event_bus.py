@@ -915,15 +915,15 @@ def _create_individual_postmortem(
             collect_system_snapshot,
             get_healing_events,
         )
-        from selfhealing.api.django.views.postmortem import (
-            _build_timeline,
-            _collect_service_states,
-            _generate_postmortem_data,
+        from selfhealing.services.postmortem_store import (
+            add_healing_incident,
+            build_timeline as _build_timeline,
+            collect_service_states as _collect_service_states,
+            generate_postmortem_data as _generate_postmortem_data,
         )
         from selfhealing.services.circuit_breaker_service import (
             get_circuit_breaker_service,
         )
-        from selfhealing.services.postmortem_store import add_healing_incident
 
         # 히스토리 및 상태 수집
         bus = get_event_bus()

@@ -139,19 +139,16 @@ class TestCircuitBreakerClosedPostmortemHandler:
         mock_base_module.collect_system_snapshot = lambda: {"cpu": 50}
         mock_base_module.get_healing_events = lambda limit: []
 
-        # Create mock module for selfhealing.api.django.views.postmortem (핸들러가 실제 import하는 경로)
-        mock_postmortem_module = ModuleType("selfhealing.api.django.views.postmortem")
-        mock_postmortem_module._build_timeline = lambda h, l: mock_timeline
-        mock_postmortem_module._collect_service_states = lambda cb: ([], [])
-        mock_postmortem_module._generate_postmortem_data = lambda *args, **kwargs: {
+        # Create mock module for selfhealing.services.postmortem_store (핸들러가 실제 import하는 경로)
+        mock_store_module = ModuleType("selfhealing.services.postmortem_store")
+        mock_store_module.add_healing_incident = mock_add_healing_incident
+        mock_store_module.build_timeline = lambda h, l: mock_timeline
+        mock_store_module.collect_service_states = lambda cb: ([], [])
+        mock_store_module.generate_postmortem_data = lambda *args, **kwargs: {
             "incident_id": "AUTO-test-123",
             "duration_seconds": 120,
             "timeline": mock_timeline,
         }
-
-        # Create mock module for selfhealing.services.postmortem_store
-        mock_store_module = ModuleType("selfhealing.services.postmortem_store")
-        mock_store_module.add_healing_incident = mock_add_healing_incident
 
         # Mock django.utils.timezone
         mock_timezone_module = MagicMock()
@@ -162,7 +159,6 @@ class TestCircuitBreakerClosedPostmortemHandler:
                 sys.modules,
                 {
                     "selfhealing.api.django.views.xtest.base": mock_base_module,
-                    "selfhealing.api.django.views.postmortem": mock_postmortem_module,
                     "selfhealing.services.postmortem_store": mock_store_module,
                     "django.utils.timezone": mock_timezone_module,
                 },
