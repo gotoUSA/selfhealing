@@ -48,9 +48,9 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Local apps
     "shopping",
-    # NOTE: selfhealing.adapters.django removed in v2.0.0
-    # Redis-based adapters are now the default (no Django app needed)
-    # See docs/self_healing/middleware_system/06_REDIS_MIGRATION.md
+    # Self-Healing system (Archive 테이블, RBAC 그룹 관리)
+    # Runtime 저장소는 Redis, Archive/통계용 Django ORM 사용
+    "selfhealing.adapters.django",
     # Third party apps
     "mptt",
     "rest_framework",

@@ -19,9 +19,28 @@
 | 4-2 | `from_dict()` is_test 파싱 | `audit/cascade_event.py` | ✅ |
 | 4-3 | `from_dataclass()` is_test 전달 | `models/cascade_event_archive.py` | ✅ |
 | 5 | `TestModeContext.is_synthetic()` 연동 | `audit/cascade_auditor.py` | ✅ |
-| 6 | 마이그레이션 생성 | `shopping/migrations/0033_cascade_event_is_test_field.py` | ✅ |
+| 6 | 마이그레이션 생성 | `selfhealing/adapters/django/migrations/0001_initial.py` | ✅ |
 | 8 (Sec 6) | API 응답 `is_test` 포함 | `api/django/views/cascade.py` | ✅ |
 | 8 (Sec 6) | API `?is_test` 필터 | `api/django/views/cascade.py` | ✅ |
+
+### 마이그레이션 아키텍처 변경 (2026-02-01)
+
+selfhealing 패키지가 자체 마이그레이션을 관리하도록 리팩토링되었습니다:
+
+| 구분 | 이전 | 현재 |
+|------|------|------|
+| 마이그레이션 위치 | `shopping/migrations/` | `selfhealing/adapters/django/migrations/` |
+| 포함 내용 | - | RBAC 그룹, PostmortemRecord, CascadeEventArchive (is_test 포함) |
+| 재사용성 | 다른 시스템 사용 시 DB 수정 필요 | `INSTALLED_APPS`에 추가만으로 사용 가능 |
+
+**사용법:**
+```python
+# settings.py
+INSTALLED_APPS = [
+    ...
+    "selfhealing.adapters.django",  # DB 마이그레이션 자동 포함
+]
+```
 
 ---
 
