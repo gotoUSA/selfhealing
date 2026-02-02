@@ -239,6 +239,7 @@ class AuditEvent:
 
     요청 처리 중 발생하는 각 이벤트를 캡처합니다.
     RequestAuditBuffer에 적재되어 AuditMiddleware에서 일괄 처리됩니다.
+    trace_id는 자동으로 현재 트레이스 컨텍스트에서 추출됩니다.
     """
 
     event_type: AuditEventType
@@ -256,6 +257,19 @@ class AuditEvent:
     domain: str | None = None
     reason: str | None = None
 
+    # 분산 트레이싱 (자동 설정)
+    trace_id: str | None = field(default=None)
+
+    def __post_init__(self) -> None:
+        """trace_id 자동 설정 (없을 경우 현재 트레이스 컨텍스트에서 추출)."""
+        if self.trace_id is None:
+            try:
+                from selfhealing.audit.trace import get_trace_id
+
+                self.trace_id = get_trace_id()
+            except Exception:
+                pass  # trace 모듈 미사용 환경에서도 동작
+
     def to_dict(self) -> dict[str, Any]:
         """직렬화를 위한 딕셔너리 변환."""
         return {
@@ -271,6 +285,7 @@ class AuditEvent:
             "target_id": self.target_id,
             "domain": self.domain,
             "reason": self.reason,
+            "trace_id": self.trace_id,
         }
 
     def __repr__(self) -> str:

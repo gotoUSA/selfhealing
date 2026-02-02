@@ -79,26 +79,14 @@ class SyncWorkerConfig:
 
         s = settings or get_audit_sync_settings()
         return cls(
-            sync_interval_seconds=overrides.get(
-                "sync_interval_seconds", s.sync_interval_seconds
-            ),
+            sync_interval_seconds=overrides.get("sync_interval_seconds", s.sync_interval_seconds),
             batch_size=overrides.get("batch_size", s.batch_size),
             max_retries=overrides.get("max_retries", s.max_retries),
-            retry_delay_seconds=overrides.get(
-                "retry_delay_seconds", s.retry_delay_seconds
-            ),
-            retry_backoff_multiplier=overrides.get(
-                "retry_backoff_multiplier", s.retry_backoff_multiplier
-            ),
-            max_retry_delay_seconds=overrides.get(
-                "max_retry_delay_seconds", s.max_retry_delay_seconds
-            ),
-            cleanup_after_seconds=overrides.get(
-                "cleanup_after_seconds", s.cleanup_after_seconds
-            ),
-            metrics_interval_seconds=overrides.get(
-                "metrics_interval_seconds", s.metrics_interval_seconds
-            ),
+            retry_delay_seconds=overrides.get("retry_delay_seconds", s.retry_delay_seconds),
+            retry_backoff_multiplier=overrides.get("retry_backoff_multiplier", s.retry_backoff_multiplier),
+            max_retry_delay_seconds=overrides.get("max_retry_delay_seconds", s.max_retry_delay_seconds),
+            cleanup_after_seconds=overrides.get("cleanup_after_seconds", s.cleanup_after_seconds),
+            metrics_interval_seconds=overrides.get("metrics_interval_seconds", s.metrics_interval_seconds),
         )
 
     @classmethod
@@ -141,9 +129,7 @@ class SyncStats:
         # 최근 100개만 유지
         if len(self._sync_durations) > 100:
             self._sync_durations = self._sync_durations[-100:]
-        self.avg_sync_duration_ms = sum(self._sync_durations) / len(
-            self._sync_durations
-        )
+        self.avg_sync_duration_ms = sum(self._sync_durations) / len(self._sync_durations)
 
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리 변환."""
@@ -317,9 +303,7 @@ class AuditSyncWorker:
                 synced, failed = self._sync_batch()
 
                 if synced > 0 or failed > 0:
-                    logger.debug(
-                        f"[AuditSyncWorker] Synced: {synced}, Failed: {failed}"
-                    )
+                    logger.debug(f"[AuditSyncWorker] Synced: {synced}, Failed: {failed}")
 
                 # 메트릭 리포팅
                 now = time.time()
@@ -375,15 +359,11 @@ class AuditSyncWorker:
                         self._sync_entry_to_adapter(adapter, entry)
 
                     synced_count += 1
-                    self._last_processed_seq = max(
-                        self._last_processed_seq, entry.sequence
-                    )
+                    self._last_processed_seq = max(self._last_processed_seq, entry.sequence)
 
                 except Exception as e:
                     failed_count += 1
-                    logger.warning(
-                        f"[AuditSyncWorker] Failed to sync entry seq={entry.sequence}: {e}"
-                    )
+                    logger.warning(f"[AuditSyncWorker] Failed to sync entry seq={entry.sequence}: {e}")
 
             # 처리 완료된 엔트리 정리
             if synced_count > 0:
@@ -417,10 +397,38 @@ class AuditSyncWorker:
 
     def _sync_entry_to_adapter(self, adapter: Any, entry: Any) -> None:
         """
-        단일 엔트리를 어댑터로 동기화.
+        단일 엔트리를 어댑터로 동기화 (Idempotent Consumer 패턴).
 
-        재시도 로직 포함.
+        중복 처리를 방지하고 재시도 로직을 포함합니다.
         """
+        # Idempotent Consumer: 중복 처리 방지
+        try:
+            from selfhealing.services.idempotency_service import (
+                IdempotencyDomain,
+                IdempotencyKey,
+                IdempotencyService,
+            )
+
+            idempotency = IdempotencyService()
+            key = IdempotencyKey.for_operation(
+                entity_type="wal_entry",
+                entity_id=entry.sequence,
+                operation=f"sync:{entry.checksum[:8] if entry.checksum else 'unknown'}",
+                domain=IdempotencyDomain.WAL_RECOVERY,
+            )
+
+            # 이미 처리된 경우 스킵
+            result = idempotency.check(key, lambda: None)
+            if result is not None:
+                logger.debug(f"[AuditSyncWorker] Skipping duplicate entry seq={entry.sequence}")
+                return
+
+        except ImportError:
+            # IdempotencyService 미사용 환경
+            pass
+        except Exception as e:
+            logger.debug(f"[AuditSyncWorker] Idempotency check failed: {e}")
+
         delay = self._config.retry_delay_seconds
         last_error: Exception | None = None
 
@@ -434,6 +442,26 @@ class AuditSyncWorker:
                 else:
                     # 범용 로그
                     logger.info(f"[AuditSync] {entry.data}")
+
+                # 성공 시 처리 완료 마킹
+                try:
+                    from selfhealing.services.idempotency_service import (
+                        IdempotencyDomain,
+                        IdempotencyKey,
+                        IdempotencyService,
+                    )
+
+                    idempotency = IdempotencyService()
+                    key = IdempotencyKey.for_operation(
+                        entity_type="wal_entry",
+                        entity_id=entry.sequence,
+                        operation=f"sync:{entry.checksum[:8] if entry.checksum else 'unknown'}",
+                        domain=IdempotencyDomain.WAL_RECOVERY,
+                    )
+                    # 24시간 TTL로 처리 완료 마킹
+                    idempotency.check(key, lambda: {"processed": True})
+                except Exception:
+                    pass
 
                 return  # 성공
 
@@ -463,9 +491,7 @@ class AuditSyncWorker:
                 stats = self._stats.to_dict()
 
             # 커스텀 메트릭 기록
-            metrics.record_write(
-                "sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"]
-            )
+            metrics.record_write("sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"])
 
             logger.debug(f"[AuditSyncWorker] Metrics: {stats}")
 

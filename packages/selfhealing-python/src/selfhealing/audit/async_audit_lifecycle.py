@@ -179,16 +179,26 @@ def _load_checkpoint() -> int:
 
 
 def _check_unprocessed_wal_entries(last_seq: int) -> int:
-    """WAL에서 미처리 엔트리 수 확인."""
+    """
+    WAL에서 미처리 엔트리 수 확인 (Lazy Recovery 지원).
+
+    count_unprocessed() 메서드를 우선 사용하여 파일 전체 읽기 없이
+    빠르게 미처리 엔트리 수를 확인합니다.
+    """
     try:
         wal = _get_wal_instance()
         if wal is None:
             return 0
 
-        # recover_unprocessed 메서드가 있으면 호출
+        # count_unprocessed() 메서드 우선 사용 (Lazy: 파일 읽기 없음)
+        if hasattr(wal, "count_unprocessed"):
+            return wal.count_unprocessed(last_processed_seq=last_seq)
+
+        # Fallback: 전체 읽기 (기존 동작)
         if hasattr(wal, "recover_unprocessed"):
             entries = wal.recover_unprocessed(last_processed_seq=last_seq)
             return len(entries) if entries else 0
+
         return 0
     except Exception as e:
         logger.debug(f"[AsyncAuditLifecycle] WAL check failed: {e}")

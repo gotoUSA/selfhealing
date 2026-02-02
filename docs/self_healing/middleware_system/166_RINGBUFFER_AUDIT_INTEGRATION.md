@@ -1239,24 +1239,24 @@ def count_unprocessed(self, last_processed_seq: int = 0) -> int:
 
 ### 11.1 Phase 1: 즉시 수정 (1일)
 
-- [ ] `wal.py`: `_get_current_wal_filename()`에 PID 추가
-- [ ] `wal.py`: `DISK_FULL_FAILOPEN` 상태 및 Fail-Open 로직 추가
-- [ ] `ring_buffer.py`: 고용량 경고 로그 추가
-- [ ] 단위 테스트 추가
+- [x] `wal.py`: `_get_current_wal_filename()`에 PID 추가
+- [x] `wal.py`: `DISK_FULL_FAILOPEN` 상태 및 Fail-Open 로직 추가
+- [x] `ring_buffer.py`: 고용량 경고 로그 추가
+- [x] 단위 테스트 추가
 
 ### 11.2 Phase 2: 운영 가시성 (2일)
 
-- [ ] `ring_buffer.py`: `on_drop_threshold` 콜백 및 알림 연동
-- [ ] `event_buffer.py`: `AuditEvent.trace_id` 자동 설정
-- [ ] `unified_notification.py` 연동 테스트
-- [ ] 통합 테스트 추가
+- [x] `ring_buffer.py`: `on_drop_threshold` 콜백 및 알림 연동
+- [x] `event_buffer.py`: `AuditEvent.trace_id` 자동 설정
+- [x] `unified_notification.py` 연동 테스트
+- [x] 통합 테스트 추가
 
 ### 11.3 Phase 3: 데이터 무결성 (3일)
 
-- [ ] `sync_worker.py`: `IdempotencyService` 연동
-- [ ] `wal.py`: `RECORD_MAGIC` 및 Best-Effort Recovery
-- [ ] `async_audit_lifecycle.py`: Lazy Recovery 옵션
-- [ ] E2E 테스트 추가
+- [x] `sync_worker.py`: `IdempotencyService` 연동
+- [x] `wal.py`: `RECORD_MAGIC` 및 Best-Effort Recovery
+- [x] `async_audit_lifecycle.py`: Lazy Recovery 옵션
+- [x] E2E 테스트 추가
 
 ### 11.4 환경 변수 (신규)
 

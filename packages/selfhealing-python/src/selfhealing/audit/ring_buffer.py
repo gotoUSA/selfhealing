@@ -10,11 +10,15 @@ Usage:
     batch = buffer.get_batch(max_size=100)  # Background worker
 """
 
+import logging
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from typing import Generic, TypeVar
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -49,6 +53,8 @@ class RingBuffer(Generic[T]):
     - Batch retrieval for background workers
     - Thread-safe operations
     - Statistics for monitoring
+    - Drop rate alert callback (운영 가시성)
+    - High capacity warning (메모리 보호)
 
     Usage:
         buffer = RingBuffer[AuditEntry](capacity=10000)
@@ -62,10 +68,19 @@ class RingBuffer(Generic[T]):
             await store.save(entry)
     """
 
+    # 메모리 경고 임계치 (10만 이상)
+    CAPACITY_WARNING_THRESHOLD = 100000
+    # 추정 이벤트 크기 (1KB)
+    ESTIMATED_EVENT_SIZE_BYTES = 1024
+    # 드랍률 알림 최소 샘플 수
+    MIN_SAMPLES_FOR_ALERT = 100
+
     def __init__(
         self,
         capacity: int = 10000,
         strategy: BackpressureStrategy = BackpressureStrategy.DROP_OLDEST,
+        on_drop_threshold: Callable[["RingBufferStats"], None] | None = None,
+        drop_rate_threshold: float = 0.01,
     ):
         """
         Initialize RingBuffer.
@@ -73,9 +88,19 @@ class RingBuffer(Generic[T]):
         Args:
             capacity: Maximum buffer size
             strategy: Backpressure strategy (DROP_OLDEST recommended)
+            on_drop_threshold: 드랍률 임계치 초과 시 호출될 콜백
+            drop_rate_threshold: 드랍률 알림 임계치 (기본 1%)
         """
         if capacity < 1:
             raise ValueError("capacity must be at least 1")
+
+        # 고용량 메모리 경고
+        if capacity > self.CAPACITY_WARNING_THRESHOLD:
+            estimated_mb = (capacity * self.ESTIMATED_EVENT_SIZE_BYTES) / (1024 * 1024)
+            logger.warning(
+                f"[RingBuffer] High capacity={capacity:,} may use ~{estimated_mb:.0f}MB RAM. "
+                f"Consider using a lower capacity or enabling WAL for persistence."
+            )
 
         self._capacity = capacity
         self._strategy = strategy
@@ -83,6 +108,11 @@ class RingBuffer(Generic[T]):
         self._lock = Lock()
         self._total_enqueued = 0
         self._total_dropped = 0
+
+        # 드랍률 알림 설정
+        self._on_drop_threshold = on_drop_threshold
+        self._drop_rate_threshold = drop_rate_threshold
+        self._alert_sent = False
 
     @classmethod
     def from_settings(cls, settings=None, **overrides) -> "RingBuffer[T]":
@@ -109,6 +139,8 @@ class RingBuffer(Generic[T]):
                 "strategy",
                 strategy_map.get(s.strategy, BackpressureStrategy.DROP_OLDEST),
             ),
+            on_drop_threshold=overrides.get("on_drop_threshold"),
+            drop_rate_threshold=overrides.get("drop_rate_threshold", 0.01),
         )
 
     @property
@@ -152,14 +184,44 @@ class RingBuffer(Generic[T]):
                     # deque with maxlen automatically drops oldest
                     self._total_dropped += 1
                     self._buffer.append(item)
+                    self._check_drop_rate_alert()
                     return True
                 else:
                     # DROP_NEWEST: reject new item
                     self._total_dropped += 1
+                    self._check_drop_rate_alert()
                     return False
 
             self._buffer.append(item)
             return True
+
+    def _check_drop_rate_alert(self) -> None:
+        """드랍률 임계치 초과 시 알림 콜백 호출."""
+        if self._on_drop_threshold is None or self._alert_sent:
+            return
+
+        if self._total_enqueued < self.MIN_SAMPLES_FOR_ALERT:
+            return
+
+        drop_rate = self._total_dropped / self._total_enqueued
+        if drop_rate > self._drop_rate_threshold:
+            self._alert_sent = True
+            stats = RingBufferStats(
+                capacity=self._capacity,
+                size=len(self._buffer),
+                total_enqueued=self._total_enqueued,
+                total_dropped=self._total_dropped,
+                drop_rate=drop_rate,
+            )
+            try:
+                self._on_drop_threshold(stats)
+            except Exception:
+                pass  # 알림 실패가 메인 로직 방해 금지
+
+    def reset_alert(self) -> None:
+        """알림 상태 리셋 (주기적 호출용)."""
+        with self._lock:
+            self._alert_sent = False
 
     def put_many(self, items: list[T]) -> int:
         """
