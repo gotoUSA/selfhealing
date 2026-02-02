@@ -525,3 +525,99 @@ class TestCheckpointManagerIntegration:
 
             # 실제 파일은 존재해야 함
             assert checkpoint_path.exists()
+
+
+class TestAsyncAuditMonitoringMetrics:
+    """모니터링 메트릭 단위 테스트."""
+
+    def setup_method(self):
+        from selfhealing.audit.async_audit_lifecycle import reset_lifecycle_state
+        from selfhealing.utils.async_logger import AsyncHealingLogger
+
+        reset_lifecycle_state()
+        AsyncHealingLogger.reset()
+
+    def teardown_method(self):
+        from selfhealing.audit.async_audit_lifecycle import reset_lifecycle_state
+        from selfhealing.utils.async_logger import AsyncHealingLogger
+
+        AsyncHealingLogger.stop()
+        AsyncHealingLogger.reset()
+        reset_lifecycle_state()
+
+    def test_get_async_audit_metrics_returns_dict(self):
+        """get_async_audit_metrics()가 dict 반환."""
+        from selfhealing.audit.async_audit_lifecycle import get_async_audit_metrics
+
+        metrics = get_async_audit_metrics()
+
+        assert isinstance(metrics, dict)
+        assert "lifecycle_startup_completed" in metrics
+        assert "lifecycle_shutdown_registered" in metrics
+
+    def test_get_async_audit_metrics_includes_logger_stats(self):
+        """메트릭에 AsyncHealingLogger 통계 포함."""
+        from selfhealing.audit.async_audit_lifecycle import get_async_audit_metrics
+        from selfhealing.utils.async_logger import AsyncHealingLogger, EventSeverity
+
+        # 로거 설정 및 시작
+        AsyncHealingLogger.configure(flush_callback=lambda e: None)
+        AsyncHealingLogger.start()
+
+        # 이벤트 로깅
+        AsyncHealingLogger.log({"test": True}, EventSeverity.INFO)
+
+        # 메트릭 조회
+        metrics = get_async_audit_metrics()
+
+        assert "events_logged" in metrics
+        assert "queue_size" in metrics
+        assert "worker_running" in metrics
+        assert metrics["events_logged"] >= 1
+        assert metrics["worker_running"] is True
+
+    def test_export_metrics_to_prometheus_format(self):
+        """Prometheus 포맷 출력 확인."""
+        from selfhealing.audit.async_audit_lifecycle import export_metrics_to_prometheus
+        from selfhealing.utils.async_logger import AsyncHealingLogger
+
+        # 로거 설정
+        AsyncHealingLogger.configure(flush_callback=lambda e: None)
+        AsyncHealingLogger.start()
+
+        # Prometheus 출력
+        output = export_metrics_to_prometheus()
+
+        assert isinstance(output, str)
+        assert "# HELP async_audit_events_logged" in output
+        assert "# TYPE async_audit_events_logged counter" in output
+        assert "async_audit_events_logged" in output
+        assert "async_audit_queue_size" in output
+        assert "async_audit_worker_running" in output
+
+    def test_metrics_after_flush(self):
+        """플러시 후 메트릭 정확성."""
+        from selfhealing.audit.async_audit_lifecycle import get_async_audit_metrics
+        from selfhealing.utils.async_logger import AsyncHealingLogger, EventSeverity
+
+        events_captured = []
+
+        def capture_callback(events):
+            events_captured.extend(events)
+
+        AsyncHealingLogger.configure(flush_callback=capture_callback)
+        AsyncHealingLogger.start()
+
+        # 이벤트 로깅
+        for i in range(5):
+            AsyncHealingLogger.log({"idx": i}, EventSeverity.INFO)
+
+        # 플러시
+        AsyncHealingLogger.flush()
+        time.sleep(0.1)
+
+        # 메트릭 조회
+        metrics = get_async_audit_metrics()
+
+        assert metrics["events_logged"] == 5
+        assert metrics["events_flushed"] == 5

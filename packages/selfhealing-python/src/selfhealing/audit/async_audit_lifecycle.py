@@ -429,3 +429,102 @@ def reset_lifecycle_state() -> None:
     with _lifecycle_lock:
         _startup_completed = False
         _shutdown_registered = False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 모니터링 메트릭 (6.3 모니터링)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def get_async_audit_metrics() -> dict[str, Any]:
+    """
+    비동기 Audit 파이프라인 메트릭 조회.
+
+    AsyncHealingLogger의 통계와 현재 큐 크기를 반환합니다.
+    Prometheus 또는 모니터링 시스템에서 수집할 수 있습니다.
+
+    Returns:
+        dict: 메트릭 정보
+            - events_logged: 로깅된 총 이벤트 수
+            - events_flushed: 플러시된 총 이벤트 수
+            - immediate_flushes: 즉시 플러시 횟수 (CRITICAL 이벤트)
+            - batch_flushes: 배치 플러시 횟수
+            - flush_errors: 플러시 에러 횟수
+            - queue_size: 현재 큐 대기 이벤트 수
+            - worker_running: 워커 스레드 실행 여부
+    """
+    try:
+        from selfhealing.utils.async_logger import AsyncHealingLogger
+
+        # 기본 통계 가져오기
+        stats = AsyncHealingLogger.get_stats()
+
+        # 큐 크기 추가
+        queue_size = 0
+        try:
+            queue_size = AsyncHealingLogger._queue.qsize()
+        except Exception:
+            pass
+
+        # 워커 상태 추가
+        worker_running = AsyncHealingLogger._running
+
+        return {
+            **stats,
+            "queue_size": queue_size,
+            "worker_running": worker_running,
+            "lifecycle_startup_completed": _startup_completed,
+            "lifecycle_shutdown_registered": _shutdown_registered,
+        }
+
+    except Exception as e:
+        logger.warning(f"[AsyncAuditLifecycle] Failed to get metrics: {e}")
+        return {
+            "error": str(e),
+            "lifecycle_startup_completed": _startup_completed,
+            "lifecycle_shutdown_registered": _shutdown_registered,
+        }
+
+
+def export_metrics_to_prometheus() -> str:
+    """
+    Prometheus 포맷으로 메트릭 출력.
+
+    /metrics 엔드포인트에서 사용할 수 있는 텍스트 포맷.
+
+    Returns:
+        str: Prometheus 텍스트 포맷 메트릭
+    """
+    metrics = get_async_audit_metrics()
+
+    lines = [
+        "# HELP async_audit_events_logged Total events logged to async logger",
+        "# TYPE async_audit_events_logged counter",
+        f"async_audit_events_logged {metrics.get('events_logged', 0)}",
+        "",
+        "# HELP async_audit_events_flushed Total events flushed to backend",
+        "# TYPE async_audit_events_flushed counter",
+        f"async_audit_events_flushed {metrics.get('events_flushed', 0)}",
+        "",
+        "# HELP async_audit_immediate_flushes Total immediate flushes (CRITICAL events)",
+        "# TYPE async_audit_immediate_flushes counter",
+        f"async_audit_immediate_flushes {metrics.get('immediate_flushes', 0)}",
+        "",
+        "# HELP async_audit_batch_flushes Total batch flushes",
+        "# TYPE async_audit_batch_flushes counter",
+        f"async_audit_batch_flushes {metrics.get('batch_flushes', 0)}",
+        "",
+        "# HELP async_audit_flush_errors Total flush errors",
+        "# TYPE async_audit_flush_errors counter",
+        f"async_audit_flush_errors {metrics.get('flush_errors', 0)}",
+        "",
+        "# HELP async_audit_queue_size Current queue size",
+        "# TYPE async_audit_queue_size gauge",
+        f"async_audit_queue_size {metrics.get('queue_size', 0)}",
+        "",
+        "# HELP async_audit_worker_running Worker thread running status",
+        "# TYPE async_audit_worker_running gauge",
+        f"async_audit_worker_running {1 if metrics.get('worker_running', False) else 0}",
+    ]
+
+    return "\n".join(lines)

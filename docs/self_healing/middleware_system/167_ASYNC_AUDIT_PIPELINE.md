@@ -787,7 +787,7 @@ class TestAsyncAuditMiddlewareIntegration:
 
 ### 6.2 테스트
 
-- [x] 단위 테스트 추가 (20개 테스트 통과)
+- [x] 단위 테스트 추가 (24개 테스트 통과)
   - 파일: `packages/selfhealing-python/tests/unit/audit/test_async_audit_pipeline.py`
   - `TestAsyncHealingLoggerNonBlocking` (2개)
   - `TestAsyncHealingLoggerCriticalEvents` (2개)
@@ -797,13 +797,31 @@ class TestAsyncAuditMiddlewareIntegration:
   - `TestAuditMiddlewareAsyncMode` (3개)
   - `TestConvertEventToDict` (1개)
   - `TestCheckpointManagerIntegration` (3개)
-- [ ] 통합 테스트 추가 (선택사항 - Docker Compose 환경 필요)
+  - `TestAsyncAuditMonitoringMetrics` (4개) - 모니터링 메트릭 테스트 추가
+- [x] 통합 테스트 추가 (12개 테스트 통과)
+  - 파일: `tests/integration/selfhealing/test_async_audit_middleware_integration.py`
+  - `TestAsyncAuditMiddlewareNonBlocking` (2개) - 논블로킹 및 CRITICAL 즉시 전송 테스트
+  - `TestAsyncAuditEventRecording` (2개) - 이벤트 기록 및 배치 플러시 테스트
+  - `TestAsyncAuditLifecycle` (2개) - 시작/종료 및 그레이스풀 셧다운 테스트
+  - `TestAsyncAuditMonitoringMetrics` (4개) - 메트릭 조회 및 Prometheus 포맷 테스트
+  - `TestAsyncModeSwitch` (2개) - 비동기 모드 전환 테스트
+  - Docker Compose: `docker-compose -f docker-compose.test.yml run --rm test-async-audit`
 - [ ] 부하 테스트: 1000 RPS에서 응답 지연 < 10ms 확인
 
 ### 6.3 모니터링
 
-- [ ] `AsyncHealingLogger.get_stats()` 메트릭 노출
-- [ ] `queue_size`, `flush_errors` 알림 설정
+- [x] `get_async_audit_metrics()` 함수 구현
+  - 파일: `packages/selfhealing-python/src/selfhealing/audit/async_audit_lifecycle.py`
+  - 반환 메트릭: `events_logged`, `events_flushed`, `queue_size`, `flush_errors`, `worker_running`
+- [x] `export_metrics_to_prometheus()` 함수 구현
+  - Prometheus 텍스트 포맷으로 메트릭 출력
+  - `selfhealing_async_audit_events_logged_total`
+  - `selfhealing_async_audit_events_flushed_total`
+  - `selfhealing_async_audit_queue_size`
+  - `selfhealing_async_audit_flush_errors_total`
+  - `selfhealing_async_audit_worker_running`
+- [ ] Grafana 대시보드 추가 (선택사항)
+- [ ] AlertManager 알림 규칙 설정 (선택사항)
 
 ---
 

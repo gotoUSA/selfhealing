@@ -50,6 +50,30 @@ services:
       redis:
         condition: service_healthy
 
+  # 167. Async Audit Pipeline 통합 테스트
+  test-async-audit:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python -m pytest tests/integration/selfhealing/test_async_audit_middleware_integration.py -v --tb=short --no-cov"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Test runner for selfhealing package
   test:
     build: .
