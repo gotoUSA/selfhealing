@@ -1,5 +1,5 @@
 """
-Redis Audit 배치 처리 v2.0 기능 단위 테스트.
+Redis Audit 배치 처리 고급 기능 단위 테스트.
 
 테스트 항목:
 - AuditBatchLuaScripts Lua 스크립트 등록 및 실행

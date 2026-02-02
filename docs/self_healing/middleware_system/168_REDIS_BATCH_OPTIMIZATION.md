@@ -4,7 +4,7 @@
 > **작성일**: 2026-01-31
 > **의존성**: [167_ASYNC_AUDIT_PIPELINE.md](167_ASYNC_AUDIT_PIPELINE.md), [166_RINGBUFFER_AUDIT_INTEGRATION.md](166_RINGBUFFER_AUDIT_INTEGRATION.md)
 > **예상 소요**: 3-4일
-> **리뷰 반영**: Q1~Q11 및 추가 보완사항 3건 (v2.0.0)
+> **리뷰 반영**: Q1~Q11 및 추가 보완사항 3건
 
 ---
 
