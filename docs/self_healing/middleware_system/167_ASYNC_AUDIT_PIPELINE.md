@@ -2246,6 +2246,42 @@ class TestBatchRetryPolicy:
 
 ---
 
+## 8.5 구현 완료 상태
+
+> **구현일**: 2026-02-03
+> **상태**: ✅ 완료
+> **테스트**: 38개 테스트 통과 (test_async_audit_resilience.py)
+
+### 8.5.1 구현된 파일 목록
+
+| 파일 | 구현 내용 |
+|-----|---------|
+| `async_logger.py` | WALPolicy, QueueOverflowPolicy, EventPriority 열거형, BatchRetryPolicy/FlushErrorAlertConfig/PrioritizedEvent 데이터클래스, Priority Queue, WAL-First 로깅, Batch Retry, Queue Backpressure, Flush 에러 알림, ThreadPoolExecutor |
+| `durable_logger.py` | DurableEventLogger 클래스 (8.4.2) |
+| `sync_worker.py` | 주기적 체크포인트 저장 설정 (8.1.2) |
+| `checkpoint_manager.py` | 경로 유연성 (8.2.3), 멀티 프로세스 파일 잠금 (8.2.4) |
+| `serialization.py` | 빠른 직렬화 유틸리티 (8.3.1) |
+| `test_async_audit_resilience.py` | 38개 단위 테스트 |
+
+### 8.5.2 구현 완료 항목
+
+| 항목 | 섹션 | 상태 |
+|-----|------|------|
+| WAL-First 로깅 | 8.1.1 | ✅ |
+| 주기적 Checkpoint 저장 | 8.1.2 | ✅ |
+| Batch Retry 로직 | 8.1.3 | ✅ |
+| 전용 ThreadPool | 8.2.1 | ✅ |
+| Queue Backpressure | 8.2.2 | ✅ |
+| 경로 유연성 | 8.2.3 | ✅ |
+| 멀티 프로세스 파일 잠금 | 8.2.4 | ✅ |
+| 빠른 직렬화 | 8.3.1 | ✅ |
+| Flush 에러 알림 | 8.3.2 | ✅ |
+| Priority Queue | 8.4.1 | ✅ |
+| DurableEventLogger | 8.4.2 | ✅ |
+| DLQ 이동 (Batch Retry) | 8.4.3 | ✅ |
+
+---
+
 ## 9. 다음 단계
 
 → [168_REDIS_BATCH_OPTIMIZATION.md](168_REDIS_BATCH_OPTIMIZATION.md): Redis 배치 처리 최적화

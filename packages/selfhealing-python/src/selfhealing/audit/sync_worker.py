@@ -59,6 +59,10 @@ class SyncWorkerConfig:
     # 메트릭 리포팅 주기 (초)
     metrics_interval_seconds: float = 60.0
 
+    # 체크포인트 저장 설정
+    checkpoint_save_interval_batches: int = 10  # N 배치마다 저장
+    checkpoint_save_interval_seconds: float = 30.0  # 최대 저장 간격
+
     @classmethod
     def from_settings(
         cls,
@@ -87,6 +91,14 @@ class SyncWorkerConfig:
             max_retry_delay_seconds=overrides.get("max_retry_delay_seconds", s.max_retry_delay_seconds),
             cleanup_after_seconds=overrides.get("cleanup_after_seconds", s.cleanup_after_seconds),
             metrics_interval_seconds=overrides.get("metrics_interval_seconds", s.metrics_interval_seconds),
+            checkpoint_save_interval_batches=overrides.get(
+                "checkpoint_save_interval_batches",
+                getattr(s, "checkpoint_save_interval_batches", 10),
+            ),
+            checkpoint_save_interval_seconds=overrides.get(
+                "checkpoint_save_interval_seconds",
+                getattr(s, "checkpoint_save_interval_seconds", 30.0),
+            ),
         )
 
     @classmethod
@@ -189,6 +201,10 @@ class AuditSyncWorker:
 
         # 마지막 처리된 시퀀스 (WAL cleanup 용)
         self._last_processed_seq: int = 0
+
+        # 체크포인트 저장 관련
+        self._batches_since_checkpoint: int = 0
+        self._last_checkpoint_time: float = time.time()
 
         logger.info(
             f"[AuditSyncWorker] Initialized with interval={self._config.sync_interval_seconds}s, "
@@ -372,6 +388,18 @@ class AuditSyncWorker:
                 except Exception as e:
                     logger.warning(f"[AuditSyncWorker] Failed to cleanup WAL: {e}")
 
+                # 주기적 체크포인트 저장
+                self._batches_since_checkpoint += 1
+                should_save_checkpoint = (
+                    self._batches_since_checkpoint >= self._config.checkpoint_save_interval_batches
+                    or time.time() - self._last_checkpoint_time >= self._config.checkpoint_save_interval_seconds
+                )
+
+                if should_save_checkpoint:
+                    self._save_checkpoint()
+                    self._batches_since_checkpoint = 0
+                    self._last_checkpoint_time = time.time()
+
             # 통계 업데이트
             duration_ms = (time.time() - start_time) * 1000
             with self._lock:
@@ -497,6 +525,17 @@ class AuditSyncWorker:
 
         except Exception as e:
             logger.debug(f"[AuditSyncWorker] Failed to report metrics: {e}")
+
+    def _save_checkpoint(self) -> None:
+        """체크포인트 즉시 저장."""
+        try:
+            from selfhealing.audit.checkpoint_manager import get_checkpoint_manager
+
+            checkpoint = get_checkpoint_manager()
+            checkpoint.save(last_sequence=self._last_processed_seq)
+            logger.debug(f"[AuditSyncWorker] Checkpoint saved: seq={self._last_processed_seq}")
+        except Exception as e:
+            logger.warning(f"[AuditSyncWorker] Checkpoint save failed: {e}")
 
     def sync_now(self) -> tuple[int, int]:
         """
