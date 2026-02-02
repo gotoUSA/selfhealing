@@ -65,8 +65,11 @@ opentelemetry = [
 fast-json = [
     "orjson>=3.9.0",
 ]
+caching = [
+    "cachetools>=5.0.0",
+]
 all = [
-    "selfhealing[django,celery,prometheus,opentelemetry,fast-json]",
+    "selfhealing[django,celery,prometheus,opentelemetry,fast-json,caching]",
 ]
 dev = [
     "selfhealing[all]",
