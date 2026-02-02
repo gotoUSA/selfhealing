@@ -57,10 +57,21 @@ if TYPE_CHECKING:
 
     from selfhealing.audit.event_buffer import (
         AuditEvent,
+        AuditEventType,
         RequestAuditBuffer,
     )
 
 logger = logging.getLogger(__name__)
+
+
+# 즉시 전송해야 하는 CRITICAL 이벤트 타입
+# Circuit Breaker 상태 변경, 비상 모드 활성화, 보안 위반, Error Budget 소진 등
+CRITICAL_AUDIT_EVENT_TYPES: set[str] = {
+    "circuit_breaker_state_change",
+    "emergency_mode_activated",
+    "security_violation",
+    "error_budget_depleted",
+}
 
 
 class AuditMiddleware:
@@ -175,7 +186,12 @@ class AuditMiddleware:
 
         # === 이벤트 기록 (버퍼 낚아채기) ===
         if buffer.has_events():
-            self._record_events(buffer, request, response)
+            # 비동기 모드가 활성화되어 있으면 AsyncHealingLogger로 전송
+            if self._is_async_mode_enabled():
+                self._flush_events_to_async_logger(buffer, request, response)
+            else:
+                # 동기 모드 (기존 방식)
+                self._record_events(buffer, request, response)
 
         return response
 
@@ -345,6 +361,123 @@ class AuditMiddleware:
             )
             # Fallback 시도
             self._fallback_log_events(buffer)
+
+    def _is_async_mode_enabled(self) -> bool:
+        """
+        비동기 Audit 모드 활성화 여부 확인.
+
+        환경변수 AUDIT_ASYNC_MODE_ENABLED로 제어 (기본: True).
+        비동기 모드에서는 AsyncHealingLogger를 통해 Non-blocking으로 이벤트 전송.
+        """
+        import os
+
+        return os.environ.get("AUDIT_ASYNC_MODE_ENABLED", "TRUE").upper() == "TRUE"
+
+    def _flush_events_to_async_logger(
+        self,
+        buffer: RequestAuditBuffer,
+        request: HttpRequest,
+        response: HttpResponse,
+    ) -> None:
+        """
+        이벤트를 AsyncHealingLogger로 전송 (Non-blocking).
+
+        일반 이벤트: 배치 처리 (~5초마다 플러시)
+        CRITICAL 이벤트: 즉시 전송 (CB 상태 변경, 비상 모드 등)
+
+        Fail-Open 정책으로 로깅 실패가 응답에 영향 주지 않음.
+        """
+        try:
+            from selfhealing.utils.async_logger import AsyncHealingLogger, EventSeverity
+
+            # Actor 컨텍스트 가져오기
+            actor_id, actor_type = self._get_actor_context()
+
+            # 요청 컨텍스트
+            request_context = {
+                "request_id": buffer.request_id,
+                "path": getattr(request, "path", ""),
+                "method": getattr(request, "method", ""),
+                "status_code": getattr(response, "status_code", 200),
+                "actor_id": actor_id,
+                "actor_type": actor_type,
+                "elapsed_seconds": round(buffer.get_elapsed_seconds(), 4),
+                "event_count": buffer.event_count(),
+            }
+
+            for event in buffer.get_events():
+                # AuditEvent → dict 변환
+                event_dict = self._convert_event_to_dict(event, request_context)
+
+                # CRITICAL 이벤트 여부 판단 (CB 상태 변경, 비상 모드 등)
+                severity = EventSeverity.INFO
+                event_type_value = event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type)
+                if event_type_value in CRITICAL_AUDIT_EVENT_TYPES:
+                    severity = EventSeverity.CRITICAL
+
+                # Non-blocking 전송 (~0.01ms)
+                AsyncHealingLogger.log(event_dict, severity=severity)
+                self._total_events_recorded += 1
+
+        except Exception as e:
+            # Fail-open: 로깅 실패가 응답에 영향 주지 않음
+            self._failed_recordings += 1
+            logger.warning(f"[AuditMiddleware] Async logging failed (fail-open): {e}")
+            # Fallback으로 stderr 출력
+            self._fallback_log_events(buffer)
+
+    def _convert_event_to_dict(
+        self,
+        event: AuditEvent,
+        request_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        AuditEvent를 dict로 변환 (AsyncHealingLogger 전송용).
+
+        AuditAdapter.log()에서 사용할 수 있는 형식으로 변환.
+        """
+        from selfhealing.audit.event_buffer import AuditEventType
+        from selfhealing.interfaces.audit_adapter import AuditAction
+
+        # 이벤트 타입 → AuditAction 매핑
+        action_map = {
+            AuditEventType.DLQ_STORE: AuditAction.DLQ_STORE,
+            AuditEventType.DLQ_REPLAY: AuditAction.DLQ_REPLAY_SUCCESS,
+            AuditEventType.DLQ_ESCALATE: AuditAction.DLQ_ESCALATE,
+            AuditEventType.CB_STATE_CHANGE: AuditAction.CB_AUTO_OPEN,
+            AuditEventType.CB_REJECTION: AuditAction.CB_FORCE_OPEN,
+            AuditEventType.CB_RECOVERY: AuditAction.CB_AUTO_CLOSE,
+            AuditEventType.GOVERNANCE_BLOCKED: AuditAction.GOVERNANCE_BLOCKED,
+            AuditEventType.GOVERNANCE_KILL_SWITCH: AuditAction.GOVERNANCE_KILL_SWITCH,
+            AuditEventType.RATE_LIMITED: AuditAction.GOVERNANCE_BLOCKED,
+            AuditEventType.POOL_CB_REJECTION: AuditAction.CB_FORCE_OPEN,
+            AuditEventType.POOL_CB_STATE_CHANGE: AuditAction.CB_AUTO_OPEN,
+            AuditEventType.ERROR_DETECTED: AuditAction.SECURITY_ALERT,
+            AuditEventType.CONFIG_CHANGE: AuditAction.CONFIG_CHANGE,
+            AuditEventType.MANUAL_OVERRIDE: AuditAction.MANUAL_OVERRIDE,
+            AuditEventType.GENERIC: AuditAction.CONFIG_CHANGE,
+        }
+
+        action = action_map.get(event.event_type, AuditAction.CONFIG_CHANGE)
+
+        return {
+            "action": action.value if hasattr(action, "value") else str(action),
+            "event_type": event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
+            "source": event.source,
+            "target_type": event.target_type or event.source,
+            "target_id": event.target_id or request_context.get("request_id", ""),
+            "actor_id": event.actor_id or request_context.get("actor_id"),
+            "actor_type": event.actor_type,
+            "domain": event.domain,
+            "reason": event.reason,
+            "details": {
+                **event.details,
+                "request_context": request_context,
+            },
+            "success": event.success,
+            "error_message": event.error_message,
+            "timestamp": event.timestamp.isoformat() if event.timestamp else None,
+        }
 
     def _get_actor_context(self) -> tuple[str | None, str]:
         """ActorContext에서 actor 정보 가져오기."""

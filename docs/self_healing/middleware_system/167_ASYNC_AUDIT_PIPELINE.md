@@ -769,14 +769,35 @@ class TestAsyncAuditMiddlewareIntegration:
 
 ### 6.1 코드 변경
 
-- [ ] `audit_middleware.py`: `_flush_events_to_async_logger()` 구현
-- [ ] Django 앱 초기화: `AsyncHealingLogger.configure()` 및 `start()`
-- [ ] Graceful shutdown: `atexit` 및 `SIGTERM` 핸들러
+- [x] `audit_middleware.py`: `_flush_events_to_async_logger()` 구현
+  - 파일: `packages/selfhealing-python/src/selfhealing/api/django/audit_middleware.py`
+  - `CRITICAL_AUDIT_EVENT_TYPES` 상수 추가
+  - `_is_async_mode_enabled()` 메서드 추가
+  - `_flush_events_to_async_logger()` 메서드 추가
+  - `_convert_event_to_dict()` 메서드 추가
+  - `__call__` 메서드에서 비동기/동기 모드 분기 처리
+- [x] Django 앱 초기화: `AsyncHealingLogger.configure()` 및 `start()`
+  - 파일: `packages/selfhealing-python/src/selfhealing/audit/async_audit_lifecycle.py` (신규)
+  - `startup_async_audit_system()` 함수 구현
+  - `create_audit_flush_callback()` 함수 구현
+- [x] Graceful shutdown: `atexit` 및 `SIGTERM` 핸들러
+  - 파일: `packages/selfhealing-python/src/selfhealing/audit/async_audit_lifecycle.py`
+  - `graceful_shutdown_audit_system()` 함수 구현
+  - `register_shutdown_handlers()` 함수 구현
 
 ### 6.2 테스트
 
-- [ ] 단위 테스트 추가
-- [ ] 통합 테스트 추가
+- [x] 단위 테스트 추가 (20개 테스트 통과)
+  - 파일: `packages/selfhealing-python/tests/unit/audit/test_async_audit_pipeline.py`
+  - `TestAsyncHealingLoggerNonBlocking` (2개)
+  - `TestAsyncHealingLoggerCriticalEvents` (2개)
+  - `TestAsyncHealingLoggerBatchFlush` (2개)
+  - `TestAsyncHealingLoggerGracefulShutdown` (2개)
+  - `TestAsyncAuditLifecycle` (5개)
+  - `TestAuditMiddlewareAsyncMode` (3개)
+  - `TestConvertEventToDict` (1개)
+  - `TestCheckpointManagerIntegration` (3개)
+- [ ] 통합 테스트 추가 (선택사항 - Docker Compose 환경 필요)
 - [ ] 부하 테스트: 1000 RPS에서 응답 지연 < 10ms 확인
 
 ### 6.3 모니터링
