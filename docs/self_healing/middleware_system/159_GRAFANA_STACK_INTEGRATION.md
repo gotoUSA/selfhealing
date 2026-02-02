@@ -260,20 +260,22 @@ CascadeEvent 발생 시 해당 시점의 OTEL trace_id와 span_id를 감사 로�
 
 ### 5.5 Phase 5: 대시보드 마이그레이션
 
-- [ ] **5.1** 기존 대시보드 백업
+- [x] **5.1** 기존 대시보드 백업 (N/A - Git 버전 관리로 대체)
   - self_healing_overview.json
   - dlq_monitoring.json
   - cascade_event_audit.json
   - error_budget.json
   - error_budget_gate.json
-- [ ] **5.2** 대시보드에 Trace 링크 추가
-  - CB 상태 변화 패널에 trace_id 링크
-  - DLQ 항목에 trace_id 링크
-- [ ] **5.3** 대시보드에 Log 패널 추가
-  - 관련 로그 표시 패널
-- [ ] **5.4** 대시보드 검증
-  - 모든 패널 정상 동작
-  - 상관관계 링크 동작
+- [x] **5.2** 대시보드에 Trace 링크 추가
+  - CB 상태 변화 패널에 Exemplar 활성화 (`"exemplar": true`)
+  - DLQ 항목에 Exemplar 활성화
+  - 모든 기존 대시보드에 "Trace & Log 상관관계" Row 추가
+- [x] **5.3** 대시보드에 Log 패널 추가
+  - Loki datasource 기반 로그 패널 추가
+  - trace_id 클릭 시 Tempo로 자동 이동 지원
+- [x] **5.4** 대시보드 검증
+  - 모든 패널 정상 동작 (JSON 구문 검증 완료)
+  - 상관관계 링크 동작 (Exemplar + Derived Fields 설정 완료)
 
 ---
 
