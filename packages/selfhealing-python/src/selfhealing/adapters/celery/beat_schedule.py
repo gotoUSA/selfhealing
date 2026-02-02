@@ -67,6 +67,12 @@ SELFHEALING_QUEUE_CONFIG = {
         "routing_key": "metrics",
         "priority": 1,
     },
+    # 📝 Audit 플러시 큐
+    "audit_flush": {
+        "exchange": "selfhealing",
+        "routing_key": "audit_flush",
+        "priority": 4,  # 중간 우선순위
+    },
 }
 
 
@@ -83,6 +89,7 @@ def get_selfhealing_beat_schedule(
     include_canary_watchdog: bool = True,
     include_governance: bool = True,
     include_xtest_cleanup: bool = True,
+    include_audit_flush: bool = True,
     include_legacy: bool = True,
 ) -> dict[str, Any]:
     """
@@ -96,6 +103,7 @@ def get_selfhealing_beat_schedule(
         include_canary_watchdog: Include 🐤 Canary Watchdog tasks
         include_governance: Include 🛡️ Governance tasks (emergency mode expiry)
         include_xtest_cleanup: Include 🧪 X-Test Artifact Cleanup tasks
+        include_audit_flush: Include 📝 Redis Audit 버퍼 플러시 tasks
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
 
     Returns:
@@ -181,6 +189,15 @@ def get_selfhealing_beat_schedule(
             logger.debug("[BeatSchedule] Added X-Test cleanup schedules")
         except ImportError as e:
             logger.warning(f"[BeatSchedule] Could not load X-Test cleanup tasks: {e}")
+
+    if include_audit_flush:
+        try:
+            from selfhealing.tasks.audit_flush import get_audit_flush_beat_schedule
+
+            schedule.update(get_audit_flush_beat_schedule())
+            logger.debug("[BeatSchedule] Added Redis Audit flush schedules")
+        except ImportError as e:
+            logger.warning(f"[BeatSchedule] Could not load audit flush tasks: {e}")
 
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())

@@ -601,20 +601,20 @@ class TestFlushRedisAuditTask:
 
 ### 7.1 코드 변경
 
-- [ ] `redis_buffer.py`: `log_batch()` 메서드 추가
-- [ ] `redis_buffer.py`: 폴백 버퍼 로직 추가
-- [ ] `shopping/tasks.py`: Celery 플러시 태스크 추가
-- [ ] `celeryconfig.py`: Beat 스케줄 추가
+- [x] `redis_buffer.py`: `log_batch()` 메서드 추가
+- [x] `redis_buffer.py`: 폴백 버퍼 로직 추가
+- [x] `selfhealing/tasks/audit_flush.py`: Celery 플러시 태스크 추가
+- [x] `beat_schedule.py`: Beat 스케줄 추가
 
 ### 7.2 인프라
 
-- [ ] `k8s/celery-audit-worker.yaml`: 전용 워커 배포
+- [x] `k8s/celery-audit-worker.yaml`: 전용 워커 배포
 - [ ] Redis 모니터링: 키 사이즈 추적
 - [ ] Celery 모니터링: 태스크 실행 시간/실패율
 
 ### 7.3 테스트
 
-- [ ] 단위 테스트: 배치 처리, 폴백
+- [x] 단위 테스트: 배치 처리, 폴백 (24개 통과)
 - [ ] 통합 테스트: Redis → DB 플러시
 - [ ] 부하 테스트: 10,000 events/sec 검증
 

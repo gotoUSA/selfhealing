@@ -1,0 +1,182 @@
+# Audit 플러시 전용 Celery Worker Deployment
+#
+# Redis Audit 버퍼 → PostgreSQL 플러시 전용 워커
+#
+# 목적: 대량 Audit 이벤트 배치 처리를 위한 전용 워커
+#       일반 워커와 분리하여 안정적인 플러시 보장
+#
+# 적용 방법:
+#   kubectl apply -f k8s/celery-audit-worker.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-audit-worker
+  namespace: selfhealing
+  labels:
+    app: celery-audit-worker
+    component: selfhealing
+    tier: worker
+    function: audit-flush
+spec:
+  # 플러시 전용 워커 2개 유지
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-audit-worker
+  template:
+    metadata:
+      labels:
+        app: celery-audit-worker
+        component: selfhealing
+        function: audit-flush
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      # 다른 Audit Worker와 같은 노드에 배치 방지
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: function
+                      operator: In
+                      values:
+                        - audit-flush
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: worker
+          image: myproject:latest
+          command:
+            - celery
+            - -A
+            - myproject
+            - worker
+            - --loglevel=info
+            # audit_flush 큐만 처리
+            - -Q
+            - audit_flush
+            # Prefetch 2 (빠른 처리)
+            - --prefetch-multiplier=2
+            # Concurrency 4 (동시 플러시 4개)
+            - -c
+            - "4"
+          env:
+            - name: CELERY_WORKER_POOL
+              value: "prefork"
+            - name: CELERY_WORKER_HIJACK_ROOT_LOGGER
+              value: "false"
+            - name: CELERY_WORKER_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Redis URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: celery-secrets
+                  key: broker-url
+            # Redis Audit 설정
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: url
+            # 배치 크기 설정
+            - name: SELFHEALING_REDIS_BATCH_SIZE
+              value: "500"
+            # 플러시 주기 (초)
+            - name: SELFHEALING_REDIS_FLUSH_INTERVAL
+              value: "10"
+            # 폴백 버퍼 최대 크기
+            - name: SELFHEALING_REDIS_MAX_FALLBACK
+              value: "10000"
+            # Django Settings
+            - name: DJANGO_SETTINGS_MODULE
+              value: "myproject.settings.production"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - myproject
+                - inspect
+                - ping
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - myproject
+                - inspect
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "Audit worker preStop - waiting for pending flushes"
+                    sleep 15
+                    echo "Audit worker preStop completed"
+      # 종료 유예 시간 (30초)
+      terminationGracePeriodSeconds: 30
+
+---
+# PodDisruptionBudget - 최소 1개 유지
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-audit-worker-pdb
+  namespace: selfhealing
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-audit-worker
+
+---
+# HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: celery-audit-worker-hpa
+  namespace: selfhealing
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: celery-audit-worker
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

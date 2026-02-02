@@ -98,10 +98,17 @@ class RedisAuditBuffer:
         self._consecutive_failures = 0
         self._lock = threading.Lock()
 
+        # 폴백 버퍼 (Redis 실패 시 임시 저장)
+        self._fallback_buffer: list[dict[str, Any]] = []
+        self._fallback_lock = threading.Lock()
+        self._max_fallback = int(os.environ.get("SELFHEALING_REDIS_MAX_FALLBACK", "10000"))
+
         # 통계
         self._total_writes = 0
         self._total_fallbacks = 0
         self._total_flushes = 0
+        self._total_batch_writes = 0
+        self._total_batch_errors = 0
 
     def log(self, entry: dict[str, Any], domain: str = "default") -> bool:
         """
@@ -161,6 +168,153 @@ class RedisAuditBuffer:
 
             return False
 
+    def log_batch(
+        self,
+        entries: list[dict[str, Any]],
+        domain: str = "default",
+    ) -> bool:
+        """
+        배치 로깅 - 단일 Redis pipeline으로 여러 이벤트 저장.
+
+        개별 log() 호출 대비 Redis RTT를 N회 → 1회로 감소.
+
+        Args:
+            entries: 저장할 Audit 엔트리 딕셔너리 리스트
+            domain: 도메인 (키 분리용)
+
+        Returns:
+            True if Redis 성공, False if 폴백 버퍼 사용
+        """
+        if not entries:
+            return True
+
+        key = f"{self._key_prefix}{domain}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        instance_id = self._get_instance_id()
+
+        try:
+            pipe = self._redis.pipeline(transaction=True)
+
+            # 여러 항목을 한번에 LPUSH
+            payloads = []
+            for entry in entries:
+                payload = {
+                    "entry": entry,
+                    "timestamp": timestamp,
+                    "instance_id": instance_id,
+                }
+                payloads.append(json.dumps(payload, default=str))
+
+            if payloads:
+                pipe.lpush(key, *payloads)
+                pipe.expire(key, self._ttl_seconds)
+                pipe.execute()
+
+            # 성공 시 통계 업데이트
+            with self._lock:
+                self._consecutive_failures = 0
+                self._total_batch_writes += 1
+                self._total_writes += len(entries)
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"[RedisAuditBuffer] Batch log failed: {e}, " f"entries_count={len(entries)}")
+
+            with self._lock:
+                self._consecutive_failures += 1
+                self._total_batch_errors += 1
+
+            # 폴백 버퍼에 저장
+            self._store_in_fallback_buffer(entries, domain)
+
+            return False
+
+    def _store_in_fallback_buffer(
+        self,
+        entries: list[dict[str, Any]],
+        domain: str = "default",
+    ) -> None:
+        """
+        Redis 실패 시 메모리 폴백 버퍼에 임시 저장.
+
+        Args:
+            entries: 저장할 엔트리 리스트
+            domain: 도메인
+        """
+        with self._fallback_lock:
+            for entry in entries:
+                self._fallback_buffer.append(
+                    {
+                        "entry": entry,
+                        "domain": domain,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+
+            # 폴백 버퍼 크기 제한 (메모리 보호)
+            if len(self._fallback_buffer) > self._max_fallback:
+                overflow = len(self._fallback_buffer) - self._max_fallback
+                self._fallback_buffer = self._fallback_buffer[overflow:]
+                logger.warning(f"[RedisAuditBuffer] Fallback buffer overflow, " f"dropped {overflow} oldest entries")
+
+    def retry_fallback_buffer(self) -> int:
+        """
+        폴백 버퍼의 엔트리를 Redis로 재시도.
+
+        Returns:
+            성공적으로 복구된 엔트리 수
+        """
+        with self._fallback_lock:
+            if not self._fallback_buffer:
+                return 0
+
+            # 도메인별로 그룹핑
+            entries_by_domain: dict[str, list[dict[str, Any]]] = {}
+            for item in self._fallback_buffer:
+                domain = item.get("domain", "default")
+                if domain not in entries_by_domain:
+                    entries_by_domain[domain] = []
+                entries_by_domain[domain].append(item["entry"])
+
+            # 각 도메인별로 배치 처리
+            recovered = 0
+            failed_items: list[dict[str, Any]] = []
+
+            for domain, domain_entries in entries_by_domain.items():
+                try:
+                    if self.log_batch(domain_entries, domain):
+                        recovered += len(domain_entries)
+                    else:
+                        # 실패 시 다시 폴백 버퍼에 보관
+                        for entry in domain_entries:
+                            failed_items.append(
+                                {
+                                    "entry": entry,
+                                    "domain": domain,
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                }
+                            )
+                except Exception:
+                    for entry in domain_entries:
+                        failed_items.append(
+                            {
+                                "entry": entry,
+                                "domain": domain,
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            }
+                        )
+
+            # 실패한 항목만 유지
+            self._fallback_buffer = failed_items
+
+            return recovered
+
+    def get_fallback_buffer_size(self) -> int:
+        """폴백 버퍼의 현재 크기."""
+        with self._fallback_lock:
+            return len(self._fallback_buffer)
+
     def flush_to_external(
         self,
         target_adapter: AuditLogAdapterProtocol,
@@ -219,6 +373,9 @@ class RedisAuditBuffer:
             "total_writes": self._total_writes,
             "total_fallbacks": self._total_fallbacks,
             "total_flushes": self._total_flushes,
+            "total_batch_writes": self._total_batch_writes,
+            "total_batch_errors": self._total_batch_errors,
+            "fallback_buffer_size": self.get_fallback_buffer_size(),
             "domains": {},
         }
 
