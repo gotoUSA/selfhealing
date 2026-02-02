@@ -62,8 +62,11 @@ opentelemetry = [
     "opentelemetry-instrumentation-django>=0.41b0",
     "opentelemetry-instrumentation-logging>=0.41b0",
 ]
+fast-json = [
+    "orjson>=3.9.0",
+]
 all = [
-    "selfhealing[django,celery,prometheus,opentelemetry]",
+    "selfhealing[django,celery,prometheus,opentelemetry,fast-json]",
 ]
 dev = [
     "selfhealing[all]",
