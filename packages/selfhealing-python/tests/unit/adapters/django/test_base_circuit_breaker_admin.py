@@ -16,7 +16,40 @@ import django
 
 django.setup()
 
+from django.db import models
+
 from selfhealing.adapters.django.admin import BaseCircuitBreakerStateAdmin
+
+
+# =============================================================================
+# 테스트용 Mock 모델 (모듈 레벨에서 한 번만 정의)
+# =============================================================================
+
+
+class MockCircuitBreakerState(models.Model):
+    """테스트용 Mock CircuitBreakerState 모델."""
+
+    STATE_CHOICES = [
+        ("closed", "Closed"),
+        ("open", "Open"),
+        ("half_open", "Half Open"),
+    ]
+
+    service_name = models.CharField(max_length=255)
+    state = models.CharField(max_length=20, choices=STATE_CHOICES, default="closed")
+    failure_count = models.IntegerField(default=0)
+    success_count = models.IntegerField(default=0)
+    manually_controlled = models.BooleanField(default=False)
+    controlled_by_id = models.IntegerField(null=True, blank=True)
+    control_reason = models.TextField(blank=True, default="")
+    last_failure_at = models.DateTimeField(null=True, blank=True)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "selfhealing_test"
+        managed = False  # DB 테이블 생성하지 않음
 
 
 # =============================================================================
@@ -34,10 +67,9 @@ def admin_class():
 def admin_instance():
     """BaseCircuitBreakerStateAdmin 인스턴스를 반환합니다."""
     from django.contrib.admin.sites import AdminSite
-    from shopping.models import CircuitBreakerState
 
     site = AdminSite()
-    return BaseCircuitBreakerStateAdmin(model=CircuitBreakerState, admin_site=site)
+    return BaseCircuitBreakerStateAdmin(model=MockCircuitBreakerState, admin_site=site)
 
 
 # =============================================================================
