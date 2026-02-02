@@ -39,7 +39,7 @@ if not settings.configured:
 class TestFullEmergencyRecoveryScenario:
     """Full Emergency Recovery 시나리오 테스트."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def scenario(self):
         """FullEmergencyRecoveryScenario 인스턴스 생성."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
@@ -51,13 +51,18 @@ class TestFullEmergencyRecoveryScenario:
             config={"skip_wait": True},
         )
 
+    @pytest.fixture(scope="class")
+    def scenario_result(self, scenario):
+        """시나리오 실행 결과 캐싱 (클래스 내 1회만 실행)."""
+        return scenario.run()
+
     def test_scenario_name_is_correct(self, scenario):
         """시나리오 이름이 올바른지 확인."""
         assert scenario.scenario_name == "full_emergency_recovery_flow"
 
-    def test_full_emergency_recovery_flow_scenario_execution(self, scenario):
+    def test_full_emergency_recovery_flow_scenario_execution(self, scenario_result):
         """10단계 전체 시나리오가 성공적으로 실행되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         assert result is not None
         assert result.scenario == "full_emergency_recovery_flow"
@@ -69,9 +74,9 @@ class TestFullEmergencyRecoveryScenario:
         for step in result.steps:
             assert step.success is True, f"Step {step.step} failed: {step.error}"
 
-    def test_recovery_steps_execute_in_order(self, scenario):
+    def test_recovery_steps_execute_in_order(self, scenario_result):
         """4단계 역순 복구가 순차적으로 실행되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         # Step 6-9가 복구 단계
         step_actions = [s.action for s in result.steps[5:9]]
@@ -103,57 +108,57 @@ class TestFullEmergencyRecoveryScenario:
         # skip_wait=True면 5초 대기 없이 바로 진행
         assert elapsed < 3.0, f"Scenario took too long: {elapsed:.2f}s (expected < 3s)"
 
-    def test_initial_state_is_emergency_normal(self, scenario):
+    def test_initial_state_is_emergency_normal(self, scenario_result):
         """초기 상태가 Emergency NORMAL인지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step1 = result.steps[0]
         assert step1.action == "check_initial_state"
         assert "NORMAL" in step1.actual
 
-    def test_level3_injection_changes_state(self, scenario):
+    def test_level3_injection_changes_state(self, scenario_result):
         """LEVEL_3 주입 후 상태 변경 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step2 = result.steps[1]
         assert step2.action == "inject_emergency_level3"
         assert "LEVEL_3" in step2.actual
 
-    def test_safety_interlock_returns_rollback_action(self, scenario):
+    def test_safety_interlock_returns_rollback_action(self, scenario_result):
         """SafetyInterlock이 LEVEL_3에서 ROLLBACK 액션 반환 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step3 = result.steps[2]
         assert step3.action == "check_safety_interlock"
         assert "ROLLBACK" in step3.actual
 
-    def test_canary_rollback_is_triggered(self, scenario):
+    def test_canary_rollback_is_triggered(self, scenario_result):
         """Canary 롤백이 트리거되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step4 = result.steps[3]
         assert step4.action == "confirm_canary_rollback"
         assert "True" in step4.actual
 
-    def test_recovery_session_id_is_generated(self, scenario):
+    def test_recovery_session_id_is_generated(self, scenario_result):
         """RecoveryCoordinator 세션 ID가 생성되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step5 = result.steps[4]
         assert step5.action == "start_recovery"
         assert "session_id:" in step5.actual
 
-    def test_budget_reset_sets_multiplier_to_1(self, scenario):
+    def test_budget_reset_sets_multiplier_to_1(self, scenario_result):
         """BUDGET_RESET 단계에서 multiplier가 1.0으로 설정되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step6 = result.steps[5]
         assert step6.action == "execute_budget_reset"
         assert "1.0" in step6.actual
 
-    def test_final_state_is_normal(self, scenario):
+    def test_final_state_is_normal(self, scenario_result):
         """최종 상태가 정상(NORMAL)인지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step10 = result.steps[9]
         assert step10.action == "verify_final_state"
@@ -164,7 +169,7 @@ class TestFullEmergencyRecoveryScenario:
 class TestSafetyInterlockCanaryRollbackScenario:
     """SafetyInterlock Canary 롤백 시나리오 테스트."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def scenario(self):
         """SafetyInterlockCanaryRollbackScenario 인스턴스 생성."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
@@ -175,13 +180,18 @@ class TestSafetyInterlockCanaryRollbackScenario:
             service_name="test-service",
         )
 
+    @pytest.fixture(scope="class")
+    def scenario_result(self, scenario):
+        """시나리오 실행 결과 캐싱 (클래스 내 1회만 실행)."""
+        return scenario.run()
+
     def test_scenario_name_is_correct(self, scenario):
         """시나리오 이름이 올바른지 확인."""
         assert scenario.scenario_name == "safety_interlock_canary_rollback"
 
-    def test_safety_interlock_canary_rollback_scenario_execution(self, scenario):
+    def test_safety_interlock_canary_rollback_scenario_execution(self, scenario_result):
         """7단계 에스컬레이션 시나리오가 성공적으로 실행되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         assert result is not None
         assert result.scenario == "safety_interlock_canary_rollback"
@@ -193,49 +203,49 @@ class TestSafetyInterlockCanaryRollbackScenario:
         for step in result.steps:
             assert step.success is True, f"Step {step.step} failed: {step.error}"
 
-    def test_canary_starts_active(self, scenario):
+    def test_canary_starts_active(self, scenario_result):
         """Canary 롤아웃이 활성 상태로 시작되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step1 = result.steps[0]
         assert step1.action == "start_canary_rollout"
         assert "true" in step1.actual
 
-    def test_level2_triggers_pause_action(self, scenario):
+    def test_level2_triggers_pause_action(self, scenario_result):
         """LEVEL_2에서 PAUSE 액션이 트리거되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step3 = result.steps[2]
         assert step3.action == "check_safety_interlock_pause"
         assert "PAUSE" in step3.actual
 
-    def test_canary_is_paused_at_level2(self, scenario):
+    def test_canary_is_paused_at_level2(self, scenario_result):
         """LEVEL_2에서 Canary가 일시 중지되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step4 = result.steps[3]
         assert step4.action == "confirm_canary_paused"
         assert "true" in step4.actual
 
-    def test_escalation_to_level3(self, scenario):
+    def test_escalation_to_level3(self, scenario_result):
         """LEVEL_3으로 에스컬레이션되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step5 = result.steps[4]
         assert step5.action == "escalate_to_level3"
         assert "LEVEL_3" in step5.actual
 
-    def test_level3_triggers_rollback_action(self, scenario):
+    def test_level3_triggers_rollback_action(self, scenario_result):
         """LEVEL_3에서 ROLLBACK 액션이 트리거되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step6 = result.steps[5]
         assert step6.action == "check_safety_interlock_rollback"
         assert "ROLLBACK" in step6.actual
 
-    def test_canary_is_rolled_back_at_level3(self, scenario):
+    def test_canary_is_rolled_back_at_level3(self, scenario_result):
         """LEVEL_3에서 Canary가 롤백되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step7 = result.steps[6]
         assert step7.action == "confirm_canary_rollback"

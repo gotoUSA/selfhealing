@@ -23,28 +23,26 @@ import pytest
 def mock_heavy_dependencies():
     """
     generate_postmortem_data 함수의 무거운 외부 의존성을 mock합니다.
-    
+
     이 fixture는 단위 테스트 성능을 위해 DB 연결, Redis 연결 등
     실제 외부 서비스가 필요한 부분을 mock으로 대체합니다.
     """
-    with mock.patch(
-        "selfhealing.services.postmortem.deployment_correlator.get_deployment_correlator"
-    ) as mock_correlator, mock.patch(
-        "selfhealing.services.postmortem.snapshot_builder.SnapshotBuilder"
-    ) as mock_snapshot, mock.patch(
-        "selfhealing.services.throttle.postmortem.collect_throttle_postmortem_data"
-    ) as mock_throttle:
+    with (
+        mock.patch("selfhealing.services.postmortem.deployment_correlator.get_deployment_correlator") as mock_correlator,
+        mock.patch("selfhealing.services.postmortem.snapshot_builder.SnapshotBuilder") as mock_snapshot,
+        mock.patch("selfhealing.services.throttle.postmortem.collect_throttle_postmortem_data") as mock_throttle,
+    ):
         # deployment_correlator: disabled로 설정
         mock_correlator.return_value.is_enabled.return_value = False
         mock_correlator.return_value.get_deployments_for_postmortem.return_value = None
         mock_correlator.return_value.get_deployment_timeline_events.return_value = []
-        
+
         # snapshot_builder: 빈 dict 반환
         mock_snapshot.return_value.build_dict.return_value = {}
-        
+
         # throttle_data: 빈 dict 반환
         mock_throttle.return_value = {}
-        
+
         yield
 
 

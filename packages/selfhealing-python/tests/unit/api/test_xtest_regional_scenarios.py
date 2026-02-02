@@ -175,28 +175,34 @@ def mock_redis_client():
 class TestRegionalOverrideConflictScenario:
     """Regional Override Conflict 시나리오 테스트."""
 
-    @pytest.fixture
-    def scenario(self, mock_redis_client):
+    @pytest.fixture(scope="class")
+    def scenario(self):
         """RegionalOverrideConflictScenario 인스턴스 생성 (Redis Mock 주입)."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
 
+        mock_redis = MockRedisClient()
         return RegionalOverrideConflictScenario(
             service_name="test-service",
             config={
                 "target_region": "seoul",
-                "redis_client": mock_redis_client,
+                "redis_client": mock_redis,
             },
         )
+
+    @pytest.fixture(scope="class")
+    def scenario_result(self, scenario):
+        """시나리오 실행 결과 캐싱 (클래스 내 1회만 실행)."""
+        return scenario.run()
 
     def test_scenario_name_is_correct(self, scenario):
         """시나리오 이름이 올바른지 확인."""
         assert scenario.scenario_name == "regional_override_conflict"
 
-    def test_regional_override_conflict_scenario_execution(self, scenario):
+    def test_regional_override_conflict_scenario_execution(self, scenario_result):
         """8단계 전체 시나리오가 성공적으로 실행되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         assert result is not None
         assert result.scenario == "regional_override_conflict"
@@ -208,27 +214,27 @@ class TestRegionalOverrideConflictScenario:
         for step in result.steps:
             assert step.success is True, f"Step {step.step} failed: {step.error}"
 
-    def test_initial_state_is_normal(self, scenario):
+    def test_initial_state_is_normal(self, scenario_result):
         """Step 1: 초기 상태가 NORMAL인지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step1 = result.steps[0]
         assert step1.action == "check_initial_state"
         assert "NORMAL" in step1.actual
         assert step1.success is True
 
-    def test_regional_strict_setting(self, scenario):
+    def test_regional_strict_setting(self, scenario_result):
         """Step 2: Regional STRICT 설정 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step2 = result.steps[1]
         assert step2.action == "set_regional_strict"
         assert "STRICT" in step2.actual
         assert step2.success is True
 
-    def test_regional_strict_takes_priority_over_global_normal(self, scenario):
+    def test_regional_strict_takes_priority_over_global_normal(self, scenario_result):
         """Step 3: Global NORMAL일 때 Regional STRICT가 우선하는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step3 = result.steps[2]
         assert step3.action == "get_effective_state_regional_priority"
@@ -236,18 +242,18 @@ class TestRegionalOverrideConflictScenario:
         assert "regional" in step3.actual
         assert step3.success is True
 
-    def test_global_strict_setting(self, scenario):
+    def test_global_strict_setting(self, scenario_result):
         """Step 4: Global STRICT 설정 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step4 = result.steps[3]
         assert step4.action == "set_global_strict"
         assert "STRICT" in step4.actual
         assert step4.success is True
 
-    def test_global_strict_overrides_regional(self, scenario):
+    def test_global_strict_overrides_regional(self, scenario_result):
         """Step 5: Global STRICT가 Regional을 오버라이드하는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step5 = result.steps[4]
         assert step5.action == "get_effective_state_global_override"
@@ -255,18 +261,18 @@ class TestRegionalOverrideConflictScenario:
         assert "global" in step5.actual
         assert step5.success is True
 
-    def test_admin_override_setting(self, scenario):
+    def test_admin_override_setting(self, scenario_result):
         """Step 6: Admin Override 설정 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step6 = result.steps[5]
         assert step6.action == "set_admin_override"
         assert "ADMIN_OVERRIDE" in step6.actual
         assert step6.success is True
 
-    def test_admin_override_wins_over_global_strict(self, scenario):
+    def test_admin_override_wins_over_global_strict(self, scenario_result):
         """Step 7: Admin Override가 Global STRICT를 이기는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step7 = result.steps[6]
         assert step7.action == "get_effective_state_admin_wins"
@@ -274,27 +280,27 @@ class TestRegionalOverrideConflictScenario:
         assert "regional" in step7.actual
         assert step7.success is True
 
-    def test_state_restoration_returns_all_to_normal(self, scenario):
+    def test_state_restoration_returns_all_to_normal(self, scenario_result):
         """Step 8: 상태 원복 후 모두 NORMAL인지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step8 = result.steps[7]
         assert step8.action == "restore_all_states"
         assert "NORMAL" in step8.actual
         assert step8.success is True
 
-    def test_state_transitions_recorded(self, scenario):
+    def test_state_transitions_recorded(self, scenario_result):
         """상태 전환 이력이 기록되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         assert result.config is not None
         assert "state_transitions" in result.config
         transitions = result.config["state_transitions"]
         assert len(transitions) >= 4  # get_effective_state 호출 기록들
 
-    def test_timeline_has_all_events(self, scenario):
+    def test_timeline_has_all_events(self, scenario_result):
         """타임라인에 모든 이벤트가 기록되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         assert len(result.timeline) == 8
         for i, event in enumerate(result.timeline):
@@ -304,29 +310,35 @@ class TestRegionalOverrideConflictScenario:
 class TestMultiRegionIsolationTestScenario:
     """Multi-Region Isolation Test 시나리오 테스트."""
 
-    @pytest.fixture
-    def scenario(self, mock_redis_client):
+    @pytest.fixture(scope="class")
+    def scenario(self):
         """MultiRegionIsolationTestScenario 인스턴스 생성 (Redis Mock 주입)."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             MultiRegionIsolationTestScenario,
         )
 
+        mock_redis = MockRedisClient()
         return MultiRegionIsolationTestScenario(
             service_name="test-service",
             config={
                 "target_region": "seoul",
                 "other_region": "tokyo",
-                "redis_client": mock_redis_client,
+                "redis_client": mock_redis,
             },
         )
+
+    @pytest.fixture(scope="class")
+    def scenario_result(self, scenario):
+        """시나리오 실행 결과 캐싱 (클래스 내 1회만 실행)."""
+        return scenario.run()
 
     def test_scenario_name_is_correct(self, scenario):
         """시나리오 이름이 올바른지 확인."""
         assert scenario.scenario_name == "multi_region_isolation_test"
 
-    def test_multi_region_isolation_test_scenario_execution(self, scenario):
+    def test_multi_region_isolation_test_scenario_execution(self, scenario_result):
         """5단계 전체 시나리오가 성공적으로 실행되는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         assert result is not None
         assert result.scenario == "multi_region_isolation_test"
@@ -338,18 +350,18 @@ class TestMultiRegionIsolationTestScenario:
         for step in result.steps:
             assert step.success is True, f"Step {step.step} failed: {step.error}"
 
-    def test_current_region_check(self, scenario):
+    def test_current_region_check(self, scenario_result):
         """Step 1: 현재 리전 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step1 = result.steps[0]
         assert step1.action == "check_current_region"
         assert "seoul" in step1.actual
         assert step1.success is True
 
-    def test_target_region_isolation(self, scenario):
+    def test_target_region_isolation(self, scenario_result):
         """Step 2: 타겟 리전 격리 설정 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step2 = result.steps[1]
         assert step2.action == "set_region_strict"
@@ -357,9 +369,9 @@ class TestMultiRegionIsolationTestScenario:
         assert "STRICT" in step2.actual
         assert step2.success is True
 
-    def test_other_region_remains_normal(self, scenario):
+    def test_other_region_remains_normal(self, scenario_result):
         """Step 3: 다른 리전이 NORMAL 상태인지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step3 = result.steps[2]
         assert step3.action == "check_other_region_normal"
@@ -367,9 +379,9 @@ class TestMultiRegionIsolationTestScenario:
         assert "NORMAL" in step3.actual
         assert step3.success is True
 
-    def test_only_target_region_is_isolated(self, scenario):
+    def test_only_target_region_is_isolated(self, scenario_result):
         """Step 4: 타겟 리전만 격리되었는지 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step4 = result.steps[3]
         assert step4.action == "verify_isolation_state"
@@ -378,9 +390,9 @@ class TestMultiRegionIsolationTestScenario:
         assert "tokyo_isolated: False" in step4.actual
         assert step4.success is True
 
-    def test_region_restore(self, scenario):
+    def test_region_restore(self, scenario_result):
         """Step 5: 격리 해제 확인."""
-        result = scenario.run()
+        result = scenario_result
 
         step5 = result.steps[4]
         assert step5.action == "restore_region"
@@ -431,87 +443,47 @@ class TestScenarioRegistry:
 class TestStateTransitionMatrix:
     """상태 전환 매트릭스 테스트 (AtomicStateQuery 우선순위 로직 검증)."""
 
-    @pytest.fixture
-    def mock_redis_client(self):
-        """Mock Redis 클라이언트 fixture."""
-        return MockRedisClient()
-
-    def test_global_normal_regional_normal_returns_normal(self, mock_redis_client):
-        """Global NORMAL + Regional NORMAL → NORMAL."""
+    @pytest.fixture(scope="class")
+    def scenario_result(self):
+        """시나리오 실행 결과 캐싱 (클래스 내 1회만 실행)."""
         from selfhealing.api.django.views.xtest.integration_scenarios import (
             RegionalOverrideConflictScenario,
         )
 
+        mock_redis = MockRedisClient()
         scenario = RegionalOverrideConflictScenario(
             service_name="test-service",
             config={
                 "target_region": "seoul",
-                "redis_client": mock_redis_client,
+                "redis_client": mock_redis,
             },
         )
-        result = scenario.run()
+        return scenario.run()
 
+    def test_global_normal_regional_normal_returns_normal(self, scenario_result):
+        """Global NORMAL + Regional NORMAL → NORMAL."""
         # Step 1에서 초기 상태 확인
-        step1 = result.steps[0]
+        step1 = scenario_result.steps[0]
         assert "NORMAL" in step1.actual
 
-    def test_global_normal_regional_strict_returns_strict(self, mock_redis_client):
+    def test_global_normal_regional_strict_returns_strict(self, scenario_result):
         """Global NORMAL + Regional STRICT → STRICT."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
-            RegionalOverrideConflictScenario,
-        )
-
-        scenario = RegionalOverrideConflictScenario(
-            service_name="test-service",
-            config={
-                "target_region": "seoul",
-                "redis_client": mock_redis_client,
-            },
-        )
-        result = scenario.run()
-
         # Step 3에서 Regional STRICT 상태 확인
-        step3 = result.steps[2]
+        step3 = scenario_result.steps[2]
         assert "STRICT" in step3.actual
         assert "regional" in step3.actual
 
-    def test_global_strict_regional_normal_returns_strict(self, mock_redis_client):
+    def test_global_strict_regional_normal_returns_strict(self, scenario_result):
         """Global STRICT + Regional NORMAL → STRICT (Global 오버라이드)."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
-            RegionalOverrideConflictScenario,
-        )
-
-        scenario = RegionalOverrideConflictScenario(
-            service_name="test-service",
-            config={
-                "target_region": "seoul",
-                "redis_client": mock_redis_client,
-            },
-        )
-        result = scenario.run()
-
         # Step 5에서 Global STRICT 오버라이드 확인
-        step5 = result.steps[4]
+        step5 = scenario_result.steps[4]
         assert "STRICT" in step5.actual
         assert "global" in step5.actual
 
-    def test_admin_override_returns_regional_state(self, mock_redis_client):
+    def test_admin_override_returns_regional_state(self, scenario_result):
         """Admin Override 시 Regional 상태 반환."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
-            RegionalOverrideConflictScenario,
-        )
-
-        scenario = RegionalOverrideConflictScenario(
-            service_name="test-service",
-            config={
-                "target_region": "seoul",
-                "redis_client": mock_redis_client,
-            },
-        )
-        result = scenario.run()
-
         # Step 7에서 Admin Override로 NORMAL 확인
-        step7 = result.steps[6]
+        step7 = scenario_result.steps[6]
         assert "NORMAL" in step7.actual
         assert "regional" in step7.actual
 
