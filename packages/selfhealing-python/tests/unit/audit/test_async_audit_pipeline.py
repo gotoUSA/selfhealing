@@ -342,19 +342,26 @@ class TestAsyncAuditLifecycle:
 
     def test_register_shutdown_handlers_only_once(self):
         """종료 핸들러는 한 번만 등록."""
+        import os
+        from unittest.mock import patch
+
         from selfhealing.audit.async_audit_lifecycle import (
             get_lifecycle_status,
             register_shutdown_handlers,
+            reset_lifecycle_state,
         )
 
-        # 첫 번째 호출
-        result1 = register_shutdown_handlers()
-        assert result1 is True
-        assert get_lifecycle_status()["shutdown_registered"] is True
+        # 테스트 모드 비활성화하여 실제 등록 로직 테스트
+        reset_lifecycle_state()
+        with patch.dict(os.environ, {"SELFHEALING_TEST_MODE": "false"}, clear=False):
+            # 첫 번째 호출
+            result1 = register_shutdown_handlers()
+            assert result1 is True
+            assert get_lifecycle_status()["shutdown_registered"] is True
 
-        # 두 번째 호출 - 이미 등록됨
-        result2 = register_shutdown_handlers()
-        assert result2 is False
+            # 두 번째 호출 - 이미 등록됨
+            result2 = register_shutdown_handlers()
+            assert result2 is False
 
 
 class TestAuditMiddlewareAsyncMode:

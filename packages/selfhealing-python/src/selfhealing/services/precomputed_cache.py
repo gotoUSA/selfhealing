@@ -374,9 +374,7 @@ def get_cached_response(
         if use_l2:
             _l2_cache.set(cache_key, json_str)
 
-        data["_cache"]["latency_ms"] = round(
-            (time.perf_counter() - start_time) * 1000, 2
-        )
+        data["_cache"]["latency_ms"] = round((time.perf_counter() - start_time) * 1000, 2)
         _update_hit_rate_metrics(cache_key, stats)
         return data
 
@@ -439,10 +437,7 @@ def check_l1_l2_drift(cache_key: str) -> dict[str, Any] | None:
             consistency = 1.0 - (drift_count / total) if total > 0 else 1.0
             update_cache_consistency(cache_key, consistency)
 
-            logger.warning(
-                f"[PrecomputedCache] Drift detected for {cache_key}: "
-                f"L1 != L2 (drift_count={drift_count})"
-            )
+            logger.warning(f"[PrecomputedCache] Drift detected for {cache_key}: " f"L1 != L2 (drift_count={drift_count})")
 
             return {
                 "cache_key": cache_key,
@@ -484,9 +479,7 @@ class PrecomputedCacheWorker:
         self._lock = threading.Lock()
         self._compute_functions: dict[str, Callable[[], dict[str, Any]]] = {}
 
-    def register(
-        self, cache_key: str, compute_fn: Callable[[], dict[str, Any]]
-    ) -> None:
+    def register(self, cache_key: str, compute_fn: Callable[[], dict[str, Any]]) -> None:
         """Register a compute function for a cache key."""
         self._compute_functions[cache_key] = compute_fn
 
@@ -537,9 +530,7 @@ class PrecomputedCacheWorker:
                 record_cache_refresh(cache_key, success=True)
 
             except Exception as e:
-                logger.warning(
-                    f"[PrecomputedCache] Refresh failed for {cache_key}: {e}"
-                )
+                logger.warning(f"[PrecomputedCache] Refresh failed for {cache_key}: {e}")
                 # Prometheus 메트릭: refresh 실패
                 record_cache_refresh(cache_key, success=False)
 
@@ -629,6 +620,10 @@ def compute_pool_status() -> dict[str, Any]:
     """Compute connection pool status for caching."""
     try:
         import os
+
+        # 테스트 환경에서는 실제 DB 연결 시도 방지
+        if os.getenv("SELFHEALING_TEST_MODE", "").lower() == "true":
+            return {"status": "test_mode", "message": "Skipped in test mode"}
 
         from django.db import connections
 

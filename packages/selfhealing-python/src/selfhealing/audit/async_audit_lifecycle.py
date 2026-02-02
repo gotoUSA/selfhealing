@@ -241,7 +241,13 @@ def graceful_shutdown_audit_system() -> None:
     4. 체크포인트 저장
 
     데이터 유실 0%를 보장합니다.
+
+    테스트 환경(SELFHEALING_TEST_MODE=true)에서는 실행되지 않습니다.
     """
+    # 테스트 환경에서는 실제 리소스 접근 방지
+    if os.getenv("SELFHEALING_TEST_MODE", "").lower() == "true":
+        return
+
     logger.info("[GracefulShutdown] Starting audit system shutdown...")
 
     # 1. AsyncHealingLogger 플러시 및 종료
@@ -352,6 +358,11 @@ def _get_wal_instance():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _is_test_mode() -> bool:
+    """테스트 환경인지 확인."""
+    return os.getenv("SELFHEALING_TEST_MODE", "").lower() == "true"
+
+
 def register_shutdown_handlers() -> bool:
     """
     종료 시그널 핸들러 등록.
@@ -360,15 +371,23 @@ def register_shutdown_handlers() -> bool:
     - SIGTERM: Kubernetes Pod 종료 시
     - SIGINT: Ctrl+C (개발 환경)
 
+    테스트 환경(SELFHEALING_TEST_MODE=true)에서는 등록하지 않습니다.
+
     Returns:
         True: 등록 성공
-        False: 이미 등록됨
+        False: 이미 등록됨 또는 테스트 환경
     """
     global _shutdown_registered
 
     with _lifecycle_lock:
         if _shutdown_registered:
             logger.debug("[AsyncAuditLifecycle] Shutdown handlers already registered")
+            return False
+
+        # 테스트 환경에서는 실제 리소스 접근을 방지하기 위해 등록하지 않음
+        if _is_test_mode():
+            _shutdown_registered = True
+            logger.debug("[AsyncAuditLifecycle] Skipping shutdown handlers in test mode")
             return False
 
         # atexit: 정상 종료 시 호출

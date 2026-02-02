@@ -92,24 +92,17 @@ class ClusterIdentity:
 
         # 환경변수에서 fail_fast 설정 읽기 (기본값: True로 변경)
         if fail_fast is None:
-            fail_fast = (
-                os.environ.get("SELFHEALING_FAIL_FAST", "true").lower() == "true"
-            )
+            fail_fast = os.environ.get("SELFHEALING_FAIL_FAST", "true").lower() == "true"
 
         errors = []
 
         # 1. cluster_id 검증
         if not self.cluster_id or self.cluster_id in ("unknown", "default"):
-            errors.append(
-                f"SELFHEALING_CLUSTER_ID not set or invalid: '{self.cluster_id}'"
-            )
+            errors.append(f"SELFHEALING_CLUSTER_ID not set or invalid: '{self.cluster_id}'")
 
         # 2. region 검증 (Phase 1 추가 - 필수!)
         if not self.region:
-            errors.append(
-                "SELFHEALING_REGION not set. "
-                "Cannot determine namespace - refusing to start."
-            )
+            errors.append("SELFHEALING_REGION not set. " "Cannot determine namespace - refusing to start.")
 
         # 검증 실패 처리
         if errors:
@@ -123,10 +116,7 @@ class ClusterIdentity:
                 logger.critical(error_msg)
                 sys.exit(1)  # Fail-Fast: 즉시 종료
             else:
-                logger.error(
-                    f"{error_msg} "
-                    "Running in Quarantine Mode (SELFHEALING_FAIL_FAST=false)"
-                )
+                logger.error(f"{error_msg} " "Running in Quarantine Mode (SELFHEALING_FAIL_FAST=false)")
                 return False
 
         logger.info(
@@ -163,16 +153,20 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
             environment=os.environ.get("SELFHEALING_ENV", "production"),
             tenant=os.environ.get("SELFHEALING_TENANT"),
         )
-        if not skip_validation:
+
+        # 테스트 환경에서는 validation 스킵
+        is_test_mode = os.environ.get("SELFHEALING_TEST_MODE", "").lower() == "true"
+
+        if not skip_validation and not is_test_mode:
             # Fail-Fast 비활성화 상태에서만 validation 실행
             # 기본적으로 개발 환경에서는 경고만 출력
             is_valid = _identity.validate(fail_fast=False)
             if not is_valid:
                 _quarantine_mode = True
                 logger.warning(
-                    "⚠️ [QuarantineMode] System running in Quarantine Mode. "
-                    "Cross-cluster operations will be disabled."
+                    "⚠️ [QuarantineMode] System running in Quarantine Mode. " "Cross-cluster operations will be disabled."
                 )
+    return _identity
     return _identity
 
 

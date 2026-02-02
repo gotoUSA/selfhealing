@@ -2,9 +2,51 @@
 Pytest configuration and fixtures for selfhealing tests.
 """
 
+import atexit
 import os
 import pytest
 from datetime import datetime
+
+
+# =============================================================================
+# Pytest Configuration - 테스트 환경 초기화
+# =============================================================================
+
+
+def pytest_configure(config):
+    """
+    pytest 시작 시 테스트 환경 설정.
+
+    단위 테스트에서는 실제 DB/Redis 연결을 시도하지 않도록
+    atexit 핸들러 등록을 방지하고, 관련 플래그를 비활성화합니다.
+    """
+    # 테스트 환경 플래그 설정
+    os.environ.setdefault("SELFHEALING_TEST_MODE", "true")
+
+    # async_audit_lifecycle의 atexit 핸들러 등록 방지
+    try:
+        import selfhealing.audit.async_audit_lifecycle as lifecycle_module
+
+        # 이미 등록된 것처럼 설정하여 추가 등록 방지
+        lifecycle_module._shutdown_registered = True
+    except ImportError:
+        pass
+
+
+def pytest_unconfigure(config):
+    """
+    pytest 종료 시 정리.
+
+    atexit에 등록된 graceful_shutdown_audit_system 핸들러를 제거하여
+    테스트 종료 시 실제 리소스 접근을 방지합니다.
+    """
+    try:
+        from selfhealing.audit.async_audit_lifecycle import graceful_shutdown_audit_system
+
+        # atexit에서 핸들러 제거
+        atexit.unregister(graceful_shutdown_audit_system)
+    except (ImportError, AttributeError):
+        pass
 
 
 # =============================================================================
