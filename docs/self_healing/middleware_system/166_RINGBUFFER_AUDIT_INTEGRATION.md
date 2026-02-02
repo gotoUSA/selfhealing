@@ -1,10 +1,10 @@
 # 166. RingBuffer + WAL을 Audit 이벤트에 적용 (데이터 유실 0%)
 
-> **버전**: 2.0.0
+> **버전**: 2.1.0
 > **작성일**: 2026-01-31
-> **수정일**: 2026-02-02 (구현 완료)
+> **수정일**: 2026-02-03 (v2.1.0 개선 사항 추가)
 > **의존성**: 없음 (첫 번째 구현)
-> **예상 소요**: 2-3일
+> **예상 소요**: 2-3일 (기본) + 6일 (v2.1.0 개선)
 
 ---
 
@@ -628,6 +628,648 @@ WAL + Kafka (유실 0%):
 
 ---
 
-## 10. 다음 단계
+## 10. 코드 리뷰 기반 개선 사항 (v2.1.0)
+
+> **추가일**: 2026-02-03
+> **목적**: 안정성, 운영 가시성, 데이터 무결성 강화
+
+### 10.1 구현 우선순위
+
+| 순위 | 개선 항목 | 긴급도 | 구현 복잡도 | 파일 |
+|-----|----------|--------|------------|------|
+| 1 | 멀티 프로세스 파일명 충돌 방지 | ❌ 필수 | 낮음 (1줄) | `wal.py` |
+| 2 | 디스크 풀 Fail-Open 모드 | ❌ 필수 | 중간 | `wal.py` |
+| 3 | 드랍률 알림 연동 | ❌ 필수 | 중간 | `ring_buffer.py` |
+| 4 | TraceID 자동 포함 | ⚠️ 권장 | 낮음 | `event_buffer.py` |
+| 5 | Idempotent Consumer | ⚠️ 권장 | 중간 | `sync_worker.py` |
+| 6 | Best-Effort Recovery | ⚠️ 권장 | 높음 | `wal.py` |
+| 7 | 메모리 경고 | ⚠️ 선택 | 낮음 | `ring_buffer.py` |
+| 8 | Lazy Recovery 옵션 | ⚠️ 선택 | 중간 | `async_audit_lifecycle.py` |
+
+---
+
+### 10.2 순위 1: 멀티 프로세스 파일명 충돌 방지
+
+**문제점**: Gunicorn 워커들이 동일 초에 시작 시 같은 WAL 파일명 사용
+
+**현재 코드** (`wal.py#L233-L235`):
+```python
+def _get_current_wal_filename(self) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return f"{self._config.file_prefix}_{timestamp}.wal"
+```
+
+**개선 코드**:
+```python
+def _get_current_wal_filename(self) -> str:
+    """현재 WAL 파일명 생성 (PID 포함으로 멀티 프로세스 안전)."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    pid = os.getpid()
+    return f"{self._config.file_prefix}_{timestamp}_{pid}.wal"
+```
+
+**테스트**:
+```python
+def test_wal_filename_includes_pid():
+    """WAL 파일명에 PID가 포함되는지 확인."""
+    wal = WriteAheadLog(config=WALConfig(wal_dir="/tmp/test_wal"))
+    filename = wal._get_current_wal_filename()
+    assert str(os.getpid()) in filename
+```
+
+---
+
+### 10.3 순위 2: 디스크 풀 Fail-Open 모드
+
+**문제점**: 디스크가 꽉 차면 서비스 전체 장애 (암묵적 Fail-Closed)
+
+**WALState 확장** (`wal.py`):
+```python
+class WALState(Enum):
+    ACTIVE = "active"
+    ROTATING = "rotating"
+    CLOSED = "closed"
+    CORRUPTED = "corrupted"
+    DISK_FULL_FAILOPEN = "disk_full_failopen"  # 신규 추가
+```
+
+**WALConfig 확장**:
+```python
+@dataclass
+class WALConfig:
+    # 기존 필드...
+    fail_open_on_disk_full: bool = True  # 디스크 풀 시 Fail-Open 활성화
+```
+
+**개선 코드** (`wal.py#L315-L340` write 메서드 내):
+```python
+def _direct_write(self, data: dict[str, Any]) -> int:
+    """직접 기록 (Disk Full Fail-Open 지원)."""
+    with self._lock:
+        # Fail-Open 모드면 WAL 기록 스킵
+        if self._state == WALState.DISK_FULL_FAILOPEN:
+            logger.warning("[WAL] Disk full fail-open mode, skipping WAL write")
+            return -1  # 음수 시퀀스 = WAL 미기록
+
+        if self._state == WALState.CLOSED:
+            raise WALError("WAL is closed")
+
+        try:
+            self._sequence += 1
+            # ... 기존 기록 로직 ...
+
+        except OSError as e:
+            import errno
+            if e.errno == errno.ENOSPC:  # No space left on device
+                self._handle_disk_full()
+                if self._config.fail_open_on_disk_full:
+                    return -1  # Fail-Open: 서비스 계속
+                raise  # Fail-Closed: 예외 전파
+            raise
+
+def _handle_disk_full(self) -> None:
+    """디스크 풀 상황 처리."""
+    self._state = WALState.DISK_FULL_FAILOPEN
+    logger.critical("[WAL] DISK FULL - Switching to fail-open mode")
+
+    # 메트릭 기록
+    if HAS_DRIFT_METRICS:
+        record_wal_disk_full()
+
+    # 알림 전송
+    try:
+        from selfhealing.services.unified_notification import (
+            UnifiedNotificationManager,
+            NotificationPayload,
+            NotificationPriority,
+            NotificationCategory,
+        )
+        payload = NotificationPayload(
+            title="🚨 WAL Disk Full - Fail-Open Mode",
+            message="WAL 디스크 용량 부족으로 Fail-Open 모드 전환. 즉시 조치 필요!",
+            priority=NotificationPriority.CRITICAL,
+            category=NotificationCategory.OPERATIONS,
+            source="WriteAheadLog",
+            dedup_key="wal:disk_full",
+        )
+        UnifiedNotificationManager().notify(payload)
+    except Exception as e:
+        logger.error(f"[WAL] Failed to send disk full notification: {e}")
+```
+
+**복구 로직** (디스크 여유 공간 확보 후):
+```python
+def check_disk_recovery(self) -> bool:
+    """디스크 여유 공간 확보 시 정상 모드 복귀."""
+    if self._state != WALState.DISK_FULL_FAILOPEN:
+        return True
+
+    try:
+        import shutil
+        usage = shutil.disk_usage(self._wal_dir)
+        free_ratio = usage.free / usage.total
+
+        if free_ratio > 0.1:  # 10% 이상 여유 시 복귀
+            self._state = WALState.ACTIVE
+            logger.info("[WAL] Disk space recovered, resuming normal operation")
+            return True
+    except Exception:
+        pass
+
+    return False
+```
+
+---
+
+### 10.4 순위 3: 드랍률 알림 연동
+
+**문제점**: 데이터 드랍 발생해도 관리자 인지 불가
+
+**RingBuffer 확장** (`ring_buffer.py`):
+```python
+from collections.abc import Callable
+
+class RingBuffer(Generic[T]):
+    def __init__(
+        self,
+        capacity: int = 10000,
+        strategy: BackpressureStrategy = BackpressureStrategy.DROP_OLDEST,
+        on_drop_threshold: Callable[["RingBufferStats"], None] | None = None,
+        drop_rate_threshold: float = 0.01,  # 1% 기본값
+    ):
+        # 기존 초기화...
+        self._on_drop_threshold = on_drop_threshold
+        self._drop_rate_threshold = drop_rate_threshold
+        self._alert_sent = False  # 중복 알림 방지
+
+    def put(self, item: T) -> bool:
+        with self._lock:
+            self._total_enqueued += 1
+
+            if len(self._buffer) >= self._capacity:
+                if self._strategy == BackpressureStrategy.DROP_OLDEST:
+                    self._total_dropped += 1
+                    self._buffer.append(item)
+                    self._check_drop_rate_alert()  # 알림 체크
+                    return True
+                else:
+                    self._total_dropped += 1
+                    self._check_drop_rate_alert()
+                    return False
+
+            self._buffer.append(item)
+            return True
+
+    def _check_drop_rate_alert(self) -> None:
+        """드랍률 임계치 초과 시 알림."""
+        if self._on_drop_threshold is None or self._alert_sent:
+            return
+
+        if self._total_enqueued < 100:  # 최소 샘플 수
+            return
+
+        drop_rate = self._total_dropped / self._total_enqueued
+        if drop_rate > self._drop_rate_threshold:
+            self._alert_sent = True
+            stats = RingBufferStats(
+                capacity=self._capacity,
+                size=len(self._buffer),
+                total_enqueued=self._total_enqueued,
+                total_dropped=self._total_dropped,
+                drop_rate=drop_rate,
+            )
+            try:
+                self._on_drop_threshold(stats)
+            except Exception:
+                pass  # 알림 실패가 메인 로직 방해 금지
+
+    def reset_alert(self) -> None:
+        """알림 상태 리셋 (주기적 호출용)."""
+        with self._lock:
+            self._alert_sent = False
+```
+
+**UnifiedNotificationManager 연동**:
+```python
+def create_drop_rate_alert_callback():
+    """드랍률 알림 콜백 생성."""
+    def on_drop_threshold(stats: RingBufferStats) -> None:
+        from selfhealing.services.unified_notification import (
+            UnifiedNotificationManager,
+            NotificationPayload,
+            NotificationPriority,
+            NotificationCategory,
+        )
+        payload = NotificationPayload(
+            title="⚠️ RingBuffer Drop Rate Alert",
+            message=(
+                f"드랍률 {stats.drop_rate:.2%} 임계치 초과!\n"
+                f"• 총 입력: {stats.total_enqueued}\n"
+                f"• 드랍: {stats.total_dropped}\n"
+                f"• 용량: {stats.size}/{stats.capacity}"
+            ),
+            priority=NotificationPriority.CRITICAL,
+            category=NotificationCategory.OPERATIONS,
+            source="RingBuffer",
+            dedup_key="ringbuffer:drop_rate_alert",
+        )
+        UnifiedNotificationManager().notify(payload)
+
+    return on_drop_threshold
+```
+
+**RequestAuditBuffer에서 사용**:
+```python
+class RequestAuditBuffer:
+    def __init__(self, max_events: int | None = None, ...):
+        from selfhealing.audit.ring_buffer import RingBuffer, BackpressureStrategy
+
+        self._ring_buffer: RingBuffer[AuditEvent] = RingBuffer(
+            capacity=capacity,
+            strategy=BackpressureStrategy.DROP_OLDEST,
+            on_drop_threshold=create_drop_rate_alert_callback(),
+            drop_rate_threshold=0.01,  # 1%
+        )
+```
+
+---
+
+### 10.5 순위 4: TraceID 자동 포함
+
+**문제점**: 감사 로그에서 트레이스 추적 불가
+
+**AuditEvent 확장** (`event_buffer.py`):
+```python
+@dataclass
+class AuditEvent:
+    event_type: AuditEventType
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    source: str = "unknown"
+    details: dict[str, Any] = field(default_factory=dict)
+    actor_id: str | None = None
+    actor_type: str = "system"
+    success: bool = True
+    error_message: str | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+    domain: str | None = None
+    reason: str | None = None
+    trace_id: str | None = field(default=None)  # 신규 추가
+
+    def __post_init__(self):
+        """trace_id 자동 설정."""
+        if self.trace_id is None:
+            try:
+                from selfhealing.audit.trace import get_trace_id
+                self.trace_id = get_trace_id()
+            except Exception:
+                pass
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_type": self.event_type.value,
+            "timestamp": self.timestamp.isoformat(),
+            "source": self.source,
+            "details": self.details,
+            "actor_id": self.actor_id,
+            "actor_type": self.actor_type,
+            "success": self.success,
+            "error_message": self.error_message,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "domain": self.domain,
+            "reason": self.reason,
+            "trace_id": self.trace_id,  # 신규 추가
+        }
+```
+
+**테스트**:
+```python
+def test_audit_event_auto_trace_id():
+    """AuditEvent 생성 시 trace_id 자동 설정."""
+    from selfhealing.audit.trace import set_trace_id
+
+    set_trace_id("req-test123")
+    event = AuditEvent(
+        event_type=AuditEventType.DLQ_STORE,
+        source="test",
+    )
+    assert event.trace_id == "req-test123"
+```
+
+---
+
+### 10.6 순위 5: Idempotent Consumer
+
+**문제점**: At-least-once 전송에서 중복 처리 가능
+
+**코드 근거**: `IdempotencyDomain.WAL_RECOVERY`가 이미 존재
+
+```python
+# idempotency_service.py#L88-L89
+WAL_RECOVERY = "wal_recovery"
+"""WAL 복구 (동일 엔트리 중복 처리 방지)."""
+```
+
+**sync_worker.py 개선**:
+```python
+from selfhealing.services.idempotency_service import (
+    IdempotencyService,
+    IdempotencyKey,
+    IdempotencyDomain,
+)
+
+class AuditSyncWorker:
+    def __init__(self, ...):
+        # 기존 초기화...
+        self._idempotency = IdempotencyService()
+
+    def _sync_entry_to_adapter(self, adapter: Any, entry: Any) -> None:
+        """Idempotent Consumer 패턴 적용."""
+        # 중복 체크 키: sequence + checksum
+        key = IdempotencyKey(
+            domain=IdempotencyDomain.WAL_RECOVERY,
+            identifier=f"{entry.sequence}:{entry.checksum}",
+        )
+
+        # 이미 처리된 경우 스킵
+        if self._idempotency.is_processed(key):
+            logger.debug(f"[AuditSyncWorker] Skipping duplicate entry seq={entry.sequence}")
+            return
+
+        # 원본 동기화 로직
+        delay = self._config.retry_delay_seconds
+        last_error: Exception | None = None
+
+        for attempt in range(self._config.max_retries + 1):
+            try:
+                if hasattr(adapter, "write"):
+                    adapter.write(entry.data)
+                elif hasattr(adapter, "log"):
+                    adapter.log(entry.data)
+                else:
+                    logger.info(f"[AuditSync] {entry.data}")
+
+                # 성공 시 처리 완료 마킹
+                self._idempotency.mark_processed(key, ttl_seconds=86400)  # 24시간 TTL
+                return
+
+            except Exception as e:
+                last_error = e
+                if attempt < self._config.max_retries:
+                    with self._lock:
+                        self._stats.total_retries += 1
+                    time.sleep(delay)
+                    delay = min(
+                        delay * self._config.retry_backoff_multiplier,
+                        self._config.max_retry_delay_seconds,
+                    )
+
+        if last_error:
+            raise last_error
+```
+
+---
+
+### 10.7 순위 6: Best-Effort Recovery
+
+**문제점**: 레코드 길이 필드 손상 시 전체 파일 복구 불가
+
+**레코드 Magic Number 추가** (`wal.py`):
+```python
+@dataclass
+class WALConfig:
+    # 기존 필드...
+    best_effort_recovery: bool = True  # 손상 시 마커 기반 복구
+    record_magic: bytes = b"\xAB\xCD"  # 레코드 시작 마커 (2바이트)
+
+class WriteAheadLog:
+    RECORD_MAGIC = b"\xAB\xCD"  # 레코드 시작 마커
+    RECORD_HEADER_SIZE = 14  # magic(2) + length(4) + checksum(8)
+```
+
+**개선된 레코드 포맷**:
+```
+[RECORD_MAGIC(2)] [LENGTH(4)] [CHECKSUM(8)] [DATA(variable)]
+    \xAB\xCD      4-byte BE   8-char hex    JSON bytes
+```
+
+**손상 복구 로직**:
+```python
+def _read_wal_file_best_effort(self, filepath: Path) -> Iterator[WALEntry]:
+    """Best-effort 복구 모드로 WAL 파일 읽기."""
+    try:
+        with open(filepath, "rb") as f:
+            # 헤더 읽기
+            header = f.read(self.HEADER_SIZE)
+            if len(header) < self.HEADER_SIZE:
+                return
+
+            while True:
+                # Magic Number 찾기
+                magic = f.read(2)
+                if len(magic) < 2:
+                    break
+
+                if magic != self.RECORD_MAGIC:
+                    # Magic이 아니면 1바이트씩 스캔
+                    if self._config.best_effort_recovery:
+                        pos = self._scan_for_magic(f)
+                        if pos == -1:
+                            break
+                        continue
+                    else:
+                        break
+
+                # 정상 레코드 읽기
+                try:
+                    entry = self._read_single_record(f)
+                    if entry:
+                        yield entry
+                except Exception:
+                    if not self._config.best_effort_recovery:
+                        break
+                    # Best-effort: 다음 Magic 찾기
+                    continue
+
+    except Exception:
+        pass
+
+def _scan_for_magic(self, f) -> int:
+    """다음 Magic Number 위치까지 스캔."""
+    window = bytearray()
+    while True:
+        byte = f.read(1)
+        if not byte:
+            return -1
+        window.append(byte[0])
+        if len(window) > 2:
+            window.pop(0)
+        if bytes(window) == self.RECORD_MAGIC:
+            return f.tell()
+    return -1
+```
+
+---
+
+### 10.8 순위 7: 메모리 경고
+
+**문제점**: 100만 용량 설정 시 메모리 폭발 위험
+
+**RingBuffer 생성자 경고** (`ring_buffer.py`):
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+class RingBuffer(Generic[T]):
+    # 경고 임계치 (10만 이상)
+    CAPACITY_WARNING_THRESHOLD = 100000
+    # 추정 이벤트 크기 (1KB)
+    ESTIMATED_EVENT_SIZE_BYTES = 1024
+
+    def __init__(
+        self,
+        capacity: int = 10000,
+        strategy: BackpressureStrategy = BackpressureStrategy.DROP_OLDEST,
+        ...
+    ):
+        if capacity < 1:
+            raise ValueError("capacity must be at least 1")
+
+        # 메모리 경고
+        if capacity > self.CAPACITY_WARNING_THRESHOLD:
+            estimated_mb = (capacity * self.ESTIMATED_EVENT_SIZE_BYTES) / (1024 * 1024)
+            logger.warning(
+                f"[RingBuffer] High capacity={capacity:,} may use ~{estimated_mb:.0f}MB RAM. "
+                f"Consider using a lower capacity or enabling WAL for persistence."
+            )
+
+        self._capacity = capacity
+        # 기존 로직...
+```
+
+---
+
+### 10.9 순위 8: Lazy Recovery 옵션
+
+**문제점**: 시작 시 대량 WAL 읽기로 서버 기동 지연
+
+**WALConfig 확장**:
+```python
+@dataclass
+class WALConfig:
+    # 기존 필드...
+    lazy_recovery: bool = True  # 지연 복구 활성화
+    startup_recovery_limit: int = 1000  # 시작 시 최대 복구 엔트리 수
+```
+
+**async_audit_lifecycle.py 개선**:
+```python
+def startup_async_audit_system() -> bool:
+    """비동기 Audit 시스템 시작 및 복구 (Lazy Recovery 지원)."""
+    global _startup_completed
+
+    with _lifecycle_lock:
+        if _startup_completed:
+            return False
+
+        try:
+            # 1. 체크포인트 로드
+            last_seq = _load_checkpoint()
+
+            # 2. WAL 미처리 엔트리 수만 확인 (Lazy)
+            unprocessed_count = _check_unprocessed_wal_entries(last_seq)
+            if unprocessed_count > 0:
+                logger.info(
+                    f"[AsyncAuditLifecycle] Found {unprocessed_count} unprocessed WAL entries. "
+                    f"SyncWorker will recover in background."
+                )
+
+            # 3. AsyncHealingLogger 초기화
+            _initialize_async_logger()
+
+            # 4. SyncWorker 시작 (백그라운드 복구 담당)
+            _start_sync_worker()
+
+            _startup_completed = True
+            return True
+
+        except Exception as e:
+            logger.error(f"[AsyncAuditLifecycle] Startup failed: {e}")
+            return False
+
+def _check_unprocessed_wal_entries(last_seq: int) -> int:
+    """WAL 미처리 엔트리 수 확인 (읽기만, 처리 안 함)."""
+    try:
+        wal = _get_wal_instance()
+        if wal is None:
+            return 0
+
+        # startup_recovery_limit 적용
+        config = getattr(wal, "_config", None)
+        limit = getattr(config, "startup_recovery_limit", 1000)
+
+        if hasattr(wal, "count_unprocessed"):
+            return wal.count_unprocessed(last_processed_seq=last_seq)
+
+        # Fallback: 전체 읽기 (기존 동작)
+        if hasattr(wal, "recover_unprocessed"):
+            entries = wal.recover_unprocessed(last_processed_seq=last_seq)
+            return len(entries) if entries else 0
+
+        return 0
+    except Exception as e:
+        logger.debug(f"[AsyncAuditLifecycle] WAL check failed: {e}")
+        return 0
+```
+
+**WAL에 count_unprocessed 메서드 추가**:
+```python
+def count_unprocessed(self, last_processed_seq: int = 0) -> int:
+    """미처리 엔트리 수 반환 (파일 전체 읽기 없이)."""
+    with self._lock:
+        # 현재 시퀀스와 마지막 처리 시퀀스 차이
+        return max(0, self._sequence - last_processed_seq)
+```
+
+---
+
+## 11. 구현 체크리스트 (v2.1.0)
+
+### 11.1 Phase 1: 즉시 수정 (1일)
+
+- [ ] `wal.py`: `_get_current_wal_filename()`에 PID 추가
+- [ ] `wal.py`: `DISK_FULL_FAILOPEN` 상태 및 Fail-Open 로직 추가
+- [ ] `ring_buffer.py`: 고용량 경고 로그 추가
+- [ ] 단위 테스트 추가
+
+### 11.2 Phase 2: 운영 가시성 (2일)
+
+- [ ] `ring_buffer.py`: `on_drop_threshold` 콜백 및 알림 연동
+- [ ] `event_buffer.py`: `AuditEvent.trace_id` 자동 설정
+- [ ] `unified_notification.py` 연동 테스트
+- [ ] 통합 테스트 추가
+
+### 11.3 Phase 3: 데이터 무결성 (3일)
+
+- [ ] `sync_worker.py`: `IdempotencyService` 연동
+- [ ] `wal.py`: `RECORD_MAGIC` 및 Best-Effort Recovery
+- [ ] `async_audit_lifecycle.py`: Lazy Recovery 옵션
+- [ ] E2E 테스트 추가
+
+### 11.4 환경 변수 (신규)
+
+| 변수명 | 기본값 | 설명 |
+|-------|-------|------|
+| `SELFHEALING_WAL_FAIL_OPEN_ON_DISK_FULL` | true | 디스크 풀 시 Fail-Open |
+| `SELFHEALING_WAL_BEST_EFFORT_RECOVERY` | true | 손상 복구 시도 |
+| `SELFHEALING_WAL_LAZY_RECOVERY` | true | 지연 복구 활성화 |
+| `SELFHEALING_WAL_STARTUP_RECOVERY_LIMIT` | 1000 | 시작 시 최대 복구 수 |
+| `SELFHEALING_RING_BUFFER_DROP_RATE_THRESHOLD` | 0.01 | 드랍률 알림 임계치 |
+
+---
+
+## 12. 다음 단계
 
 → [167_ASYNC_AUDIT_PIPELINE.md](167_ASYNC_AUDIT_PIPELINE.md): AsyncHealingLogger 미들웨어 연동
