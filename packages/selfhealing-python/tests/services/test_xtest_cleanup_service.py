@@ -56,14 +56,14 @@ class TestXTestCleanupResult:
 class TestXTestCleanupServiceWithMocks:
     """Mock을 사용한 XTestCleanupService 테스트."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def mock_redis(self):
         """Mock Redis 클라이언트."""
         redis_mock = MagicMock()
         redis_mock.keys.return_value = []
         return redis_mock
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def mock_session_manager(self):
         """Mock 세션 매니저."""
         manager = MagicMock()
@@ -71,8 +71,18 @@ class TestXTestCleanupServiceWithMocks:
         manager.get_sessions_count.return_value = 0
         return manager
 
-    @pytest.fixture
-    def cleanup_service(self, mock_redis, mock_session_manager):
+    @pytest.fixture(scope="class")
+    def mock_settings(self):
+        """Mock 설정 객체."""
+        settings = MagicMock()
+        settings.cb_auto_restore = False
+        settings.dlq_auto_purge = False
+        settings.idempotency_auto_clear = False
+        settings.rate_limit_auto_reset = False
+        return settings
+
+    @pytest.fixture(scope="class")
+    def cleanup_service(self, mock_redis, mock_session_manager, mock_settings):
         """테스트용 Cleanup 서비스."""
         from selfhealing.services.xtest_cleanup_service import (
             XTestCleanupService,
@@ -82,6 +92,7 @@ class TestXTestCleanupServiceWithMocks:
         reset_xtest_cleanup_service()
         service = XTestCleanupService(redis_client=mock_redis)
         service._session_manager = mock_session_manager
+        service._settings = mock_settings
         return service
 
     def test_cleanup_expired_sessions_no_expired(self, cleanup_service, mock_session_manager):
@@ -109,7 +120,9 @@ class TestXTestCleanupServiceWithMocks:
         mock_session_manager.get_expired_sessions.return_value = [expired_session]
         mock_session_manager.delete_session.return_value = True
 
-        result = cleanup_service.cleanup_expired_sessions()
+        # audit 로깅 mock으로 무거운 모듈 로드 방지
+        with patch("selfhealing.services.xtest_cleanup_service.log_xtest_cleanup_audit"):
+            result = cleanup_service.cleanup_expired_sessions()
 
         assert result.success is True
         assert result.sessions_cleaned == 1

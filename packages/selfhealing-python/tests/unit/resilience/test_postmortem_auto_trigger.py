@@ -181,11 +181,13 @@ class TestCircuitBreakerClosedPostmortemHandler:
             SelfHealingEvent,
             EventType,
         )
-        from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
 
-        reset_api_view_settings()
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "60")
+        # 올바른 prefix: SELFHEALING_POSTMORTEM_ 사용
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "60")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+        reset_postmortem_settings()
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -209,10 +211,11 @@ class TestCircuitBreakerClosedPostmortemHandler:
         mock_base_module.collect_system_snapshot = lambda: {}
         mock_base_module.get_healing_events = lambda limit: []
 
-        mock_obs_module = ModuleType("selfhealing.api.django.views.xtest.observability")
-        mock_obs_module._build_timeline = lambda h, l: []
-        mock_obs_module._collect_service_states = lambda cb: ([], [])
-        mock_obs_module._generate_postmortem_data = lambda *args, **kwargs: {
+        mock_store_module = ModuleType("selfhealing.services.postmortem_store")
+        mock_store_module.add_healing_incident = mock_add_healing_incident
+        mock_store_module.build_timeline = lambda h, l: []
+        mock_store_module.collect_service_states = lambda cb: ([], [])
+        mock_store_module.generate_postmortem_data = lambda *args, **kwargs: {
             "incident_id": "AUTO-test-123",
             "duration_seconds": 10,  # min_duration(60) 미만
             "timeline": [],
@@ -223,7 +226,7 @@ class TestCircuitBreakerClosedPostmortemHandler:
                 sys.modules,
                 {
                     "selfhealing.api.django.views.xtest.base": mock_base_module,
-                    "selfhealing.api.django.views.xtest.observability": mock_obs_module,
+                    "selfhealing.services.postmortem_store": mock_store_module,
                 },
             ),
             patch(
