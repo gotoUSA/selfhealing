@@ -34,6 +34,10 @@ class FakeRedisPipeline:
         self.commands.append(("expire", (key, ttl)))
         return self
 
+    def sadd(self, key: str, *values) -> "FakeRedisPipeline":
+        self.commands.append(("sadd", (key, values)))
+        return self
+
     def execute(self) -> list:
         self._executed = True
         return [len(self.commands)]
@@ -44,8 +48,22 @@ class FakeRedis:
 
     def __init__(self):
         self._data: dict[str, list] = {}
+        self._sets: dict[str, set] = {}
         self._pipelines_created = 0
         self._pipeline_instance: FakeRedisPipeline | None = None
+
+    def sadd(self, key: str, *values) -> int:
+        if key not in self._sets:
+            self._sets[key] = set()
+        added = 0
+        for v in values:
+            if v not in self._sets[key]:
+                self._sets[key].add(v)
+                added += 1
+        return added
+
+    def smembers(self, key: str) -> set:
+        return self._sets.get(key, set())
 
     def pipeline(self, transaction: bool = False) -> FakeRedisPipeline:
         self._pipelines_created += 1
@@ -97,6 +115,7 @@ class TestRedisAuditBufferBatch:
         return RedisAuditBuffer(
             redis_client=fake_redis,
             fallback_adapter=None,
+            enable_graceful_shutdown=False,  # 테스트 종료 시 atexit 훅 방지
         )
 
     def test_log_batch_single_pipeline_call(self, buffer, fake_redis: FakeRedis) -> None:
@@ -194,6 +213,7 @@ class TestRedisAuditBufferFallback:
         return RedisAuditBuffer(
             redis_client=error_redis,
             fallback_adapter=None,
+            enable_graceful_shutdown=False,
         )
 
     def test_fallback_buffer_stores_entries(self, buffer_with_error_redis) -> None:
@@ -261,6 +281,7 @@ class TestRedisAuditBufferStats:
         return RedisAuditBuffer(
             redis_client=FakeRedis(),
             fallback_adapter=None,
+            enable_graceful_shutdown=False,
         )
 
     def test_get_buffer_stats_includes_batch_info(self, buffer) -> None:

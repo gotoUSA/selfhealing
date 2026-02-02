@@ -5,7 +5,7 @@ Redis 기반 분산 Audit 버퍼.
 - CB Advanced Protection의 Redis-First + WAL 패턴
 - RedisMetricSourceAdapter의 Write-Through 패턴
 
-v2.0.0:
+기능:
 - Processing Queue 패턴 적용
 - ActiveKeySet O(1) 도메인 조회
 - 청킹 구현
@@ -357,7 +357,9 @@ class RedisAuditBuffer:
 
             for domain, domain_entries in entries_by_domain.items():
                 try:
-                    if self.log_batch(domain_entries, domain):
+                    # _log_batch_chunk를 직접 호출하여 폴백 버퍼 재진입 방지
+                    # (log_batch는 실패 시 _store_in_fallback_buffer를 호출하여 데드락 발생)
+                    if self._log_batch_chunk(domain_entries, domain):
                         recovered += len(domain_entries)
                     else:
                         # 실패 시 다시 폴백 버퍼에 보관
@@ -797,7 +799,8 @@ class RedisAuditBuffer:
 
                     for domain, domain_entries in by_domain.items():
                         try:
-                            self.log_batch(domain_entries, domain)
+                            # _log_batch_chunk 직접 호출 (log_batch는 폴백 버퍼 재진입 유발)
+                            self._log_batch_chunk(domain_entries, domain)
                         except Exception as e:
                             logger.warning(f"[RedisAuditBuffer] Shutdown flush failed for {domain}: {e}")
 
