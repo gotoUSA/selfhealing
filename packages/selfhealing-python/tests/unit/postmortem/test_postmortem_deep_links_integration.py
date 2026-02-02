@@ -14,6 +14,40 @@ from unittest import mock
 import pytest
 
 
+# =============================================================================
+# 공통 Fixture: generate_postmortem_data의 무거운 의존성 Mock
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def mock_heavy_dependencies():
+    """
+    generate_postmortem_data 함수의 무거운 외부 의존성을 mock합니다.
+    
+    이 fixture는 단위 테스트 성능을 위해 DB 연결, Redis 연결 등
+    실제 외부 서비스가 필요한 부분을 mock으로 대체합니다.
+    """
+    with mock.patch(
+        "selfhealing.services.postmortem.deployment_correlator.get_deployment_correlator"
+    ) as mock_correlator, mock.patch(
+        "selfhealing.services.postmortem.snapshot_builder.SnapshotBuilder"
+    ) as mock_snapshot, mock.patch(
+        "selfhealing.services.throttle.postmortem.collect_throttle_postmortem_data"
+    ) as mock_throttle:
+        # deployment_correlator: disabled로 설정
+        mock_correlator.return_value.is_enabled.return_value = False
+        mock_correlator.return_value.get_deployments_for_postmortem.return_value = None
+        mock_correlator.return_value.get_deployment_timeline_events.return_value = []
+        
+        # snapshot_builder: 빈 dict 반환
+        mock_snapshot.return_value.build_dict.return_value = {}
+        
+        # throttle_data: 빈 dict 반환
+        mock_throttle.return_value = {}
+        
+        yield
+
+
 class TestGeneratePostmortemDataDeepLinks:
     """generate_postmortem_data()의 deep_links 통합 테스트."""
 
@@ -274,10 +308,16 @@ class TestGeneratePostmortemDataCascadeEvent:
         assert result["causation_chain"] == []
         assert result["evidence_hash"] is None
 
+    @mock.patch("selfhealing.services.postmortem.deep_links.get_postmortem_deep_link_builder")
     @mock.patch("selfhealing.audit.cascade_auditor.get_cascade_event_auditor")
-    def test_cascade_event_auditor_import_error_handled(self, mock_get_auditor):
+    def test_cascade_event_auditor_import_error_handled(
+        self,
+        mock_get_auditor,
+        mock_deep_links,
+    ):
         """CascadeAuditor import 실패 시 에러 없이 처리."""
         mock_get_auditor.side_effect = ImportError("Module not found")
+        mock_deep_links.return_value.build_postmortem_links.return_value.to_dict.return_value = {}
 
         from selfhealing.services.postmortem_store import generate_postmortem_data
 
