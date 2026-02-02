@@ -609,8 +609,14 @@ class TestFlushRedisAuditTask:
 
 - [x] `redis_buffer.py`: `log_batch()` 메서드 추가
 - [x] `redis_buffer.py`: 폴백 버퍼 로직 추가
-- [x] `selfhealing/tasks/audit_flush.py`: Celery 플러시 태스크 추가
-- [x] `beat_schedule.py`: Beat 스케줄 추가
+- [x] `redis_buffer.py`: Processing Queue 패턴 (`flush_to_external_safe()`)
+- [x] `redis_buffer.py`: ActiveKeySet O(1) 도메인 조회
+- [x] `redis_buffer.py`: 청킹 구현 (`_log_batch_chunk()`)
+- [x] `redis_buffer.py`: Safety LTRIM (`apply_safety_ltrim()`)
+- [x] `redis_buffer.py`: Graceful Shutdown Hook
+- [x] `audit/redis_batch_lua.py`: Lua 스크립트 모듈 추가
+- [x] `metrics/audit_buffer_metrics.py`: Backpressure 메트릭
+- [x] `celery_tasks/audit_flush_tasks.py`: Celery 플러시 태스크 추가
 
 ### 7.2 인프라
 
@@ -620,7 +626,7 @@ class TestFlushRedisAuditTask:
 
 ### 7.3 테스트
 
-- [x] 단위 테스트: 배치 처리, 폴백 (24개 통과)
+- [x] 단위 테스트: 배치 처리, 폴백, v2.0 기능 (19개 통과)
 - [ ] 통합 테스트: Redis → DB 플러시
 - [ ] 부하 테스트: 10,000 events/sec 검증
 

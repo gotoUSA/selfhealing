@@ -4,13 +4,23 @@ Redis 기반 분산 Audit 버퍼.
 기존 패턴 참조:
 - CB Advanced Protection의 Redis-First + WAL 패턴
 - RedisMetricSourceAdapter의 Write-Through 패턴
+
+v2.0.0:
+- Processing Queue 패턴 적용
+- ActiveKeySet O(1) 도메인 조회
+- 청킹 구현
+- LTRIM Safety Net
+- Graceful Shutdown
 """
 
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
+import signal
+import socket
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -20,6 +30,13 @@ if TYPE_CHECKING:
     import redis
 
 logger = logging.getLogger(__name__)
+
+
+# 환경 변수 기본값
+_MAX_PIPELINE_CHUNK = int(os.environ.get("SELFHEALING_MAX_PIPELINE_CHUNK", "1000"))
+_BUFFER_WARNING_THRESHOLD = int(os.environ.get("SELFHEALING_BUFFER_WARNING", "10000"))
+_BUFFER_CRITICAL_THRESHOLD = int(os.environ.get("SELFHEALING_BUFFER_CRITICAL", "50000"))
+_SAFETY_LTRIM_THRESHOLD = int(os.environ.get("SELFHEALING_SAFETY_LTRIM", "100000"))
 
 
 def _get_audit_buffer_ttl() -> int:
@@ -53,6 +70,8 @@ class RedisAuditBuffer:
     - LPUSH/RPOP으로 FIFO 순서 보장
     - Redis 장애 시 FileAuditLogAdapter로 자동 fallback
     - Redis 복구 시 로컬 WAL → Redis 동기화
+    - Processing Queue 패턴으로 데이터 손실 방지
+    - ActiveKeySet으로 O(1) 도메인 조회
 
     사용 예:
         redis_client = redis.from_url("redis://localhost:6379")
@@ -69,6 +88,7 @@ class RedisAuditBuffer:
     DEFAULT_KEY_PREFIX = "audit:buffer:"
     DEFAULT_TTL_SECONDS = 86400  # 하위 호환성용 레거시 상수
     MAX_CONSECUTIVE_FAILURES = 3
+    ACTIVE_DOMAINS_SET = "audit:active_domains"  # ActiveKeySet
 
     def __init__(
         self,
@@ -77,6 +97,7 @@ class RedisAuditBuffer:
         key_prefix: str | None = None,
         ttl_seconds: int | None = None,
         on_fallback: Callable[[Exception], None] | None = None,
+        enable_graceful_shutdown: bool = True,
     ):
         """
         RedisAuditBuffer 초기화.
@@ -87,6 +108,7 @@ class RedisAuditBuffer:
             key_prefix: Redis 키 프리픽스 (None = 기본값)
             ttl_seconds: TTL (초). None이면 Settings에서 가져옴.
             on_fallback: 폴백 발생 시 콜백
+            enable_graceful_shutdown: Graceful Shutdown 훅 등록 여부
         """
         self._redis = redis_client
         self._fallback = fallback_adapter
@@ -103,12 +125,24 @@ class RedisAuditBuffer:
         self._fallback_lock = threading.Lock()
         self._max_fallback = int(os.environ.get("SELFHEALING_REDIS_MAX_FALLBACK", "10000"))
 
+        # 워커 식별자 (Processing Queue 패턴용)
+        self._worker_id = f"{socket.gethostname()}-{os.getpid()}"
+
+        # Lua 스크립트 (지연 초기화)
+        self._lua_scripts = None
+
         # 통계
         self._total_writes = 0
         self._total_fallbacks = 0
         self._total_flushes = 0
         self._total_batch_writes = 0
         self._total_batch_errors = 0
+        self._total_safety_ltrim = 0
+
+        # Graceful Shutdown 훅 등록
+        self._shutdown_registered = False
+        if enable_graceful_shutdown:
+            self._register_shutdown_hooks()
 
     def log(self, entry: dict[str, Any], domain: str = "default") -> bool:
         """
@@ -174,9 +208,10 @@ class RedisAuditBuffer:
         domain: str = "default",
     ) -> bool:
         """
-        배치 로깅 - 단일 Redis pipeline으로 여러 이벤트 저장.
+        배치 로깅 - 청킹 적용된 Redis pipeline으로 여러 이벤트 저장.
 
         개별 log() 호출 대비 Redis RTT를 N회 → 1회로 감소.
+        MAX_PIPELINE_CHUNK 크기로 분할하여 메모리 보호.
 
         Args:
             entries: 저장할 Audit 엔트리 딕셔너리 리스트
@@ -184,6 +219,39 @@ class RedisAuditBuffer:
 
         Returns:
             True if Redis 성공, False if 폴백 버퍼 사용
+        """
+        if not entries:
+            return True
+
+        total = len(entries)
+        success = True
+
+        # 청킹 적용
+        for chunk_start in range(0, total, _MAX_PIPELINE_CHUNK):
+            chunk_end = min(chunk_start + _MAX_PIPELINE_CHUNK, total)
+            chunk = entries[chunk_start:chunk_end]
+
+            if not self._log_batch_chunk(chunk, domain):
+                success = False
+                # 실패한 청크는 폴백 버퍼에 저장
+                self._store_in_fallback_buffer(chunk, domain)
+
+        return success
+
+    def _log_batch_chunk(
+        self,
+        entries: list[dict[str, Any]],
+        domain: str = "default",
+    ) -> bool:
+        """
+        단일 청크 처리 (최대 MAX_PIPELINE_CHUNK 개).
+
+        Args:
+            entries: 저장할 엔트리 리스트
+            domain: 도메인
+
+        Returns:
+            성공 여부
         """
         if not entries:
             return True
@@ -208,6 +276,11 @@ class RedisAuditBuffer:
             if payloads:
                 pipe.lpush(key, *payloads)
                 pipe.expire(key, self._ttl_seconds)
+
+                # ActiveKeySet에 도메인 추가
+                pipe.sadd(self.ACTIVE_DOMAINS_SET, domain)
+                pipe.expire(self.ACTIVE_DOMAINS_SET, 86400)
+
                 pipe.execute()
 
             # 성공 시 통계 업데이트
@@ -216,17 +289,18 @@ class RedisAuditBuffer:
                 self._total_batch_writes += 1
                 self._total_writes += len(entries)
 
+            logger.debug(f"[RedisAuditBuffer] Batch chunk logged: {len(entries)} entries")
             return True
 
         except Exception as e:
-            logger.warning(f"[RedisAuditBuffer] Batch log failed: {e}, " f"entries_count={len(entries)}")
+            logger.warning(
+                f"[RedisAuditBuffer] Batch chunk failed: {e}",
+                extra={"entries_count": len(entries), "domain": domain},
+            )
 
             with self._lock:
                 self._consecutive_failures += 1
                 self._total_batch_errors += 1
-
-            # 폴백 버퍼에 저장
-            self._store_in_fallback_buffer(entries, domain)
 
             return False
 
@@ -375,20 +449,50 @@ class RedisAuditBuffer:
             "total_flushes": self._total_flushes,
             "total_batch_writes": self._total_batch_writes,
             "total_batch_errors": self._total_batch_errors,
+            "total_safety_ltrim": self._total_safety_ltrim,
             "fallback_buffer_size": self.get_fallback_buffer_size(),
             "domains": {},
         }
 
         try:
-            for key in self._redis.scan_iter(match=f"{self._key_prefix}*"):
-                key_str = key.decode() if isinstance(key, bytes) else key
-                domain = key_str.replace(self._key_prefix, "")
-                stats["domains"][domain] = self._redis.llen(key)
+            for domain in self._get_active_domains():
+                key = f"{self._key_prefix}{domain}"
+                size = self._redis.llen(key)
+                stats["domains"][domain] = size
+
+                # 임계치 체크 및 알림 발송
+                self._check_buffer_threshold(domain, size)
         except Exception as e:
             logger.debug(f"[RedisAuditBuffer] Stats query failed: {e}")
             stats["error"] = str(e)
 
         return stats
+
+    def _check_buffer_threshold(self, domain: str, size: int) -> None:
+        """버퍼 임계치 체크 및 알림 발송."""
+        try:
+            from selfhealing.metrics.audit_buffer_metrics import (
+                audit_buffer_backpressure,
+                audit_buffer_size,
+            )
+
+            # 메트릭 업데이트
+            audit_buffer_size.labels(domain=domain).set(size)
+            backpressure = min(1.0, size / max(1, _SAFETY_LTRIM_THRESHOLD))
+            audit_buffer_backpressure.labels(domain=domain).set(backpressure)
+        except ImportError:
+            pass
+
+        if size >= _BUFFER_CRITICAL_THRESHOLD:
+            logger.error(
+                f"[RedisAuditBuffer] CRITICAL: Buffer overflow for {domain}",
+                extra={"domain": domain, "size": size, "threshold": _BUFFER_CRITICAL_THRESHOLD},
+            )
+        elif size >= _BUFFER_WARNING_THRESHOLD:
+            logger.warning(
+                f"[RedisAuditBuffer] WARNING: Buffer high for {domain}",
+                extra={"domain": domain, "size": size, "threshold": _BUFFER_WARNING_THRESHOLD},
+            )
 
     def get_pending_count(self, domain: str = "default") -> int:
         """특정 도메인의 대기 엔트리 수."""
@@ -415,6 +519,295 @@ class RedisAuditBuffer:
         """현재 인스턴스 식별자."""
         return os.environ.get("HOSTNAME", os.environ.get("INSTANCE_ID", "unknown"))
 
+    def _get_lua_scripts(self):
+        """Lua 스크립트 지연 초기화."""
+        if self._lua_scripts is None:
+            from selfhealing.audit.redis_batch_lua import AuditBatchLuaScripts
+
+            self._lua_scripts = AuditBatchLuaScripts(self._redis)
+        return self._lua_scripts
+
+    def _get_active_domains(self) -> list[str]:
+        """
+        활성 도메인 조회 (O(1) 복잡도).
+
+        ActiveKeySet을 사용하여 빠른 조회.
+        """
+        try:
+            domains = self._redis.smembers(self.ACTIVE_DOMAINS_SET)
+
+            # 빈 도메인 정리
+            empty_domains = []
+            result_domains = []
+
+            for domain in domains:
+                domain_str = domain.decode() if isinstance(domain, bytes) else domain
+                key = f"{self._key_prefix}{domain_str}"
+
+                if self._redis.llen(key) == 0:
+                    empty_domains.append(domain_str)
+                else:
+                    result_domains.append(domain_str)
+
+            # 빈 도메인 SET에서 제거
+            if empty_domains:
+                self._redis.srem(self.ACTIVE_DOMAINS_SET, *empty_domains)
+
+            return result_domains
+
+        except Exception as e:
+            logger.debug(f"[RedisAuditBuffer] ActiveKeySet query failed: {e}")
+            return self._get_active_domains_fallback()
+
+    def _get_active_domains_fallback(self) -> list[str]:
+        """scan_iter 기반 fallback (ActiveKeySet 사용 불가 시)."""
+        domains = set()
+        try:
+            for key in self._redis.scan_iter(f"{self._key_prefix}*"):
+                key_str = key.decode() if isinstance(key, bytes) else key
+                domain = key_str.replace(self._key_prefix, "")
+                domains.add(domain)
+        except Exception:
+            pass
+        return list(domains)
+
+    def _add_to_active_domains(self, domains: set[str]) -> None:
+        """활성 도메인 SET에 도메인 추가."""
+        if domains:
+            try:
+                pipe = self._redis.pipeline()
+                pipe.sadd(self.ACTIVE_DOMAINS_SET, *domains)
+                pipe.expire(self.ACTIVE_DOMAINS_SET, 86400)  # 24시간 TTL
+                pipe.execute()
+            except Exception as e:
+                logger.debug(f"[RedisAuditBuffer] Failed to update active domains: {e}")
+
+    def apply_safety_ltrim(self) -> dict[str, int]:
+        """
+        버퍼가 과도하게 커지면 LTRIM 적용.
+
+        Returns:
+            도메인별 트림된 항목 수
+        """
+        trimmed = {}
+        try:
+            for domain in self._get_active_domains():
+                key = f"{self._key_prefix}{domain}"
+                size = self._redis.llen(key)
+
+                if size > _SAFETY_LTRIM_THRESHOLD:
+                    self._redis.ltrim(key, 0, _SAFETY_LTRIM_THRESHOLD - 1)
+                    trimmed_count = size - _SAFETY_LTRIM_THRESHOLD
+
+                    logger.warning(
+                        f"[RedisAuditBuffer] Safety LTRIM: {domain}",
+                        extra={
+                            "domain": domain,
+                            "original_size": size,
+                            "trimmed_to": _SAFETY_LTRIM_THRESHOLD,
+                            "dropped": trimmed_count,
+                        },
+                    )
+
+                    trimmed[domain] = trimmed_count
+
+                    with self._lock:
+                        self._total_safety_ltrim += trimmed_count
+
+                    # 메트릭 기록
+                    try:
+                        from selfhealing.metrics.audit_buffer_metrics import (
+                            audit_buffer_dropped_total,
+                        )
+
+                        audit_buffer_dropped_total.labels(domain=domain).inc(trimmed_count)
+                    except ImportError:
+                        pass
+
+        except Exception as e:
+            logger.error(f"[RedisAuditBuffer] Safety LTRIM failed: {e}")
+
+        return trimmed
+
+    def flush_to_external_safe(
+        self,
+        target_adapter: AuditLogAdapterProtocol,
+        batch_size: int = 500,
+        domain: str | None = None,
+    ) -> int:
+        """
+        Processing Queue 패턴을 사용한 안전한 플러시.
+
+        데이터 손실 없이 순서를 보존하며 외부 저장소로 전송.
+
+        Args:
+            target_adapter: 대상 어댑터
+            batch_size: 배치 크기
+            domain: 특정 도메인만 처리 (None이면 전체)
+
+        Returns:
+            플러시된 엔트리 수
+        """
+        total_flushed = 0
+        lua_scripts = self._get_lua_scripts()
+
+        domains_to_process = [domain] if domain else self._get_active_domains()
+
+        for current_domain in domains_to_process:
+            try:
+                # 1. Buffer → Processing Queue 원자적 이동
+                moved = lua_scripts.atomic_batch_move(
+                    domain=current_domain,
+                    batch_size=batch_size,
+                    worker_id=self._worker_id,
+                )
+
+                if moved == 0:
+                    continue
+
+                # 2. Processing Queue에서 데이터 읽기
+                processing_key = f"audit:processing:{current_domain}"
+                items = self._redis.lrange(processing_key, 0, moved - 1)
+
+                entries = []
+                for item in items:
+                    try:
+                        item_str = item.decode() if isinstance(item, bytes) else item
+                        payload = json.loads(item_str)
+                        entries.append(payload.get("entry", payload))
+                    except (json.JSONDecodeError, AttributeError):
+                        entries.append(item)
+
+                # 3. 외부 어댑터로 저장
+                if hasattr(target_adapter, "log_batch"):
+                    target_adapter.log_batch(entries)
+                else:
+                    for entry in entries:
+                        if hasattr(target_adapter, "log_raw"):
+                            target_adapter.log_raw(entry)
+                        else:
+                            target_adapter.log(entry)
+
+                # 4. 성공 시 Processing Queue 정리
+                lua_scripts.atomic_batch_complete(current_domain, moved)
+                total_flushed += moved
+
+                logger.debug(f"[RedisAuditBuffer] Flushed {moved} entries from {current_domain}")
+
+            except Exception as e:
+                logger.error(f"[RedisAuditBuffer] Flush failed for {current_domain}: {e}")
+
+                # 5. 실패 시 순서 보존하여 복원
+                try:
+                    restored = lua_scripts.atomic_batch_restore(current_domain)
+                    logger.info(f"[RedisAuditBuffer] Restored {restored} items to buffer")
+                except Exception as restore_error:
+                    logger.error(f"[RedisAuditBuffer] Restore failed: {restore_error}")
+
+        with self._lock:
+            self._total_flushes += total_flushed
+
+        return total_flushed
+
+    def recover_orphaned_processing_queues(
+        self,
+        timeout_seconds: int = 300,
+    ) -> int:
+        """
+        타임아웃된 고아 Processing Queue 복구.
+
+        Args:
+            timeout_seconds: 고아 판단 임계 시간 (기본 5분)
+
+        Returns:
+            복구된 총 항목 수
+        """
+        recovered_total = 0
+        lua_scripts = self._get_lua_scripts()
+
+        orphaned = lua_scripts.get_orphaned_processing_queues(timeout_seconds)
+
+        for processing_key, worker_id, age in orphaned:
+            logger.warning(
+                f"[RedisAuditBuffer] Orphaned queue detected",
+                extra={
+                    "processing_key": processing_key,
+                    "worker_id": worker_id,
+                    "age_seconds": age,
+                },
+            )
+
+            # audit:processing:{domain}에서 domain 추출
+            try:
+                domain = processing_key.split(":")[-1]
+                restored = lua_scripts.atomic_batch_restore(domain)
+                recovered_total += restored
+                logger.info(f"[RedisAuditBuffer] Recovered {restored} items from {domain}")
+            except Exception as e:
+                logger.error(f"[RedisAuditBuffer] Recovery failed for {processing_key}: {e}")
+
+        return recovered_total
+
+    def _register_shutdown_hooks(self) -> None:
+        """Graceful Shutdown 훅 등록."""
+        if self._shutdown_registered:
+            return
+
+        try:
+            atexit.register(self._graceful_shutdown)
+
+            # Windows에서는 SIGTERM이 없을 수 있음
+            if hasattr(signal, "SIGTERM"):
+                signal.signal(signal.SIGTERM, self._signal_handler)
+            if hasattr(signal, "SIGINT"):
+                signal.signal(signal.SIGINT, self._signal_handler)
+
+            self._shutdown_registered = True
+            logger.debug("[RedisAuditBuffer] Shutdown hooks registered")
+        except Exception as e:
+            logger.debug(f"[RedisAuditBuffer] Could not register shutdown hooks: {e}")
+
+    def _signal_handler(self, signum: int, frame: Any) -> None:
+        """시그널 핸들러."""
+        logger.info(f"[RedisAuditBuffer] Received signal {signum}")
+        self._graceful_shutdown()
+
+    def _graceful_shutdown(self) -> None:
+        """
+        Graceful Shutdown 처리.
+
+        메모리 fallback 버퍼의 데이터를 Redis로 저장 시도.
+        """
+        logger.info("[RedisAuditBuffer] Graceful shutdown started")
+
+        try:
+            # 메모리 버퍼 → Redis 저장
+            with self._fallback_lock:
+                if self._fallback_buffer:
+                    entries = list(self._fallback_buffer)
+                    logger.info(f"[RedisAuditBuffer] Flushing {len(entries)} entries from fallback")
+
+                    # 도메인별로 그룹핑하여 배치 저장
+                    by_domain: dict[str, list] = {}
+                    for item in entries:
+                        domain = item.get("domain", "default")
+                        if domain not in by_domain:
+                            by_domain[domain] = []
+                        by_domain[domain].append(item["entry"])
+
+                    for domain, domain_entries in by_domain.items():
+                        try:
+                            self.log_batch(domain_entries, domain)
+                        except Exception as e:
+                            logger.warning(f"[RedisAuditBuffer] Shutdown flush failed for {domain}: {e}")
+
+                    self._fallback_buffer.clear()
+
+        except Exception as e:
+            logger.error(f"[RedisAuditBuffer] Graceful shutdown error: {e}")
+
+        logger.info("[RedisAuditBuffer] Graceful shutdown completed")
+
     def clear_domain(self, domain: str) -> int:
         """
         특정 도메인의 모든 엔트리 삭제 (테스트용).
@@ -426,6 +819,10 @@ class RedisAuditBuffer:
             key = f"{self._key_prefix}{domain}"
             count = self._redis.llen(key)
             self._redis.delete(key)
+
+            # ActiveKeySet에서도 제거
+            self._redis.srem(self.ACTIVE_DOMAINS_SET, domain)
+
             return count
         except Exception:
             return 0
