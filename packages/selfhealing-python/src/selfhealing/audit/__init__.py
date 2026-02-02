@@ -251,6 +251,11 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "BufferEventType": ("selfhealing.audit.event_buffer", "AuditEventType"),
     "RequestAuditBuffer": ("selfhealing.audit.event_buffer", "RequestAuditBuffer"),
     "add_audit_event": ("selfhealing.audit.event_buffer", "add_audit_event"),
+    # checkpoint_manager (4개)
+    "CheckpointManager": ("selfhealing.audit.checkpoint_manager", "CheckpointManager"),
+    "CheckpointData": ("selfhealing.audit.checkpoint_manager", "CheckpointData"),
+    "CheckpointError": ("selfhealing.audit.checkpoint_manager", "CheckpointError"),
+    "get_checkpoint_manager": ("selfhealing.audit.checkpoint_manager", "get_checkpoint_manager"),
 }
 
 # Cache for loaded symbols
@@ -557,4 +562,9 @@ __all__ = [
     "BufferEventType",
     "RequestAuditBuffer",
     "add_audit_event",
+    # Checkpoint Manager (WAL 처리 시퀀스 영속화)
+    "CheckpointManager",
+    "CheckpointData",
+    "CheckpointError",
+    "get_checkpoint_manager",
 ]

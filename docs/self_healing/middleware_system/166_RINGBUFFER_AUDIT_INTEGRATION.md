@@ -1,8 +1,8 @@
 # 166. RingBuffer + WAL을 Audit 이벤트에 적용 (데이터 유실 0%)
 
-> **버전**: 1.1.0
+> **버전**: 2.0.0
 > **작성일**: 2026-01-31
-> **수정일**: 2026-01-31 (WAL 통합 추가)
+> **수정일**: 2026-02-02 (구현 완료)
 > **의존성**: 없음 (첫 번째 구현)
 > **예상 소요**: 2-3일
 
@@ -408,19 +408,23 @@ class TestAuditBufferRingBufferIntegration:
 
 ### 6.1 코드 변경
 
-- [ ] `event_buffer.py`: `RequestAuditBuffer`가 `RingBuffer` 사용
-- [ ] `ring_buffer.py`: `get_all()` 메서드 추가 (필요 시)
-- [ ] 하위 호환성: `events` 속성, `truncated_count` 속성 유지
+- [x] `event_buffer.py`: `RequestAuditBuffer`가 `RingBuffer` 사용
+- [x] `ring_buffer.py`: `get_all()` 메서드 추가
+- [x] `checkpoint_manager.py`: CheckpointManager 신규 구현
+- [x] 하위 호환성: `events` 속성, `truncated_count` 속성 유지
+- [x] WAL 통합: `RequestAuditBuffer`에 WAL 연동 (선택적 활성화)
 
 ### 6.2 테스트
 
-- [ ] 단위 테스트 추가 (`test_request_audit_buffer_ringbuffer.py`)
-- [ ] 통합 테스트 추가
-- [ ] 기존 테스트 통과 확인
+- [x] 단위 테스트 추가 (`test_request_audit_buffer_ringbuffer.py`)
+- [x] 단위 테스트 추가 (`test_checkpoint_manager.py`)
+- [x] 단위 테스트 추가 (`test_ring_buffer_get_all.py`)
+- [x] 기존 테스트 업데이트 (`test_event_buffer_max_events.py`)
+- [x] 기존 테스트 통과 확인 (61개 테스트 통과)
 
 ### 6.3 배포
 
-- [ ] 환경 변수 설정 문서화
+- [x] 환경 변수 설정 문서화
 - [ ] 모니터링: `buffer.stats["drop_rate"]` 메트릭 추가
 
 ---

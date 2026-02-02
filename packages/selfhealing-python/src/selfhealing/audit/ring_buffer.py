@@ -238,6 +238,19 @@ class RingBuffer(Generic[T]):
             count = min(max_size, len(self._buffer))
             return list(self._buffer)[:count]
 
+    def get_all(self) -> list[T]:
+        """
+        모든 항목 반환 (비파괴적).
+
+        버퍼에 있는 모든 항목을 리스트로 반환합니다.
+        항목을 제거하지 않습니다.
+
+        Returns:
+            버퍼 내 모든 항목의 복사본 리스트
+        """
+        with self._lock:
+            return list(self._buffer)
+
     def clear(self) -> int:
         """
         Clear all items from buffer.
@@ -259,11 +272,7 @@ class RingBuffer(Generic[T]):
         """
         with self._lock:
             size = len(self._buffer)
-            drop_rate = (
-                self._total_dropped / self._total_enqueued
-                if self._total_enqueued > 0
-                else 0.0
-            )
+            drop_rate = self._total_dropped / self._total_enqueued if self._total_enqueued > 0 else 0.0
             return RingBufferStats(
                 capacity=self._capacity,
                 size=size,
