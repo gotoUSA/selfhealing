@@ -1029,36 +1029,37 @@ avg(time() - kube_pod_start_time{pod=~"django-api-.*"})
 ### 8.1 인프라
 
 - [ ] KEDA 설치
-- [ ] Redis TriggerAuthentication 설정
+- [x] Redis TriggerAuthentication 설정 (`k8s/keda-triggerauth-redis.yaml`)
 - [ ] Prometheus Adapter 설치 (RPS HPA용)
 - [ ] PgBouncer 검토 (선택)
 
 ### 8.2 Kubernetes 매니페스트
 
-- [ ] `k8s/django-api-hpa.yaml` 생성
-- [ ] `k8s/keda-scaledobject-celery-default.yaml` 생성
-- [ ] `k8s/keda-scaledobject-celery-critical.yaml` 생성
-- [ ] `k8s/keda-scaledobject-celery-audit.yaml` 생성
-- [ ] `k8s/prometheus-adapter-config.yaml` 생성 (신규)
+- [x] `k8s/django-api-hpa.yaml` 생성 ✅ 2026-02-03
+- [x] `k8s/keda-scaledobject-celery-default.yaml` 생성 ✅ 2026-02-03
+- [x] `k8s/keda-scaledobject-celery-critical.yaml` 생성 ✅ 2026-02-03
+- [x] `k8s/keda-scaledobject-celery-audit.yaml` 생성 ✅ 2026-02-03
+- [x] `k8s/prometheus-adapter-config.yaml` 생성 ✅ 2026-02-03
 - [ ] 기존 Deployment에 resources 추가
 
 ### 8.3 코드 변경
 
-- [ ] `myproject/celery.py`에 `task_reject_on_worker_lost=True` 추가
-- [ ] `scripts/prometheus/self_healing_alerts.yml`에 Redis 알림 추가
+- [x] `myproject/celery.py`에 `task_reject_on_worker_lost=True` 추가 ✅ 2026-02-03
+- [x] `scripts/prometheus/self_healing_alerts.yml`에 Redis 알림 추가 ✅ 2026-02-03
 
 ### 8.4 모니터링
 
-- [ ] Grafana 대시보드 추가
+- [x] Grafana 대시보드 추가 (`docker/grafana/dashboards/kubernetes-hpa.json`) ✅ 2026-02-03
 - [ ] 스케일 이벤트 알림 설정
-- [ ] Redis 부하 알림 설정 (신규)
+- [x] Redis 부하 알림 설정 ✅ 2026-02-03
 
 ### 8.5 테스트
 
-- [ ] 부하 테스트로 스케일 아웃 확인
-- [ ] 스케일 다운 동작 확인
-- [ ] Graceful Shutdown 확인
-- [ ] HPA 플래핑 테스트 (신규)
+- [x] HPA 플래핑 테스트 스크립트 생성 (`load_tests/scenarios/hpa/test_hpa_flapping.py`) ✅ 2026-02-03
+- [x] 단위 테스트 작성 및 통과 (`packages/selfhealing-python/tests/unit/config/test_kubernetes_autoscaling.py` - 30개 통과) ✅ 2026-02-03
+- [ ] 부하 테스트로 스케일 아웃 확인 (클러스터 배포 후)
+- [ ] 스케일 다운 동작 확인 (클러스터 배포 후)
+- [ ] Graceful Shutdown 확인 (클러스터 배포 후)
 
 ---
 
@@ -1135,3 +1136,4 @@ avg(time() - kube_pod_start_time{pod=~"django-api-.*"})
 |------|------|----------|
 | 1.0.0 | 2026-01-31 | 초기 작성 |
 | 1.1.0 | 2026-02-03 | 리뷰 반영: DB 커넥션 계산, task_reject_on_worker_lost, Redis 모니터링, RPS HPA, 플래핑 테스트 |
+| 1.2.0 | 2026-02-03 | 구현 완료: HPA/KEDA YAML, Celery 설정, Redis 알림, Grafana 대시보드, 단위테스트 30개 통과 |

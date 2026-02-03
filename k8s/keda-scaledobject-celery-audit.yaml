@@ -1,0 +1,73 @@
+# KEDA ScaledObject - Celery Audit Flush Worker
+#
+# Redis 버퍼 크기 기반 Celery Audit Worker 자동 스케일링
+# 감사 로그 플러시 작업 전용 Worker
+# 큐에 50개 초과 시 스케일 아웃
+#
+# 스케일링 범위: 1~3 Pods
+# 폴링 간격: 10초
+# 쿨다운 기간: 120초
+#
+# 적용 방법:
+#   kubectl apply -f k8s/keda-scaledobject-celery-audit.yaml
+#
+# 사전 요구사항:
+#   - KEDA 설치: helm install keda kedacore/keda
+#   - redis-trigger-auth TriggerAuthentication 생성
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-audit-worker-scaledobject
+  namespace: production
+  labels:
+    app: celery-audit-worker
+    component: worker
+    queue: audit
+spec:
+  # 스케일 대상 Deployment
+  scaleTargetRef:
+    name: celery-audit-worker
+
+  # 최소/최대 Pod 수
+  minReplicaCount: 1
+  maxReplicaCount: 3
+
+  # 메트릭 폴링 간격 (초)
+  pollingInterval: 10
+
+  # 스케일 다운 대기 시간 (초) - Audit은 느리게 축소
+  cooldownPeriod: 120
+
+  triggers:
+    # Redis Audit 플러시 큐 길이 기반 스케일링
+    - type: redis
+      metadata:
+        # Redis 서버 주소
+        address: redis-master.production.svc.cluster.local:6379
+        # Audit 플러시 큐 이름
+        listName: audit_flush
+        # 50개 초과 시 스케일 아웃
+        listLength: "50"
+      # Redis 인증 설정
+      authenticationRef:
+        name: redis-trigger-auth
+
+  # 고급 HPA 동작 설정
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          # 1분 안정화 대기
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 30
+        scaleDown:
+          # 3분 안정화 대기 (Audit 작업 완료 보장)
+          stabilizationWindowSeconds: 180
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60

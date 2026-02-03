@@ -1,0 +1,27 @@
+# KEDA Redis Trigger Authentication
+#
+# KEDA가 Redis에 인증하기 위한 자격 증명 설정
+# Redis 큐 길이 기반 Celery Worker 스케일링에 사용
+#
+# 사전 요구사항:
+#   - redis-secrets Secret이 production 네임스페이스에 존재해야 함
+#   - Secret에 redis-password 키가 있어야 함
+#
+# 적용 방법:
+#   kubectl apply -f k8s/keda-triggerauth-redis.yaml
+
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-trigger-auth
+  namespace: production
+  labels:
+    app: keda
+    component: trigger-auth
+    backend: redis
+spec:
+  # Redis Secret 참조
+  secretTargetRef:
+    - parameter: password
+      name: redis-secrets
+      key: redis-password

@@ -221,3 +221,83 @@ groups:
           summary: "Replay attempts spike detected"
           description: "{{ $value | printf \"%.1f\" }} replay attempts per minute. May indicate batch replay or recovery in progress."
           runbook_url: "https://docs.internal/runbooks/replay-spike"
+
+  # =========================================================================
+  # Redis Load Monitoring (KEDA Polling Impact)
+  # 171_KUBERNETES_AUTOSCALING.md §5.2
+  # =========================================================================
+  - name: self_healing_redis_load
+    rules:
+      # Redis Ops/Sec 급증 (KEDA 폴링 영향 가능)
+      - alert: RedisOpsPerSecSpike
+        expr: |
+          redis_instantaneous_ops_per_sec
+          > 3 * avg_over_time(redis_instantaneous_ops_per_sec[1h])
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Redis ops/sec spike detected"
+          description: |
+            Current: {{ $value | printf "%.0f" }} ops/sec
+            This may indicate KEDA polling impact.
+            Consider increasing pollingInterval in ScaledObject.
+          runbook_url: "https://docs.internal/runbooks/redis-ops-spike"
+
+      # Redis CPU 사용률 높음
+      - alert: RedisCPUHigh
+        expr: redis_used_cpu_sys > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Redis CPU usage high ({{ $value | printf \"%.1f\" }})"
+          description: |
+            Redis system CPU usage exceeds 50%.
+            Check for excessive polling or connection storms.
+          runbook_url: "https://docs.internal/runbooks/redis-cpu-high"
+
+      # Redis 연결 수 급증
+      - alert: RedisConnectionsSpike
+        expr: redis_connected_clients > 200
+        for: 2m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Redis connections spike: {{ $value }}"
+          description: |
+            Too many Redis connections.
+            May indicate Pod scaling without proper connection pooling.
+          runbook_url: "https://docs.internal/runbooks/redis-connections-spike"
+
+      # Redis 메모리 사용량 높음
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Redis memory usage high: {{ $value | printf \"%.1f%%\" }}"
+          description: |
+            Redis memory usage exceeds 80% of max.
+            Consider scaling Redis or reviewing key expiration policies.
+          runbook_url: "https://docs.internal/runbooks/redis-memory-high"
+
+      # Celery 큐 길이 급증
+      - alert: CeleryQueueLengthHigh
+        expr: redis_list_length{key=~"celery|critical|audit_flush"} > 500
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "Celery queue length high: {{ $labels.key }} = {{ $value }}"
+          description: |
+            Queue {{ $labels.key }} has {{ $value }} pending tasks.
+            KEDA should be scaling workers. Check ScaledObject status.
+          runbook_url: "https://docs.internal/runbooks/celery-queue-high"
+

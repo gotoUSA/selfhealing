@@ -1,0 +1,88 @@
+# Django API Horizontal Pod Autoscaler
+#
+# CPU 및 RPS(Requests Per Second) 기반 자동 스케일링
+# Pod 수를 2~20개 범위에서 자동 조절
+#
+# 스케일링 트리거:
+#   - CPU 사용률 70% 초과
+#   - 메모리 사용률 80% 초과
+#   - Pod당 RPS 100 초과 (Prometheus Adapter 필요)
+#
+# 적용 방법:
+#   kubectl apply -f k8s/django-api-hpa.yaml
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: django-api-hpa
+  namespace: production
+  labels:
+    app: django-api
+    component: web
+    tier: frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: django-api
+
+  # 최소/최대 Pod 수
+  minReplicas: 2
+  maxReplicas: 20
+
+  metrics:
+    # CPU 사용률 기반 (주요 지표)
+    # 70% 초과 시 스케일 아웃
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+    # 메모리 사용률 기반 (보조 지표)
+    # 80% 초과 시 스케일 아웃
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+    # RPS 기반 (Prometheus Adapter 필요)
+    # Pod당 100 RPS 초과 시 스케일 아웃
+    - type: Pods
+      pods:
+        metric:
+          name: django_http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "100"
+
+  # 스케일링 동작 설정
+  behavior:
+    # 스케일 업 정책
+    scaleUp:
+      # 30초 안정화 대기 (급격한 확장 방지)
+      stabilizationWindowSeconds: 30
+      policies:
+        # 100% 증가 (현재 Pod 수의 2배)
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        # 또는 4개씩 증가 (둘 중 큰 값 적용)
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+      selectPolicy: Max
+
+    # 스케일 다운 정책
+    scaleDown:
+      # 5분 안정화 대기 (플래핑 방지)
+      stabilizationWindowSeconds: 300
+      policies:
+        # 50% 감소
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+      selectPolicy: Max

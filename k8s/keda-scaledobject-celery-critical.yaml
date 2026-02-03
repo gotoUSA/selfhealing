@@ -1,0 +1,75 @@
+# KEDA ScaledObject - Celery Critical Worker
+#
+# Redis 큐 길이 기반 Celery Critical Worker 자동 스케일링
+# P0 태스크 전용 Worker로 민감하게 스케일링
+# 큐에 10개 초과 시 즉시 스케일 아웃
+#
+# 스케일링 범위: 1~5 Pods
+# 폴링 간격: 5초 (빠른 반응)
+# 쿨다운 기간: 30초
+#
+# 적용 방법:
+#   kubectl apply -f k8s/keda-scaledobject-celery-critical.yaml
+#
+# 사전 요구사항:
+#   - KEDA 설치: helm install keda kedacore/keda
+#   - redis-trigger-auth TriggerAuthentication 생성
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-critical-worker-scaledobject
+  namespace: production
+  labels:
+    app: celery-critical-worker
+    component: worker
+    queue: critical
+    priority: p0
+spec:
+  # 스케일 대상 Deployment
+  scaleTargetRef:
+    name: celery-critical-worker
+
+  # 최소/최대 Pod 수 (Critical은 항상 최소 1개 유지)
+  minReplicaCount: 1
+  maxReplicaCount: 5
+
+  # 메트릭 폴링 간격 - Critical은 더 자주 체크 (5초)
+  pollingInterval: 5
+
+  # 스케일 다운 대기 시간 - 빠른 수축 (30초)
+  cooldownPeriod: 30
+
+  triggers:
+    # Redis Critical 큐 길이 기반 스케일링
+    - type: redis
+      metadata:
+        # Redis 서버 주소
+        address: redis-master.production.svc.cluster.local:6379
+        # Critical 큐 이름 (selfhealing.critical)
+        listName: critical
+        # 민감한 임계값 - 10개 초과 시 스케일 아웃
+        listLength: "10"
+      # Redis 인증 설정
+      authenticationRef:
+        name: redis-trigger-auth
+
+  # 고급 HPA 동작 설정 (즉시 반응)
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          # 즉시 스케일 아웃 (안정화 없음)
+          stabilizationWindowSeconds: 0
+          policies:
+            # 한 번에 2개까지 추가
+            - type: Pods
+              value: 2
+              periodSeconds: 10
+        scaleDown:
+          # 1분 안정화 대기
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 30

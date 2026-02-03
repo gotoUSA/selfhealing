@@ -1,0 +1,72 @@
+# KEDA ScaledObject - Celery Default Worker
+#
+# Redis 큐 길이 기반 Celery Default Worker 자동 스케일링
+# 큐에 쌓인 작업 수가 100개 초과 시 스케일 아웃
+#
+# 스케일링 범위: 2~10 Pods
+# 폴링 간격: 15초
+# 쿨다운 기간: 60초
+#
+# 적용 방법:
+#   kubectl apply -f k8s/keda-scaledobject-celery-default.yaml
+#
+# 사전 요구사항:
+#   - KEDA 설치: helm install keda kedacore/keda
+#   - redis-trigger-auth TriggerAuthentication 생성
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-default-worker-scaledobject
+  namespace: production
+  labels:
+    app: celery-default-worker
+    component: worker
+    queue: default
+spec:
+  # 스케일 대상 Deployment
+  scaleTargetRef:
+    name: celery-default-worker
+
+  # 최소/최대 Pod 수
+  minReplicaCount: 2
+  maxReplicaCount: 10
+
+  # 메트릭 폴링 간격 (초)
+  pollingInterval: 15
+
+  # 스케일 다운 대기 시간 (초)
+  cooldownPeriod: 60
+
+  triggers:
+    # Redis 큐 길이 기반 스케일링
+    - type: redis
+      metadata:
+        # Redis 서버 주소
+        address: redis-master.production.svc.cluster.local:6379
+        # 모니터링할 Celery 큐 이름
+        listName: celery
+        # 이 값 초과 시 스케일 아웃 시작
+        listLength: "100"
+      # Redis 인증 설정
+      authenticationRef:
+        name: redis-trigger-auth
+
+  # 고급 HPA 동작 설정
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          # 30초 안정화 대기
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+        scaleDown:
+          # 2분 안정화 대기 (플래핑 방지)
+          stabilizationWindowSeconds: 120
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 30

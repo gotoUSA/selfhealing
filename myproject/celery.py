@@ -32,7 +32,7 @@ if hasattr(settings, "CELERY_RESULT_BACKEND"):
 app.autodiscover_tasks()
 
 # selfhealing 패키지의 Celery tasks 자동 로드
-app.autodiscover_tasks(['selfhealing.celery_tasks'])
+app.autodiscover_tasks(["selfhealing.celery_tasks"])
 
 # =============================================================================
 # Self-Healing Signal Hooks (Zero-Code Integration)
@@ -274,6 +274,17 @@ app.conf.update(
     # 워커 설정
     worker_max_tasks_per_child=1000,  # 메모리 누수 방지
     worker_prefetch_multiplier=4,
+    # =========================================================================
+    # Worker 비정상 종료 시 안전한 작업 재처리
+    # =========================================================================
+    # SIGKILL 등으로 Worker가 강제 종료되면 처리 중이던 작업을 큐로 반환
+    # acks_late=True와 함께 At-least-once 전송 보장
+    task_reject_on_worker_lost=True,
+    # 작업 visibility timeout (Redis broker 전용)
+    # 작업 처리 중 Worker 죽으면 이 시간 후 다른 Worker가 처리
+    broker_transport_options={
+        "visibility_timeout": 3600,  # 1시간 (긴 작업 고려)
+    },
     # 큐 설정
     task_default_queue="default",
     task_queues={
