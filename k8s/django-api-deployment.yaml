@@ -1,0 +1,210 @@
+# Django API Deployment
+#
+# Django REST API 서버 배포
+# HPA에 의해 자동 스케일링 (2-20 Pods)
+#
+# Reference:
+#   docs/self_healing/middleware_system/171_KUBERNETES_AUTOSCALING.md
+#
+# 적용 방법:
+#   kubectl apply -f k8s/django-api-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-api
+  namespace: production
+  labels:
+    app: django-api
+    component: web
+    tier: frontend
+spec:
+  # HPA에 의해 오버라이드됨
+  replicas: 2
+  selector:
+    matchLabels:
+      app: django-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: django-api
+        component: web
+        tier: frontend
+      annotations:
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # 다른 Django API Pod와 같은 노드 배치 방지 (HA)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - django-api
+                topologyKey: kubernetes.io/hostname
+
+      # Graceful Shutdown을 위한 종료 유예 시간
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: django-api
+          image: myproject:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+
+          command:
+            - gunicorn
+            - myproject.wsgi:application
+            - --bind=0.0.0.0:8000
+            - --workers=4
+            - --worker-class=gthread
+            - --threads=2
+            - --worker-tmp-dir=/dev/shm
+            - --access-logfile=-
+            - --error-logfile=-
+            - --capture-output
+            - --timeout=30
+            - --graceful-timeout=10
+
+          env:
+            # Django Settings
+            - name: DJANGO_SETTINGS_MODULE
+              value: "myproject.settings.production"
+            # Database
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: url
+            # Redis
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: url
+            # Celery Broker
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: celery-secrets
+                  key: broker-url
+            # Secret Key
+            - name: DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: django-secrets
+                  key: secret-key
+            # Allowed Hosts
+            - name: DJANGO_ALLOWED_HOSTS
+              value: "*"
+
+          # HPA 계산에 사용되는 리소스 설정
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          # Readiness Probe: 트래픽 수신 전 체크
+          readinessProbe:
+            httpGet:
+              path: /health/ready/
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+
+          # Liveness Probe: Pod 재시작 결정
+          livenessProbe:
+            httpGet:
+              path: /health/live/
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          # Startup Probe: 초기 시작 시간 허용
+          startupProbe:
+            httpGet:
+              path: /health/live/
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+
+          # Graceful Shutdown (연결 드레이닝 대기)
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 10
+
+          # 볼륨 마운트
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+            - name: media-files
+              mountPath: /app/media
+
+      volumes:
+        - name: static-files
+          emptyDir: {}
+        - name: media-files
+          persistentVolumeClaim:
+            claimName: django-media-pvc
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-api
+  namespace: production
+  labels:
+    app: django-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: django-api
+
+---
+# PodDisruptionBudget - 최소 1개 유지
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: django-api-pdb
+  namespace: production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: django-api

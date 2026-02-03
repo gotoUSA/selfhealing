@@ -1,8 +1,8 @@
 # 171. Kubernetes Autoscaling 구현
 
-> **버전**: 1.1.0
+> **버전**: 1.2.1
 > **작성일**: 2026-01-31
-> **수정일**: 2026-02-03 (리뷰 반영)
+> **수정일**: 2026-02-03 (Deployment YAML 추가)
 > **의존성**: [170_KAFKA_AUDIT_ADAPTER.md](170_KAFKA_AUDIT_ADAPTER.md)
 > **예상 소요**: 2-3일
 
@@ -1036,11 +1036,13 @@ avg(time() - kube_pod_start_time{pod=~"django-api-.*"})
 ### 8.2 Kubernetes 매니페스트
 
 - [x] `k8s/django-api-hpa.yaml` 생성 ✅ 2026-02-03
+- [x] `k8s/django-api-deployment.yaml` 생성 ✅ 2026-02-03
+- [x] `k8s/celery-default-worker.yaml` 생성 ✅ 2026-02-03
 - [x] `k8s/keda-scaledobject-celery-default.yaml` 생성 ✅ 2026-02-03
 - [x] `k8s/keda-scaledobject-celery-critical.yaml` 생성 ✅ 2026-02-03
 - [x] `k8s/keda-scaledobject-celery-audit.yaml` 생성 ✅ 2026-02-03
 - [x] `k8s/prometheus-adapter-config.yaml` 생성 ✅ 2026-02-03
-- [ ] 기존 Deployment에 resources 추가
+- [x] Deployment에 resources 설정 완료 ✅ 2026-02-03
 
 ### 8.3 코드 변경
 
@@ -1137,3 +1139,4 @@ avg(time() - kube_pod_start_time{pod=~"django-api-.*"})
 | 1.0.0 | 2026-01-31 | 초기 작성 |
 | 1.1.0 | 2026-02-03 | 리뷰 반영: DB 커넥션 계산, task_reject_on_worker_lost, Redis 모니터링, RPS HPA, 플래핑 테스트 |
 | 1.2.0 | 2026-02-03 | 구현 완료: HPA/KEDA YAML, Celery 설정, Redis 알림, Grafana 대시보드, 단위테스트 30개 통과 |
+| 1.2.1 | 2026-02-03 | 누락 Deployment 추가: django-api-deployment.yaml, celery-default-worker.yaml |

@@ -1,0 +1,172 @@
+# Celery Default Worker Deployment
+#
+# 일반 Celery 작업 처리용 Worker
+# KEDA ScaledObject에 의해 자동 스케일링 (2-10 Pods)
+#
+# Reference:
+#   docs/self_healing/middleware_system/171_KUBERNETES_AUTOSCALING.md
+#
+# 적용 방법:
+#   kubectl apply -f k8s/celery-default-worker.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-default-worker
+  namespace: production
+  labels:
+    app: celery-default-worker
+    component: worker
+    tier: backend
+    queue: default
+spec:
+  # KEDA ScaledObject에 의해 오버라이드됨
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-default-worker
+  template:
+    metadata:
+      labels:
+        app: celery-default-worker
+        component: worker
+        queue: default
+      annotations:
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      # 다른 Default Worker와 같은 노드에 배치 방지 (선택)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - celery-default-worker
+                topologyKey: kubernetes.io/hostname
+
+      # Graceful Shutdown을 위한 종료 유예 시간
+      terminationGracePeriodSeconds: 120
+
+      containers:
+        - name: celery-worker
+          image: myproject:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - shopping
+            - worker
+            - --loglevel=info
+            # 동시 처리 4개
+            - --concurrency=4
+            # 기본 큐 처리
+            - --queues=celery
+            # 미리 가져올 작업 수
+            - --prefetch-multiplier=4
+
+          env:
+            - name: CELERY_WORKER_POOL
+              value: "prefork"
+            - name: CELERY_WORKER_HIJACK_ROOT_LOGGER
+              value: "false"
+            # Worker 식별자
+            - name: CELERY_WORKER_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Redis Broker URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: celery-secrets
+                  key: broker-url
+            # Redis Result Backend
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: celery-secrets
+                  key: result-backend
+            # Django Settings
+            - name: DJANGO_SETTINGS_MODULE
+              value: "myproject.settings.production"
+            # Database URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: url
+
+          # HPA 계산에 사용되는 리소스 설정
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          # Liveness Probe: Worker 프로세스 살아있는지 확인
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - shopping
+                - inspect
+                - ping
+                - --timeout
+                - "10"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+
+          # Readiness Probe: 작업 수신 가능 상태 확인
+          readinessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - shopping
+                - inspect
+                - ping
+                - --timeout
+                - "5"
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          # Graceful Shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "PreStop: Stopping worker gracefully..."
+                    # 새 작업 수신 중단
+                    celery -A shopping control cancel_consumer celery || true
+                    # 진행 중인 작업 완료 대기 (최대 60초)
+                    sleep 60
+                    echo "PreStop: Worker shutdown complete"
+
+---
+# PodDisruptionBudget - 최소 1개 유지
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-default-worker-pdb
+  namespace: production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-default-worker
