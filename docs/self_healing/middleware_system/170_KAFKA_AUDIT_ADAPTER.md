@@ -1115,6 +1115,12 @@ class TestKafkaAuditAdapter:
 - [x] `schemas/audit_event.avsc` Avro 스키마
 - [x] `pyproject.toml` kafka 의존성 추가
 - [x] 단위 테스트 작성 및 통과 (24개)
+- [x] `kafka_consumer.py` Consumer 구현 (IdempotentAuditConsumer, RebalanceAwareConsumer, PostgreSQLSinkConsumer)
+- [x] `wal.py` 우선순위 기반 Purge 구현 (`_purge_by_priority()`)
+- [x] `test_kafka_chaos.py` 카오스 테스트 (파티션 장애, 네트워크 파티션, DLT)
+- [x] `test_kafka_consumer.py` Consumer 단위 테스트
+- [x] `demo_zero_data_loss.py` 피칭 시연 스크립트
+- [x] `k8s/kafka-mirrormaker2-config.yaml` MirrorMaker 2 설정
 
 ### 8.3 전환
 

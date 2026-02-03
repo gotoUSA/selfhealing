@@ -117,6 +117,17 @@ class WALConfig:
     # Best-Effort Recovery 설정
     best_effort_recovery: bool = True  # 손상 시 마커 기반 복구
 
+    # Priority-based Purge 설정 (디스크 풀 시 우선순위 낮은 로그 삭제)
+    priority_based_purge: bool = True  # 우선순위 기반 삭제 활성화
+    purge_priority_order: tuple[str, ...] = (
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    )  # 삭제 우선순위 (낮은 것부터 삭제)
+    critical_retention_min_mb: int = 100  # CRITICAL 로그 최소 보관 용량 (MB)
+
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024
@@ -866,7 +877,14 @@ class WriteAheadLog:
             )
 
     def _handle_disk_full(self) -> None:
-        """디스크 풀 상황 처리 (Fail-Open 모드 전환)."""
+        """디스크 풀 상황 처리 (우선순위 기반 Purge 시도 후 Fail-Open 모드 전환)."""
+        # 우선순위 기반 Purge 시도
+        if self._config.priority_based_purge:
+            if self._purge_by_priority():
+                logger.info("[WAL] Priority-based purge succeeded, continuing normal operation")
+                return  # 공간 확보 성공, 정상 모드 유지
+
+        # Purge 실패 또는 비활성화 시 Fail-Open 모드 전환
         self._state = WALState.DISK_FULL_FAILOPEN
         logger.critical("[WAL] DISK FULL - Switching to fail-open mode")
 
@@ -899,6 +917,84 @@ class WriteAheadLog:
             UnifiedNotificationManager().notify(payload)
         except Exception as e:
             logger.error(f"[WAL] Failed to send disk full notification: {e}")
+
+    def _purge_by_priority(self) -> bool:
+        """
+        우선순위 기반 삭제로 디스크 공간 확보.
+
+        낮은 우선순위 로그 파일부터 삭제하고, CRITICAL은 최대한 보존.
+
+        Returns:
+            True: 충분한 공간 확보 성공
+            False: 공간 확보 실패
+        """
+        freed_bytes = 0
+        target_free = self._config.max_file_size_bytes  # 최소 1개 파일 공간 확보
+
+        # CRITICAL 제외한 우선순위 순서로 삭제
+        purge_priorities = self._config.purge_priority_order[:-1]  # CRITICAL 제외
+
+        for priority in purge_priorities:
+            # 해당 우선순위 로그 파일 찾기 (오래된 순서)
+            priority_pattern = f"{self._config.file_prefix}_{priority.lower()}_*.wal"
+            priority_files = sorted(
+                self._wal_dir.glob(priority_pattern),
+                key=lambda f: f.stat().st_mtime,
+            )
+
+            for wal_file in priority_files:
+                if freed_bytes >= target_free:
+                    logger.info(f"[WAL] Priority purge complete, freed {freed_bytes} bytes")
+                    return True
+
+                try:
+                    file_size = wal_file.stat().st_size
+                    wal_file.unlink()
+                    freed_bytes += file_size
+                    logger.warning(
+                        f"[WAL] Priority purge: deleted {wal_file.name} " f"(priority={priority}, size={file_size})"
+                    )
+                except Exception as e:
+                    logger.error(f"[WAL] Failed to delete {wal_file}: {e}")
+
+        # 우선순위 파일이 없으면 일반 파일 중 오래된 것부터 삭제 (CRITICAL 보호)
+        if freed_bytes < target_free:
+            general_files = sorted(
+                self._wal_dir.glob(f"{self._config.file_prefix}_*.wal"),
+                key=lambda f: f.stat().st_mtime,
+            )
+            critical_min_bytes = self._config.critical_retention_min_mb * 1024 * 1024
+            total_size = sum(f.stat().st_size for f in general_files)
+
+            for wal_file in general_files:
+                if freed_bytes >= target_free:
+                    return True
+
+                # CRITICAL 최소 보관 용량 보호
+                remaining_size = total_size - freed_bytes
+                if remaining_size <= critical_min_bytes:
+                    logger.warning(
+                        f"[WAL] Priority purge stopped to protect CRITICAL logs " f"(remaining={remaining_size} bytes)"
+                    )
+                    break
+
+                try:
+                    file_size = wal_file.stat().st_size
+                    wal_file.unlink()
+                    freed_bytes += file_size
+                    logger.warning(f"[WAL] General purge: deleted {wal_file.name} (size={file_size})")
+                except Exception as e:
+                    logger.error(f"[WAL] Failed to delete {wal_file}: {e}")
+
+        if freed_bytes >= target_free:
+            logger.info(f"[WAL] Priority purge complete, freed {freed_bytes} bytes")
+            return True
+
+        logger.critical(
+            f"[WAL] Priority purge insufficient, freed only {freed_bytes} bytes "
+            f"(target={target_free} bytes). CRITICAL logs at risk!"
+        )
+        return False
 
     def check_disk_recovery(self) -> bool:
         """

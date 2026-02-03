@@ -66,10 +66,17 @@ __all__ = [
     # Django Adapter (optional - requires Django)
     "DjangoAuditLogAdapter",
     "get_django_audit_adapter",
-    # Kafka Adapter (optional - requires confluent-kafka)
+    # Kafka Producer Adapter (optional - requires confluent-kafka)
     "KafkaAuditAdapter",
     "get_kafka_audit_adapter",
     "reset_kafka_audit_adapter",
+    # Kafka Consumer Adapters (optional - requires confluent-kafka)
+    "KafkaConsumerConfig",
+    "BaseAuditConsumer",
+    "IdempotentAuditConsumer",
+    "RebalanceAwareConsumer",
+    "PostgreSQLSinkConfig",
+    "PostgreSQLSinkConsumer",
 ]
 
 
@@ -95,5 +102,33 @@ def __getattr__(name: str):
         if name == "get_kafka_audit_adapter":
             return get_kafka_audit_adapter
         return reset_kafka_audit_adapter
+
+    # Kafka Consumer adapters
+    consumer_names = (
+        "KafkaConsumerConfig",
+        "BaseAuditConsumer",
+        "IdempotentAuditConsumer",
+        "RebalanceAwareConsumer",
+        "PostgreSQLSinkConfig",
+        "PostgreSQLSinkConsumer",
+    )
+    if name in consumer_names:
+        from .kafka_consumer import (
+            BaseAuditConsumer,
+            IdempotentAuditConsumer,
+            KafkaConsumerConfig,
+            PostgreSQLSinkConfig,
+            PostgreSQLSinkConsumer,
+            RebalanceAwareConsumer,
+        )
+
+        return {
+            "KafkaConsumerConfig": KafkaConsumerConfig,
+            "BaseAuditConsumer": BaseAuditConsumer,
+            "IdempotentAuditConsumer": IdempotentAuditConsumer,
+            "RebalanceAwareConsumer": RebalanceAwareConsumer,
+            "PostgreSQLSinkConfig": PostgreSQLSinkConfig,
+            "PostgreSQLSinkConsumer": PostgreSQLSinkConsumer,
+        }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
