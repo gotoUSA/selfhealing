@@ -1052,7 +1052,7 @@ avg(time() - kube_pod_start_time{pod=~"django-api-.*"})
 ### 8.4 모니터링
 
 - [x] Grafana 대시보드 추가 (`docker/grafana/dashboards/kubernetes-hpa.json`) ✅ 2026-02-03
-- [ ] 스케일 이벤트 알림 설정
+- [x] 스케일 이벤트 알림 설정 (`scripts/prometheus/self_healing_alerts.yml`) ✅ 2026-02-03
 - [x] Redis 부하 알림 설정 ✅ 2026-02-03
 
 ### 8.5 테스트
@@ -1140,3 +1140,4 @@ avg(time() - kube_pod_start_time{pod=~"django-api-.*"})
 | 1.1.0 | 2026-02-03 | 리뷰 반영: DB 커넥션 계산, task_reject_on_worker_lost, Redis 모니터링, RPS HPA, 플래핑 테스트 |
 | 1.2.0 | 2026-02-03 | 구현 완료: HPA/KEDA YAML, Celery 설정, Redis 알림, Grafana 대시보드, 단위테스트 30개 통과 |
 | 1.2.1 | 2026-02-03 | 누락 Deployment 추가: django-api-deployment.yaml, celery-default-worker.yaml |
+| 1.2.2 | 2026-02-03 | 스케일 이벤트 알림 규칙 추가 (HPA 플래핑, 최대 레플리카, KEDA 에러) |

@@ -301,3 +301,117 @@ groups:
             KEDA should be scaling workers. Check ScaledObject status.
           runbook_url: "https://docs.internal/runbooks/celery-queue-high"
 
+  # =========================================================================
+  # HPA/KEDA Scaling Events Monitoring
+  # 171_KUBERNETES_AUTOSCALING.md §8.4
+  # =========================================================================
+  - name: self_healing_scaling_events
+    rules:
+      # HPA 스케일 아웃 이벤트 (정보성)
+      - alert: HPAScaledUp
+        expr: |
+          increase(kube_hpa_status_current_replicas{hpa=~"django-api-hpa|celery-.*"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+          team: ops
+        annotations:
+          summary: "HPA scaled up: {{ $labels.hpa }}"
+          description: |
+            HPA {{ $labels.hpa }} increased replicas.
+            Current: {{ $value | printf "%.0f" }} replicas added in last 5m.
+          runbook_url: "https://docs.internal/runbooks/hpa-scale-event"
+
+      # HPA 스케일 다운 이벤트 (정보성)
+      - alert: HPAScaledDown
+        expr: |
+          decrease(kube_hpa_status_current_replicas{hpa=~"django-api-hpa|celery-.*"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: info
+          team: ops
+        annotations:
+          summary: "HPA scaled down: {{ $labels.hpa }}"
+          description: |
+            HPA {{ $labels.hpa }} decreased replicas.
+            Current: {{ $value | printf "%.0f" }} replicas removed in last 5m.
+          runbook_url: "https://docs.internal/runbooks/hpa-scale-event"
+
+      # HPA 플래핑 감지 (5분 내 2회 이상 변경)
+      - alert: HPAFlapping
+        expr: |
+          changes(kube_hpa_status_current_replicas{hpa=~"django-api-hpa|celery-.*"}[5m]) > 2
+        for: 0m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "HPA flapping detected: {{ $labels.hpa }}"
+          description: |
+            HPA {{ $labels.hpa }} changed {{ $value | printf "%.0f" }} times in 5 minutes.
+            This indicates unstable load or misconfigured thresholds.
+            Consider increasing stabilizationWindowSeconds.
+          runbook_url: "https://docs.internal/runbooks/hpa-flapping"
+
+      # HPA 최대 레플리카 도달 (용량 한계)
+      - alert: HPAMaxReplicasReached
+        expr: |
+          kube_hpa_status_current_replicas == kube_hpa_spec_max_replicas
+        for: 10m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "HPA at max capacity: {{ $labels.hpa }}"
+          description: |
+            HPA {{ $labels.hpa }} has reached max replicas limit for 10 minutes.
+            Current: {{ $value | printf "%.0f" }} pods.
+            Consider increasing maxReplicas or optimizing performance.
+          runbook_url: "https://docs.internal/runbooks/hpa-max-replicas"
+
+      # HPA 최소 레플리카 유지 (정상 상태)
+      - alert: HPAAtMinReplicas
+        expr: |
+          kube_hpa_status_current_replicas == kube_hpa_spec_min_replicas
+        for: 30m
+        labels:
+          severity: info
+          team: ops
+        annotations:
+          summary: "HPA at minimum: {{ $labels.hpa }}"
+          description: |
+            HPA {{ $labels.hpa }} at minimum replicas for 30 minutes.
+            This is normal during low traffic periods.
+
+      # KEDA ScaledObject 비활성 상태
+      - alert: KEDAScaledObjectInactive
+        expr: |
+          keda_scaledobject_paused == 1
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "KEDA ScaledObject paused: {{ $labels.scaledobject }}"
+          description: |
+            ScaledObject {{ $labels.scaledobject }} is paused.
+            No autoscaling will occur until resumed.
+          runbook_url: "https://docs.internal/runbooks/keda-paused"
+
+      # KEDA 스케일러 에러
+      - alert: KEDAScalerErrors
+        expr: |
+          increase(keda_scaler_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "KEDA scaler errors: {{ $labels.scaler }}"
+          description: |
+            KEDA scaler {{ $labels.scaler }} has errors.
+            {{ $value | printf "%.0f" }} errors in last 5 minutes.
+            Check Redis connectivity and KEDA logs.
+          runbook_url: "https://docs.internal/runbooks/keda-errors"
+
+
