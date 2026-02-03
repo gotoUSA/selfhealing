@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import threading
+import time
 from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,6 +97,9 @@ class ContinuousAuditRecorder:
         # Checkpoint Strategy 연동
         checkpoint_strategy: Optional["CheckpointStorageStrategy"] = None,
         checkpoint_namespace: str = "default",
+        # Checkpoint Back-pressure 설정
+        checkpoint_save_interval: int = 10,
+        checkpoint_save_max_seconds: float = 30.0,
     ):
         """
         Initialize ContinuousAuditRecorder.
@@ -111,6 +115,8 @@ class ContinuousAuditRecorder:
             wal_config: WAL 설정
             checkpoint_strategy: 체크포인트 저장 전략 (None이면 WAL 활성화 시 기본값 사용)
             checkpoint_namespace: 체크포인트 네임스페이스
+            checkpoint_save_interval: N번 기록마다 체크포인트 저장 (기본: 10)
+            checkpoint_save_max_seconds: 최대 저장 간격 초 (기본: 30.0)
         """
         self.audit_adapter = audit_adapter
         self.config = config or AuditConfig.get_default()
@@ -143,6 +149,12 @@ class ContinuousAuditRecorder:
         # Checkpoint Strategy 초기화
         self._checkpoint_strategy: CheckpointStorageStrategy | None = checkpoint_strategy
         self._checkpoint_namespace = checkpoint_namespace
+
+        # Checkpoint Back-pressure 상태 (호출자 책임 패턴)
+        self._checkpoint_save_interval = checkpoint_save_interval
+        self._checkpoint_save_max_seconds = checkpoint_save_max_seconds
+        self._records_since_checkpoint: int = 0
+        self._last_checkpoint_time: float = time.time()
 
         if checkpoint_strategy is None and wal_enabled:
             # WAL 활성화 시 기본 전략 자동 설정
@@ -761,21 +773,9 @@ class ContinuousAuditRecorder:
                     except Exception as e:
                         logger.warning(f"[ContinuousAudit] WAL commit failed: {e}")
 
-                # Checkpoint 저장 (WAL 커밋 후)
+                # Checkpoint 저장 (Back-pressure 적용)
                 if wal_seq is not None and self._checkpoint_strategy:
-                    try:
-                        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
-
-                        checkpoint_data = UnifiedCheckpointData(
-                            wal_sequence=wal_seq,
-                            checksum=entry_dict.get("integrity", {}).get("hash"),
-                        )
-                        self._checkpoint_strategy.save(
-                            self._checkpoint_namespace,
-                            checkpoint_data,
-                        )
-                    except Exception as e:
-                        logger.warning(f"[ContinuousAudit] Checkpoint save failed: {e}")
+                    self._maybe_save_checkpoint(wal_seq, entry_dict)
 
             except Exception as e:
                 self._failed_write_count += 1
@@ -813,7 +813,75 @@ class ContinuousAuditRecorder:
             "fallback_to_stdout": self._fallback_to_stdout,
             "wal_enabled": self._wal_enabled,
             "chain_state": self._hash_manager.get_state(),
+            "records_since_checkpoint": self._records_since_checkpoint,
+            "checkpoint_save_interval": self._checkpoint_save_interval,
         }
+
+    def _maybe_save_checkpoint(self, wal_seq: int, entry_dict: dict[str, Any]) -> None:
+        """
+        Back-pressure를 적용한 체크포인트 저장.
+
+        N번 기록마다 또는 최대 저장 간격 초과 시에만 저장.
+        sync_worker.py의 Back-pressure 패턴과 동일.
+        """
+        self._records_since_checkpoint += 1
+
+        should_save = (
+            self._records_since_checkpoint >= self._checkpoint_save_interval
+            or time.time() - self._last_checkpoint_time >= self._checkpoint_save_max_seconds
+        )
+
+        if not should_save:
+            return
+
+        try:
+            from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
+
+            checkpoint_data = UnifiedCheckpointData(
+                wal_sequence=wal_seq,
+                checksum=entry_dict.get("integrity", {}).get("hash"),
+            )
+            self._checkpoint_strategy.save(
+                self._checkpoint_namespace,
+                checkpoint_data,
+            )
+
+            # 저장 성공 시 카운터 리셋
+            self._records_since_checkpoint = 0
+            self._last_checkpoint_time = time.time()
+
+            logger.debug(f"[ContinuousAudit] Checkpoint saved: seq={wal_seq}")
+
+        except Exception as e:
+            logger.warning(f"[ContinuousAudit] Checkpoint save failed: {e}")
+
+    def force_save_checkpoint(self, wal_seq: int | None = None) -> None:
+        """
+        체크포인트 강제 저장 (Back-pressure 무시).
+
+        종료 시그널, 에러 복구 등 즉시 저장이 필요한 경우 사용.
+        """
+        if not self._checkpoint_strategy:
+            return
+
+        try:
+            from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
+
+            checkpoint_data = UnifiedCheckpointData(
+                wal_sequence=wal_seq or 0,
+            )
+            self._checkpoint_strategy.save(
+                self._checkpoint_namespace,
+                checkpoint_data,
+            )
+
+            self._records_since_checkpoint = 0
+            self._last_checkpoint_time = time.time()
+
+            logger.info(f"[ContinuousAudit] Checkpoint force saved: seq={wal_seq}")
+
+        except Exception as e:
+            logger.warning(f"[ContinuousAudit] Checkpoint force save failed: {e}")
 
     def _send_alert(self, channel: str, data: dict[str, Any]) -> None:
         """알림 발송."""

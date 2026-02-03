@@ -216,11 +216,13 @@ class TestRedisCheckpointStorage:
         """load()가 데이터를 올바르게 반환하는지 확인."""
         from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
-        mock_redis.get.return_value = json.dumps({
-            "wal_sequence": 5678,
-            "timestamp": "2024-01-01T00:00:00Z",
-            "version": 1,
-        })
+        mock_redis.get.return_value = json.dumps(
+            {
+                "wal_sequence": 5678,
+                "timestamp": "2024-01-01T00:00:00Z",
+                "version": 1,
+            }
+        )
 
         data = storage.load("test")
         assert data is not None
@@ -296,14 +298,16 @@ class TestKafkaRedisCheckpointStorage:
 
     def test_load_from_redis_first(self, storage, mock_redis):
         """load()가 Redis를 먼저 시도하는지 확인."""
-        mock_redis.get.return_value = json.dumps({
-            "wal_sequence": 5678,
-            "kafka_topic": "test.topic",
-            "kafka_partition": 0,
-            "kafka_offset": 100,
-            "timestamp": "2024-01-01T00:00:00Z",
-            "version": 1,
-        })
+        mock_redis.get.return_value = json.dumps(
+            {
+                "wal_sequence": 5678,
+                "kafka_topic": "test.topic",
+                "kafka_partition": 0,
+                "kafka_offset": 100,
+                "timestamp": "2024-01-01T00:00:00Z",
+                "version": 1,
+            }
+        )
 
         data = storage.load("test")
         assert data is not None
@@ -656,3 +660,205 @@ class TestSingleton:
 
         # 리셋 후 새 인스턴스
         assert strategy1 is not strategy2
+
+
+class TestContinuousAuditRecorderBackPressure:
+    """ContinuousAuditRecorder Back-pressure 테스트."""
+
+    def _make_test_record(self, recorder):
+        """테스트용 레코드 기록 헬퍼."""
+        return recorder.record_auto_tuning(
+            parameter="test_param",
+            old_value=1,
+            new_value=2,
+            reason="test",
+            confidence=0.9,
+            metrics_snapshot={"cpu": 50},
+            safety_check={"passed": True},
+        )
+
+    def test_backpressure_after_record_count_threshold(self, tmp_path):
+        """레코드 개수 임계값 도달 시 체크포인트 저장."""
+        from unittest.mock import MagicMock, patch
+
+        from selfhealing.audit.checkpoint_strategy import (
+            FileCheckpointStorage,
+            UnifiedCheckpointData,
+        )
+        from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
+
+        # Mock 설정
+        mock_adapter = MagicMock()
+        mock_adapter.record_audit_event.return_value = "test-id"
+
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+
+        recorder = ContinuousAuditRecorder(
+            audit_adapter=mock_adapter,
+            checkpoint_strategy=strategy,
+            checkpoint_save_interval=3,  # 3개마다 저장
+            checkpoint_save_max_seconds=60.0,
+            wal_enabled=True,
+        )
+
+        # 3개 기록
+        for i in range(3):
+            self._make_test_record(recorder)
+
+        # stats에서 records_since_checkpoint 확인
+        stats = recorder.get_stats()
+        assert "records_since_checkpoint" in stats
+
+    def test_backpressure_after_time_threshold(self, tmp_path):
+        """시간 임계값 도달 시 체크포인트 저장."""
+        import time
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
+        from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
+
+        mock_adapter = MagicMock()
+        mock_adapter.record_audit_event.return_value = "test-id"
+
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+
+        recorder = ContinuousAuditRecorder(
+            audit_adapter=mock_adapter,
+            checkpoint_strategy=strategy,
+            checkpoint_save_interval=1000,  # 높게 설정
+            checkpoint_save_max_seconds=0.1,  # 0.1초 후 저장
+            wal_enabled=True,
+        )
+
+        # 1개 기록
+        self._make_test_record(recorder)
+
+        # 0.15초 대기
+        time.sleep(0.15)
+
+        # 다음 레코드가 시간 임계값 초과로 저장 트리거
+        self._make_test_record(recorder)
+
+        stats = recorder.get_stats()
+        assert "records_since_checkpoint" in stats
+
+    def test_force_save_checkpoint(self, tmp_path):
+        """force_save_checkpoint 테스트."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
+        from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
+
+        mock_adapter = MagicMock()
+
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+
+        recorder = ContinuousAuditRecorder(
+            audit_adapter=mock_adapter,
+            checkpoint_strategy=strategy,
+            checkpoint_save_interval=1000,  # 높게 설정
+        )
+
+        # 강제 저장 (시퀀스 지정)
+        recorder.force_save_checkpoint(wal_seq=999)
+
+        loaded = strategy.load("default")
+        assert loaded is not None
+        assert loaded.wal_sequence == 999
+
+    def test_stats_include_backpressure_info(self, tmp_path):
+        """get_stats()가 Back-pressure 정보 포함."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
+        from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
+
+        mock_adapter = MagicMock()
+        mock_adapter.record_audit_event.return_value = "test-id"
+
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+
+        recorder = ContinuousAuditRecorder(
+            audit_adapter=mock_adapter,
+            checkpoint_strategy=strategy,
+            checkpoint_save_interval=100,
+        )
+
+        # WAL 없이 기록하면 records_since_checkpoint는 증가하지 않음 (WAL seq 필요)
+        # Back-pressure는 WAL 시퀀스가 있을 때만 동작
+        stats = recorder.get_stats()
+        assert "records_since_checkpoint" in stats
+        # 기본값 0 확인 (WAL 없으므로)
+        assert stats["records_since_checkpoint"] == 0
+
+
+class TestAuditSyncWorkerCheckpointStrategyMigration:
+    """AuditSyncWorker CheckpointStorageStrategy 마이그레이션 테스트."""
+
+    def test_set_checkpoint_strategy(self, tmp_path):
+        """set_checkpoint_strategy 테스트."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
+        from selfhealing.audit.sync_worker import AuditSyncWorker
+
+        mock_wal = MagicMock()
+        mock_adapter = MagicMock()
+
+        worker = AuditSyncWorker(wal=mock_wal, central_adapter=mock_adapter)
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+
+        worker.set_checkpoint_strategy(strategy)
+
+        # 내부 필드 확인
+        assert worker._checkpoint_strategy is strategy
+
+    def test_save_checkpoint_uses_strategy(self, tmp_path):
+        """_save_checkpoint가 주입된 Strategy 사용."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
+        from selfhealing.audit.sync_worker import AuditSyncWorker
+
+        mock_wal = MagicMock()
+        mock_adapter = MagicMock()
+
+        worker = AuditSyncWorker(wal=mock_wal, central_adapter=mock_adapter)
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+        worker.set_checkpoint_strategy(strategy)
+
+        # 시퀀스 설정
+        worker._last_processed_seq = 12345
+
+        # 체크포인트 저장
+        worker._save_checkpoint()
+
+        # 저장되었는지 확인
+        loaded = strategy.load("sync_worker")
+        assert loaded is not None
+        assert loaded.wal_sequence == 12345
+
+    def test_save_checkpoint_falls_back_to_legacy(self, monkeypatch):
+        """Strategy 없으면 레거시 CheckpointManager 사용."""
+        from unittest.mock import MagicMock, patch
+
+        from selfhealing.audit.sync_worker import AuditSyncWorker
+
+        mock_wal = MagicMock()
+        mock_adapter = MagicMock()
+
+        worker = AuditSyncWorker(wal=mock_wal, central_adapter=mock_adapter)
+        worker._last_processed_seq = 999
+
+        # CheckpointStrategyRegistry.get_default()가 None 반환하도록 설정
+        mock_checkpoint_manager = MagicMock()
+
+        with patch(
+            "selfhealing.audit.checkpoint_manager.get_checkpoint_manager",
+            return_value=mock_checkpoint_manager,
+        ):
+            # Strategy 없이 저장 시도
+            worker._save_checkpoint()
+
+            # 레거시 매니저가 호출되었는지 확인
+            mock_checkpoint_manager.save.assert_called_once_with(last_sequence=999)

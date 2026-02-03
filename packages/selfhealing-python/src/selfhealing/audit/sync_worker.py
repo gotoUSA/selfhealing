@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.settings.audit_sync import AuditSyncSettings
+    from selfhealing.audit.checkpoint_strategy import CheckpointStorageStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,7 @@ class AuditSyncWorker:
         self._config = config or SyncWorkerConfig.from_env()
         self._on_sync_complete = on_sync_complete
         self._on_sync_error = on_sync_error
+        self._checkpoint_strategy: CheckpointStorageStrategy | None = None
 
         self._stats = SyncStats()
         self._lock = threading.RLock()
@@ -526,14 +528,49 @@ class AuditSyncWorker:
         except Exception as e:
             logger.debug(f"[AuditSyncWorker] Failed to report metrics: {e}")
 
-    def _save_checkpoint(self) -> None:
-        """체크포인트 즉시 저장."""
-        try:
-            from selfhealing.audit.checkpoint_manager import get_checkpoint_manager
+    def _get_checkpoint_strategy(self) -> CheckpointStorageStrategy | None:
+        """CheckpointStorageStrategy 인스턴스 가져오기."""
+        if self._checkpoint_strategy is not None:
+            return self._checkpoint_strategy
 
-            checkpoint = get_checkpoint_manager()
-            checkpoint.save(last_sequence=self._last_processed_seq)
-            logger.debug(f"[AuditSyncWorker] Checkpoint saved: seq={self._last_processed_seq}")
+        try:
+            from selfhealing.audit.checkpoint_strategy import CheckpointStrategyRegistry
+
+            self._checkpoint_strategy = CheckpointStrategyRegistry.get_default()
+            return self._checkpoint_strategy
+        except Exception as e:
+            logger.debug(f"[AuditSyncWorker] CheckpointStrategy not available: {e}")
+            return None
+
+    def set_checkpoint_strategy(self, strategy: CheckpointStorageStrategy) -> None:
+        """CheckpointStorageStrategy 주입 (테스트/커스터마이징용)."""
+        self._checkpoint_strategy = strategy
+
+    def _save_checkpoint(self) -> None:
+        """체크포인트 즉시 저장 (CheckpointStorageStrategy 사용)."""
+        strategy = self._get_checkpoint_strategy()
+        if strategy is None:
+            # Fallback: 기존 CheckpointManager 사용
+            try:
+                from selfhealing.audit.checkpoint_manager import get_checkpoint_manager
+
+                checkpoint = get_checkpoint_manager()
+                checkpoint.save(last_sequence=self._last_processed_seq)
+                logger.debug(f"[AuditSyncWorker] Checkpoint saved via legacy manager: seq={self._last_processed_seq}")
+            except Exception as e:
+                logger.warning(f"[AuditSyncWorker] Legacy checkpoint save failed: {e}")
+            return
+
+        try:
+            from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
+            from datetime import datetime, timezone
+
+            checkpoint_data = UnifiedCheckpointData(
+                wal_sequence=self._last_processed_seq,
+            )
+            strategy.save("sync_worker", checkpoint_data)
+            strategy.commit()  # 영속적 저장 보장
+            logger.debug(f"[AuditSyncWorker] Checkpoint saved via strategy: seq={self._last_processed_seq}")
         except Exception as e:
             logger.warning(f"[AuditSyncWorker] Checkpoint save failed: {e}")
 

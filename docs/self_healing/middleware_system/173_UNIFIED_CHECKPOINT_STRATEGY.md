@@ -2713,7 +2713,7 @@ strategy.save_with_kafka_offset(
 ### 8.2 구현 (고급 - 리뷰 반영)
 
 - [x] `CheckpointStrategyRegistry` 동적 전략 등록 (§2.3)
-- [ ] `maybe_save()` Back-pressure 메커니즘 (§2.4) - 향후 구현 예정
+- [x] `maybe_save()` Back-pressure 메커니즘 (§2.4) - ContinuousAuditRecorder._maybe_save_checkpoint() 구현
 - [x] `CompositeCheckpointStorage` Tiered Fallback (§2.5)
 - [x] `CheckpointCorruptedError` 예외 클래스
 - [x] `DistributedRecoveryLock` 분산 락 통합 (Q2)
@@ -2726,13 +2726,15 @@ strategy.save_with_kafka_offset(
 - [x] `ContinuousAuditRecorder.__init__`에 `checkpoint_strategy` 파라미터 추가
 - [x] `_record_with_integrity()`에서 체크포인트 저장 로직 추가
 - [x] `AuditMiddleware._ensure_initialized()`에서 전략 주입
+- [x] `AuditSyncWorker`에 `set_checkpoint_strategy()` 메서드 추가
 
 ### 8.4 테스트
 
-- [x] `test_checkpoint_strategy.py` 단위 테스트 (42개 테스트 통과)
+- [x] `test_checkpoint_strategy.py` 단위 테스트 (49개 테스트 통과)
 - [ ] `test_middleware_checkpoint_integration.py` 통합 테스트 - 불필요 (순수 단위 테스트로 커버)
 - [x] 레거시 마이그레이션 테스트
 - [x] Tiered Fallback 테스트 (Redis 장애 시뮬레이션)
+- [x] Back-pressure 단위 테스트 (ContinuousAuditRecorder + AuditSyncWorker)
 - [ ] 분산 락 경합 테스트 (멀티 Pod 시뮬레이션) - 향후 구현 예정
 - [ ] Checksum 검증 실패 테스트 - 향후 구현 예정
 
@@ -2743,7 +2745,9 @@ strategy.save_with_kafka_offset(
 | 기능 | 참조 코드 | 라인 |
 |------|----------|------|
 | ProviderRegistry 패턴 | `services/factory/registry.py` | #L55-150 |
-| Back-pressure 로직 | `audit/sync_worker.py` | #L63-64, #L394-401 |
+| Back-pressure 로직 (sync_worker) | `audit/sync_worker.py` | #L63-64, #L394-401 |
+| Back-pressure 로직 (continuous_audit) | `audit/continuous_audit.py` | #L820-856 |
+| AuditSyncWorker Strategy 마이그레이션 | `audit/sync_worker.py` | #L529-581 |
 | Tiered Fallback | `audit/graceful_degradation/fallback.py` | #L22-126 |
 | DistributedRecoveryLock | `services/coordination/distributed_recovery_lock.py` | #L57-200 |
 | Checksum 검증 | `audit/checksum.py` | #L60-75, #L157-175 |
