@@ -168,6 +168,19 @@ class GovernanceSettings(BaseSettings):
     )
 
     # ==========================================================================
+    # Break Glass (비상 탈출구) - 172_CANARY_ERROR_BUDGET_GATE.md §13.2
+    # ==========================================================================
+    break_glass_enabled: bool = Field(
+        default=False,
+        description="긴급 상황 시 모든 거버넌스 체크 우회 (PIR 필수). 환경변수: SELFHEALING_GOVERNANCE_BREAK_GLASS_ENABLED=true",
+    )
+
+    break_glass_audit_required: bool = Field(
+        default=True,
+        description="Break Glass 사용 시 Audit 로그 필수",
+    )
+
+    # ==========================================================================
     # Celery Task 재시도 설정 (check_emergency_mode_expiry_task)
     # ==========================================================================
     expiry_check_max_retries: int = Field(

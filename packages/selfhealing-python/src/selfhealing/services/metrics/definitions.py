@@ -323,3 +323,26 @@ xtest_global_scope_requests_total = get_or_create_counter(
     "Total GLOBAL scope X-Test API requests",
     ["endpoint_pattern", "region", "result"],
 )
+
+
+# =============================================================================
+# Canary Governance Metrics
+# =============================================================================
+
+canary_governance_blocked_total = get_or_create_counter(
+    "selfhealing_canary_governance_blocked_total",
+    "Total canary promotions blocked by governance",
+    ["block_reason"],  # kill_switch, emergency_mode, error_budget
+)
+
+canary_pending_promotion_gauge = get_or_create_gauge(
+    "selfhealing_canary_pending_promotion",
+    "Number of canary rollouts pending promotion due to governance",
+    ["reason"],  # error_budget, emergency, etc.
+)
+
+canary_governance_bypass_total = get_or_create_counter(
+    "selfhealing_canary_governance_bypass_total",
+    "Total governance bypasses (Break Glass usage)",
+    ["requested_by"],
+)

@@ -1,7 +1,8 @@
 # 172. Canary 자동 프로모션 Error Budget Gate 적용
 
 > **작성일**: 2026-01-31
-> **상태**: 📋 구현 예정
+> **상태**: ✅ 구현 완료
+> **구현일**: 2025-02-12
 > **관련 문서**: [71_CANARY_CONFIG_ROLLOUT.md](71_CANARY_CONFIG_ROLLOUT.md), [12_ERROR_BUDGET.md](../12_ERROR_BUDGET.md)
 
 ---
@@ -1985,32 +1986,32 @@ class TestRedisBackwardCompatibility:
 
 ### 15.1 필수 구현 (P0)
 
-- [ ] `CanaryRollout` 모델에 `pause_reason`, `pause_triggered_by`, `paused_at` 필드 추가
-- [ ] `_deserialize_rollout`에 `.get()` 기본값 처리 추가
-- [ ] `_serialize_rollout`에 신규 필드 추가
-- [ ] `_check_zombie`에 `ZOMBIE_EXEMPT_TRIGGERS` 제외 로직 추가
-- [ ] `resume_paused_rollouts`에 `triggered_by_whitelist` 파라미터 추가
-- [ ] `_handle_canary_resume`에 whitelist 기본값 `["error_budget"]` 적용
-- [ ] `GovernanceSettings`에 `break_glass_enabled` 필드 추가
-- [ ] `check_all_governance` 최상단에 Break Glass 체크 추가
+- [x] `CanaryRollout` 모델에 `pause_reason`, `pause_triggered_by`, `paused_at` 필드 추가
+- [x] `_deserialize_rollout`에 `.get()` 기본값 처리 추가
+- [x] `_serialize_rollout`에 신규 필드 추가
+- [x] `_check_zombie`에 `ZOMBIE_EXEMPT_TRIGGERS` 제외 로직 추가
+- [x] `resume_paused_rollouts`에 `triggered_by_whitelist` 파라미터 추가
+- [x] `_handle_canary_resume`에 whitelist 기본값 `["error_budget"]` 적용
+- [x] `GovernanceSettings`에 `break_glass_enabled` 필드 추가
+- [x] `check_all_governance` 최상단에 Break Glass 체크 추가
 
 ### 15.2 권장 구현 (P2-P3)
 
-- [ ] `promote()`에 `bypass_governance`, `bypass_reason` 파라미터 추가
-- [ ] `PauseTriggerPriority` Enum 및 우선순위 로직 추가
-- [ ] `_send_governance_blocked_notification` 메서드 추가
-- [ ] `canary_governance_blocked_total` Counter 메트릭 추가
-- [ ] `canary_pending_promotion_gauge` Gauge 메트릭 추가
-- [ ] `resume_paused_rollouts_staggered` 메서드 추가
-- [ ] RecoveryCoordinator에 `staggered_enabled`, `max_batch_size` 파라미터 추가
+- [x] `promote()`에 `bypass_governance`, `bypass_reason` 파라미터 추가
+- [x] `PauseTriggerPriority` Enum 및 우선순위 로직 추가
+- [x] `_send_governance_blocked_notification` 메서드 추가
+- [x] `canary_governance_blocked_total` Counter 메트릭 추가
+- [x] `canary_pending_promotion_gauge` Gauge 메트릭 추가
+- [x] `resume_paused_rollouts_staggered` 메서드 추가
+- [x] RecoveryCoordinator에 `staggered_enabled`, `max_batch_size` 파라미터 추가
 
 ### 15.3 테스트
 
-- [ ] `test_zombie_exempt_error_budget` - Error Budget PAUSED는 Zombie 아님
-- [ ] `test_resume_whitelist_filter` - Whitelist 외 사유는 재개 안 됨
-- [ ] `test_break_glass_bypass` - Break Glass 시 모든 체크 우회
-- [ ] `test_redis_backward_compatibility` - 구버전 데이터 역직렬화
-- [ ] `test_staggered_resume` - 순차 재개 동작 확인
+- [x] `test_zombie_exempt_error_budget` - Error Budget PAUSED는 Zombie 아님
+- [x] `test_resume_whitelist_filter` - Whitelist 외 사유는 재개 안 됨
+- [x] `test_break_glass_bypass` - Break Glass 시 모든 체크 우회
+- [x] `test_redis_backward_compatibility` - 구버전 데이터 역직렬화
+- [x] `test_staggered_resume` - 순차 재개 동작 확인
 
 ---
 
@@ -2345,22 +2346,22 @@ log_canary_action(
 
 ### 17.1 추가 테스트 (§16.1)
 
-- [ ] `TestZombieExemption` 클래스 추가
-- [ ] `test_error_budget_paused_not_zombie` 구현
-- [ ] `test_manual_paused_is_zombie` 구현
-- [ ] `test_metrics_paused_is_zombie` 구현
-- [ ] `test_governance_paused_not_zombie` 구현
+- [x] `TestZombieExemption` 클래스 추가
+- [x] `test_error_budget_paused_not_zombie` 구현
+- [x] `test_manual_paused_is_zombie` 구현
+- [x] `test_metrics_paused_is_zombie` 구현
+- [x] `test_governance_paused_not_zombie` 구현
 
 ### 17.2 설정 통합 (§16.2)
 
-- [ ] `settings/canary_governance.py` 파일 생성
-- [ ] `CanaryGovernanceSettings` 클래스 구현
-- [ ] 기존 하드코딩 값 마이그레이션
-- [ ] 환경변수 문서화
+- [x] `settings/canary_governance.py` 파일 생성
+- [x] `CanaryGovernanceSettings` 클래스 구현
+- [x] 기존 하드코딩 값 마이그레이션
+- [x] 환경변수 문서화
 
 ### 17.3 Audit 강화 (§16.3)
 
-- [ ] `CANARY_ACTIONS`에 `governance_blocked` 추가
-- [ ] `CANARY_ACTIONS`에 `governance_bypass` 추가
-- [ ] Break Glass Audit 스키마 구현
-- [ ] 컴플라이언스 검증 테스트 추가
+- [x] `CANARY_ACTIONS`에 `governance_blocked` 추가
+- [x] `CANARY_ACTIONS`에 `governance_bypass` 추가
+- [x] Break Glass Audit 스키마 구현
+- [x] 컴플라이언스 검증 테스트 추가

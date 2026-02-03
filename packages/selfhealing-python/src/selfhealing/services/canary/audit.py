@@ -44,6 +44,8 @@ CANARY_ACTIONS = [
     "panic_rollback",  # 긴급 롤백
     "cancel",  # 취소
     "force_promote",  # 강제 프로모션 (메트릭 무시)
+    "governance_blocked",  # 거버넌스 체크로 차단됨
+    "governance_bypass",  # Break Glass로 거버넌스 우회함 (PIR 필수)
 ]
 
 
@@ -92,9 +94,7 @@ def log_canary_action(
         "new_version_hash": new_hash,
         # 상태 정보
         "state": rollout.state.value,
-        "current_stage": (
-            rollout.current_stage.name if rollout.current_stage else None
-        ),
+        "current_stage": (rollout.current_stage.name if rollout.current_stage else None),
         "current_stage_index": rollout.current_stage_index,
         "affected_clusters": rollout.affected_clusters,
         # 메타데이터
@@ -154,10 +154,7 @@ def log_canary_error(
         "timestamp": utc_now().isoformat(),
     }
 
-    logger.error(
-        f"[CanaryAudit] Error: action={action}, rollout={rollout_id}, "
-        f"error={type(error).__name__}: {error}"
-    )
+    logger.error(f"[CanaryAudit] Error: action={action}, rollout={rollout_id}, " f"error={type(error).__name__}: {error}")
 
     try:
         from selfhealing.services.audit import log_system_control_audit
@@ -197,8 +194,7 @@ def log_canary_metrics_check(
     logger.log(
         log_level,
         f"[CanaryAudit] Metrics check: rollout={rollout_id}, "
-        f"stage={stage_name}, passed={passed}"
-        + (f", reason={failure_reason}" if failure_reason else ""),
+        f"stage={stage_name}, passed={passed}" + (f", reason={failure_reason}" if failure_reason else ""),
     )
 
     try:

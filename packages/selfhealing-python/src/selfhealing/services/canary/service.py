@@ -322,13 +322,19 @@ class CanaryRolloutService:
         self,
         rollout_id: str,
         force: bool = False,
+        bypass_governance: bool = False,
+        bypass_reason: str = "",
+        requested_by: str = "",
     ) -> bool:
         """
         다음 단계로 프로모션.
 
         Args:
             rollout_id: 롤아웃 ID
-            force: 메트릭 검증 무시
+            force: 메트릭 검증 무시 (기존)
+            bypass_governance: 거버넌스 검증 무시 (Audit 필수)
+            bypass_reason: bypass 시 사유 (bypass_governance=True일 때 필수, 최소 10자)
+            requested_by: 요청자 (Audit 로깅용)
 
         Returns:
             성공 여부
@@ -340,6 +346,50 @@ class CanaryRolloutService:
         if rollout.state not in (CanaryState.CANARY, CanaryState.PAUSED):
             logger.warning(f"[CanaryRollout] Cannot promote: state={rollout.state}")
             return False
+
+        # 거버넌스 체크 (수동 프로모션에도 적용)
+        if not bypass_governance:
+            try:
+                from selfhealing.services.governance_checks import check_all_governance
+
+                governance = check_all_governance(
+                    check_kill_switch=True,
+                    check_emergency=True,
+                    check_error_budget=True,
+                    operation_name="manual_promote_canary",
+                    service_name="CanaryRolloutService",
+                    domain="canary",
+                    audit_on_block=True,
+                )
+
+                if not governance.allowed:
+                    logger.warning(f"[CanaryRollout] Promotion blocked by governance: " f"{governance.block_message}")
+                    return False
+
+            except ImportError:
+                logger.debug("[CanaryRollout] GovernanceChecks not available, skipping")
+            except Exception as e:
+                logger.warning(f"[CanaryRollout] Governance check failed: {e}")
+                # Fail-Closed: 체크 실패 시 차단
+                return False
+        else:
+            # bypass_governance=True: Audit 로그 필수
+            if not bypass_reason or len(bypass_reason) < 10:
+                logger.error("[CanaryRollout] bypass_reason required (min 10 chars)")
+                return False
+
+            log_canary_action(
+                action="governance_bypass",
+                rollout=rollout,
+                additional_context={
+                    "bypass_reason": bypass_reason,
+                    "requested_by": requested_by,
+                    "warning": "PIR may be required",
+                },
+            )
+            logger.warning(
+                f"[CanaryRollout] Governance bypassed: rollout={rollout_id}, " f"reason={bypass_reason}, by={requested_by}"
+            )
 
         # 현재 단계 메트릭 검증 (force가 아니면)
         if not force:
@@ -438,26 +488,60 @@ class CanaryRolloutService:
 
         return True
 
-    def pause(self, rollout_id: str) -> bool:
+    def pause(
+        self,
+        rollout_id: str,
+        reason: str = "",
+        triggered_by: str = "manual",
+    ) -> bool:
         """
-        롤아웃 일시 중지.
+        롤아웃 일시 중지 (사유 추적 확장).
 
         Args:
             rollout_id: 롤아웃 ID
+            reason: 일시 중지 사유
+            triggered_by: 트리거 유형 (manual, interlock, chaos_guard, metrics, error_budget, governance)
 
         Returns:
             성공 여부
         """
+        from selfhealing.services.canary.models import TRIGGER_PRIORITY_MAP
+
         rollout = self.get_rollout(rollout_id)
         if not rollout or rollout.state != CanaryState.CANARY:
             return False
 
+        # 우선순위 기반 사유 덮어쓰기 (높은 우선순위만)
+        existing_trigger = getattr(rollout, "pause_triggered_by", None)
+        existing_priority = TRIGGER_PRIORITY_MAP.get(existing_trigger, 0)
+        new_priority = TRIGGER_PRIORITY_MAP.get(triggered_by, 0)
+
+        # 더 높은 우선순위인 경우에만 덮어쓰기
+        if new_priority >= existing_priority:
+            rollout.pause_reason = reason
+            rollout.pause_triggered_by = triggered_by
+            rollout.paused_at = utc_now()
+        else:
+            logger.debug(
+                f"[CanaryRollout] Keeping existing trigger: "
+                f"{existing_trigger} (priority {existing_priority}) > "
+                f"{triggered_by} (priority {new_priority})"
+            )
+
         rollout.state = CanaryState.PAUSED
         self._save_rollout(rollout)
 
-        log_canary_action(action="pause", rollout=rollout)
+        log_canary_action(
+            action="pause",
+            rollout=rollout,
+            additional_context={
+                "pause_reason": reason,
+                "pause_triggered_by": triggered_by,
+                "priority": new_priority,
+            },
+        )
 
-        logger.info(f"[CanaryRollout] Paused: id={rollout_id}")
+        logger.info(f"[CanaryRollout] Paused: id={rollout_id}, " f"triggered_by={triggered_by}, reason={reason}")
         return True
 
     def resume(self, rollout_id: str) -> bool:
@@ -475,12 +559,129 @@ class CanaryRolloutService:
             return False
 
         rollout.state = CanaryState.CANARY
+        # pause 관련 필드 초기화
+        rollout.pause_reason = None
+        rollout.pause_triggered_by = None
+        rollout.paused_at = None
         self._save_rollout(rollout)
 
         log_canary_action(action="resume", rollout=rollout)
 
         logger.info(f"[CanaryRollout] Resumed: id={rollout_id}")
         return True
+
+    def resume_paused_rollouts(
+        self,
+        namespace: str | None = None,
+        triggered_by_whitelist: list[str] | None = None,
+    ) -> list[str]:
+        """
+        PAUSED 상태의 롤아웃 재개 (Whitelist 필터링).
+
+        Args:
+            namespace: 네임스페이스 필터 (None이면 전체)
+            triggered_by_whitelist: 재개 허용 목록 (예: ["error_budget"])
+                - None이면 모든 PAUSED 대상 (기존 동작, 비권장)
+                - 빈 리스트면 아무것도 재개 안 함
+                - ["error_budget"]이면 해당 사유로 멈춘 롤아웃만 재개
+
+        Returns:
+            재개된 롤아웃 ID 목록
+
+        Warning:
+            triggered_by_whitelist=None은 기존 호환성을 위해 유지되나,
+            명시적 Whitelist 사용을 강력 권장합니다.
+        """
+        resumed = []
+
+        for rollout in self.get_active_rollouts():
+            if rollout.state != CanaryState.PAUSED:
+                continue
+
+            # namespace 필터
+            if namespace and getattr(rollout, "namespace", None) != namespace:
+                continue
+
+            # Whitelist 필터링
+            triggered_by = getattr(rollout, "pause_triggered_by", None)
+
+            if triggered_by_whitelist is not None:
+                # Whitelist가 명시된 경우: 해당 사유만 재개
+                if triggered_by not in triggered_by_whitelist:
+                    logger.debug(
+                        f"[CanaryRollout] Skipping resume for {rollout.id}: " f"triggered_by={triggered_by} not in whitelist"
+                    )
+                    continue
+            else:
+                # Whitelist=None: 기존 동작 (모든 PAUSED 재개) + 경고
+                logger.warning(
+                    f"[CanaryRollout] Resuming {rollout.id} without whitelist filter. "
+                    f"Consider using triggered_by_whitelist for safety."
+                )
+
+            if self.resume(rollout.id):
+                resumed.append(rollout.id)
+
+        return resumed
+
+    def resume_paused_rollouts_staggered(
+        self,
+        namespace: str | None = None,
+        triggered_by_whitelist: list[str] | None = None,
+        max_batch_size: int = 5,
+        interval_seconds: int = 60,
+    ) -> list[str]:
+        """
+        PAUSED 상태의 롤아웃 순차 재개 (Thundering Herd 방지).
+
+        Args:
+            namespace: 네임스페이스 필터
+            triggered_by_whitelist: 재개 허용 목록
+            max_batch_size: 한 배치당 최대 재개 수
+            interval_seconds: 배치 간 대기 시간
+
+        Returns:
+            재개된 롤아웃 ID 목록
+        """
+        import time
+
+        # 재개 대상 수집
+        candidates = []
+        for rollout in self.get_active_rollouts():
+            if rollout.state != CanaryState.PAUSED:
+                continue
+            if namespace and getattr(rollout, "namespace", None) != namespace:
+                continue
+            triggered_by = getattr(rollout, "pause_triggered_by", None)
+            if triggered_by_whitelist is not None:
+                if triggered_by not in triggered_by_whitelist:
+                    continue
+            candidates.append(rollout.id)
+
+        if not candidates:
+            return []
+
+        resumed = []
+
+        # 배치 단위로 순차 재개
+        for i in range(0, len(candidates), max_batch_size):
+            batch = candidates[i : i + max_batch_size]
+
+            for rollout_id in batch:
+                if self.resume(rollout_id):
+                    resumed.append(rollout_id)
+
+            # 마지막 배치가 아니면 대기
+            if i + max_batch_size < len(candidates):
+                logger.info(
+                    f"[CanaryRollout] Resumed batch {i // max_batch_size + 1}, "
+                    f"waiting {interval_seconds}s before next batch"
+                )
+                time.sleep(interval_seconds)
+
+        logger.info(f"[CanaryRollout] Staggered resume complete: " f"{len(resumed)}/{len(candidates)} rollouts resumed")
+
+        return resumed
 
     def cancel(self, rollout_id: str, reason: str = "") -> bool:
         """
@@ -824,10 +1025,14 @@ class CanaryRolloutService:
             "reason": rollout.reason,
             "completed_at": (rollout.completed_at.isoformat() if rollout.completed_at else None),
             "rollback_reason": rollout.rollback_reason,
+            # pause 관련 필드
+            "pause_reason": rollout.pause_reason,
+            "pause_triggered_by": rollout.pause_triggered_by,
+            "paused_at": (rollout.paused_at.isoformat() if rollout.paused_at else None),
         }
 
     def _deserialize_rollout(self, data: dict[str, Any]) -> CanaryRollout:
-        """딕셔너리에서 CanaryRollout 복원."""
+        """딕셔너리에서 CanaryRollout 복원 (하위 호환성 보장)."""
         return CanaryRollout(
             id=data["id"],
             config_type=data["config_type"],
@@ -852,6 +1057,10 @@ class CanaryRolloutService:
             reason=data["reason"],
             completed_at=(datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None),
             rollback_reason=data.get("rollback_reason"),
+            # 하위 호환성: pause 관련 필드 (없으면 None)
+            pause_reason=data.get("pause_reason"),
+            pause_triggered_by=data.get("pause_triggered_by"),
+            paused_at=(datetime.fromisoformat(data["paused_at"]) if data.get("paused_at") else None),
         )
 
 

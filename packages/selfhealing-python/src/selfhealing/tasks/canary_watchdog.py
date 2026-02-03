@@ -132,6 +132,8 @@ class WatchdogResult:
         zombie_count: 감지된 Zombie 수
         rollback_count: 자동 롤백된 수
         promote_count: 자동 프로모션된 수
+        governance_blocked: 거버넌스에 의해 차단됨
+        governance_block_reason: 차단 사유
         zombies: Zombie 롤아웃 목록
         errors: 에러 목록
     """
@@ -141,6 +143,8 @@ class WatchdogResult:
     zombie_count: int = 0
     rollback_count: int = 0
     promote_count: int = 0
+    governance_blocked: bool = False
+    governance_block_reason: str = ""
     zombies: list[ZombieRollout] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -152,6 +156,8 @@ class WatchdogResult:
             "zombie_count": self.zombie_count,
             "rollback_count": self.rollback_count,
             "promote_count": self.promote_count,
+            "governance_blocked": self.governance_blocked,
+            "governance_block_reason": self.governance_block_reason,
             "zombies": [
                 {
                     "rollout_id": z.rollout_id,
@@ -271,6 +277,7 @@ class RolloutWatchdog:
             ZombieRollout 또는 None
         """
         from selfhealing.services.canary import CanaryState
+        from selfhealing.services.canary.models import ZOMBIE_EXEMPT_TRIGGERS
 
         # 상태별 체류 시간 계산
         stage = rollout.current_stage
@@ -292,7 +299,15 @@ class RolloutWatchdog:
                 reason = f"Stuck in CANARY for {stuck_minutes:.1f} min (threshold: {threshold})"
 
         elif rollout.state == CanaryState.PAUSED:
-            # PAUSED 상태: zombie_threshold 초과
+            # Error Budget/Governance로 인한 PAUSED는 정상적인 대기 상태이므로 Zombie 제외
+            triggered_by = getattr(rollout, "pause_triggered_by", None)
+
+            if triggered_by in ZOMBIE_EXEMPT_TRIGGERS:
+                # 정상적인 대기 상태 - Zombie 아님
+                logger.debug(f"[Watchdog] Rollout {rollout.id} excluded from zombie check: " f"triggered_by={triggered_by}")
+                return None
+
+            # 그 외 PAUSED는 기존 로직 적용
             if stuck_minutes > self.config.zombie_threshold_minutes:
                 is_zombie = True
                 reason = f"Paused for {stuck_minutes:.1f} min (threshold: {self.config.zombie_threshold_minutes})"
@@ -410,6 +425,7 @@ class RolloutWatchdog:
         - auto_promote=True인 단계
         - duration_minutes 경과
         - 메트릭 검증 통과
+        - 글로벌 에러 예산 체크 (신규)
 
         Returns:
             WatchdogResult: 프로모션 결과
@@ -417,6 +433,44 @@ class RolloutWatchdog:
         result = WatchdogResult()
 
         if not self.config.enable_auto_promote:
+            return result
+
+        # 글로벌 에러 예산 체크 (Fail-Closed 정책)
+        try:
+            from selfhealing.services.governance_checks import check_all_governance
+
+            governance = check_all_governance(
+                check_kill_switch=True,
+                check_emergency=True,
+                emergency_min_level=2,  # LEVEL_2+ 시 차단
+                check_error_budget=True,
+                operation_name="auto_promote_canary",
+                service_name="RolloutWatchdog",
+                domain="canary",
+                audit_on_block=True,
+            )
+
+            if not governance.allowed:
+                logger.warning(f"[Watchdog] Auto promotion blocked by governance: " f"{governance.block_message}")
+
+                # Prometheus 메트릭 기록
+                self._record_governance_blocked_metrics(governance)
+
+                result.governance_blocked = True
+                result.governance_block_reason = governance.block_message
+                return result
+
+        except ImportError:
+            logger.debug("[Watchdog] GovernanceChecks not available, skipping")
+            # Fail-Closed: Import 실패 시에도 차단 (보수적 정책)
+            result.governance_blocked = True
+            result.governance_block_reason = "GovernanceChecks module not available"
+            return result
+        except Exception as e:
+            logger.warning(f"[Watchdog] Governance check failed: {e}")
+            # Fail-Closed: 에러 시에도 차단 (변경 작업은 보수적으로)
+            result.governance_blocked = True
+            result.governance_block_reason = f"Governance check error: {e}"
             return result
 
         try:
@@ -454,6 +508,22 @@ class RolloutWatchdog:
             result.errors.append(str(e))
 
         return result
+
+    def _record_governance_blocked_metrics(self, governance) -> None:
+        """거버넌스 차단 시 Prometheus 메트릭 기록."""
+        try:
+            from selfhealing.services.metrics.definitions import (
+                canary_governance_blocked_total,
+                canary_pending_promotion_gauge,
+            )
+
+            block_reason = governance.block_reason.value if governance.block_reason else "unknown"
+            canary_governance_blocked_total.labels(block_reason=block_reason).inc()
+
+            pending_count = len(self.service.get_active_rollouts())
+            canary_pending_promotion_gauge.labels(reason=block_reason).set(pending_count)
+        except Exception as e:
+            logger.debug(f"[Watchdog] Metrics recording failed: {e}")
 
 
 # =============================================================================

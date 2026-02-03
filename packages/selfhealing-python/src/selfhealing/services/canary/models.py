@@ -17,10 +17,40 @@ State Transitions:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any
 
 from selfhealing.utils.time import utc_now
+
+
+class PauseTriggerPriority(IntEnum):
+    """
+    Pause 트리거 우선순위.
+
+    높은 값이 더 우선 (근본 원인에 가까움).
+    동시 발생 시 가장 높은 우선순위 사유만 기록.
+    """
+
+    METRICS = 100  # 직접적 장애 (에러율/레이턴시)
+    INTERLOCK = 90  # Safety Interlock
+    ERROR_BUDGET = 80  # 거버넌스 (에러 예산)
+    GOVERNANCE = 75  # 거버넌스 체크 실패 (Kill Switch, Emergency 등)
+    CHAOS_GUARD = 70  # Chaos 실험 충돌
+    MANUAL = 10  # 수동 중지
+
+
+# triggered_by 값 → 우선순위 매핑
+TRIGGER_PRIORITY_MAP: dict[str, int] = {
+    "metrics": PauseTriggerPriority.METRICS,
+    "interlock": PauseTriggerPriority.INTERLOCK,
+    "error_budget": PauseTriggerPriority.ERROR_BUDGET,
+    "governance": PauseTriggerPriority.GOVERNANCE,
+    "chaos_guard": PauseTriggerPriority.CHAOS_GUARD,
+    "manual": PauseTriggerPriority.MANUAL,
+}
+
+# Zombie 판정에서 제외할 pause_triggered_by 값 목록
+ZOMBIE_EXEMPT_TRIGGERS: list[str] = ["error_budget", "governance"]
 
 
 class CanaryState(str, Enum):
@@ -89,29 +119,18 @@ class PassCriteria:
 
         # 에러율 절대값 검사
         if metrics.error_rate_after > self.error_rate_absolute_max:
-            return False, (
-                f"Error rate {metrics.error_rate_after:.2%} exceeds "
-                f"{self.error_rate_absolute_max:.2%}"
-            )
+            return False, (f"Error rate {metrics.error_rate_after:.2%} exceeds " f"{self.error_rate_absolute_max:.2%}")
 
         # 에러율 증가분 검사
         error_increase = metrics.error_rate_after - metrics.error_rate_before
         if error_increase > self.error_rate_increase_max:
-            return False, (
-                f"Error rate increased by {error_increase:.2%} "
-                f"(max: {self.error_rate_increase_max:.2%})"
-            )
+            return False, (f"Error rate increased by {error_increase:.2%} " f"(max: {self.error_rate_increase_max:.2%})")
 
         # p99 레이턴시 검사
         if metrics.latency_p99_before > 0:
-            latency_pct = (
-                metrics.latency_p99_after - metrics.latency_p99_before
-            ) / metrics.latency_p99_before
+            latency_pct = (metrics.latency_p99_after - metrics.latency_p99_before) / metrics.latency_p99_before
             if latency_pct > self.latency_p99_delta_pct:
-                return False, (
-                    f"p99 latency increased by {latency_pct:.1%} "
-                    f"(max: {self.latency_p99_delta_pct:.1%})"
-                )
+                return False, (f"p99 latency increased by {latency_pct:.1%} " f"(max: {self.latency_p99_delta_pct:.1%})")
 
         return True, None
 
@@ -223,6 +242,26 @@ class CanaryRollout:
     completed_at: datetime | None = None
     rollback_reason: str | None = None
 
+    # PAUSED 상태 사유 추적
+    pause_reason: str | None = None
+    """일시 중지 사유 (예: 'Error budget below threshold (5.0% < 10.0%)')."""
+
+    pause_triggered_by: str | None = None
+    """
+    일시 중지 트리거 유형.
+
+    Values:
+    - "interlock": Safety Interlock에 의해 자동 중지
+    - "manual": 운영자 수동 중지
+    - "chaos_guard": Chaos Guard에 의해 중지
+    - "metrics": 메트릭 악화로 인한 중지
+    - "error_budget": 에러 예산 부족으로 중지
+    - "governance": 거버넌스 체크 실패로 중지
+    """
+
+    paused_at: datetime | None = None
+    """일시 중지 시각."""
+
     @property
     def current_stage(self) -> CanaryStage | None:
         """현재 단계 반환."""
@@ -259,8 +298,4 @@ class CanaryRollout:
         if self.state == CanaryState.CREATED:
             return 0.0
         # 현재 단계까지의 percentage 합계
-        return sum(
-            stage.percentage
-            for i, stage in enumerate(self.stages)
-            if i <= self.current_stage_index
-        )
+        return sum(stage.percentage for i, stage in enumerate(self.stages) if i <= self.current_stage_index)

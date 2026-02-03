@@ -767,8 +767,17 @@ class RecoveryCoordinator:
         Canary 롤아웃 재개.
 
         Emergency로 인해 일시 중지된 Canary 롤아웃 재개.
+        Whitelist 기반 필터링 및 순차 재개 지원.
         """
         resume_paused_only = step.params.get("resume_paused_only", True)
+
+        # Whitelist 기반 필터링 (기본: error_budget만 재개)
+        triggered_by_whitelist = step.params.get("triggered_by_whitelist", ["error_budget"])
+
+        # 순차 재개 설정
+        staggered_enabled = step.params.get("staggered_enabled", True)
+        max_batch_size = step.params.get("max_batch_size", 5)
+        interval_seconds = step.params.get("interval_seconds", 60)
 
         try:
             # CanaryService가 있으면 사용
@@ -778,13 +787,28 @@ class RecoveryCoordinator:
                 service = get_canary_service()
 
                 if resume_paused_only:
-                    resumed = service.resume_paused_rollouts(session.namespace)
+                    if staggered_enabled:
+                        # 순차 재개
+                        resumed = service.resume_paused_rollouts_staggered(
+                            namespace=session.namespace,
+                            triggered_by_whitelist=triggered_by_whitelist,
+                            max_batch_size=max_batch_size,
+                            interval_seconds=interval_seconds,
+                        )
+                    else:
+                        # 일괄 재개
+                        resumed = service.resume_paused_rollouts(
+                            namespace=session.namespace,
+                            triggered_by_whitelist=triggered_by_whitelist,
+                        )
                 else:
                     resumed = service.resume_all_rollouts(session.namespace)
 
                 return {
                     "success": True,
                     "resumed_count": len(resumed) if resumed else 0,
+                    "staggered": staggered_enabled,
+                    "triggered_by_whitelist": triggered_by_whitelist,
                 }
             except (ImportError, AttributeError):
                 logger.warning("[Recovery] CanaryService not available or missing method, " "skipping canary resume")

@@ -430,6 +430,7 @@ def check_all_governance(
     모든 거버넌스 체크를 순차적으로 수행.
 
     체크 순서:
+    0. Break Glass (활성화 시 모든 체크 우회)
     1. Kill Switch (enabled일 때)
     2. Emergency Level (enabled일 때)
     3. Error Budget (enabled일 때)
@@ -450,6 +451,32 @@ def check_all_governance(
     Returns:
         GovernanceCheckResult
     """
+    # 0. Break Glass 체크 (최상단)
+    try:
+        from selfhealing.settings.governance import get_governance_settings
+
+        settings = get_governance_settings()
+
+        if settings.break_glass_enabled:
+            logger.warning(f"[GovernanceChecks] BREAK GLASS ACTIVE - " f"bypassing all checks for {operation_name}")
+
+            # Audit 기록 (필수)
+            if settings.break_glass_audit_required:
+                _log_governance_blocked(
+                    block_reason="break_glass_bypass",
+                    operation_name=operation_name,
+                    details={
+                        "action": "BYPASSED",
+                        "warning": "PIR required after incident",
+                    },
+                    service_name=service_name,
+                    domain=domain,
+                )
+
+            return GovernanceCheckResult.allowed_result()
+    except Exception as e:
+        logger.debug(f"[GovernanceChecks] Break glass check failed: {e}")
+
     # emergency_min_level이 None이면 Settings에서 로드
     if emergency_min_level is None:
         from selfhealing.settings.governance import get_governance_settings
