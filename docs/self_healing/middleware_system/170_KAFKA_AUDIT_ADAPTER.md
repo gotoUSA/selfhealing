@@ -1108,9 +1108,13 @@ class TestKafkaAuditAdapter:
 
 ### 8.2 코드
 
-- [ ] `kafka_adapter.py` 구현
-- [ ] `settings/kafka.py` 설정 클래스
-- [ ] `adapters/audit/__init__.py` 내보내기
+- [x] `kafka_adapter.py` 구현
+- [x] `settings/kafka.py` 설정 클래스
+- [x] `adapters/audit/__init__.py` 내보내기
+- [x] `audit/kafka_checkpoint.py` 체크포인트 관리자
+- [x] `schemas/audit_event.avsc` Avro 스키마
+- [x] `pyproject.toml` kafka 의존성 추가
+- [x] 단위 테스트 작성 및 통과 (24개)
 
 ### 8.3 전환
 

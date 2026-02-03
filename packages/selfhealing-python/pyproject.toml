@@ -62,6 +62,9 @@ opentelemetry = [
     "opentelemetry-instrumentation-django>=0.41b0",
     "opentelemetry-instrumentation-logging>=0.41b0",
 ]
+kafka = [
+    "confluent-kafka>=2.3.0",
+]
 fast-json = [
     "orjson>=3.9.0",
 ]
@@ -69,7 +72,7 @@ caching = [
     "cachetools>=5.0.0",
 ]
 all = [
-    "selfhealing[django,celery,prometheus,opentelemetry,fast-json,caching]",
+    "selfhealing[django,celery,prometheus,opentelemetry,kafka,fast-json,caching]",
 ]
 dev = [
     "selfhealing[all]",

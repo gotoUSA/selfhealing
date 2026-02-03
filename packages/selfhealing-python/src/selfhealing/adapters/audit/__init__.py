@@ -66,6 +66,10 @@ __all__ = [
     # Django Adapter (optional - requires Django)
     "DjangoAuditLogAdapter",
     "get_django_audit_adapter",
+    # Kafka Adapter (optional - requires confluent-kafka)
+    "KafkaAuditAdapter",
+    "get_kafka_audit_adapter",
+    "reset_kafka_audit_adapter",
 ]
 
 
@@ -78,4 +82,18 @@ def __getattr__(name: str):
         if name == "DjangoAuditLogAdapter":
             return DjangoAuditLogAdapter
         return get_django_audit_adapter
+
+    if name in ("KafkaAuditAdapter", "get_kafka_audit_adapter", "reset_kafka_audit_adapter"):
+        from .kafka_adapter import (
+            KafkaAuditAdapter,
+            get_kafka_audit_adapter,
+            reset_kafka_audit_adapter,
+        )
+
+        if name == "KafkaAuditAdapter":
+            return KafkaAuditAdapter
+        if name == "get_kafka_audit_adapter":
+            return get_kafka_audit_adapter
+        return reset_kafka_audit_adapter
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
