@@ -2011,3 +2011,356 @@ class TestRedisBackwardCompatibility:
 - [ ] `test_break_glass_bypass` - Break Glass 시 모든 체크 우회
 - [ ] `test_redis_backward_compatibility` - 구버전 데이터 역직렬화
 - [ ] `test_staggered_resume` - 순차 재개 동작 확인
+
+---
+
+## 16. 추가 보완 제안
+
+> **목적**: 172 문서 구현의 완성도 및 운영 안정성 강화
+
+---
+
+### 16.1 테스트 커버리지 강화
+
+#### 16.1.1 현재 상태
+
+§15.3에 기본 테스트 케이스가 정의되어 있으나, **Zombie 판정 경계값 테스트**가 부족합니다.
+
+#### 16.1.2 추가 테스트 케이스
+
+**코드 근거** (`tasks/canary_watchdog.py` - §13.1 구현):
+```python
+ZOMBIE_EXEMPT_TRIGGERS: list[str] = ["error_budget", "governance"]
+```
+
+```python
+# tests/unit/tasks/test_canary_watchdog_zombie.py
+
+class TestZombieExemption:
+    """Zombie 판정 제외 테스트 - §13.1 검증."""
+
+    def test_error_budget_paused_not_zombie(self, watchdog, canary_service):
+        """error_budget 사유로 PAUSED된 롤아웃은 Zombie 아님."""
+        rollout = canary_service.create_rollout(
+            config_type="circuit_breaker",
+            reason="Test",
+        )
+        # pause_triggered_by가 면제 목록에 있음
+        canary_service.pause(rollout.id, triggered_by="error_budget")
+
+        # 40분 경과 (zombie_threshold_minutes=30 초과)
+        with freeze_time(datetime.utcnow() + timedelta(minutes=40)):
+            result = watchdog._check_zombie(rollout, datetime.utcnow())
+
+        assert result is None  # Zombie 아님
+
+    def test_manual_paused_is_zombie(self, watchdog, canary_service):
+        """manual 사유로 PAUSED된 롤아웃은 Zombie 맞음."""
+        rollout = canary_service.create_rollout(
+            config_type="circuit_breaker",
+            reason="Test",
+        )
+        # manual은 면제 목록에 없음
+        canary_service.pause(rollout.id, triggered_by="manual")
+
+        # 40분 경과
+        with freeze_time(datetime.utcnow() + timedelta(minutes=40)):
+            result = watchdog._check_zombie(rollout, datetime.utcnow())
+
+        assert result is not None  # Zombie 맞음
+        assert "Paused for" in result.reason
+
+    def test_metrics_paused_is_zombie(self, watchdog, canary_service):
+        """metrics 사유로 PAUSED된 롤아웃은 Zombie 맞음.
+
+        메트릭 악화로 인한 PAUSED는 문제 상황이므로 Zombie 처리 필요.
+        장시간 방치 시 수동 개입 필요.
+        """
+        rollout = canary_service.create_rollout(
+            config_type="circuit_breaker",
+            reason="Test",
+        )
+        # metrics는 면제 목록에 없음
+        canary_service.pause(rollout.id, triggered_by="metrics")
+
+        # 40분 경과
+        with freeze_time(datetime.utcnow() + timedelta(minutes=40)):
+            result = watchdog._check_zombie(rollout, datetime.utcnow())
+
+        assert result is not None  # Zombie 맞음
+
+    def test_governance_paused_not_zombie(self, watchdog, canary_service):
+        """governance 사유로 PAUSED된 롤아웃은 Zombie 아님.
+
+        거버넌스 체크 실패(Kill Switch, Emergency 등)로 인한 PAUSED는
+        정상적인 대기 상태이므로 Zombie 아님.
+        """
+        rollout = canary_service.create_rollout(
+            config_type="circuit_breaker",
+            reason="Test",
+        )
+        canary_service.pause(rollout.id, triggered_by="governance")
+
+        # 40분 경과
+        with freeze_time(datetime.utcnow() + timedelta(minutes=40)):
+            result = watchdog._check_zombie(rollout, datetime.utcnow())
+
+        assert result is None  # Zombie 아님
+```
+
+---
+
+### 16.2 설정 통합 (CanaryGovernanceSettings)
+
+#### 16.2.1 현재 상태
+
+§13 구현 코드에서 하드코딩된 값들이 분산되어 있습니다:
+- `ZOMBIE_EXEMPT_TRIGGERS = ["error_budget", "governance"]` (§13.1)
+- `triggered_by_whitelist=["error_budget"]` 기본값 (§13.3)
+- `bypass_governance` 기본값 `False` (§13.4)
+- `PauseTriggerPriority` 우선순위 값 (§13.5)
+
+#### 16.2.2 기존 Settings 패턴
+
+**코드 근거** (`settings/error_budget.py`):
+```python
+class ErrorBudgetSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_ERRORBUDGET_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    threshold_healthy: float = Field(default=75.0, ge=50.0, le=100.0)
+    # ...
+```
+
+#### 16.2.3 신규 Settings 파일 제안
+
+```python
+# settings/canary_governance.py (신규)
+
+"""
+Canary Governance Settings.
+
+Centralizes all governance-related settings for Canary rollouts.
+Extracted from document 172_CANARY_ERROR_BUDGET_GATE.
+
+Environment Variables:
+    SELFHEALING_CANARY_GOV_ZOMBIE_EXEMPT_TRIGGERS='["error_budget","governance"]'
+    SELFHEALING_CANARY_GOV_RESUME_WHITELIST_TRIGGERS='["error_budget"]'
+    SELFHEALING_CANARY_GOV_MANUAL_PROMOTE_GOVERNANCE_CHECK=true
+"""
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class CanaryGovernanceSettings(BaseSettings):
+    """
+    Canary Governance 설정.
+
+    §172 문서의 모든 하드코딩 값을 중앙 집중화.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_CANARY_GOV_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+    )
+
+    # ==========================================================================
+    # §13.1 Zombie 판정 제외 설정
+    # ==========================================================================
+    zombie_exempt_triggers: list[str] = Field(
+        default=["error_budget", "governance"],
+        description="Zombie 판정에서 제외할 pause_triggered_by 값 목록",
+    )
+
+    # ==========================================================================
+    # §13.3 Resume Whitelist 설정
+    # ==========================================================================
+    resume_whitelist_triggers: list[str] = Field(
+        default=["error_budget"],
+        description="자동 재개 허용 pause_triggered_by 목록",
+    )
+
+    # ==========================================================================
+    # §13.4 수동 프로모션 거버넌스 체크 설정
+    # ==========================================================================
+    governance_check_on_manual_promote: bool = Field(
+        default=True,
+        description="수동 프로모션 시에도 거버넌스 체크 적용 여부",
+    )
+
+    # ==========================================================================
+    # §13.5 Pause 트리거 우선순위
+    # ==========================================================================
+    pause_trigger_priority: dict[str, int] = Field(
+        default={
+            "metrics": 100,       # 직접적 장애 (에러율/레이턴시)
+            "interlock": 90,      # Safety Interlock
+            "error_budget": 80,   # 거버넌스 (에러 예산)
+            "chaos_guard": 70,    # Chaos 실험 충돌
+            "manual": 10,         # 수동 중지
+        },
+        description="pause_triggered_by 값별 우선순위 (높을수록 우선)",
+    )
+
+    # ==========================================================================
+    # §13.7 Resume 쓰로틀링 설정
+    # ==========================================================================
+    resume_max_batch_size: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="한 번에 재개할 최대 롤아웃 수",
+    )
+    resume_interval_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description="배치 간 대기 시간 (초)",
+    )
+    resume_staggered_enabled: bool = Field(
+        default=True,
+        description="순차 재개 활성화",
+    )
+
+
+# Singleton
+_settings: CanaryGovernanceSettings | None = None
+
+
+def get_canary_governance_settings() -> CanaryGovernanceSettings:
+    """CanaryGovernanceSettings 싱글톤 반환."""
+    global _settings
+    if _settings is None:
+        _settings = CanaryGovernanceSettings()
+    return _settings
+```
+
+#### 16.2.4 마이그레이션 가이드
+
+1. 기존 하드코딩 값을 Settings로 교체:
+```python
+# Before (§13.1)
+ZOMBIE_EXEMPT_TRIGGERS = ["error_budget", "governance"]
+
+# After
+from selfhealing.settings.canary_governance import get_canary_governance_settings
+settings = get_canary_governance_settings()
+exempt_triggers = settings.zombie_exempt_triggers
+```
+
+2. 환경변수로 런타임 조정 가능:
+```bash
+# 예: governance도 Zombie로 판정하려면
+SELFHEALING_CANARY_GOV_ZOMBIE_EXEMPT_TRIGGERS='["error_budget"]'
+```
+
+---
+
+### 16.3 감사(Audit) 강화 - Break Glass 기록
+
+#### 16.3.1 현재 상태
+
+**코드 근거** (`services/canary/audit.py` Lines 36-48):
+```python
+CANARY_ACTIONS = [
+    "create",
+    "start",
+    "promote",
+    "rollback",
+    "pause",
+    "resume",
+    "complete",
+    "panic_rollback",
+    "cancel",
+    "force_promote",
+]
+```
+
+§13.2에서 Break Glass(거버넌스 우회) 기능을 추가했으나, `CANARY_ACTIONS`에 해당 액션이 없습니다.
+
+#### 16.3.2 해결 방안
+
+```python
+# services/canary/audit.py - CANARY_ACTIONS 확장
+
+CANARY_ACTIONS = [
+    "create",
+    "start",
+    "promote",
+    "rollback",
+    "pause",
+    "resume",
+    "complete",
+    "panic_rollback",
+    "cancel",
+    "force_promote",
+    # ============================================================
+    # [신규] §172 거버넌스 관련 액션
+    # ============================================================
+    "governance_blocked",   # 거버넌스 체크로 차단됨
+    "governance_bypass",    # Break Glass로 우회함 (PIR 필수)
+    # ============================================================
+]
+```
+
+#### 16.3.3 Audit 로그 스키마
+
+```python
+# Break Glass 사용 시 Audit 로그 예시
+
+log_canary_action(
+    action="governance_bypass",  # 신규 액션
+    rollout=rollout,
+    additional_context={
+        "bypass_reason": "긴급 보안 패치 배포",
+        "requested_by": "admin@company.com",
+        "ticket_id": "INC-12345",
+        "bypassed_checks": ["error_budget", "kill_switch"],
+        "pir_required": True,  # Post-Incident Review 필수
+        "break_glass_activated_at": "2026-02-04T10:30:00Z",
+    },
+)
+```
+
+#### 16.3.4 컴플라이언스 요구사항
+
+| 필드 | 필수 | 설명 |
+|------|------|------|
+| `bypass_reason` | ✅ | 최소 10자 이상 사유 |
+| `requested_by` | ✅ | 요청자 이메일/ID |
+| `ticket_id` | 🟡 | 인시던트 티켓 (정책에 따라) |
+| `pir_required` | ✅ | PIR 필요 여부 (항상 true) |
+| `break_glass_activated_at` | ✅ | Break Glass 활성화 시각 |
+
+---
+
+## 17. 최종 체크리스트 (추가 보완 포함)
+
+### 17.1 추가 테스트 (§16.1)
+
+- [ ] `TestZombieExemption` 클래스 추가
+- [ ] `test_error_budget_paused_not_zombie` 구현
+- [ ] `test_manual_paused_is_zombie` 구현
+- [ ] `test_metrics_paused_is_zombie` 구현
+- [ ] `test_governance_paused_not_zombie` 구현
+
+### 17.2 설정 통합 (§16.2)
+
+- [ ] `settings/canary_governance.py` 파일 생성
+- [ ] `CanaryGovernanceSettings` 클래스 구현
+- [ ] 기존 하드코딩 값 마이그레이션
+- [ ] 환경변수 문서화
+
+### 17.3 Audit 강화 (§16.3)
+
+- [ ] `CANARY_ACTIONS`에 `governance_blocked` 추가
+- [ ] `CANARY_ACTIONS`에 `governance_bypass` 추가
+- [ ] Break Glass Audit 스키마 구현
+- [ ] 컴플라이언스 검증 테스트 추가
