@@ -943,3 +943,1071 @@ if self.fail_closed:
 | [77_RECOVERY_COORDINATOR.md](77_RECOVERY_COORDINATOR.md) | RecoveryCoordinator (CANARY_RESUME 단계) |
 | [12_ERROR_BUDGET.md](../12_ERROR_BUDGET.md) | 에러 예산 정책 |
 | [41_WRAPPER_REFACTORING_PART4.md](41_WRAPPER_REFACTORING_PART4.md) | automation_gate 설계 |
+
+---
+
+## 13. 추가 구현 요구사항 (리뷰 반영)
+
+> **작성일**: 2026-02-04
+> **리뷰 기반**: 9가지 필수/권장 사항
+
+---
+
+### 13.1 Zombie 판정 제외 로직 (Q12) - 🔴 필수
+
+#### 13.1.1 문제점
+
+현재 Zombie 판정 로직은 PAUSED 상태의 **사유를 구분하지 않고** 일괄 Zombie로 판정합니다.
+
+**현재 코드** (`tasks/canary_watchdog.py` Lines 293-298):
+```python
+elif rollout.state == CanaryState.PAUSED:
+    # PAUSED 상태: zombie_threshold 초과
+    if stuck_minutes > self.config.zombie_threshold_minutes:
+        is_zombie = True
+        reason = f"Paused for {stuck_minutes:.1f} min (threshold: {self.config.zombie_threshold_minutes})"
+```
+
+**위험:** Error Budget 때문에 PAUSED된 롤아웃이 30분 후 Zombie로 오판되어 강제 롤백됩니다.
+
+#### 13.1.2 해결 방안
+
+```python
+# tasks/canary_watchdog.py - _check_zombie 메서드 수정
+
+# 설정으로 분리 (확장 가능)
+ZOMBIE_EXEMPT_TRIGGERS: list[str] = ["error_budget", "governance"]
+
+def _check_zombie(
+    self,
+    rollout: CanaryRollout,
+    now: datetime,
+) -> ZombieRollout | None:
+    """롤아웃이 Zombie인지 확인."""
+    from selfhealing.services.canary import CanaryState
+
+    stage = rollout.current_stage
+    stage_duration = stage.duration_minutes if stage else 5
+    stuck_since = rollout.created_at
+    stuck_minutes = (now - stuck_since).total_seconds() / 60
+
+    is_zombie = False
+    reason = ""
+
+    if rollout.state == CanaryState.CANARY:
+        threshold = stage_duration * 2
+        if stuck_minutes > threshold:
+            is_zombie = True
+            reason = f"Stuck in CANARY for {stuck_minutes:.1f} min (threshold: {threshold})"
+
+    elif rollout.state == CanaryState.PAUSED:
+        # ============================================================
+        # [신규] Error Budget 대기는 정상적인 대기이므로 Zombie 제외
+        # ============================================================
+        # pause_triggered_by가 ZOMBIE_EXEMPT_TRIGGERS에 포함되면 제외
+        triggered_by = getattr(rollout, "pause_triggered_by", None)
+
+        if triggered_by in ZOMBIE_EXEMPT_TRIGGERS:
+            # 정상적인 대기 상태 - Zombie 아님
+            logger.debug(
+                f"[Watchdog] Rollout {rollout.id} excluded from zombie check: "
+                f"triggered_by={triggered_by}"
+            )
+            return None
+
+        # 그 외 PAUSED는 기존 로직 적용
+        if stuck_minutes > self.config.zombie_threshold_minutes:
+            is_zombie = True
+            reason = f"Paused for {stuck_minutes:.1f} min (threshold: {self.config.zombie_threshold_minutes})"
+        # ============================================================
+
+    elif rollout.state == CanaryState.PROMOTING:
+        if stuck_minutes > 5:
+            is_zombie = True
+            reason = "Stuck in PROMOTING state"
+
+    if not is_zombie:
+        return None
+
+    return ZombieRollout(
+        rollout_id=rollout.id,
+        config_type=rollout.config_type,
+        state=rollout.state.value,
+        stuck_since=stuck_since,
+        stuck_minutes=stuck_minutes,
+        created_by=rollout.created_by,
+        affected_clusters=rollout.affected_clusters,
+        reason=reason,
+    )
+```
+
+#### 13.1.3 설정 확장
+
+```python
+# settings/canary_watchdog.py
+
+class CanaryWatchdogSettings(BaseSettings):
+    # ... 기존 설정 ...
+
+    zombie_exempt_triggers: list[str] = Field(
+        default=["error_budget", "governance"],
+        description="Zombie 판정에서 제외할 pause_triggered_by 값 목록",
+    )
+```
+
+---
+
+### 13.2 Break Glass 비상 탈출구 (Q6) - 🔴 필수
+
+#### 13.2.1 문제점
+
+거버넌스 체크 서비스(Redis 등)가 장애 시 Fail-Closed 정책으로 인해 긴급 패치조차 배포할 수 없습니다.
+
+#### 13.2.2 기존 패턴 확인
+
+**이미 존재하는 Break Glass 패턴** (`services/canary/override.py`):
+```python
+@dataclass
+class EmergencyOverrideRequest:
+    """Emergency Override (Break Glass) 요청."""
+    reason: str  # 최소 10자 이상
+    requested_by: str
+    ticket_id: str | None = None
+    approval_token: str | None = None  # LEVEL_3에서 필수
+
+@dataclass
+class EmergencyOverridePolicy:
+    """Emergency Override 정책."""
+    enabled: bool = True
+    min_reason_length: int = 10
+    require_ticket_id: bool = True
+    pir_required: bool = True  # Post-Incident Review 필수
+```
+
+#### 13.2.3 해결 방안: 환경변수 + 기존 패턴 통합
+
+```python
+# settings/governance.py
+
+class GovernanceSettings(BaseSettings):
+    # ... 기존 설정 ...
+
+    # ============================================================
+    # Break Glass (비상 탈출구)
+    # ============================================================
+    break_glass_enabled: bool = Field(
+        default=False,
+        description="긴급 상황 시 모든 거버넌스 체크 우회 (PIR 필수)",
+    )
+
+    break_glass_audit_required: bool = Field(
+        default=True,
+        description="Break Glass 사용 시 Audit 로그 필수",
+    )
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_GOVERNANCE_",
+        # SELFHEALING_GOVERNANCE_BREAK_GLASS_ENABLED=true
+    )
+```
+
+```python
+# services/governance_checks.py - check_all_governance 수정
+
+def check_all_governance(
+    check_kill_switch: bool = True,
+    check_emergency: bool = True,
+    emergency_min_level: int | None = None,
+    check_error_budget: bool = True,
+    operation_name: str = "unknown_operation",
+    service_name: str | None = None,
+    domain: str | None = None,
+    audit_on_block: bool = True,
+) -> GovernanceCheckResult:
+    """모든 거버넌스 체크를 순차적으로 수행."""
+
+    # ============================================================
+    # [신규] Break Glass 체크 (최상단)
+    # ============================================================
+    try:
+        from selfhealing.settings.governance import get_governance_settings
+        settings = get_governance_settings()
+
+        if settings.break_glass_enabled:
+            logger.warning(
+                f"[GovernanceChecks] BREAK GLASS ACTIVE - "
+                f"bypassing all checks for {operation_name}"
+            )
+
+            # Audit 기록 (필수)
+            if settings.break_glass_audit_required:
+                _log_governance_blocked(
+                    block_reason="break_glass_bypass",
+                    operation_name=operation_name,
+                    details={
+                        "action": "BYPASSED",
+                        "warning": "PIR required after incident",
+                    },
+                    service_name=service_name,
+                    domain=domain,
+                )
+
+            return GovernanceCheckResult.allowed_result()
+    except Exception as e:
+        logger.debug(f"[GovernanceChecks] Break glass check failed: {e}")
+    # ============================================================
+
+    # ... 기존 체크 로직 ...
+```
+
+#### 13.2.4 운영 가이드
+
+```markdown
+## Break Glass 사용 절차
+
+1. **활성화**: `SELFHEALING_GOVERNANCE_BREAK_GLASS_ENABLED=true`
+2. **배포 진행**: 모든 거버넌스 체크 우회됨
+3. **비활성화**: 환경변수 제거 또는 `false` 설정
+4. **PIR 작성**: 48시간 내 Post-Incident Review 필수
+
+⚠️ 경고: Break Glass는 장애 복구용으로만 사용. 남용 시 감사 추적됨.
+```
+
+---
+
+### 13.3 Resume 대상 엄격한 필터링 (Q2) - 🔴 필수
+
+#### 13.3.1 문제점
+
+운영자가 수동으로 멈춘 배포(`pause_triggered_by="manual"`)가 에러 예산 회복 시 자동 재개되면 사고 발생 가능.
+
+#### 13.3.2 해결 방안: Whitelist 방식
+
+```python
+# services/canary/service.py
+
+def resume_paused_rollouts(
+    self,
+    namespace: str | None = None,
+    triggered_by_whitelist: list[str] | None = None,  # ✅ Whitelist 방식
+) -> list[str]:
+    """
+    PAUSED 상태의 롤아웃 재개 (Whitelist 필터링).
+
+    Args:
+        namespace: 네임스페이스 필터 (None이면 전체)
+        triggered_by_whitelist: 재개 허용 목록 (예: ["error_budget"])
+            - None이면 모든 PAUSED 대상 (기존 동작, 비권장)
+            - 빈 리스트면 아무것도 재개 안 함
+            - ["error_budget"]이면 해당 사유로 멈춘 롤아웃만 재개
+
+    Returns:
+        재개된 롤아웃 ID 목록
+
+    Warning:
+        triggered_by_whitelist=None은 기존 호환성을 위해 유지되나,
+        명시적 Whitelist 사용을 강력 권장합니다.
+    """
+    resumed = []
+
+    for rollout in self.get_active_rollouts():
+        if rollout.state != CanaryState.PAUSED:
+            continue
+
+        # namespace 필터
+        if namespace and getattr(rollout, "namespace", None) != namespace:
+            continue
+
+        # ============================================================
+        # Whitelist 필터링 (핵심)
+        # ============================================================
+        triggered_by = getattr(rollout, "pause_triggered_by", None)
+
+        if triggered_by_whitelist is not None:
+            # Whitelist가 명시된 경우: 해당 사유만 재개
+            if triggered_by not in triggered_by_whitelist:
+                logger.debug(
+                    f"[CanaryRollout] Skipping resume for {rollout.id}: "
+                    f"triggered_by={triggered_by} not in whitelist"
+                )
+                continue
+        else:
+            # Whitelist=None: 기존 동작 (모든 PAUSED 재개)
+            # ⚠️ 경고 로그 추가
+            logger.warning(
+                f"[CanaryRollout] Resuming {rollout.id} without whitelist filter. "
+                f"Consider using triggered_by_whitelist for safety."
+            )
+        # ============================================================
+
+        if self.resume(rollout.id):
+            resumed.append(rollout.id)
+
+    return resumed
+```
+
+#### 13.3.3 RecoveryCoordinator 연동
+
+```python
+# services/coordination/recovery_coordinator.py - _handle_canary_resume 수정
+
+def _handle_canary_resume(
+    self,
+    session: RecoverySession,
+    step: RecoveryStep,
+) -> dict[str, Any]:
+    """Canary 롤아웃 재개."""
+    resume_paused_only = step.params.get("resume_paused_only", True)
+
+    # ============================================================
+    # [신규] Whitelist 기반 필터링
+    # ============================================================
+    # 기본값: error_budget만 재개 (안전)
+    triggered_by_whitelist = step.params.get(
+        "triggered_by_whitelist",
+        ["error_budget"]  # 기본값: 예산 때문에 멈춘 것만
+    )
+    # ============================================================
+
+    try:
+        from selfhealing.services.canary import get_canary_service
+        service = get_canary_service()
+
+        if resume_paused_only:
+            resumed = service.resume_paused_rollouts(
+                namespace=session.namespace,
+                triggered_by_whitelist=triggered_by_whitelist,  # ✅ Whitelist 전달
+            )
+        else:
+            resumed = service.resume_all_rollouts(session.namespace)
+
+        return {
+            "success": True,
+            "resumed_count": len(resumed) if resumed else 0,
+            "triggered_by_whitelist": triggered_by_whitelist,
+        }
+    except (ImportError, AttributeError):
+        return {"success": True, "resumed_count": 0, "skipped": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+```
+
+---
+
+### 13.4 수동 프로모션 Gate 적용 (Q4) - 🟡 권장
+
+#### 13.4.1 문제점
+
+"자동은 막히는데 수동은 뚫린다"는 정책은 일관성이 없습니다.
+
+**현재 코드** (`services/canary/service.py` Lines 321-377):
+```python
+def promote(self, rollout_id: str, force: bool = False) -> bool:
+    # force는 메트릭 검증만 건너뜀
+    if not force:
+        metrics = self._collect_stage_metrics(rollout)
+    # governance check 없음!
+```
+
+#### 13.4.2 해결 방안: 파라미터 분리
+
+```python
+# services/canary/service.py
+
+def promote(
+    self,
+    rollout_id: str,
+    force: bool = False,  # 메트릭 검증 건너뜀 (기존)
+    bypass_governance: bool = False,  # ✅ 신규: 거버넌스 검증 건너뜀
+    bypass_reason: str = "",  # bypass 시 사유 필수
+    requested_by: str = "",  # 요청자 (Audit용)
+) -> bool:
+    """
+    다음 단계로 프로모션.
+
+    Args:
+        rollout_id: 롤아웃 ID
+        force: 메트릭 검증 무시 (기존)
+        bypass_governance: 거버넌스 검증 무시 (신규, Audit 필수)
+        bypass_reason: bypass 시 사유 (bypass_governance=True일 때 필수)
+        requested_by: 요청자 (Audit 로깅용)
+
+    Returns:
+        성공 여부
+    """
+    rollout = self.get_rollout(rollout_id)
+    if not rollout:
+        return False
+
+    if rollout.state not in (CanaryState.CANARY, CanaryState.PAUSED):
+        logger.warning(f"[CanaryRollout] Cannot promote: state={rollout.state}")
+        return False
+
+    # ============================================================
+    # [신규] 거버넌스 체크 (수동 프로모션에도 적용)
+    # ============================================================
+    if not bypass_governance:
+        try:
+            from selfhealing.services.governance_checks import check_all_governance
+
+            governance = check_all_governance(
+                check_kill_switch=True,
+                check_emergency=True,
+                check_error_budget=True,
+                operation_name="manual_promote_canary",
+                service_name="CanaryRolloutService",
+                domain="canary",
+                audit_on_block=True,
+            )
+
+            if not governance.allowed:
+                logger.warning(
+                    f"[CanaryRollout] Promotion blocked by governance: "
+                    f"{governance.block_message}"
+                )
+                return False
+
+        except Exception as e:
+            logger.warning(f"[CanaryRollout] Governance check failed: {e}")
+            # Fail-Closed: 체크 실패 시 차단
+            return False
+    else:
+        # bypass_governance=True: Audit 로그 필수
+        if not bypass_reason or len(bypass_reason) < 10:
+            logger.error("[CanaryRollout] bypass_reason required (min 10 chars)")
+            return False
+
+        log_canary_action(
+            action="governance_bypass",
+            rollout=rollout,
+            additional_context={
+                "bypass_reason": bypass_reason,
+                "requested_by": requested_by,
+                "warning": "PIR may be required",
+            },
+        )
+        logger.warning(
+            f"[CanaryRollout] Governance bypassed: rollout={rollout_id}, "
+            f"reason={bypass_reason}, by={requested_by}"
+        )
+    # ============================================================
+
+    # 메트릭 검증 (force가 아니면)
+    if not force:
+        metrics = self._collect_stage_metrics(rollout)
+        is_healthy, failure_reason = self._is_stage_healthy(
+            rollout.current_stage,
+            metrics,
+        )
+
+        if not is_healthy:
+            logger.warning(f"[CanaryRollout] Promotion blocked: {failure_reason}")
+            return False
+
+    # ... 기존 프로모션 로직 ...
+```
+
+#### 13.4.3 API View 수정
+
+```python
+# api/django/views/canary.py - _handle_promote 수정
+
+def _handle_promote(
+    service: CanaryRolloutService,
+    rollout_id: str,
+    rollout: CanaryRollout,
+    request: Request,
+) -> tuple[bool, str | None]:
+    """프로모션 핸들러."""
+    force = request.data.get("force", False)
+    bypass_governance = request.data.get("bypass_governance", False)
+    bypass_reason = request.data.get("bypass_reason", "")
+
+    # bypass_governance 사용 시 사유 필수
+    if bypass_governance and len(bypass_reason) < 10:
+        return False, "bypass_reason required (min 10 chars) when bypass_governance=True"
+
+    success = service.promote(
+        rollout_id,
+        force=force,
+        bypass_governance=bypass_governance,
+        bypass_reason=bypass_reason,
+        requested_by=_get_username(request),
+    )
+
+    return success, None if success else "Promotion blocked"
+```
+
+---
+
+### 13.5 멈춤 사유 우선순위 (Q8) - 🟡 권장
+
+#### 13.5.1 문제점
+
+메트릭 악화(직접적 장애)와 에러 예산 고갈이 동시 발생 시, 무엇이 근본 원인인지 파악 어려움.
+
+#### 13.5.2 해결 방안: 우선순위 Enum
+
+```python
+# services/canary/models.py
+
+from enum import IntEnum
+
+class PauseTriggerPriority(IntEnum):
+    """
+    Pause 트리거 우선순위.
+
+    높은 값이 더 우선 (근본 원인에 가까움).
+    동시 발생 시 가장 높은 우선순위 사유만 기록.
+    """
+    METRICS = 100       # 직접적 장애 (에러율/레이턴시)
+    INTERLOCK = 90      # Safety Interlock
+    ERROR_BUDGET = 80   # 거버넌스 (에러 예산)
+    CHAOS_GUARD = 70    # Chaos 실험 충돌
+    MANUAL = 10         # 수동 중지
+
+
+# triggered_by 값 → 우선순위 매핑
+TRIGGER_PRIORITY_MAP: dict[str, int] = {
+    "metrics": PauseTriggerPriority.METRICS,
+    "interlock": PauseTriggerPriority.INTERLOCK,
+    "error_budget": PauseTriggerPriority.ERROR_BUDGET,
+    "chaos_guard": PauseTriggerPriority.CHAOS_GUARD,
+    "manual": PauseTriggerPriority.MANUAL,
+}
+```
+
+```python
+# services/canary/service.py
+
+def pause(
+    self,
+    rollout_id: str,
+    reason: str = "",
+    triggered_by: str = "manual",
+) -> bool:
+    """롤아웃 일시 중지 (우선순위 기반 사유 기록)."""
+    from selfhealing.services.canary.models import TRIGGER_PRIORITY_MAP
+
+    rollout = self.get_rollout(rollout_id)
+    if not rollout or rollout.state != CanaryState.CANARY:
+        return False
+
+    # ============================================================
+    # [신규] 우선순위 기반 사유 덮어쓰기
+    # ============================================================
+    existing_trigger = getattr(rollout, "pause_triggered_by", None)
+    existing_priority = TRIGGER_PRIORITY_MAP.get(existing_trigger, 0)
+    new_priority = TRIGGER_PRIORITY_MAP.get(triggered_by, 0)
+
+    # 더 높은 우선순위인 경우에만 덮어쓰기
+    if new_priority >= existing_priority:
+        rollout.pause_reason = reason
+        rollout.pause_triggered_by = triggered_by
+        rollout.paused_at = utc_now()
+    else:
+        logger.debug(
+            f"[CanaryRollout] Keeping existing trigger: "
+            f"{existing_trigger} (priority {existing_priority}) > "
+            f"{triggered_by} (priority {new_priority})"
+        )
+    # ============================================================
+
+    rollout.state = CanaryState.PAUSED
+    self._save_rollout(rollout)
+
+    log_canary_action(
+        action="pause",
+        rollout=rollout,
+        additional_context={
+            "pause_reason": reason,
+            "pause_triggered_by": triggered_by,
+            "priority": new_priority,
+        },
+    )
+
+    return True
+```
+
+---
+
+### 13.6 알림 및 대시보드 강화 (Q10 & Q11) - 🟡 권장
+
+#### 13.6.1 Slack 알림 추가
+
+```python
+# tasks/canary_watchdog.py - auto_promote_eligible 수정
+
+def auto_promote_eligible(self) -> WatchdogResult:
+    """자동 프로모션 조건을 충족한 롤아웃 프로모션."""
+    result = WatchdogResult()
+
+    if not self.config.enable_auto_promote:
+        return result
+
+    # ... 거버넌스 체크 ...
+
+    if not governance.allowed:
+        logger.warning(
+            f"[Watchdog] Auto promotion blocked by governance: "
+            f"{governance.block_message}"
+        )
+
+        # ============================================================
+        # [신규] Slack 알림 발송
+        # ============================================================
+        self._send_governance_blocked_notification(
+            block_reason=governance.block_reason.value if governance.block_reason else "unknown",
+            block_message=governance.block_message,
+            pending_count=len(self.service.get_active_rollouts()),
+        )
+        # ============================================================
+
+        result.governance_blocked = True
+        result.governance_block_reason = governance.block_message
+        return result
+
+    # ... 기존 로직 ...
+
+
+def _send_governance_blocked_notification(
+    self,
+    block_reason: str,
+    block_message: str,
+    pending_count: int,
+) -> None:
+    """거버넌스 차단 시 Slack 알림."""
+    try:
+        from selfhealing.services.unified_notification import (
+            get_notification_service,
+        )
+
+        service = get_notification_service()
+
+        message = (
+            f"⏸️ [Canary Watchdog] 프로모션 대기 중\n"
+            f"• 차단 사유: {block_reason}\n"
+            f"• 상세: {block_message}\n"
+            f"• 대기 중인 롤아웃: {pending_count}개\n"
+            f"• 조치: 에러 예산 회복 시 자동 재개됨"
+        )
+
+        service.send_slack_message(
+            message=message,
+            channel=self.config.slack_channel,
+            severity="warning",
+        )
+
+    except Exception as e:
+        logger.warning(f"[Watchdog] Governance blocked notification failed: {e}")
+```
+
+#### 13.6.2 Prometheus 메트릭 추가
+
+```python
+# services/metrics/definitions.py
+
+# =============================================================================
+# Canary Governance Metrics (신규)
+# =============================================================================
+
+canary_governance_blocked_total = get_or_create_counter(
+    "selfhealing_canary_governance_blocked_total",
+    "Total canary promotions blocked by governance",
+    ["block_reason"],  # kill_switch, emergency_mode, error_budget
+)
+
+canary_pending_promotion_gauge = get_or_create_gauge(
+    "selfhealing_canary_pending_promotion",
+    "Number of canary rollouts pending promotion due to governance",
+    ["reason"],  # error_budget, emergency, etc.
+)
+
+canary_governance_bypass_total = get_or_create_counter(
+    "selfhealing_canary_governance_bypass_total",
+    "Total governance bypasses (Break Glass usage)",
+    ["requested_by"],
+)
+```
+
+```python
+# tasks/canary_watchdog.py - 메트릭 기록 추가
+
+def auto_promote_eligible(self) -> WatchdogResult:
+    # ... 거버넌스 체크 후 ...
+
+    if not governance.allowed:
+        # ============================================================
+        # [신규] Prometheus 메트릭 기록
+        # ============================================================
+        try:
+            from selfhealing.services.metrics.definitions import (
+                canary_governance_blocked_total,
+                canary_pending_promotion_gauge,
+            )
+
+            block_reason = governance.block_reason.value if governance.block_reason else "unknown"
+            canary_governance_blocked_total.labels(block_reason=block_reason).inc()
+
+            pending_count = len(self.service.get_active_rollouts())
+            canary_pending_promotion_gauge.labels(reason=block_reason).set(pending_count)
+        except Exception as e:
+            logger.debug(f"[Watchdog] Metrics recording failed: {e}")
+        # ============================================================
+
+        result.governance_blocked = True
+        result.governance_block_reason = governance.block_message
+        return result
+```
+
+#### 13.6.3 Grafana 대시보드 쿼리
+
+```promql
+# 거버넌스 차단 횟수 (시간당)
+sum(rate(selfhealing_canary_governance_blocked_total[1h])) by (block_reason)
+
+# 현재 대기 중인 롤아웃 수
+selfhealing_canary_pending_promotion
+
+# Break Glass 사용 추이
+sum(increase(selfhealing_canary_governance_bypass_total[24h])) by (requested_by)
+```
+
+---
+
+### 13.7 재개 시 쓰로틀링 (Q9) - 🟡 권장
+
+#### 13.7.1 문제점
+
+에러 예산 회복 시 수십 개의 롤아웃이 동시 재개되면 Thundering Herd 문제 발생.
+
+#### 13.7.2 해결 방안: 배치 기반 순차 재개
+
+```python
+# settings/canary_watchdog.py
+
+class CanaryWatchdogSettings(BaseSettings):
+    # ... 기존 설정 ...
+
+    # ============================================================
+    # Resume 쓰로틀링 설정
+    # ============================================================
+    resume_max_batch_size: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="한 번에 재개할 최대 롤아웃 수",
+    )
+
+    resume_interval_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description="배치 간 대기 시간 (초)",
+    )
+
+    resume_staggered_enabled: bool = Field(
+        default=True,
+        description="순차 재개 활성화",
+    )
+```
+
+```python
+# services/canary/service.py
+
+import time
+
+def resume_paused_rollouts_staggered(
+    self,
+    namespace: str | None = None,
+    triggered_by_whitelist: list[str] | None = None,
+    max_batch_size: int = 5,
+    interval_seconds: int = 60,
+) -> list[str]:
+    """
+    PAUSED 상태의 롤아웃 순차 재개 (Thundering Herd 방지).
+
+    Args:
+        namespace: 네임스페이스 필터
+        triggered_by_whitelist: 재개 허용 목록
+        max_batch_size: 한 배치당 최대 재개 수
+        interval_seconds: 배치 간 대기 시간
+
+    Returns:
+        재개된 롤아웃 ID 목록
+    """
+    # 재개 대상 수집
+    candidates = []
+    for rollout in self.get_active_rollouts():
+        if rollout.state != CanaryState.PAUSED:
+            continue
+        if namespace and getattr(rollout, "namespace", None) != namespace:
+            continue
+        triggered_by = getattr(rollout, "pause_triggered_by", None)
+        if triggered_by_whitelist is not None:
+            if triggered_by not in triggered_by_whitelist:
+                continue
+        candidates.append(rollout.id)
+
+    if not candidates:
+        return []
+
+    resumed = []
+
+    # 배치 단위로 순차 재개
+    for i in range(0, len(candidates), max_batch_size):
+        batch = candidates[i:i + max_batch_size]
+
+        for rollout_id in batch:
+            if self.resume(rollout_id):
+                resumed.append(rollout_id)
+
+        # 마지막 배치가 아니면 대기
+        if i + max_batch_size < len(candidates):
+            logger.info(
+                f"[CanaryRollout] Resumed batch {i // max_batch_size + 1}, "
+                f"waiting {interval_seconds}s before next batch"
+            )
+            time.sleep(interval_seconds)
+
+    logger.info(
+        f"[CanaryRollout] Staggered resume complete: "
+        f"{len(resumed)}/{len(candidates)} rollouts resumed"
+    )
+
+    return resumed
+```
+
+#### 13.7.3 RecoveryCoordinator 연동
+
+```python
+# services/coordination/recovery_coordinator.py
+
+def _handle_canary_resume(
+    self,
+    session: RecoverySession,
+    step: RecoveryStep,
+) -> dict[str, Any]:
+    """Canary 롤아웃 재개 (쓰로틀링 지원)."""
+    resume_paused_only = step.params.get("resume_paused_only", True)
+    triggered_by_whitelist = step.params.get("triggered_by_whitelist", ["error_budget"])
+
+    # ============================================================
+    # [신규] 쓰로틀링 파라미터
+    # ============================================================
+    staggered_enabled = step.params.get("staggered_enabled", True)
+    max_batch_size = step.params.get("max_batch_size", 5)
+    interval_seconds = step.params.get("interval_seconds", 60)
+    # ============================================================
+
+    try:
+        from selfhealing.services.canary import get_canary_service
+        service = get_canary_service()
+
+        if resume_paused_only:
+            if staggered_enabled:
+                # 순차 재개
+                resumed = service.resume_paused_rollouts_staggered(
+                    namespace=session.namespace,
+                    triggered_by_whitelist=triggered_by_whitelist,
+                    max_batch_size=max_batch_size,
+                    interval_seconds=interval_seconds,
+                )
+            else:
+                # 일괄 재개 (기존)
+                resumed = service.resume_paused_rollouts(
+                    namespace=session.namespace,
+                    triggered_by_whitelist=triggered_by_whitelist,
+                )
+        else:
+            resumed = service.resume_all_rollouts(session.namespace)
+
+        return {
+            "success": True,
+            "resumed_count": len(resumed) if resumed else 0,
+            "staggered": staggered_enabled,
+            "max_batch_size": max_batch_size,
+        }
+    except (ImportError, AttributeError):
+        return {"success": True, "resumed_count": 0, "skipped": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+```
+
+---
+
+### 13.8 Redis 데이터 하위 호환성 (Q1) - 🔴 필수
+
+#### 13.8.1 현재 패턴 확인
+
+**이미 `.get()` 패턴 사용 중** (`services/canary/service.py` Lines 830-853):
+```python
+def _deserialize_rollout(self, data: dict[str, Any]) -> CanaryRollout:
+    return CanaryRollout(
+        # ...
+        duration_minutes=s.get("duration_minutes", 5),  # ✅ 기본값
+        auto_promote=s.get("auto_promote", True),       # ✅ 기본값
+        rollback_reason=data.get("rollback_reason"),    # ✅ None 허용
+    )
+```
+
+#### 13.8.2 신규 필드 추가 (호환성 유지)
+
+```python
+# services/canary/service.py - _deserialize_rollout 수정
+
+def _deserialize_rollout(self, data: dict[str, Any]) -> CanaryRollout:
+    """딕셔너리에서 CanaryRollout 복원 (하위 호환성 보장)."""
+    return CanaryRollout(
+        id=data["id"],
+        config_type=data["config_type"],
+        previous_values=data["previous_values"],
+        new_values=data["new_values"],
+        state=CanaryState(data["state"]),
+        current_stage_index=data["current_stage_index"],
+        stages=[
+            CanaryStage(
+                name=s["name"],
+                clusters=s["clusters"],
+                percentage=s["percentage"],
+                duration_minutes=s.get("duration_minutes", 5),
+                auto_promote=s.get("auto_promote", True),
+                error_rate_threshold=s.get("error_rate_threshold", 0.05),
+                latency_increase_threshold=s.get("latency_increase_threshold", 0.5),
+            )
+            for s in data["stages"]
+        ],
+        created_by=data["created_by"],
+        created_at=datetime.fromisoformat(data["created_at"]),
+        reason=data["reason"],
+        completed_at=(
+            datetime.fromisoformat(data["completed_at"])
+            if data.get("completed_at") else None
+        ),
+        rollback_reason=data.get("rollback_reason"),
+
+        # ============================================================
+        # [신규] 하위 호환성 필드 (없으면 None)
+        # ============================================================
+        pause_reason=data.get("pause_reason"),
+        pause_triggered_by=data.get("pause_triggered_by"),
+        paused_at=(
+            datetime.fromisoformat(data["paused_at"])
+            if data.get("paused_at") else None
+        ),
+        # ============================================================
+    )
+
+
+def _serialize_rollout(self, rollout: CanaryRollout) -> dict[str, Any]:
+    """CanaryRollout을 딕셔너리로 직렬화."""
+    return {
+        "id": rollout.id,
+        "config_type": rollout.config_type,
+        # ... 기존 필드 ...
+
+        # ============================================================
+        # [신규] pause 관련 필드
+        # ============================================================
+        "pause_reason": rollout.pause_reason,
+        "pause_triggered_by": rollout.pause_triggered_by,
+        "paused_at": (
+            rollout.paused_at.isoformat()
+            if rollout.paused_at else None
+        ),
+        # ============================================================
+    }
+```
+
+#### 13.8.3 테스트 케이스
+
+```python
+# tests/services/canary/test_backward_compatibility.py
+
+class TestRedisBackwardCompatibility:
+    """Redis 데이터 하위 호환성 테스트."""
+
+    def test_deserialize_without_pause_fields(self):
+        """구버전 데이터 (pause 필드 없음) 역직렬화."""
+        old_data = {
+            "id": "test-123",
+            "config_type": "circuit_breaker",
+            "state": "paused",
+            # pause_reason, pause_triggered_by, paused_at 없음
+        }
+
+        service = CanaryRolloutService()
+        rollout = service._deserialize_rollout(old_data)
+
+        assert rollout.pause_reason is None
+        assert rollout.pause_triggered_by is None
+        assert rollout.paused_at is None
+
+    def test_deserialize_with_pause_fields(self):
+        """신버전 데이터 (pause 필드 있음) 역직렬화."""
+        new_data = {
+            "id": "test-456",
+            "config_type": "circuit_breaker",
+            "state": "paused",
+            "pause_reason": "Error budget low",
+            "pause_triggered_by": "error_budget",
+            "paused_at": "2026-02-04T10:00:00+00:00",
+        }
+
+        service = CanaryRolloutService()
+        rollout = service._deserialize_rollout(new_data)
+
+        assert rollout.pause_reason == "Error budget low"
+        assert rollout.pause_triggered_by == "error_budget"
+        assert rollout.paused_at is not None
+```
+
+---
+
+## 14. 구현 우선순위 정리
+
+| 우선순위 | 항목 | 섹션 | 예상 공수 |
+|---------|------|------|----------|
+| 🔴 P0 | Redis 호환성 | §13.8 | 0.5일 |
+| 🔴 P0 | Zombie 판정 제외 | §13.1 | 0.5일 |
+| 🔴 P0 | Resume 필터링 | §13.3 | 1일 |
+| 🔴 P1 | Break Glass | §13.2 | 1일 |
+| 🟡 P2 | 수동 프로모션 Gate | §13.4 | 1일 |
+| 🟡 P2 | 멈춤 사유 우선순위 | §13.5 | 0.5일 |
+| 🟡 P2 | 알림/대시보드 | §13.6 | 1일 |
+| 🟡 P3 | 재개 쓰로틀링 | §13.7 | 1일 |
+
+**총 예상 공수:** 6.5일
+
+---
+
+## 15. 체크리스트
+
+### 15.1 필수 구현 (P0)
+
+- [ ] `CanaryRollout` 모델에 `pause_reason`, `pause_triggered_by`, `paused_at` 필드 추가
+- [ ] `_deserialize_rollout`에 `.get()` 기본값 처리 추가
+- [ ] `_serialize_rollout`에 신규 필드 추가
+- [ ] `_check_zombie`에 `ZOMBIE_EXEMPT_TRIGGERS` 제외 로직 추가
+- [ ] `resume_paused_rollouts`에 `triggered_by_whitelist` 파라미터 추가
+- [ ] `_handle_canary_resume`에 whitelist 기본값 `["error_budget"]` 적용
+- [ ] `GovernanceSettings`에 `break_glass_enabled` 필드 추가
+- [ ] `check_all_governance` 최상단에 Break Glass 체크 추가
+
+### 15.2 권장 구현 (P2-P3)
+
+- [ ] `promote()`에 `bypass_governance`, `bypass_reason` 파라미터 추가
+- [ ] `PauseTriggerPriority` Enum 및 우선순위 로직 추가
+- [ ] `_send_governance_blocked_notification` 메서드 추가
+- [ ] `canary_governance_blocked_total` Counter 메트릭 추가
+- [ ] `canary_pending_promotion_gauge` Gauge 메트릭 추가
+- [ ] `resume_paused_rollouts_staggered` 메서드 추가
+- [ ] RecoveryCoordinator에 `staggered_enabled`, `max_batch_size` 파라미터 추가
+
+### 15.3 테스트
+
+- [ ] `test_zombie_exempt_error_budget` - Error Budget PAUSED는 Zombie 아님
+- [ ] `test_resume_whitelist_filter` - Whitelist 외 사유는 재개 안 됨
+- [ ] `test_break_glass_bypass` - Break Glass 시 모든 체크 우회
+- [ ] `test_redis_backward_compatibility` - 구버전 데이터 역직렬화
+- [ ] `test_staggered_resume` - 순차 재개 동작 확인
