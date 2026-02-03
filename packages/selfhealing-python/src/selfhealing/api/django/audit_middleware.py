@@ -135,10 +135,30 @@ class AuditMiddleware:
             from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
 
             adapter = get_audit_adapter()
+
+            # Checkpoint Strategy 로드
+            checkpoint_strategy = None
+            if self._is_checkpoint_enabled():
+                try:
+                    from selfhealing.audit.checkpoint_strategy import (
+                        get_default_checkpoint_strategy,
+                    )
+
+                    checkpoint_strategy = get_default_checkpoint_strategy()
+                    logger.info("[AuditMiddleware] Checkpoint strategy loaded")
+                except Exception as e:
+                    logger.warning(f"[AuditMiddleware] Checkpoint strategy failed: {e}")
+
+            # WAL + Checkpoint 설정
+            wal_enabled = self._is_wal_enabled()
+
             self._recorder = ContinuousAuditRecorder(
                 audit_adapter=adapter,
                 fail_open=True,
                 fallback_to_stdout=True,
+                wal_enabled=wal_enabled,
+                checkpoint_strategy=checkpoint_strategy,
+                checkpoint_namespace=self._get_checkpoint_namespace(),
             )
             logger.info("[AuditMiddleware] Initialized with ContinuousAuditRecorder")
         except Exception as e:
@@ -149,6 +169,24 @@ class AuditMiddleware:
         self._load_read_audit_config()
 
         self._initialized = True
+
+    def _is_wal_enabled(self) -> bool:
+        """WAL 활성화 여부."""
+        import os
+
+        return os.environ.get("AUDIT_WAL_ENABLED", "FALSE").upper() == "TRUE"
+
+    def _is_checkpoint_enabled(self) -> bool:
+        """Checkpoint 활성화 여부."""
+        import os
+
+        return os.environ.get("AUDIT_CHECKPOINT_ENABLED", "TRUE").upper() == "TRUE"
+
+    def _get_checkpoint_namespace(self) -> str:
+        """Checkpoint 네임스페이스."""
+        import os
+
+        return os.environ.get("AUDIT_CHECKPOINT_NAMESPACE", "audit_middleware")
 
     def _load_read_audit_config(self) -> None:
         """ADR-002: Django settings에서 조회 기록 설정 로드."""

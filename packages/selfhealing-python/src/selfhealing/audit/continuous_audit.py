@@ -30,6 +30,10 @@ from selfhealing.interfaces.audit_adapter import (
 )
 
 if TYPE_CHECKING:
+    from selfhealing.audit.checkpoint_strategy import (
+        CheckpointStorageStrategy,
+        UnifiedCheckpointData,
+    )
     from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
 logger = logging.getLogger(__name__)
@@ -89,6 +93,9 @@ class ContinuousAuditRecorder:
         # WAL 연동
         wal_enabled: bool = False,
         wal_config: Optional["WALConfig"] = None,
+        # Checkpoint Strategy 연동
+        checkpoint_strategy: Optional["CheckpointStorageStrategy"] = None,
+        checkpoint_namespace: str = "default",
     ):
         """
         Initialize ContinuousAuditRecorder.
@@ -102,6 +109,8 @@ class ContinuousAuditRecorder:
             fallback_to_stdout: 실패 시 stdout 출력 (기본: True)
             wal_enabled: WAL 활성화 (기본: False)
             wal_config: WAL 설정
+            checkpoint_strategy: 체크포인트 저장 전략 (None이면 WAL 활성화 시 기본값 사용)
+            checkpoint_namespace: 체크포인트 네임스페이스
         """
         self.audit_adapter = audit_adapter
         self.config = config or AuditConfig.get_default()
@@ -130,6 +139,20 @@ class ContinuousAuditRecorder:
             except Exception as e:
                 logger.warning(f"[ContinuousAudit] WAL initialization failed: {e}")
                 self._wal_enabled = False
+
+        # Checkpoint Strategy 초기화
+        self._checkpoint_strategy: CheckpointStorageStrategy | None = checkpoint_strategy
+        self._checkpoint_namespace = checkpoint_namespace
+
+        if checkpoint_strategy is None and wal_enabled:
+            # WAL 활성화 시 기본 전략 자동 설정
+            try:
+                from selfhealing.audit.checkpoint_strategy import get_default_checkpoint_strategy
+
+                self._checkpoint_strategy = get_default_checkpoint_strategy()
+                logger.info("[ContinuousAudit] Checkpoint strategy initialized")
+            except Exception as e:
+                logger.warning(f"[ContinuousAudit] Checkpoint strategy init failed: {e}")
 
         # 환경 정보
         self._environment = os.environ.get("ENVIRONMENT", "development")
@@ -656,9 +679,7 @@ class ContinuousAuditRecorder:
         verifier = HashChainVerifier()
 
         # 엔트리에 integrity 필드가 있으면 검증
-        entries_with_integrity = [
-            e for e in entries if "integrity" in e.get("details", {})
-        ]
+        entries_with_integrity = [e for e in entries if "integrity" in e.get("details", {})]
 
         if not entries_with_integrity:
             return {
@@ -740,6 +761,22 @@ class ContinuousAuditRecorder:
                     except Exception as e:
                         logger.warning(f"[ContinuousAudit] WAL commit failed: {e}")
 
+                # Checkpoint 저장 (WAL 커밋 후)
+                if wal_seq is not None and self._checkpoint_strategy:
+                    try:
+                        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
+
+                        checkpoint_data = UnifiedCheckpointData(
+                            wal_sequence=wal_seq,
+                            checksum=entry_dict.get("integrity", {}).get("hash"),
+                        )
+                        self._checkpoint_strategy.save(
+                            self._checkpoint_namespace,
+                            checkpoint_data,
+                        )
+                    except Exception as e:
+                        logger.warning(f"[ContinuousAudit] Checkpoint save failed: {e}")
+
             except Exception as e:
                 self._failed_write_count += 1
 
@@ -757,8 +794,7 @@ class ContinuousAuditRecorder:
                     raise
 
                 logger.warning(
-                    f"[ContinuousAudit] Write failed (fail-open): {e}. "
-                    f"Total failures: {self._failed_write_count}"
+                    f"[ContinuousAudit] Write failed (fail-open): {e}. " f"Total failures: {self._failed_write_count}"
                 )
 
             # ID 생성 (timestamp + sequence)

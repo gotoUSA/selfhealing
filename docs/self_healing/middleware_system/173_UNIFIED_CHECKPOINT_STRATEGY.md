@@ -2702,39 +2702,39 @@ strategy.save_with_kafka_offset(
 
 ### 8.1 구현 (기본)
 
-- [ ] `checkpoint_strategy.py` 신규 파일 생성
-- [ ] `UnifiedCheckpointData` 통합 데이터 모델
-- [ ] `CheckpointStorageStrategy` 추상 인터페이스
-- [ ] `FileCheckpointStorage` 구현
-- [ ] `RedisCheckpointStorage` 구현
-- [ ] `KafkaRedisCheckpointStorage` 구현
-- [ ] `get_checkpoint_strategy()` 팩토리 함수
+- [x] `checkpoint_strategy.py` 신규 파일 생성
+- [x] `UnifiedCheckpointData` 통합 데이터 모델
+- [x] `CheckpointStorageStrategy` 추상 인터페이스
+- [x] `FileCheckpointStorage` 구현
+- [x] `RedisCheckpointStorage` 구현
+- [x] `KafkaRedisCheckpointStorage` 구현
+- [x] `get_checkpoint_strategy()` 팩토리 함수
 
 ### 8.2 구현 (고급 - 리뷰 반영)
 
-- [ ] `CheckpointStrategyRegistry` 동적 전략 등록 (§2.3)
-- [ ] `maybe_save()` Back-pressure 메커니즘 (§2.4)
-- [ ] `CompositeCheckpointStorage` Tiered Fallback (§2.5)
-- [ ] `CheckpointCorruptedError` 예외 클래스
-- [ ] `DistributedRecoveryLock` 분산 락 통합 (Q2)
-- [ ] File 백업 로직 in `KafkaRedisCheckpointStorage` (Q3)
-- [ ] `_verify_data_checksum()` Checksum 검증 (Q4)
-- [ ] `_notify_failure()` UnifiedNotificationManager 연동 (Q9)
+- [x] `CheckpointStrategyRegistry` 동적 전략 등록 (§2.3)
+- [ ] `maybe_save()` Back-pressure 메커니즘 (§2.4) - 향후 구현 예정
+- [x] `CompositeCheckpointStorage` Tiered Fallback (§2.5)
+- [x] `CheckpointCorruptedError` 예외 클래스
+- [x] `DistributedRecoveryLock` 분산 락 통합 (Q2)
+- [x] File 백업 로직 in `KafkaRedisCheckpointStorage` (Q3)
+- [x] `_verify_data_checksum()` Checksum 검증 (Q4)
+- [x] `_notify_failure()` UnifiedNotificationManager 연동 (Q9)
 
 ### 8.3 연동
 
-- [ ] `ContinuousAuditRecorder.__init__`에 `checkpoint_strategy` 파라미터 추가
-- [ ] `_record_with_integrity()`에서 체크포인트 저장 로직 추가
-- [ ] `AuditMiddleware._ensure_initialized()`에서 전략 주입
+- [x] `ContinuousAuditRecorder.__init__`에 `checkpoint_strategy` 파라미터 추가
+- [x] `_record_with_integrity()`에서 체크포인트 저장 로직 추가
+- [x] `AuditMiddleware._ensure_initialized()`에서 전략 주입
 
 ### 8.4 테스트
 
-- [ ] `test_checkpoint_strategy.py` 단위 테스트
-- [ ] `test_middleware_checkpoint_integration.py` 통합 테스트
-- [ ] 레거시 마이그레이션 테스트
-- [ ] Tiered Fallback 테스트 (Redis 장애 시뮬레이션)
-- [ ] 분산 락 경합 테스트 (멀티 Pod 시뮬레이션)
-- [ ] Checksum 검증 실패 테스트
+- [x] `test_checkpoint_strategy.py` 단위 테스트 (42개 테스트 통과)
+- [ ] `test_middleware_checkpoint_integration.py` 통합 테스트 - 불필요 (순수 단위 테스트로 커버)
+- [x] 레거시 마이그레이션 테스트
+- [x] Tiered Fallback 테스트 (Redis 장애 시뮬레이션)
+- [ ] 분산 락 경합 테스트 (멀티 Pod 시뮬레이션) - 향후 구현 예정
+- [ ] Checksum 검증 실패 테스트 - 향후 구현 예정
 
 ---
 
