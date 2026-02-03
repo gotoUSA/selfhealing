@@ -121,10 +121,12 @@ class CascadeRetentionSettings(BaseSettings):
     # Rate Limiting (from cascade_config.py#L288)
     # ==========================================================================
     max_events_per_second: int = Field(
-        default=1000,
-        ge=100,
-        le=10000,
-        description="초당 최대 이벤트 처리 수",
+        default=10000,
+        ge=1,
+        le=1000000,
+        description=(
+            "초당 최대 감사 이벤트 수 임계값. " "대기업 환경에서는 100,000+ 권장. " "이 값 초과 시 샘플링 또는 경고 발생."
+        ),
     )
 
     # ==========================================================================
@@ -161,10 +163,7 @@ class CascadeRetentionSettings(BaseSettings):
         # Note: cross-field validation은 model_validator에서 더 적합하지만
         # 여기서는 경고만 발생
         if v <= 0.7:
-            logger.warning(
-                f"[CascadeRetention] buffer_critical_threshold={v}는 낮습니다. "
-                "0.85 이상을 권장합니다."
-            )
+            logger.warning(f"[CascadeRetention] buffer_critical_threshold={v}는 낮습니다. " "0.85 이상을 권장합니다.")
         return v
 
 

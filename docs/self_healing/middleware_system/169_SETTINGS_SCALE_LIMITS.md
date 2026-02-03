@@ -522,20 +522,20 @@ SELFHEALING_SCALE_PROFILE=enterprise
 
 ### 7.1 코드 변경
 
-- [ ] `cascade_retention.py`: `le=1000000` 으로 수정
-- [ ] `event_buffer.py`: `le=100000` 으로 수정
-- [ ] `batch.py`: `le=10000` 으로 수정
-- [ ] `settings/scale.py`: 신규 파일 생성
-- [ ] `settings/__init__.py`: `ScaleSettings` 내보내기
+- [x] `cascade_retention.py`: `le=1000000` 으로 수정
+- [x] `event_buffer.py`: `le=100000` 으로 수정 (신규 생성)
+- [x] `batch.py`: `le=10000` 으로 수정
+- [x] `settings/scale.py`: 신규 파일 생성
+- [x] `settings/__init__.py`: `ScaleSettings` 내보내기
 
 ### 7.2 문서
 
-- [ ] README.md에 프로파일 설명 추가
-- [ ] 환경 변수 표 업데이트
+- [x] README.md에 프로파일 설명 추가
+- [x] 환경 변수 표 업데이트
 
 ### 7.3 테스트
 
-- [ ] 단위 테스트 추가
+- [x] 단위 테스트 추가 (28개 테스트 통과)
 - [ ] 통합 테스트: 프로파일별 동작 확인
 
 ---

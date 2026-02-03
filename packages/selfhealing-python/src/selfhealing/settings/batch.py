@@ -60,10 +60,12 @@ class BatchSettings(BaseSettings):
     # Logger Batch - from async_logger.py
     # ==========================================================================
     logger_batch_size: int = Field(
-        default=10,
+        default=100,
         ge=1,
-        le=100,
-        description="비동기 로거 배치 크기",
+        le=10000,
+        description=(
+            "AsyncHealingLogger 배치 크기. " "대량 처리 시 1,000+ 권장. " "너무 크면 메모리 사용 증가, 너무 작으면 I/O 증가."
+        ),
     )
 
     # ==========================================================================
@@ -71,9 +73,9 @@ class BatchSettings(BaseSettings):
     # ==========================================================================
     flush_interval: float = Field(
         default=5.0,
-        ge=1.0,
+        ge=0.1,
         le=60.0,
-        description="배치 플러시 간격 (초)",
+        description=("배치 플러시 간격 (초). " "고속 처리 시 1.0-2.0 권장. " "실시간 요구 시 0.5 가능."),
     )
 
     # ==========================================================================

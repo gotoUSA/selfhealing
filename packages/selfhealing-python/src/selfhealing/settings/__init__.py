@@ -166,6 +166,13 @@ from selfhealing.settings.error_budget import (
     reset_error_budget_settings,
 )
 
+# Event Buffer Settings (169_SETTINGS_SCALE_LIMITS.md)
+from selfhealing.settings.event_buffer import (
+    EventBufferSettings,
+    get_event_buffer_settings,
+    reset_event_buffer_settings,
+)
+
 # Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
 from selfhealing.settings.error_budget_propagation import (
     ErrorBudgetPropagationSettings,
@@ -341,6 +348,15 @@ from selfhealing.settings.security import (
     SecuritySettings,
     get_security_settings,
     reset_security_settings,
+)
+
+# Enterprise Scale Settings (169_SETTINGS_SCALE_LIMITS.md)
+from selfhealing.settings.scale import (
+    PROFILE_DEFAULTS,
+    ScaleProfile,
+    ScaleSettings,
+    get_scale_settings,
+    reset_scale_settings,
 )
 
 # 확장 설정 (12)
@@ -634,4 +650,14 @@ __all__ = [
     "ResourceGuardSettings",
     "get_resource_guard_settings",
     "reset_resource_guard_settings",
+    # Event Buffer Settings (169_SETTINGS_SCALE_LIMITS.md)
+    "EventBufferSettings",
+    "get_event_buffer_settings",
+    "reset_event_buffer_settings",
+    # Enterprise Scale Settings (169_SETTINGS_SCALE_LIMITS.md)
+    "ScaleProfile",
+    "ScaleSettings",
+    "PROFILE_DEFAULTS",
+    "get_scale_settings",
+    "reset_scale_settings",
 ]
