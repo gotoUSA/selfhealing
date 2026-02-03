@@ -2730,11 +2730,11 @@ strategy.save_with_kafka_offset(
 
 ### 8.4 테스트
 
-- [x] `test_checkpoint_strategy.py` 단위 테스트 (49개 테스트 통과)
+- [x] `test_checkpoint_strategy.py` 단위 테스트 (50개 테스트 통과)
 - [ ] `test_middleware_checkpoint_integration.py` 통합 테스트 - 불필요 (순수 단위 테스트로 커버)
 - [x] 레거시 마이그레이션 테스트
 - [x] Tiered Fallback 테스트 (Redis 장애 시뮬레이션)
-- [x] Back-pressure 단위 테스트 (ContinuousAuditRecorder + AuditSyncWorker)
+- [x] Back-pressure 단위 테스트 (Mock WAL 주입으로 카운터 증가/저장/리셋 검증)
 - [ ] 분산 락 경합 테스트 (멀티 Pod 시뮬레이션) - 향후 구현 예정
 - [ ] Checksum 검증 실패 테스트 - 향후 구현 예정
 

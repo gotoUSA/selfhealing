@@ -677,19 +677,64 @@ class TestContinuousAuditRecorderBackPressure:
             safety_check={"passed": True},
         )
 
-    def test_backpressure_after_record_count_threshold(self, tmp_path):
-        """레코드 개수 임계값 도달 시 체크포인트 저장."""
-        from unittest.mock import MagicMock, patch
+    def _inject_mock_wal(self, recorder, start_seq=1):
+        """Mock WAL 주입 헬퍼. wal_seq가 순차 증가하도록 설정."""
+        from unittest.mock import MagicMock
 
-        from selfhealing.audit.checkpoint_strategy import (
-            FileCheckpointStorage,
-            UnifiedCheckpointData,
-        )
+        mock_wal = MagicMock()
+        # write() 호출 시 순차 증가하는 시퀀스 반환
+        mock_wal.write.side_effect = lambda _: next(mock_wal._seq_counter)
+        mock_wal._seq_counter = iter(range(start_seq, start_seq + 1000))
+        mock_wal.mark_processed.return_value = None
+
+        recorder._wal = mock_wal
+        recorder._wal_enabled = True
+        return mock_wal
+
+    def test_backpressure_counter_increases_with_mock_wal(self, tmp_path):
+        """Mock WAL 주입 시 records_since_checkpoint가 증가하는지 확인."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
         from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
 
-        # Mock 설정
         mock_adapter = MagicMock()
-        mock_adapter.record_audit_event.return_value = "test-id"
+        mock_adapter.log.return_value = None
+
+        strategy = FileCheckpointStorage(base_path=tmp_path)
+
+        recorder = ContinuousAuditRecorder(
+            audit_adapter=mock_adapter,
+            checkpoint_strategy=strategy,
+            checkpoint_save_interval=10,  # 10개마다 저장 (임계값 도달 전)
+            checkpoint_save_max_seconds=60.0,
+        )
+
+        # Mock WAL 주입
+        mock_wal = self._inject_mock_wal(recorder, start_seq=1)
+
+        # 초기값 확인
+        assert recorder.get_stats()["records_since_checkpoint"] == 0
+
+        # 2개 기록
+        self._make_test_record(recorder)
+        assert recorder.get_stats()["records_since_checkpoint"] == 1
+
+        self._make_test_record(recorder)
+        assert recorder.get_stats()["records_since_checkpoint"] == 2
+
+        # WAL.write() 호출 확인
+        assert mock_wal.write.call_count == 2
+
+    def test_backpressure_saves_checkpoint_at_threshold(self, tmp_path):
+        """임계값 도달 시 체크포인트가 저장되고 카운터가 리셋되는지 확인."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
+        from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
+
+        mock_adapter = MagicMock()
+        mock_adapter.log.return_value = None
 
         strategy = FileCheckpointStorage(base_path=tmp_path)
 
@@ -698,19 +743,25 @@ class TestContinuousAuditRecorderBackPressure:
             checkpoint_strategy=strategy,
             checkpoint_save_interval=3,  # 3개마다 저장
             checkpoint_save_max_seconds=60.0,
-            wal_enabled=True,
         )
 
-        # 3개 기록
+        # Mock WAL 주입
+        self._inject_mock_wal(recorder, start_seq=100)
+
+        # 3개 기록 (임계값 = 3)
         for i in range(3):
             self._make_test_record(recorder)
 
-        # stats에서 records_since_checkpoint 확인
-        stats = recorder.get_stats()
-        assert "records_since_checkpoint" in stats
+        # 카운터가 리셋되었는지 확인 (저장 후 0)
+        assert recorder.get_stats()["records_since_checkpoint"] == 0
 
-    def test_backpressure_after_time_threshold(self, tmp_path):
-        """시간 임계값 도달 시 체크포인트 저장."""
+        # 체크포인트가 실제로 저장되었는지 확인
+        loaded = strategy.load("default")
+        assert loaded is not None
+        assert loaded.wal_sequence == 102  # 100, 101, 102 중 마지막
+
+    def test_backpressure_saves_checkpoint_at_time_threshold(self, tmp_path):
+        """시간 임계값 도달 시 체크포인트가 저장되는지 확인."""
         import time
         from unittest.mock import MagicMock
 
@@ -718,20 +769,23 @@ class TestContinuousAuditRecorderBackPressure:
         from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
 
         mock_adapter = MagicMock()
-        mock_adapter.record_audit_event.return_value = "test-id"
+        mock_adapter.log.return_value = None
 
         strategy = FileCheckpointStorage(base_path=tmp_path)
 
         recorder = ContinuousAuditRecorder(
             audit_adapter=mock_adapter,
             checkpoint_strategy=strategy,
-            checkpoint_save_interval=1000,  # 높게 설정
+            checkpoint_save_interval=1000,  # 높게 설정 (개수 임계값 도달 안함)
             checkpoint_save_max_seconds=0.1,  # 0.1초 후 저장
-            wal_enabled=True,
         )
+
+        # Mock WAL 주입
+        self._inject_mock_wal(recorder, start_seq=200)
 
         # 1개 기록
         self._make_test_record(recorder)
+        assert recorder.get_stats()["records_since_checkpoint"] == 1
 
         # 0.15초 대기
         time.sleep(0.15)
@@ -739,8 +793,13 @@ class TestContinuousAuditRecorderBackPressure:
         # 다음 레코드가 시간 임계값 초과로 저장 트리거
         self._make_test_record(recorder)
 
-        stats = recorder.get_stats()
-        assert "records_since_checkpoint" in stats
+        # 카운터가 리셋되었는지 확인
+        assert recorder.get_stats()["records_since_checkpoint"] == 0
+
+        # 체크포인트가 저장되었는지 확인
+        loaded = strategy.load("default")
+        assert loaded is not None
+        assert loaded.wal_sequence == 201
 
     def test_force_save_checkpoint(self, tmp_path):
         """force_save_checkpoint 테스트."""
@@ -774,7 +833,7 @@ class TestContinuousAuditRecorderBackPressure:
         from selfhealing.audit.continuous_audit import ContinuousAuditRecorder
 
         mock_adapter = MagicMock()
-        mock_adapter.record_audit_event.return_value = "test-id"
+        mock_adapter.log.return_value = None
 
         strategy = FileCheckpointStorage(base_path=tmp_path)
 
@@ -784,12 +843,14 @@ class TestContinuousAuditRecorderBackPressure:
             checkpoint_save_interval=100,
         )
 
-        # WAL 없이 기록하면 records_since_checkpoint는 증가하지 않음 (WAL seq 필요)
-        # Back-pressure는 WAL 시퀀스가 있을 때만 동작
+        # Mock WAL 주입
+        self._inject_mock_wal(recorder, start_seq=1)
+
+        self._make_test_record(recorder)
+
         stats = recorder.get_stats()
         assert "records_since_checkpoint" in stats
-        # 기본값 0 확인 (WAL 없으므로)
-        assert stats["records_since_checkpoint"] == 0
+        assert stats["records_since_checkpoint"] == 1
 
 
 class TestAuditSyncWorkerCheckpointStrategyMigration:
