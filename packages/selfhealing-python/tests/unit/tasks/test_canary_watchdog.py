@@ -140,7 +140,7 @@ class TestWatchdogConfig:
     def test_default_values(self):
         """기본값 확인."""
         config = WatchdogConfig()
-        
+
         assert config.zombie_threshold_minutes == 30
         assert config.auto_rollback_after_minutes == 60
         assert config.enable_auto_promote is True
@@ -153,7 +153,7 @@ class TestWatchdogConfig:
             zombie_threshold_minutes=15,
             enable_auto_rollback=False,
         )
-        
+
         assert config.zombie_threshold_minutes == 15
         assert config.enable_auto_rollback is False
 
@@ -178,7 +178,7 @@ class TestZombieRollout:
             affected_clusters=["seoul", "tokyo"],
             reason="Stuck in CANARY state",
         )
-        
+
         assert zombie.rollout_id == "test123"
         assert zombie.stuck_minutes == 40.0
         assert zombie.action_taken == ""
@@ -195,7 +195,7 @@ class TestWatchdogResult:
     def test_default_values(self):
         """기본값 확인."""
         result = WatchdogResult()
-        
+
         assert result.success is True
         assert result.scanned_count == 0
         assert result.zombie_count == 0
@@ -213,16 +213,16 @@ class TestWatchdogResult:
             created_by="admin",
             affected_clusters=["seoul"],
         )
-        
+
         result = WatchdogResult(
             success=True,
             scanned_count=5,
             zombie_count=1,
             zombies=[zombie],
         )
-        
+
         d = result.to_dict()
-        
+
         assert d["success"] is True
         assert d["scanned_count"] == 5
         assert d["zombie_count"] == 1
@@ -241,26 +241,26 @@ class TestRolloutWatchdog:
     def test_initialization_default_config(self):
         """기본 설정으로 초기화."""
         watchdog = RolloutWatchdog()
-        
+
         assert watchdog.config.zombie_threshold_minutes == 30
         assert watchdog._service is None
 
     def test_initialization_custom_config(self, watchdog_config):
         """사용자 정의 설정으로 초기화."""
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         assert watchdog.config.notification_enabled is False
 
     def test_scan_no_active_rollouts(self, watchdog_config):
         """활성 롤아웃이 없을 때."""
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = []
         watchdog._service = mock_service
-        
+
         result = watchdog.scan_and_handle()
-        
+
         assert result.success is True
         assert result.scanned_count == 0
         assert result.zombie_count == 0
@@ -268,14 +268,14 @@ class TestRolloutWatchdog:
     def test_scan_detects_zombie_canary(self, watchdog_config, zombie_rollout):
         """CANARY 상태의 Zombie 감지."""
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = [zombie_rollout]
         mock_service.rollback.return_value = False  # 롤백 조건 미달
         watchdog._service = mock_service
-        
+
         result = watchdog.scan_and_handle()
-        
+
         assert result.scanned_count == 1
         assert result.zombie_count == 1
         assert result.zombies[0].rollout_id == "zombie123"
@@ -283,26 +283,26 @@ class TestRolloutWatchdog:
     def test_scan_detects_zombie_paused(self, watchdog_config, paused_rollout):
         """PAUSED 상태의 Zombie 감지."""
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = [paused_rollout]
         watchdog._service = mock_service
-        
+
         result = watchdog.scan_and_handle()
-        
+
         assert result.zombie_count == 1
         assert "paused" in result.zombies[0].state.lower()
 
     def test_scan_normal_rollout_not_zombie(self, watchdog_config, sample_rollout):
         """정상 롤아웃은 Zombie로 감지 안됨."""
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = [sample_rollout]
         watchdog._service = mock_service
-        
+
         result = watchdog.scan_and_handle()
-        
+
         assert result.scanned_count == 1
         assert result.zombie_count == 0
 
@@ -321,34 +321,44 @@ class TestRolloutWatchdog:
             created_by="admin",
             created_at=utc_now() - timedelta(minutes=65),
         )
-        
+
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = [old_rollout]
         mock_service.rollback.return_value = True
         watchdog._service = mock_service
-        
+
         result = watchdog.scan_and_handle()
-        
+
         assert result.zombie_count == 1
         assert result.rollback_count == 1
         mock_service.rollback.assert_called_once()
 
     def test_auto_promote_eligible(self, watchdog_config, sample_rollout):
         """자동 프로모션 조건 충족 시 프로모션."""
+        from unittest.mock import patch, Mock as MockClass
+
         # duration 경과한 롤아웃
         sample_rollout.created_at = utc_now() - timedelta(minutes=10)
-        
+
         watchdog = RolloutWatchdog(config=watchdog_config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = [sample_rollout]
         mock_service.promote.return_value = True
         watchdog._service = mock_service
-        
-        result = watchdog.auto_promote_eligible()
-        
+
+        # Mock governance to allow promotion
+        mock_governance = MockClass()
+        mock_governance.allowed = True
+
+        with patch(
+            "selfhealing.services.governance_checks.check_all_governance",
+            return_value=mock_governance,
+        ):
+            result = watchdog.auto_promote_eligible()
+
         assert result.scanned_count == 1
         assert result.promote_count == 1
         mock_service.promote.assert_called_once_with(sample_rollout.id, force=False)
@@ -357,13 +367,13 @@ class TestRolloutWatchdog:
         """auto_promote 비활성화 시 프로모션 안함."""
         config = WatchdogConfig(enable_auto_promote=False)
         watchdog = RolloutWatchdog(config=config)
-        
+
         mock_service = Mock()
         mock_service.get_active_rollouts.return_value = [sample_rollout]
         watchdog._service = mock_service
-        
+
         result = watchdog.auto_promote_eligible()
-        
+
         assert result.promote_count == 0
         mock_service.promote.assert_not_called()
 
@@ -378,9 +388,7 @@ class TestScanZombieRolloutsTask:
 
     def test_task_success(self):
         """태스크 성공."""
-        with patch(
-            "selfhealing.tasks.canary_watchdog.get_rollout_watchdog"
-        ) as mock_get:
+        with patch("selfhealing.tasks.canary_watchdog.get_rollout_watchdog") as mock_get:
             mock_watchdog = Mock()
             mock_watchdog.scan_and_handle.return_value = WatchdogResult(
                 success=True,
@@ -388,20 +396,18 @@ class TestScanZombieRolloutsTask:
                 zombie_count=1,
             )
             mock_get.return_value = mock_watchdog
-            
+
             result = scan_zombie_rollouts()
-            
+
             assert result["success"] is True
             assert result["scanned_count"] == 5
             assert result["zombie_count"] == 1
 
     def test_task_error_handling(self):
         """태스크 에러 처리."""
-        with patch(
-            "selfhealing.tasks.canary_watchdog.get_rollout_watchdog"
-        ) as mock_get:
+        with patch("selfhealing.tasks.canary_watchdog.get_rollout_watchdog") as mock_get:
             mock_get.side_effect = Exception("Test error")
-            
+
             with pytest.raises(Exception, match="Test error"):
                 scan_zombie_rollouts()
 
@@ -411,9 +417,7 @@ class TestAutoPromoteEligibleTask:
 
     def test_task_success(self):
         """태스크 성공."""
-        with patch(
-            "selfhealing.tasks.canary_watchdog.get_rollout_watchdog"
-        ) as mock_get:
+        with patch("selfhealing.tasks.canary_watchdog.get_rollout_watchdog") as mock_get:
             mock_watchdog = Mock()
             mock_watchdog.auto_promote_eligible.return_value = WatchdogResult(
                 success=True,
@@ -421,9 +425,9 @@ class TestAutoPromoteEligibleTask:
                 promote_count=2,
             )
             mock_get.return_value = mock_watchdog
-            
+
             result = auto_promote_eligible()
-            
+
             assert result["success"] is True
             assert result["promote_count"] == 2
 
@@ -433,19 +437,17 @@ class TestCollectCanaryMetricsTask:
 
     def test_task_success(self):
         """태스크 성공."""
-        with patch(
-            "selfhealing.services.canary.get_canary_rollout_service"
-        ) as mock_get_service:
+        with patch("selfhealing.services.canary.get_canary_rollout_service") as mock_get_service:
             mock_service = Mock()
-            
+
             mock_rollout = Mock()
             mock_rollout.id = "test123"
             mock_service.get_active_rollouts.return_value = [mock_rollout]
             mock_service.collect_metrics.return_value = [Mock()]
             mock_get_service.return_value = mock_service
-            
+
             result = collect_canary_metrics()
-            
+
             assert result["success"] is True
             assert result["rollout_count"] == 1
             assert result["metrics_collected"] == 1
@@ -463,7 +465,7 @@ class TestSingleton:
         """싱글톤이 같은 인스턴스를 반환."""
         w1 = get_rollout_watchdog()
         w2 = get_rollout_watchdog()
-        
+
         assert w1 is w2
 
     def test_reset_watchdog_creates_new_instance(self):
@@ -471,5 +473,5 @@ class TestSingleton:
         w1 = get_rollout_watchdog()
         reset_watchdog()
         w2 = get_rollout_watchdog()
-        
+
         assert w1 is not w2

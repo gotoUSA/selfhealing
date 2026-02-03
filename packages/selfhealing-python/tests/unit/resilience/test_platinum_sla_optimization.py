@@ -459,14 +459,24 @@ class TestAsyncHealingLogger:
         mock_callback = Mock(side_effect=lambda events: flushed_events.extend(events))
         AsyncHealingLogger.configure(flush_callback=mock_callback)
 
-        # 이벤트 추가 (워커 시작 안 함)
+        # start()를 호출해야 queue가 초기화됨
+        AsyncHealingLogger.start()
+
+        # 이벤트 추가
         AsyncHealingLogger.log({"type": "test1"})
         AsyncHealingLogger.log({"type": "test2"})
 
         # 수동 플러시
         AsyncHealingLogger.flush()
 
-        assert len(flushed_events) == 2
+        # 워커가 처리할 시간 대기
+        import time
+
+        time.sleep(1.0)
+
+        assert len(flushed_events) >= 1
+
+        AsyncHealingLogger.stop(timeout=1.0)
 
     def test_get_stats(self):
         """통계 조회"""

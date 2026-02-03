@@ -171,15 +171,15 @@ class TestAsyncHealingLoggerBatchFlush:
         AsyncHealingLogger.configure(flush_callback=capture_events)
         AsyncHealingLogger.start()
 
-        # 배치 크기 (기본 10) 이상 전송
-        for i in range(15):
+        # 배치 크기 (기본 100) 이상 전송
+        for i in range(110):
             AsyncHealingLogger.log({"idx": i}, EventSeverity.INFO)
 
         # 워커가 처리할 시간 대기
         time.sleep(2.0)
 
         # 최소 배치 크기만큼은 플러시됨
-        assert len(events_received) >= 10
+        assert len(events_received) >= 100
 
     def test_manual_flush(self):
         """수동 flush() 호출 시 모든 이벤트 즉시 플러시."""

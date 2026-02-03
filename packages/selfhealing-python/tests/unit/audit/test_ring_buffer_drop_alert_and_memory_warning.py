@@ -152,12 +152,17 @@ class TestRingBufferHighCapacityWarning:
 
     def test_high_capacity_logs_warning(self, caplog):
         """고용량 설정 시 경고 로그 출력."""
-        with caplog.at_level(logging.WARNING):
+        # Use patch to capture logger.warning calls directly
+        from unittest.mock import patch
+
+        with patch("selfhealing.audit.ring_buffer.logger") as mock_logger:
             buffer: RingBuffer[int] = RingBuffer(capacity=200000)
 
-        # 경고 메시지 확인
-        assert any("[RingBuffer]" in record.message for record in caplog.records)
-        assert any("High capacity" in record.message for record in caplog.records)
+            # Verify warning was called with expected message
+            mock_logger.warning.assert_called_once()
+            call_args = mock_logger.warning.call_args
+            assert "[RingBuffer]" in call_args[0][0]
+            assert "High capacity" in call_args[0][0]
 
     def test_normal_capacity_no_warning(self, caplog):
         """정상 용량 시 경고 로그 없음."""
