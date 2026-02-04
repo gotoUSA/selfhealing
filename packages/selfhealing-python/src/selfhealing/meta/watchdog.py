@@ -423,21 +423,25 @@ class SelfHealerWatchdog:
             복구 성공 여부
         """
         try:
-            from selfhealing.services.circuit_breaker.state_manager import (
-                get_circuit_breaker_state_manager,
-            )
+            from selfhealing.services.circuit_breaker import get_circuit_breaker_service
 
-            manager = get_circuit_breaker_state_manager()
+            cb_service = get_circuit_breaker_service()
             stuck_count = result.details.get("stuck_count", 0)
 
             if stuck_count > 0:
                 logger.info("[SelfHealerWatchdog] Forcing stuck CBs to HALF_OPEN")
-                # State manager 리셋 등 복구 로직
+                # CB 서비스를 통한 상태 리셋
+                all_states = cb_service.get_all_states()
+                for state in all_states:
+                    if state.get("state") == "OPEN":
+                        service_name = state.get("service_name")
+                        if service_name:
+                            cb_service.reset_state(service_name)
                 return True
 
             return True
         except ImportError:
-            logger.debug("[SelfHealerWatchdog] CB state manager not available")
+            logger.debug("[SelfHealerWatchdog] CB service not available")
             return False
         except Exception as e:
             logger.error(f"[SelfHealerWatchdog] CB recovery error: {e}")

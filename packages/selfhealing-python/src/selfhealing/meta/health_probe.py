@@ -108,15 +108,16 @@ class CircuitBreakerProbe(HealthProbe):
             all_states: dict[str, str] = {}
 
             try:
-                from selfhealing.services.circuit_breaker.state_manager import (
-                    get_circuit_breaker_state_manager,
-                )
+                from selfhealing.services.circuit_breaker import get_circuit_breaker_service
 
-                manager = get_circuit_breaker_state_manager()
-                # 기본 상태 확인
-                all_states["manager_available"] = "true"
+                cb_service = get_circuit_breaker_service()
+                # CB 서비스 상태 확인
+                cb_states = cb_service.get_all_states()
+                open_count = sum(1 for s in cb_states if s.get("state") == "OPEN")
+                all_states["cb_service_available"] = "true"
+                all_states["open_cb_count"] = str(open_count)
             except ImportError:
-                all_states["manager_available"] = "false"
+                all_states["cb_service_available"] = "false"
             except Exception as e:
                 all_states["manager_error"] = str(e)
 
