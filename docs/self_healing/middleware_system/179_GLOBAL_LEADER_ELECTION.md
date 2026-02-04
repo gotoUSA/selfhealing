@@ -1,6 +1,6 @@
 # 179. Global Leader Election 구현 가이드
 
-> **버전**: 1.1.0
+> **버전**: 1.3.0
 > **작성일**: 2026-02-04
 > **최종 수정**: 2026-02-05
 > **의존성**: [174_MISSING_SYSTEMS_MASTER_PLAN.md](174_MISSING_SYSTEMS_MASTER_PLAN.md)
@@ -11,6 +11,8 @@
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|-----------|
+| 1.3.0 | 2026-02-05 | **연동 구현 완료**: DLQConsumerCoordinator, LeaderScheduler, EtcdLeaderElector, 142개 단위 테스트 |
+| 1.2.0 | 2026-02-05 | 통합 테스트 완료, Docker Compose 8개 테스트 |
 | 1.1.0 | 2026-02-05 | **고급 기능 추가** (6장): Fencing Token, 리전 우선순위, Safe Margin/Self-Fencing, Graceful Shutdown, 비동기 콜백, Recovery Audit, Prometheus 메트릭 |
 | 1.0.0 | 2026-02-04 | 최초 작성: 기본 Redis SETNX 기반 리더 선출 |
 
@@ -1818,46 +1820,67 @@ class LeaderElectorMetrics:
 - [x] Prometheus 메트릭 (6.7) ✅ 2026-02-05
 
 ### 7.3 연동 및 테스트
-- [ ] DLQ Consumer 연동 ⚠️ (하단 참조)
-- [ ] Scheduler 연동 ⚠️ (하단 참조)
-- [x] 단위 테스트 작성 ✅ 2026-02-05 (70개 테스트 통과)
+- [x] DLQ Consumer 연동 ✅ 2026-02-05 (`DLQConsumerCoordinator` 클래스, 17개 테스트)
+- [x] Scheduler 연동 ✅ 2026-02-05 (`LeaderScheduler` 클래스, 26개 테스트)
+- [x] 단위 테스트 작성 ✅ 2026-02-05 (142개 테스트 통과: 70+17+26+29)
 - [x] 통합 테스트 작성 ✅ 2026-02-05 (8개 테스트, Docker Compose)
-- [ ] (선택) etcd 구현 ⚠️ (하단 참조)
+- [x] (선택) etcd 구현 ✅ 2026-02-05 (`EtcdLeaderElector` 클래스, 29개 테스트)
 
 ### 7.4 연동 및 구현 설명
 
-#### DLQ Consumer / Scheduler 연동
+#### DLQ Consumer 연동
 
-현재 코드베이스에는 **DLQ Consumer**, **Scheduler** 모듈이 별도 파일로 존재하지 않습니다:
-- `celery_tasks/dlq_tasks.py` - DLQ 관련 Celery 태스크
-- `scheduler.py` 파일 없음
-
-Leader Election을 연동하려면 각 모듈에서 아래 패턴을 적용해야 합니다:
+`DLQConsumerCoordinator` 클래스가 구현되었습니다:
+- 파일: `coordination/dlq_consumer.py`
+- 리더 선출과 DLQ 처리를 통합
+- Fencing Token으로 중복 처리 방지
+- 테스트: `tests/unit/coordination/test_dlq_consumer.py` (17개)
 
 ```python
-from selfhealing.coordination import get_leader_elector
+from selfhealing.coordination import DLQConsumerCoordinator
 
-elector = get_leader_elector("dlq-consumer")
+coordinator = DLQConsumerCoordinator(
+    election_name="dlq-consumer",
+    process_callback=my_dlq_processor,
+)
+await coordinator.start()
+```
 
-@elector.on_become_leader
-def start_consuming():
-    # 리더가 되면 소비 시작
+#### Scheduler 연동
+
+`LeaderScheduler` 클래스가 구현되었습니다:
+- 파일: `coordination/scheduler.py`
+- 리더 노드에서만 스케줄된 작업 실행
+- 데코레이터 패턴으로 작업 등록
+- 테스트: `tests/unit/coordination/test_scheduler.py` (26개)
+
+```python
+from selfhealing.coordination import LeaderScheduler
+
+scheduler = LeaderScheduler(election_name="scheduler")
+
+@scheduler.job(interval_seconds=60)
+async def cleanup_task():
     pass
 
-@elector.on_lose_leader
-def stop_consuming():
-    # 리더 상실 시 소비 중지
-    pass
-
-# 서비스 시작 시
-elector.start()
+await scheduler.start()
 ```
 
 #### etcd 구현
 
-`backend="etcd"`는 **선택 사항**입니다. 문서 4장에 설계만 포함되어 있으며,
-실제 구현이 필요할 경우 `EtcdLeaderElector` 클래스를 추가해야 합니다.
-Redis만으로도 대부분의 사용 사례를 충족합니다.
+`EtcdLeaderElector` 클래스가 구현되었습니다:
+- 파일: `coordination/etcd_elector.py`
+- etcd3 Lease API 기반 리더 선출
+- Transaction CAS로 원자적 리더 획득
+- Fencing Token 지원
+- 테스트: `tests/unit/coordination/test_etcd_leader_elector.py` (29개)
+
+```python
+from selfhealing.coordination import get_leader_elector
+
+# backend="etcd" 설정 시 자동 사용
+elector = get_leader_elector("my-election")
+```
 
 #### lmdb 오류
 
@@ -1878,6 +1901,7 @@ lmdb가 없어도 테스트가 건너뛰어집니다. 실행 오류가 아닙니
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.3.0 | 2026-02-05 | **DLQ Consumer, Scheduler, etcd 구현 완료**, 단위 테스트 142개 |
 | 1.2.0 | 2026-02-05 | **통합 테스트 완료**, Docker Compose 8개 테스트, stop() 버그 수정 |
 | 1.1.0 | 2026-02-05 | 고급 기능 추가, 단위 테스트 70개 |
 | 1.0.0 | 2026-02-04 | 초안 작성 |

@@ -59,7 +59,15 @@ def get_leader_elector(
 
             elector = RedisLeaderElector(resource_name, settings)
         elif settings.backend == "etcd":
-            raise NotImplementedError("etcd 백엔드는 아직 구현되지 않았습니다")
+            from selfhealing.coordination.etcd_elector import (
+                EtcdLeaderElector,
+                is_etcd_available,
+            )
+
+            if not is_etcd_available():
+                raise ImportError("etcd3 라이브러리가 필요합니다. " "pip install etcd3 로 설치하세요.")
+
+            elector = EtcdLeaderElector(resource_name, settings)
         else:
             raise ValueError(f"알 수 없는 백엔드: {settings.backend}")
 
