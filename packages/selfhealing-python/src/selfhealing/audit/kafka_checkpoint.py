@@ -251,6 +251,9 @@ class KafkaCheckpointManager:
                 f.flush()
                 os.fsync(f.fileno())
 
+            # Windows 호환: 기존 파일 삭제 후 rename
+            if file_path.exists():
+                file_path.unlink()
             tmp_path.rename(file_path)
         except Exception as e:
             try:
@@ -306,7 +309,7 @@ class KafkaCheckpointManager:
 
 def sync_wal_to_kafka_with_checkpoint(
     wal,
-    adapter,
+    producer,
     checkpoint: KafkaCheckpointManager,
     namespace: str = "default",
 ) -> int:
@@ -314,36 +317,59 @@ def sync_wal_to_kafka_with_checkpoint(
     WAL → Kafka 동기화 (체크포인트 기반).
 
     마지막 체크포인트 이후의 엔트리만 전송하여 중복 방지.
+    KafkaAuditProducer 또는 기존 KafkaAuditAdapter 모두 지원.
 
     Args:
         wal: WriteAheadLog 인스턴스
-        adapter: KafkaAuditAdapter 인스턴스
+        producer: KafkaAuditProducer 또는 KafkaAuditAdapter 인스턴스
         checkpoint: KafkaCheckpointManager 인스턴스
         namespace: 네임스페이스
 
     Returns:
         동기화된 엔트리 수
     """
-    from selfhealing.interfaces.audit_adapter import AuditEntry
-
     last_cp = checkpoint.get_last_checkpoint(namespace)
     last_seq = last_cp.wal_sequence if last_cp else 0
 
     entries = wal.recover_unprocessed(last_processed_seq=last_seq)
     synced = 0
 
+    # Producer 타입 감지: KafkaAuditProducer vs 기존 Adapter
+    is_new_producer = hasattr(producer, "publish_audit_event")
+
     for entry in entries:
         try:
-            # Kafka 전송
-            audit_entry = AuditEntry(**entry.data)
-            adapter.log(audit_entry)
-            adapter.flush(timeout=5.0)
+            if is_new_producer:
+                # 새로운 KafkaAuditProducer 사용
+                success = producer.publish_audit_event(
+                    event=entry.data,
+                    domain=namespace,
+                )
+                if not success:
+                    logger.error(f"[WAL→Kafka] Publish failed at seq={entry.sequence}")
+                    break
+
+                # 동기 플러시로 전송 완료 확인
+                remaining = producer.flush(timeout=5.0)
+                if remaining > 0:
+                    logger.warning(f"[WAL→Kafka] {remaining} messages pending after flush")
+
+                # 토픽 이름 획득
+                kafka_topic = producer._settings.full_audit_topic
+            else:
+                # 기존 KafkaAuditAdapter 사용 (하위 호환성)
+                from selfhealing.interfaces.audit_adapter import AuditEntry
+
+                audit_entry = AuditEntry(**entry.data)
+                producer.log(audit_entry)
+                producer.flush(timeout=5.0)
+                kafka_topic = producer._settings.topic
 
             # 체크포인트 저장 (원자적)
             checkpoint.save_checkpoint(
                 namespace=namespace,
                 wal_sequence=entry.sequence,
-                kafka_topic=adapter._settings.topic,
+                kafka_topic=kafka_topic,
                 kafka_partition=0,  # 실제 파티션은 콜백에서 획득
                 kafka_offset=0,  # 실제 오프셋은 콜백에서 획득
                 checksum=entry.checksum,

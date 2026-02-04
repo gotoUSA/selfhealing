@@ -1256,56 +1256,70 @@ class KafkaEventBus:
 
 **파일**: `packages/selfhealing-python/src/selfhealing/audit/kafka_checkpoint.py`
 
-기존 `sync_wal_to_kafka_with_checkpoint` 함수를 실제 구현으로 대체:
+**상태**: ✅ 구현 완료
+
+`sync_wal_to_kafka_with_checkpoint` 함수가 **KafkaAuditProducer**와 기존 **KafkaAuditAdapter** 모두 지원하도록 수정됨:
 
 ```python
-# 수정 필요: kafka_checkpoint.py 의 sync_wal_to_kafka_with_checkpoint
+# kafka_checkpoint.py - 구현 완료
 
 def sync_wal_to_kafka_with_checkpoint(
     wal,
-    producer: "KafkaAuditProducer",  # 실제 Producer 사용
+    producer,  # KafkaAuditProducer 또는 KafkaAuditAdapter
     checkpoint: KafkaCheckpointManager,
     namespace: str = "default",
 ) -> int:
     """
     WAL → Kafka 동기화 (체크포인트 기반).
+    KafkaAuditProducer 또는 기존 KafkaAuditAdapter 모두 지원.
     """
-    from selfhealing.adapters.kafka.producer import KafkaAuditProducer
-
     last_cp = checkpoint.get_last_checkpoint(namespace)
     last_seq = last_cp.wal_sequence if last_cp else 0
 
     entries = wal.recover_unprocessed(last_processed_seq=last_seq)
     synced = 0
 
+    # Producer 타입 감지: KafkaAuditProducer vs 기존 Adapter
+    is_new_producer = hasattr(producer, "publish_audit_event")
+
     for entry in entries:
         try:
-            # 실제 Kafka 전송
-            success = producer.publish_audit_event(
-                event=entry.data,
-                domain=namespace,
-            )
-
-            if success:
-                # 동기 플러시로 확인
-                producer.flush(timeout=5.0)
-
-                # 체크포인트 저장
-                checkpoint.save_checkpoint(
-                    namespace=namespace,
-                    wal_sequence=entry.sequence,
-                    kafka_topic=producer._settings.full_audit_topic,
-                    kafka_partition=0,
-                    kafka_offset=0,
-                    checksum=entry.checksum,
+            if is_new_producer:
+                # 새로운 KafkaAuditProducer 사용
+                success = producer.publish_audit_event(
+                    event=entry.data,
+                    domain=namespace,
                 )
-                synced += 1
+                if not success:
+                    break
+                producer.flush(timeout=5.0)
+                kafka_topic = producer._settings.full_audit_topic
+            else:
+                # 기존 KafkaAuditAdapter 사용 (하위 호환성)
+                from selfhealing.interfaces.audit_adapter import AuditEntry
+                audit_entry = AuditEntry(**entry.data)
+                producer.log(audit_entry)
+                producer.flush(timeout=5.0)
+                kafka_topic = producer._settings.topic
+
+            # 체크포인트 저장
+            checkpoint.save_checkpoint(
+                namespace=namespace,
+                wal_sequence=entry.sequence,
+                kafka_topic=kafka_topic,
+                kafka_partition=0,
+                kafka_offset=0,
+                checksum=entry.checksum,
+            )
+            synced += 1
         except Exception as e:
             logger.error(f"[WAL→Kafka] Sync failed at seq={entry.sequence}: {e}")
             break
 
     return synced
 ```
+
+**테스트**: `tests/unit/audit/test_kafka_adapter.py::TestSyncWalToKafkaWithCheckpoint` (6개 테스트 통과)
 
 ### 5.2 Fallback Chain 확장
 
@@ -1442,8 +1456,8 @@ class TestKafkaEventBusIntegration:
 - [x] `adapters/kafka/metrics.py` 구현
 - [x] `adapters/kafka/retry.py` 구현
 - [x] `pyproject.toml`에 `confluent-kafka` 의존성 추가 (기존 optional dependency)
-- [ ] `kafka_checkpoint.py` 통합 수정
-- [x] 단위 테스트 작성 (108개 통과)
+- [x] `kafka_checkpoint.py` 통합 수정 (KafkaAuditProducer 지원 추가)
+- [x] 단위 테스트 작성 (114개 통과)
 - [ ] 통합 테스트 작성 (Testcontainers 기반 - 별도 이슈)
 - [x] 문서 업데이트
 
