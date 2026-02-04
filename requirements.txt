@@ -1,77 +1,15 @@
-amqp==5.3.1
-asgiref==3.9.1
-billiard==4.2.1
-celery==5.5.3
-certifi==2025.8.3
-cffi==2.0.0
-cfgv==3.4.0
-charset-normalizer==3.4.3
-click==8.2.1
-click-didyoumean==0.3.1
-click-plugins==1.1.1.2
-click-repl==0.3.0
-colorama==0.4.6
-cron_descriptor==2.0.5
-cryptography==46.0.2
-distlib==0.4.0
-dj-rest-auth==7.0.1
-Django==5.2.9
-django-allauth==65.12.0
-django-celery-beat==2.8.1
-django-filter==25.2
-django-js-asset==3.1.2
-django-mptt==0.17.0
-django-prometheus==2.4.1
-django-redis==6.0.0
-django-timezone-field==7.1
-djangorestframework==3.16.0
-djangorestframework_simplejwt==5.5.1
-drf-nested-routers==0.93.4
-drf-spectacular==0.29.0
-drf-spectacular-sidecar==2025.10.1
-flower==2.0.1
-gunicorn==23.0.0
-humanize==4.13.0
-idna==3.10
-inflection==0.5.1
-kombu==5.5.4
-oauthlib==3.3.1
-parso==0.8.5
-pillow==11.3.0
-prometheus_client==0.22.1
-psycopg2-binary==2.9.10
-pycparser==2.23
-PyJWT==2.10.1
-python-crontab==3.3.0
-python-dateutil==2.9.0.post0
-python-dotenv==1.1.1
-pytz==2025.2
-PyYAML==6.0.2
-redis==6.4.0
-requests==2.32.4
-six==1.17.0
-SQLAlchemy==2.0.41
-django-db-connection-pool==1.2.6
+# ==========================================
+# DEPRECATED: Use pyproject.toml instead
+# ==========================================
+#
+# This file is kept for backward compatibility.
+# For new installations, use:
+#
+#   pip install -e .           # Production dependencies
+#   pip install -e ".[dev]"    # Development dependencies
+#
+# See pyproject.toml [project.dependencies] and [project.optional-dependencies.dev]
+# ==========================================
 
-# OpenTelemetry SDK
-opentelemetry-api>=1.20.0
-opentelemetry-sdk>=1.20.0
-opentelemetry-exporter-otlp>=1.20.0
-opentelemetry-instrumentation-django>=0.41b0
-opentelemetry-instrumentation-requests>=0.41b0
-opentelemetry-instrumentation-celery>=0.41b0
-opentelemetry-instrumentation-redis>=0.41b0
-opentelemetry-instrumentation-psycopg2>=0.41b0
-opentelemetry-instrumentation-logging>=0.41b0
-sqlparse==0.5.3
-tenacity==9.1.2
-tornado==6.5.2
-typing_extensions==4.15.0
-orjson>=3.9.0
-tzdata==2025.2
-uritemplate==4.2.0
-urllib3==2.6.0
-vine==5.1.0
-
-# Self-Healing Package (local development)
--e ./packages/selfhealing-python[all]
+# Include pyproject.toml dependencies via pip
+-e .

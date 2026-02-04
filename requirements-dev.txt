@@ -1,48 +1,14 @@
-# 운영 패키지 포함
--r requirements.txt
+# ==========================================
+# DEPRECATED: Use pyproject.toml instead
+# ==========================================
+#
+# This file is kept for backward compatibility.
+# For new installations, use:
+#
+#   pip install -e ".[dev]"    # All development dependencies
+#
+# See pyproject.toml [project.optional-dependencies.dev]
+# ==========================================
 
-# ==========================================
-# 코드 품질 도구 (필수)
-# ==========================================
-autoflake==2.3.0      # 사용 안 하는 import/변수 제거
-isort==5.13.2         # import 정렬
-black==24.10.0         # 코드 포맷팅
-flake8==7.0.0         # 코드 스타일 검사
-pre-commit==3.6.0     # Git hook
-
-# ==========================================
-# 테스트 도구
-# ==========================================
-pytest>=8.3.3         # 더 나은 테스트 프레임워크 (locust 요구사항)
-pytest-django==4.7.0  # Django용 pytest
-pytest-xdist==3.5.0   # 병렬 테스트 (속도 2-3배↑)
-pytest-cov==4.1.0     # pytest용 커버리지
-pytest-mock==3.14.1   # Mock 객체 생성 (외부 API 테스트용)
-pytest-env==1.2.0     # pytest 환경 변수 설정 (Windows PostgreSQL 인코딩 문제 해결)
-factory-boy==3.3.0    # 테스트 데이터 쉽게 생성
-
-# ==========================================
-# 디버깅 & 개발 도구
-# ==========================================
-django-debug-toolbar==4.2.0  # Django 디버그 툴바 (필수)
-ipdb==0.13.13                # 향상된 디버거
-ipython==8.20.0              # 향상된 Python 쉘
-locust==2.42.5               # 부하 테스트 도구
-schemathesis==4.6.7          # API 테스트 자동화 도구
-
-# ==========================================
-# Time Mocking (for time-based tests)
-# ==========================================
-freezegun>=1.2.0      # Time freezing for tests (CB timeout, SLA breach detection)
-
-# ==========================================
-# 코드 분석 & 시각화 도구
-# ==========================================
-pydeps==3.0.1         # Python 의존성 그래프 시각화
-radon==6.0.1          # 코드 복잡도 분석 (Cyclomatic Complexity)
-vulture==2.14         # 죽은 코드(Dead Code) 탐지
-bandit==1.9.2         # 보안 취약점 분석
-pip-audit>=2.10.0     # 의존성 보안 취약점 검사 (safety 대체)
-pipdeptree==2.30.0    # pip 의존성 트리 시각화
-pygount==3.1.0        # 코드 라인 수 통계 (cloc 대안)
-mutmut==2.4.4         # Mutation Testing (테스트 품질 검증) - Windows 호환 버전
+# Include pyproject.toml dev dependencies via pip
+-e ".[dev]"
