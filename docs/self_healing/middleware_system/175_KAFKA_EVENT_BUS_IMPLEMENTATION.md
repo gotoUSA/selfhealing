@@ -1446,7 +1446,898 @@ class TestKafkaEventBusIntegration:
 
 ---
 
-## 9. 관련 문서
+## 9. 운영 고도화 가이드라인
+
+### 9.1 거버넌스 및 소유권 (CCoE/아키텍처 리뷰 보드)
+
+> **코드 근거**: 현재 거버넌스 정책 코드 없음, 조직 정책 문서 추가 필요
+
+**Topic Ownership Matrix**
+
+| 토픽 패턴 | 소유팀 | 리뷰어 | SLA | 설명 |
+|-----------|--------|--------|-----|------|
+| `selfhealing.audit.*` | Platform | @arch-review | 99.9% | Audit 이벤트 |
+| `selfhealing.dlq.*` | Platform | @arch-review | 99.5% | Dead Letter Queue |
+| `selfhealing.recovery.*` | SRE | @oncall | 99.0% | 복구 이벤트 |
+
+**아키텍처 리뷰 프로세스**
+
+```
+1. 신규 토픽 생성 요청
+   └─→ Architecture Review Board (ARB) 리뷰
+       └─→ CCoE 승인
+           └─→ 토픽 생성 (Terraform)
+
+2. 스키마 변경 요청
+   └─→ Schema Registry 호환성 검사 (CI/CD)
+       └─→ ARB 리뷰 (Breaking Change 시)
+           └─→ 배포
+```
+
+**역할 정의**
+
+| 역할 | 책임 | 권한 |
+|------|------|------|
+| **Topic Owner** | 토픽 스키마 관리, SLA 보장 | 토픽 설정 변경, ACL 요청 |
+| **CCoE** | 표준 정책 수립, 기술 가이드라인 | 아키텍처 승인/거부 |
+| **SRE** | 운영 모니터링, 장애 대응 | 긴급 스케일링, 토픽 삭제 |
+
+---
+
+### 9.2 명령과 이벤트 구분 (Command vs Event 명명 규칙)
+
+> **코드 근거**: `packages/selfhealing-python/src/selfhealing/audit/event_buffer.py`
+
+```python
+# event_buffer.py - AuditEventType Enum (현재 상태)
+class AuditEventType(Enum):
+    """모든 값이 과거형 이벤트 (사실)로 명명됨 - 올바른 패턴"""
+
+    # ✅ 이벤트 (과거형 - 사실 기록)
+    DLQ_STORE = "dlq_store"              # DLQ에 저장되었음
+    DLQ_REPLAY = "dlq_replay"            # DLQ가 재생되었음
+    CB_STATE_CHANGE = "circuit_breaker_state_change"  # CB 상태가 변경됨
+    GOVERNANCE_BLOCKED = "governance_blocked"  # 거버넌스에 의해 차단됨
+    API_EXCEPTION = "api_exception"      # API 예외가 발생됨
+
+    # ❌ 명령 (명령형) - 현재 사용 안 함 (올바름)
+    # CREATE_ORDER = "order.create"      # 안티패턴 - 사용 금지
+```
+
+**명명 규칙 (필수)**
+
+| 구분 | 패턴 | 예시 (✅ 허용) | 예시 (❌ 금지) |
+|------|------|---------------|---------------|
+| **Event** | `{domain}.{past_tense}` | `order.created`, `dlq.stored` | `order.create` |
+| **Command** | - | 사용하지 않음 | `order.create`, `user.delete` |
+
+**안티패턴 방지 체크리스트**
+
+```python
+# CI/CD에서 검증할 규칙
+FORBIDDEN_PATTERNS = [
+    r"\.create$",      # ❌ 명령형
+    r"\.delete$",      # ❌ 명령형
+    r"\.update$",      # ❌ 명령형
+    r"\.execute$",     # ❌ 명령형
+]
+
+RECOMMENDED_PATTERNS = [
+    r"\.created$",     # ✅ 과거형
+    r"\.deleted$",     # ✅ 과거형
+    r"\.updated$",     # ✅ 과거형
+    r"\.executed$",    # ✅ 과거형
+    r"_store$",        # ✅ 현재 코드 패턴
+    r"_replay$",       # ✅ 현재 코드 패턴
+]
+```
+
+---
+
+### 9.3 스키마 레지스트리 실질 통합 (CI/CD 호환성 검사)
+
+> **코드 근거**: `settings/kafka.py`에 `schema_registry_url` 설정만 존재, 실제 직렬화 코드 없음
+
+**현재 상태 (설정만 존재)**
+
+```python
+# packages/selfhealing-python/src/selfhealing/settings/kafka.py
+class KafkaAuditSettings(BaseSettings):
+    schema_registry_url: str | None = Field(
+        default=None,
+        description="Confluent Schema Registry URL",
+    )
+    schema_compatibility: str = Field(
+        default="BACKWARD",
+        description="스키마 호환성 정책: BACKWARD, FORWARD, FULL",
+    )
+```
+
+**구현 필요 코드 (TODO)**
+
+```python
+# adapters/kafka/schemas.py - 신규 구현 필요
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer, AvroDeserializer
+
+class AuditEventSchemaRegistry:
+    """
+    Audit 이벤트 스키마 레지스트리 통합.
+
+    TODO: 실제 구현 필요
+    """
+
+    def __init__(self, settings: KafkaAuditSettings):
+        if not settings.schema_registry_url:
+            raise ValueError("schema_registry_url is required")
+
+        self._client = SchemaRegistryClient({
+            "url": settings.schema_registry_url
+        })
+
+    def get_serializer(self, schema_str: str) -> AvroSerializer:
+        """Avro 직렬화기 반환."""
+        return AvroSerializer(
+            self._client,
+            schema_str,
+            conf={"auto.register.schemas": True}
+        )
+
+    def check_compatibility(self, subject: str, schema_str: str) -> bool:
+        """스키마 호환성 검사."""
+        return self._client.test_compatibility(subject, schema_str)
+```
+
+**CI/CD 호환성 검사 파이프라인**
+
+```yaml
+# .github/workflows/schema-compatibility.yml
+name: Schema Compatibility Check
+
+on:
+  pull_request:
+    paths:
+      - 'schemas/**/*.avsc'
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Schema Compatibility
+        run: |
+          for schema in schemas/*.avsc; do
+            subject=$(basename "$schema" .avsc)
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              --data @"$schema" \
+              "$SCHEMA_REGISTRY_URL/compatibility/subjects/${subject}-value/versions/latest"
+          done
+```
+
+---
+
+### 9.4 인프라 토폴로지 및 파티셔닝 (클러스터 분리, 파티션 산정)
+
+> **코드 근거**: 현재 파티션 산정 공식 없음
+
+**파티션 산정 공식**
+
+```python
+# 파티션 수 산정 공식
+def calculate_partition_count(
+    expected_tps: int,
+    consumer_count: int,
+    throughput_per_partition: int = 1000  # 기본 1,000 TPS/파티션
+) -> int:
+    """
+    파티션 수 계산.
+
+    공식: max(expected_TPS / throughput_per_partition, consumer_count * 2)
+    """
+    by_throughput = expected_tps // throughput_per_partition
+    by_consumers = consumer_count * 2  # 2배 여유
+    return max(by_throughput, by_consumers, 3)  # 최소 3개
+```
+
+**토픽별 파티션 설정**
+
+| 토픽 | 예상 TPS | Consumer 수 | 파티션 수 | 근거 |
+|------|----------|-------------|-----------|------|
+| `selfhealing.audit.events` | 10,000 | 4 | **12** | max(10, 8) |
+| `selfhealing.dlq.events` | 1,000 | 2 | **4** | max(1, 4) |
+| `selfhealing.recovery.events` | 500 | 2 | **4** | max(1, 4) |
+
+**클러스터 토폴로지**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Production Cluster                        │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐                      │
+│  │Broker-1 │  │Broker-2 │  │Broker-3 │  (min 3 for HA)      │
+│  │ AZ-a    │  │ AZ-b    │  │ AZ-c    │                      │
+│  └─────────┘  └─────────┘  └─────────┘                      │
+│                                                              │
+│  replication.factor = 3                                      │
+│  min.insync.replicas = 2                                     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Development Cluster                       │
+│  ┌─────────┐                                                 │
+│  │Broker-1 │  (단일 브로커, 개발용)                          │
+│  └─────────┘                                                 │
+│                                                              │
+│  replication.factor = 1                                      │
+│  min.insync.replicas = 1                                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 9.5 시간 기반 지연 모니터링 (Time Lag 메트릭)
+
+> **코드 근거**: 현재 Time Lag 모니터링 구현 없음
+
+**Time Lag vs Offset Lag**
+
+| 메트릭 | 설명 | 용도 |
+|--------|------|------|
+| **Offset Lag** | 미처리 메시지 수 | 처리량 모니터링 |
+| **Time Lag** | 가장 오래된 미처리 메시지 시간 | SLA 모니터링 |
+
+**구현 필요 코드**
+
+```python
+# adapters/kafka/metrics.py - 신규 구현 필요
+from prometheus_client import Gauge, Histogram
+
+# Time Lag 메트릭 정의
+kafka_consumer_time_lag_seconds = Gauge(
+    "kafka_consumer_time_lag_seconds",
+    "Time difference between message timestamp and processing time",
+    ["topic", "partition", "consumer_group"]
+)
+
+kafka_message_processing_latency = Histogram(
+    "kafka_message_processing_latency_seconds",
+    "Message processing latency from produce to consume",
+    ["topic"],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0]
+)
+
+
+class TimeLagTracker:
+    """Consumer Time Lag 추적기."""
+
+    def record_message_processed(
+        self,
+        topic: str,
+        partition: int,
+        consumer_group: str,
+        message_timestamp: float,
+    ) -> None:
+        """메시지 처리 시 Time Lag 기록."""
+        import time
+        current_time = time.time()
+        time_lag = current_time - message_timestamp
+
+        kafka_consumer_time_lag_seconds.labels(
+            topic=topic,
+            partition=partition,
+            consumer_group=consumer_group
+        ).set(time_lag)
+
+        kafka_message_processing_latency.labels(
+            topic=topic
+        ).observe(time_lag)
+```
+
+**알림 규칙 (Prometheus)**
+
+```yaml
+# prometheus/rules/kafka-time-lag.yml
+groups:
+  - name: kafka_time_lag
+    rules:
+      - alert: KafkaConsumerTimeLagHigh
+        expr: kafka_consumer_time_lag_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer time lag is high"
+          description: "Consumer group {{ $labels.consumer_group }} has time lag of {{ $value }}s"
+
+      - alert: KafkaConsumerTimeLagCritical
+        expr: kafka_consumer_time_lag_seconds > 300
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer time lag is critical"
+          description: "Consumer group {{ $labels.consumer_group }} has time lag of {{ $value }}s (> 5 minutes)"
+```
+
+---
+
+### 9.6 ACL 정책 (최소 권한 원칙)
+
+> **코드 근거**: 현재 ACL 구성 코드 없음
+
+**ACL 정책 매트릭스**
+
+| Principal | Resource Type | Resource Pattern | Operation | Permission |
+|-----------|---------------|------------------|-----------|------------|
+| `User:audit-producer` | Topic | `selfhealing.audit.*` | Write | Allow |
+| `User:audit-producer` | Topic | `selfhealing.audit.*` | Describe | Allow |
+| `User:audit-consumer` | Topic | `selfhealing.audit.*` | Read | Allow |
+| `User:audit-consumer` | Group | `selfhealing-audit-*` | Read | Allow |
+| `User:dlq-processor` | Topic | `selfhealing.dlq.*` | All | Allow |
+| `User:admin` | Cluster | `kafka-cluster` | All | Allow |
+
+**Kafka ACL 설정 스크립트**
+
+```bash
+#!/bin/bash
+# scripts/kafka/setup-acls.sh
+
+BOOTSTRAP_SERVER="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
+
+# Audit Producer ACL
+kafka-acls --bootstrap-server $BOOTSTRAP_SERVER \
+  --add \
+  --allow-principal User:audit-producer \
+  --operation Write \
+  --operation Describe \
+  --topic selfhealing.audit. \
+  --resource-pattern-type prefixed
+
+# Audit Consumer ACL
+kafka-acls --bootstrap-server $BOOTSTRAP_SERVER \
+  --add \
+  --allow-principal User:audit-consumer \
+  --operation Read \
+  --topic selfhealing.audit. \
+  --resource-pattern-type prefixed
+
+kafka-acls --bootstrap-server $BOOTSTRAP_SERVER \
+  --add \
+  --allow-principal User:audit-consumer \
+  --operation Read \
+  --group selfhealing-audit- \
+  --resource-pattern-type prefixed
+
+# DLQ Processor ACL (Read + Write for replay)
+kafka-acls --bootstrap-server $BOOTSTRAP_SERVER \
+  --add \
+  --allow-principal User:dlq-processor \
+  --operation All \
+  --topic selfhealing.dlq. \
+  --resource-pattern-type prefixed
+```
+
+**환경별 인증 설정**
+
+```python
+# 환경별 보안 프로토콜 설정
+ENVIRONMENT_SECURITY = {
+    "development": {
+        "security_protocol": "PLAINTEXT",  # 개발환경만 허용
+        "acl_enabled": False,
+    },
+    "staging": {
+        "security_protocol": "SASL_SSL",
+        "acl_enabled": True,
+    },
+    "production": {
+        "security_protocol": "SASL_SSL",  # 필수
+        "acl_enabled": True,              # 필수
+    },
+}
+```
+
+---
+
+### 9.7 DR 및 용량 계획 (MirrorMaker 2, RPO/RTO)
+
+> **코드 근거**: `174_MISSING_SYSTEMS_MASTER_PLAN.md#L411` - `replication.factor=3` 언급
+
+**RPO/RTO 목표**
+
+| 시나리오 | RPO (Data Loss) | RTO (Downtime) | 복구 전략 |
+|----------|-----------------|----------------|-----------|
+| 단일 브로커 장애 | 0 | 0 | 자동 페일오버 (ISR) |
+| AZ 장애 | 0 | < 1분 | 멀티 AZ 복제 |
+| 리전 장애 | < 1분 | < 5분 | MirrorMaker 2 |
+| 전체 클러스터 손실 | < 5분 | < 30분 | 백업 복구 |
+
+**MirrorMaker 2 구성 (DR)**
+
+```properties
+# mm2.properties
+clusters = primary, dr
+
+primary.bootstrap.servers = kafka-primary:9092
+dr.bootstrap.servers = kafka-dr:9092
+
+# 복제 설정
+primary->dr.enabled = true
+primary->dr.topics = selfhealing\..*
+
+# 동기화 설정
+replication.factor = 3
+sync.topic.configs.enabled = true
+sync.topic.acls.enabled = true
+
+# 오프셋 동기화 (Consumer 페일오버용)
+emit.checkpoints.enabled = true
+emit.checkpoints.interval.seconds = 10
+```
+
+**용량 계획**
+
+```python
+# 용량 산정 공식
+def calculate_storage_capacity(
+    daily_events: int,
+    avg_event_size_bytes: int,
+    retention_days: int,
+    replication_factor: int = 3,
+    compression_ratio: float = 0.3,  # zstd 압축
+) -> int:
+    """
+    필요 스토리지 용량 계산 (bytes).
+
+    공식: daily_events * avg_size * retention * replication * compression
+    """
+    raw_size = daily_events * avg_event_size_bytes * retention_days
+    replicated_size = raw_size * replication_factor
+    compressed_size = int(replicated_size * compression_ratio)
+
+    # 20% 여유 추가
+    return int(compressed_size * 1.2)
+
+
+# 예시 계산
+storage_needed = calculate_storage_capacity(
+    daily_events=10_000_000,      # 1000만 이벤트/일
+    avg_event_size_bytes=500,     # 평균 500 bytes
+    retention_days=7,             # 7일 보관
+    replication_factor=3,
+    compression_ratio=0.3,
+)
+# 결과: 약 37.8 GB
+```
+
+---
+
+### 9.8 테스트 환경 고도화 (Testcontainers)
+
+> **코드 근거**: 현재 Testcontainers 미사용
+
+**Testcontainers 통합 테스트**
+
+```python
+# tests/integration/kafka/conftest.py
+import pytest
+from testcontainers.kafka import KafkaContainer
+from testcontainers.compose import DockerCompose
+
+
+@pytest.fixture(scope="session")
+def kafka_container():
+    """단일 Kafka 컨테이너 (단위 테스트용)."""
+    with KafkaContainer("confluentinc/cp-kafka:7.5.0") as kafka:
+        yield {
+            "bootstrap_servers": kafka.get_bootstrap_server(),
+        }
+
+
+@pytest.fixture(scope="session")
+def kafka_cluster():
+    """Kafka 클러스터 + Schema Registry (통합 테스트용)."""
+    compose = DockerCompose(
+        "tests/fixtures/docker",
+        compose_file_name="docker-compose.kafka.yml",
+    )
+    compose.start()
+
+    yield {
+        "bootstrap_servers": "localhost:9092",
+        "schema_registry_url": "http://localhost:8081",
+    }
+
+    compose.stop()
+
+
+# tests/integration/kafka/test_kafka_producer.py
+@pytest.mark.integration
+class TestKafkaProducerIntegration:
+    """KafkaAuditProducer 통합 테스트."""
+
+    def test_produce_and_consume(self, kafka_container):
+        """발행-소비 E2E 테스트."""
+        from selfhealing.adapters.kafka.producer import KafkaAuditProducer
+        from selfhealing.adapters.kafka.consumer import KafkaAuditConsumer
+
+        # Producer 설정
+        producer = KafkaAuditProducer(
+            bootstrap_servers=kafka_container["bootstrap_servers"]
+        )
+
+        # 메시지 발행
+        producer.publish(
+            topic="test.events",
+            key="test-key",
+            value={"event": "test_event", "data": "test_data"}
+        )
+        producer.flush()
+
+        # Consumer 설정 및 소비
+        consumer = KafkaAuditConsumer(
+            bootstrap_servers=kafka_container["bootstrap_servers"],
+            group_id="test-group",
+            topics=["test.events"]
+        )
+
+        messages = list(consumer.poll(timeout=10.0))
+        assert len(messages) == 1
+        assert messages[0].value["event"] == "test_event"
+```
+
+**docker-compose.kafka.yml (테스트용)**
+
+```yaml
+# tests/fixtures/docker/docker-compose.kafka.yml
+version: '3.8'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+```
+
+---
+
+### 9.9 재시도 전략 및 순서 보장 (비블로킹 재시도)
+
+> **코드 근거**: DLQ는 존재하나 retry topic 패턴 미구현
+
+**Non-Blocking Retry 토폴로지**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Non-Blocking Retry Pattern                       │
+│                                                                      │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐       │
+│  │  Main    │───▶│ Retry-1  │───▶│ Retry-2  │───▶│   DLQ    │       │
+│  │  Topic   │    │ (1분후)  │    │ (5분후)  │    │ (최종)   │       │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘       │
+│       │               │               │               │              │
+│       ▼               ▼               ▼               ▼              │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐       │
+│  │ Consumer │    │ Consumer │    │ Consumer │    │ Consumer │       │
+│  │  Group   │    │  Group   │    │  Group   │    │  Group   │       │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘       │
+│                                                                      │
+│  순서 보장: 같은 파티션 키 → 같은 파티션 → 순서 유지                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Retry Topic 구성**
+
+```python
+# adapters/kafka/retry.py - 신규 구현 필요
+from dataclasses import dataclass
+from typing import Callable
+
+@dataclass
+class RetryTopicConfig:
+    """Retry Topic 설정."""
+    main_topic: str
+    retry_delays: list[int] = field(default_factory=lambda: [60, 300, 900])  # 1분, 5분, 15분
+    dlq_topic: str | None = None
+
+    @property
+    def retry_topics(self) -> list[str]:
+        """Retry 토픽 목록 생성."""
+        return [
+            f"{self.main_topic}.retry.{i+1}"
+            for i in range(len(self.retry_delays))
+        ]
+
+    @property
+    def final_dlq_topic(self) -> str:
+        """최종 DLQ 토픽."""
+        return self.dlq_topic or f"{self.main_topic}.dlq"
+
+
+class NonBlockingRetryHandler:
+    """Non-Blocking Retry 핸들러."""
+
+    def __init__(self, config: RetryTopicConfig, producer: KafkaAuditProducer):
+        self._config = config
+        self._producer = producer
+
+    def handle_failure(self, message: dict, retry_count: int, error: Exception) -> None:
+        """실패 메시지 처리."""
+        if retry_count >= len(self._config.retry_delays):
+            # 최대 재시도 초과 → DLQ
+            self._send_to_dlq(message, error)
+        else:
+            # Retry 토픽으로 전송
+            self._send_to_retry(message, retry_count)
+
+    def _send_to_retry(self, message: dict, retry_count: int) -> None:
+        """Retry 토픽으로 전송."""
+        retry_topic = self._config.retry_topics[retry_count]
+        delay_ms = self._config.retry_delays[retry_count] * 1000
+
+        # 헤더에 재시도 정보 추가
+        headers = message.get("headers", {})
+        headers["x-retry-count"] = str(retry_count + 1)
+        headers["x-retry-delay-ms"] = str(delay_ms)
+        headers["x-original-topic"] = self._config.main_topic
+
+        self._producer.publish(
+            topic=retry_topic,
+            key=message.get("key"),
+            value=message.get("value"),
+            headers=headers,
+        )
+
+    def _send_to_dlq(self, message: dict, error: Exception) -> None:
+        """DLQ로 전송."""
+        headers = message.get("headers", {})
+        headers["x-dlq-reason"] = str(error)
+        headers["x-original-topic"] = self._config.main_topic
+
+        self._producer.publish(
+            topic=self._config.final_dlq_topic,
+            key=message.get("key"),
+            value=message.get("value"),
+            headers=headers,
+        )
+```
+
+---
+
+### 9.10 보안 설정 강제화 (SASL_SSL 기본값)
+
+> **코드 근거**: `settings/kafka.py#L173-175` - `security_protocol` 기본값이 `PLAINTEXT`
+
+**현재 상태 (⚠️ 보안 취약)**
+
+```python
+# packages/selfhealing-python/src/selfhealing/settings/kafka.py (현재)
+security_protocol: str = Field(
+    default="PLAINTEXT",  # ⚠️ 프로덕션에서 위험
+    description="보안 프로토콜: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL",
+)
+```
+
+**권장 변경사항**
+
+```python
+# 권장 변경 (환경별 분기)
+import os
+
+def get_default_security_protocol() -> str:
+    """환경에 따른 기본 보안 프로토콜."""
+    env = os.getenv("ENVIRONMENT", "development")
+    if env in ("production", "staging"):
+        return "SASL_SSL"  # 프로덕션/스테이징은 필수
+    return "PLAINTEXT"  # 개발환경만 허용
+
+
+security_protocol: str = Field(
+    default_factory=get_default_security_protocol,
+    description="보안 프로토콜: PLAINTEXT(개발만), SASL_SSL(프로덕션)",
+)
+```
+
+**프로덕션 체크리스트**
+
+| 항목 | 개발 | 스테이징 | 프로덕션 |
+|------|------|----------|----------|
+| `security_protocol` | PLAINTEXT | SASL_SSL | **SASL_SSL** |
+| `sasl_mechanism` | - | SCRAM-SHA-512 | **SCRAM-SHA-512** |
+| `ssl_cafile` | - | 설정 | **필수** |
+| ACL 활성화 | ❌ | ✅ | **✅ 필수** |
+| 암호 복잡도 | - | 중 | **강** (16자+) |
+
+**환경변수 예시 (프로덕션)**
+
+```bash
+# .env.production
+SELFHEALING_KAFKA_SECURITY_PROTOCOL=SASL_SSL
+SELFHEALING_KAFKA_SASL_MECHANISM=SCRAM-SHA-512
+SELFHEALING_KAFKA_SASL_USERNAME=selfhealing-prod
+SELFHEALING_KAFKA_SASL_PASSWORD=${KAFKA_PASSWORD}  # Vault에서 주입
+SELFHEALING_KAFKA_SSL_CAFILE=/etc/kafka/certs/ca.crt
+```
+
+---
+
+### 9.11 DLQ 운영 체계화 (SOP 추가)
+
+> **코드 근거**: `api/django/urls.py` - DLQListView, DLQRetryView, DLQReplayView 존재, 운영 절차서 없음
+
+**DLQ API 현황**
+
+```python
+# packages/selfhealing-python/src/selfhealing/api/django/urls.py
+path("dlq/list/", DLQListView.as_view(), name="dlq-list"),
+path("dlq/replay/", DLQReplayView.as_view(), name="dlq-replay"),
+path("dlq/retry/", DLQRetryView.as_view(), name="dlq-retry"),
+```
+
+**DLQ 운영 SOP (Standard Operating Procedure)**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     DLQ 운영 절차서 (SOP)                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+1. 알림 수신
+   └─→ PagerDuty/Slack 알림: "DLQ count > threshold"
+   └─→ 담당자: On-Call SRE
+
+2. 초기 진단 (5분 이내)
+   ├─→ DLQ 대시보드 확인: GET /api/v1/dlq/list/
+   ├─→ 실패 원인 분류:
+   │   ├─ Transient Error (일시적): 네트워크, 타임아웃, 리소스 부족
+   │   └─ Permanent Error (영구적): 스키마 불일치, 데이터 오류, 버그
+   └─→ 영향 범위 파악: 도메인, 개수, 시간대
+
+3. 대응 (원인별)
+   ├─ Transient Error:
+   │   ├─→ 자동 재시도 대기 (3회, 지수 백오프)
+   │   ├─→ 수동 재시도: POST /api/v1/dlq/retry/ {"dlq_ids": [...]}
+   │   └─→ 인프라 이슈 시: 스케일업/장애 복구 후 재시도
+   │
+   └─ Permanent Error:
+       ├─→ 데이터 검토: 원본 메시지 분석
+       ├─→ 옵션 1: 데이터 수정 후 재투입
+       │   └─→ POST /api/v1/dlq/replay/ {"dlq_ids": [...], "transform": {...}}
+       ├─→ 옵션 2: 폐기 (비즈니스 승인 필요)
+       │   └─→ DELETE /api/v1/dlq/{id}/ + 폐기 사유 기록
+       └─→ 옵션 3: 버그 수정 후 재처리
+           └─→ 핫픽스 배포 → 재시도
+
+4. 사후 조치
+   ├─→ 인시던트 리포트 작성
+   ├─→ RCA (Root Cause Analysis) 수행
+   └─→ 재발 방지 조치 (코드/인프라 개선)
+
+5. 에스컬레이션 기준
+   ├─ L1 → L2: DLQ 100개 이상 또는 30분 이상 미해결
+   ├─ L2 → L3: DLQ 1,000개 이상 또는 핵심 비즈니스 영향
+   └─ L3 → Incident Commander: 전체 시스템 영향
+```
+
+**DLQ 모니터링 대시보드 항목**
+
+| 메트릭 | 쿼리 | 알림 임계값 |
+|--------|------|-------------|
+| DLQ 총 개수 | `dlq_total_count` | > 100 (warning), > 1000 (critical) |
+| DLQ 증가율 | `rate(dlq_total_count[5m])` | > 10/min |
+| 도메인별 분포 | `dlq_count_by_domain` | - |
+| 평균 체류 시간 | `dlq_avg_age_seconds` | > 3600 (1시간) |
+| 재시도 성공률 | `dlq_retry_success_rate` | < 90% |
+
+---
+
+### 9.12 인프라 가용성 설정 (min.insync.replicas)
+
+> **코드 근거**: `174_MISSING_SYSTEMS_MASTER_PLAN.md#L411` - `replication.factor=3` 언급, 애플리케이션 코드에 broker 설정 없음
+
+**권장 Kafka 브로커 설정**
+
+| 설정 | 개발 | 스테이징 | 프로덕션 | 설명 |
+|------|------|----------|----------|------|
+| `replication.factor` | 1 | 2 | **3** | 복제본 수 |
+| `min.insync.replicas` | 1 | 1 | **2** | 최소 동기화 복제본 |
+| `acks` (Producer) | 1 | all | **all** | ACK 정책 |
+| `unclean.leader.election.enable` | true | false | **false** | 비동기 리더 선출 |
+
+**Kafka 브로커 설정 (server.properties)**
+
+```properties
+# config/server.properties (프로덕션)
+
+# 복제 설정
+default.replication.factor=3
+min.insync.replicas=2
+unclean.leader.election.enable=false
+
+# 토픽별 설정 (selfhealing.* 토픽)
+# kafka-configs.sh로 적용
+# kafka-configs --alter --entity-type topics --entity-name selfhealing.audit.events \
+#   --add-config min.insync.replicas=2,replication.factor=3
+```
+
+**Producer 설정과의 관계**
+
+```python
+# Producer acks=all + min.insync.replicas=2 조합
+#
+# 동작 방식:
+# 1. Producer가 메시지 전송 (acks=all)
+# 2. Leader가 메시지 수신
+# 3. min.insync.replicas(2개) 이상의 ISR이 복제 완료
+# 4. Leader가 Producer에게 ACK 전송
+#
+# 장점:
+# - 1개 브로커 장애 시에도 데이터 손실 없음
+# - Leader 장애 시 ISR 중 하나가 새 Leader로 승격
+#
+# 트레이드오프:
+# - ISR < min.insync.replicas 시 Producer 쓰기 불가
+# - 네트워크 지연 증가 (복제 대기)
+
+# settings/kafka.py에서 보장
+producer_acks: Literal["0", "1", "all"] = Field(
+    default="all",  # min.insync.replicas와 함께 사용 시 데이터 무손실 보장
+    description="Producer ACK 레벨 (all 권장)",
+)
+producer_idempotent: bool = Field(
+    default=True,  # Exactly-once 의미론
+    description="Idempotent Producer 활성화",
+)
+```
+
+**가용성 시나리오**
+
+```
+Scenario 1: 정상 운영 (3 브로커, ISR=3)
+├─ 쓰기: ✅ 가능
+├─ 읽기: ✅ 가능
+└─ 데이터 손실: 없음
+
+Scenario 2: 1 브로커 장애 (3 브로커, ISR=2)
+├─ 쓰기: ✅ 가능 (min.insync.replicas=2 충족)
+├─ 읽기: ✅ 가능
+└─ 데이터 손실: 없음
+
+Scenario 3: 2 브로커 장애 (3 브로커, ISR=1)
+├─ 쓰기: ❌ 불가 (min.insync.replicas=2 미충족)
+├─ 읽기: ✅ 가능
+└─ 데이터 손실: 없음 (쓰기 거부로 보호)
+
+Scenario 4: 전체 브로커 장애
+├─ 쓰기: ❌ 불가
+├─ 읽기: ❌ 불가
+└─ 데이터 손실: 없음 (디스크 복구 필요)
+```
+
+---
+
+## 10. 관련 문서
 
 - [170_KAFKA_AUDIT_ADAPTER.md](170_KAFKA_AUDIT_ADAPTER.md) - Kafka 어댑터 설계
 - [173_UNIFIED_CHECKPOINT_STRATEGY.md](173_UNIFIED_CHECKPOINT_STRATEGY.md) - Checkpoint 통합
@@ -1454,8 +2345,9 @@ class TestKafkaEventBusIntegration:
 
 ---
 
-## 10. 변경 이력
+## 11. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2026-02-04 | 초안 작성 |
+| 1.1.0 | 2026-02-04 | 운영 고도화 가이드라인 추가 (9.1~9.12) |
