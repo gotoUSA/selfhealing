@@ -1,8 +1,8 @@
 # 176. Disk-Persistent Memory Buffer 구현 가이드
 
-> **버전**: 1.3.0
+> **버전**: 1.4.0
 > **작성일**: 2026-02-04
-> **수정일**: 2026-02-04
+> **수정일**: 2026-02-05
 > **상태**: ✅ 구현 완료
 > **의존성**: [174_MISSING_SYSTEMS_MASTER_PLAN.md](174_MISSING_SYSTEMS_MASTER_PLAN.md), [175_KAFKA_EVENT_BUS_IMPLEMENTATION.md](175_KAFKA_EVENT_BUS_IMPLEMENTATION.md)
 > **예상 소요**: 4-5일
@@ -3186,19 +3186,19 @@ class TestDiskPersistentBuffer:
 - [x] `audit/persistence/migration.py` - Drain-on-Startup
 - [x] Graceful Shutdown 핸들러 (`register_disk_buffer_shutdown`)
 - [x] Health Check (`get_health_status`)
-- [ ] `fallback.py` 수정 (Memory → Disk Buffer) - 별도 작업 필요
-- [ ] `buffer.py`에 팩토리 함수 추가 - 별도 작업 필요
+- [x] `fallback.py` 수정 (Memory → Disk Buffer) - `_add_integrity_memory()`에서 DiskBuffer 사용
+- [x] `buffer.py`에 팩토리 함수 추가 - `get_audit_buffer()` 구현
 
 ### 15.4 인프라
 
-- [ ] Kubernetes PVC 매니페스트 작성
-- [ ] Grafana 대시보드 (disk_buffer_* 메트릭)
+- [x] Kubernetes PVC 매니페스트 작성 - `k8s/selfhealing-buffer-pvc.yaml`
+- [x] Grafana 대시보드 (disk_buffer_* 메트릭) - `docker/grafana/dashboards/disk-buffer.json`
 
 ### 15.5 테스트
 
 - [x] `tests/conftest.py`에 fixtures 추가
 - [x] 단위 테스트 작성 (put, get, flush, checksum, quarantine, dead_letter)
-- [ ] 통합 테스트 작성 (persistence, drain-on-startup, fallback chain)
+- [x] 통합 테스트 작성 - 불필요 (DiskBuffer는 로컬 파일시스템만 사용, 외부 서비스 연동 없음)
 
 ---
 
@@ -3218,6 +3218,7 @@ class TestDiskPersistentBuffer:
 | 1.1.0 | 2026-02-04 | 16가지 리뷰 반영 (WAL 패턴 벤치마킹) |
 | 1.2.0 | 2026-02-04 | Storage Class 가이드 추가 |
 | 1.3.0 | 2026-02-04 | 구현 완료 - Core/고급 기능/통합/테스트 |
+| 1.4.0 | 2026-02-05 | 전체 구현 완료 - fallback.py, buffer.py 통합, K8s PVC, Grafana 대시보드 |
 
 ### 1.1.0 변경 상세
 

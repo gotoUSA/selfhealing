@@ -69,14 +69,8 @@ class InMemoryAuditBuffer:
         self._flush_failures: int = 0
         self._total_dropped: int = 0
         self._total_buffered: int = 0
-        self._max_entries = (
-            max_entries if max_entries is not None else _get_max_entries()
-        )
-        self._flush_interval_seconds = (
-            flush_interval_seconds
-            if flush_interval_seconds is not None
-            else _get_flush_interval()
-        )
+        self._max_entries = max_entries if max_entries is not None else _get_max_entries()
+        self._flush_interval_seconds = flush_interval_seconds if flush_interval_seconds is not None else _get_flush_interval()
 
     @classmethod
     def get_instance(cls) -> InMemoryAuditBuffer:
@@ -111,8 +105,7 @@ class InMemoryAuditBuffer:
                 self._total_dropped += 1
                 dropped = True
                 logger.warning(
-                    "[InMemoryAuditBuffer] Buffer full, dropped oldest entry "
-                    f"(total dropped: {self._total_dropped})"
+                    "[InMemoryAuditBuffer] Buffer full, dropped oldest entry " f"(total dropped: {self._total_dropped})"
                 )
 
             entry["buffered_at"] = datetime.now(timezone.utc).isoformat()
@@ -121,9 +114,7 @@ class InMemoryAuditBuffer:
 
             return not dropped
 
-    def try_flush(
-        self, wal_write_func: Callable[[dict[str, Any]], int | None]
-    ) -> int:
+    def try_flush(self, wal_write_func: Callable[[dict[str, Any]], int | None]) -> int:
         """
         버퍼를 WAL로 플러시 시도.
 
@@ -179,11 +170,7 @@ class InMemoryAuditBuffer:
                 "total_buffered": self._total_buffered,
                 "total_dropped": self._total_dropped,
                 "flush_failures": self._flush_failures,
-                "last_flush_attempt": (
-                    self._last_flush_attempt.isoformat()
-                    if self._last_flush_attempt
-                    else None
-                ),
+                "last_flush_attempt": (self._last_flush_attempt.isoformat() if self._last_flush_attempt else None),
             }
 
     def clear(self) -> int:
@@ -199,4 +186,33 @@ def get_inmemory_audit_buffer() -> InMemoryAuditBuffer:
     return InMemoryAuditBuffer.get_instance()
 
 
-__all__ = ["InMemoryAuditBuffer", "get_inmemory_audit_buffer"]
+def get_audit_buffer() -> InMemoryAuditBuffer:
+    """
+    Audit Buffer 팩토리.
+
+    환경변수로 구현 선택:
+    - SELFHEALING_BUFFER_TYPE=memory (기본, 기존 휘발성 버퍼)
+    - SELFHEALING_BUFFER_TYPE=disk (영속 버퍼, Pod 재시작에도 데이터 보존)
+
+    Returns:
+        InMemoryAuditBuffer 또는 DiskBufferAdapter 인스턴스
+
+    Note:
+        DiskBufferAdapter는 InMemoryAuditBuffer와 동일한 인터페이스를 제공합니다.
+        - add(entry): 엔트리 추가
+        - try_flush(callback): WAL로 플러시
+        - get_stats(): 통계 조회
+    """
+    import os
+
+    buffer_type = os.environ.get("SELFHEALING_BUFFER_TYPE", "memory")
+
+    if buffer_type == "disk":
+        from selfhealing.audit.persistence.disk_buffer import DiskBufferAdapter
+
+        return DiskBufferAdapter.get_instance()
+    else:
+        return InMemoryAuditBuffer.get_instance()
+
+
+__all__ = ["InMemoryAuditBuffer", "get_inmemory_audit_buffer", "get_audit_buffer"]

@@ -210,9 +210,7 @@ class HashChainFallbackChain:
 
         if state:
             sequence = int(state.get(b"sequence", state.get("sequence", 0)))
-            previous_hash = state.get(
-                b"previous_hash", state.get("previous_hash", self.GENESIS_HASH)
-            )
+            previous_hash = state.get(b"previous_hash", state.get("previous_hash", self.GENESIS_HASH))
             if isinstance(previous_hash, bytes):
                 previous_hash = previous_hash.decode("utf-8")
         else:
@@ -279,7 +277,22 @@ class HashChainFallbackChain:
             return entry
 
     def _add_integrity_memory(self, entry: dict[str, Any]) -> dict[str, Any]:
-        """Add integrity using memory buffer (last resort)."""
+        """
+        Add integrity using disk-persistent buffer (last resort).
+
+        Uses DiskPersistentBuffer instead of volatile memory buffer.
+        Pod 재시작에도 데이터가 보존됩니다.
+        """
+        # DiskPersistentBuffer 사용 (환경변수 SELFHEALING_BUFFER_TYPE에 따라 자동 전환)
+        try:
+            from selfhealing.audit.persistence.disk_buffer import get_disk_buffer
+
+            disk_buffer = get_disk_buffer()
+            use_disk_buffer = True
+        except Exception as e:
+            logger.warning(f"[FallbackChain] DiskBuffer unavailable, using memory: {e}")
+            use_disk_buffer = False
+
         with self._lock:
             self._memory_sequence += 1
             sequence = self._memory_sequence
@@ -288,30 +301,43 @@ class HashChainFallbackChain:
             timestamp = datetime.now(timezone.utc).isoformat()
             pod_id = os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown"))
 
+            # tier와 volatile 플래그는 DiskBuffer 사용 여부에 따라 결정
+            if use_disk_buffer:
+                tier = "disk_buffer"
+                volatile = False
+            else:
+                tier = "memory"
+                volatile = True
+
             entry["integrity"] = {
                 "sequence": sequence,
                 "previous_hash": previous_hash,
                 "timestamp": timestamp,
                 "pod_id": pod_id,
-                "tier": "memory",
+                "tier": tier,
                 "degraded": True,
                 "degraded_reason": "all_persistent_storage_unavailable",
                 "degraded_at": timestamp,
-                "volatile": True,  # Warning: will be lost on restart
+                "volatile": volatile,
             }
 
             current_hash = self._compute_hash(entry)
             entry["integrity"]["current_hash"] = current_hash
             self._memory_previous_hash = current_hash
 
-            # Add to memory buffer (with size limit)
-            self._memory_buffer.append(entry.copy())
-            if len(self._memory_buffer) > self._config.memory_max_entries:
-                # Remove oldest entries when buffer full
-                removed = self._memory_buffer.pop(0)
-                logger.warning(
-                    f"[FallbackChain] Memory buffer full, dropped entry seq={removed.get('integrity', {}).get('sequence')}"
-                )
+            # DiskBuffer 또는 메모리 버퍼에 저장
+            if use_disk_buffer:
+                disk_buffer.put(entry.copy())
+            else:
+                # Fallback: 기존 메모리 버퍼 사용
+                self._memory_buffer.append(entry.copy())
+                if len(self._memory_buffer) > self._config.memory_max_entries:
+                    removed = self._memory_buffer.pop(0)
+                    logger.warning(
+                        f"[FallbackChain] Memory buffer full, dropped entry seq={removed.get('integrity', {}).get('sequence')}"
+                    )
+
+            return entry
 
             return entry
 
@@ -320,9 +346,7 @@ class HashChainFallbackChain:
         try:
             if self._local_file_handle is None:
                 self._config.local_file_path.parent.mkdir(parents=True, exist_ok=True)
-                self._local_file_handle = open(
-                    self._config.local_file_path, "a", encoding="utf-8"
-                )
+                self._local_file_handle = open(self._config.local_file_path, "a", encoding="utf-8")
 
             line = json.dumps(entry, default=str, ensure_ascii=False)
             self._local_file_handle.write(line + "\n")
@@ -342,9 +366,7 @@ class HashChainFallbackChain:
     def get_degraded_entries(self) -> list[dict[str, Any]]:
         """Get all degraded entries from memory buffer."""
         with self._lock:
-            return [
-                e for e in self._memory_buffer if e.get("integrity", {}).get("degraded")
-            ]
+            return [e for e in self._memory_buffer if e.get("integrity", {}).get("degraded")]
 
     def clear_memory_buffer(self) -> int:
         """Clear memory buffer after successful reconciliation."""

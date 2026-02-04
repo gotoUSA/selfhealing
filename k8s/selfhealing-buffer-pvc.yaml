@@ -1,0 +1,56 @@
+# Selfhealing Disk Buffer Persistent Volume Claim
+#
+# LMDB 기반 영속 버퍼를 위한 스토리지 설정.
+# Pod 재시작에도 버퍼 데이터가 보존됩니다.
+#
+# 사용법:
+#   kubectl apply -f k8s/selfhealing-buffer-pvc.yaml
+#
+# StorageClass 확인:
+#   kubectl get storageclass
+#
+# 환경변수로 StorageClass 오버라이드:
+#   SELFHEALING_STORAGE_CLASS=standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: selfhealing-buffer-pvc
+  labels:
+    app: selfhealing
+    component: disk-buffer
+  annotations:
+    selfhealing.io/description: "LMDB disk buffer for audit events"
+    selfhealing.io/preferred-storage: "fast-ssd"
+    selfhealing.io/fallback-storage: "standard"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      # lmdb_map_size(10GB) + 20% 여유 공간
+      storage: 12Gi
+  # StorageClass는 실제 클러스터 환경에 맞게 수정 필요
+  # kubectl get storageclass 로 사용 가능한 클래스 확인
+  # 예시: standard, fast-ssd, gp2, premium-rwo
+  storageClassName: standard
+
+---
+# 고성능 SSD StorageClass (선택 사항)
+# 클러스터에 이미 존재하는 경우 생략 가능
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: selfhealing-fast-ssd
+  labels:
+    app: selfhealing
+provisioner: kubernetes.io/no-provisioner  # 동적 프로비저닝 사용 시 변경 필요
+# GKE: pd.csi.storage.gke.io
+# AWS: ebs.csi.aws.com
+# Azure: disk.csi.azure.com
+parameters:
+  type: pd-ssd  # GKE 예시, 클라우드별로 다름
+reclaimPolicy: Retain  # Pod 삭제 시에도 데이터 보존
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

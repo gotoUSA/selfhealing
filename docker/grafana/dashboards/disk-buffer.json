@@ -1,0 +1,451 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "LMDB 기반 Disk-Persistent Buffer 모니터링 대시보드",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Buffer Entries Count",
+      "description": "현재 버퍼에 저장된 엔트리 수",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "selfhealing_disk_buffer_entries{instance=~\"$instance\"}",
+          "legendFormat": "{{ instance }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10000 },
+              { "color": "red", "value": 50000 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "title": "Buffer State",
+      "description": "버퍼 상태 (1=ACTIVE, 2=DISK_FULL, 3=CORRUPTED)",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "selfhealing_disk_buffer_state{instance=~\"$instance\"}",
+          "legendFormat": "{{ instance }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "UNINITIALIZED", "color": "gray" } } },
+            { "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } },
+            { "type": "value", "options": { "2": { "text": "DISK_FULL", "color": "red" } } },
+            { "type": "value", "options": { "3": { "text": "CORRUPTED", "color": "red" } } },
+            { "type": "value", "options": { "4": { "text": "CLOSED", "color": "gray" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 2 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Dead Letters Count",
+      "description": "Dead Letter DB에 격리된 엔트리 수",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "selfhealing_disk_buffer_dead_letters{instance=~\"$instance\"}",
+          "legendFormat": "{{ instance }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Disk Free Ratio",
+      "description": "디스크 여유 공간 비율",
+      "type": "gauge",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "selfhealing_disk_buffer_disk_free_ratio{instance=~\"$instance\"}",
+          "legendFormat": "{{ instance }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "green", "value": 0.2 }
+            ]
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    {
+      "title": "Put Operations Rate",
+      "description": "초당 저장 작업 수",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(selfhealing_disk_buffer_puts_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "puts/sec - {{ instance }}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(selfhealing_disk_buffer_flushes_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "flushes/sec - {{ instance }}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "ops/sec",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "title": "Error Events",
+      "description": "에러 이벤트 발생 추이",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(selfhealing_disk_buffer_checksum_errors_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "checksum_errors - {{ instance }}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(selfhealing_disk_buffer_disk_full_events_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "disk_full - {{ instance }}",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(selfhealing_disk_buffer_dead_letter_moves_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "dead_letter_moves - {{ instance }}",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(selfhealing_disk_buffer_quarantine_events_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "quarantine - {{ instance }}",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "events/sec",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "title": "Buffer Size Over Time",
+      "description": "버퍼 크기 변화 추이",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "selfhealing_disk_buffer_entries{instance=~\"$instance\"}",
+          "legendFormat": "entries - {{ instance }}",
+          "refId": "A"
+        },
+        {
+          "expr": "selfhealing_disk_buffer_sequence{instance=~\"$instance\"}",
+          "legendFormat": "sequence - {{ instance }}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "count",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Group Commit Flushes",
+      "description": "Group Commit 플러시 횟수",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(selfhealing_disk_buffer_group_commit_flushes_total{instance=~\"$instance\"}[5m])",
+          "legendFormat": "group_commits/sec - {{ instance }}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "flushes/sec",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "title": "Put Latency",
+      "description": "저장 작업 지연 시간 분포",
+      "type": "heatmap",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(selfhealing_disk_buffer_put_latency_seconds_bucket{instance=~\"$instance\"}[5m])) by (le)",
+          "legendFormat": "{{ le }}",
+          "refId": "A",
+          "format": "heatmap"
+        }
+      ],
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "scale": "exponential",
+          "scheme": "Oranges"
+        },
+        "yAxis": {
+          "axisLabel": "latency",
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "Flush Latency",
+      "description": "플러시 작업 지연 시간 분포",
+      "type": "heatmap",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(selfhealing_disk_buffer_flush_latency_seconds_bucket{instance=~\"$instance\"}[5m])) by (le)",
+          "legendFormat": "{{ le }}",
+          "refId": "A",
+          "format": "heatmap"
+        }
+      ],
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "scale": "exponential",
+          "scheme": "Blues"
+        },
+        "yAxis": {
+          "axisLabel": "latency",
+          "unit": "s"
+        }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 30,
+  "style": "dark",
+  "tags": ["selfhealing", "disk-buffer", "lmdb", "audit"],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": "Prometheus",
+        "definition": "label_values(selfhealing_disk_buffer_entries, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Instance",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": "label_values(selfhealing_disk_buffer_entries, instance)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+  },
+  "timezone": "browser",
+  "title": "Selfhealing Disk Buffer",
+  "uid": "selfhealing-disk-buffer",
+  "version": 1
+}

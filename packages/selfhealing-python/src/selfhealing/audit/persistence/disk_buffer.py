@@ -481,7 +481,7 @@ class DiskPersistentBuffer:
 
         # fsync 수행 (sync=False일 때도 주기적 sync)
         if not self._settings.sync_on_write:
-            self._env.sync(force=True)
+            self._env.sync()
 
         self._stats["group_commit_flushes"] += 1
         self._group_buffer.clear()
@@ -1228,7 +1228,7 @@ def _shutdown_disk_buffer() -> None:
 
         # 2. LMDB fsync (데이터 안전 보장)
         if _disk_buffer_instance._env:
-            _disk_buffer_instance._env.sync(force=True)
+            _disk_buffer_instance._env.sync()
             logger.debug("[DiskBuffer] LMDB synced")
 
         # 3. 버퍼 종료
