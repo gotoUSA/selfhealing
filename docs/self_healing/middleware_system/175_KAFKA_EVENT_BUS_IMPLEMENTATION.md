@@ -1433,16 +1433,19 @@ class TestKafkaEventBusIntegration:
 
 ## 8. 구현 체크리스트
 
-- [ ] `adapters/kafka/__init__.py` 생성
-- [ ] `adapters/kafka/config.py` 구현
-- [ ] `adapters/kafka/producer.py` 구현
-- [ ] `adapters/kafka/consumer.py` 구현
-- [ ] `adapters/kafka/event_bus.py` 구현
-- [ ] `pyproject.toml`에 `confluent-kafka` 의존성 추가
+- [x] `adapters/kafka/__init__.py` 생성
+- [x] `adapters/kafka/config.py` 구현
+- [x] `adapters/kafka/producer.py` 구현
+- [x] `adapters/kafka/consumer.py` 구현
+- [x] `adapters/kafka/event_bus.py` 구현
+- [x] `adapters/kafka/schemas.py` 구현
+- [x] `adapters/kafka/metrics.py` 구현
+- [x] `adapters/kafka/retry.py` 구현
+- [x] `pyproject.toml`에 `confluent-kafka` 의존성 추가 (기존 optional dependency)
 - [ ] `kafka_checkpoint.py` 통합 수정
-- [ ] 단위 테스트 작성
-- [ ] 통합 테스트 작성
-- [ ] 문서 업데이트
+- [x] 단위 테스트 작성 (108개 통과)
+- [ ] 통합 테스트 작성 (Testcontainers 기반 - 별도 이슈)
+- [x] 문서 업데이트
 
 ---
 
