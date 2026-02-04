@@ -165,6 +165,18 @@ dependencies = [
     # LMDB (Optional - Local Cache)
     # ==========================================
     "lmdb>=1.7.5",
+
+    # ==========================================
+    # Optional Adapters (lazy import)
+    # ==========================================
+    "pymemcache>=4.0.0",      # Memcached adapter
+    "kubernetes>=29.0.0",      # K8s deployment adapter
+    "rq>=1.16.0",              # RQ queue adapter
+    "rq-scheduler>=0.13.0",    # RQ scheduler
+    "boto3>=1.34.0",           # AWS S3 export
+    "pyarrow>=15.0.0",         # Parquet export
+    "croniter>=2.0.0",         # Cron expression parsing
+    "cachetools>=5.3.0",       # Precomputed cache
 ]
 
 [project.optional-dependencies]
@@ -614,3 +626,79 @@ sort_by_size = true
 # tests_dir = "shopping/tests/"
 # runner = "python -m pytest -x --tb=short -q"
 # dict_synonyms = "Struct,NamedStruct"
+
+# ==========================================
+# deptry Configuration (Unused Dependency Detection)
+# ==========================================
+# 사용: deptry .
+# DEP001: 누락된 의존성, DEP002: 미사용 의존성, DEP003: 전이 의존성
+[tool.deptry]
+extend_exclude = [
+    "load_tests",
+    "tests",
+    "htmlcov",
+    "staticfiles",
+    "media",
+    "migrations",
+]
+# 내부/테스트 모듈 - DEP001 무시
+ignore_missing = [
+    "integrity",           # 내부 모듈 (상대 import)
+    "wal",                 # 내부 모듈 (상대 import)
+    "backports",           # Python 3.9+ 호환용 (3.12에서 불필요)
+    "nonexistent_module",  # 테스트용 의도적 import
+]
+
+# CLI 도구 (import 안 함) - 오탐 무시
+[tool.deptry.per_rule_ignores]
+DEP002 = [
+    # === CLI 도구 (터미널에서만 사용) ===
+    "black", "isort", "ruff", "mypy", "autoflake", "flake8", "pre-commit",
+    "pytest", "pytest-asyncio", "pytest-celery", "pytest-cov", "pytest-django",
+    "pytest-docker-tools", "pytest-mock", "pytest-xdist", "pytest-env", "pytest-subtests",
+    "coverage", "locust", "radon", "vulture", "pydeps", "pipdeptree",
+    "import-linter", "bandit", "pygount", "pip-audit", "pip-licenses", "safety",
+    "debugpy", "ipdb", "ipython", "gunicorn", "mutmut", "deptry",
+
+    # === 다른 패키지의 런타임 의존성 ===
+    "kombu", "amqp", "billiard", "vine",           # Celery 의존성
+    "asgiref", "sqlparse",                          # Django 의존성
+    "Werkzeug", "Jinja2", "itsdangerous", "blinker", "flask-cors", "Flask-Login",  # Flask/Flower 의존성
+    "click", "click-didyoumean", "click-plugins", "click-repl", "colorama",        # CLI 의존성
+    "MarkupSafe", "Pygments", "rich", "prompt_toolkit", "wcwidth",                 # 터미널 UI 의존성
+    "grpcio", "protobuf", "googleapis-common-protos",                              # OpenTelemetry gRPC 의존성
+    "pydantic_core", "annotated-types", "typing-inspection",                       # Pydantic 의존성
+    "anyio", "h11", "httpcore",                                                    # HTTP 의존성
+    "cffi", "pycparser",                                                           # 암호화 의존성
+    "zope.event", "zope.interface", "greenlet", "gevent", "geventhttpclient",      # 비동기 의존성
+    "packaging", "platformdirs", "filelock", "pluggy", "iniconfig", "execnet",     # 유틸리티 의존성
+    "attrs", "tomli", "tomli_w", "pathspec",                                       # 파싱 의존성
+    "rpds-py", "referencing", "jsonschema-specifications",                         # JSON Schema 의존성
+    "importlib_metadata", "zipp", "typing_extensions",                             # Python 버전 호환 의존성
+    "virtualenv", "nodeenv", "identify",                                           # 환경 관리 의존성
+
+    # === 선택적/환경별 의존성 ===
+    "opentelemetry-instrumentation-psycopg2", "opentelemetry-instrumentation-redis",  # DB/Cache 계측
+    "django-prometheus", "django-celery-beat", "django-timezone-field",               # Django 확장
+    "django-js-asset", "drf-spectacular-sidecar",                                     # 정적 자산
+    "flower", "httpx", "certifi", "idna", "charset-normalizer",                       # HTTP 클라이언트
+    "psycopg-binary", "sqlparams",                                                    # DB 드라이버
+    "msgpack", "jsonschema",                                                          # 직렬화
+    "humanize", "python-dateutil", "pytz", "tzdata", "six", "wrapt",                  # 유틸리티
+    "cron_descriptor", "python-crontab", "pillow",                                    # 스케줄/이미지
+    "tornado", "uritemplate", "pyparsing", "prettytable",                             # 기타 유틸리티
+    "stdlib-list", "sympy", "mpmath",                                                 # 수학/표준 라이브러리
+    "CacheControl", "ConfigArgParse", "defusedxml", "brotli",                         # HTTP/XML/압축
+    "markdown-it-py", "mdurl", "librt", "mando",                                      # 문서/CLI
+    "pip-api", "pip-requirements-parser", "annotated-doc",                            # pip 도구
+    "python-socketio", "python-engineio", "simple-websocket", "websocket-client", "bidict", "wsproto",  # WebSocket
+    "cyclonedx-python-lib", "packageurl-python", "license-expression", "boolean.py", "py-serializable", "sortedcontainers",  # SBOM
+
+    # === 테스트/개발 도구 ===
+    "fastapi", "starlette", "Faker",                                                  # 테스트 서버/데이터
+    "schemathesis", "hypothesis", "hypothesis-jsonschema", "hypothesis-graphql",      # 속성 기반 테스트
+    "GitPython", "Authlib", "oauthlib",                                               # Git/OAuth
+    "typer", "textual", "nltk", "ruamel.yaml",                                        # 추가 도구
+    "drf-yasg", "marshmallow", "libcst",                                              # API/직렬화/코드 변환
+    "urllib3", "mypy-extensions", "grimp", "docker", "Flask", "inflection",           # 추가 런타임/도구 의존성
+]
