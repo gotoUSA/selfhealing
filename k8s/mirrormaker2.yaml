@@ -1,0 +1,240 @@
+# Kafka MirrorMaker 2 배포 설정
+#
+# Multi-Region Kafka 복제를 위한 MirrorMaker 2 Kubernetes 배포
+#
+# 복제 토픽: selfhealing.*
+# 복제 방향: 양방향 (kr <-> us)
+# 그룹 오프셋 동기화: 활성화
+# 체크포인트 및 하트비트: 활성화
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaMirrorMaker2
+metadata:
+  name: selfhealing-mirrormaker2
+  namespace: selfhealing
+  labels:
+    app: selfhealing-mirrormaker2
+    component: kafka-replication
+spec:
+  version: 3.6.0
+  replicas: 2
+
+  # Kafka Connect 클러스터 설정
+  connectCluster: "kr"
+
+  # 리전별 Kafka 클러스터 정의
+  clusters:
+    # 한국 리전 (ap-northeast-2)
+    - alias: kr
+      bootstrapServers: kafka-kr.selfhealing.svc.cluster.local:9092
+      config:
+        # 복제 설정
+        config.storage.replication.factor: 3
+        offset.storage.replication.factor: 3
+        status.storage.replication.factor: 3
+        # TLS 설정 (필요시)
+        # ssl.truststore.location: /etc/ssl/certs/kafka-truststore.jks
+        # ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD}
+        # security.protocol: SSL
+
+    # 미국 리전 (us-east-1)
+    - alias: us
+      bootstrapServers: kafka-us.selfhealing.svc.cluster.local:9092
+      config:
+        config.storage.replication.factor: 3
+        offset.storage.replication.factor: 3
+        status.storage.replication.factor: 3
+
+  # 복제 미러 설정
+  mirrors:
+    # 한국 → 미국 복제
+    - sourceCluster: kr
+      targetCluster: us
+
+      # 복제 토픽 패턴
+      topicsPattern: "selfhealing\\..*"
+
+      # Consumer 그룹 패턴
+      groupsPattern: ".*"
+
+      # Source Connector 설정
+      sourceConnector:
+        tasksMax: 4
+        config:
+          replication.factor: 3
+          offset-syncs.topic.replication.factor: 3
+          sync.topic.acls.enabled: "false"
+          # 복제 지연 최소화
+          refresh.topics.interval.seconds: "30"
+          replication.policy.separator: ""
+          # 원본 토픽 이름 유지 (prefix 없음)
+          source.cluster.alias: ""
+
+      # Checkpoint Connector (Consumer Offset 동기화)
+      checkpointConnector:
+        tasksMax: 1
+        config:
+          checkpoints.topic.replication.factor: 3
+          emit.checkpoints.interval.seconds: "5"
+          sync.group.offsets.enabled: "true"
+          sync.group.offsets.interval.seconds: "5"
+          refresh.groups.interval.seconds: "30"
+
+      # Heartbeat Connector (연결 상태 모니터링)
+      heartbeatConnector:
+        config:
+          heartbeats.topic.replication.factor: 3
+          emit.heartbeats.interval.seconds: "1"
+
+    # 미국 → 한국 복제
+    - sourceCluster: us
+      targetCluster: kr
+
+      topicsPattern: "selfhealing\\..*"
+      groupsPattern: ".*"
+
+      sourceConnector:
+        tasksMax: 4
+        config:
+          replication.factor: 3
+          offset-syncs.topic.replication.factor: 3
+          sync.topic.acls.enabled: "false"
+          refresh.topics.interval.seconds: "30"
+          replication.policy.separator: ""
+          source.cluster.alias: ""
+
+      checkpointConnector:
+        tasksMax: 1
+        config:
+          checkpoints.topic.replication.factor: 3
+          emit.checkpoints.interval.seconds: "5"
+          sync.group.offsets.enabled: "true"
+          sync.group.offsets.interval.seconds: "5"
+          refresh.groups.interval.seconds: "30"
+
+      heartbeatConnector:
+        config:
+          heartbeats.topic.replication.factor: 3
+          emit.heartbeats.interval.seconds: "1"
+
+  # 리소스 제한
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 1000m
+
+  # 로깅 설정
+  logging:
+    type: inline
+    loggers:
+      connect.root.logger.level: WARN
+      log4j.logger.org.apache.kafka.connect.mirror: INFO
+
+  # 메트릭 설정
+  metricsConfig:
+    type: jmxPrometheusExporter
+    valueFrom:
+      configMapKeyRef:
+        name: selfhealing-mm2-metrics
+        key: metrics-config.yml
+
+  # JVM 옵션
+  jvmOptions:
+    "-Xms": "512m"
+    "-Xmx": "1g"
+    gcLoggingEnabled: false
+
+  # Pod 템플릿
+  template:
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    strimzi.io/name: selfhealing-mirrormaker2
+                topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "kafka"
+          effect: "NoSchedule"
+
+---
+# MirrorMaker2 메트릭 설정
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: selfhealing-mm2-metrics
+  namespace: selfhealing
+  labels:
+    app: selfhealing-mirrormaker2
+data:
+  metrics-config.yml: |
+    # MirrorMaker 2 메트릭 설정
+    lowercaseOutputName: true
+    lowercaseOutputLabelNames: true
+    rules:
+      # Connector 메트릭
+      - pattern: "kafka.connect<type=connector-metrics, connector=(.+)><>(.+)"
+        name: "kafka_connect_connector_$2"
+        labels:
+          connector: "$1"
+        type: GAUGE
+
+      # Task 메트릭
+      - pattern: "kafka.connect<type=connector-task-metrics, connector=(.+), task=(.+)><>(.+)"
+        name: "kafka_connect_task_$3"
+        labels:
+          connector: "$1"
+          task: "$2"
+        type: GAUGE
+
+      # Source Connector 메트릭
+      - pattern: "kafka.connect<type=source-task-metrics, connector=(.+), task=(.+)><>(.+)"
+        name: "kafka_connect_source_task_$3"
+        labels:
+          connector: "$1"
+          task: "$2"
+        type: GAUGE
+
+      # MirrorMaker 2 Replication 메트릭
+      - pattern: "kafka.connect.mirror<type=MirrorSourceConnector, source=(.+), target=(.+), topic=(.+), partition=(.+)><>(.+)"
+        name: "mirrormaker2_$5"
+        labels:
+          source: "$1"
+          target: "$2"
+          topic: "$3"
+          partition: "$4"
+        type: GAUGE
+
+      # MirrorMaker 2 Checkpoint 메트릭
+      - pattern: "kafka.connect.mirror<type=MirrorCheckpointConnector, source=(.+), target=(.+)><>(.+)"
+        name: "mirrormaker2_checkpoint_$3"
+        labels:
+          source: "$1"
+          target: "$2"
+        type: GAUGE
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: selfhealing-mm2-monitor
+  namespace: selfhealing
+  labels:
+    app: selfhealing-mirrormaker2
+spec:
+  selector:
+    matchLabels:
+      strimzi.io/name: selfhealing-mirrormaker2
+  endpoints:
+    - port: tcp-prometheus
+      path: /metrics
+      interval: 15s

@@ -2958,23 +2958,23 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 
 ### 9.1 P0 (필수)
 
-- [ ] `multiregion/quorum.py` - Quorum Witness (Split-brain 방지)
-- [ ] `multiregion/conflict.py` - Tie-breaking 룰 적용
-- [ ] `multiregion/health_monitor.py` - Lag 모니터링 및 DEGRADED 전환
-- [ ] `multiregion/replicator.py` - 이벤트 필터링
+- [x] `multiregion/quorum.py` - Quorum Witness (Split-brain 방지)
+- [x] `multiregion/conflict.py` - Tie-breaking 룰 적용
+- [x] `multiregion/health_monitor.py` - Lag 모니터링 및 DEGRADED 전환
+- [x] `multiregion/replicator.py` - 이벤트 필터링
 - [ ] `idempotency_service.py` - Recovery Action 멱등성 키
 
 ### 9.2 P1 (권장)
 
-- [ ] `multiregion/time_sync.py` - AWS Time Sync 상태 모니터링
-- [ ] `multiregion/router.py` - Service-based Locality
-- [ ] `multiregion/secure_client.py` - mTLS 적용
+- [x] `multiregion/time_sync.py` - AWS Time Sync 상태 모니터링
+- [x] `multiregion/router.py` - Service-based Locality
+- [x] `multiregion/secure_client.py` - mTLS 적용
 
 ### 9.3 P2 (선택)
 
 - [ ] 아키텍처 다이어그램 업데이트
 - [ ] Chaos Engineering 테스트 시나리오
-- [ ] `multiregion/conflict.py` - ConflictMetrics 충돌 비율 모니터링
+- [x] `multiregion/conflict.py` - ConflictMetrics 충돌 비율 모니터링
 
 ---
 
@@ -2996,3 +2996,4 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 | 1.0.0 | 2026-02-04 | 초안 작성 |
 | 1.1.0 | 2026-02-04 | 아키텍처 리뷰 보완 (8장 추가) |
 | 1.1.1 | 2026-02-04 | Conflict 비율 분석 섹션 추가 (8.10) |
+| 1.2.0 | 2026-02-04 | P0/P1 구현 완료 (config, conflict, health_monitor, replicator, quorum, failover, router, time_sync, secure_client) - 126개 단위테스트 통과 |
