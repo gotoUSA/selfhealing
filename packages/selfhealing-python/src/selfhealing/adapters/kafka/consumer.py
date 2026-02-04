@@ -149,7 +149,8 @@ class KafkaAuditConsumer:
             "group.id": self._settings.consumer_group_id,
             "auto.offset.reset": self._settings.consumer_auto_offset_reset,
             "enable.auto.commit": self._settings.consumer_enable_auto_commit,
-            "max.poll.records": self._settings.consumer_max_poll_records,
+            # Note: max.poll.records is not supported in confluent-kafka Python
+            # Use batch_size parameter in consume() method instead
             "session.timeout.ms": self._settings.consumer_session_timeout_ms,
         }
 

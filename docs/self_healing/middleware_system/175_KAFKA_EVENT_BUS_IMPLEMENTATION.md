@@ -1458,7 +1458,7 @@ class TestKafkaEventBusIntegration:
 - [x] `pyproject.toml`에 `confluent-kafka` 의존성 추가 (기존 optional dependency)
 - [x] `kafka_checkpoint.py` 통합 수정 (KafkaAuditProducer 지원 추가)
 - [x] 단위 테스트 작성 (114개 통과)
-- [ ] 통합 테스트 작성 (Testcontainers 기반 - 별도 이슈)
+- [x] 통합 테스트 작성 (Docker Compose Kafka 기반, 11개 통과)
 - [x] 문서 업데이트
 
 ---
