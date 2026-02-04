@@ -1558,8 +1558,1290 @@ SELFHEALING_MULTIREGION_FAILOVER_COOLDOWN_SECONDS=300
 
 ---
 
-## 8. 변경 이력
+## 8. 아키텍처 리뷰 보완사항
+
+### 8.1 Clock Skew 제어 (시계 동기화)
+
+> **문제**: 기본 30초 Tolerance는 Active-Active 환경에서 위험. 리전 간 초단위 경합 시 데이터 덮어쓰기 가능.
+
+#### 8.1.1 AWS Time Sync Service 설정 가이드
+
+**인프라 설정** (EC2/EKS):
+
+```bash
+# Amazon Time Sync Service 사용 (169.254.169.123)
+# /etc/chrony.conf
+server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
+
+# 확인
+chronyc tracking
+# Reference ID    : A9FEA97B (169.254.169.123)
+# System time     : 0.000000123 seconds fast of NTP time
+# Root delay      : 0.000123456 seconds
+```
+
+**목표 정밀도**: **5ms 이하** (AWS Time Sync Service 기준)
+
+#### 8.1.2 설정 업데이트
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/config.py
+
+class MultiRegionSettings(BaseSettings):
+    # 기존: 30초 (위험)
+    # clock_skew_tolerance_seconds: float = 30.0
+
+    # 신규: 5ms (AWS Time Sync 사용 시)
+    clock_skew_tolerance_ms: int = Field(
+        default=5,
+        description="Clock Skew 허용 오차 (ms). AWS Time Sync 사용 필수.",
+    )
+
+    # Time Sync 실패 시 폴백
+    clock_skew_fallback_seconds: float = Field(
+        default=1.0,
+        description="Time Sync 실패 시 폴백 tolerance (초)",
+    )
+```
+
+#### 8.1.3 Time Sync 상태 모니터링
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/time_sync.py
+"""
+Time Sync 상태 모니터링.
+
+AWS Time Sync Service 사용 여부 및 정확도 확인.
+"""
+
+from __future__ import annotations
+
+import logging
+import subprocess
+from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TimeSyncStatus:
+    """Time Sync 상태."""
+
+    is_synced: bool
+    """NTP 동기화 여부."""
+
+    offset_ms: float
+    """시스템 시간 오프셋 (ms)."""
+
+    source: str
+    """NTP 소스 (예: 169.254.169.123)."""
+
+    stratum: int
+    """NTP Stratum."""
+
+
+class TimeSyncChecker:
+    """AWS Time Sync Service 연동."""
+
+    AWS_TIME_SYNC_IP = "169.254.169.123"
+
+    def check_sync_status(self) -> TimeSyncStatus:
+        """chronyc tracking 결과 파싱."""
+        try:
+            result = subprocess.run(
+                ["chronyc", "tracking"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                return TimeSyncStatus(
+                    is_synced=False,
+                    offset_ms=float('inf'),
+                    source="unknown",
+                    stratum=16,
+                )
+
+            # 출력 파싱
+            lines = result.stdout.strip().split("\n")
+            offset_ms = 0.0
+            source = ""
+            stratum = 16
+
+            for line in lines:
+                if "System time" in line:
+                    # "0.000000123 seconds fast" → 0.123 ms
+                    parts = line.split(":")[-1].strip().split()
+                    if len(parts) >= 2:
+                        offset_ms = abs(float(parts[0])) * 1000
+                elif "Reference ID" in line:
+                    source = line.split("(")[-1].rstrip(")")
+                elif "Stratum" in line:
+                    stratum = int(line.split(":")[-1].strip())
+
+            is_synced = (
+                source == self.AWS_TIME_SYNC_IP
+                and stratum <= 4
+                and offset_ms < 10  # 10ms 미만
+            )
+
+            return TimeSyncStatus(
+                is_synced=is_synced,
+                offset_ms=offset_ms,
+                source=source,
+                stratum=stratum,
+            )
+
+        except Exception as e:
+            logger.warning(f"[TimeSync] Check failed: {e}")
+            return TimeSyncStatus(
+                is_synced=False,
+                offset_ms=float('inf'),
+                source="error",
+                stratum=16,
+            )
+
+    def get_clock_accuracy_ms(self) -> float:
+        """현재 시계 정확도 (ms)."""
+        status = self.check_sync_status()
+        return status.offset_ms
+
+
+def get_time_sync_checker() -> TimeSyncChecker:
+    """TimeSyncChecker 싱글톤."""
+    return TimeSyncChecker()
+```
+
+---
+
+### 8.2 Tie-breaking 룰 (타임스탬프 충돌 해결)
+
+> **문제**: 타임스탬프가 동일할 경우 비결정적 동작. 100,000+ TPS에서는 μs 충돌 빈번.
+
+#### 8.2.1 결정적 충돌 해결 로직
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/conflict.py
+"""
+Conflict Resolver - 리전 간 충돌 해결 (개선판).
+
+충돌 해결 전략:
+- LWW (Last-Write-Wins): 타임스탬프 기반
+- Tie-breaking: timestamp → region_priority → cluster_id
+"""
+
+from __future__ import annotations
+
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any
+
+from selfhealing.multiregion.config import get_multiregion_settings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ConflictKey:
+    """충돌 해결용 복합 키."""
+
+    timestamp: float
+    """이벤트 타임스탬프 (Unix timestamp, μs 정밀도)."""
+
+    region_priority: int
+    """리전 우선순위 (낮을수록 높은 우선순위)."""
+
+    cluster_id: str
+    """클러스터 ID (최종 tie-breaker)."""
+
+    def __gt__(self, other: ConflictKey) -> bool:
+        """결정적 비교: timestamp → region_priority (역순) → cluster_id."""
+        if self.timestamp != other.timestamp:
+            return self.timestamp > other.timestamp
+        # 낮은 priority가 더 높은 우선순위
+        if self.region_priority != other.region_priority:
+            return self.region_priority < other.region_priority
+        # 최종: 문자열 비교
+        return self.cluster_id > other.cluster_id
+
+
+class LastWriteWinsResolver:
+    """
+    Last-Write-Wins + Deterministic Tie-breaking.
+
+    Tie-breaking 순서:
+    1. timestamp (최신 우선)
+    2. region_priority (낮을수록 높은 우선순위)
+    3. cluster_id (문자열 비교)
+
+    이 순서로 항상 동일한 승자가 결정됨.
+    """
+
+    def __init__(self):
+        """초기화."""
+        self._last_keys: dict[str, ConflictKey] = {}
+        self._settings = get_multiregion_settings()
+
+    def resolve(self, incoming: Any) -> Any | None:
+        """
+        결정적 충돌 해결.
+
+        Args:
+            incoming: 수신 이벤트 (timestamp, region_priority, cluster_id 포함)
+
+        Returns:
+            적용할 이벤트 (None이면 무시)
+        """
+        key = incoming.key
+
+        incoming_conflict_key = ConflictKey(
+            timestamp=incoming.timestamp,
+            region_priority=getattr(incoming, 'region_priority', 100),
+            cluster_id=getattr(incoming, 'cluster_id', self._settings.current_region),
+        )
+
+        last_conflict_key = self._last_keys.get(key)
+
+        if last_conflict_key is None or incoming_conflict_key > last_conflict_key:
+            self._last_keys[key] = incoming_conflict_key
+            logger.debug(
+                f"[LWW] Accepted: {key} "
+                f"(ts={incoming_conflict_key.timestamp}, "
+                f"priority={incoming_conflict_key.region_priority})"
+            )
+            return incoming
+        else:
+            logger.debug(
+                f"[LWW] Dropped: {key} "
+                f"(incoming={incoming_conflict_key.timestamp} <= "
+                f"last={last_conflict_key.timestamp})"
+            )
+            return None
+```
+
+#### 8.2.2 ReplicationEvent 확장
+
+```python
+@dataclass
+class ReplicationEvent:
+    """복제 이벤트 (확장)."""
+
+    event_type: ReplicationEventType
+    key: str
+    value: Any
+    field: str | None = None
+    timestamp: float = 0.0
+    source_region: str = ""
+
+    # 신규: Tie-breaking 필드
+    region_priority: int = 100
+    """리전 우선순위 (1=최고, 100=기본)."""
+
+    cluster_id: str = ""
+    """클러스터 ID (예: prod-kr-1)."""
+```
+
+---
+
+### 8.3 Quorum/Witness (Split-brain 방지)
+
+> **⚠️ 매우 중요**: 리전 간 통신만 끊기면 양쪽 모두 Primary가 되어 데이터 오염 가능.
+
+#### 8.3.1 DynamoDB Global Table 기반 Quorum
+
+**선택 이유**:
+- AWS DynamoDB Global Table은 자체적으로 Multi-Region 복제 제공
+- 조건부 쓰기(Conditional Write)로 원자적 락 획득 가능
+- Self-healing 시스템이 AWS 기반이므로 자연스러운 통합
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/quorum.py
+"""
+Quorum Witness - Split-brain 방지.
+
+DynamoDB Global Table을 사용하여 리전 간 Quorum 확인.
+Primary 승격 전 반드시 Witness 락을 획득해야 함.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class QuorumLease:
+    """Quorum 리스."""
+
+    region: str
+    """리스를 보유한 리전."""
+
+    acquired_at: float
+    """획득 시각 (Unix timestamp)."""
+
+    expires_at: float
+    """만료 시각 (Unix timestamp)."""
+
+    lease_id: str
+    """리스 ID (재획득 시 검증용)."""
+
+
+class QuorumWitness:
+    """
+    DynamoDB Global Table 기반 Quorum.
+
+    Split-brain 방지를 위해 Primary 승격 전 Witness 락 획득 필수.
+
+    동작 원리:
+    1. Primary가 되려는 리전이 DynamoDB에 조건부 쓰기 시도
+    2. 이미 다른 리전이 락을 보유하고 있으면 실패
+    3. 성공한 리전만 Primary가 됨
+    4. 락은 TTL 기반으로 자동 만료 (장애 시 자동 해제)
+    """
+
+    TABLE_NAME = "selfhealing-quorum-witness"
+    LEASE_TTL_SECONDS = 60  # 1분
+    RENEW_INTERVAL_SECONDS = 20  # 20초마다 갱신
+
+    def __init__(self, dynamodb_client: Any, region: str, cluster_id: str):
+        """초기화."""
+        self._dynamodb = dynamodb_client
+        self._region = region
+        self._cluster_id = cluster_id
+        self._current_lease: QuorumLease | None = None
+
+    def try_acquire_primary(self) -> bool:
+        """
+        Primary 락 획득 시도.
+
+        Returns:
+            True: 락 획득 성공 → Primary 가능
+            False: 락 획득 실패 → 다른 리전이 Primary
+        """
+        import uuid
+
+        now = time.time()
+        lease_id = f"{self._region}:{self._cluster_id}:{uuid.uuid4().hex[:8]}"
+        expires_at = now + self.LEASE_TTL_SECONDS
+
+        try:
+            self._dynamodb.put_item(
+                TableName=self.TABLE_NAME,
+                Item={
+                    "pk": {"S": "primary_lease"},
+                    "region": {"S": self._region},
+                    "cluster_id": {"S": self._cluster_id},
+                    "lease_id": {"S": lease_id},
+                    "acquired_at": {"N": str(now)},
+                    "expires_at": {"N": str(expires_at)},
+                    "ttl": {"N": str(int(expires_at))},
+                },
+                # 조건: 키가 없거나 TTL이 만료된 경우에만 쓰기
+                ConditionExpression=(
+                    "attribute_not_exists(pk) OR expires_at < :now"
+                ),
+                ExpressionAttributeValues={
+                    ":now": {"N": str(now)},
+                },
+            )
+
+            self._current_lease = QuorumLease(
+                region=self._region,
+                acquired_at=now,
+                expires_at=expires_at,
+                lease_id=lease_id,
+            )
+
+            logger.info(
+                f"[Quorum] Primary lease acquired: {self._region} "
+                f"(expires_at={expires_at})"
+            )
+            return True
+
+        except self._dynamodb.exceptions.ConditionalCheckFailedException:
+            logger.warning(
+                f"[Quorum] Primary lease denied: {self._region} "
+                f"(another region holds the lease)"
+            )
+            return False
+        except Exception as e:
+            logger.error(f"[Quorum] Lease acquisition error: {e}")
+            return False
+
+    def renew_lease(self) -> bool:
+        """리스 갱신."""
+        if self._current_lease is None:
+            return False
+
+        now = time.time()
+        new_expires_at = now + self.LEASE_TTL_SECONDS
+
+        try:
+            self._dynamodb.update_item(
+                TableName=self.TABLE_NAME,
+                Key={"pk": {"S": "primary_lease"}},
+                UpdateExpression="SET expires_at = :exp, ttl = :ttl",
+                ConditionExpression="lease_id = :lid",
+                ExpressionAttributeValues={
+                    ":exp": {"N": str(new_expires_at)},
+                    ":ttl": {"N": str(int(new_expires_at))},
+                    ":lid": {"S": self._current_lease.lease_id},
+                },
+            )
+
+            self._current_lease.expires_at = new_expires_at
+            logger.debug(f"[Quorum] Lease renewed: expires_at={new_expires_at}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[Quorum] Lease renewal failed: {e}")
+            self._current_lease = None
+            return False
+
+    def release_lease(self) -> None:
+        """리스 해제."""
+        if self._current_lease is None:
+            return
+
+        try:
+            self._dynamodb.delete_item(
+                TableName=self.TABLE_NAME,
+                Key={"pk": {"S": "primary_lease"}},
+                ConditionExpression="lease_id = :lid",
+                ExpressionAttributeValues={
+                    ":lid": {"S": self._current_lease.lease_id},
+                },
+            )
+            logger.info(f"[Quorum] Lease released: {self._region}")
+        except Exception as e:
+            logger.warning(f"[Quorum] Lease release failed: {e}")
+        finally:
+            self._current_lease = None
+
+    def get_current_primary(self) -> str | None:
+        """현재 Primary 리전 조회."""
+        try:
+            response = self._dynamodb.get_item(
+                TableName=self.TABLE_NAME,
+                Key={"pk": {"S": "primary_lease"}},
+            )
+
+            item = response.get("Item")
+            if item is None:
+                return None
+
+            expires_at = float(item["expires_at"]["N"])
+            if time.time() > expires_at:
+                return None  # 만료됨
+
+            return item["region"]["S"]
+
+        except Exception as e:
+            logger.error(f"[Quorum] Get primary failed: {e}")
+            return None
+
+    def is_primary(self) -> bool:
+        """현재 리전이 Primary인지 확인."""
+        return (
+            self._current_lease is not None
+            and time.time() < self._current_lease.expires_at
+        )
+```
+
+#### 8.3.2 Failover 통합
+
+```python
+# failover.py 수정
+class RegionFailover:
+    def __init__(
+        self,
+        settings: MultiRegionSettings | None = None,
+        health_monitor: RegionHealthMonitor | None = None,
+        quorum_witness: QuorumWitness | None = None,  # 신규
+        on_failover: Callable[[FailoverEvent], None] | None = None,
+    ):
+        self._quorum_witness = quorum_witness
+        # ...
+
+    def _execute_failover(self, target_region: str, reason: str) -> bool:
+        """페일오버 실행 (Quorum 확인 추가)."""
+
+        # 🔴 신규: Quorum 획득 필수
+        if self._quorum_witness:
+            if not self._quorum_witness.try_acquire_primary():
+                logger.error(
+                    "[Failover] Cannot become primary: "
+                    "quorum witness denied"
+                )
+                return False
+
+        # 기존 로직 계속...
+```
+
+---
+
+### 8.4 Service-based Write Locality (쓰기 지역성)
+
+> **개념**: 특정 서비스의 CB 상태는 해당 서비스와 가장 가까운 리전에서 관리.
+
+#### 8.4.1 Service-based Locality란?
+
+**핵심 질문**: "이 데이터를 어느 리전에서 쓰기(Write)하는 것이 가장 적합한가?"
+
+| 서비스 | 대상 API 위치 | 담당 리전 | 이유 |
+|--------|-------------|----------|------|
+| `cb:payment_kakao` | 한국 | `ap-northeast-2` | 카카오페이 API가 한국에 있음 |
+| `cb:payment_toss` | 한국 | `ap-northeast-2` | 토스 API가 한국에 있음 |
+| `cb:payment_stripe` | 미국 | `us-east-1` | Stripe API가 미국에 있음 |
+| `cb:payment_paypal` | 미국 | `us-east-1` | PayPal API가 미국에 있음 |
+| `cb:notification_slack` | 미국 | `us-east-1` | Slack API가 미국에 있음 |
+
+**왜 이렇게 하나요?**
+
+```
+문제 상황: 양쪽 리전에서 동시에 CB 상태 변경
+
+한국 리전: "카카오페이 장애 감지! cb:payment_kakao → OPEN"
+미국 리전: "카카오페이 정상! cb:payment_kakao → CLOSED" (네트워크 지연으로 늦게 감지)
+
+→ LWW로 하나가 덮어씌워짐 → 잘못된 상태!
+
+해결: 카카오페이 CB는 한국 리전만 쓰기 담당
+→ 충돌 원천 차단
+→ 미국 리전은 복제된 상태를 읽기만 함
+```
+
+#### 8.4.2 ServiceLocalityRouter 구현
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/router.py
+"""
+Service-based Write Locality Router.
+
+서비스별로 담당 리전을 지정하여 쓰기 충돌 최소화.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass, field
+
+from selfhealing.multiregion.config import get_multiregion_settings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LocalityRule:
+    """Locality 규칙."""
+
+    pattern: str
+    """키 패턴 (정규식)."""
+
+    preferred_region: str
+    """선호 리전."""
+
+    description: str = ""
+    """규칙 설명."""
+
+
+class ServiceLocalityRouter:
+    """
+    서비스 기반 Write-Locality 라우터.
+
+    서비스별로 담당 리전을 지정하여 쓰기 충돌을 최소화합니다.
+
+    사용 예:
+        router = ServiceLocalityRouter()
+
+        # 카카오페이 CB → 한국 리전 담당
+        if router.should_write_locally("cb:payment_kakao"):
+            # 현재 리전이 한국이면 쓰기 진행
+            cb_service.update_state("payment_kakao", "OPEN")
+        else:
+            # 현재 리전이 미국이면 쓰기 스킵 (복제로 받음)
+            logger.debug("Skipping write: not the preferred region")
+    """
+
+    # 기본 Locality 규칙
+    DEFAULT_RULES: list[LocalityRule] = [
+        # 한국 결제 서비스 → 한국 리전
+        LocalityRule(
+            pattern=r"^cb:payment_(kakao|toss|naverpay|samsung).*",
+            preferred_region="ap-northeast-2",
+            description="한국 결제 서비스 CB",
+        ),
+        # 글로벌 결제 서비스 → 미국 리전
+        LocalityRule(
+            pattern=r"^cb:payment_(stripe|paypal|braintree).*",
+            preferred_region="us-east-1",
+            description="글로벌 결제 서비스 CB",
+        ),
+        # 글로벌 알림 서비스 → 미국 리전
+        LocalityRule(
+            pattern=r"^cb:(notification_slack|notification_pagerduty).*",
+            preferred_region="us-east-1",
+            description="글로벌 알림 서비스 CB",
+        ),
+        # Emergency 상태 → Primary 리전만
+        LocalityRule(
+            pattern=r"^selfhealing:.*:emergency.*",
+            preferred_region="ap-northeast-2",  # Primary
+            description="Emergency 상태",
+        ),
+    ]
+
+    def __init__(
+        self,
+        rules: list[LocalityRule] | None = None,
+        current_region: str | None = None,
+    ):
+        """초기화."""
+        self._rules = rules or self.DEFAULT_RULES
+        self._settings = get_multiregion_settings()
+        self._current_region = current_region or self._settings.current_region
+
+        # 정규식 컴파일 캐시
+        self._compiled_patterns: dict[str, re.Pattern] = {}
+        for rule in self._rules:
+            self._compiled_patterns[rule.pattern] = re.compile(rule.pattern)
+
+    def get_preferred_region(self, key: str) -> str | None:
+        """
+        키에 대한 선호 리전 반환.
+
+        Args:
+            key: Redis 키
+
+        Returns:
+            선호 리전 (매칭 규칙 없으면 None)
+        """
+        for rule in self._rules:
+            pattern = self._compiled_patterns[rule.pattern]
+            if pattern.match(key):
+                return rule.preferred_region
+        return None
+
+    def should_write_locally(self, key: str) -> bool:
+        """
+        현재 리전에서 쓰기해야 하는지 확인.
+
+        Args:
+            key: Redis 키
+
+        Returns:
+            True: 현재 리전에서 쓰기
+            False: 다른 리전이 담당 (복제로 받음)
+        """
+        preferred = self.get_preferred_region(key)
+
+        if preferred is None:
+            # 규칙 없으면 어디서든 쓰기 가능
+            return True
+
+        return preferred == self._current_region
+
+    def get_write_region(self, key: str) -> str:
+        """
+        쓰기 담당 리전 반환.
+
+        Args:
+            key: Redis 키
+
+        Returns:
+            담당 리전 (규칙 없으면 현재 리전)
+        """
+        preferred = self.get_preferred_region(key)
+        return preferred or self._current_region
+
+    def add_rule(self, rule: LocalityRule) -> None:
+        """규칙 추가."""
+        self._rules.append(rule)
+        self._compiled_patterns[rule.pattern] = re.compile(rule.pattern)
+
+    def get_rules_summary(self) -> list[dict]:
+        """규칙 요약 반환."""
+        return [
+            {
+                "pattern": rule.pattern,
+                "preferred_region": rule.preferred_region,
+                "description": rule.description,
+            }
+            for rule in self._rules
+        ]
+
+
+# 싱글톤
+_router: ServiceLocalityRouter | None = None
+
+
+def get_locality_router() -> ServiceLocalityRouter:
+    """ServiceLocalityRouter 싱글톤."""
+    global _router
+    if _router is None:
+        _router = ServiceLocalityRouter()
+    return _router
+
+
+def reset_locality_router() -> None:
+    """라우터 리셋 (테스트용)."""
+    global _router
+    _router = None
+```
+
+---
+
+### 8.5 Replication Lag 모니터링 및 DEGRADED 전환
+
+> **문제**: 복제 지연 시 "A 리전에서 고친 문제를 B 리전이 다시 터뜨리는" 현상 발생.
+
+#### 8.5.1 Lag 모니터링 확장
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/health_monitor.py (수정)
+
+class RegionHealthMonitor:
+    """Region Health Monitor (Lag 모니터링 추가)."""
+
+    # Lag 임계치
+    REPLICATION_LAG_WARNING_MS = 500    # 0.5초
+    REPLICATION_LAG_CRITICAL_MS = 2000  # 2초
+
+    def _check_kafka_lag(self, endpoint: RegionEndpoint) -> float:
+        """
+        Kafka Consumer Lag 확인.
+
+        Returns:
+            Lag (ms). 에러 시 inf 반환.
+        """
+        try:
+            # Kafka Admin API로 Consumer Lag 조회
+            # selfhealing.* 토픽의 __consumer_offsets 확인
+            # 실제 구현은 Kafka 클라이언트에 따라 다름
+
+            # 간략화: Prometheus에서 lag 메트릭 조회
+            import urllib.request
+            import json
+
+            metrics_url = f"{endpoint.api_endpoint}/metrics/replication_lag"
+            with urllib.request.urlopen(metrics_url, timeout=5) as resp:
+                data = json.loads(resp.read())
+                return data.get("lag_ms", 0)
+
+        except Exception as e:
+            logger.warning(f"[RegionHealth] Kafka lag check failed: {e}")
+            return float('inf')
+
+    def _check_redis_lag(self, endpoint: RegionEndpoint) -> float:
+        """
+        Redis Replication Lag 확인.
+
+        Returns:
+            Lag (ms). 에러 시 inf 반환.
+        """
+        try:
+            import redis
+            client = redis.Redis.from_url(endpoint.redis_url)
+            info = client.info("replication")
+
+            # master_repl_offset vs slave_repl_offset 비교
+            # ElastiCache Global Datastore의 경우 다른 메트릭 사용
+
+            lag_bytes = info.get("master_repl_offset", 0) - info.get("slave_repl_offset", 0)
+            # 대략적인 변환: 1KB ≈ 1ms (가정)
+            return max(0, lag_bytes / 1000)
+
+        except Exception as e:
+            logger.warning(f"[RegionHealth] Redis lag check failed: {e}")
+            return float('inf')
+
+    def check_region(self, endpoint: RegionEndpoint) -> RegionHealth:
+        """
+        리전 건강 체크 (Lag 포함).
+        """
+        start = time.time()
+
+        # 1. 기존 API 체크
+        api_health = self._check_api_health(endpoint)
+        if api_health.status == RegionHealthStatus.UNREACHABLE:
+            return api_health
+
+        # 2. Replication Lag 체크
+        kafka_lag = self._check_kafka_lag(endpoint)
+        redis_lag = self._check_redis_lag(endpoint)
+        max_lag = max(kafka_lag, redis_lag)
+
+        # 3. Lag 기반 상태 결정
+        if max_lag > self.REPLICATION_LAG_CRITICAL_MS:
+            return RegionHealth(
+                region=endpoint.region,
+                status=RegionHealthStatus.DEGRADED,
+                latency_ms=api_health.latency_ms,
+                last_check=datetime.now(timezone.utc),
+                details={
+                    "kafka_lag_ms": kafka_lag,
+                    "redis_lag_ms": redis_lag,
+                    "reason": "replication_lag_exceeded",
+                },
+            )
+        elif max_lag > self.REPLICATION_LAG_WARNING_MS:
+            logger.warning(
+                f"[RegionHealth] {endpoint.region} replication lag warning: "
+                f"kafka={kafka_lag}ms, redis={redis_lag}ms"
+            )
+
+        # 4. 정상
+        return RegionHealth(
+            region=endpoint.region,
+            status=RegionHealthStatus.HEALTHY,
+            latency_ms=api_health.latency_ms,
+            last_check=datetime.now(timezone.utc),
+            details={
+                "kafka_lag_ms": kafka_lag,
+                "redis_lag_ms": redis_lag,
+            },
+        )
+```
+
+---
+
+### 8.6 Recovery Action 멱등성
+
+> **문제**: 리전 페일오버 시 동일한 복구 작업이 중복 실행될 수 있음.
+
+#### 8.6.1 Recovery Action Idempotency Key
+
+```python
+# packages/selfhealing-python/src/selfhealing/services/idempotency_service.py (추가)
+
+class IdempotencyDomain(Enum):
+    # ... 기존 도메인 ...
+
+    # 신규: 복구 액션 도메인
+    RECOVERY_ACTION = "recovery_action"
+    """복구 액션 (CB 리셋, Pod 재시작 등) 중복 실행 방지."""
+
+
+@dataclass
+class IdempotencyKey:
+    # ... 기존 메서드 ...
+
+    @classmethod
+    def for_recovery_action(
+        cls,
+        action_type: str,
+        target: str,
+        region_id: str,
+        session_id: str,
+    ) -> IdempotencyKey:
+        """
+        복구 액션에 대한 멱등성 키 생성.
+
+        리전 간 동일 액션 중복 실행 방지.
+
+        Args:
+            action_type: 액션 유형 ("cb_reset", "pod_restart", "dlq_retry" 등)
+            target: 대상 (서비스명, Pod 이름 등)
+            region_id: 실행 리전
+            session_id: 복구 세션 ID
+
+        Returns:
+            IdempotencyKey
+
+        Example:
+            # CB 리셋 전 멱등성 확인
+            key = IdempotencyKey.for_recovery_action(
+                action_type="cb_reset",
+                target="payment_api",
+                region_id="ap-northeast-2",
+                session_id="sess-12345",
+            )
+
+            result = idempotency_service.check(key)
+            if result.is_duplicate:
+                logger.info("Already executed by another region")
+                return
+
+            # 실행
+            circuit_breaker.reset("payment_api")
+        """
+        key = f"recovery:{action_type}:{target}:{session_id}"
+        return cls(
+            domain=IdempotencyDomain.RECOVERY_ACTION,
+            key=key,
+            components={
+                "action_type": action_type,
+                "target": target,
+                "region_id": region_id,
+                "session_id": session_id,
+            },
+        )
+
+    @classmethod
+    def for_cb_reset(
+        cls,
+        service_name: str,
+        region_id: str,
+        trigger_id: str,
+    ) -> IdempotencyKey:
+        """
+        Circuit Breaker 리셋 전용 멱등성 키.
+
+        Args:
+            service_name: 서비스명
+            region_id: 실행 리전
+            trigger_id: 트리거 ID (예: recovery session ID)
+        """
+        return cls.for_recovery_action(
+            action_type="cb_reset",
+            target=service_name,
+            region_id=region_id,
+            session_id=trigger_id,
+        )
+```
+
+---
+
+### 8.7 Replication 필터링 (전송 최적화)
+
+> **문제**: 모든 Redis 변경사항 복제는 100,000+ TPS에서 비효율적.
+
+#### 8.7.1 ReplicationFilter 구현
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/replicator.py (추가)
+
+class ReplicationFilter:
+    """
+    복제 대상 키 필터.
+
+    전역 공유가 필수적인 키 패턴만 복제하여 트래픽 최적화.
+    """
+
+    # 복제 필수 패턴 (정규식)
+    REPLICATE_PATTERNS = [
+        r"^cb:.*",                         # Circuit Breaker 상태
+        r"^idempotency:.*",                # 멱등성 키
+        r"^selfhealing:.*:emergency.*",    # Emergency 상태
+        r"^selfhealing:.*:recovery:.*",    # 복구 세션
+        r"^selfhealing:governance:.*",     # Governance 상태
+    ]
+
+    # 복제 제외 패턴 (우선 적용)
+    EXCLUDE_PATTERNS = [
+        r"^selfhealing:.*:metrics:.*",     # 메트릭 (로컬 전용)
+        r"^selfhealing:.*:cache:.*",       # 캐시 (로컬 성능용)
+        r"^rate_limit:.*",                 # Rate Limit (리전 로컬)
+        r".*:history$",                    # 이력 데이터 (너무 큼)
+        r"^celery.*",                      # Celery 내부 키
+    ]
+
+    def __init__(self):
+        """초기화."""
+        import re
+        self._replicate_compiled = [
+            re.compile(p) for p in self.REPLICATE_PATTERNS
+        ]
+        self._exclude_compiled = [
+            re.compile(p) for p in self.EXCLUDE_PATTERNS
+        ]
+
+    def should_replicate(self, key: str) -> bool:
+        """
+        복제 여부 판단.
+
+        Args:
+            key: Redis 키
+
+        Returns:
+            True: 복제 필요
+            False: 복제 불필요 (로컬 전용)
+        """
+        # 1. 제외 패턴 먼저 확인 (우선)
+        for pattern in self._exclude_compiled:
+            if pattern.match(key):
+                return False
+
+        # 2. 포함 패턴 확인
+        for pattern in self._replicate_compiled:
+            if pattern.match(key):
+                return True
+
+        # 3. 기본: 복제 안함
+        return False
+
+
+class RegionReplicator:
+    """Region Replicator (필터링 추가)."""
+
+    def __init__(self, ...):
+        # ... 기존 코드 ...
+        self._filter = ReplicationFilter()
+
+    def enqueue(self, event: ReplicationEvent) -> bool:
+        """복제 이벤트 큐에 추가 (필터링 적용)."""
+
+        # 🔴 신규: 필터링
+        if not self._filter.should_replicate(event.key):
+            logger.debug(f"[Replicator] Filtered out: {event.key}")
+            return True  # 필터링됨 (성공으로 처리)
+
+        event.source_region = self._settings.current_region
+        event.timestamp = time.time()
+
+        # ... 기존 로직 ...
+```
+
+---
+
+### 8.8 mTLS 보안 통신
+
+> **문제**: 리전 간 데이터는 공용 인터넷 통과 가능.
+
+#### 8.8.1 TLS 설정 확장
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/config.py (추가)
+
+class MultiRegionSettings(BaseSettings):
+    # ... 기존 설정 ...
+
+    # 보안 설정
+    tls_enabled: bool = Field(
+        default=True,
+        description="리전 간 통신 TLS 활성화",
+    )
+    tls_cert_path: str = Field(
+        default="/etc/ssl/certs/multiregion-client.crt",
+        description="클라이언트 인증서 경로",
+    )
+    tls_key_path: str = Field(
+        default="/etc/ssl/private/multiregion-client.key",
+        description="클라이언트 키 경로",
+    )
+    tls_ca_path: str = Field(
+        default="/etc/ssl/certs/multiregion-ca.crt",
+        description="CA 인증서 경로",
+    )
+    tls_verify_hostname: bool = Field(
+        default=True,
+        description="호스트명 검증",
+    )
+```
+
+#### 8.8.2 SecureRedisClient
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/secure_client.py
+"""
+Secure Redis Client for Multi-Region.
+
+mTLS를 적용한 리전 간 Redis 통신.
+"""
+
+from __future__ import annotations
+
+import logging
+import ssl
+from typing import Any
+
+from selfhealing.multiregion.config import get_multiregion_settings, RegionEndpoint
+
+logger = logging.getLogger(__name__)
+
+
+class SecureRedisClient:
+    """mTLS 적용 Redis 클라이언트."""
+
+    def __init__(self, endpoint: RegionEndpoint):
+        """초기화."""
+        self._endpoint = endpoint
+        self._client: Any = None
+        self._settings = get_multiregion_settings()
+
+    def _create_ssl_context(self) -> ssl.SSLContext | None:
+        """SSL 컨텍스트 생성."""
+        if not self._settings.tls_enabled:
+            return None
+
+        try:
+            context = ssl.create_default_context(
+                cafile=self._settings.tls_ca_path,
+            )
+            context.load_cert_chain(
+                certfile=self._settings.tls_cert_path,
+                keyfile=self._settings.tls_key_path,
+            )
+            context.check_hostname = self._settings.tls_verify_hostname
+            context.verify_mode = ssl.CERT_REQUIRED
+            return context
+        except Exception as e:
+            logger.error(f"[SecureRedis] SSL context creation failed: {e}")
+            raise
+
+    def get_client(self) -> Any:
+        """Redis 클라이언트 반환."""
+        if self._client is None:
+            import redis
+
+            ssl_context = self._create_ssl_context()
+
+            # rediss:// 사용 (TLS)
+            url = self._endpoint.redis_url
+            if self._settings.tls_enabled and url.startswith("redis://"):
+                url = url.replace("redis://", "rediss://", 1)
+
+            self._client = redis.Redis.from_url(
+                url,
+                decode_responses=True,
+                ssl=ssl_context,
+            )
+
+        return self._client
+```
+
+---
+
+### 8.9 데이터 저장소 전략
+
+> **현재 아키텍처**: Self-healing 핵심 데이터는 Redis 기반. RDBMS는 Audit 로그용.
+
+#### 8.9.1 저장소별 복제 전략
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          데이터 저장소 전략                                   │
+├──────────────────┬────────────────────┬─────────────────────────────────────┤
+│ 데이터 유형       │ 저장소              │ 리전 간 복제 전략                    │
+├──────────────────┼────────────────────┼─────────────────────────────────────┤
+│ CB 상태          │ Redis              │ ElastiCache Global Datastore       │
+│ DLQ 항목         │ Redis              │ ElastiCache Global Datastore       │
+│ Idempotency 키   │ Redis              │ ElastiCache Global Datastore       │
+│ Emergency 상태   │ Redis              │ ElastiCache Global Datastore       │
+│ 복구 세션        │ Redis              │ ElastiCache Global Datastore       │
+├──────────────────┼────────────────────┼─────────────────────────────────────┤
+│ Audit 로그       │ PostgreSQL         │ 각 리전 독립 저장 + 사후 통합        │
+│ 정책 설정        │ ConfigMap/환경변수  │ GitOps로 동기화                     │
+│ Postmortem       │ PostgreSQL         │ 각 리전 독립 저장 + 수동 통합        │
+└──────────────────┴────────────────────┴─────────────────────────────────────┘
+```
+
+#### 8.9.2 아키텍처 다이어그램 (업데이트)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Global Traffic Manager                              │
+│                    (Route53 Latency-based Routing)                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                    ↓                                    ↓
+┌────────────────────────────────┐    ┌────────────────────────────────┐
+│     Region: ap-northeast-2      │    │        Region: us-east-1        │
+│          (Primary)              │    │         (Secondary)             │
+│  ┌──────────────────────────┐  │    │  ┌──────────────────────────┐  │
+│  │    Self-Healing Stack    │  │    │  │    Self-Healing Stack    │  │
+│  └──────────────────────────┘  │    │  └──────────────────────────┘  │
+│                                │    │                                │
+│  ┌──────────────────────────┐  │    │  ┌──────────────────────────┐  │
+│  │   ElastiCache (Redis)    │◄─┼────┼─►│   ElastiCache (Redis)    │  │
+│  │   Global Datastore       │  │    │  │   Global Datastore       │  │
+│  └──────────────────────────┘  │    │  └──────────────────────────┘  │
+│                                │    │                                │
+│  ┌──────────────────────────┐  │    │  ┌──────────────────────────┐  │
+│  │        MSK (Kafka)       │◄─┼────┼─►│        MSK (Kafka)       │  │
+│  │      MirrorMaker 2       │  │    │  │      MirrorMaker 2       │  │
+│  └──────────────────────────┘  │    │  └──────────────────────────┘  │
+│                                │    │                                │
+│  ┌──────────────────────────┐  │    │  ┌──────────────────────────┐  │
+│  │   Aurora PostgreSQL      │  │    │  │   Aurora PostgreSQL      │  │
+│  │   (Audit 로컬 저장)       │  │    │  │   (Audit 로컬 저장)       │  │
+│  └──────────────────────────┘  │    │  └──────────────────────────┘  │
+│                                │    │                                │
+│  ┌──────────────────────────┐  │    │                                │
+│  │   DynamoDB Global Table  │◄─┼────┼────────────────────────────────┤
+│  │   (Quorum Witness)       │  │    │                                │
+│  └──────────────────────────┘  │    │                                │
+└────────────────────────────────┘    └────────────────────────────────┘
+```
+
+---
+
+### 8.10 성능 목표 (100,000+ TPS 대비)
+
+| 지표 | 목표값 | 설정 |
+|------|--------|------|
+| RPO | 1초 | `replication_interval_seconds=0.5` |
+| RTO | 30초 | `failover_cooldown_seconds=30` |
+| Throughput | 100,000+ TPS | `replication_batch_size=1000` |
+| Clock Skew | 5ms 이하 | AWS Time Sync Service |
+| Replication Lag | 500ms 이하 (HEALTHY) | Lag 모니터링 |
+
+#### 8.10.1 고성능 설정
+
+```bash
+# .env (100,000+ TPS 권장)
+
+# 복제 성능
+SELFHEALING_MULTIREGION_REPLICATION_BATCH_SIZE=1000
+SELFHEALING_MULTIREGION_REPLICATION_QUEUE_SIZE=100000
+SELFHEALING_MULTIREGION_REPLICATION_WORKER_COUNT=4
+SELFHEALING_MULTIREGION_REPLICATION_INTERVAL_SECONDS=0.5
+
+# 페일오버
+SELFHEALING_MULTIREGION_FAILOVER_COOLDOWN_SECONDS=30
+
+# Clock Skew
+SELFHEALING_MULTIREGION_CLOCK_SKEW_TOLERANCE_MS=5
+
+# Lag 임계치
+SELFHEALING_MULTIREGION_REPLICATION_LAG_WARNING_MS=500
+SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
+```
+
+---
+
+## 9. 구현 체크리스트 (업데이트)
+
+### 9.1 P0 (필수)
+
+- [ ] `multiregion/quorum.py` - Quorum Witness (Split-brain 방지)
+- [ ] `multiregion/conflict.py` - Tie-breaking 룰 적용
+- [ ] `multiregion/health_monitor.py` - Lag 모니터링 및 DEGRADED 전환
+- [ ] `multiregion/replicator.py` - 이벤트 필터링
+- [ ] `idempotency_service.py` - Recovery Action 멱등성 키
+
+### 9.2 P1 (권장)
+
+- [ ] `multiregion/time_sync.py` - AWS Time Sync 상태 모니터링
+- [ ] `multiregion/router.py` - Service-based Locality
+- [ ] `multiregion/secure_client.py` - mTLS 적용
+
+### 9.3 P2 (선택)
+
+- [ ] 아키텍처 다이어그램 업데이트
+- [ ] Chaos Engineering 테스트 시나리오
+
+---
+
+## 10. 관련 문서
+
+- [174_MISSING_SYSTEMS_MASTER_PLAN.md](174_MISSING_SYSTEMS_MASTER_PLAN.md) - 마스터 플랜
+- [175_KAFKA_EVENT_BUS_IMPLEMENTATION.md](175_KAFKA_EVENT_BUS_IMPLEMENTATION.md) - Kafka 구현
+- [cluster_identity.py](../../packages/selfhealing-python/src/selfhealing/core/cluster_identity.py) - 클러스터 식별
+- [time_provider.py](../../packages/selfhealing-python/src/selfhealing/core/time_provider.py) - 시간 제공자
+- [idempotency_service.py](../../packages/selfhealing-python/src/selfhealing/services/idempotency_service.py) - 멱등성 서비스
+
+---
+
+## 11. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2026-02-04 | 초안 작성 |
+| 1.1.0 | 2026-02-04 | 아키텍처 리뷰 보완 (8장 추가) |
