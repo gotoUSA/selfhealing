@@ -287,6 +287,12 @@ from selfhealing.api.django.views.grafana_webhook import (
     GrafanaAlertWebhookTestView,
 )
 
+# Meta-Watchdog API Views (Self-Healing 시스템 자체 모니터링)
+from selfhealing.api.django.views.meta_watchdog import (
+    MetaWatchdogLivenessView,
+    MetaWatchdogStatusView,
+)
+
 app_name = "selfhealing"
 
 urlpatterns = [
@@ -1378,6 +1384,22 @@ urlpatterns += [
         "recovery/widget/",
         RecoveryDashboardWidgetView.as_view(),
         name="recovery-widget",
+    ),
+    # =========================================================================
+    # Meta-Watchdog API - Self-Healing 시스템 자체 모니터링
+    # Reference: docs/self_healing/middleware_system/177_SELF_HEALING_META_WATCHDOG.md
+    # =========================================================================
+    # Liveness Probe (K8s용 - Watchdog 루프 stuck 감지)
+    path(
+        "health/meta-watchdog/",
+        MetaWatchdogLivenessView.as_view(),
+        name="meta-watchdog-liveness",
+    ),
+    # Status (전체 상태 및 컴포넌트별 상태 조회)
+    path(
+        "meta/status/",
+        MetaWatchdogStatusView.as_view(),
+        name="meta-watchdog-status",
     ),
     # =========================================================================
     # Canary Rollout API - 설정 변경의 점진적 배포

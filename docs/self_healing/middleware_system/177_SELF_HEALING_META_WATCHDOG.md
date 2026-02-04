@@ -2953,9 +2953,10 @@ urlpatterns = [
 ### 8.3 API & 인프라
 
 - [x] `api/django/views/meta_watchdog.py` 구현 (Liveness Endpoint)
-- [ ] URL 라우팅 설정
+- [x] URL 라우팅 설정
 - [x] `k8s/selfhealing-watchdog-rbac.yaml` 생성
-- [ ] Django AppConfig 통합
+- [x] Django AppConfig 통합
+- [x] Audit Recorder 통합 (`_attempt_recovery`에서 RecoveryAuditRecorder 호출)
 
 ### 8.4 테스트
 

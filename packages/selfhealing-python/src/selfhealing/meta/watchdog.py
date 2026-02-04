@@ -256,7 +256,9 @@ class SelfHealerWatchdog:
 
     def _attempt_recovery(self, component: str, result: ProbeResult) -> bool:
         """
-        자동 복구 시도.
+        자동 복구 시도 (Audit 연동).
+
+        복구 전후에 RecoveryAuditRecorder를 통해 감사 로그를 기록합니다.
 
         Args:
             component: 컴포넌트 이름
@@ -267,6 +269,14 @@ class SelfHealerWatchdog:
         """
         start_time = time.time()
         success = False
+        session_id = f"meta-watchdog-{component}-{int(start_time)}"
+
+        # Audit Recorder 획득 (선택적 - 없어도 복구는 진행)
+        recorder = self._get_recovery_audit_recorder()
+
+        # 복구 시작 Audit
+        if recorder:
+            self._record_recovery_start_audit(recorder, session_id, component, result)
 
         try:
             if component == "circuit_breaker":
@@ -282,6 +292,11 @@ class SelfHealerWatchdog:
                 return False
 
             duration_ms = (time.time() - start_time) * 1000
+
+            # 복구 완료/실패 Audit
+            if recorder:
+                self._record_recovery_complete_audit(recorder, session_id, component, success, duration_ms)
+
             logger.info(
                 f"[SelfHealerWatchdog] Recovery {component}: " f"{'success' if success else 'failed'} ({duration_ms:.1f}ms)"
             )
@@ -289,8 +304,111 @@ class SelfHealerWatchdog:
             return success
 
         except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+
+            # 복구 실패 Audit
+            if recorder:
+                self._record_recovery_failed_audit(recorder, session_id, component, str(e), duration_ms)
+
             logger.error(f"[SelfHealerWatchdog] Recovery failed for {component}: {e}")
             return False
+
+    def _get_recovery_audit_recorder(self) -> Any:
+        """RecoveryAuditRecorder 획득 (선택적)."""
+        try:
+            from selfhealing.services.coordination.recovery_audit import (
+                get_recovery_audit_recorder,
+            )
+
+            return get_recovery_audit_recorder()
+        except ImportError:
+            return None
+        except Exception:
+            return None
+
+    def _record_recovery_start_audit(
+        self,
+        recorder: Any,
+        session_id: str,
+        component: str,
+        result: ProbeResult,
+    ) -> None:
+        """복구 시작 Audit 기록."""
+        try:
+            from selfhealing.services.coordination.recovery_audit import (
+                RecoveryAuditEventType,
+            )
+
+            recorder.record_recovery_event(
+                event_type=RecoveryAuditEventType.RECOVERY_STARTED,
+                session_id=session_id,
+                namespace="meta-watchdog",
+                step_type=f"recover_{component}",
+                executed_by="meta-watchdog",
+                metadata={
+                    "component": component,
+                    "probe_status": result.status.value,
+                    "probe_error": result.error,
+                    "probe_details": result.details,
+                },
+            )
+        except Exception as e:
+            logger.debug(f"[SelfHealerWatchdog] Audit start record failed: {e}")
+
+    def _record_recovery_complete_audit(
+        self,
+        recorder: Any,
+        session_id: str,
+        component: str,
+        success: bool,
+        duration_ms: float,
+    ) -> None:
+        """복구 완료 Audit 기록."""
+        try:
+            from selfhealing.services.coordination.recovery_audit import (
+                RecoveryAuditEventType,
+            )
+
+            event_type = RecoveryAuditEventType.RECOVERY_COMPLETED if success else RecoveryAuditEventType.RECOVERY_STEP_FAILED
+
+            recorder.record_recovery_event(
+                event_type=event_type,
+                session_id=session_id,
+                namespace="meta-watchdog",
+                step_type=f"recover_{component}",
+                executed_by="meta-watchdog",
+                success=success,
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
+            logger.debug(f"[SelfHealerWatchdog] Audit complete record failed: {e}")
+
+    def _record_recovery_failed_audit(
+        self,
+        recorder: Any,
+        session_id: str,
+        component: str,
+        error_message: str,
+        duration_ms: float,
+    ) -> None:
+        """복구 실패 Audit 기록."""
+        try:
+            from selfhealing.services.coordination.recovery_audit import (
+                RecoveryAuditEventType,
+            )
+
+            recorder.record_recovery_event(
+                event_type=RecoveryAuditEventType.RECOVERY_STEP_FAILED,
+                session_id=session_id,
+                namespace="meta-watchdog",
+                step_type=f"recover_{component}",
+                executed_by="meta-watchdog",
+                success=False,
+                error_message=error_message,
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
+            logger.debug(f"[SelfHealerWatchdog] Audit failed record failed: {e}")
 
     def _recover_circuit_breaker(self, result: ProbeResult) -> bool:
         """
