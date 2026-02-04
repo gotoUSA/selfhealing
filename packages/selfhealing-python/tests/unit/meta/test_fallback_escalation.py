@@ -129,14 +129,29 @@ class TestDrainToFile:
 
     def test_drain_to_file(self, handler, temp_log_path):
         """파일로 드레인 테스트."""
-        # 메모리 버퍼에 추가
-        handler._memory_buffer.append({"component": "redis"})
-        handler._memory_buffer.append({"component": "postgres"})
+        # 메모리 버퍼에 올바른 엔트리 형식으로 추가
+        handler._memory_buffer.append(
+            {
+                "component": "redis",
+                "title": "Redis Down",
+                "timestamp": "2024-01-01T00:00:00Z",
+            }
+        )
+        handler._memory_buffer.append(
+            {
+                "component": "postgres",
+                "title": "Postgres Down",
+                "timestamp": "2024-01-01T00:00:00Z",
+            }
+        )
 
         drained_count = handler.drain_to_file()
 
         assert drained_count == 2
-        assert handler.get_pending_count() == 0
+        # drain 후 메모리 버퍼는 비어있어야 함
+        assert len(handler._memory_buffer) == 0
+        # 파일에 기록되었으므로 파일에서 읽을 수 있음
+        assert temp_log_path.exists()
 
     def test_drain_to_file_empty_buffer(self, handler):
         """빈 버퍼 드레인."""

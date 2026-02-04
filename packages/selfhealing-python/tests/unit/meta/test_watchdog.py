@@ -57,21 +57,22 @@ class TestSelfHealerWatchdog:
     @pytest.fixture
     def mock_probe_manager(self):
         """Mock probe manager."""
-        from selfhealing.meta.health_probe import HealthProbeResult, HealthStatus
+        from datetime import datetime, timezone
+        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
-            "redis": HealthProbeResult(
-                component_name="redis",
+            "redis": ProbeResult(
+                component="redis",
                 status=HealthStatus.HEALTHY,
-                message="OK",
                 latency_ms=10,
+                timestamp=datetime.now(timezone.utc),
             ),
-            "celery": HealthProbeResult(
-                component_name="celery",
+            "celery": ProbeResult(
+                component="celery",
                 status=HealthStatus.HEALTHY,
-                message="OK",
                 latency_ms=15,
+                timestamp=datetime.now(timezone.utc),
             ),
         }
         manager.get_overall_status.return_value = HealthStatus.HEALTHY
@@ -156,21 +157,23 @@ class TestHealthCheck:
     @pytest.fixture
     def mock_probe_manager_unhealthy(self):
         """비정상 상태 Mock probe manager."""
-        from selfhealing.meta.health_probe import HealthProbeResult, HealthStatus
+        from datetime import datetime, timezone
+        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
-            "redis": HealthProbeResult(
-                component_name="redis",
+            "redis": ProbeResult(
+                component="redis",
                 status=HealthStatus.UNHEALTHY,
-                message="Connection refused",
                 latency_ms=0,
+                timestamp=datetime.now(timezone.utc),
+                error="Connection refused",
             ),
-            "celery": HealthProbeResult(
-                component_name="celery",
+            "celery": ProbeResult(
+                component="celery",
                 status=HealthStatus.HEALTHY,
-                message="OK",
                 latency_ms=15,
+                timestamp=datetime.now(timezone.utc),
             ),
         }
         manager.get_overall_status.return_value = HealthStatus.UNHEALTHY
@@ -206,15 +209,17 @@ class TestDryRunMode:
     @pytest.fixture
     def mock_probe_manager(self):
         """Mock probe manager."""
-        from selfhealing.meta.health_probe import HealthProbeResult, HealthStatus
+        from datetime import datetime, timezone
+        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
-            "redis": HealthProbeResult(
-                component_name="redis",
+            "redis": ProbeResult(
+                component="redis",
                 status=HealthStatus.UNHEALTHY,
-                message="Failed",
                 latency_ms=0,
+                timestamp=datetime.now(timezone.utc),
+                error="Failed",
             ),
         }
         manager.get_overall_status.return_value = HealthStatus.UNHEALTHY
@@ -308,15 +313,16 @@ class TestSelfCircuitBreaker:
     @pytest.fixture
     def mock_probe_manager(self):
         """Mock probe manager."""
-        from selfhealing.meta.health_probe import HealthProbeResult, HealthStatus
+        from datetime import datetime, timezone
+        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
-            "redis": HealthProbeResult(
-                component_name="redis",
+            "redis": ProbeResult(
+                component="redis",
                 status=HealthStatus.HEALTHY,
-                message="OK",
                 latency_ms=10,
+                timestamp=datetime.now(timezone.utc),
             ),
         }
         manager.get_overall_status.return_value = HealthStatus.HEALTHY
@@ -361,15 +367,17 @@ class TestConsecutiveFailures:
     @pytest.fixture
     def mock_probe_manager_failing(self):
         """실패하는 Mock probe manager."""
-        from selfhealing.meta.health_probe import HealthProbeResult, HealthStatus
+        from datetime import datetime, timezone
+        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
-            "redis": HealthProbeResult(
-                component_name="redis",
+            "redis": ProbeResult(
+                component="redis",
                 status=HealthStatus.UNHEALTHY,
-                message="Failed",
                 latency_ms=0,
+                timestamp=datetime.now(timezone.utc),
+                error="Failed",
             ),
         }
         manager.get_overall_status.return_value = HealthStatus.UNHEALTHY

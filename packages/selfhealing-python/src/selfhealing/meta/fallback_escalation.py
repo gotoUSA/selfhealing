@@ -73,7 +73,7 @@ class FallbackEscalationHandler:
             max_buffer_size: 메모리 버퍼 최대 크기
         """
         self._log_path = Path(log_path) if log_path else DEFAULT_ESCALATION_LOG_PATH
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # 재진입 가능 락 (drain_to_file에서 _write_to_file 호출 시 필요)
         self._memory_buffer: list[dict[str, Any]] = []
         self._max_buffer_size = max_buffer_size
 
