@@ -1818,11 +1818,52 @@ class LeaderElectorMetrics:
 - [x] Prometheus 메트릭 (6.7) ✅ 2026-02-05
 
 ### 7.3 연동 및 테스트
-- [ ] DLQ Consumer 연동
-- [ ] Scheduler 연동
+- [ ] DLQ Consumer 연동 ⚠️ (하단 참조)
+- [ ] Scheduler 연동 ⚠️ (하단 참조)
 - [x] 단위 테스트 작성 ✅ 2026-02-05 (70개 테스트 통과)
-- [ ] 통합 테스트 작성
-- [ ] (선택) etcd 구현
+- [x] 통합 테스트 작성 ✅ 2026-02-05 (8개 테스트, Docker Compose)
+- [ ] (선택) etcd 구현 ⚠️ (하단 참조)
+
+### 7.4 연동 및 구현 설명
+
+#### DLQ Consumer / Scheduler 연동
+
+현재 코드베이스에는 **DLQ Consumer**, **Scheduler** 모듈이 별도 파일로 존재하지 않습니다:
+- `celery_tasks/dlq_tasks.py` - DLQ 관련 Celery 태스크
+- `scheduler.py` 파일 없음
+
+Leader Election을 연동하려면 각 모듈에서 아래 패턴을 적용해야 합니다:
+
+```python
+from selfhealing.coordination import get_leader_elector
+
+elector = get_leader_elector("dlq-consumer")
+
+@elector.on_become_leader
+def start_consuming():
+    # 리더가 되면 소비 시작
+    pass
+
+@elector.on_lose_leader
+def stop_consuming():
+    # 리더 상실 시 소비 중지
+    pass
+
+# 서비스 시작 시
+elector.start()
+```
+
+#### etcd 구현
+
+`backend="etcd"`는 **선택 사항**입니다. 문서 4장에 설계만 포함되어 있으며,
+실제 구현이 필요할 경우 `EtcdLeaderElector` 클래스를 추가해야 합니다.
+Redis만으로도 대부분의 사용 사례를 충족합니다.
+
+#### lmdb 오류
+
+`import lmdb` 오류는 **IDE 경고**입니다.
+테스트 파일에 `pytest.mark.skipif(not LMDB_AVAILABLE, ...)` 가드가 있어
+lmdb가 없어도 테스트가 건너뛰어집니다. 실행 오류가 아닙니다.
 
 ---
 
@@ -1833,8 +1874,10 @@ class LeaderElectorMetrics:
 
 ---
 
-## 8. 변경 이력
+## 9. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.2.0 | 2026-02-05 | **통합 테스트 완료**, Docker Compose 8개 테스트, stop() 버그 수정 |
+| 1.1.0 | 2026-02-05 | 고급 기능 추가, 단위 테스트 70개 |
 | 1.0.0 | 2026-02-04 | 초안 작성 |

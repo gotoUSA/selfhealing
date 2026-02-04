@@ -497,21 +497,38 @@ class RedisLeaderElector(LeaderElector):
 
     def stop(self) -> None:
         """리더 선출 프로세스 중지."""
+        was_leader = False
         with self._lock:
+            was_leader = self._state == LeadershipState.LEADER
             self._state = LeadershipState.STOPPING
 
         self._running = False
 
-        # 리더십 반납
-        if self.is_leader():
+        # 리더십 반납 (이전 상태가 LEADER였던 경우)
+        if was_leader:
             self._release_leadership()
-            self._lose_leader(reason="shutdown")
+            # _lose_leader는 _state를 확인하므로 직접 콜백 실행
+            logger.info(f"[LeaderElector] 리더십을 잃었습니다 " f"(resource={self._resource_name}, reason=shutdown)")
+
+            # 메트릭 업데이트
+            metrics = self._get_metrics()
+            if metrics:
+                metrics.set_leader(False)
+                metrics.record_leadership_end()
+
+            # 콜백을 별도 스레드에서 실행 (논블로킹)
+            executor = self._get_callback_executor()
+            for callback in self._on_lose_callbacks:
+                executor.submit(self._safe_callback, callback, "on_lose_leader")
+
+            # Recovery Audit 기록
+            self._record_leadership_event("leader_stepped_down")
 
         # 워커 스레드 종료 대기
         if self._worker:
             self._worker.join(timeout=5.0)
 
-        # 콜백 스레드 풀 종료
+        # 콜백 스레드 풀 종료 (콜백이 완료될 때까지 대기)
         if self._callback_executor:
             self._callback_executor.shutdown(wait=True, cancel_futures=False)
             self._callback_executor = None
