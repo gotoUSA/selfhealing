@@ -71,8 +71,11 @@ fast-json = [
 caching = [
     "cachetools>=5.0.0",
 ]
+disk-buffer = [
+    "lmdb>=1.4.0",
+]
 all = [
-    "selfhealing[django,celery,prometheus,opentelemetry,kafka,fast-json,caching]",
+    "selfhealing[django,celery,prometheus,opentelemetry,kafka,fast-json,caching,disk-buffer]",
 ]
 dev = [
     "selfhealing[all]",

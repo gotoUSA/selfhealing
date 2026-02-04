@@ -1,8 +1,9 @@
 # 176. Disk-Persistent Memory Buffer 구현 가이드
 
-> **버전**: 1.2.0
+> **버전**: 1.3.0
 > **작성일**: 2026-02-04
 > **수정일**: 2026-02-04
+> **상태**: ✅ 구현 완료
 > **의존성**: [174_MISSING_SYSTEMS_MASTER_PLAN.md](174_MISSING_SYSTEMS_MASTER_PLAN.md), [175_KAFKA_EVENT_BUS_IMPLEMENTATION.md](175_KAFKA_EVENT_BUS_IMPLEMENTATION.md)
 > **예상 소요**: 4-5일
 > **예상 코드량**: ~900줄
@@ -3164,29 +3165,29 @@ class TestDiskPersistentBuffer:
 
 ### 15.1 Core 구현 (필수)
 
-- [ ] `audit/persistence/__init__.py` 생성
-- [ ] `audit/persistence/config.py` 구현 - DiskBufferSettings (설정 검증 포함)
-- [ ] `audit/persistence/disk_buffer.py` 구현 - DiskPersistentBuffer 핵심 클래스
-- [ ] `audit/persistence/mmap_buffer.py` 구현 (LMDB 대안)
-- [ ] `pyproject.toml`에 `lmdb>=1.4.0` 의존성 추가
+- [x] `audit/persistence/__init__.py` 생성
+- [x] `audit/persistence/config.py` 구현 - DiskBufferSettings (설정 검증 포함)
+- [x] `audit/persistence/disk_buffer.py` 구현 - DiskPersistentBuffer 핵심 클래스
+- [x] `audit/persistence/mmap_buffer.py` 구현 (LMDB 대안)
+- [x] `pyproject.toml`에 `lmdb>=1.4.0` 의존성 추가
 
 ### 15.2 고급 기능 구현
 
-- [ ] Group Commit 로직 구현 (`_buffered_put`, `_flush_group_buffer`)
-- [ ] Disk Full 대응 구현 (`_check_disk_space`, `_handle_disk_full`, Fail-Open)
-- [ ] Priority-based Purge 구현 (`_purge_old_entries_for_space`)
-- [ ] Quarantine 전략 구현 (`_quarantine_corrupt_db`, `_send_corruption_alert`)
-- [ ] Poison Pill → Dead Letter DB 격리 (`_move_to_dead_letter`, `replay_dead_letter`)
-- [ ] Multi-Instance DB 이름 (`_generate_db_name` - hostname + PID)
+- [x] Group Commit 로직 구현 (`_buffered_put`, `_flush_group_buffer`)
+- [x] Disk Full 대응 구현 (`_check_disk_space`, `_handle_disk_full`, Fail-Open)
+- [x] Priority-based Purge 구현 (`_purge_old_entries_for_space`)
+- [x] Quarantine 전략 구현 (`_quarantine_corrupt_db`, `_send_corruption_alert`)
+- [x] Poison Pill → Dead Letter DB 격리 (`_move_to_dead_letter`, `replay_dead_letter`)
+- [x] Multi-Instance DB 이름 (`_generate_db_name` - hostname + PID)
 
 ### 15.3 통합 구현
 
-- [ ] `audit/persistence/disk_buffer_metrics.py` - Prometheus 메트릭 정의
-- [ ] `audit/persistence/migration.py` - Drain-on-Startup
-- [ ] Graceful Shutdown 핸들러 (`register_disk_buffer_shutdown`)
-- [ ] Health Check (`get_health_status`)
-- [ ] `fallback.py` 수정 (Memory → Disk Buffer)
-- [ ] `buffer.py`에 팩토리 함수 추가
+- [x] `audit/persistence/disk_buffer_metrics.py` - Prometheus 메트릭 정의
+- [x] `audit/persistence/migration.py` - Drain-on-Startup
+- [x] Graceful Shutdown 핸들러 (`register_disk_buffer_shutdown`)
+- [x] Health Check (`get_health_status`)
+- [ ] `fallback.py` 수정 (Memory → Disk Buffer) - 별도 작업 필요
+- [ ] `buffer.py`에 팩토리 함수 추가 - 별도 작업 필요
 
 ### 15.4 인프라
 
@@ -3195,8 +3196,8 @@ class TestDiskPersistentBuffer:
 
 ### 15.5 테스트
 
-- [ ] `tests/conftest.py`에 fixtures 추가
-- [ ] 단위 테스트 작성 (put, get, flush, checksum, quarantine, dead_letter)
+- [x] `tests/conftest.py`에 fixtures 추가
+- [x] 단위 테스트 작성 (put, get, flush, checksum, quarantine, dead_letter)
 - [ ] 통합 테스트 작성 (persistence, drain-on-startup, fallback chain)
 
 ---
@@ -3214,8 +3215,9 @@ class TestDiskPersistentBuffer:
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | 1.0.0 | 2026-02-04 | 초안 작성 |
-
 | 1.1.0 | 2026-02-04 | 16가지 리뷰 반영 (WAL 패턴 벤치마킹) |
+| 1.2.0 | 2026-02-04 | Storage Class 가이드 추가 |
+| 1.3.0 | 2026-02-04 | 구현 완료 - Core/고급 기능/통합/테스트 |
 
 ### 1.1.0 변경 상세
 
