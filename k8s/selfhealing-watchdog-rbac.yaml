@@ -1,0 +1,132 @@
+# Self-Healing Meta-Watchdog RBAC Configuration
+#
+# Meta-Watchdog 전용 RBAC - 복구 작업을 위한 K8s 권한
+#
+# 기능:
+# - Deployment 관리: 복구를 위한 patch/scale 권한
+# - Pod 관리: 상태 확인 및 강제 삭제
+# - Pod 로그 조회: 진단용
+# - Events 조회: 장애 분석용
+#
+# 적용 방법:
+#   kubectl apply -f k8s/selfhealing-watchdog-rbac.yaml
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: selfhealing-watchdog
+  namespace: selfhealing
+  labels:
+    app.kubernetes.io/name: selfhealing-watchdog
+    app.kubernetes.io/component: meta-watchdog
+    app.kubernetes.io/part-of: selfhealing
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: selfhealing-watchdog
+  labels:
+    app.kubernetes.io/name: selfhealing-watchdog
+    app.kubernetes.io/component: meta-watchdog
+rules:
+  # Deployment 관리 - 복구를 위한 patch/scale 권한
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch"]
+
+  # Pod 관리 - 상태 확인 및 강제 삭제
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+
+  # Pod 로그 조회 - 진단용
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  # Events 조회 - 장애 분석용
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list"]
+
+  # ConfigMaps 조회 - 설정 확인용
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: selfhealing-watchdog
+  labels:
+    app.kubernetes.io/name: selfhealing-watchdog
+subjects:
+  - kind: ServiceAccount
+    name: selfhealing-watchdog
+    namespace: selfhealing
+roleRef:
+  kind: ClusterRole
+  name: selfhealing-watchdog
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Namespace-scoped Role for selfhealing namespace
+# More restrictive than ClusterRole for namespace-specific operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: selfhealing-watchdog-ns
+  namespace: selfhealing
+  labels:
+    app.kubernetes.io/name: selfhealing-watchdog
+    app.kubernetes.io/component: meta-watchdog
+rules:
+  # Deployment 관리 (namespace 내)
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "statefulsets"]
+    verbs: ["get", "list", "patch", "update"]
+
+  # Pod 관리 (namespace 내)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete", "watch"]
+
+  # Pod 로그 (namespace 내)
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  # Events (namespace 내)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create"]
+
+  # ConfigMaps/Secrets 조회 (namespace 내)
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+
+  # Services (namespace 내)
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: selfhealing-watchdog-ns
+  namespace: selfhealing
+  labels:
+    app.kubernetes.io/name: selfhealing-watchdog
+subjects:
+  - kind: ServiceAccount
+    name: selfhealing-watchdog
+    namespace: selfhealing
+roleRef:
+  kind: Role
+  name: selfhealing-watchdog-ns
+  apiGroup: rbac.authorization.k8s.io

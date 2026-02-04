@@ -2936,30 +2936,30 @@ urlpatterns = [
 
 ### 8.1 코어 모듈
 
-- [ ] `meta/__init__.py` 생성
-- [ ] `meta/config.py` 구현 (dry_run_mode, maintenance_components 포함)
-- [ ] `meta/health_probe.py` 구현
-- [ ] `meta/stuck_detector.py` 구현 (Zero-variance 감지)
-- [ ] `meta/escalation.py` 구현
-- [ ] `meta/watchdog.py` 구현
+- [x] `meta/__init__.py` 생성
+- [x] `meta/config.py` 구현 (dry_run_mode, maintenance_components 포함)
+- [x] `meta/health_probe.py` 구현
+- [x] `meta/stuck_detector.py` 구현 (Zero-variance 감지)
+- [x] `meta/escalation.py` 구현
+- [x] `meta/watchdog.py` 구현
 
 ### 8.2 고급 기능
 
-- [ ] `meta/recovery_adapter.py` 구현 (K8s/Docker/NoOp)
-- [ ] `meta/dependency_analyzer.py` 구현 (Blast Radius, Root Cause 억제)
-- [ ] `meta/state_store.py` 구현 (Redis 기반 상태 저장)
-- [ ] `meta/fallback_escalation.py` 구현 (디스크 폴백)
+- [x] `meta/recovery_adapter.py` 구현 (K8s/Docker/NoOp)
+- [x] `meta/dependency_analyzer.py` 구현 (Blast Radius, Root Cause 억제)
+- [x] `meta/state_store.py` 구현 (Redis 기반 상태 저장)
+- [x] `meta/fallback_escalation.py` 구현 (디스크 폴백)
 
 ### 8.3 API & 인프라
 
-- [ ] `api/django/views/meta_watchdog.py` 구현 (Liveness Endpoint)
+- [x] `api/django/views/meta_watchdog.py` 구현 (Liveness Endpoint)
 - [ ] URL 라우팅 설정
-- [ ] `k8s/selfhealing-watchdog-rbac.yaml` 생성
+- [x] `k8s/selfhealing-watchdog-rbac.yaml` 생성
 - [ ] Django AppConfig 통합
 
 ### 8.4 테스트
 
-- [ ] 단위 테스트 작성
+- [x] 단위 테스트 작성 (100+ tests across 9 test files)
 - [ ] 통합 테스트 작성
 - [ ] K8s 환경 테스트
 

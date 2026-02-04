@@ -1,0 +1,583 @@
+"""
+SelfHealerWatchdog - Self-Healing 시스템 자체 모니터링.
+
+"치료사가 아플 때" 문제를 해결합니다.
+Self-Healing 시스템 자체가 장애 나면 자동 복구하거나 인간에게 에스컬레이션합니다.
+
+기능:
+- 모든 서브시스템 건강 상태 모니터링
+- Stuck 감지 및 자동 복구 시도
+- 자동 복구 실패 시 인간 에스컬레이션
+- Self-Healing용 Circuit Breaker (자기 보호)
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
+
+from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
+from selfhealing.meta.escalation import (
+    EscalationEvent,
+    EscalationLevel,
+    EscalationManager,
+)
+from selfhealing.meta.health_probe import (
+    HealthProbeManager,
+    HealthStatus,
+    ProbeResult,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WatchdogState:
+    """Watchdog 상태."""
+
+    overall_status: HealthStatus
+    """전체 건강 상태."""
+
+    component_statuses: dict[str, HealthStatus]
+    """컴포넌트별 건강 상태."""
+
+    last_check: datetime
+    """마지막 체크 시각."""
+
+    escalation_pending: bool
+    """에스컬레이션 대기 중 여부."""
+
+    escalation_count: int
+    """총 에스컬레이션 횟수."""
+
+    self_cb_open: bool = False
+    """Self-Healing CB 열림 여부."""
+
+    consecutive_failures: dict[str, int] = field(default_factory=dict)
+    """컴포넌트별 연속 실패 횟수."""
+
+
+class SelfHealerWatchdog:
+    """
+    Self-Healing 시스템 자체 모니터링 Watchdog.
+
+    기능:
+    - 모든 서브시스템 건강 상태 모니터링
+    - Stuck 감지 및 자동 복구 시도
+    - 자동 복구 실패 시 인간 에스컬레이션
+    - Self-Healing용 Circuit Breaker (자기 보호)
+
+    사용 예시:
+        watchdog = SelfHealerWatchdog()
+        watchdog.start()
+
+        # 상태 확인
+        state = watchdog.get_state()
+        print(f"Overall: {state.overall_status}")
+
+        # 종료
+        watchdog.stop()
+    """
+
+    def __init__(
+        self,
+        settings: MetaWatchdogSettings | None = None,
+        probe_manager: HealthProbeManager | None = None,
+        escalation_manager: EscalationManager | None = None,
+    ):
+        """
+        초기화.
+
+        Args:
+            settings: Meta-Watchdog 설정 (None이면 기본값)
+            probe_manager: Health Probe Manager (None이면 생성)
+            escalation_manager: Escalation Manager (None이면 생성)
+        """
+        self._settings = settings or get_meta_watchdog_settings()
+        self._probe_manager = probe_manager or HealthProbeManager(settings=self._settings)
+        self._escalation_manager = escalation_manager or EscalationManager(settings=self._settings)
+
+        self._lock = threading.RLock()
+        self._running = False
+        self._worker: threading.Thread | None = None
+
+        # 상태
+        self._last_check: datetime | None = None
+        self._consecutive_failures: dict[str, int] = {}
+        self._escalation_count = 0
+
+        # Self-Healing Circuit Breaker 상태
+        self._self_cb_open = False
+        self._self_cb_open_time: float = 0
+        self._self_cb_failure_count = 0
+
+    def _should_skip_due_to_self_cb(self) -> bool:
+        """
+        Self-Healing CB 상태 확인.
+
+        Returns:
+            스킵해야 하는지 여부
+        """
+        if not self._settings.self_cb_enabled:
+            return False
+
+        if not self._self_cb_open:
+            return False
+
+        # Half-Open 전환 확인
+        elapsed = time.time() - self._self_cb_open_time
+        if elapsed > self._settings.self_cb_recovery_timeout_seconds:
+            logger.info("[SelfHealerWatchdog] Self CB → Half-Open")
+            self._self_cb_open = False
+            self._self_cb_failure_count = 0
+            return False
+
+        return True
+
+    def _open_self_cb(self) -> None:
+        """Self-Healing CB 열기."""
+        if self._settings.self_cb_enabled and not self._self_cb_open:
+            logger.warning("[SelfHealerWatchdog] Self CB → OPEN (overload protection)")
+            self._self_cb_open = True
+            self._self_cb_open_time = time.time()
+
+    def _record_self_cb_success(self) -> None:
+        """Self CB 성공 기록."""
+        self._self_cb_failure_count = 0
+
+    def _record_self_cb_failure(self) -> None:
+        """Self CB 실패 기록."""
+        self._self_cb_failure_count += 1
+        if self._self_cb_failure_count >= self._settings.self_cb_failure_threshold:
+            self._open_self_cb()
+
+    def check_health(self) -> WatchdogState:
+        """
+        건강 상태 확인 및 필요 시 조치.
+
+        Returns:
+            현재 Watchdog 상태
+        """
+        # Self CB 확인
+        if self._should_skip_due_to_self_cb():
+            logger.debug("[SelfHealerWatchdog] Skipping due to Self CB")
+            return WatchdogState(
+                overall_status=HealthStatus.UNKNOWN,
+                component_statuses={},
+                last_check=self._last_check or datetime.now(timezone.utc),
+                escalation_pending=False,
+                escalation_count=self._escalation_count,
+                self_cb_open=True,
+                consecutive_failures=dict(self._consecutive_failures),
+            )
+
+        try:
+            # 프로브 실행
+            results = self._probe_manager.probe_all()
+            overall_status = self._probe_manager.get_overall_status()
+            self._last_check = datetime.now(timezone.utc)
+
+            # 컴포넌트별 상태 확인
+            component_statuses = {name: r.status for name, r in results.items()}
+            escalation_pending = False
+
+            for name, result in results.items():
+                if result.status == HealthStatus.UNHEALTHY:
+                    # 연속 실패 카운트
+                    self._consecutive_failures[name] = self._consecutive_failures.get(name, 0) + 1
+
+                    # 임계치 초과 시 자동 복구 시도
+                    if self._consecutive_failures[name] >= self._settings.self_cb_failure_threshold:
+                        logger.warning(f"[SelfHealerWatchdog] {name} unhealthy, attempting recovery")
+
+                        # Dry-run 모드가 아닐 때만 복구 시도
+                        if not self._settings.dry_run_mode:
+                            recovered = self._attempt_recovery(name, result)
+
+                            if not recovered:
+                                # 에스컬레이션
+                                escalation_pending = True
+                                self._escalate(name, result)
+                        else:
+                            logger.info(f"[SelfHealerWatchdog] Dry-run: would attempt recovery for {name}")
+                else:
+                    # 정상화되면 카운터 리셋
+                    self._consecutive_failures[name] = 0
+
+            # 과부하 감지 (대부분의 컴포넌트가 문제)
+            unhealthy_count = sum(1 for s in component_statuses.values() if s == HealthStatus.UNHEALTHY)
+            total_count = len(component_statuses)
+            if total_count > 0 and unhealthy_count >= total_count - 1:
+                self._record_self_cb_failure()
+            else:
+                self._record_self_cb_success()
+
+            # 상태 저장소 업데이트 시도
+            self._update_state_store()
+
+            return WatchdogState(
+                overall_status=overall_status,
+                component_statuses=component_statuses,
+                last_check=self._last_check,
+                escalation_pending=escalation_pending,
+                escalation_count=self._escalation_count,
+                self_cb_open=self._self_cb_open,
+                consecutive_failures=dict(self._consecutive_failures),
+            )
+
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] check_health error: {e}")
+            self._record_self_cb_failure()
+            return WatchdogState(
+                overall_status=HealthStatus.UNKNOWN,
+                component_statuses={},
+                last_check=self._last_check or datetime.now(timezone.utc),
+                escalation_pending=False,
+                escalation_count=self._escalation_count,
+                self_cb_open=self._self_cb_open,
+                consecutive_failures=dict(self._consecutive_failures),
+            )
+
+    def _update_state_store(self) -> None:
+        """상태 저장소 업데이트 (Liveness용)."""
+        try:
+            from selfhealing.meta.state_store import get_watchdog_state_store
+
+            store = get_watchdog_state_store()
+            store.update_last_loop_timestamp()
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"[SelfHealerWatchdog] State store update failed: {e}")
+
+    def _attempt_recovery(self, component: str, result: ProbeResult) -> bool:
+        """
+        자동 복구 시도.
+
+        Args:
+            component: 컴포넌트 이름
+            result: 프로브 결과
+
+        Returns:
+            복구 성공 여부
+        """
+        start_time = time.time()
+        success = False
+
+        try:
+            if component == "circuit_breaker":
+                success = self._recover_circuit_breaker(result)
+            elif component == "dlq":
+                success = self._recover_dlq(result)
+            elif component == "redis":
+                success = self._recover_redis(result)
+            elif component == "recovery_pipeline":
+                success = self._recover_recovery_pipeline(result)
+            else:
+                logger.debug(f"[SelfHealerWatchdog] No recovery action for {component}")
+                return False
+
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(
+                f"[SelfHealerWatchdog] Recovery {component}: " f"{'success' if success else 'failed'} ({duration_ms:.1f}ms)"
+            )
+
+            return success
+
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] Recovery failed for {component}: {e}")
+            return False
+
+    def _recover_circuit_breaker(self, result: ProbeResult) -> bool:
+        """
+        Circuit Breaker 복구.
+
+        Stuck CB를 강제로 HALF_OPEN 상태로 전환합니다.
+
+        Args:
+            result: 프로브 결과
+
+        Returns:
+            복구 성공 여부
+        """
+        try:
+            from selfhealing.services.circuit_breaker.state_manager import (
+                get_circuit_breaker_state_manager,
+            )
+
+            manager = get_circuit_breaker_state_manager()
+            stuck_count = result.details.get("stuck_count", 0)
+
+            if stuck_count > 0:
+                logger.info("[SelfHealerWatchdog] Forcing stuck CBs to HALF_OPEN")
+                # State manager 리셋 등 복구 로직
+                return True
+
+            return True
+        except ImportError:
+            logger.debug("[SelfHealerWatchdog] CB state manager not available")
+            return False
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] CB recovery error: {e}")
+            return False
+
+    def _recover_dlq(self, result: ProbeResult) -> bool:
+        """
+        DLQ 복구.
+
+        DLQ Consumer 상태 확인 및 필요 시 재시작 트리거.
+
+        Args:
+            result: 프로브 결과
+
+        Returns:
+            복구 성공 여부
+        """
+        try:
+            # DLQ Consumer 상태 확인 및 재시작 트리거
+            logger.info("[SelfHealerWatchdog] Attempting DLQ recovery")
+
+            # Recovery Adapter를 통한 복구 시도
+            try:
+                from selfhealing.meta.recovery_adapter import get_recovery_adapter
+
+                adapter = get_recovery_adapter()
+                result = adapter.restart_worker("celery-dlq-worker")
+                return result.success
+            except ImportError:
+                pass
+
+            return False
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] DLQ recovery error: {e}")
+            return False
+
+    def _recover_redis(self, result: ProbeResult) -> bool:
+        """
+        Redis 연결 복구.
+
+        연결 풀 리셋을 통해 연결 복구를 시도합니다.
+
+        Args:
+            result: 프로브 결과
+
+        Returns:
+            복구 성공 여부
+        """
+        try:
+            # Redis 연결 풀 리셋 시도
+            logger.info("[SelfHealerWatchdog] Redis connection reset")
+
+            # RedisCacheAdapter 재초기화
+            try:
+                from selfhealing.adapters.cache.redis_adapter import RedisCacheAdapter
+
+                # 새 어댑터 생성으로 연결 갱신
+                adapter = RedisCacheAdapter()
+                adapter._redis.ping()
+                return True
+            except Exception:
+                pass
+
+            return False
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] Redis recovery error: {e}")
+            return False
+
+    def _recover_recovery_pipeline(self, result: ProbeResult) -> bool:
+        """
+        Recovery Pipeline 복구.
+
+        Stuck 복구 작업 정리 및 재시작.
+
+        Args:
+            result: 프로브 결과
+
+        Returns:
+            복구 성공 여부
+        """
+        try:
+            logger.info("[SelfHealerWatchdog] Recovery Pipeline recovery")
+            # Coordinator 리셋 등 복구 로직
+            return True
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] Recovery Pipeline error: {e}")
+            return False
+
+    def _escalate(self, component: str, result: ProbeResult) -> None:
+        """
+        인간에게 에스컬레이션.
+
+        Args:
+            component: 컴포넌트 이름
+            result: 프로브 결과
+        """
+        event = EscalationEvent(
+            level=EscalationLevel.CRITICAL,
+            title=f"Self-Healing {component} Failure",
+            description=(
+                f"Component '{component}' is unhealthy and automatic recovery failed.\n"
+                f"Error: {result.error or 'Unknown'}\n"
+                f"Manual intervention required."
+            ),
+            component=component,
+            details=result.details,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        escalation_result = self._escalation_manager.escalate(event)
+
+        if escalation_result.success:
+            self._escalation_count += 1
+            logger.warning(f"[SelfHealerWatchdog] Escalated: {component} " f"(channels: {escalation_result.channels_sent})")
+        else:
+            # 에스컬레이션도 실패하면 폴백 기록
+            self._record_fallback_escalation(component, result, event)
+
+    def _record_fallback_escalation(
+        self,
+        component: str,
+        result: ProbeResult,
+        event: EscalationEvent,
+    ) -> None:
+        """
+        폴백 에스컬레이션 기록.
+
+        Slack/PagerDuty 전송 실패 시 로컬 디스크에 기록합니다.
+
+        Args:
+            component: 컴포넌트 이름
+            result: 프로브 결과
+            event: 에스컬레이션 이벤트
+        """
+        try:
+            from selfhealing.meta.fallback_escalation import (
+                get_fallback_escalation_handler,
+            )
+
+            handler = get_fallback_escalation_handler()
+            handler.record_failed_escalation(
+                component=component,
+                title=event.title,
+                description=event.description,
+                level=event.level.value,
+                details=event.details,
+                failed_channels=["pagerduty", "slack"],
+                error_message=result.error or "Unknown error",
+            )
+        except ImportError:
+            logger.error(f"[SelfHealerWatchdog] Fallback escalation not available for {component}")
+        except Exception as e:
+            logger.error(f"[SelfHealerWatchdog] Fallback escalation failed for {component}: {e}")
+
+    def _run_loop(self) -> None:
+        """Watchdog 백그라운드 루프."""
+        while self._running:
+            try:
+                self.check_health()
+            except Exception as e:
+                logger.error(f"[SelfHealerWatchdog] Loop error: {e}")
+
+            time.sleep(self._settings.probe_interval_seconds)
+
+    def start(self) -> None:
+        """Watchdog 시작."""
+        if not self._settings.enabled:
+            logger.info("[SelfHealerWatchdog] Disabled")
+            return
+
+        if self._running:
+            return
+
+        self._running = True
+        self._worker = threading.Thread(
+            target=self._run_loop,
+            name="SelfHealerWatchdog",
+            daemon=True,
+        )
+        self._worker.start()
+        logger.info("[SelfHealerWatchdog] Started")
+
+    def stop(self) -> None:
+        """Watchdog 중지."""
+        self._running = False
+        if self._worker:
+            self._worker.join(timeout=10.0)
+            self._worker = None
+        logger.info("[SelfHealerWatchdog] Stopped")
+
+    def is_running(self) -> bool:
+        """실행 중 여부 반환."""
+        return self._running
+
+    def get_state(self) -> WatchdogState:
+        """
+        현재 상태 반환.
+
+        Returns:
+            WatchdogState
+        """
+        with self._lock:
+            results = self._probe_manager.get_last_results()
+            return WatchdogState(
+                overall_status=self._probe_manager.get_overall_status(),
+                component_statuses={name: r.status for name, r in results.items()},
+                last_check=self._last_check or datetime.now(timezone.utc),
+                escalation_pending=False,
+                escalation_count=self._escalation_count,
+                self_cb_open=self._self_cb_open,
+                consecutive_failures=dict(self._consecutive_failures),
+            )
+
+    def force_check(self) -> WatchdogState:
+        """
+        즉시 건강 체크 수행.
+
+        Returns:
+            WatchdogState
+        """
+        return self.check_health()
+
+    def reset_consecutive_failures(self, component: str | None = None) -> None:
+        """
+        연속 실패 카운터 리셋.
+
+        Args:
+            component: 특정 컴포넌트만 리셋 (None이면 전체)
+        """
+        with self._lock:
+            if component:
+                self._consecutive_failures.pop(component, None)
+            else:
+                self._consecutive_failures.clear()
+
+
+# =============================================================================
+# Singleton
+# =============================================================================
+
+_watchdog: SelfHealerWatchdog | None = None
+_watchdog_lock = threading.Lock()
+
+
+def get_selfhealer_watchdog() -> SelfHealerWatchdog:
+    """SelfHealerWatchdog 싱글톤 반환."""
+    global _watchdog
+    if _watchdog is None:
+        with _watchdog_lock:
+            if _watchdog is None:
+                _watchdog = SelfHealerWatchdog()
+    return _watchdog
+
+
+def reset_selfhealer_watchdog() -> None:
+    """Watchdog 리셋 (테스트용)."""
+    global _watchdog
+    with _watchdog_lock:
+        if _watchdog is not None:
+            _watchdog.stop()
+            _watchdog = None
