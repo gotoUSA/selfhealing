@@ -9,10 +9,16 @@ Kafka 통합 테스트용 pytest fixtures.
 from __future__ import annotations
 
 import os
+import sys
 import time
 import uuid
 
 import pytest
+
+# selfhealing 패키지 경로 추가
+_selfhealing_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "packages", "selfhealing-python", "src")
+if os.path.exists(_selfhealing_path):
+    sys.path.insert(0, os.path.abspath(_selfhealing_path))
 
 
 def is_kafka_available() -> bool:
