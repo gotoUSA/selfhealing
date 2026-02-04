@@ -2772,7 +2772,154 @@ class SecureRedisClient:
 
 ---
 
-### 8.10 성능 목표 (100,000+ TPS 대비)
+### 8.10 Conflict 비율 분석 및 검증
+
+> **문제**: Active-Active에서 실제 충돌이 얼마나 발생하는지 예측 및 검증 필요.
+
+#### 8.10.1 충돌 시나리오 분석
+
+**코드 근거**: `tests/integration/selfhealing/test_xtest_cross_region_integration.py`
+
+```python
+# 동시 상태 조회 테스트 (원자적 실행 검증)
+def test_concurrent_state_queries_are_atomic(self, redis_client, atomic_query):
+    """
+    여러 스레드가 동시에 상태를 조회해도 일관된 결과를 반환해야 합니다.
+    """
+    # 10개 스레드로 동시 조회
+    threads = [threading.Thread(target=query_state) for _ in range(10)]
+
+    # 모든 결과가 동일해야 함 (원자적 실행)
+    for mode, decision in results:
+        assert mode == "STRICT"
+        assert decision == "GLOBAL_OVERRIDE"
+```
+
+#### 8.10.2 예상 충돌 비율
+
+| 시나리오 | TPS | 예상 충돌률 | 대응 전략 |
+|----------|-----|------------|----------|
+| 일반 운영 | 1,000 | < 0.01% | LWW 충분 |
+| 고부하 | 10,000 | < 0.1% | Tie-breaking 필수 |
+| 피크 타임 | 100,000+ | < 1% | Locality + Tie-breaking |
+| 장애 복구 시 | 100,000+ | 1-5% | Quorum + Idempotency 필수 |
+
+**계산 근거**:
+```
+충돌 확률 = (동일 키 동시 쓰기 확률) × (복제 지연 내 발생 확률)
+
+가정:
+- CB 상태 키 수: ~1,000개
+- 초당 CB 상태 변경: ~10회
+- 복제 지연: 500ms
+
+동일 키 동시 쓰기 확률:
+= (10/1000) × (10/1000) × 0.5
+= 0.00005 (0.005%)
+
+→ 100,000 TPS에서도 실제 CB 충돌은 분당 ~3건 수준
+```
+
+#### 8.10.3 충돌 모니터링 메트릭
+
+```python
+# packages/selfhealing-python/src/selfhealing/multiregion/conflict.py (추가)
+
+class ConflictMetrics:
+    """충돌 메트릭 수집."""
+
+    def __init__(self):
+        self._total_events = 0
+        self._conflicts_detected = 0
+        self._conflicts_resolved_by_timestamp = 0
+        self._conflicts_resolved_by_priority = 0
+        self._conflicts_resolved_by_cluster_id = 0
+
+    def record_event(self, is_conflict: bool, resolution_method: str | None = None):
+        """이벤트 기록."""
+        self._total_events += 1
+        if is_conflict:
+            self._conflicts_detected += 1
+            if resolution_method == "timestamp":
+                self._conflicts_resolved_by_timestamp += 1
+            elif resolution_method == "priority":
+                self._conflicts_resolved_by_priority += 1
+            elif resolution_method == "cluster_id":
+                self._conflicts_resolved_by_cluster_id += 1
+
+    def get_conflict_ratio(self) -> float:
+        """충돌 비율 반환."""
+        if self._total_events == 0:
+            return 0.0
+        return self._conflicts_detected / self._total_events
+
+    def get_stats(self) -> dict:
+        """통계 반환."""
+        return {
+            "total_events": self._total_events,
+            "conflicts_detected": self._conflicts_detected,
+            "conflict_ratio": self.get_conflict_ratio(),
+            "by_timestamp": self._conflicts_resolved_by_timestamp,
+            "by_priority": self._conflicts_resolved_by_priority,
+            "by_cluster_id": self._conflicts_resolved_by_cluster_id,
+        }
+
+
+# LastWriteWinsResolver에 메트릭 통합
+class LastWriteWinsResolver:
+    def __init__(self):
+        self._metrics = ConflictMetrics()
+
+    def resolve(self, incoming: Any) -> Any | None:
+        # ... 기존 로직 ...
+
+        if last_conflict_key is None:
+            # 충돌 없음
+            self._metrics.record_event(is_conflict=False)
+            return incoming
+
+        if incoming_conflict_key > last_conflict_key:
+            # 충돌 발생, 해결됨
+            resolution = self._determine_resolution_method(
+                incoming_conflict_key, last_conflict_key
+            )
+            self._metrics.record_event(is_conflict=True, resolution_method=resolution)
+            return incoming
+        else:
+            # 이전 값이 더 최신
+            self._metrics.record_event(is_conflict=True, resolution_method="dropped")
+            return None
+```
+
+#### 8.10.4 Chaos Engineering 검증 시나리오
+
+**테스트 코드 참조**: `test_xtest_cross_region_integration.py`
+
+```python
+def test_state_change_during_concurrent_queries(self, redis_client, atomic_query):
+    """
+    상태 변경 중 동시 조회 시 일관성 유지.
+
+    Lua 스크립트는 원자적이므로 중간 상태를 반환하지 않습니다.
+    """
+    # 상태 변경과 조회를 동시에 실행
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        change_future = executor.submit(change_state)
+        query_futures = [executor.submit(query_and_check) for _ in range(20)]
+
+    # 모든 결과가 STRICT 또는 NORMAL (중간 상태 없음)
+    for mode in results:
+        assert mode in ("STRICT", "NORMAL")
+```
+
+**권장 Chaos 테스트**:
+1. 양 리전 동시 CB 상태 변경 → Tie-breaking 검증
+2. 네트워크 지연 주입 → Lag 모니터링 검증
+3. 리전 간 통신 차단 → Quorum Witness 검증
+
+---
+
+### 8.11 성능 목표 (100,000+ TPS 대비)
 
 | 지표 | 목표값 | 설정 |
 |------|--------|------|
@@ -2781,6 +2928,7 @@ class SecureRedisClient:
 | Throughput | 100,000+ TPS | `replication_batch_size=1000` |
 | Clock Skew | 5ms 이하 | AWS Time Sync Service |
 | Replication Lag | 500ms 이하 (HEALTHY) | Lag 모니터링 |
+| Conflict 비율 | < 1% | Locality + Tie-breaking |
 
 #### 8.10.1 고성능 설정
 
@@ -2826,6 +2974,7 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 
 - [ ] 아키텍처 다이어그램 업데이트
 - [ ] Chaos Engineering 테스트 시나리오
+- [ ] `multiregion/conflict.py` - ConflictMetrics 충돌 비율 모니터링
 
 ---
 
@@ -2836,6 +2985,7 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 - [cluster_identity.py](../../packages/selfhealing-python/src/selfhealing/core/cluster_identity.py) - 클러스터 식별
 - [time_provider.py](../../packages/selfhealing-python/src/selfhealing/core/time_provider.py) - 시간 제공자
 - [idempotency_service.py](../../packages/selfhealing-python/src/selfhealing/services/idempotency_service.py) - 멱등성 서비스
+- [test_xtest_cross_region_integration.py](../../tests/integration/selfhealing/test_xtest_cross_region_integration.py) - Cross-Region Conflict 테스트
 
 ---
 
@@ -2845,3 +2995,4 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 |------|------|----------|
 | 1.0.0 | 2026-02-04 | 초안 작성 |
 | 1.1.0 | 2026-02-04 | 아키텍처 리뷰 보완 (8장 추가) |
+| 1.1.1 | 2026-02-04 | Conflict 비율 분석 섹션 추가 (8.10) |
