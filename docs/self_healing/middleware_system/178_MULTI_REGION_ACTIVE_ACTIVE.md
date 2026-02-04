@@ -2962,7 +2962,7 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 - [x] `multiregion/conflict.py` - Tie-breaking 룰 적용
 - [x] `multiregion/health_monitor.py` - Lag 모니터링 및 DEGRADED 전환
 - [x] `multiregion/replicator.py` - 이벤트 필터링
-- [ ] `idempotency_service.py` - Recovery Action 멱등성 키
+- [x] `idempotency_service.py` - Recovery Action 멱등성 키
 
 ### 9.2 P1 (권장)
 
@@ -2997,3 +2997,4 @@ SELFHEALING_MULTIREGION_REPLICATION_LAG_CRITICAL_MS=2000
 | 1.1.0 | 2026-02-04 | 아키텍처 리뷰 보완 (8장 추가) |
 | 1.1.1 | 2026-02-04 | Conflict 비율 분석 섹션 추가 (8.10) |
 | 1.2.0 | 2026-02-04 | P0/P1 구현 완료 (config, conflict, health_monitor, replicator, quorum, failover, router, time_sync, secure_client) - 126개 단위테스트 통과 |
+| 1.2.1 | 2026-02-04 | idempotency_service.py Recovery Action 멱등성 키 구현 (RECOVERY_ACTION 도메인, for_recovery_action, for_cb_reset, for_pod_restart, for_dlq_retry) - P0 완료 |

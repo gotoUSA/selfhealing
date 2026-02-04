@@ -93,6 +93,13 @@ class IdempotencyDomain(Enum):
     AUTO_ADJUSTMENT = "auto_adjustment"
     """자율 조정 (동일 조정 중복 적용 방지)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Multi-Region Active-Active 복구 액션
+    # 리전 간 동일 복구 액션 중복 실행 방지
+    # ═══════════════════════════════════════════════════════════════════════════
+    RECOVERY_ACTION = "recovery_action"
+    """복구 액션 (CB 리셋, Pod 재시작, DLQ 재시도 등) 중복 실행 방지."""
+
 
 @dataclass
 class IdempotencyKey:
@@ -451,6 +458,155 @@ class IdempotencyKey:
                 "parameter": parameter,
                 "target_value": target_value,
             },
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Multi-Region Active-Active 복구 액션
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    @classmethod
+    def for_recovery_action(
+        cls,
+        action_type: str,
+        target: str,
+        region_id: str,
+        session_id: str,
+    ) -> IdempotencyKey:
+        """
+        복구 액션에 대한 멱등성 키 생성.
+
+        Multi-Region Active-Active 환경에서 리전 간 동일 복구 액션의
+        중복 실행을 방지합니다.
+
+        Args:
+            action_type: 액션 유형 ("cb_reset", "pod_restart", "dlq_retry" 등)
+            target: 대상 (서비스명, Pod 이름 등)
+            region_id: 실행 리전 (예: "ap-northeast-2")
+            session_id: 복구 세션 ID (동일 복구 세션 내 중복 방지)
+
+        Returns:
+            IdempotencyKey for recovery action
+
+        Example:
+            # CB 리셋 전 멱등성 확인
+            key = IdempotencyKey.for_recovery_action(
+                action_type="cb_reset",
+                target="payment_api",
+                region_id="ap-northeast-2",
+                session_id="sess-12345",
+            )
+
+            result = idempotency_service.check(key)
+            if result.is_duplicate:
+                logger.info("Already executed by another region")
+                return
+
+            # 실행
+            circuit_breaker.reset("payment_api")
+        """
+        key = f"recovery:{action_type}:{target}:{session_id}"
+        return cls(
+            domain=IdempotencyDomain.RECOVERY_ACTION,
+            key=key,
+            components={
+                "action_type": action_type,
+                "target": target,
+                "region_id": region_id,
+                "session_id": session_id,
+            },
+        )
+
+    @classmethod
+    def for_cb_reset(
+        cls,
+        service_name: str,
+        region_id: str,
+        trigger_id: str,
+    ) -> IdempotencyKey:
+        """
+        Circuit Breaker 리셋 전용 멱등성 키.
+
+        for_recovery_action의 편의 메서드로, CB 리셋에 특화된 인터페이스를 제공합니다.
+
+        Args:
+            service_name: 서비스명 (예: "payment_api")
+            region_id: 실행 리전 (예: "ap-northeast-2")
+            trigger_id: 트리거 ID (예: recovery session ID)
+
+        Returns:
+            IdempotencyKey for CB reset action
+
+        Example:
+            key = IdempotencyKey.for_cb_reset(
+                service_name="payment_api",
+                region_id="ap-northeast-2",
+                trigger_id="recovery-sess-abc123",
+            )
+
+            if not idempotency_service.check(key).is_duplicate:
+                circuit_breaker.reset("payment_api")
+        """
+        return cls.for_recovery_action(
+            action_type="cb_reset",
+            target=service_name,
+            region_id=region_id,
+            session_id=trigger_id,
+        )
+
+    @classmethod
+    def for_pod_restart(
+        cls,
+        pod_name: str,
+        namespace: str,
+        region_id: str,
+        session_id: str,
+    ) -> IdempotencyKey:
+        """
+        Pod 재시작 전용 멱등성 키.
+
+        Args:
+            pod_name: Pod 이름
+            namespace: Kubernetes 네임스페이스
+            region_id: 실행 리전
+            session_id: 복구 세션 ID
+
+        Returns:
+            IdempotencyKey for pod restart action
+        """
+        target = f"{namespace}/{pod_name}"
+        return cls.for_recovery_action(
+            action_type="pod_restart",
+            target=target,
+            region_id=region_id,
+            session_id=session_id,
+        )
+
+    @classmethod
+    def for_dlq_retry(
+        cls,
+        queue_name: str,
+        message_id: str,
+        region_id: str,
+        session_id: str,
+    ) -> IdempotencyKey:
+        """
+        DLQ 재시도 전용 멱등성 키.
+
+        Args:
+            queue_name: DLQ 큐 이름
+            message_id: 메시지 ID
+            region_id: 실행 리전
+            session_id: 복구 세션 ID
+
+        Returns:
+            IdempotencyKey for DLQ retry action
+        """
+        target = f"{queue_name}:{message_id}"
+        return cls.for_recovery_action(
+            action_type="dlq_retry",
+            target=target,
+            region_id=region_id,
+            session_id=session_id,
         )
 
 

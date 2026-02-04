@@ -251,7 +251,7 @@ class TestAntiFlappingWindowMemory:
         """
         Purpose:
             유사한 값이 max_similar_changes 이상 반복되면 플래핑 감지.
-            
+
         Note:
             max_similar_changes=3일 때, 이미 윈도우에 3개가 있으면 4번째 호출 시 감지됨.
         """
@@ -469,3 +469,186 @@ class TestGetAntiFlappingWindow:
 
         assert window1 is window2
         assert isinstance(window1, AntiFlappingWindow)
+
+
+# =============================================================================
+# Recovery Action Idempotency Tests (Multi-Region Active-Active)
+# =============================================================================
+
+
+class TestRecoveryActionDomain:
+    """RECOVERY_ACTION 도메인 테스트."""
+
+    def test_recovery_action_domain_exists(self):
+        """
+        Purpose:
+            RECOVERY_ACTION 도메인이 정의되어 있는지 확인.
+        """
+        assert hasattr(IdempotencyDomain, "RECOVERY_ACTION")
+        assert IdempotencyDomain.RECOVERY_ACTION.value == "recovery_action"
+
+    def test_recovery_action_domain_value_is_snake_case(self):
+        """
+        Purpose:
+            RECOVERY_ACTION 도메인 값이 snake_case인지 확인.
+        """
+        value = IdempotencyDomain.RECOVERY_ACTION.value
+        assert value == value.lower()
+        assert "_" in value
+
+
+class TestRecoveryActionKeyFactories:
+    """Recovery Action 멱등성 키 팩토리 테스트."""
+
+    def test_for_recovery_action_creates_correct_key(self):
+        """
+        Purpose:
+            for_recovery_action이 올바른 키를 생성하는지 확인.
+        """
+        key = IdempotencyKey.for_recovery_action(
+            action_type="cb_reset",
+            target="payment_api",
+            region_id="ap-northeast-2",
+            session_id="sess-12345",
+        )
+
+        assert key.domain == IdempotencyDomain.RECOVERY_ACTION
+        assert "recovery:cb_reset:payment_api:sess-12345" == key.key
+        assert key.components["action_type"] == "cb_reset"
+        assert key.components["target"] == "payment_api"
+        assert key.components["region_id"] == "ap-northeast-2"
+        assert key.components["session_id"] == "sess-12345"
+
+    def test_for_recovery_action_cache_key_format(self):
+        """
+        Purpose:
+            for_recovery_action의 cache_key가 올바른 형식인지 확인.
+        """
+        key = IdempotencyKey.for_recovery_action(
+            action_type="pod_restart",
+            target="web-pod-abc",
+            region_id="us-east-1",
+            session_id="recovery-001",
+        )
+
+        expected_cache_key = "idempotency:recovery_action:recovery:pod_restart:web-pod-abc:recovery-001"
+        assert key.cache_key == expected_cache_key
+
+    def test_for_cb_reset_creates_correct_key(self):
+        """
+        Purpose:
+            for_cb_reset이 for_recovery_action을 올바르게 래핑하는지 확인.
+        """
+        key = IdempotencyKey.for_cb_reset(
+            service_name="order_service",
+            region_id="ap-northeast-2",
+            trigger_id="trigger-abc123",
+        )
+
+        assert key.domain == IdempotencyDomain.RECOVERY_ACTION
+        assert "cb_reset" in key.key
+        assert "order_service" in key.key
+        assert "trigger-abc123" in key.key
+        assert key.components["action_type"] == "cb_reset"
+        assert key.components["target"] == "order_service"
+        assert key.components["region_id"] == "ap-northeast-2"
+        assert key.components["session_id"] == "trigger-abc123"
+
+    def test_for_pod_restart_creates_correct_key(self):
+        """
+        Purpose:
+            for_pod_restart이 올바른 키를 생성하는지 확인.
+        """
+        key = IdempotencyKey.for_pod_restart(
+            pod_name="web-pod-123",
+            namespace="production",
+            region_id="ap-northeast-2",
+            session_id="sess-xyz",
+        )
+
+        assert key.domain == IdempotencyDomain.RECOVERY_ACTION
+        assert "pod_restart" in key.key
+        assert "production/web-pod-123" in key.key
+        assert key.components["action_type"] == "pod_restart"
+        assert key.components["target"] == "production/web-pod-123"
+
+    def test_for_dlq_retry_creates_correct_key(self):
+        """
+        Purpose:
+            for_dlq_retry가 올바른 키를 생성하는지 확인.
+        """
+        key = IdempotencyKey.for_dlq_retry(
+            queue_name="orders-dlq",
+            message_id="msg-456",
+            region_id="us-west-2",
+            session_id="retry-session-001",
+        )
+
+        assert key.domain == IdempotencyDomain.RECOVERY_ACTION
+        assert "dlq_retry" in key.key
+        assert "orders-dlq:msg-456" in key.key
+        assert key.components["action_type"] == "dlq_retry"
+        assert key.components["target"] == "orders-dlq:msg-456"
+
+    def test_recovery_action_keys_are_unique_per_session(self):
+        """
+        Purpose:
+            동일 액션이라도 세션 ID가 다르면 다른 키가 생성되는지 확인.
+        """
+        key1 = IdempotencyKey.for_cb_reset(
+            service_name="payment",
+            region_id="ap-northeast-2",
+            trigger_id="session-001",
+        )
+        key2 = IdempotencyKey.for_cb_reset(
+            service_name="payment",
+            region_id="ap-northeast-2",
+            trigger_id="session-002",
+        )
+
+        assert key1.key != key2.key
+        assert key1.cache_key != key2.cache_key
+
+    def test_recovery_action_keys_are_same_for_same_session(self):
+        """
+        Purpose:
+            동일 세션 ID면 리전이 달라도 동일 키가 생성되는지 확인.
+            (리전 간 중복 실행 방지 목적)
+        """
+        key_kr = IdempotencyKey.for_cb_reset(
+            service_name="payment",
+            region_id="ap-northeast-2",
+            trigger_id="session-001",
+        )
+        key_us = IdempotencyKey.for_cb_reset(
+            service_name="payment",
+            region_id="us-east-1",
+            trigger_id="session-001",
+        )
+
+        # 키는 동일해야 함 (세션 기반)
+        assert key_kr.key == key_us.key
+        assert key_kr.cache_key == key_us.cache_key
+
+        # 컴포넌트에서 리전 정보는 다름 (디버깅/감사용)
+        assert key_kr.components["region_id"] != key_us.components["region_id"]
+
+    def test_recovery_action_hash_is_consistent(self):
+        """
+        Purpose:
+            동일 입력에 대해 해시가 일관되게 생성되는지 확인.
+        """
+        key1 = IdempotencyKey.for_recovery_action(
+            action_type="cb_reset",
+            target="service-a",
+            region_id="region-1",
+            session_id="sess-001",
+        )
+        key2 = IdempotencyKey.for_recovery_action(
+            action_type="cb_reset",
+            target="service-a",
+            region_id="region-1",
+            session_id="sess-001",
+        )
+
+        assert key1.hash == key2.hash
