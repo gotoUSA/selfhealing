@@ -177,6 +177,10 @@ class AsyncHealingLogger:
     _overflow_policy: QueueOverflowPolicy = QueueOverflowPolicy.DROP_NEWEST
     _max_queue_size: int = 5000
 
+    # 성능2: atomic 카운터 (qsize() 대신 사용)
+    _queue_count: int = 0
+    _queue_count_lock = threading.Lock()
+
     # 재시도 관련
     _retry_policy: BatchRetryPolicy = BatchRetryPolicy()
     _pending_retries: list[tuple[list[dict], int, float]] = []
@@ -422,29 +426,37 @@ class AsyncHealingLogger:
 
     @classmethod
     def _enqueue_with_backpressure(cls, prioritized: PrioritizedEvent) -> None:
-        """배압 전략을 적용하여 큐에 추가."""
+        """배압 전략을 적용하여 큐에 추가 (성능2: atomic 카운터 사용)."""
         if cls._priority_queue is None:
             return
 
         try:
-            # Priority Queue는 maxsize가 없으므로 별도로 크기 체크
-            if cls._priority_queue.qsize() >= cls._max_queue_size:
-                with cls._lock:
+            # 성능2: qsize() 대신 atomic 카운터로 크기 체크 (Lock 범위 최소화)
+            with cls._queue_count_lock:
+                current_count = cls._queue_count
+                is_full = current_count >= cls._max_queue_size
+
+                if is_full:
                     cls._stats["queue_overflows"] += 1
 
-                if cls._overflow_policy == QueueOverflowPolicy.DROP_NEWEST:
-                    logger.warning("[AsyncHealingLogger] Queue full, dropping newest event")
-                    return
-                elif cls._overflow_policy == QueueOverflowPolicy.DROP_OLDEST:
-                    # 가장 오래된 이벤트 제거 후 새 이벤트 추가
-                    try:
-                        cls._priority_queue.get_nowait()
-                    except queue.Empty:
-                        pass
-                    logger.warning("[AsyncHealingLogger] Queue full, dropping oldest event")
-                # BLOCK은 put() 사용 (Non-blocking 위반이므로 권장 안함)
+                    if cls._overflow_policy == QueueOverflowPolicy.DROP_NEWEST:
+                        logger.warning("[AsyncHealingLogger] Queue full, dropping newest event")
+                        return
+                    elif cls._overflow_policy == QueueOverflowPolicy.DROP_OLDEST:
+                        # 성능2: atomic하게 get + put 수행
+                        try:
+                            cls._priority_queue.get_nowait()
+                            # 카운터는 그대로 (get 후 put이므로)
+                        except queue.Empty:
+                            pass
+                        logger.warning("[AsyncHealingLogger] Queue full, dropping oldest event")
+                        # DROP_OLDEST에서는 아래에서 put
+                    # BLOCK은 put() 사용 (Non-blocking 위반이므로 권장 안함)
 
-            cls._priority_queue.put_nowait(prioritized)
+                # 큐에 추가하고 카운터 증가
+                cls._priority_queue.put_nowait(prioritized)
+                if not is_full:
+                    cls._queue_count += 1
 
         except queue.Full:
             with cls._lock:
@@ -455,6 +467,7 @@ class AsyncHealingLogger:
     def flush(cls) -> None:
         """수동 플러시 (즉시 모든 대기 이벤트 전송)"""
         events = []
+        extracted_count = 0
 
         # Priority Queue에서 모든 이벤트 추출
         if cls._priority_queue:
@@ -462,6 +475,7 @@ class AsyncHealingLogger:
                 try:
                     prioritized = cls._priority_queue.get_nowait()
                     events.append(prioritized.event)
+                    extracted_count += 1
                 except queue.Empty:
                     break
 
@@ -470,8 +484,14 @@ class AsyncHealingLogger:
             while not cls._queue.empty():
                 try:
                     events.append(cls._queue.get_nowait())
+                    extracted_count += 1
                 except queue.Empty:
                     break
+
+        # 성능2: 카운터 업데이트
+        if extracted_count > 0:
+            with cls._queue_count_lock:
+                cls._queue_count = max(0, cls._queue_count - extracted_count)
 
         if events:
             cls._flush_batch(events)
@@ -481,11 +501,9 @@ class AsyncHealingLogger:
         """로거 통계 조회"""
         with cls._lock:
             stats = cls._stats.copy()
-            # 현재 큐 크기 추가
-            if cls._priority_queue:
-                stats["current_queue_size"] = cls._priority_queue.qsize()
-            else:
-                stats["current_queue_size"] = 0
+            # 성능2: atomic 카운터 사용
+            with cls._queue_count_lock:
+                stats["current_queue_size"] = cls._queue_count
             return stats
 
     @classmethod
@@ -525,6 +543,10 @@ class AsyncHealingLogger:
             try:
                 if cls._priority_queue:
                     prioritized = cls._priority_queue.get(timeout=0.5)
+
+                    # 성능2: 카운터 감소
+                    with cls._queue_count_lock:
+                        cls._queue_count = max(0, cls._queue_count - 1)
 
                     if prioritized.priority == EventPriority.CRITICAL:
                         # CRITICAL은 별도 배치로 즉시 처리

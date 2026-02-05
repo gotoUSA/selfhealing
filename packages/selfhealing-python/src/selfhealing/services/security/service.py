@@ -17,6 +17,7 @@ import re
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from selfhealing.audit.masking import mask_ip
 from selfhealing.services.audit import log_security_violation_audit
 from selfhealing.services.security.models import (
     SecurityConfig,
@@ -134,11 +135,7 @@ class SecurityViolationService:
         Returns:
             SecurityViolationResult with incident ID and action taken
         """
-        violation_type_str = (
-            violation_type.value
-            if isinstance(violation_type, ViolationType)
-            else violation_type
-        )
+        violation_type_str = violation_type.value if isinstance(violation_type, ViolationType) else violation_type
 
         try:
             # Extract request information
@@ -146,9 +143,7 @@ class SecurityViolationService:
             user_agent = request_info.get("user_agent", "") if request_info else ""
 
             # Determine severity
-            severity = SEVERITY_BY_VIOLATION_TYPE.get(
-                violation_type_str, Severity.MEDIUM
-            )
+            severity = SEVERITY_BY_VIOLATION_TYPE.get(violation_type_str, Severity.MEDIUM)
 
             # Create incident record via repository
             incident = self.repository.create(
@@ -181,11 +176,7 @@ class SecurityViolationService:
             log_security_violation_audit(
                 violation_type=violation_type_str,
                 action="handle_violation",
-                target=(
-                    f"ip:{source_ip}"
-                    if source_ip
-                    else f"user:{user_id}" if user_id else "unknown"
-                ),
+                target=(f"ip:{source_ip}" if source_ip else f"user:{user_id}" if user_id else "unknown"),
                 result="success",
                 severity=severity.value,
                 operator="system",
@@ -200,13 +191,9 @@ class SecurityViolationService:
 
             # Trigger notification (async if possible)
             try:
-                self._send_security_notification(
-                    incident.id, violation_type_str, severity.value
-                )
+                self._send_security_notification(incident.id, violation_type_str, severity.value)
             except Exception as e:
-                logger.error(
-                    f"[Security Violation] Notification failed but incident saved: {e}"
-                )
+                logger.error(f"[Security Violation] Notification failed but incident saved: {e}")
 
             # CRITICAL 보안 위반 시 EventBus 연동
             if severity == Severity.CRITICAL:
@@ -304,9 +291,7 @@ class SecurityViolationService:
 
         elif violation_type == ViolationType.RATE_LIMIT_ABUSE.value:
             if source_ip:
-                action_taken = self._temporary_ip_ban(
-                    source_ip, hours=self.config.temporary_ban_hours
-                )
+                action_taken = self._temporary_ip_ban(source_ip, hours=self.config.temporary_ban_hours)
             else:
                 action_taken = "Rate limit abuse detected but no IP"
 
@@ -382,15 +367,15 @@ class SecurityViolationService:
             ttl=timedelta(seconds=self.config.suspicious_ip_cache_timeout),
         )
 
-        logger.info(
-            f"[Security] Suspicious IP logged: {ip_address} (count: {new_count})"
-        )
+        # 보안: 로그에는 마스킹된 IP만 기록
+        masked_ip = mask_ip(ip_address)
+        logger.info(f"[Security] Suspicious IP logged: {masked_ip} (count: {new_count})")
 
         if new_count >= self.config.permanent_ban_threshold:
             self._permanent_ip_ban(ip_address)
-            return f"IP {ip_address} marked for permanent ban (violations: {new_count})"
+            return f"IP {masked_ip} marked for permanent ban (violations: {new_count})"
 
-        return f"IP {ip_address} logged for monitoring (violations: {new_count})"
+        return f"IP {masked_ip} logged for monitoring (violations: {new_count})"
 
     def _temporary_ip_ban(self, ip_address: str, hours: int = 1) -> str:
         """Temporarily ban an IP address."""
@@ -400,7 +385,9 @@ class SecurityViolationService:
             {"banned": True, "type": "temporary"},
             ttl=timedelta(hours=hours),
         )
-        logger.info(f"[Security] IP temporarily banned: {ip_address} for {hours} hours")
+        # 보안: 로그에는 마스킹된 IP만 기록
+        masked_ip = mask_ip(ip_address)
+        logger.info(f"[Security] IP temporarily banned: {masked_ip} for {hours} hours")
 
         # === Audit 기록: 임시 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
         log_security_violation_audit(
@@ -420,7 +407,9 @@ class SecurityViolationService:
         """Permanently ban an IP address."""
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
         self.cache.set(cache_key, {"banned": True, "type": "permanent"}, ttl=None)
-        logger.warning(f"[Security] IP permanently banned: {ip_address}")
+        # 보안: 로그에는 마스킹된 IP만 기록
+        masked_ip = mask_ip(ip_address)
+        logger.warning(f"[Security] IP permanently banned: {masked_ip}")
 
         # === Audit 기록: 영구 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
         log_security_violation_audit(
@@ -449,6 +438,46 @@ class SecurityViolationService:
         ban_info = self.cache.get(cache_key)
         return ban_info is not None and ban_info.get("banned", False)
 
+    # 보안3: 정규식을 클래스 레벨에서 사전 컴파일 (ReDoS 방지 및 성능 개선)
+    _SENSITIVE_FIELDS: frozenset[str] = frozenset(
+        {
+            "password",
+            "new_password",
+            "old_password",
+            "token",
+            "access_token",
+            "refresh_token",
+            "api_key",
+            "secret",
+            "card_number",
+            "cvv",
+            "cvc",
+            "credit_card",
+            "private_key",
+            "secret_key",
+            "connection_string",
+            "db_password",
+            "redis_password",
+        }
+    )
+
+    _INTERNAL_IP_PATTERNS: tuple[re.Pattern, ...] = (
+        re.compile(r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
+        re.compile(r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"),
+        re.compile(r"192\.168\.\d{1,3}\.\d{1,3}"),
+    )
+
+    _SERVER_PATH_PATTERNS: tuple[re.Pattern, ...] = (
+        re.compile(r"/home/[^/\s]+"),
+        re.compile(r"/var/[^/\s]+/[^/\s]+"),
+        re.compile(r"/etc/[^/\s]+"),
+        re.compile(r"[A-Z]:\\Users\\[^\\\s]+", re.IGNORECASE),
+        re.compile(r"/app/[^/\s]+/[^/\s]+"),
+    )
+
+    # 보안3: 입력 문자열 최대 길이 제한 (ReDoS 방지)
+    _MAX_SANITIZE_STRING_LENGTH: int = 10000
+
     def _sanitize_request_data(self, raw_data: dict[str, Any] | None) -> dict[str, Any]:
         """
         Sanitize request data by removing sensitive fields and masking IPs/paths.
@@ -456,65 +485,36 @@ class SecurityViolationService:
         FAIL-SECURE DESIGN:
         - If masking fails for any reason, return empty dict (not raw data)
         - This prevents accidental exposure of sensitive information
+        - Input string length is limited to prevent ReDoS attacks
         """
         if not raw_data:
             return {}
 
         try:
-            sensitive_fields = {
-                "password",
-                "new_password",
-                "old_password",
-                "token",
-                "access_token",
-                "refresh_token",
-                "api_key",
-                "secret",
-                "card_number",
-                "cvv",
-                "cvc",
-                "credit_card",
-                "private_key",
-                "secret_key",
-                "connection_string",
-                "db_password",
-                "redis_password",
-            }
-
-            internal_ip_patterns = [
-                re.compile(r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}"),
-                re.compile(r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"),
-                re.compile(r"192\.168\.\d{1,3}\.\d{1,3}"),
-            ]
-
-            server_path_patterns = [
-                re.compile(r"/home/[^/\s]+"),
-                re.compile(r"/var/[^/\s]+/[^/\s]+"),
-                re.compile(r"/etc/[^/\s]+"),
-                re.compile(r"[A-Z]:\\Users\\[^\\\s]+", re.IGNORECASE),
-                re.compile(r"/app/[^/\s]+/[^/\s]+"),
-            ]
 
             def mask_string(value: str) -> str:
+                # 보안3: 긴 문자열은 잘라서 처리 (ReDoS 방지)
+                if len(value) > self._MAX_SANITIZE_STRING_LENGTH:
+                    value = value[: self._MAX_SANITIZE_STRING_LENGTH] + "[TRUNCATED]"
                 result = value
-                for pattern in internal_ip_patterns:
+                for pattern in self._INTERNAL_IP_PATTERNS:
                     result = pattern.sub("[INTERNAL_IP]", result)
-                for pattern in server_path_patterns:
+                for pattern in self._SERVER_PATH_PATTERNS:
                     result = pattern.sub("[SERVER_PATH]", result)
                 return result
 
-            def sanitize(data: Any) -> Any:
+            def sanitize(data: Any, depth: int = 0) -> Any:
+                # 보안3: 재귀 깊이 제한 (스택 오버플로우 방지)
+                if depth > 20:
+                    return "[MAX_DEPTH_EXCEEDED]"
                 if isinstance(data, dict):
                     return {
-                        k: (
-                            "[REDACTED]"
-                            if k.lower() in sensitive_fields
-                            else sanitize(v)
-                        )
+                        k: ("[REDACTED]" if k.lower() in self._SENSITIVE_FIELDS else sanitize(v, depth + 1))
                         for k, v in data.items()
                     }
                 elif isinstance(data, list):
-                    return [sanitize(item) for item in data]
+                    # 보안3: 리스트 항목 수 제한
+                    return [sanitize(item, depth + 1) for item in data[:100]]
                 elif isinstance(data, str):
                     return mask_string(data)
                 return data
@@ -540,9 +540,7 @@ class SecurityViolationService:
             service = get_security_notification_service()
             service.notify_security_incident_by_id(incident_id, incident_type, severity)
         except Exception as e:
-            logger.error(
-                f"[Security] Failed to send notification for incident {incident_id}: {e}"
-            )
+            logger.error(f"[Security] Failed to send notification for incident {incident_id}: {e}")
 
     def _emit_critical_violation_event(
         self,
@@ -573,6 +571,4 @@ class SecurityViolationService:
                 f"for incident {incident_id}, type={violation_type}"
             )
         except Exception as e:
-            logger.error(
-                f"[SecurityViolationService] Failed to emit critical event: {e}"
-            )
+            logger.error(f"[SecurityViolationService] Failed to emit critical event: {e}")

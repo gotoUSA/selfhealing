@@ -94,9 +94,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
         safe_key = key.replace("/", "_").replace(":", "_")
         return self._directory / f"{safe_key}.json"
 
-    def get(
-        self, key: str, default: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
+    def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
         file_path = self._get_file_path(key)
         with self._lock:
             try:
@@ -107,9 +105,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                 logger.warning(f"[StateBackend] Error reading {key}: {e}")
         return default
 
-    def set(
-        self, key: str, value: dict[str, Any], ttl_seconds: int | None = None
-    ) -> None:
+    def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
         file_path = self._get_file_path(key)
         with self._lock:
             try:
@@ -186,9 +182,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             self._client.ping()
             logger.info(f"[StateBackend] Redis backend connected: {self._redis_url}")
         except ImportError:
-            logger.error(
-                "[StateBackend] redis package not installed. Run: pip install redis"
-            )
+            logger.error("[StateBackend] redis package not installed. Run: pip install redis")
             raise
         except Exception as e:
             logger.error(f"[StateBackend] Redis connection failed: {e}")
@@ -197,9 +191,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
     def _make_key(self, key: str) -> str:
         return f"{self._key_prefix}{key}"
 
-    def get(
-        self, key: str, default: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
+    def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
         try:
             data = self._client.get(self._make_key(key))
             if data:
@@ -208,9 +200,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             logger.warning(f"[StateBackend] Redis get error for {key}: {e}")
         return default
 
-    def set(
-        self, key: str, value: dict[str, Any], ttl_seconds: int | None = None
-    ) -> None:
+    def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
         try:
             data = json.dumps(value, default=str)
             if ttl_seconds:
@@ -235,15 +225,40 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             logger.warning(f"[StateBackend] Redis exists error for {key}: {e}")
             return False
 
-    def get_all(self, pattern: str = "*") -> dict[str, dict[str, Any]]:
+    # 보안2: scan_iter 최대 키 수 제한 (DoS 방지)
+    DEFAULT_MAX_SCAN_KEYS: int = 10000
+
+    def get_all(
+        self,
+        pattern: str = "*",
+        max_keys: int | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Get all states matching pattern with safety limits.
+
+        Args:
+            pattern: Key pattern to match
+            max_keys: Maximum number of keys to return (default: 10000)
+                      Set to prevent DoS via unbounded iteration
+
+        Returns:
+            Dictionary of matching states
+        """
         result = {}
+        limit = max_keys if max_keys is not None else self.DEFAULT_MAX_SCAN_KEYS
+
         try:
             full_pattern = self._make_key(pattern)
-            for key in self._client.scan_iter(match=full_pattern):
+            count = 0
+            for key in self._client.scan_iter(match=full_pattern, count=100):
+                if count >= limit:
+                    logger.warning(f"[StateBackend] get_all reached max_keys limit ({limit}), " f"results may be incomplete")
+                    break
                 short_key = key.replace(self._key_prefix, "")
                 data = self._client.get(key)
                 if data:
                     result[short_key] = json.loads(data)
+                    count += 1
         except Exception as e:
             logger.error(f"[StateBackend] Redis scan error: {e}")
         return result
@@ -262,15 +277,11 @@ class MemoryStateBackend(StateBackend[dict[str, Any]]):
         self._lock = threading.Lock()
         logger.info("[StateBackend] Memory backend initialized (testing only)")
 
-    def get(
-        self, key: str, default: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
+    def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
         with self._lock:
             return self._store.get(key, default)
 
-    def set(
-        self, key: str, value: dict[str, Any], ttl_seconds: int | None = None
-    ) -> None:
+    def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
         with self._lock:
             self._store[key] = value
 
@@ -289,9 +300,7 @@ class MemoryStateBackend(StateBackend[dict[str, Any]]):
         with self._lock:
             if pattern == "*":
                 return dict(self._store)
-            return {
-                k: v for k, v in self._store.items() if pattern.replace("*", "") in k
-            }
+            return {k: v for k, v in self._store.items() if pattern.replace("*", "") in k}
 
 
 # =============================================================================
