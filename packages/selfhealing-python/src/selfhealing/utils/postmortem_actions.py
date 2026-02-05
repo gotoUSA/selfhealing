@@ -25,6 +25,66 @@ EVENT_ACTION_MAP = {
 }
 
 
+def _extract_auto_actions(
+    timeline: list,
+    seen_actions: set[tuple[str, str]],
+) -> list[dict]:
+    """타임라인에서 자동 수행된 조치 추출."""
+    auto_actions = []
+
+    for event in timeline:
+        event_type = event.get("event_type", "").lower()
+        service = event.get("details", {}).get("service_name", "")
+        timestamp = event.get("timestamp", "")
+
+        for key, action_text in EVENT_ACTION_MAP.items():
+            if key in event_type and (key, service) not in seen_actions:
+                seen_actions.add((key, service))
+                auto_actions.append(
+                    {
+                        "action": action_text,
+                        "status": "completed",
+                        "timestamp": timestamp,
+                        "service": service,
+                    }
+                )
+                break
+
+    return auto_actions
+
+
+def _generate_recommendations(
+    duration_seconds: float | None,
+    affected_services: list,
+    seen_actions: set[tuple[str, str]],
+) -> list[str]:
+    """분석 결과 기반 권장 사항 생성."""
+    recommendations = []
+
+    # 복구 시간 기준
+    if duration_seconds is not None:
+        if duration_seconds > 120:
+            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 2분을 초과함 - SLA 검토 필요")
+        elif duration_seconds > 60:
+            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 목표(60초) 초과 - 개선 검토 권장")
+
+    # 다중 서비스 장애 기준
+    if len(affected_services) > 3:
+        recommendations.append(f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요")
+
+    # Fast Fail 미발생 검사
+    has_cb_open = any("circuit_breaker_opened" in (key, "") for key, _ in seen_actions)
+    has_cb_recovery = any(key in ("circuit_breaker_half_opened", "circuit_breaker_closed") for key, _ in seen_actions)
+    if has_cb_open and not has_cb_recovery:
+        recommendations.append("Fast Fail 미동작 - CB 설정 점검 필요")
+
+    # 기본 recommendation
+    if not recommendations:
+        recommendations.append("장애 근본 원인 분석 및 재발 방지 검토 권장")
+
+    return recommendations
+
+
 def generate_dynamic_actions(
     timeline: list,
     affected_services: list,
@@ -45,29 +105,11 @@ def generate_dynamic_actions(
             - auto_actions: 자동 수행된 조치 리스트 (Google SRE 표준 구조)
             - recommendations: 권장 사항 문자열 리스트
     """
-    auto_actions = []
-    recommendations = []
-
     # 중복 방지를 위한 이벤트 추적 (이벤트 키, 서비스명)
     seen_actions: set[tuple[str, str]] = set()
 
-    for event in timeline:
-        event_type = event.get("event_type", "").lower()
-        service = event.get("details", {}).get("service_name", "")
-        timestamp = event.get("timestamp", "")
-
-        for key, action_text in EVENT_ACTION_MAP.items():
-            if key in event_type and (key, service) not in seen_actions:
-                seen_actions.add((key, service))
-                auto_actions.append(
-                    {
-                        "action": action_text,
-                        "status": "completed",
-                        "timestamp": timestamp,
-                        "service": service,
-                    }
-                )
-                break
+    # 자동 조치 추출
+    auto_actions = _extract_auto_actions(timeline, seen_actions)
 
     # 액션이 없으면 기본 메시지
     if not auto_actions:
@@ -80,26 +122,7 @@ def generate_dynamic_actions(
             }
         )
 
-    # Recommendations 생성 (복구 시간 기준)
-    if duration_seconds is not None:
-        if duration_seconds > 120:
-            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 2분을 초과함 - SLA 검토 필요")
-        elif duration_seconds > 60:
-            recommendations.append(f"복구 시간이 {duration_seconds:.0f}초로 목표(60초) 초과 - 개선 검토 권장")
-
-    # Recommendations 생성 (다중 서비스 장애 기준)
-    if len(affected_services) > 3:
-        recommendations.append(f"다중 서비스 장애 ({len(affected_services)}개) - 공통 원인 분석 필요")
-
-    # Recommendations 생성 (Fast Fail 미발생 검사)
-    # CB OPEN이 발생했으나 HALF_OPEN 또는 CLOSED로 전환되지 않은 경우
-    has_cb_open = any("circuit_breaker_opened" in (key, "") for key, _ in seen_actions)
-    has_cb_recovery = any(key in ("circuit_breaker_half_opened", "circuit_breaker_closed") for key, _ in seen_actions)
-    if has_cb_open and not has_cb_recovery:
-        recommendations.append("Fast Fail 미동작 - CB 설정 점검 필요")
-
-    # 기본 recommendation
-    if not recommendations:
-        recommendations.append("장애 근본 원인 분석 및 재발 방지 검토 권장")
+    # 권장 사항 생성
+    recommendations = _generate_recommendations(duration_seconds, affected_services, seen_actions)
 
     return auto_actions, recommendations

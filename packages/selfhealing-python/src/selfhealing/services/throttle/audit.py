@@ -30,6 +30,51 @@ AUDIT_THROTTLE_CB_SYNC = "throttle_cb_sync"
 AUDIT_THROTTLE_SLA_BREACH = "throttle_sla_breach"
 
 
+def _build_audit_data(
+    action: str,
+    *,
+    old_limit: int | None = None,
+    new_limit: int | None = None,
+    reason: str | None = None,
+    trigger_source: str | None = None,
+    emergency_level: int | None = None,
+    applied_multiplier: float | None = None,
+    service_name: str | None = None,
+    cb_state: str | None = None,
+    rtt_ms: float | None = None,
+    threshold_ms: int | None = None,
+    extra_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """감사 데이터 딕셔너리 구성."""
+    audit_data: dict[str, Any] = {
+        "action": action,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # None이 아닌 값만 추가
+    optional_fields = {
+        "old_limit": old_limit,
+        "new_limit": new_limit,
+        "reason": reason,
+        "trigger_source": trigger_source,
+        "emergency_level": emergency_level,
+        "applied_multiplier": applied_multiplier,
+        "service_name": service_name,
+        "cb_state": cb_state,
+        "rtt_ms": rtt_ms,
+        "threshold_ms": threshold_ms,
+    }
+
+    for key, value in optional_fields.items():
+        if value is not None:
+            audit_data[key] = value
+
+    if extra_data:
+        audit_data.update(extra_data)
+
+    return audit_data
+
+
 def record_throttle_audit(
     action: str,
     old_limit: int | None = None,
@@ -67,33 +112,20 @@ def record_throttle_audit(
         auditor = get_cascade_event_auditor()
 
         # 감사 데이터 구성
-        audit_data = {
-            "action": action,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-        if old_limit is not None:
-            audit_data["old_limit"] = old_limit
-        if new_limit is not None:
-            audit_data["new_limit"] = new_limit
-        if reason:
-            audit_data["reason"] = reason
-        if trigger_source:
-            audit_data["trigger_source"] = trigger_source
-        if emergency_level is not None:
-            audit_data["emergency_level"] = emergency_level
-        if applied_multiplier is not None:
-            audit_data["applied_multiplier"] = applied_multiplier
-        if service_name:
-            audit_data["service_name"] = service_name
-        if cb_state:
-            audit_data["cb_state"] = cb_state
-        if rtt_ms is not None:
-            audit_data["rtt_ms"] = rtt_ms
-        if threshold_ms is not None:
-            audit_data["threshold_ms"] = threshold_ms
-        if extra_data:
-            audit_data.update(extra_data)
+        audit_data = _build_audit_data(
+            action,
+            old_limit=old_limit,
+            new_limit=new_limit,
+            reason=reason,
+            trigger_source=trigger_source,
+            emergency_level=emergency_level,
+            applied_multiplier=applied_multiplier,
+            service_name=service_name,
+            cb_state=cb_state,
+            rtt_ms=rtt_ms,
+            threshold_ms=threshold_ms,
+            extra_data=extra_data,
+        )
 
         # CascadeEvent로 기록 (비상 상황 강등만)
         if action in (AUDIT_THROTTLE_EMERGENCY_SYNC, AUDIT_THROTTLE_CB_SYNC):

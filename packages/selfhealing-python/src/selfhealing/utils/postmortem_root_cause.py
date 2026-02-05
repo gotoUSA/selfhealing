@@ -149,6 +149,58 @@ def extract_resolution_info(timeline: list) -> dict | None:
     }
 
 
+def _extract_error_context_from_timeline(timeline: list) -> tuple[str | None, str | None, str | None]:
+    """
+    타임라인에서 첫 번째 OPEN 이벤트의 에러 컨텍스트 추출.
+
+    Returns:
+        (error_type, error_message, first_service) 튜플
+    """
+    for event in timeline:
+        event_type = event.get("event_type", "").lower()
+        if "opened" in event_type or "open" in event_type:
+            details = event.get("details", {})
+            error_context = details.get("error_context") or {}
+            return (
+                error_context.get("error_type", ""),
+                error_context.get("message", ""),
+                details.get("service_name") or details.get("service"),
+            )
+    return None, None, None
+
+
+def _match_error_pattern(
+    error_type: str | None,
+    error_message: str | None,
+    keywords: list[str],
+) -> bool:
+    """에러 타입/메시지에서 키워드 패턴 매칭."""
+    error_type_lower = (error_type or "").lower()
+    error_message_lower = (error_message or "").lower()
+    return any(kw in error_type_lower or kw in error_message_lower for kw in keywords)
+
+
+def _build_hypothesis_from_error_pattern(
+    error_type: str | None,
+    error_message: str | None,
+    first_service: str | None,
+) -> str | None:
+    """에러 패턴 기반 가설 생성."""
+    # DB 관련 에러 패턴
+    db_keywords = ["database", "db", "connection", "sql", "postgresql", "mysql", "redis"]
+    if _match_error_pattern(error_type, error_message, db_keywords):
+        service_info = f": {first_service}" if first_service else ""
+        return f"데이터베이스 연결 문제{service_info}"
+
+    # Timeout 에러 패턴
+    timeout_keywords = ["timeout", "timed out", "timeouterror"]
+    if _match_error_pattern(error_type, error_message, timeout_keywords):
+        service_info = f": {first_service}" if first_service else ""
+        return f"네트워크 지연 또는 서비스 과부하{service_info}"
+
+    return None
+
+
 def generate_root_cause_hypothesis(
     timeline: list,
     affected_services: list,
@@ -172,40 +224,17 @@ def generate_root_cause_hypothesis(
     if not timeline and not affected_services:
         return None
 
-    # 에러 컨텍스트 수집 (첫 번째 OPEN 이벤트에서)
-    error_type = None
-    error_message = None
-    first_service = None
-
-    for event in timeline:
-        event_type = event.get("event_type", "").lower()
-        if "opened" in event_type or "open" in event_type:
-            details = event.get("details", {})
-            error_context = details.get("error_context") or {}
-            error_type = error_context.get("error_type", "")
-            error_message = error_context.get("message", "")
-            first_service = details.get("service_name") or details.get("service")
-            break
+    # 에러 컨텍스트 수집
+    error_type, error_message, first_service = _extract_error_context_from_timeline(timeline)
 
     # 다중 서비스 장애 판단
     if len(affected_services) > 1:
         return "인프라 전체 장애 가능성 - 공통 원인 분석 필요"
 
-    # 에러 타입 기반 가설 생성
-    error_type_lower = (error_type or "").lower()
-    error_message_lower = (error_message or "").lower()
-
-    # DB 관련 에러 패턴
-    db_keywords = ["database", "db", "connection", "sql", "postgresql", "mysql", "redis"]
-    if any(kw in error_type_lower or kw in error_message_lower for kw in db_keywords):
-        service_info = f": {first_service}" if first_service else ""
-        return f"데이터베이스 연결 문제{service_info}"
-
-    # Timeout 에러 패턴
-    timeout_keywords = ["timeout", "timed out", "timeouterror"]
-    if any(kw in error_type_lower or kw in error_message_lower for kw in timeout_keywords):
-        service_info = f": {first_service}" if first_service else ""
-        return f"네트워크 지연 또는 서비스 과부하{service_info}"
+    # 에러 패턴 기반 가설 생성
+    pattern_hypothesis = _build_hypothesis_from_error_pattern(error_type, error_message, first_service)
+    if pattern_hypothesis:
+        return pattern_hypothesis
 
     # 단일 서비스 장애
     service_name = first_service or (affected_services[0] if affected_services else "unknown")
