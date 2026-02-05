@@ -381,6 +381,80 @@ class DeploymentCorrelator:
             logger.warning(f"[DeploymentCorrelator] Failed to get config changes: {e}")
         return []
 
+    def _find_closest_deployment(
+        self,
+        incident_time: datetime,
+        deployments: list,
+    ) -> tuple[float | None, Any]:
+        """가장 가까운 배포 시간 계산."""
+        closest_minutes: float | None = None
+        closest_deploy = None
+
+        for deploy in deployments:
+            try:
+                deploy_time = datetime.fromisoformat(deploy.deployed_at.replace("Z", "+00:00"))
+                minutes_diff = abs((incident_time - deploy_time).total_seconds() / 60)
+                if closest_minutes is None or minutes_diff < closest_minutes:
+                    closest_minutes = minutes_diff
+                    closest_deploy = deploy
+            except (ValueError, TypeError):
+                continue
+
+        return closest_minutes, closest_deploy
+
+    def _find_closest_config_change(
+        self,
+        incident_time: datetime,
+        config_changes: list,
+    ) -> tuple[float | None, Any]:
+        """가장 가까운 설정 변경 시간 계산."""
+        closest_config_minutes: float | None = None
+        closest_config = None
+
+        for change in config_changes:
+            try:
+                change_time = datetime.fromisoformat(change.changed_at.replace("Z", "+00:00"))
+                minutes_diff = abs((incident_time - change_time).total_seconds() / 60)
+                if closest_config_minutes is None or minutes_diff < closest_config_minutes:
+                    closest_config_minutes = minutes_diff
+                    closest_config = change
+            except (ValueError, TypeError):
+                continue
+
+        return closest_config_minutes, closest_config
+
+    def _determine_correlation(
+        self,
+        result: DeploymentCorrelationResult,
+        closest_minutes: float | None,
+        closest_deploy: Any,
+        closest_config_minutes: float | None,
+        closest_config: Any,
+    ) -> None:
+        """상관관계 판정."""
+        if closest_config_minutes is not None and closest_config_minutes <= self.CONFIG_CHANGE_THRESHOLD_MINUTES:
+            result.correlation_type = CorrelationType.CONFIG_CHANGED
+            result.correlation_score = 0.9
+            result.analysis_summary = (
+                f"Config change '{closest_config.config_key}' occurred "
+                f"{closest_config_minutes:.1f} minutes before incident"
+            )
+        elif closest_minutes is not None and closest_minutes <= self.HIGH_CORRELATION_THRESHOLD_MINUTES:
+            result.correlation_type = CorrelationType.DEPLOYMENT_TRIGGERED
+            result.correlation_score = 0.85
+            version_info = f"{closest_deploy.version_from} → {closest_deploy.version_to}" if closest_deploy else "unknown"
+            result.analysis_summary = f"Deployment ({version_info}) occurred {closest_minutes:.1f} minutes before incident"
+        elif closest_minutes is not None and closest_minutes <= self.MEDIUM_CORRELATION_THRESHOLD_MINUTES:
+            result.correlation_type = CorrelationType.POSSIBLE_CORRELATION
+            result.correlation_score = 0.5
+            result.analysis_summary = (
+                f"Deployment occurred {closest_minutes:.1f} minutes before incident - possible correlation"
+            )
+        else:
+            result.correlation_type = CorrelationType.UNLIKELY
+            result.correlation_score = 0.1
+            result.analysis_summary = "Deployments found but not closely correlated with incident time"
+
     def _analyze_correlation(
         self,
         incident_time: datetime,
@@ -403,59 +477,14 @@ class DeploymentCorrelator:
             result.analysis_summary = "No deployments or config changes found near incident time"
             return result
 
-        # 가장 가까운 배포 시간 계산
-        closest_minutes: float | None = None
-        closest_deploy = None
-
-        for deploy in deployments:
-            try:
-                deploy_time = datetime.fromisoformat(deploy.deployed_at.replace("Z", "+00:00"))
-                minutes_diff = abs((incident_time - deploy_time).total_seconds() / 60)
-                if closest_minutes is None or minutes_diff < closest_minutes:
-                    closest_minutes = minutes_diff
-                    closest_deploy = deploy
-            except (ValueError, TypeError):
-                continue
+        # 가장 가까운 배포/설정 변경 시간 계산
+        closest_minutes, closest_deploy = self._find_closest_deployment(incident_time, deployments)
+        closest_config_minutes, closest_config = self._find_closest_config_change(incident_time, config_changes)
 
         result.closest_deployment_minutes = closest_minutes
 
-        # 설정 변경 시간 계산
-        closest_config_minutes: float | None = None
-        closest_config = None
-
-        for change in config_changes:
-            try:
-                change_time = datetime.fromisoformat(change.changed_at.replace("Z", "+00:00"))
-                minutes_diff = abs((incident_time - change_time).total_seconds() / 60)
-                if closest_config_minutes is None or minutes_diff < closest_config_minutes:
-                    closest_config_minutes = minutes_diff
-                    closest_config = change
-            except (ValueError, TypeError):
-                continue
-
         # 상관관계 판정
-        if closest_config_minutes is not None and closest_config_minutes <= self.CONFIG_CHANGE_THRESHOLD_MINUTES:
-            result.correlation_type = CorrelationType.CONFIG_CHANGED
-            result.correlation_score = 0.9
-            result.analysis_summary = (
-                f"Config change '{closest_config.config_key}' occurred "
-                f"{closest_config_minutes:.1f} minutes before incident"
-            )
-        elif closest_minutes is not None and closest_minutes <= self.HIGH_CORRELATION_THRESHOLD_MINUTES:
-            result.correlation_type = CorrelationType.DEPLOYMENT_TRIGGERED
-            result.correlation_score = 0.85
-            version_info = f"{closest_deploy.version_from} → {closest_deploy.version_to}" if closest_deploy else "unknown"
-            result.analysis_summary = f"Deployment ({version_info}) occurred " f"{closest_minutes:.1f} minutes before incident"
-        elif closest_minutes is not None and closest_minutes <= self.MEDIUM_CORRELATION_THRESHOLD_MINUTES:
-            result.correlation_type = CorrelationType.POSSIBLE_CORRELATION
-            result.correlation_score = 0.5
-            result.analysis_summary = (
-                f"Deployment occurred {closest_minutes:.1f} minutes before incident - " "possible correlation"
-            )
-        else:
-            result.correlation_type = CorrelationType.UNLIKELY
-            result.correlation_score = 0.1
-            result.analysis_summary = "Deployments found but not closely correlated with incident time"
+        self._determine_correlation(result, closest_minutes, closest_deploy, closest_config_minutes, closest_config)
 
         return result
 

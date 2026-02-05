@@ -340,6 +340,54 @@ class AuditSyncWorker:
             # 다음 사이클까지 대기
             self._stop_event.wait(timeout=self._config.sync_interval_seconds)
 
+    def _process_batch_entries(self, adapter: Any, batch: list, synced_count: int, failed_count: int) -> tuple[int, int]:
+        """배치 엔트리들을 순회하며 동기화."""
+        for entry in batch:
+            try:
+                if adapter:
+                    self._sync_entry_to_adapter(adapter, entry)
+                synced_count += 1
+                self._last_processed_seq = max(self._last_processed_seq, entry.sequence)
+            except Exception as e:
+                failed_count += 1
+                logger.warning(f"[AuditSyncWorker] Failed to sync entry seq={entry.sequence}: {e}")
+        return synced_count, failed_count
+
+    def _post_sync_cleanup(self, synced_count: int, wal: Any) -> None:
+        """동기화 완료 후 정리 및 체크포인트 저장."""
+        if synced_count <= 0:
+            return
+
+        try:
+            wal.cleanup_processed(self._last_processed_seq)
+        except Exception as e:
+            logger.warning(f"[AuditSyncWorker] Failed to cleanup WAL: {e}")
+
+        self._batches_since_checkpoint += 1
+        should_save = (
+            self._batches_since_checkpoint >= self._config.checkpoint_save_interval_batches
+            or time.time() - self._last_checkpoint_time >= self._config.checkpoint_save_interval_seconds
+        )
+        if should_save:
+            self._save_checkpoint()
+            self._batches_since_checkpoint = 0
+            self._last_checkpoint_time = time.time()
+
+    def _update_sync_stats(self, synced_count: int, failed_count: int, duration_ms: float) -> None:
+        """동기화 통계 업데이트 및 콜백 호출."""
+        with self._lock:
+            self._stats.total_synced += synced_count
+            self._stats.total_failed += failed_count
+            self._stats.last_sync_time = time.time()
+            self._stats.last_sync_count = synced_count
+            self._stats.record_sync_duration(duration_ms)
+
+        if self._on_sync_complete and (synced_count > 0 or failed_count > 0):
+            try:
+                self._on_sync_complete(synced_count, failed_count)
+            except Exception:
+                pass
+
     def _sync_batch(self) -> tuple[int, int]:
         """
         배치 동기화 수행.
@@ -352,71 +400,24 @@ class AuditSyncWorker:
             return 0, 0
 
         adapter = self._get_adapter()
-
         start_time = time.time()
         synced_count = 0
         failed_count = 0
 
         try:
-            # 미처리 엔트리 조회
             entries = wal.recover_unprocessed(self._last_processed_seq)
-
             if not entries:
                 return 0, 0
 
-            # 배치 크기만큼만 처리
             batch = entries[: self._config.batch_size]
-
             with self._lock:
                 self._stats.current_lag_entries = len(entries)
 
-            for entry in batch:
-                try:
-                    # 중앙 저장소에 기록
-                    if adapter:
-                        self._sync_entry_to_adapter(adapter, entry)
+            synced_count, failed_count = self._process_batch_entries(adapter, batch, synced_count, failed_count)
+            self._post_sync_cleanup(synced_count, wal)
 
-                    synced_count += 1
-                    self._last_processed_seq = max(self._last_processed_seq, entry.sequence)
-
-                except Exception as e:
-                    failed_count += 1
-                    logger.warning(f"[AuditSyncWorker] Failed to sync entry seq={entry.sequence}: {e}")
-
-            # 처리 완료된 엔트리 정리
-            if synced_count > 0:
-                try:
-                    wal.cleanup_processed(self._last_processed_seq)
-                except Exception as e:
-                    logger.warning(f"[AuditSyncWorker] Failed to cleanup WAL: {e}")
-
-                # 주기적 체크포인트 저장
-                self._batches_since_checkpoint += 1
-                should_save_checkpoint = (
-                    self._batches_since_checkpoint >= self._config.checkpoint_save_interval_batches
-                    or time.time() - self._last_checkpoint_time >= self._config.checkpoint_save_interval_seconds
-                )
-
-                if should_save_checkpoint:
-                    self._save_checkpoint()
-                    self._batches_since_checkpoint = 0
-                    self._last_checkpoint_time = time.time()
-
-            # 통계 업데이트
             duration_ms = (time.time() - start_time) * 1000
-            with self._lock:
-                self._stats.total_synced += synced_count
-                self._stats.total_failed += failed_count
-                self._stats.last_sync_time = time.time()
-                self._stats.last_sync_count = synced_count
-                self._stats.record_sync_duration(duration_ms)
-
-            # 콜백 호출
-            if self._on_sync_complete and (synced_count > 0 or failed_count > 0):
-                try:
-                    self._on_sync_complete(synced_count, failed_count)
-                except Exception:
-                    pass
+            self._update_sync_stats(synced_count, failed_count, duration_ms)
 
             return synced_count, failed_count
 

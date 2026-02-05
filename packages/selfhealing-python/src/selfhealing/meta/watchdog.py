@@ -155,6 +155,51 @@ class SelfHealerWatchdog:
         if self._self_cb_failure_count >= self._settings.self_cb_failure_threshold:
             self._open_self_cb()
 
+    def _process_unhealthy_component(self, name: str, result: Any) -> bool:
+        """비정상 컴포넌트 처리. 에스컬레이션 필요 시 True 반환."""
+        self._consecutive_failures[name] = self._consecutive_failures.get(name, 0) + 1
+
+        if self._consecutive_failures[name] < self._settings.self_cb_failure_threshold:
+            return False
+
+        logger.warning(f"[SelfHealerWatchdog] {name} unhealthy, attempting recovery")
+
+        if self._settings.dry_run_mode:
+            logger.info(f"[SelfHealerWatchdog] Dry-run: would attempt recovery for {name}")
+            return False
+
+        recovered = self._attempt_recovery(name, result)
+        if not recovered:
+            self._escalate(name, result)
+            return True
+        return False
+
+    def _check_overload_status(self, component_statuses: dict) -> None:
+        """과부하 상태 확인 및 Self CB 업데이트."""
+        unhealthy_count = sum(1 for s in component_statuses.values() if s == HealthStatus.UNHEALTHY)
+        total_count = len(component_statuses)
+        if total_count > 0 and unhealthy_count >= total_count - 1:
+            self._record_self_cb_failure()
+        else:
+            self._record_self_cb_success()
+
+    def _build_watchdog_state(
+        self,
+        overall_status: HealthStatus,
+        component_statuses: dict,
+        escalation_pending: bool,
+    ) -> WatchdogState:
+        """WatchdogState 객체 생성."""
+        return WatchdogState(
+            overall_status=overall_status,
+            component_statuses=component_statuses,
+            last_check=self._last_check or datetime.now(timezone.utc),
+            escalation_pending=escalation_pending,
+            escalation_count=self._escalation_count,
+            self_cb_open=self._self_cb_open,
+            consecutive_failures=dict(self._consecutive_failures),
+        )
+
     def check_health(self) -> WatchdogState:
         """
         건강 상태 확인 및 필요 시 조치.
@@ -162,85 +207,34 @@ class SelfHealerWatchdog:
         Returns:
             현재 Watchdog 상태
         """
-        # Self CB 확인
         if self._should_skip_due_to_self_cb():
             logger.debug("[SelfHealerWatchdog] Skipping due to Self CB")
-            return WatchdogState(
-                overall_status=HealthStatus.UNKNOWN,
-                component_statuses={},
-                last_check=self._last_check or datetime.now(timezone.utc),
-                escalation_pending=False,
-                escalation_count=self._escalation_count,
-                self_cb_open=True,
-                consecutive_failures=dict(self._consecutive_failures),
-            )
+            return self._build_watchdog_state(HealthStatus.UNKNOWN, {}, False)
 
         try:
-            # 프로브 실행
             results = self._probe_manager.probe_all()
             overall_status = self._probe_manager.get_overall_status()
             self._last_check = datetime.now(timezone.utc)
 
-            # 컴포넌트별 상태 확인
             component_statuses = {name: r.status for name, r in results.items()}
             escalation_pending = False
 
             for name, result in results.items():
                 if result.status == HealthStatus.UNHEALTHY:
-                    # 연속 실패 카운트
-                    self._consecutive_failures[name] = self._consecutive_failures.get(name, 0) + 1
-
-                    # 임계치 초과 시 자동 복구 시도
-                    if self._consecutive_failures[name] >= self._settings.self_cb_failure_threshold:
-                        logger.warning(f"[SelfHealerWatchdog] {name} unhealthy, attempting recovery")
-
-                        # Dry-run 모드가 아닐 때만 복구 시도
-                        if not self._settings.dry_run_mode:
-                            recovered = self._attempt_recovery(name, result)
-
-                            if not recovered:
-                                # 에스컬레이션
-                                escalation_pending = True
-                                self._escalate(name, result)
-                        else:
-                            logger.info(f"[SelfHealerWatchdog] Dry-run: would attempt recovery for {name}")
+                    if self._process_unhealthy_component(name, result):
+                        escalation_pending = True
                 else:
-                    # 정상화되면 카운터 리셋
                     self._consecutive_failures[name] = 0
 
-            # 과부하 감지 (대부분의 컴포넌트가 문제)
-            unhealthy_count = sum(1 for s in component_statuses.values() if s == HealthStatus.UNHEALTHY)
-            total_count = len(component_statuses)
-            if total_count > 0 and unhealthy_count >= total_count - 1:
-                self._record_self_cb_failure()
-            else:
-                self._record_self_cb_success()
-
-            # 상태 저장소 업데이트 시도
+            self._check_overload_status(component_statuses)
             self._update_state_store()
 
-            return WatchdogState(
-                overall_status=overall_status,
-                component_statuses=component_statuses,
-                last_check=self._last_check,
-                escalation_pending=escalation_pending,
-                escalation_count=self._escalation_count,
-                self_cb_open=self._self_cb_open,
-                consecutive_failures=dict(self._consecutive_failures),
-            )
+            return self._build_watchdog_state(overall_status, component_statuses, escalation_pending)
 
         except Exception as e:
             logger.error(f"[SelfHealerWatchdog] check_health error: {e}")
             self._record_self_cb_failure()
-            return WatchdogState(
-                overall_status=HealthStatus.UNKNOWN,
-                component_statuses={},
-                last_check=self._last_check or datetime.now(timezone.utc),
-                escalation_pending=False,
-                escalation_count=self._escalation_count,
-                self_cb_open=self._self_cb_open,
-                consecutive_failures=dict(self._consecutive_failures),
-            )
+            return self._build_watchdog_state(HealthStatus.UNKNOWN, {}, False)
 
     def _update_state_store(self) -> None:
         """상태 저장소 업데이트 (Liveness용)."""

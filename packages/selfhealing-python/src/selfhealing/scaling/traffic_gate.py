@@ -102,6 +102,62 @@ class TrafficGate:
         self._rate_controller = rate_controller or get_rate_controller()
         self._load_shedding = load_shedding
 
+    def _check_bulkhead(
+        self,
+        bulkhead_name: str,
+        current_level: BackpressureLevel,
+        metadata: dict[str, Any] | None,
+    ) -> tuple[bool, TrafficDecision | None]:
+        """Bulkhead 확인. 획득 여부와 거부 시 결정을 반환."""
+        try:
+            from selfhealing.resilience.bulkhead import get_bulkhead_registry
+
+            registry = get_bulkhead_registry()
+            bulkhead = registry.get(bulkhead_name)
+
+            if not bulkhead.try_acquire():
+                return False, TrafficDecision(
+                    allowed=False,
+                    reason=f"Bulkhead '{bulkhead_name}' is full",
+                    level=current_level,
+                    gate="Bulkhead",
+                    metadata=metadata,
+                    bulkhead_acquired=False,
+                    bulkhead_name=bulkhead_name,
+                )
+            return True, None
+        except KeyError:
+            logger.debug(f"[TrafficGate] Bulkhead '{bulkhead_name}' not found, skipping")
+            return False, None
+        except Exception as e:
+            logger.warning(f"[TrafficGate] Bulkhead error: {e}")
+            return False, None
+
+    def _check_load_shedding(
+        self,
+        priority: int,
+        current_level: BackpressureLevel,
+        metadata: dict[str, Any] | None,
+    ) -> TrafficDecision | None:
+        """LoadShedding 확인. 거부 시 결정을 반환, 허용 시 None."""
+        if self._load_shedding is None:
+            return None
+
+        try:
+            if hasattr(self._load_shedding, "should_accept"):
+                result = self._load_shedding.should_accept(priority=priority)
+                if isinstance(result, dict) and not result.get("accepted", True):
+                    return TrafficDecision(
+                        allowed=False,
+                        reason=f"Load shedding rejected priority={priority}",
+                        level=current_level,
+                        gate="CascadeLoadShedding",
+                        metadata=metadata,
+                    )
+        except Exception as e:
+            logger.warning(f"[TrafficGate] LoadShedding error: {e}")
+        return None
+
     def should_allow(
         self,
         priority: int = 0,
@@ -133,52 +189,20 @@ class TrafficGate:
 
         # 0단계: Bulkhead 확인 (도메인별 격리)
         if bulkhead_name is not None:
-            try:
-                from selfhealing.resilience.bulkhead import get_bulkhead_registry
+            acquired, decision = self._check_bulkhead(bulkhead_name, current_level, metadata)
+            if decision is not None:
+                return decision
+            bulkhead_acquired = acquired
 
-                registry = get_bulkhead_registry()
-                bulkhead = registry.get(bulkhead_name)
-
-                if not bulkhead.try_acquire():
-                    return TrafficDecision(
-                        allowed=False,
-                        reason=f"Bulkhead '{bulkhead_name}' is full",
-                        level=current_level,
-                        gate="Bulkhead",
-                        metadata=metadata,
-                        bulkhead_acquired=False,
-                        bulkhead_name=bulkhead_name,
-                    )
-                bulkhead_acquired = True
-            except KeyError:
-                # 등록되지 않은 bulkhead는 무시하고 진행
-                logger.debug(f"[TrafficGate] Bulkhead '{bulkhead_name}' not found, skipping")
-            except Exception as e:
-                logger.warning(f"[TrafficGate] Bulkhead error: {e}")
-
-        # 1단계: CascadeLoadShedding 확인 (설정된 경우)
-        if self._load_shedding is not None:
-            try:
-                if hasattr(self._load_shedding, "should_accept"):
-                    result = self._load_shedding.should_accept(priority=priority)
-                    # CascadeLoadShedding.should_accept()는 dict 반환
-                    if isinstance(result, dict) and not result.get("accepted", True):
-                        # 거부 시 획득한 Bulkhead 반환
-                        if bulkhead_acquired and bulkhead_name:
-                            self._release_bulkhead_internal(bulkhead_name)
-                        return TrafficDecision(
-                            allowed=False,
-                            reason=f"Load shedding rejected priority={priority}",
-                            level=current_level,
-                            gate="CascadeLoadShedding",
-                            metadata=metadata,
-                        )
-            except Exception as e:
-                logger.warning(f"[TrafficGate] LoadShedding error: {e}")
+        # 1단계: CascadeLoadShedding 확인
+        load_shedding_decision = self._check_load_shedding(priority, current_level, metadata)
+        if load_shedding_decision is not None:
+            if bulkhead_acquired and bulkhead_name:
+                self._release_bulkhead_internal(bulkhead_name)
+            return load_shedding_decision
 
         # 2단계: RateController 확인
         if not self._rate_controller.should_process():
-            # 거부 시 획득한 Bulkhead 반환
             if bulkhead_acquired and bulkhead_name:
                 self._release_bulkhead_internal(bulkhead_name)
             return TrafficDecision(

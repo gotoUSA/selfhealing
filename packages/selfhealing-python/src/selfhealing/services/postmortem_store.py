@@ -579,6 +579,151 @@ def build_timeline(history: list, local_events: list) -> list:
     return timeline
 
 
+def _parse_incident_times(duration_result) -> tuple[datetime | None, datetime | None]:
+    """시작/종료 시각 파싱."""
+    start_time = None
+    end_time = None
+    if duration_result.started_at:
+        try:
+            start_time = datetime.fromisoformat(duration_result.started_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    if duration_result.resolved_at:
+        try:
+            end_time = datetime.fromisoformat(duration_result.resolved_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    return start_time, end_time
+
+
+def _collect_deployment_context(
+    start_time: datetime | None,
+    target_service: str,
+) -> tuple[dict | None, list]:
+    """배포 연관성 분석 데이터 수집."""
+    deployment_context = None
+    deployment_timeline_events = []
+    try:
+        from selfhealing.services.postmortem.deployment_correlator import get_deployment_correlator
+
+        correlator = get_deployment_correlator()
+
+        if start_time and correlator.is_enabled():
+            deployment_context = correlator.get_deployments_for_postmortem(
+                incident_time=start_time,
+                service_name=target_service,
+            )
+            deployment_timeline_events = correlator.get_deployment_timeline_events(
+                incident_time=start_time,
+                service_name=target_service,
+            )
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Failed to collect deployment context: {e}")
+    return deployment_context, deployment_timeline_events
+
+
+def _build_timeline_snapshot(
+    target_service: str,
+    start_time: datetime | None,
+    end_time: datetime | None,
+    timeline: list,
+) -> dict:
+    """타임라인 스냅샷 빌드."""
+    try:
+        from selfhealing.services.postmortem.snapshot_builder import SnapshotBuilder
+
+        builder = SnapshotBuilder(
+            service_name=target_service,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        return builder.build_dict(timeline[:30])
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Failed to build timeline snapshot: {e}")
+    return {}
+
+
+def _collect_throttle_data(
+    start_time: datetime | None,
+    end_time: datetime | None,
+) -> dict:
+    """Throttle 상태 데이터 수집."""
+    try:
+        from selfhealing.services.throttle.postmortem import collect_throttle_postmortem_data
+
+        return collect_throttle_postmortem_data(
+            start_time=start_time,
+            end_time=end_time,
+        )
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"Failed to collect throttle data: {e}")
+    return {}
+
+
+def _collect_cascade_event_data(
+    target_service: str,
+) -> tuple[str | None, list[str], str | None]:
+    """CascadeEvent 감사 증적 수집."""
+    cascade_event_id = None
+    causation_chain: list[str] = []
+    evidence_hash = None
+    try:
+        from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
+
+        auditor = get_cascade_event_auditor()
+        recent_events = auditor.get_recent_events(namespace="default", limit=50)
+
+        for event in recent_events:
+            trigger_service = event.trigger.details.get("service_name")
+            effect_services = [e.target for e in event.effects if e.target]
+
+            if target_service in [trigger_service] + effect_services:
+                cascade_event_id = event.id
+                causation_chain = event.get_causation_chain()
+                evidence_hash = event.current_hash
+                break
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"Failed to collect cascade event data: {e}")
+    return cascade_event_id, causation_chain, evidence_hash
+
+
+def _build_deep_links(
+    incident_id: str,
+    target_service: str,
+    duration_result,
+    cascade_event_id: str | None,
+    evidence_hash: str | None,
+) -> dict:
+    """딥링크 생성."""
+    try:
+        from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
+
+        deep_link_builder = get_postmortem_deep_link_builder()
+        postmortem_links = deep_link_builder.build_postmortem_links(
+            incident_id=incident_id,
+            service_name=target_service,
+            start_time=duration_result.started_at,
+            end_time=duration_result.resolved_at,
+            namespace="default",
+            cascade_event_id=cascade_event_id,
+            evidence_hash=evidence_hash,
+        )
+        return postmortem_links.to_dict()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.debug(f"Failed to build deep links: {e}")
+    return {}
+
+
 def generate_postmortem_data(
     incident_id: str,
     timeline: list,
@@ -629,125 +774,30 @@ def generate_postmortem_data(
     # Root cause 관련 필드 추출
     root_cause_fields = build_postmortem_root_cause_fields(timeline, affected)
 
-    # 서비스 이름 추출 (affected에서 첫 번째 또는 명시적으로 전달된 것)
+    # 서비스 이름 추출
     target_service = service_name or (affected[0] if affected else "unknown")
 
     # 시작/종료 시각 파싱
-    start_time = None
-    end_time = None
-    if duration_result.started_at:
-        try:
-            start_time = datetime.fromisoformat(duration_result.started_at.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            pass
-    if duration_result.resolved_at:
-        try:
-            end_time = datetime.fromisoformat(duration_result.resolved_at.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            pass
+    start_time, end_time = _parse_incident_times(duration_result)
 
-    # 배포 연관성 분석 (deployment_context)
-    deployment_context = None
-    deployment_timeline_events = []
-    try:
-        from selfhealing.services.postmortem.deployment_correlator import get_deployment_correlator
+    # 배포 연관성 분석
+    deployment_context, deployment_timeline_events = _collect_deployment_context(start_time, target_service)
 
-        correlator = get_deployment_correlator()
-
-        if start_time and correlator.is_enabled():
-            deployment_context = correlator.get_deployments_for_postmortem(
-                incident_time=start_time,
-                service_name=target_service,
-            )
-            deployment_timeline_events = correlator.get_deployment_timeline_events(
-                incident_time=start_time,
-                service_name=target_service,
-            )
-    except ImportError:
-        pass  # DeploymentCorrelator 없으면 무시
-    except Exception as e:
-        logger.warning(f"Failed to collect deployment context: {e}")
-
-    # 타임라인 스냅샷 빌드 (확장)
-    timeline_snapshot = {}
-    try:
-        from selfhealing.services.postmortem.snapshot_builder import SnapshotBuilder
-
-        builder = SnapshotBuilder(
-            service_name=target_service,
-            start_time=start_time,
-            end_time=end_time,
-        )
-        timeline_snapshot = builder.build_dict(timeline[:30])
-    except ImportError:
-        pass  # SnapshotBuilder 없으면 기본 방식 유지
-    except Exception as e:
-        logger.warning(f"Failed to build timeline snapshot: {e}")
+    # 타임라인 스냅샷 빌드
+    timeline_snapshot = _build_timeline_snapshot(target_service, start_time, end_time, timeline)
 
     # 타임라인에 배포 이벤트 삽입
     merged_timeline = timeline[:30] + deployment_timeline_events
     merged_timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
 
     # Throttle 상태 데이터 수집
-    throttle_data = {}
-    try:
-        from selfhealing.services.throttle.postmortem import collect_throttle_postmortem_data
-
-        throttle_data = collect_throttle_postmortem_data(
-            start_time=start_time,
-            end_time=end_time,
-        )
-    except ImportError:
-        pass  # Throttle 모듈 없으면 무시
-    except Exception as e:
-        logger.debug(f"Failed to collect throttle data: {e}")
+    throttle_data = _collect_throttle_data(start_time, end_time)
 
     # CascadeEvent 감사 증적 연결
-    cascade_event_id = None
-    causation_chain: list[str] = []
-    evidence_hash = None
-    try:
-        from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
-
-        auditor = get_cascade_event_auditor()
-        # 해당 서비스의 최근 CascadeEvent 조회 (Postmortem 생성 시점 기준)
-        recent_events = auditor.get_recent_events(namespace="default", limit=50)
-
-        for event in recent_events:
-            # 서비스명과 관련된 이벤트 찾기
-            trigger_service = event.trigger.details.get("service_name")
-            effect_services = [e.target for e in event.effects if e.target]
-
-            if target_service in [trigger_service] + effect_services:
-                cascade_event_id = event.id
-                causation_chain = event.get_causation_chain()
-                evidence_hash = event.current_hash
-                break
-    except ImportError:
-        pass  # CascadeAuditor 없으면 무시
-    except Exception as e:
-        logger.debug(f"Failed to collect cascade event data: {e}")
+    cascade_event_id, causation_chain, evidence_hash = _collect_cascade_event_data(target_service)
 
     # 딥링크 생성
-    deep_links = {}
-    try:
-        from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
-
-        deep_link_builder = get_postmortem_deep_link_builder()
-        postmortem_links = deep_link_builder.build_postmortem_links(
-            incident_id=incident_id,
-            service_name=target_service,
-            start_time=duration_result.started_at,
-            end_time=duration_result.resolved_at,
-            namespace="default",
-            cascade_event_id=cascade_event_id,
-            evidence_hash=evidence_hash,
-        )
-        deep_links = postmortem_links.to_dict()
-    except ImportError:
-        pass  # PostmortemDeepLinkBuilder 없으면 무시
-    except Exception as e:
-        logger.debug(f"Failed to build deep links: {e}")
+    deep_links = _build_deep_links(incident_id, target_service, duration_result, cascade_event_id, evidence_hash)
 
     return {
         "incident_id": incident_id,

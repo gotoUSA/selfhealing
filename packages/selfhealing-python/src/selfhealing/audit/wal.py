@@ -645,6 +645,27 @@ class WriteAheadLog:
         except Exception:
             pass
 
+    def _handle_corrupted_record_length(self, f) -> bool:
+        """손상된 레코드 길이 처리. 계속 진행 가능하면 True."""
+        if self._config.best_effort_recovery:
+            pos = self._scan_for_valid_record(f)
+            return pos != -1
+        return False
+
+    def _parse_wal_record(self, data_bytes: bytes, checksum: str) -> WALEntry | None:
+        """WAL 레코드 파싱. 실패 시 None."""
+        try:
+            entry_dict = json.loads(data_bytes.decode("utf-8"))
+            return WALEntry(
+                sequence=entry_dict["seq"],
+                timestamp=entry_dict["ts"],
+                data=entry_dict["data"],
+                checksum=checksum,
+            )
+        except (json.JSONDecodeError, KeyError):
+            self._corrupted_entries += 1
+            return None
+
     def _read_wal_file_best_effort(self, filepath: Path) -> Iterator[WALEntry]:
         """
         Best-effort 복구 모드로 WAL 파일 읽기.
@@ -660,70 +681,43 @@ class WriteAheadLog:
         """
         try:
             with open(filepath, "rb") as f:
-                # 헤더 읽기
                 header = f.read(self.HEADER_SIZE)
-                if len(header) < self.HEADER_SIZE:
-                    return
-
-                magic = header[:4]
-                if magic != self.MAGIC:
+                if len(header) < self.HEADER_SIZE or header[:4] != self.MAGIC:
                     return
 
                 while True:
-                    # 길이 읽기 시도
                     length_bytes = f.read(4)
                     if len(length_bytes) < 4:
                         break
 
                     length = struct.unpack(">I", length_bytes)[0]
 
-                    # 비정상적인 길이 감지 (손상 가능성)
-                    if length > 10 * 1024 * 1024:  # 10MB 초과 = 손상
-                        if self._config.best_effort_recovery:
-                            # 다음 유효 레코드 찾기
-                            pos = self._scan_for_valid_record(f)
-                            if pos == -1:
-                                break
-                            continue
-                        else:
+                    # 비정상적인 길이 감지 (10MB 초과 = 손상)
+                    if length > 10 * 1024 * 1024:
+                        if not self._handle_corrupted_record_length(f):
                             break
+                        continue
 
-                    # 체크섬 읽기
                     checksum_bytes = f.read(8)
                     if len(checksum_bytes) < 8:
                         break
-
                     checksum = checksum_bytes.decode("ascii", errors="replace")
 
-                    # 데이터 읽기
                     data_bytes = f.read(length)
                     if len(data_bytes) < length:
                         break
 
-                    # 체크섬 검증
                     if not self._verify_checksum(data_bytes, checksum):
                         self._corrupted_entries += 1
                         if self._config.best_effort_recovery:
-                            # 손상된 레코드 건너뛰고 계속
                             continue
-                        else:
-                            break
+                        break
 
-                    # JSON 파싱
-                    try:
-                        entry_dict = json.loads(data_bytes.decode("utf-8"))
-                        entry = WALEntry(
-                            sequence=entry_dict["seq"],
-                            timestamp=entry_dict["ts"],
-                            data=entry_dict["data"],
-                            checksum=checksum,
-                        )
+                    entry = self._parse_wal_record(data_bytes, checksum)
+                    if entry is not None:
                         yield entry
-                    except (json.JSONDecodeError, KeyError):
-                        self._corrupted_entries += 1
-                        if not self._config.best_effort_recovery:
-                            break
-                        # Best-effort: 손상 레코드 건너뛰고 계속
+                    elif not self._config.best_effort_recovery:
+                        break
 
         except Exception:
             pass

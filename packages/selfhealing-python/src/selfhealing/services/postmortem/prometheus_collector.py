@@ -264,6 +264,25 @@ class PrometheusMetricsCollector:
                 error_message=str(e),
             )
 
+    def _query_and_parse_metric(
+        self,
+        query: str,
+        end: datetime,
+        metric_name: str,
+        multiplier: float = 1.0,
+    ) -> tuple[float | None, str | None]:
+        """메트릭 쿼리 및 파싱. (값, 에러메시지) 반환."""
+        result = self.query_instant(query, end)
+        if result.success and result.data:
+            try:
+                value = float(result.data[0].get("value", [0, 0])[1])
+                return value * multiplier, None
+            except (IndexError, ValueError, TypeError):
+                return None, f"{metric_name} parse error"
+        elif result.error_message:
+            return None, f"{metric_name}: {result.error_message}"
+        return None, None
+
     def get_peak_metrics(
         self,
         start: datetime,
@@ -293,41 +312,31 @@ class PrometheusMetricsCollector:
         errors = []
 
         # CPU 최대값
-        cpu_query = f"max_over_time(process_cpu_seconds_total[{duration}])"
-        cpu_result = self.query_instant(cpu_query, end)
-        if cpu_result.success and cpu_result.data:
-            try:
-                value = float(cpu_result.data[0].get("value", [0, 0])[1])
-                peak.max_cpu_percent = value * 100
-            except (IndexError, ValueError, TypeError):
-                errors.append("CPU parse error")
-        elif cpu_result.error_message:
-            errors.append(f"CPU: {cpu_result.error_message}")
+        cpu_val, cpu_err = self._query_and_parse_metric(
+            f"max_over_time(process_cpu_seconds_total[{duration}])", end, "CPU", 100
+        )
+        if cpu_val is not None:
+            peak.max_cpu_percent = cpu_val
+        if cpu_err:
+            errors.append(cpu_err)
 
-        # 메모리 최대값
-        memory_query = f"max_over_time(process_resident_memory_bytes[{duration}])"
-        memory_result = self.query_instant(memory_query, end)
-        if memory_result.success and memory_result.data:
-            try:
-                value = float(memory_result.data[0].get("value", [0, 0])[1])
-                # 퍼센트 계산을 위해 총 메모리 필요, 여기서는 바이트 값으로 저장
-                peak.max_memory_percent = value / (1024 * 1024)  # MB로 변환
-            except (IndexError, ValueError, TypeError):
-                errors.append("Memory parse error")
-        elif memory_result.error_message:
-            errors.append(f"Memory: {memory_result.error_message}")
+        # 메모리 최대값 (바이트 -> MB 변환)
+        mem_val, mem_err = self._query_and_parse_metric(
+            f"max_over_time(process_resident_memory_bytes[{duration}])", end, "Memory", 1 / (1024 * 1024)
+        )
+        if mem_val is not None:
+            peak.max_memory_percent = mem_val
+        if mem_err:
+            errors.append(mem_err)
 
         # 에러율 최대값
-        error_rate_query = f"max_over_time(selfhealing_error_rate_percent[{duration}])"
-        error_rate_result = self.query_instant(error_rate_query, end)
-        if error_rate_result.success and error_rate_result.data:
-            try:
-                value = float(error_rate_result.data[0].get("value", [0, 0])[1])
-                peak.max_error_rate_percent = value
-            except (IndexError, ValueError, TypeError):
-                errors.append("Error rate parse error")
-        elif error_rate_result.error_message:
-            errors.append(f"Error rate: {error_rate_result.error_message}")
+        err_val, err_err = self._query_and_parse_metric(
+            f"max_over_time(selfhealing_error_rate_percent[{duration}])", end, "Error rate"
+        )
+        if err_val is not None:
+            peak.max_error_rate_percent = err_val
+        if err_err:
+            errors.append(err_err)
 
         # P99 지연 최대값
         latency_query = (
@@ -335,15 +344,11 @@ class PrometheusMetricsCollector:
             f"histogram_quantile(0.99, rate(selfhealing_http_request_duration_seconds_bucket[1m]))"
             f"[{duration}])"
         )
-        latency_result = self.query_instant(latency_query, end)
-        if latency_result.success and latency_result.data:
-            try:
-                value = float(latency_result.data[0].get("value", [0, 0])[1])
-                peak.max_latency_p99_seconds = value
-            except (IndexError, ValueError, TypeError):
-                errors.append("Latency parse error")
-        elif latency_result.error_message:
-            errors.append(f"Latency: {latency_result.error_message}")
+        lat_val, lat_err = self._query_and_parse_metric(latency_query, end, "Latency")
+        if lat_val is not None:
+            peak.max_latency_p99_seconds = lat_val
+        if lat_err:
+            errors.append(lat_err)
 
         if errors:
             peak.query_error = "; ".join(errors)

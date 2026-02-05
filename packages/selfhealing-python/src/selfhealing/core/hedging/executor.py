@@ -262,6 +262,62 @@ class HedgingExecutor:
 
         return self._execute_delayed(candidates)
 
+    def _process_completed_future(
+        self,
+        future: Future,
+        candidate: HedgingCandidate,
+        latency_ms: float,
+        primary_candidate: HedgingCandidate,
+        primary_latency_ms: float | None,
+        hedged: bool,
+        future_count: int,
+        succeeded: int,
+        failed: int,
+    ) -> tuple[HedgingResult[T] | None, bool, int, int, float | None, str | None]:
+        """완료된 Future 처리. 성공 시 결과 반환, 실패 시 None."""
+        if candidate == primary_candidate:
+            primary_latency_ms = latency_ms
+
+        try:
+            result = future.result(timeout=0)
+
+            # ADAPTIVE 모드용 지연시간 기록
+            if self._latency_tracker:
+                self._latency_tracker.record(latency_ms)
+
+            is_hedged = hedged and candidate != primary_candidate
+
+            return (
+                HedgingResult(
+                    value=result,
+                    success=True,
+                    source=candidate.name,
+                    latency_ms=latency_ms,
+                    hedged=is_hedged,
+                    candidates_tried=future_count,
+                    candidates_succeeded=succeeded + 1,
+                    candidates_failed=failed,
+                    metadata={"primary_latency_ms": primary_latency_ms},
+                ),
+                True,
+                succeeded + 1,
+                failed,
+                primary_latency_ms,
+                None,
+            )
+
+        except CancelledError:
+            return None, False, succeeded, failed, primary_latency_ms, None
+
+        except Exception as e:
+            error_msg = f"{candidate.name}: {e}"
+            logger.warning(f"[Hedging] {candidate.name} failed: {e}")
+
+            if self._is_non_retryable(e):
+                return None, False, succeeded, failed + 1, primary_latency_ms, f"non_retryable:{error_msg}"
+
+            return None, False, succeeded, failed + 1, primary_latency_ms, error_msg
+
     def _wait_for_first_success(
         self,
         future_to_candidate: dict[Future, HedgingCandidate],
@@ -290,54 +346,32 @@ class HedgingExecutor:
                 candidate = future_to_candidate[future]
                 latency_ms = (time.perf_counter() - start_time) * 1000
 
-                # Primary 지연시간 기록
-                if candidate == primary_candidate:
-                    primary_latency_ms = latency_ms
+                result, success, succeeded, failed, primary_latency_ms, error = self._process_completed_future(
+                    future,
+                    candidate,
+                    latency_ms,
+                    primary_candidate,
+                    primary_latency_ms,
+                    hedged,
+                    len(future_to_candidate),
+                    succeeded,
+                    failed,
+                )
 
-                try:
-                    result = future.result(timeout=0)
-                    succeeded += 1
-
-                    # ADAPTIVE 모드용 지연시간 기록
-                    if self._latency_tracker:
-                        self._latency_tracker.record(latency_ms)
-
-                    # 첫 성공 → 나머지 취소
+                if success and result:
                     if self._config.cancel_on_success:
                         for f in future_to_candidate:
                             if f != future and not f.done():
                                 f.cancel()
+                    return result
 
-                    is_hedged = hedged and candidate != primary_candidate
-
-                    return HedgingResult(
-                        value=result,
-                        success=True,
-                        source=candidate.name,
-                        latency_ms=latency_ms,
-                        hedged=is_hedged,
-                        candidates_tried=len(future_to_candidate),
-                        candidates_succeeded=succeeded,
-                        candidates_failed=failed,
-                        metadata={"primary_latency_ms": primary_latency_ms},
-                    )
-
-                except CancelledError:
-                    pass  # 취소된 작업 무시
-
-                except Exception as e:
-                    failed += 1
-                    errors.append(f"{candidate.name}: {e}")
-                    logger.warning(f"[Hedging] {candidate.name} failed: {e}")
-
-                    # 확정적 에러 시 즉시 중단
-                    if self._is_non_retryable(e):
-                        logger.warning(f"[Hedging] Non-retryable error: {type(e).__name__}")
-                        # 나머지 모두 취소
+                if error:
+                    if error.startswith("non_retryable:"):
                         for f in future_to_candidate:
                             if not f.done():
                                 f.cancel()
-                        raise NonRetryableHedgingError(f"Non-retryable: {candidate.name}: {e}") from e
+                        raise NonRetryableHedgingError(error[14:])
+                    errors.append(error)
 
         except FuturesTimeoutError:
             # 전체 타임아웃

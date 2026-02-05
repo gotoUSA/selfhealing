@@ -81,6 +81,45 @@ SELFHEALING_QUEUE_CONFIG = {
 # =============================================================================
 
 
+# 모듈 로드 설정: (include_flag_name, module_path, getter_func_name, debug_message)
+_SCHEDULE_MODULES = [
+    ("cleanup", "selfhealing.tasks.cleanup_tasks", "get_cleanup_beat_schedule", "cleanup lane"),
+    ("intelligence", "selfhealing.tasks.intelligence_tasks", "get_intelligence_beat_schedule", "intelligence lane"),
+    ("compliance", "selfhealing.tasks.compliance_tasks", "get_compliance_beat_schedule", "compliance lane"),
+    (
+        "traffic_aware",
+        "selfhealing.tasks.traffic_aware_replay",
+        "get_traffic_aware_beat_schedule",
+        "traffic-aware replay (Track 3)",
+    ),
+    ("canary_watchdog", "selfhealing.tasks.canary_watchdog", "get_canary_watchdog_beat_schedule", "canary watchdog"),
+    ("governance", "selfhealing.tasks.governance", "get_governance_beat_schedule", "governance (emergency mode expiry)"),
+    ("xtest_cleanup", "selfhealing.tasks.xtest_cleanup_tasks", "get_xtest_cleanup_beat_schedule", "X-Test cleanup"),
+    ("audit_flush", "selfhealing.tasks.audit_flush", "get_audit_flush_beat_schedule", "Redis Audit flush"),
+]
+
+
+def _load_schedule_module(
+    module_path: str,
+    getter_func_name: str,
+    debug_message: str,
+) -> dict[str, Any]:
+    """단일 스케줄 모듈 로드."""
+    try:
+        import importlib
+
+        module = importlib.import_module(module_path)
+        getter_func = getattr(module, getter_func_name)
+        schedule = getter_func()
+        logger.debug(f"[BeatSchedule] Added {debug_message} schedules")
+        return schedule
+    except ImportError as e:
+        logger.warning(f"[BeatSchedule] Could not load {debug_message} tasks: {e}")
+    except AttributeError as e:
+        logger.warning(f"[BeatSchedule] Function not found in {module_path}: {e}")
+    return {}
+
+
 def get_selfhealing_beat_schedule(
     include_cleanup: bool = True,
     include_intelligence: bool = True,
@@ -117,88 +156,26 @@ def get_selfhealing_beat_schedule(
             # ... your custom schedules
         }
     """
+    # include 플래그 매핑
+    include_flags = {
+        "cleanup": include_cleanup,
+        "intelligence": include_intelligence,
+        "compliance": include_compliance,
+        "traffic_aware": include_traffic_aware,
+        "canary_watchdog": include_canary_watchdog,
+        "governance": include_governance,
+        "xtest_cleanup": include_xtest_cleanup,
+        "audit_flush": include_audit_flush,
+    }
+
     schedule: dict[str, Any] = {}
 
-    if include_cleanup:
-        try:
-            from selfhealing.tasks.cleanup_tasks import get_cleanup_beat_schedule
+    # 모듈별 스케줄 로드
+    for flag_name, module_path, getter_func, debug_msg in _SCHEDULE_MODULES:
+        if include_flags.get(flag_name, False):
+            schedule.update(_load_schedule_module(module_path, getter_func, debug_msg))
 
-            schedule.update(get_cleanup_beat_schedule())
-            logger.debug("[BeatSchedule] Added cleanup lane schedules")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load cleanup tasks: {e}")
-
-    if include_intelligence:
-        try:
-            from selfhealing.tasks.intelligence_tasks import (
-                get_intelligence_beat_schedule,
-            )
-
-            schedule.update(get_intelligence_beat_schedule())
-            logger.debug("[BeatSchedule] Added intelligence lane schedules")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load intelligence tasks: {e}")
-
-    if include_compliance:
-        try:
-            from selfhealing.tasks.compliance_tasks import get_compliance_beat_schedule
-
-            schedule.update(get_compliance_beat_schedule())
-            logger.debug("[BeatSchedule] Added compliance lane schedules")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load compliance tasks: {e}")
-
-    if include_traffic_aware:
-        try:
-            from selfhealing.tasks.traffic_aware_replay import (
-                get_traffic_aware_beat_schedule,
-            )
-
-            schedule.update(get_traffic_aware_beat_schedule())
-            logger.debug("[BeatSchedule] Added traffic-aware replay schedule (Track 3)")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load traffic-aware tasks: {e}")
-
-    if include_canary_watchdog:
-        try:
-            from selfhealing.tasks.canary_watchdog import (
-                get_canary_watchdog_beat_schedule,
-            )
-
-            schedule.update(get_canary_watchdog_beat_schedule())
-            logger.debug("[BeatSchedule] Added canary watchdog schedules")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load canary watchdog tasks: {e}")
-
-    if include_governance:
-        try:
-            from selfhealing.tasks.governance import get_governance_beat_schedule
-
-            schedule.update(get_governance_beat_schedule())
-            logger.debug("[BeatSchedule] Added governance schedules (emergency mode expiry)")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load governance tasks: {e}")
-
-    if include_xtest_cleanup:
-        try:
-            from selfhealing.tasks.xtest_cleanup_tasks import (
-                get_xtest_cleanup_beat_schedule,
-            )
-
-            schedule.update(get_xtest_cleanup_beat_schedule())
-            logger.debug("[BeatSchedule] Added X-Test cleanup schedules")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load X-Test cleanup tasks: {e}")
-
-    if include_audit_flush:
-        try:
-            from selfhealing.tasks.audit_flush import get_audit_flush_beat_schedule
-
-            schedule.update(get_audit_flush_beat_schedule())
-            logger.debug("[BeatSchedule] Added Redis Audit flush schedules")
-        except ImportError as e:
-            logger.warning(f"[BeatSchedule] Could not load audit flush tasks: {e}")
-
+    # 레거시 스케줄
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())
         logger.debug("[BeatSchedule] Added legacy schedules")

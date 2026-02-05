@@ -998,45 +998,8 @@ def _create_individual_postmortem(
         logger.error(f"[EventHandler] Failed to generate auto postmortem: {e}")
 
 
-def _generate_emergency_postmortem_data(
-    session_data: dict,
-    event_bus_history: list,
-    snapshot: dict,
-) -> dict:
-    """
-    Emergency 복구 완료 시 Postmortem 데이터 생성.
-
-    CB Postmortem과 달리 Emergency Postmortem은 리전/글로벌 장애에 대한
-    복구 세션 정보를 기반으로 생성됩니다.
-
-    Args:
-        session_data: EMERGENCY_RECOVERY_COMPLETED 이벤트에서 전달된 세션 정보
-        event_bus_history: EventBus 히스토리
-        snapshot: 시스템 스냅샷
-
-    Returns:
-        Emergency Postmortem 데이터 딕셔너리
-    """
-    from datetime import datetime, timezone as dt_timezone
-
-    session_id = session_data.get("session_id", "unknown")
-    namespace = session_data.get("namespace", "global")
-    trigger_level = session_data.get("trigger_level", "UNKNOWN")
-    started_at = session_data.get("started_at")
-    completed_at = session_data.get("completed_at")
-    duration_seconds = session_data.get("duration_seconds")
-    steps_executed = session_data.get("steps_executed", 0)
-    total_steps = session_data.get("total_steps", 0)
-    requires_approval = session_data.get("requires_approval", False)
-    approved_by = session_data.get("approved_by")
-
-    now = datetime.now(dt_timezone.utc)
-    current_time = now.isoformat()
-
-    # 인시던트 ID 생성 (Emergency 전용 접두사)
-    incident_id = f"EMERGENCY-{namespace}-{now.strftime('%Y%m%d-%H%M%S')}"
-
-    # 타임라인 구성: Emergency 관련 이벤트 필터링
+def _build_emergency_timeline(event_bus_history: list) -> list:
+    """Emergency 관련 타임라인 구성."""
     timeline = []
     emergency_event_types = [
         "emergency_activated",
@@ -1069,10 +1032,13 @@ def _generate_emergency_postmortem_data(
 
     # 시간순 정렬
     timeline.sort(key=lambda x: x.get("timestamp", ""), reverse=False)
+    return timeline
 
-    # 복구 단계 정보 추출
-    recovery_steps = []
+
+def _build_recovery_steps(steps_executed: int) -> list:
+    """복구 단계 정보 추출."""
     step_types = ["BUDGET_RESET", "HEALTH_CHECK", "CANARY_RESUME", "GOVERNANCE_NORMAL"]
+    recovery_steps = []
     for i in range(min(steps_executed, len(step_types))):
         recovery_steps.append(
             {
@@ -1081,8 +1047,16 @@ def _generate_emergency_postmortem_data(
                 "status": "COMPLETED",
             }
         )
+    return recovery_steps
 
-    # 동적 Action Items 생성
+
+def _build_emergency_actions(
+    trigger_level: str,
+    steps_executed: int,
+    requires_approval: bool,
+    approved_by: str | None,
+) -> tuple[list, list]:
+    """Emergency 동적 Action Items 및 권장사항 생성."""
     auto_actions = []
     recommendations = []
 
@@ -1118,7 +1092,11 @@ def _generate_emergency_postmortem_data(
     recommendations.append(f"Emergency {trigger_level} 발생 원인 분석")
     recommendations.append("복구 프로세스 시간 단축 방안 검토")
 
-    # CascadeEvent 감사 증적 연결
+    return auto_actions, recommendations
+
+
+def _collect_emergency_cascade_event_data(namespace: str) -> tuple[str | None, list[str], str | None]:
+    """Emergency CascadeEvent 감사 증적 수집."""
     cascade_event_id = None
     causation_chain: list[str] = []
     evidence_hash = None
@@ -1126,23 +1104,30 @@ def _generate_emergency_postmortem_data(
         from selfhealing.audit.cascade_auditor import get_cascade_event_auditor
 
         auditor = get_cascade_event_auditor()
-        # Emergency 관련 CascadeEvent 조회
         recent_events = auditor.get_recent_events(namespace=namespace, limit=50)
 
         for event in recent_events:
-            # Emergency 트리거 타입의 이벤트 찾기
             if "EMERGENCY" in event.trigger.trigger_type:
                 cascade_event_id = event.id
                 causation_chain = event.get_causation_chain()
                 evidence_hash = event.current_hash
                 break
     except ImportError:
-        pass  # CascadeAuditor 없으면 무시
+        pass
     except Exception as e:
         logger.debug(f"Failed to collect cascade event data: {e}")
+    return cascade_event_id, causation_chain, evidence_hash
 
-    # 딥링크 생성
-    deep_links = {}
+
+def _build_emergency_deep_links(
+    incident_id: str,
+    namespace: str,
+    started_at: str | None,
+    completed_at: str | None,
+    cascade_event_id: str | None,
+    evidence_hash: str | None,
+) -> dict:
+    """Emergency 딥링크 생성."""
     try:
         from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
 
@@ -1156,11 +1141,57 @@ def _generate_emergency_postmortem_data(
             cascade_event_id=cascade_event_id,
             evidence_hash=evidence_hash,
         )
-        deep_links = postmortem_links.to_dict()
+        return postmortem_links.to_dict()
     except ImportError:
-        pass  # PostmortemDeepLinkBuilder 없으면 무시
+        pass
     except Exception as e:
         logger.debug(f"Failed to build deep links: {e}")
+    return {}
+
+
+def _generate_emergency_postmortem_data(
+    session_data: dict,
+    event_bus_history: list,
+    snapshot: dict,
+) -> dict:
+    """
+    Emergency 복구 완료 시 Postmortem 데이터 생성.
+
+    CB Postmortem과 달리 Emergency Postmortem은 리전/글로벌 장애에 대한
+    복구 세션 정보를 기반으로 생성됩니다.
+
+    Args:
+        session_data: EMERGENCY_RECOVERY_COMPLETED 이벤트에서 전달된 세션 정보
+        event_bus_history: EventBus 히스토리
+        snapshot: 시스템 스냅샷
+
+    Returns:
+        Emergency Postmortem 데이터 딕셔너리
+    """
+    from datetime import datetime, timezone as dt_timezone
+
+    # 세션 데이터 추출
+    session_id = session_data.get("session_id", "unknown")
+    namespace = session_data.get("namespace", "global")
+    trigger_level = session_data.get("trigger_level", "UNKNOWN")
+    started_at = session_data.get("started_at")
+    completed_at = session_data.get("completed_at")
+    duration_seconds = session_data.get("duration_seconds")
+    steps_executed = session_data.get("steps_executed", 0)
+    total_steps = session_data.get("total_steps", 0)
+    requires_approval = session_data.get("requires_approval", False)
+    approved_by = session_data.get("approved_by")
+
+    now = datetime.now(dt_timezone.utc)
+    current_time = now.isoformat()
+    incident_id = f"EMERGENCY-{namespace}-{now.strftime('%Y%m%d-%H%M%S')}"
+
+    # 헬퍼 함수들을 사용하여 데이터 수집
+    timeline = _build_emergency_timeline(event_bus_history)
+    recovery_steps = _build_recovery_steps(steps_executed)
+    auto_actions, recommendations = _build_emergency_actions(trigger_level, steps_executed, requires_approval, approved_by)
+    cascade_event_id, causation_chain, evidence_hash = _collect_emergency_cascade_event_data(namespace)
+    deep_links = _build_emergency_deep_links(incident_id, namespace, started_at, completed_at, cascade_event_id, evidence_hash)
 
     return {
         "incident_id": incident_id,
@@ -1178,7 +1209,7 @@ def _generate_emergency_postmortem_data(
         "approved_by": approved_by,
         # 공통 필드
         "summary": {
-            "affected_services": [],  # Emergency는 리전/글로벌 범위
+            "affected_services": [],
             "unaffected_services": [],
             "fast_fail_count": 0,
             "total_events": len(timeline),
@@ -1189,9 +1220,7 @@ def _generate_emergency_postmortem_data(
         "system_snapshot": snapshot,
         "auto_actions": auto_actions,
         "recommendations": recommendations,
-        # 딥링크 (Grafana, Runbook, Postmortem 상세 등)
         "deep_links": deep_links,
-        # CascadeEvent 감사 증적 연결
         "cascade_event_id": cascade_event_id,
         "causation_chain": causation_chain,
         "evidence_hash": evidence_hash,

@@ -217,6 +217,63 @@ class AsyncHedgingExecutor:
 
         return await self._execute_delayed(candidates)
 
+    def _process_completed_task(
+        self,
+        task: asyncio.Task,
+        candidate: HedgingCandidate,
+        latency_ms: float,
+        primary_candidate: HedgingCandidate,
+        primary_latency_ms: float | None,
+        hedged: bool,
+        task_count: int,
+        succeeded: int,
+        failed: int,
+    ) -> tuple[HedgingResult[T] | None, bool, int, int, float | None, str | None]:
+        """완료된 태스크 처리. 성공 시 결과 반환, 실패 시 None."""
+        if candidate == primary_candidate:
+            primary_latency_ms = latency_ms
+
+        try:
+            result = task.result()
+
+            # ADAPTIVE 모드용 지연시간 기록
+            if self._latency_tracker:
+                self._latency_tracker.record(latency_ms)
+
+            is_hedged = hedged and candidate != primary_candidate
+
+            return (
+                HedgingResult(
+                    value=result,
+                    success=True,
+                    source=candidate.name,
+                    latency_ms=latency_ms,
+                    hedged=is_hedged,
+                    candidates_tried=task_count,
+                    candidates_succeeded=succeeded + 1,
+                    candidates_failed=failed,
+                    metadata={"primary_latency_ms": primary_latency_ms},
+                ),
+                True,
+                succeeded + 1,
+                failed,
+                primary_latency_ms,
+                None,
+            )
+
+        except asyncio.CancelledError:
+            return None, False, succeeded, failed, primary_latency_ms, None
+
+        except Exception as e:
+            error_msg = f"{candidate.name}: {e}"
+            logger.warning(f"[Hedging] {candidate.name} failed: {e}")
+
+            # 확정적 에러 시 즉시 중단 표시
+            if self._is_non_retryable(e):
+                return None, False, succeeded, failed + 1, primary_latency_ms, f"non_retryable:{error_msg}"
+
+            return None, False, succeeded, failed + 1, primary_latency_ms, error_msg
+
     async def _wait_for_first_success(
         self,
         tasks: dict[asyncio.Task, HedgingCandidate],
@@ -246,7 +303,6 @@ class AsyncHedgingExecutor:
                     return_when=asyncio.FIRST_COMPLETED,
                 )
             except asyncio.CancelledError:
-                # 외부에서 취소된 경우
                 for p in pending:
                     p.cancel()
                 raise
@@ -255,49 +311,22 @@ class AsyncHedgingExecutor:
                 candidate = tasks[task]
                 latency_ms = (time.perf_counter() - start_time) * 1000
 
-                if candidate == primary_candidate:
-                    primary_latency_ms = latency_ms
+                result, success, succeeded, failed, primary_latency_ms, error = self._process_completed_task(
+                    task, candidate, latency_ms, primary_candidate, primary_latency_ms, hedged, len(tasks), succeeded, failed
+                )
 
-                try:
-                    result = task.result()
-                    succeeded += 1
-
-                    # ADAPTIVE 모드용 지연시간 기록
-                    if self._latency_tracker:
-                        self._latency_tracker.record(latency_ms)
-
-                    # 첫 성공 → 나머지 취소
+                if success and result:
                     if self._config.cancel_on_success:
                         for p in pending:
                             p.cancel()
+                    return result
 
-                    is_hedged = hedged and candidate != primary_candidate
-
-                    return HedgingResult(
-                        value=result,
-                        success=True,
-                        source=candidate.name,
-                        latency_ms=latency_ms,
-                        hedged=is_hedged,
-                        candidates_tried=len(tasks),
-                        candidates_succeeded=succeeded,
-                        candidates_failed=failed,
-                        metadata={"primary_latency_ms": primary_latency_ms},
-                    )
-
-                except asyncio.CancelledError:
-                    pass
-
-                except Exception as e:
-                    failed += 1
-                    errors.append(f"{candidate.name}: {e}")
-                    logger.warning(f"[Hedging] {candidate.name} failed: {e}")
-
-                    # 확정적 에러 시 즉시 중단
-                    if self._is_non_retryable(e):
+                if error:
+                    if error.startswith("non_retryable:"):
                         for p in pending:
                             p.cancel()
-                        raise NonRetryableHedgingError(f"Non-retryable: {candidate.name}: {e}") from e
+                        raise NonRetryableHedgingError(error[14:])
+                    errors.append(error)
 
             remaining_timeout = self._config.timeout - (time.perf_counter() - start_time)
 
