@@ -9,6 +9,7 @@ Components:
     - RateController: 동적 처리율 조절 (Token Bucket + AIMD)
     - TrafficGate: RateController + LoadShedding 통합 파이프라인
     - BackpressureMetrics: Prometheus 메트릭 노출
+    - HPAMetricsExporter: HPA용 메트릭 내보내기
     - GracefulDegradation: 단계별 기능 축소
     - CachedQueueSizeProvider: 큐 크기 캐싱
 
@@ -17,6 +18,7 @@ Usage:
         get_traffic_gate,
         get_rate_controller,
         get_graceful_degradation,
+        get_hpa_metrics_exporter,
     )
 
     # 트래픽 제어
@@ -34,6 +36,10 @@ Usage:
     degradation = get_graceful_degradation()
     if degradation.is_enabled("detailed_logging"):
         log_details()
+
+    # HPA Metrics Exporter
+    exporter = get_hpa_metrics_exporter()
+    exporter.start()
 """
 
 from selfhealing.scaling.config import (
@@ -50,6 +56,12 @@ from selfhealing.scaling.graceful_degradation import (
     GracefulDegradation,
     get_graceful_degradation,
 )
+from selfhealing.scaling.hpa_exporter import (
+    HPAMetricsExporter,
+    LEVEL_TO_INT,
+    get_hpa_metrics_exporter,
+    reset_hpa_metrics_exporter,
+)
 from selfhealing.scaling.metrics import (
     BackpressureMetrics,
     get_backpressure_metrics,
@@ -65,7 +77,9 @@ from selfhealing.scaling.rate_controller import (
 from selfhealing.scaling.traffic_gate import (
     TrafficDecision,
     TrafficGate,
+    create_traffic_gate_with_cascade_load_shedding,
     get_traffic_gate,
+    reset_traffic_gate,
     traffic_gate,
 )
 
@@ -87,12 +101,19 @@ __all__ = [
     "TrafficDecision",
     "TrafficGate",
     "get_traffic_gate",
+    "reset_traffic_gate",
+    "create_traffic_gate_with_cascade_load_shedding",
     "traffic_gate",
     # Queue Provider
     "CachedQueueSizeProvider",
     # Metrics
     "BackpressureMetrics",
     "get_backpressure_metrics",
+    # HPA Exporter
+    "HPAMetricsExporter",
+    "LEVEL_TO_INT",
+    "get_hpa_metrics_exporter",
+    "reset_hpa_metrics_exporter",
     # Graceful Degradation
     "Feature",
     "FeaturePriority",

@@ -1755,23 +1755,34 @@ Rate Controller 조절 간격:
 - [x] `scaling/traffic_gate.py` 구현 (TrafficGate)
 - [x] `scaling/metrics.py` 구현
 - [x] `scaling/graceful_degradation.py` 구현
+- [x] `scaling/hpa_exporter.py` 구현 (HPAMetricsExporter)
 
 ### 9.2 통합
 
-- [ ] Django 미들웨어 통합 (X-SelfHealing-* 헤더)
-- [ ] Celery Worker 통합
-- [ ] 기존 CascadeLoadShedding 연동
+- [x] Django 미들웨어 통합 (X-SelfHealing-* 헤더)
+  - `api/django/middleware/backpressure.py`: BackpressureMiddleware, AsyncBackpressureMiddleware
+- [x] Celery Worker 통합
+  - `tasks/backpressure_mixin.py`: BackpressureTaskMixin
+- [x] 기존 CascadeLoadShedding 연동
+  - `traffic_gate.py`: create_traffic_gate_with_cascade_load_shedding()
 
 ### 9.3 Kubernetes
 
 - [x] Kubernetes HPA 설정 (stabilizationWindowSeconds 확인)
 - [x] Prometheus Adapter 설정
-- [ ] KEDA ScaledObject 검토 (기존과 충돌 여부)
+- [x] KEDA ScaledObject 검토 (기존과 충돌 여부)
+  - 결과: **충돌 없음** - 네임스페이스/Deployment 분리됨
+  - KEDA: production 네임스페이스의 celery-*-worker
+  - selfhealing-hpa: selfhealing 네임스페이스의 selfhealing-worker
 - [x] ServiceMonitor 설정
 
 ### 9.4 검증
 
 - [x] 단위 테스트 작성
+  - `test_hpa_exporter.py`: 12개 테스트
+  - `test_backpressure_middleware.py`: 6개 테스트
+  - `test_backpressure_mixin.py`: 15개 테스트
+  - `test_traffic_gate_cascade.py`: 7개 테스트
 - [ ] 부하 테스트 수행
 - [ ] HPA-Backpressure 지연 시나리오 테스트
 

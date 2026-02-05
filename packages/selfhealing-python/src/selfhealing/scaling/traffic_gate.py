@@ -150,5 +150,88 @@ def get_traffic_gate() -> TrafficGate:
     return _traffic_gate
 
 
+def reset_traffic_gate() -> None:
+    """싱글톤 리셋 (테스트용)."""
+    global _traffic_gate
+    _traffic_gate = None
+
+
+def create_traffic_gate_with_cascade_load_shedding(
+    buffer_size_provider: Any = None,
+    buffer_capacity: int = 10000,
+) -> TrafficGate:
+    """
+    CascadeLoadShedding과 연동된 TrafficGate 생성.
+
+    CascadeLoadShedding을 자동으로 설정하고 TrafficGate에 연결합니다.
+
+    Args:
+        buffer_size_provider: 버퍼 크기 제공 함수 또는 객체
+            - Callable[[], int]: 버퍼 크기 반환 함수
+            - RingBuffer: has __len__ method
+            - None: 기본값 0 사용
+        buffer_capacity: 버퍼 최대 용량
+
+    Returns:
+        CascadeLoadShedding이 연동된 TrafficGate
+
+    Usage:
+        from selfhealing.audit.ring_buffer import RingBuffer
+
+        buffer = RingBuffer(capacity=10000)
+        gate = create_traffic_gate_with_cascade_load_shedding(
+            buffer_size_provider=buffer,
+            buffer_capacity=10000,
+        )
+
+        decision = gate.should_allow(priority=5)
+    """
+    try:
+        from selfhealing.audit.cascade_load_shedding import CascadeLoadShedding
+    except ImportError:
+        logger.warning("[TrafficGate] CascadeLoadShedding not available, creating gate without it")
+        return TrafficGate()
+
+    # 버퍼 크기 제공 함수 생성
+    def get_buffer_size() -> int:
+        if buffer_size_provider is None:
+            return 0
+        if callable(buffer_size_provider):
+            return buffer_size_provider()
+        if hasattr(buffer_size_provider, "__len__"):
+            return len(buffer_size_provider)
+        return 0
+
+    # CascadeLoadShedding 래퍼 클래스
+    class LoadSheddingAdapter:
+        """CascadeLoadShedding 어댑터."""
+
+        def __init__(self):
+            self._shedding = CascadeLoadShedding()
+            self._buffer_capacity = buffer_capacity
+
+        def should_accept(self, priority: int = 0, **kwargs: Any) -> dict:
+            """
+            should_accept 래퍼.
+
+            CascadeLoadShedding.should_accept()는 trigger_type, buffer_size,
+            buffer_capacity를 필요로 합니다.
+            """
+            return self._shedding.should_accept(
+                trigger_type="traffic_gate",
+                buffer_size=get_buffer_size(),
+                buffer_capacity=self._buffer_capacity,
+                priority=None,  # priority는 trigger_type에서 추론
+            )
+
+    adapter = LoadSheddingAdapter()
+
+    return TrafficGate(load_shedding=adapter)
+
+
+# 전역 인스턴스 (편의 접근용)
+traffic_gate = get_traffic_gate()
+
+
 # 전역 인스턴스 (편의 접근용)
 traffic_gate = get_traffic_gate()
