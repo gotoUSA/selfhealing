@@ -1,8 +1,40 @@
 # 184. 사이드카 통신 레이어 설계
 
-> **문서 버전**: 2.0.0
-> **최종 수정일**: 2026-02-05
+> **문서 버전**: 2.1.0
+> **최종 수정일**: 2026-02-06
 > **작성 근거**: `selfhealing` 패키지 인터페이스 분석
+> **구현 상태**: ✅ 완료
+
+## 구현 현황
+
+| 컴포넌트 | 파일 | 상태 |
+|----------|------|------|
+| JSON-RPC 프로토콜 | `adapters/ipc/protocol/json_rpc.py` | ✅ 구현 완료 |
+| UDS 서버 | `adapters/ipc/uds_server.py` | ✅ 구현 완료 |
+| UDS 클라이언트 | `adapters/ipc/uds_client.py` | ✅ 구현 완료 |
+| gRPC 서버 | `adapters/ipc/grpc_server.py` | ✅ 구현 완료 |
+| 인증 | `adapters/ipc/auth.py` | ✅ 구현 완료 |
+| CB 상태 캐시 | `adapters/ipc/cb_state_cache.py` | ✅ 구현 완료 |
+| CB 상태 스냅샷 | `adapters/ipc/cb_state_snapshot.py` | ✅ 구현 완료 |
+| 이벤트 스트림 프록시 | `adapters/ipc/event_stream_proxy.py` | ✅ 구현 완료 |
+| 사이드카 메트릭 | `adapters/ipc/sidecar_metrics.py` | ✅ 구현 완료 |
+| IPC 헬스 프로브 | `adapters/ipc/sidecar_ipc_probe.py` | ✅ 구현 완료 |
+
+### 단위 테스트 (217 passed)
+
+```
+tests/unit/adapters/ipc/
+├── test_json_rpc.py           # 32 tests
+├── test_auth.py               # 28 tests
+├── test_cb_state_cache.py     # 21 tests
+├── test_cb_state_snapshot.py  # 21 tests
+├── test_event_stream_proxy.py # 18 tests
+├── test_grpc_server.py        # 25 tests
+├── test_sidecar_ipc_probe.py  # 19 tests
+├── test_sidecar_metrics.py    # 26 tests
+├── test_uds_client.py         # 16 tests
+└── test_uds_server.py         # 12 tests
+```
 
 ## 목차
 
