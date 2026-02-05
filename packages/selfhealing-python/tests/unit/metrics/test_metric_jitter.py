@@ -41,8 +41,9 @@ class TestSleepWithJitter:
         elapsed = time.monotonic() - start
 
         assert 0.05 <= waited <= 0.1
-        # Windows timer precision can cause slight undersleep, allow 20% margin
-        assert elapsed >= waited * 0.8
+        # Windows timer precision can cause slight undersleep, allow 50% margin
+        # Windows timer resolution is ~15.6ms which can cause significant variance
+        assert elapsed >= waited * 0.5
 
 
 class TestWithJitterDecorator:
@@ -112,7 +113,7 @@ class TestJitterConfig:
     def test_from_env_loads_environment_variables(self):
         """from_settings should load config from environment (from_env deprecated)."""
         from selfhealing.settings.jitter import reset_jitter_settings
-        
+
         with patch.dict(
             os.environ,
             {

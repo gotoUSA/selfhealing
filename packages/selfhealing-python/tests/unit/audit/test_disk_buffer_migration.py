@@ -50,6 +50,7 @@ def drain_buffer(temp_db_path) -> Generator:
         enable_shutdown_handlers=False,
         include_hostname_in_db_name=False,
         include_pid_in_db_name=False,
+        disk_full_threshold=0.0,  # 테스트에서는 디스크 체크 비활성화
     )
 
     buffer = DiskPersistentBuffer(settings=settings, db_name="drain_test")

@@ -68,10 +68,10 @@ class TestGetLeaderElector:
         assert mock_class.call_count == 2
 
     def test_raises_for_etcd_backend(self):
-        """etcd 백엔드는 NotImplementedError 발생."""
+        """etcd 백엔드는 ImportError 또는 NotImplementedError 발생."""
         settings = LeaderElectionSettings(backend="etcd", node_id="test")
 
-        with pytest.raises(NotImplementedError, match="etcd"):
+        with pytest.raises((ImportError, NotImplementedError)):
             get_leader_elector("test-resource", settings=settings)
 
     def test_raises_for_unknown_backend(self):

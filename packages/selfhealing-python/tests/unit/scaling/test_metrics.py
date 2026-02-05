@@ -26,22 +26,28 @@ if HAS_PROMETHEUS:
     from prometheus_client import REGISTRY, CollectorRegistry
 
 
+def _clean_prometheus_registry():
+    """Prometheus 레지스트리에서 selfhealing_ 메트릭 정리."""
+    if not HAS_PROMETHEUS:
+        return
+    collectors_to_remove = []
+    for collector in list(REGISTRY._collector_to_names.keys()):
+        names = REGISTRY._collector_to_names.get(collector, [])
+        if any(name.startswith("selfhealing_") or name.startswith("custom_") for name in names):
+            collectors_to_remove.append(collector)
+    for collector in collectors_to_remove:
+        try:
+            REGISTRY.unregister(collector)
+        except Exception:
+            pass
+
+
 @pytest.fixture(autouse=True)
 def reset_prometheus_registry():
-    """Prometheus 레지스트리 리셋."""
+    """Prometheus 레지스트리 리셋 (테스트 전후)."""
+    _clean_prometheus_registry()
     yield
-    if HAS_PROMETHEUS:
-        # 등록된 collector들 정리
-        collectors_to_remove = []
-        for collector in list(REGISTRY._collector_to_names.keys()):
-            names = REGISTRY._collector_to_names.get(collector, [])
-            if any(name.startswith("selfhealing_") for name in names):
-                collectors_to_remove.append(collector)
-        for collector in collectors_to_remove:
-            try:
-                REGISTRY.unregister(collector)
-            except Exception:
-                pass
+    _clean_prometheus_registry()
 
 
 class TestBackpressureMetrics:

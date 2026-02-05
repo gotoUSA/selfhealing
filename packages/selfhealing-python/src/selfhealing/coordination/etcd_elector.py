@@ -34,13 +34,15 @@ from selfhealing.coordination.config import (
 logger = logging.getLogger(__name__)
 
 # etcd 가용성 확인
+# TypeError: protobuf 버전 불일치 시 Descriptors 오류 발생 가능
 try:
     import etcd3
 
     ETCD_AVAILABLE = True
-except ImportError:
+except (ImportError, TypeError) as e:
     ETCD_AVAILABLE = False
     etcd3 = None  # type: ignore
+    logger.debug(f"etcd3 라이브러리를 로드할 수 없습니다: {e}")
 
 
 class EtcdLeaderElector(LeaderElector):
