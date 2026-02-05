@@ -2637,47 +2637,47 @@ def test_hedging_reduces_latency():
 
 ### 8.1 핵심 모듈
 
-- [ ] `core/hedging/config.py` 작성
-- [ ] `core/hedging/result.py` 작성
-- [ ] `core/hedging/executor.py` 작성 (ContextVar 전파 포함)
-- [ ] `core/hedging/async_executor.py` 작성
-- [ ] `core/hedging/strategy.py` 작성 (Bulkhead/Backpressure 연동)
-- [ ] `core/hedging/async_strategy.py` 작성
-- [ ] `core/hedging/decorator.py` 작성 (동기/비동기 자동 분기)
-- [ ] `core/hedging/exceptions.py` 작성 (NonRetryableHedgingError 포함)
-- [ ] `core/hedging/metrics.py` 작성
-- [ ] `core/hedging/otel.py` 작성 (hedging_span 포함)
-- [ ] `core/hedging/latency_tracker.py` 작성 (ADAPTIVE 모드용)
-- [ ] `core/hedging/result_validator.py` 작성 (비동기 결과 정합성 검증)
-- [ ] `core/hedging/__init__.py` 작성
-- [ ] `settings/hedging.py` 작성
+- [x] `core/hedging/config.py` 작성
+- [x] `core/hedging/result.py` 작성
+- [x] `core/hedging/executor.py` 작성 (ContextVar 전파 포함)
+- [x] `core/hedging/async_executor.py` 작성
+- [x] `core/hedging/strategy.py` 작성 (Bulkhead/Backpressure 연동)
+- [x] `core/hedging/async_strategy.py` 작성
+- [x] `core/hedging/decorator.py` 작성 (동기/비동기 자동 분기)
+- [x] `core/hedging/exceptions.py` 작성 (NonRetryableHedgingError 포함)
+- [x] `core/hedging/metrics.py` 작성
+- [x] `core/hedging/otel.py` 작성 (hedging_span 포함)
+- [x] `core/hedging/latency_tracker.py` 작성 (ADAPTIVE 모드용)
+- [x] `core/hedging/result_validator.py` 작성 (비동기 결과 정합성 검증)
+- [x] `core/hedging/__init__.py` 작성
+- [x] `settings/hedging.py` 작성
 
 ### 8.2 통합
 
-- [ ] `core/fallback_strategy.py`에 HEDGE 모드 추가
-- [ ] BulkheadRegistry 연동 (181 문서)
-- [ ] BackpressureLevel 연동 (180 문서)
-- [ ] EventBus CONFIG_UPDATED 구독 (동적 모드 변경)
+- [x] `core/fallback_strategy.py`에 HEDGE 모드 추가
+- [x] BulkheadRegistry 연동 (181 문서)
+- [x] BackpressureLevel 연동 (180 문서)
+- [x] EventBus CONFIG_UPDATED 구독 (동적 모드 변경)
 
 ### 8.3 테스트
 
-- [ ] 단위 테스트 작성
-- [ ] 지연시간 테스트 작성
-- [ ] ContextVar 전파 테스트
-- [ ] Bulkhead 연동 테스트
-- [ ] Backpressure 연동 테스트
-- [ ] OTel span 테스트
-- [ ] 비동기 헷징 테스트
-- [ ] 확정적 에러 처리 테스트
-- [ ] 결과 정합성 검증 테스트
-- [ ] Backpressure 연동 검증 생략 테스트
+- [x] 단위 테스트 작성 (80개 테스트 통과)
+- [x] 지연시간 테스트 작성
+- [x] ContextVar 전파 테스트
+- [x] Bulkhead 연동 테스트
+- [x] Backpressure 연동 테스트
+- [x] OTel span 테스트
+- [x] 비동기 헷징 테스트
+- [x] 확정적 에러 처리 테스트
+- [x] 결과 정합성 검증 테스트
+- [x] Backpressure 연동 검증 생략 테스트
 - [ ] Meta-Watchdog 에스컨레이션 테스트
 - [ ] DiskPersistentBuffer 영속화 테스트
 
 ### 8.4 문서
 
-- [ ] API 문서 업데이트
-- [ ] 사용 예제 추가
+- [x] API 문서 업데이트
+- [x] 사용 예제 추가
 
 ---
 

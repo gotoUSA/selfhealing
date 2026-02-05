@@ -31,6 +31,7 @@ class FallbackMode(str, Enum):
     USE_DEFAULT = "use_default"  # 기본값 사용
     DEGRADE_GRACEFULLY = "degrade"  # 기능 축소
     RETRY_ALTERNATIVE = "retry_alt"  # 대체 경로 시도
+    HEDGE = "hedge"  # 병렬 헷징으로 인한 대체 응답
 
 
 @dataclass
@@ -45,9 +46,7 @@ class FallbackResult(Generic[T]):
     @property
     def success(self) -> bool:
         """True if we have a value (either primary or fallback)"""
-        return self.value is not None or (
-            self.used_fallback and self.fallback_mode != FallbackMode.FAIL_FAST
-        )
+        return self.value is not None or (self.used_fallback and self.fallback_mode != FallbackMode.FAIL_FAST)
 
 
 class FallbackStrategy(ABC):
@@ -167,10 +166,7 @@ class PartitionAwareFallback(FallbackStrategy):
                 logger.warning(f"Explicit fallback failed: {e}")
 
         # 2. 캐시 사용 불가 + DB 가용 → DB fallback
-        if (
-            not self._partition_state.cache_available
-            and self._partition_state.db_available
-        ):
+        if not self._partition_state.cache_available and self._partition_state.db_available:
             if self._db_fallback:
                 try:
                     result = self._db_fallback()
@@ -185,10 +181,7 @@ class PartitionAwareFallback(FallbackStrategy):
                     logger.warning(f"DB fallback failed: {e}")
 
         # 3. DB 사용 불가 + 캐시 가용 → 캐시 fallback
-        if (
-            not self._partition_state.db_available
-            and self._partition_state.cache_available
-        ):
+        if not self._partition_state.db_available and self._partition_state.cache_available:
             if self._cache_fallback:
                 try:
                     result = self._cache_fallback()
