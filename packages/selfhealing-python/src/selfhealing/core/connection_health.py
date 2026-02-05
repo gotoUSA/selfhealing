@@ -59,40 +59,43 @@ class PartitionState:
     cache_available: bool = True
     external_apis: dict[str, bool] = field(default_factory=dict)
     detected_at: datetime | None = None
+    bulkhead_states: dict[str, dict] = field(default_factory=dict)
+    """격벽 상태 정보 (ConnectionType별 active_count, max_concurrent 등)"""
 
     @property
     def is_partial_partition(self) -> bool:
         """True if some but not all connections are down"""
-        statuses = [self.db_available, self.cache_available] + list(
-            self.external_apis.values()
-        )
+        statuses = [self.db_available, self.cache_available] + list(self.external_apis.values())
         # Partial partition = some up AND some down
         return any(statuses) and not all(statuses)
 
     @property
     def is_full_partition(self) -> bool:
         """True if all connections are down"""
-        statuses = [self.db_available, self.cache_available] + list(
-            self.external_apis.values()
-        )
+        statuses = [self.db_available, self.cache_available] + list(self.external_apis.values())
         return not any(statuses) if statuses else False
 
     @property
     def is_healthy(self) -> bool:
         """True if all connections are healthy"""
-        statuses = [self.db_available, self.cache_available] + list(
-            self.external_apis.values()
-        )
+        statuses = [self.db_available, self.cache_available] + list(self.external_apis.values())
         return all(statuses) if statuses else True
+
+    @property
+    def has_bulkhead_pressure(self) -> bool:
+        """True if any bulkhead has high utilization (>80%)"""
+        for state in self.bulkhead_states.values():
+            utilization = state.get("utilization_percent", 0)
+            if utilization > 80:
+                return True
+        return False
 
 
 class ConnectionHealthMonitor(ABC):
     """Abstract interface for connection health monitoring"""
 
     @abstractmethod
-    def check_health(
-        self, connection_type: ConnectionType, name: str
-    ) -> ConnectionHealth:
+    def check_health(self, connection_type: ConnectionType, name: str) -> ConnectionHealth:
         """Check health of a specific connection"""
         pass
 
@@ -102,9 +105,7 @@ class ConnectionHealthMonitor(ABC):
         pass
 
     @abstractmethod
-    def register_health_check(
-        self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]
-    ) -> None:
+    def register_health_check(self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]) -> None:
         """Register a health check function for a connection"""
         pass
 
@@ -138,9 +139,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         self._simulation_experiment_id: str | None = None
 
     @classmethod
-    def from_settings(
-        cls, settings=None, **overrides
-    ) -> DefaultConnectionHealthMonitor:
+    def from_settings(cls, settings=None, **overrides) -> DefaultConnectionHealthMonitor:
         """
         Settings 기반 인스턴스 생성.
 
@@ -155,9 +154,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
 
         s = settings or get_pool_monitor_settings()
         return cls(
-            failure_threshold=overrides.get(
-                "failure_threshold", s.connection_failure_threshold
-            ),
+            failure_threshold=overrides.get("failure_threshold", s.connection_failure_threshold),
         )
 
     def set_simulation_override(
@@ -194,8 +191,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         )
         self._simulation_experiment_id = experiment_id
         logging.getLogger(__name__).info(
-            f"[ConnectionHealthMonitor] Simulation override set: {key}={status.value} "
-            f"(experiment_id={experiment_id})"
+            f"[ConnectionHealthMonitor] Simulation override set: {key}={status.value} " f"(experiment_id={experiment_id})"
         )
 
     def set_partition_simulation(
@@ -230,9 +226,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         self._simulation_overrides.clear()
         self._partition_override = None
         self._simulation_experiment_id = None
-        logging.getLogger(__name__).info(
-            "[ConnectionHealthMonitor] All simulation overrides cleared"
-        )
+        logging.getLogger(__name__).info("[ConnectionHealthMonitor] All simulation overrides cleared")
 
     def is_simulation_active(self) -> bool:
         """시뮬레이션 오버라이드가 활성화되어 있는지 확인."""
@@ -242,9 +236,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         """현재 시뮬레이션과 연관된 실험 ID 반환."""
         return self._simulation_experiment_id
 
-    def register_health_check(
-        self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]
-    ) -> None:
+    def register_health_check(self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]) -> None:
         """Register a health check function for monitoring."""
         key = f"{connection_type.value}:{name}"
         self._health_checks[key] = check_fn
@@ -266,9 +258,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
             return True
         return False
 
-    def check_health(
-        self, connection_type: ConnectionType, name: str
-    ) -> ConnectionHealth:
+    def check_health(self, connection_type: ConnectionType, name: str) -> ConnectionHealth:
         """
         Check health of a specific connection.
 
@@ -280,9 +270,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         if key in self._simulation_overrides:
             import logging
 
-            logging.getLogger(__name__).debug(
-                f"[ConnectionHealthMonitor] Returning simulated health for {key}"
-            )
+            logging.getLogger(__name__).debug(f"[ConnectionHealthMonitor] Returning simulated health for {key}")
             return self._simulation_overrides[key]
 
         if key not in self._health_checks:
@@ -333,14 +321,13 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         Get current partition state across all connections.
 
         시뮬레이션 오버라이드를 지원합니다.
+        Bulkhead 상태도 함께 수집합니다.
         """
         # 파티션 시뮬레이션 오버라이드 체크
         if self._partition_override is not None:
             import logging
 
-            logging.getLogger(__name__).debug(
-                "[ConnectionHealthMonitor] Returning simulated partition state"
-            )
+            logging.getLogger(__name__).debug("[ConnectionHealthMonitor] Returning simulated partition state")
             return self._partition_override
 
         state = PartitionState()
@@ -357,7 +344,43 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
             elif conn_type == ConnectionType.EXTERNAL_API.value:
                 state.external_apis[name] = is_healthy
 
+        # Bulkhead 상태 수집
+        state.bulkhead_states = self._collect_bulkhead_states()
+
         return state
+
+    def _collect_bulkhead_states(self) -> dict[str, dict]:
+        """
+        모든 Bulkhead의 현재 상태 수집.
+
+        Returns:
+            격벽 이름 -> 상태 정보 딕셔너리
+        """
+        try:
+            from selfhealing.resilience.bulkhead import get_bulkhead_registry
+
+            registry = get_bulkhead_registry()
+            states = registry.get_all_states()
+
+            return {
+                name: {
+                    "type": state.bulkhead_type.value,
+                    "max_concurrent": state.max_concurrent,
+                    "active_count": state.active_count,
+                    "waiting_count": state.waiting_count,
+                    "rejected_count": state.rejected_count,
+                    "available_permits": state.available_permits,
+                    "utilization_percent": round(state.utilization_percent, 2),
+                }
+                for name, state in states.items()
+            }
+        except ImportError:
+            return {}
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).debug(f"[ConnectionHealthMonitor] Failed to collect bulkhead states: {e}")
+            return {}
 
     def get_all_health_states(self) -> dict[str, ConnectionHealth]:
         """Get all registered connection health states."""

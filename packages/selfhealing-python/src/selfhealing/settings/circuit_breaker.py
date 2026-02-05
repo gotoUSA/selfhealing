@@ -80,7 +80,11 @@ class CircuitBreakerSettings(BaseSettings):
         description="Request limit in half-open state",
     )
     excluded_exceptions: list[str] = Field(
-        default_factory=list,
+        default_factory=lambda: [
+            # Bulkhead 거부는 리소스 부족이지 서비스 장애가 아님
+            # CB 실패 카운트에서 제외하여 불필요한 서킷 오픈 방지
+            "selfhealing.resilience.bulkhead.exceptions.BulkheadFullException",
+        ],
         description="Exception types to exclude from failure count",
     )
 
@@ -132,10 +136,7 @@ class CircuitBreakerSettings(BaseSettings):
     def validate_failure_threshold(cls, v: int) -> int:
         """Safe default fallback warning for extreme values."""
         if v > 50:
-            logger.warning(
-                f"[SafeDefault] High failure_threshold={v}, "
-                "consider using <= 50 for safety"
-            )
+            logger.warning(f"[SafeDefault] High failure_threshold={v}, " "consider using <= 50 for safety")
         return v
 
 

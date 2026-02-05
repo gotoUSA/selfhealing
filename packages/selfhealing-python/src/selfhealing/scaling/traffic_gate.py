@@ -1,8 +1,13 @@
 """
-Traffic Gate - RateController + CascadeLoadShedding 통합.
+Traffic Gate - RateController + CascadeLoadShedding + Bulkhead 통합.
 
-RateController와 CascadeLoadShedding을 파이프라인 형태로 통합하여
+RateController, CascadeLoadShedding, Bulkhead를 파이프라인 형태로 통합하여
 트래픽을 제어합니다.
+
+처리 순서:
+1. Bulkhead (도메인별 격리) - 특정 도메인 폭주 시 해당 도메인만 거부
+2. CascadeLoadShedding (우선순위 필터링) - 낮은 우선순위 요청 거부
+3. RateController (전역 Rate Limit) - 전체 처리량 제한
 """
 
 from __future__ import annotations
@@ -43,23 +48,42 @@ class TrafficDecision:
     metadata: dict[str, Any] | None = None
     """추가 메타데이터."""
 
+    bulkhead_acquired: bool = False
+    """Bulkhead 리소스 획득 여부 (True면 release 필요)."""
+
+    bulkhead_name: str | None = None
+    """획득한 Bulkhead 이름."""
+
 
 class TrafficGate:
     """
     Traffic Gate - 통합 트래픽 제어.
 
     처리 순서:
-    1. CascadeLoadShedding.should_accept() - 우선순위 기반 필터링
-    2. RateController.should_process() - Rate Limit 기반 스로틀링
+    1. Bulkhead.try_acquire() - 도메인별 리소스 격리 (신규)
+    2. CascadeLoadShedding.should_accept() - 우선순위 기반 필터링
+    3. RateController.should_process() - Rate Limit 기반 스로틀링
+
+    Bulkhead 통합 이점:
+    - database 도메인 폭주 시 database 격벽만 거부, cache/external_api 정상
+    - 전역 Rate Limit 소진 방지
+    - 도메인별 병목 지점 명확히 파악 가능
 
     Usage:
         gate = TrafficGate()
 
+        # 기본 사용 (Bulkhead 없이)
         decision = gate.should_allow(priority=5)
+
+        # Bulkhead와 함께 사용
+        decision = gate.should_allow(priority=5, bulkhead_name="database")
         if decision.allowed:
-            process_item()
-        else:
-            logger.warning(f"Rejected: {decision.reason} by {decision.gate}")
+            try:
+                process_item()
+            finally:
+                # 주의: Bulkhead 획득 성공 시 release 필요
+                if decision.bulkhead_acquired:
+                    gate.release_bulkhead("database")
     """
 
     def __init__(
@@ -81,19 +105,56 @@ class TrafficGate:
     def should_allow(
         self,
         priority: int = 0,
+        bulkhead_name: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> TrafficDecision:
         """
         트래픽 허용 여부 결정.
 
+        처리 순서:
+        1. Bulkhead (도메인별 격리) - 신규
+        2. CascadeLoadShedding (우선순위 필터링)
+        3. RateController (전역 Rate Limit)
+
         Args:
             priority: 요청 우선순위 (낮을수록 높은 우선순위)
+            bulkhead_name: 격벽 이름 (ConnectionType.value 또는 커스텀)
             metadata: 결정에 사용할 추가 메타데이터
 
         Returns:
             TrafficDecision 결과
+
+        Note:
+            bulkhead_name을 지정하고 allowed=True인 경우,
+            bulkhead_acquired=True이면 작업 완료 후 release_bulkhead() 호출 필요.
         """
         current_level = self._rate_controller.get_state().level
+        bulkhead_acquired = False
+
+        # 0단계: Bulkhead 확인 (도메인별 격리)
+        if bulkhead_name is not None:
+            try:
+                from selfhealing.resilience.bulkhead import get_bulkhead_registry
+
+                registry = get_bulkhead_registry()
+                bulkhead = registry.get(bulkhead_name)
+
+                if not bulkhead.try_acquire():
+                    return TrafficDecision(
+                        allowed=False,
+                        reason=f"Bulkhead '{bulkhead_name}' is full",
+                        level=current_level,
+                        gate="Bulkhead",
+                        metadata=metadata,
+                        bulkhead_acquired=False,
+                        bulkhead_name=bulkhead_name,
+                    )
+                bulkhead_acquired = True
+            except KeyError:
+                # 등록되지 않은 bulkhead는 무시하고 진행
+                logger.debug(f"[TrafficGate] Bulkhead '{bulkhead_name}' not found, skipping")
+            except Exception as e:
+                logger.warning(f"[TrafficGate] Bulkhead error: {e}")
 
         # 1단계: CascadeLoadShedding 확인 (설정된 경우)
         if self._load_shedding is not None:
@@ -102,6 +163,9 @@ class TrafficGate:
                     result = self._load_shedding.should_accept(priority=priority)
                     # CascadeLoadShedding.should_accept()는 dict 반환
                     if isinstance(result, dict) and not result.get("accepted", True):
+                        # 거부 시 획득한 Bulkhead 반환
+                        if bulkhead_acquired and bulkhead_name:
+                            self._release_bulkhead_internal(bulkhead_name)
                         return TrafficDecision(
                             allowed=False,
                             reason=f"Load shedding rejected priority={priority}",
@@ -114,6 +178,9 @@ class TrafficGate:
 
         # 2단계: RateController 확인
         if not self._rate_controller.should_process():
+            # 거부 시 획득한 Bulkhead 반환
+            if bulkhead_acquired and bulkhead_name:
+                self._release_bulkhead_internal(bulkhead_name)
             return TrafficDecision(
                 allowed=False,
                 reason=f"Rate limit exceeded at level={current_level.value}",
@@ -128,7 +195,32 @@ class TrafficGate:
             level=current_level,
             gate="TrafficGate",
             metadata=metadata,
+            bulkhead_acquired=bulkhead_acquired,
+            bulkhead_name=bulkhead_name if bulkhead_acquired else None,
         )
+
+    def _release_bulkhead_internal(self, bulkhead_name: str) -> None:
+        """내부용 Bulkhead 릴리즈."""
+        try:
+            from selfhealing.resilience.bulkhead import get_bulkhead_registry
+
+            registry = get_bulkhead_registry()
+            bulkhead = registry.get(bulkhead_name)
+            bulkhead.release()
+        except Exception as e:
+            logger.warning(f"[TrafficGate] Failed to release bulkhead: {e}")
+
+    def release_bulkhead(self, bulkhead_name: str) -> None:
+        """
+        Bulkhead 리소스 반환.
+
+        should_allow()에서 bulkhead_acquired=True인 경우,
+        작업 완료 후 반드시 호출해야 합니다.
+
+        Args:
+            bulkhead_name: 반환할 격벽 이름
+        """
+        self._release_bulkhead_internal(bulkhead_name)
 
     def get_level(self) -> BackpressureLevel:
         """현재 Backpressure 레벨 반환."""

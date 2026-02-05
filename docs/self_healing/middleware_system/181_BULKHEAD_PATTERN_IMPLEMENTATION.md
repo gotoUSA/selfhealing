@@ -2251,10 +2251,10 @@ class BulkheadSettings(BaseSettings):
 - [x] `resilience/bulkhead/async_semaphore.py` 작성 (10.1) ✅ 2026-02-05
 - [x] `threadpool.py`에 `contextvars.copy_context()` 추가 (10.2) ✅ 2026-02-05
 - [x] `registry.py`에 EventBus 구독 추가 (10.3) ✅ 2026-02-05
-- [ ] `settings/circuit_breaker.py`에 BulkheadFullException 제외 추가 (10.4) - 선택적
-- [ ] `scaling/traffic_gate.py` 확장 (10.5) - 별도 문서에서 진행
+- [x] `settings/circuit_breaker.py`에 BulkheadFullException 제외 추가 (10.4) ✅ 2026-02-05
+- [x] `scaling/traffic_gate.py` 확장 (10.5) ✅ 2026-02-05
 - [x] `resilience/bulkhead/otel.py` 작성 (10.6) ✅ 2026-02-05
-- [ ] `api/django/views/bulkhead.py` 작성 (10.7) - 별도 문서에서 진행
+- [x] `api/django/views/bulkhead.py` 작성 (10.7) ✅ 2026-02-05
 - [x] `registry.py`에 `get_for_database()` 추가 (10.8) ✅ 2026-02-05
 - [x] `decorator.py`에 async 분기 추가 (4.2.7) ✅ 2026-02-05
 
@@ -2267,7 +2267,7 @@ class BulkheadSettings(BaseSettings):
 
 ### 11.4 통합
 
-- [ ] LayeredRepositoryBase 통합 - 별도 문서에서 진행
-- [ ] ConnectionHealthMonitor 통합 - 별도 문서에서 진행
-- [ ] TrafficGate 통합 - 별도 문서에서 진행
+- [x] LayeredRepositoryBase 통합 ✅ 2026-02-05
+- [x] ConnectionHealthMonitor 통합 ✅ 2026-02-05
+- [x] TrafficGate 통합 ✅ 2026-02-05
 - [x] 문서 업데이트 ✅ 2026-02-05

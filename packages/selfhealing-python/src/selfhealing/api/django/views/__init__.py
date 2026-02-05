@@ -387,6 +387,17 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
         "selfhealing.api.django.views.grafana_webhook",
         "GrafanaAlertWebhookTestView",
     ),
+    # -------------------------------------------------------------------------
+    # bulkhead.py (2 symbols)
+    # -------------------------------------------------------------------------
+    "BulkheadStatusView": (
+        "selfhealing.api.django.views.bulkhead",
+        "BulkheadStatusView",
+    ),
+    "BulkheadDetailView": (
+        "selfhealing.api.django.views.bulkhead",
+        "BulkheadDetailView",
+    ),
 }
 
 # Cache for lazily loaded symbols
