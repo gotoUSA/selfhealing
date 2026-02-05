@@ -106,3 +106,49 @@ data:
         name:
           as: "http_request_duration_p95"
         metricsQuery: 'histogram_quantile(0.95, sum(rate(<<.Series>>{<<.LabelMatchers>>}[5m])) by (<<.GroupBy>>, le))'
+
+      # =============================================================================
+      # SelfHealing Backpressure Metrics (HPA Custom Metrics)
+      # =============================================================================
+
+      # SelfHealing Queue Depth
+      # 현재 큐 깊이 (HPA 주요 지표)
+      - seriesQuery: 'selfhealing_queue_depth{namespace!="",pod!=""}'
+        resources:
+          overrides:
+            namespace:
+              resource: "namespace"
+            pod:
+              resource: "pod"
+        name:
+          matches: "^(.*)$"
+          as: "selfhealing_queue_depth"
+        metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+
+      # SelfHealing Processing Rate
+      # 처리율 (항목/초)
+      - seriesQuery: 'selfhealing_processing_rate{namespace!="",pod!=""}'
+        resources:
+          overrides:
+            namespace:
+              resource: "namespace"
+            pod:
+              resource: "pod"
+        name:
+          matches: "^(.*)$"
+          as: "selfhealing_processing_rate"
+        metricsQuery: 'avg(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+
+      # SelfHealing Backpressure Level
+      # 현재 Backpressure 레벨 (0=NONE ~ 4=CRITICAL)
+      - seriesQuery: 'selfhealing_backpressure_level{namespace!="",pod!=""}'
+        resources:
+          overrides:
+            namespace:
+              resource: "namespace"
+            pod:
+              resource: "pod"
+        name:
+          matches: "^(.*)$"
+          as: "selfhealing_backpressure_level"
+        metricsQuery: 'max(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'

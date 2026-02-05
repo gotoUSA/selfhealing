@@ -1,0 +1,81 @@
+# SelfHealing Worker Horizontal Pod Autoscaler
+#
+# 큐 깊이, CPU, 메모리 기반 자동 스케일링.
+# HPA Scale-Up과 Pod Ready 사이의 지연 기간 동안
+# Backpressure가 부하를 제어합니다.
+#
+# 적용 방법:
+#   kubectl apply -f k8s/selfhealing-hpa.yaml
+#
+# 사전 요구사항:
+#   - metrics-server (CPU/Memory 메트릭)
+#   - prometheus-adapter (커스텀 메트릭)
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: selfhealing-worker-hpa
+  namespace: selfhealing
+  labels:
+    app: selfhealing
+    component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: selfhealing-worker
+
+  # 최소/최대 Pod 수
+  minReplicas: 2
+  maxReplicas: 20
+
+  metrics:
+    # 1. 큐 깊이 기반 (주요 지표)
+    # Pod당 평균 100개 큐 항목 목표
+    - type: Pods
+      pods:
+        metric:
+          name: selfhealing_queue_depth
+        target:
+          type: AverageValue
+          averageValue: "100"
+
+    # 2. CPU 사용률 기반 (보조 지표)
+    # 70% 초과 시 스케일 아웃
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+    # 3. 메모리 사용률 기반 (보조 지표)
+    # 80% 초과 시 스케일 아웃
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  behavior:
+    # Scale-Down 정책
+    # 300초 안정화로 flapping 방지
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    # Scale-Up 정책
+    # 즉시 스케일 업 (Backpressure가 대기 시간 커버)
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max

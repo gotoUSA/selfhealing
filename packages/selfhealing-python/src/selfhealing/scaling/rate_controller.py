@@ -1,0 +1,339 @@
+"""
+Rate-aware Backpressure Controller.
+
+동적으로 처리율을 조절하여 과부하를 방지합니다.
+AIMD (Additive Increase, Multiplicative Decrease) 패턴 적용.
+
+주의:
+    이 모듈은 동기(Threading) 환경용입니다.
+    asyncio 환경에서는 이벤트 루프를 블로킹할 수 있습니다.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from dataclasses import dataclass
+from typing import Callable
+
+from selfhealing.scaling.config import (
+    BackpressureLevel,
+    BackpressureSettings,
+    BackpressureStrategy,
+    get_backpressure_settings,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RateControllerState:
+    """Rate Controller 현재 상태."""
+
+    current_rate: float
+    """현재 처리율 (항목/초)."""
+
+    target_rate: float
+    """목표 처리율."""
+
+    level: BackpressureLevel
+    """Backpressure 레벨."""
+
+    queue_size: int
+    """현재 큐 크기."""
+
+    processed_count: int
+    """처리된 항목 수."""
+
+    dropped_count: int
+    """버려진 항목 수."""
+
+
+class TokenBucket:
+    """
+    Token Bucket 알고리즘 구현.
+
+    Rate Limit을 구현하기 위한 토큰 버킷.
+    토큰이 일정 속도로 충전되고, 요청 시 토큰을 소비합니다.
+    """
+
+    def __init__(
+        self,
+        rate: float,
+        capacity: float | None = None,
+    ):
+        """
+        Args:
+            rate: 초당 토큰 생성율
+            capacity: 최대 토큰 수 (None이면 rate와 동일)
+        """
+        self._rate = rate
+        self._capacity = capacity or rate
+        self._tokens = self._capacity
+        self._last_update = time.time()
+        self._lock = threading.Lock()
+
+    def set_rate(self, rate: float) -> None:
+        """Rate 변경."""
+        with self._lock:
+            self._rate = rate
+
+    def get_rate(self) -> float:
+        """현재 Rate 반환."""
+        with self._lock:
+            return self._rate
+
+    def consume(self, tokens: int = 1) -> bool:
+        """
+        토큰 소비 시도.
+
+        Args:
+            tokens: 소비할 토큰 수
+
+        Returns:
+            소비 성공 여부
+        """
+        with self._lock:
+            now = time.time()
+            elapsed = now - self._last_update
+            self._last_update = now
+
+            # 토큰 충전 (시간 경과에 따라)
+            self._tokens = min(
+                self._capacity,
+                self._tokens + elapsed * self._rate,
+            )
+
+            # 토큰 소비 시도
+            if self._tokens >= tokens:
+                self._tokens -= tokens
+                return True
+            return False
+
+    def wait_for_token(self, timeout: float = 1.0) -> bool:
+        """
+        토큰을 대기하며 획득 시도.
+
+        주의:
+            time.sleep()을 사용하므로 asyncio 환경에서는
+            이벤트 루프를 블로킹합니다.
+
+        Args:
+            timeout: 최대 대기 시간 (초)
+
+        Returns:
+            토큰 획득 성공 여부
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            if self.consume():
+                return True
+            time.sleep(0.01)
+        return False
+
+
+class RateController:
+    """
+    Rate-aware Backpressure Controller.
+
+    기능:
+    - 큐 크기 기반 Backpressure 레벨 계산
+    - 동적 Rate 조절 (AIMD 패턴)
+    - 전략 기반 처리 (Throttle, Drop, Reject)
+
+    Usage:
+        controller = RateController()
+        controller.start()
+
+        if controller.should_process():
+            process_item()
+        else:
+            # Backpressure 활성화됨
+            pass
+
+        controller.stop()
+    """
+
+    def __init__(
+        self,
+        settings: BackpressureSettings | None = None,
+        queue_size_provider: Callable[[], int] | None = None,
+    ):
+        """
+        Args:
+            settings: Backpressure 설정
+            queue_size_provider: 큐 크기 제공 함수
+        """
+        self._settings = settings or get_backpressure_settings()
+        self._queue_size_provider = queue_size_provider or (lambda: 0)
+
+        self._lock = threading.RLock()
+        self._current_rate = self._settings.max_rate_per_second
+        self._level = BackpressureLevel.NONE
+        self._token_bucket = TokenBucket(self._current_rate)
+
+        # 통계
+        self._processed_count = 0
+        self._dropped_count = 0
+
+        # 백그라운드 조절 스레드
+        self._running = False
+        self._worker: threading.Thread | None = None
+
+    def get_state(self) -> RateControllerState:
+        """현재 상태 반환."""
+        with self._lock:
+            return RateControllerState(
+                current_rate=self._current_rate,
+                target_rate=self._settings.max_rate_per_second,
+                level=self._level,
+                queue_size=self._queue_size_provider(),
+                processed_count=self._processed_count,
+                dropped_count=self._dropped_count,
+            )
+
+    def should_process(self) -> bool:
+        """
+        처리 여부 결정.
+
+        Returns:
+            True면 처리, False면 Backpressure로 거부
+        """
+        if not self._settings.backpressure_enabled:
+            return True
+
+        # Token Bucket에서 토큰 소비 시도
+        if self._token_bucket.consume():
+            with self._lock:
+                self._processed_count += 1
+            return True
+
+        # 토큰 부족 시 전략에 따른 처리
+        strategy = self._settings.default_strategy
+
+        if strategy == BackpressureStrategy.REJECT:
+            with self._lock:
+                self._dropped_count += 1
+            return False
+
+        if strategy == BackpressureStrategy.THROTTLE:
+            # 잠시 대기 후 재시도
+            if self._token_bucket.wait_for_token(timeout=0.1):
+                with self._lock:
+                    self._processed_count += 1
+                return True
+            with self._lock:
+                self._dropped_count += 1
+            return False
+
+        if strategy == BackpressureStrategy.DROP_OLDEST:
+            # DROP_OLDEST는 호출자가 처리
+            return True
+
+        if strategy == BackpressureStrategy.QUEUE:
+            # QUEUE는 호출자가 처리
+            return True
+
+        return True
+
+    def _adjust_rate(self) -> None:
+        """
+        Rate 조절 (AIMD 패턴).
+
+        - 과부하 시: 레벨별 차등 감소 (Multiplicative Decrease)
+        - 정상화 시: 점진적 증가 (Additive Increase)
+        """
+        queue_size = self._queue_size_provider()
+        new_level = self._settings.get_level_for_queue_size(queue_size)
+
+        with self._lock:
+            old_level = self._level
+            self._level = new_level
+
+        # AIMD 패턴: 레벨별 Rate 배율 적용
+        if new_level == BackpressureLevel.NONE:
+            # 정상: 점진적 증가 (Additive Increase)
+            new_rate = self._current_rate * self._settings.rate_increase_factor
+        else:
+            # 과부하: 레벨별 차등 감소 (Multiplicative Decrease)
+            multiplier = self._settings.get_rate_multiplier(new_level)
+            new_rate = self._settings.max_rate_per_second * multiplier
+
+        # 범위 제한
+        new_rate = max(
+            self._settings.min_rate_per_second,
+            min(self._settings.max_rate_per_second, new_rate),
+        )
+
+        with self._lock:
+            if new_rate != self._current_rate:
+                self._current_rate = new_rate
+                self._token_bucket.set_rate(new_rate)
+                logger.info(
+                    f"[RateController] Rate adjusted: {new_rate:.1f}/s "
+                    f"(level={new_level.value}, queue={queue_size}, "
+                    f"multiplier={self._settings.get_rate_multiplier(new_level)})"
+                )
+
+    def _run_loop(self) -> None:
+        """백그라운드 조절 루프."""
+        while self._running:
+            try:
+                self._adjust_rate()
+            except Exception as e:
+                logger.error(f"[RateController] Adjust error: {e}")
+
+            time.sleep(self._settings.rate_adjust_interval_seconds)
+
+    def start(self) -> None:
+        """Rate 조절 시작."""
+        if not self._settings.backpressure_enabled:
+            logger.info("[RateController] Disabled")
+            return
+
+        if self._running:
+            return
+
+        self._running = True
+        self._worker = threading.Thread(
+            target=self._run_loop,
+            name="RateController",
+            daemon=True,
+        )
+        self._worker.start()
+        logger.info("[RateController] Started")
+
+    def stop(self) -> None:
+        """Rate 조절 중지."""
+        self._running = False
+        if self._worker:
+            self._worker.join(timeout=5.0)
+        logger.info("[RateController] Stopped")
+
+
+# =============================================================================
+# Singleton
+# =============================================================================
+
+_controller: RateController | None = None
+_controller_lock = threading.Lock()
+
+
+def get_rate_controller() -> RateController:
+    """RateController 싱글톤 반환."""
+    global _controller
+    if _controller is None:
+        with _controller_lock:
+            if _controller is None:
+                _controller = RateController()
+    return _controller
+
+
+def reset_rate_controller() -> None:
+    """리셋 (테스트용)."""
+    global _controller
+    with _controller_lock:
+        if _controller is not None:
+            _controller.stop()
+            _controller = None

@@ -1,0 +1,33 @@
+# SelfHealing ServiceMonitor for Prometheus
+#
+# Prometheus가 SelfHealing Pod의 /metrics 엔드포인트를 스크래핑합니다.
+# HPA 커스텀 메트릭에 사용됩니다.
+#
+# 적용 방법:
+#   kubectl apply -f k8s/selfhealing-servicemonitor.yaml
+#
+# 사전 요구사항:
+#   - Prometheus Operator
+#   - SelfHealing Service (port: metrics)
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: selfhealing
+  namespace: selfhealing
+  labels:
+    app: selfhealing
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: selfhealing
+  namespaceSelector:
+    matchNames:
+      - selfhealing
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: true

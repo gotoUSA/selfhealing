@@ -1748,13 +1748,13 @@ Rate Controller 조절 간격:
 
 ### 9.1 Core 모듈
 
-- [ ] `scaling/__init__.py` 생성
-- [ ] `scaling/config.py` 구현 (BackpressureSettings)
-- [ ] `scaling/rate_controller.py` 구현 (AIMD 패턴)
-- [ ] `scaling/queue_provider.py` 구현 (CachedQueueSizeProvider)
-- [ ] `scaling/traffic_gate.py` 구현 (TrafficGate)
-- [ ] `scaling/metrics.py` 구현
-- [ ] `scaling/graceful_degradation.py` 구현
+- [x] `scaling/__init__.py` 생성
+- [x] `scaling/config.py` 구현 (BackpressureSettings)
+- [x] `scaling/rate_controller.py` 구현 (AIMD 패턴)
+- [x] `scaling/queue_provider.py` 구현 (CachedQueueSizeProvider)
+- [x] `scaling/traffic_gate.py` 구현 (TrafficGate)
+- [x] `scaling/metrics.py` 구현
+- [x] `scaling/graceful_degradation.py` 구현
 
 ### 9.2 통합
 
@@ -1764,14 +1764,14 @@ Rate Controller 조절 간격:
 
 ### 9.3 Kubernetes
 
-- [ ] Kubernetes HPA 설정 (stabilizationWindowSeconds 확인)
-- [ ] Prometheus Adapter 설정
+- [x] Kubernetes HPA 설정 (stabilizationWindowSeconds 확인)
+- [x] Prometheus Adapter 설정
 - [ ] KEDA ScaledObject 검토 (기존과 충돌 여부)
-- [ ] ServiceMonitor 설정
+- [x] ServiceMonitor 설정
 
 ### 9.4 검증
 
-- [ ] 단위 테스트 작성
+- [x] 단위 테스트 작성
 - [ ] 부하 테스트 수행
 - [ ] HPA-Backpressure 지연 시나리오 테스트
 
