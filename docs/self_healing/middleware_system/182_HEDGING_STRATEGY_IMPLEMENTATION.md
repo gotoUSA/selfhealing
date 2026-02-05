@@ -2671,8 +2671,8 @@ def test_hedging_reduces_latency():
 - [x] 확정적 에러 처리 테스트
 - [x] 결과 정합성 검증 테스트
 - [x] Backpressure 연동 검증 생략 테스트
-- [ ] Meta-Watchdog 에스컨레이션 테스트
-- [ ] DiskPersistentBuffer 영속화 테스트
+- [x] Meta-Watchdog 에스컬레이션 테스트
+- [x] DiskPersistentBuffer 영속화 테스트
 
 ### 8.4 문서
 
