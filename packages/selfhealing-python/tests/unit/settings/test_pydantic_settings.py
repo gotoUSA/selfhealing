@@ -20,6 +20,7 @@ class TestCircuitBreakerSettings:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.circuit_breaker import reset_circuit_breaker_settings
+
         reset_circuit_breaker_settings()
         yield
         reset_circuit_breaker_settings()
@@ -27,9 +28,9 @@ class TestCircuitBreakerSettings:
     def test_default_values(self):
         """기본값이 core/config.py:CircuitBreakerConfig와 일치하는지 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         settings = CircuitBreakerSettings()
-        
+
         # Core settings (from core/config.py lines 17-23)
         assert settings.enabled is True
         assert settings.failure_threshold == 5
@@ -37,12 +38,15 @@ class TestCircuitBreakerSettings:
         assert settings.success_threshold == 2
         assert settings.half_open_max_calls == 3
         assert settings.half_open_request_limit == 10
-        assert settings.excluded_exceptions == []
-        
+        # BulkheadFullException은 리소스 부족이지 서비스 장애가 아니므로 기본 제외
+        assert settings.excluded_exceptions == [
+            "selfhealing.resilience.bulkhead.exceptions.BulkheadFullException",
+        ]
+
         # Rate limit cascade (lines 25-27)
         assert settings.rate_limit_cascade_threshold == 10
         assert settings.rate_limit_cascade_window_seconds == 60
-        
+
         # Self-DDoS protection (lines 29-33)
         assert settings.self_ddos_protection_enabled is True
         assert settings.self_ddos_request_threshold == 100
@@ -52,13 +56,13 @@ class TestCircuitBreakerSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         monkeypatch.setenv("SELFHEALING_CB_FAILURE_THRESHOLD", "10")
         monkeypatch.setenv("SELFHEALING_CB_RECOVERY_TIMEOUT", "120")
         monkeypatch.setenv("SELFHEALING_CB_ENABLED", "false")
-        
+
         settings = CircuitBreakerSettings()
-        
+
         assert settings.failure_threshold == 10
         assert settings.recovery_timeout == 120
         assert settings.enabled is False
@@ -66,44 +70,44 @@ class TestCircuitBreakerSettings:
     def test_validation_min_failure_threshold(self):
         """failure_threshold 최소값(1) 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         with pytest.raises(ValidationError) as exc_info:
             CircuitBreakerSettings(failure_threshold=0)
-        
+
         assert "failure_threshold" in str(exc_info.value)
 
     def test_validation_max_failure_threshold(self):
         """failure_threshold 최대값(100) 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         with pytest.raises(ValidationError) as exc_info:
             CircuitBreakerSettings(failure_threshold=101)
-        
+
         assert "failure_threshold" in str(exc_info.value)
 
     def test_validation_recovery_timeout_range(self):
         """recovery_timeout 범위 (1-3600) 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         # Too low
         with pytest.raises(ValidationError):
             CircuitBreakerSettings(recovery_timeout=0)
-        
+
         # Too high
         with pytest.raises(ValidationError):
             CircuitBreakerSettings(recovery_timeout=3601)
-        
+
         # Valid edge cases
         settings_min = CircuitBreakerSettings(recovery_timeout=1)
         assert settings_min.recovery_timeout == 1
-        
+
         settings_max = CircuitBreakerSettings(recovery_timeout=3600)
         assert settings_max.recovery_timeout == 3600
 
     def test_type_coercion(self):
         """문자열이 정수로 자동 변환되는지 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         settings = CircuitBreakerSettings(failure_threshold="5")  # type: ignore
         assert settings.failure_threshold == 5
         assert isinstance(settings.failure_threshold, int)
@@ -114,26 +118,26 @@ class TestCircuitBreakerSettings:
             get_circuit_breaker_settings,
             reset_circuit_breaker_settings,
         )
-        
+
         settings1 = get_circuit_breaker_settings()
         settings2 = get_circuit_breaker_settings()
-        
+
         assert settings1 is settings2
-        
+
         reset_circuit_breaker_settings()
         settings3 = get_circuit_breaker_settings()
-        
+
         assert settings1 is not settings3
 
     def test_json_schema_generation(self):
         """JSON Schema가 올바르게 생성되는지 검증."""
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         schema = CircuitBreakerSettings.model_json_schema()
-        
+
         assert "properties" in schema
         assert "failure_threshold" in schema["properties"]
-        
+
         ft_schema = schema["properties"]["failure_threshold"]
         assert ft_schema.get("minimum") == 1
         assert ft_schema.get("maximum") == 100
@@ -146,6 +150,7 @@ class TestDLQSettings:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.dlq import reset_dlq_settings
+
         reset_dlq_settings()
         yield
         reset_dlq_settings()
@@ -153,9 +158,9 @@ class TestDLQSettings:
     def test_default_values(self):
         """기본값이 core/config.py:DLQConfig와 일치하는지 검증."""
         from selfhealing.settings.dlq import DLQSettings
-        
+
         settings = DLQSettings()
-        
+
         # From core/config.py lines 38-45
         assert settings.enabled is True
         assert settings.max_retries == 3
@@ -168,42 +173,42 @@ class TestDLQSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.dlq import DLQSettings
-        
+
         monkeypatch.setenv("SELFHEALING_DLQ_MAX_RETRIES", "5")
         monkeypatch.setenv("SELFHEALING_DLQ_RETENTION_DAYS", "60")
-        
+
         settings = DLQSettings()
-        
+
         assert settings.max_retries == 5
         assert settings.retention_days == 60
 
     def test_validation_max_retries_range(self):
         """max_retries 범위 (1-20) 검증."""
         from selfhealing.settings.dlq import DLQSettings
-        
+
         with pytest.raises(ValidationError):
             DLQSettings(max_retries=0)
-        
+
         with pytest.raises(ValidationError):
             DLQSettings(max_retries=21)
 
     def test_validation_retention_days_range(self):
         """retention_days 범위 (1-365) 검증."""
         from selfhealing.settings.dlq import DLQSettings
-        
+
         with pytest.raises(ValidationError):
             DLQSettings(retention_days=0)
-        
+
         with pytest.raises(ValidationError):
             DLQSettings(retention_days=366)
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.dlq import get_dlq_settings, reset_dlq_settings
-        
+
         settings1 = get_dlq_settings()
         settings2 = get_dlq_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -214,6 +219,7 @@ class TestRetrySettings:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.retry import reset_retry_settings
+
         reset_retry_settings()
         yield
         reset_retry_settings()
@@ -221,9 +227,9 @@ class TestRetrySettings:
     def test_default_values(self):
         """기본값이 core/config.py:RetryConfig와 일치하는지 검증."""
         from selfhealing.settings.retry import RetrySettings
-        
+
         settings = RetrySettings()
-        
+
         # From core/config.py lines 50-56
         assert settings.max_attempts == 3
         assert settings.backoff_strategy == "exponential"
@@ -237,47 +243,47 @@ class TestRetrySettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.retry import RetrySettings
-        
+
         monkeypatch.setenv("SELFHEALING_RETRY_MAX_ATTEMPTS", "5")
         monkeypatch.setenv("SELFHEALING_RETRY_BACKOFF_STRATEGY", "linear")
-        
+
         settings = RetrySettings()
-        
+
         assert settings.max_attempts == 5
         assert settings.backoff_strategy == "linear"
 
     def test_validation_backoff_strategy(self):
         """backoff_strategy 유효값 검증."""
         from selfhealing.settings.retry import RetrySettings
-        
+
         # Valid strategies
         for strategy in ["exponential", "linear", "constant", "decorrelated_jitter"]:
             settings = RetrySettings(backoff_strategy=strategy)
             assert settings.backoff_strategy == strategy
-        
+
         # Invalid strategy
         with pytest.raises(ValidationError) as exc_info:
             RetrySettings(backoff_strategy="invalid_strategy")
-        
+
         assert "backoff_strategy" in str(exc_info.value)
 
     def test_validation_max_attempts_range(self):
         """max_attempts 범위 (1-20) 검증."""
         from selfhealing.settings.retry import RetrySettings
-        
+
         with pytest.raises(ValidationError):
             RetrySettings(max_attempts=0)
-        
+
         with pytest.raises(ValidationError):
             RetrySettings(max_attempts=21)
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.retry import get_retry_settings, reset_retry_settings
-        
+
         settings1 = get_retry_settings()
         settings2 = get_retry_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -288,6 +294,7 @@ class TestRateLimitSettings:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.rate_limit import reset_rate_limit_settings
+
         reset_rate_limit_settings()
         yield
         reset_rate_limit_settings()
@@ -295,16 +302,16 @@ class TestRateLimitSettings:
     def test_default_values(self):
         """기본값이 core/config.py:RateLimitConfig와 일치하는지 검증."""
         from selfhealing.settings.rate_limit import RateLimitSettings
-        
+
         settings = RateLimitSettings()
-        
+
         # Retry backoff settings (lines 144-149)
         assert settings.base_delay == 1.0
         assert settings.max_delay == 60.0
         assert settings.jitter_percent == 30.0
         assert settings.default_retry_after == 5.0
         assert settings.backoff_multiplier == 2.0
-        
+
         # Control API rate limiting (lines 152-156)
         assert settings.control_api_rate_limit == 100
         assert settings.control_api_window_seconds == 60
@@ -314,32 +321,32 @@ class TestRateLimitSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.rate_limit import RateLimitSettings
-        
+
         monkeypatch.setenv("SELFHEALING_RATELIMIT_CONTROL_API_RATE_LIMIT", "200")
         monkeypatch.setenv("SELFHEALING_RATELIMIT_EMERGENCY_RATE_LIMIT", "20")
-        
+
         settings = RateLimitSettings()
-        
+
         assert settings.control_api_rate_limit == 200
         assert settings.emergency_rate_limit == 20
 
     def test_validation_base_delay_range(self):
         """base_delay 범위 (0.1-60.0) 검증."""
         from selfhealing.settings.rate_limit import RateLimitSettings
-        
+
         with pytest.raises(ValidationError):
             RateLimitSettings(base_delay=0.05)
-        
+
         with pytest.raises(ValidationError):
             RateLimitSettings(base_delay=61.0)
 
     def test_validation_emergency_rate_limit(self):
         """emergency_rate_limit 범위 (1-100) 검증."""
         from selfhealing.settings.rate_limit import RateLimitSettings
-        
+
         with pytest.raises(ValidationError):
             RateLimitSettings(emergency_rate_limit=0)
-        
+
         with pytest.raises(ValidationError):
             RateLimitSettings(emergency_rate_limit=101)
 
@@ -349,10 +356,10 @@ class TestRateLimitSettings:
             get_rate_limit_settings,
             reset_rate_limit_settings,
         )
-        
+
         settings1 = get_rate_limit_settings()
         settings2 = get_rate_limit_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -363,6 +370,7 @@ class TestSecuritySettings:
     def reset_singleton(self):
         """Reset singleton before and after each test."""
         from selfhealing.settings.security import reset_security_settings
+
         reset_security_settings()
         yield
         reset_security_settings()
@@ -370,9 +378,9 @@ class TestSecuritySettings:
     def test_default_values(self):
         """기본값이 core/config.py:SecurityConfig와 일치하는지 검증."""
         from selfhealing.settings.security import SecuritySettings
-        
+
         settings = SecuritySettings()
-        
+
         # From core/config.py lines 176-187
         assert settings.rate_limit_window_seconds == 60
         assert settings.rate_limit_max_requests == 100
@@ -387,42 +395,42 @@ class TestSecuritySettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.security import SecuritySettings
-        
+
         monkeypatch.setenv("SELFHEALING_SECURITY_RATE_LIMIT_MAX_REQUESTS", "200")
         monkeypatch.setenv("SELFHEALING_SECURITY_INJECTION_BAN_HOURS", "48")
-        
+
         settings = SecuritySettings()
-        
+
         assert settings.rate_limit_max_requests == 200
         assert settings.injection_ban_hours == 48
 
     def test_validation_rate_limit_max_requests(self):
         """rate_limit_max_requests 범위 (1-10000) 검증."""
         from selfhealing.settings.security import SecuritySettings
-        
+
         with pytest.raises(ValidationError):
             SecuritySettings(rate_limit_max_requests=0)
-        
+
         with pytest.raises(ValidationError):
             SecuritySettings(rate_limit_max_requests=10001)
 
     def test_validation_injection_ban_hours(self):
         """injection_ban_hours 범위 (1-720) 검증."""
         from selfhealing.settings.security import SecuritySettings
-        
+
         with pytest.raises(ValidationError):
             SecuritySettings(injection_ban_hours=0)
-        
+
         with pytest.raises(ValidationError):
             SecuritySettings(injection_ban_hours=721)
 
     def test_validation_failed_login_threshold(self):
         """failed_login_threshold 범위 (1-100) 검증."""
         from selfhealing.settings.security import SecuritySettings
-        
+
         with pytest.raises(ValidationError):
             SecuritySettings(failed_login_threshold=0)
-        
+
         with pytest.raises(ValidationError):
             SecuritySettings(failed_login_threshold=101)
 
@@ -432,18 +440,18 @@ class TestSecuritySettings:
             get_security_settings,
             reset_security_settings,
         )
-        
+
         settings1 = get_security_settings()
         settings2 = get_security_settings()
-        
+
         assert settings1 is settings2
 
     def test_json_schema_generation(self):
         """JSON Schema가 올바르게 생성되는지 검증."""
         from selfhealing.settings.security import SecuritySettings
-        
+
         schema = SecuritySettings.model_json_schema()
-        
+
         assert "properties" in schema
         assert "rate_limit_max_requests" in schema["properties"]
         assert "injection_ban_hours" in schema["properties"]
@@ -452,7 +460,7 @@ class TestSecuritySettings:
 class TestSettingsConsistencyWithLegacy:
     """
     기존 dataclass 설정과 Pydantic Settings의 일관성 검증.
-    
+
     core/config.py의 dataclass 기본값과
     settings/*.py의 Pydantic 기본값이 동일한지 확인.
     """
@@ -461,10 +469,10 @@ class TestSettingsConsistencyWithLegacy:
         """CircuitBreakerConfig와 CircuitBreakerSettings 기본값 일치."""
         from selfhealing.core.config import CircuitBreakerConfig
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         legacy = CircuitBreakerConfig()
         pydantic = CircuitBreakerSettings()
-        
+
         assert pydantic.enabled == legacy.enabled
         assert pydantic.failure_threshold == legacy.failure_threshold
         assert pydantic.recovery_timeout == legacy.recovery_timeout
@@ -482,10 +490,10 @@ class TestSettingsConsistencyWithLegacy:
         """DLQConfig와 DLQSettings 기본값 일치."""
         from selfhealing.core.config import DLQConfig
         from selfhealing.settings.dlq import DLQSettings
-        
+
         legacy = DLQConfig()
         pydantic = DLQSettings()
-        
+
         assert pydantic.enabled == legacy.enabled
         assert pydantic.max_retries == legacy.max_retries
         assert pydantic.retry_delay == legacy.retry_delay
@@ -498,10 +506,10 @@ class TestSettingsConsistencyWithLegacy:
         """RetryConfig와 RetrySettings 기본값 일치."""
         from selfhealing.core.config import RetryConfig
         from selfhealing.settings.retry import RetrySettings
-        
+
         legacy = RetryConfig()
         pydantic = RetrySettings()
-        
+
         assert pydantic.max_attempts == legacy.max_attempts
         assert pydantic.backoff_strategy == legacy.backoff_strategy
         assert pydantic.backoff_base == legacy.backoff_base
@@ -515,10 +523,10 @@ class TestSettingsConsistencyWithLegacy:
         """RateLimitConfig와 RateLimitSettings 기본값 일치."""
         from selfhealing.core.config import RateLimitConfig
         from selfhealing.settings.rate_limit import RateLimitSettings
-        
+
         legacy = RateLimitConfig()
         pydantic = RateLimitSettings()
-        
+
         assert pydantic.base_delay == legacy.base_delay
         assert pydantic.max_delay == legacy.max_delay
         assert pydantic.jitter_percent == legacy.jitter_percent
@@ -533,10 +541,10 @@ class TestSettingsConsistencyWithLegacy:
         """SecurityConfig와 SecuritySettings 기본값 일치."""
         from selfhealing.core.config import SecurityConfig
         from selfhealing.settings.security import SecuritySettings
-        
+
         legacy = SecurityConfig()
         pydantic = SecuritySettings()
-        
+
         assert pydantic.rate_limit_window_seconds == legacy.rate_limit_window_seconds
         assert pydantic.rate_limit_max_requests == legacy.rate_limit_max_requests
         assert pydantic.temporary_ban_hours == legacy.temporary_ban_hours
@@ -550,7 +558,7 @@ class TestSettingsConsistencyWithLegacy:
 
 class TestValidationRulesConsistency:
     """
-    core/safe_defaults.py의 VALIDATION_RULES와 
+    core/safe_defaults.py의 VALIDATION_RULES와
     Pydantic Field constraints의 일관성 검증.
     """
 
@@ -558,19 +566,19 @@ class TestValidationRulesConsistency:
         """CircuitBreakerSettings 검증 규칙이 VALIDATION_RULES와 일치."""
         from selfhealing.core.safe_defaults import VALIDATION_RULES
         from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
-        
+
         schema = CircuitBreakerSettings.model_json_schema()
         props = schema["properties"]
         rules = VALIDATION_RULES["circuit_breaker"]
-        
+
         # failure_threshold: (1, 100)
         assert props["failure_threshold"]["minimum"] == rules["failure_threshold"][0]
         assert props["failure_threshold"]["maximum"] == rules["failure_threshold"][1]
-        
+
         # recovery_timeout: (1, 3600)
         assert props["recovery_timeout"]["minimum"] == rules["recovery_timeout"][0]
         assert props["recovery_timeout"]["maximum"] == rules["recovery_timeout"][1]
-        
+
         # success_threshold: (1, 100)
         assert props["success_threshold"]["minimum"] == rules["success_threshold"][0]
         assert props["success_threshold"]["maximum"] == rules["success_threshold"][1]
@@ -579,15 +587,15 @@ class TestValidationRulesConsistency:
         """DLQSettings 검증 규칙이 VALIDATION_RULES와 일치."""
         from selfhealing.core.safe_defaults import VALIDATION_RULES
         from selfhealing.settings.dlq import DLQSettings
-        
+
         schema = DLQSettings.model_json_schema()
         props = schema["properties"]
         rules = VALIDATION_RULES["dlq"]
-        
+
         # max_retries: (1, 20)
         assert props["max_retries"]["minimum"] == rules["max_retries"][0]
         assert props["max_retries"]["maximum"] == rules["max_retries"][1]
-        
+
         # retention_days: (1, 365)
         assert props["retention_days"]["minimum"] == rules["retention_days"][0]
         assert props["retention_days"]["maximum"] == rules["retention_days"][1]
@@ -596,15 +604,15 @@ class TestValidationRulesConsistency:
         """RetrySettings 검증 규칙이 VALIDATION_RULES와 일치."""
         from selfhealing.core.safe_defaults import VALIDATION_RULES
         from selfhealing.settings.retry import RetrySettings
-        
+
         schema = RetrySettings.model_json_schema()
         props = schema["properties"]
         rules = VALIDATION_RULES["retry"]
-        
+
         # max_attempts: (1, 20)
         assert props["max_attempts"]["minimum"] == rules["max_attempts"][0]
         assert props["max_attempts"]["maximum"] == rules["max_attempts"][1]
-        
+
         # jitter_percent: (0, 100)
         assert props["jitter_percent"]["minimum"] == rules["jitter_percent"][0]
         assert props["jitter_percent"]["maximum"] == rules["jitter_percent"][1]
@@ -613,11 +621,11 @@ class TestValidationRulesConsistency:
         """RateLimitSettings 검증 규칙이 VALIDATION_RULES와 일치."""
         from selfhealing.core.safe_defaults import VALIDATION_RULES
         from selfhealing.settings.rate_limit import RateLimitSettings
-        
+
         schema = RateLimitSettings.model_json_schema()
         props = schema["properties"]
         rules = VALIDATION_RULES["rate_limit"]
-        
+
         # control_api_rate_limit: (1, 10000)
         assert props["control_api_rate_limit"]["minimum"] == rules["control_api_rate_limit"][0]
         assert props["control_api_rate_limit"]["maximum"] == rules["control_api_rate_limit"][1]
@@ -626,15 +634,15 @@ class TestValidationRulesConsistency:
         """SecuritySettings 검증 규칙이 VALIDATION_RULES와 일치."""
         from selfhealing.core.safe_defaults import VALIDATION_RULES
         from selfhealing.settings.security import SecuritySettings
-        
+
         schema = SecuritySettings.model_json_schema()
         props = schema["properties"]
         rules = VALIDATION_RULES["security"]
-        
+
         # rate_limit_max_requests: (1, 10000)
         assert props["rate_limit_max_requests"]["minimum"] == rules["rate_limit_max_requests"][0]
         assert props["rate_limit_max_requests"]["maximum"] == rules["rate_limit_max_requests"][1]
-        
+
         # injection_ban_hours: (1, 720)
         assert props["injection_ban_hours"]["minimum"] == rules["injection_ban_hours"][0]
         assert props["injection_ban_hours"]["maximum"] == rules["injection_ban_hours"][1]

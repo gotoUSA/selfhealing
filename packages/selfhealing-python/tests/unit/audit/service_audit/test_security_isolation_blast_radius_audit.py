@@ -1,16 +1,15 @@
-"""
-Tests for Phase 1 Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md).
+"""보안, 리전 격리, Blast Radius 서비스의 감사 통합 테스트.
 
-Tests audit integration for:
+테스트 대상:
 1. SecurityViolationService - 보안 위반 처리, IP 차단, 세션 무효화
 2. RegionalIsolationGate - 리전 격리/해제
 3. BlastRadiusService - 정책 설정, 의존성 추가, 서비스 격리/해제
 
-Goals:
-- Verify log_security_violation_audit is called correctly
-- Verify log_region_isolation_audit is called correctly
-- Verify log_blast_radius_audit is called correctly
-- Ensure WAL-based zero-loss audit recording
+검증 항목:
+- log_security_violation_audit 호출 검증
+- log_region_isolation_audit 호출 검증
+- log_blast_radius_audit 호출 검증
+- WAL 기반 무손실 감사 기록
 """
 
 import pytest
@@ -23,40 +22,40 @@ from unittest.mock import MagicMock, patch, call
 
 
 class TestSecurityViolationAuditEventTypes:
-    """Tests for security violation AuditEventType additions (Phase 1)."""
+    """보안 위반 AuditEventType 열거형 테스트."""
 
     def test_security_violation_event_type_exists(self):
         """Should have SECURITY_VIOLATION event type."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "SECURITY_VIOLATION")
         assert AuditEventType.SECURITY_VIOLATION.value == "security_violation"
 
     def test_security_ip_blocked_event_type_exists(self):
         """Should have SECURITY_IP_BLOCKED event type."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "SECURITY_IP_BLOCKED")
         assert AuditEventType.SECURITY_IP_BLOCKED.value == "security_ip_blocked"
 
     def test_security_session_invalidated_event_type_exists(self):
         """Should have SECURITY_SESSION_INVALIDATED event type."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "SECURITY_SESSION_INVALIDATED")
         assert AuditEventType.SECURITY_SESSION_INVALIDATED.value == "security_session_invalidated"
 
     def test_region_isolated_event_type_exists(self):
         """Should have REGION_ISOLATED event type."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "REGION_ISOLATED")
         assert AuditEventType.REGION_ISOLATED.value == "region_isolated"
 
     def test_region_restored_event_type_exists(self):
         """Should have REGION_RESTORED event type."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "REGION_RESTORED")
         assert AuditEventType.REGION_RESTORED.value == "region_restored"
 
@@ -76,7 +75,7 @@ class TestLogSecurityViolationAudit:
             return_value=42,
         ):
             from selfhealing.services.audit import log_security_violation_audit
-            
+
             result = log_security_violation_audit(
                 violation_type="token_forged",
                 action="handle_violation",
@@ -84,7 +83,7 @@ class TestLogSecurityViolationAudit:
                 result="success",
                 severity="critical",
             )
-            
+
             assert result == 42
 
     def test_writes_to_wal_with_correct_event_type(self):
@@ -94,7 +93,7 @@ class TestLogSecurityViolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_security_violation_audit
-            
+
             log_security_violation_audit(
                 violation_type="injection_attempt",
                 action="handle_violation",
@@ -104,7 +103,7 @@ class TestLogSecurityViolationAudit:
                 incident_id=123,
                 source_ip="10.0.0.1",
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "SECURITY_VIOLATION"
@@ -122,7 +121,7 @@ class TestLogSecurityViolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_security_violation_audit
-            
+
             log_security_violation_audit(
                 violation_type="ip_ban_temporary",
                 action="block_ip",
@@ -130,7 +129,7 @@ class TestLogSecurityViolationAudit:
                 result="success",
                 severity="high",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "SECURITY_IP_BLOCKED"
 
@@ -141,7 +140,7 @@ class TestLogSecurityViolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_security_violation_audit
-            
+
             log_security_violation_audit(
                 violation_type="session_invalidation",
                 action="invalidate_session",
@@ -150,7 +149,7 @@ class TestLogSecurityViolationAudit:
                 severity="high",
                 user_id=42,
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "SECURITY_SESSION_INVALIDATED"
             assert call_kwargs["details"]["user_id"] == 42
@@ -162,7 +161,7 @@ class TestLogSecurityViolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_security_violation_audit
-            
+
             log_security_violation_audit(
                 violation_type="session_invalidation",
                 action="invalidate_session",
@@ -170,7 +169,7 @@ class TestLogSecurityViolationAudit:
                 result="failed",
                 severity="high",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["success"] is False
             assert "failed" in call_kwargs["error_message"]
@@ -191,14 +190,14 @@ class TestLogRegionIsolationAudit:
             return_value=55,
         ):
             from selfhealing.services.audit import log_region_isolation_audit
-            
+
             result = log_region_isolation_audit(
                 region="tokyo",
                 action="isolate",
                 result="success",
                 reason="High error rate",
             )
-            
+
             assert result == 55
 
     def test_isolate_action_uses_region_isolated_event_type(self):
@@ -208,7 +207,7 @@ class TestLogRegionIsolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_region_isolation_audit
-            
+
             log_region_isolation_audit(
                 region="seoul",
                 action="isolate",
@@ -217,7 +216,7 @@ class TestLogRegionIsolationAudit:
                 duration_seconds=300,
                 operator="cluster-a",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "REGION_ISOLATED"
             assert call_kwargs["source"] == "RegionalIsolationGate"
@@ -233,7 +232,7 @@ class TestLogRegionIsolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_region_isolation_audit
-            
+
             log_region_isolation_audit(
                 region="tokyo",
                 action="restore",
@@ -241,7 +240,7 @@ class TestLogRegionIsolationAudit:
                 reason="Manual restore",
                 operator="ops-team",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "REGION_RESTORED"
             assert call_kwargs["details"]["action"] == "restore"
@@ -253,14 +252,14 @@ class TestLogRegionIsolationAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit import log_region_isolation_audit
-            
+
             log_region_isolation_audit(
                 region="osaka",
                 action="isolate",
                 result="failed",
                 reason="Redis not available",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["success"] is False
 
@@ -291,23 +290,21 @@ class TestSecurityViolationServiceAuditIntegration:
 
     def test_handle_violation_calls_audit(self, mock_repository, mock_cache):
         """Should call log_security_violation_audit on handle_violation."""
-        with patch(
-            "selfhealing.services.security.service.log_security_violation_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.security.service.log_security_violation_audit") as mock_audit:
             from selfhealing.services.security.service import SecurityViolationService
             from selfhealing.services.security.types import ViolationType
-            
+
             service = SecurityViolationService(
                 repository=mock_repository,
                 cache=mock_cache,
             )
-            
+
             result = service.handle_violation(
                 violation_type=ViolationType.SIGNATURE_INVALID,
                 request_info={"ip": "1.2.3.4"},
                 description="Test violation",
             )
-            
+
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["violation_type"] == "signature_invalid"
@@ -318,18 +315,16 @@ class TestSecurityViolationServiceAuditIntegration:
 
     def test_temporary_ip_ban_calls_audit(self, mock_repository, mock_cache):
         """Should call log_security_violation_audit on _temporary_ip_ban."""
-        with patch(
-            "selfhealing.services.security.service.log_security_violation_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.security.service.log_security_violation_audit") as mock_audit:
             from selfhealing.services.security.service import SecurityViolationService
-            
+
             service = SecurityViolationService(
                 repository=mock_repository,
                 cache=mock_cache,
             )
-            
+
             service._temporary_ip_ban("10.0.0.1", hours=2)
-            
+
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["violation_type"] == "ip_ban_temporary"
@@ -340,18 +335,16 @@ class TestSecurityViolationServiceAuditIntegration:
 
     def test_permanent_ip_ban_calls_audit(self, mock_repository, mock_cache):
         """Should call log_security_violation_audit on _permanent_ip_ban."""
-        with patch(
-            "selfhealing.services.security.service.log_security_violation_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.security.service.log_security_violation_audit") as mock_audit:
             from selfhealing.services.security.service import SecurityViolationService
-            
+
             service = SecurityViolationService(
                 repository=mock_repository,
                 cache=mock_cache,
             )
-            
+
             service._permanent_ip_ban("192.168.1.100")
-            
+
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["violation_type"] == "ip_ban_permanent"
@@ -361,18 +354,16 @@ class TestSecurityViolationServiceAuditIntegration:
 
     def test_invalidate_user_sessions_calls_audit(self, mock_repository, mock_cache):
         """Should call log_security_violation_audit on _invalidate_user_sessions."""
-        with patch(
-            "selfhealing.services.security.service.log_security_violation_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.security.service.log_security_violation_audit") as mock_audit:
             from selfhealing.services.security.service import SecurityViolationService
-            
+
             service = SecurityViolationService(
                 repository=mock_repository,
                 cache=mock_cache,
             )
-            
+
             service._invalidate_user_sessions(user_id=42)
-            
+
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["violation_type"] == "session_invalidation"
@@ -410,19 +401,17 @@ class TestRegionalIsolationGateAuditIntegration:
 
     def test_isolate_region_calls_audit_on_success(self, mock_redis, mock_identity):
         """Should call log_region_isolation_audit on successful isolation."""
-        with patch(
-            "selfhealing.services.isolation.regional_gate.log_region_isolation_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.isolation.regional_gate.log_region_isolation_audit") as mock_audit:
             from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
-            
+
             gate = RegionalIsolationGate(
                 global_redis=mock_redis,
                 cluster_identity=mock_identity,
             )
             gate._initialized = True
-            
+
             result = gate.isolate_region("tokyo", reason="High error rate", duration_seconds=300)
-            
+
             assert result is True
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
@@ -437,20 +426,18 @@ class TestRegionalIsolationGateAuditIntegration:
         """Should call log_region_isolation_audit on failed isolation."""
         mock_redis = MagicMock()
         mock_redis.set.side_effect = Exception("Redis connection failed")
-        
-        with patch(
-            "selfhealing.services.isolation.regional_gate.log_region_isolation_audit"
-        ) as mock_audit:
+
+        with patch("selfhealing.services.isolation.regional_gate.log_region_isolation_audit") as mock_audit:
             from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
-            
+
             gate = RegionalIsolationGate(
                 global_redis=mock_redis,
                 cluster_identity=mock_identity,
             )
             gate._initialized = True
-            
+
             result = gate.isolate_region("osaka", reason="Test", duration_seconds=60)
-            
+
             assert result is False
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
@@ -461,19 +448,17 @@ class TestRegionalIsolationGateAuditIntegration:
 
     def test_restore_region_calls_audit_on_success(self, mock_redis, mock_identity):
         """Should call log_region_isolation_audit on successful restore."""
-        with patch(
-            "selfhealing.services.isolation.regional_gate.log_region_isolation_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.isolation.regional_gate.log_region_isolation_audit") as mock_audit:
             from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
-            
+
             gate = RegionalIsolationGate(
                 global_redis=mock_redis,
                 cluster_identity=mock_identity,
             )
             gate._initialized = True
-            
+
             result = gate.restore_region("seoul")
-            
+
             assert result is True
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
@@ -494,28 +479,27 @@ class TestBlastRadiusServiceAuditIntegration:
     def reset_singleton(self):
         """Reset BlastRadiusService singleton before each test."""
         from selfhealing.services.blast_radius.service import BlastRadiusService
+
         BlastRadiusService._instance = None
         yield
         BlastRadiusService._instance = None
 
     def test_set_policy_calls_audit(self):
         """Should call log_blast_radius_audit on set_policy."""
-        with patch(
-            "selfhealing.services.blast_radius.service.log_blast_radius_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
             from selfhealing.services.blast_radius.service import BlastRadiusService
             from selfhealing.services.blast_radius.models import BlastRadiusLevel
-            
+
             service = BlastRadiusService()
             service.clear()
-            
+
             policy = service.set_policy(
                 stage_name="production",
                 level=BlastRadiusLevel.LIMITED,
                 max_affected_percentage=15.0,
                 auto_isolate=True,
             )
-            
+
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["target_service"] == "production"
@@ -525,21 +509,19 @@ class TestBlastRadiusServiceAuditIntegration:
 
     def test_add_dependency_calls_audit(self):
         """Should call log_blast_radius_audit on add_dependency."""
-        with patch(
-            "selfhealing.services.blast_radius.service.log_blast_radius_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
             from selfhealing.services.blast_radius.service import BlastRadiusService
-            
+
             service = BlastRadiusService()
             service.clear()
-            
+
             dep = service.add_dependency(
                 source_service="payment",
                 target_service="order",
                 dependency_type="sync",
                 criticality="high",
             )
-            
+
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["action"] == "add_dependency"
@@ -549,16 +531,14 @@ class TestBlastRadiusServiceAuditIntegration:
 
     def test_isolate_service_calls_audit(self):
         """Should call log_blast_radius_audit on isolate_service."""
-        with patch(
-            "selfhealing.services.blast_radius.service.log_blast_radius_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
             from selfhealing.services.blast_radius.service import BlastRadiusService
-            
+
             service = BlastRadiusService()
             service.clear()
-            
+
             result = service.isolate_service("payment-gateway")
-            
+
             assert result is True
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
@@ -568,19 +548,17 @@ class TestBlastRadiusServiceAuditIntegration:
 
     def test_release_isolation_calls_audit(self):
         """Should call log_blast_radius_audit on release_isolation."""
-        with patch(
-            "selfhealing.services.blast_radius.service.log_blast_radius_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
             from selfhealing.services.blast_radius.service import BlastRadiusService
-            
+
             service = BlastRadiusService()
             service.clear()
-            
+
             # First isolate, then release
             service._isolated_services.add("order-service")
-            
+
             result = service.release_isolation("order-service")
-            
+
             assert result is True
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]
@@ -590,41 +568,37 @@ class TestBlastRadiusServiceAuditIntegration:
 
     def test_isolate_already_isolated_service_does_not_call_audit(self):
         """Should not call audit when isolating already isolated service."""
-        with patch(
-            "selfhealing.services.blast_radius.service.log_blast_radius_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
             from selfhealing.services.blast_radius.service import BlastRadiusService
-            
+
             service = BlastRadiusService()
             service.clear()
-            
+
             # Already isolated
             service._isolated_services.add("payment")
-            
+
             result = service.isolate_service("payment")
-            
+
             assert result is False
             mock_audit.assert_not_called()
 
     def test_auto_isolate_calls_audit(self):
         """Should call log_blast_radius_audit for each auto-isolated service."""
-        with patch(
-            "selfhealing.services.blast_radius.service.log_blast_radius_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
             from selfhealing.services.blast_radius.service import BlastRadiusService
-            
+
             service = BlastRadiusService()
             service.clear()
-            
+
             service._auto_isolate(["svc-a", "svc-b"])
-            
+
             assert mock_audit.call_count == 2
-            
+
             # Check first service
             first_call_kwargs = mock_audit.call_args_list[0][1]
             assert first_call_kwargs["action"] == "auto_isolate"
             assert first_call_kwargs["target_service"] == "svc-a"
-            
+
             # Check second service
             second_call_kwargs = mock_audit.call_args_list[1][1]
             assert second_call_kwargs["target_service"] == "svc-b"
@@ -641,18 +615,18 @@ class TestAuditHelpersExport:
     def test_log_security_violation_audit_is_exported(self):
         """Should export log_security_violation_audit from selfhealing.services.audit."""
         from selfhealing.services.audit import log_security_violation_audit
-        
+
         assert callable(log_security_violation_audit)
 
     def test_log_region_isolation_audit_is_exported(self):
         """Should export log_region_isolation_audit from selfhealing.services.audit."""
         from selfhealing.services.audit import log_region_isolation_audit
-        
+
         assert callable(log_region_isolation_audit)
 
     def test_exports_are_in_all(self):
         """Should include new audit functions in __all__."""
         from selfhealing.services import audit
-        
+
         assert "log_security_violation_audit" in audit.__all__
         assert "log_region_isolation_audit" in audit.__all__
