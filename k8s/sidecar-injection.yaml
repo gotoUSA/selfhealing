@@ -1,0 +1,220 @@
+# Self-Healing 사이드카 Deployment 예시
+#
+# 타언어 애플리케이션(Go, Java 등)과 함께 배포되는
+# Self-Healing 사이드카 컨테이너 설정입니다.
+#
+# 특징:
+# - UDS 소켓을 통한 저지연 IPC
+# - gRPC를 통한 원격 접근 지원
+# - 리소스 제한으로 안정적 운영
+# - 헬스 체크 및 프로브 설정
+#
+# 사용 방법:
+#   kubectl apply -f k8s/sidecar-injection.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-go-app-with-sidecar
+  labels:
+    app: my-go-app
+    selfhealing.enabled: "true"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-go-app
+  template:
+    metadata:
+      labels:
+        app: my-go-app
+        selfhealing.sidecar: "true"
+      annotations:
+        # Prometheus 메트릭 수집
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Pod 간 통신을 위한 서비스 계정
+      serviceAccountName: selfhealing-sa
+
+      # 메인 애플리케이션 컨테이너
+      containers:
+        - name: app
+          image: my-go-app:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            # Self-Healing 사이드카 UDS 소켓 경로
+            - name: SELFHEALING_SOCKET
+              value: "/tmp/selfhealing.sock"
+            # gRPC 엔드포인트 (fallback)
+            - name: SELFHEALING_GRPC_ADDR
+              value: "localhost:50051"
+          volumeMounts:
+            # 사이드카와 공유하는 UDS 소켓 볼륨
+            - name: selfhealing-socket
+              mountPath: /tmp
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+        # Self-Healing 사이드카 컨테이너
+        - name: selfhealing-sidecar
+          image: selfhealing-sidecar:latest
+          args:
+            - "--mode"
+            - "both"
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 9090
+              name: metrics
+          env:
+            # 사이드카 모드
+            - name: SELFHEALING_MODE
+              value: "both"
+            # UDS 소켓 경로
+            - name: SELFHEALING_SOCKET
+              value: "/tmp/selfhealing.sock"
+            # gRPC 설정
+            - name: SELFHEALING_GRPC_HOST
+              value: "0.0.0.0"
+            - name: SELFHEALING_GRPC_PORT
+              value: "50051"
+            # Redis 연결 (Secret에서 가져옴)
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: selfhealing-secrets
+                  key: redis-url
+            # 인증 토큰 (선택)
+            - name: SELFHEALING_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: selfhealing-secrets
+                  key: auth-token
+                  optional: true
+          volumeMounts:
+            # 메인 앱과 공유하는 UDS 소켓 볼륨
+            - name: selfhealing-socket
+              mountPath: /tmp
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import socket
+                  s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  s.connect('/tmp/selfhealing.sock')
+                  s.close()
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import socket, json
+                  s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                  s.connect('/tmp/selfhealing.sock')
+                  req = json.dumps({"jsonrpc": "2.0", "method": "health.check", "params": {}, "id": "probe"})
+                  s.send((req + "\n").encode())
+                  resp = s.recv(4096)
+                  s.close()
+                  result = json.loads(resp)
+                  assert result.get("result", {}).get("status") == "SERVING"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+      # 공유 볼륨
+      volumes:
+        # UDS 소켓용 emptyDir (메모리 기반)
+        - name: selfhealing-socket
+          emptyDir:
+            medium: Memory
+            sizeLimit: "1Mi"
+
+---
+# Self-Healing 사이드카용 Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: selfhealing-secrets
+type: Opaque
+stringData:
+  # Redis 연결 URL
+  redis-url: "redis://redis-master:6379/0"
+  # 인증 토큰 (선택)
+  auth-token: "your-secure-token-here"
+
+---
+# Self-Healing 사이드카용 ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: selfhealing-sa
+  labels:
+    app: selfhealing
+
+---
+# 사이드카 gRPC 서비스 (클러스터 내부 통신용)
+apiVersion: v1
+kind: Service
+metadata:
+  name: selfhealing-sidecar-grpc
+  labels:
+    app: selfhealing-sidecar
+spec:
+  selector:
+    selfhealing.sidecar: "true"
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+  type: ClusterIP
+
+---
+# 사이드카 메트릭 ServiceMonitor (Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: selfhealing-sidecar-monitor
+  labels:
+    app: selfhealing-sidecar
+spec:
+  selector:
+    matchLabels:
+      selfhealing.sidecar: "true"
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

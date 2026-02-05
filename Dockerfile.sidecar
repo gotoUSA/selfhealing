@@ -1,0 +1,76 @@
+# Dockerfile.sidecar
+# Self-Healing 사이드카 컨테이너
+#
+# 타언어 애플리케이션(Go, Java 등)이 Self-Healing 시스템을
+# 사이드카 패턴으로 사용할 수 있도록 지원합니다.
+#
+# 지원 프로토콜:
+# - Unix Domain Socket (JSON-RPC 2.0)
+# - gRPC (Protobuf)
+#
+# 빌드:
+#   docker build -f Dockerfile.sidecar -t selfhealing-sidecar:latest .
+#
+# 실행:
+#   docker run -d \
+#     -v /tmp:/tmp \
+#     -p 50051:50051 \
+#     -e REDIS_URL=redis://redis:6379/0 \
+#     selfhealing-sidecar:latest
+
+FROM python:3.11-slim
+
+LABEL maintainer="selfhealing-team"
+LABEL description="Self-Healing Sidecar for cross-language support"
+LABEL version="1.0.0"
+
+# 환경 변수 설정
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 시스템 패키지 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 의존성 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# gRPC 추가 설치 (선택적)
+RUN pip install --no-cache-dir grpcio grpcio-tools || true
+
+# selfhealing 패키지 복사
+COPY packages/selfhealing-python/src/selfhealing /app/selfhealing
+
+# 사이드카 진입점 복사
+COPY sidecar/entrypoint.py /app/entrypoint.py
+
+# 비루트 사용자 생성
+RUN groupadd -r selfhealing && useradd -r -g selfhealing selfhealing \
+    && chown -R selfhealing:selfhealing /app
+
+USER selfhealing
+
+# 포트 노출
+# 50051: gRPC
+EXPOSE 50051
+
+# UDS 소켓은 볼륨 마운트로 공유
+# /tmp/selfhealing.sock
+
+# 헬스 체크
+# gRPC 헬스 체크 또는 HTTP 프로브
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import socket; s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.connect('/tmp/selfhealing.sock'); s.close()" || exit 1
+
+# 진입점
+ENTRYPOINT ["python", "entrypoint.py"]
+
+# 기본 인자: UDS + gRPC 모드
+CMD ["--mode", "both"]

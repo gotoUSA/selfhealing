@@ -710,25 +710,27 @@ class TestSidecarE2E:
 ## 7. 체크리스트
 
 ### Phase 1 체크리스트
-- [ ] `adapters/ipc/protocol.py` 생성
-- [ ] `adapters/ipc/request_handler.py` 생성
-- [ ] `adapters/ipc/uds_server.py` 생성
-- [ ] `adapters/ipc/uds_client.py` 생성 (테스트용)
-- [ ] 단위 테스트 작성
+- [x] `adapters/ipc/protocol.py` 생성
+- [x] `adapters/ipc/request_handler.py` 생성
+- [x] `adapters/ipc/uds_server.py` 생성
+- [x] `adapters/ipc/uds_client.py` 생성 (테스트용)
+- [x] `adapters/ipc/exceptions.py` 생성
+- [x] 단위 테스트 작성
 - [ ] 통합 테스트 작성
 
 ### Phase 2 체크리스트
-- [ ] `adapters/grpc/proto/selfhealing.proto` 생성
+- [x] `adapters/grpc/proto/selfhealing.proto` 생성
 - [ ] Protobuf 컴파일 스크립트
-- [ ] gRPC 서버 구현
-- [ ] 스트리밍 이벤트 구현
+- [x] gRPC 서버 구현
+- [x] 스트리밍 이벤트 구현
 - [ ] 통합 테스트
 
 ### Phase 3 체크리스트
-- [ ] Dockerfile.sidecar 생성
-- [ ] K8s 매니페스트 작성
+- [x] Dockerfile.sidecar 생성
+- [x] K8s 매니페스트 작성
 - [ ] CI/CD 파이프라인 추가
 - [ ] E2E 테스트
+- [x] sidecar/entrypoint.py 생성
 
 ### Phase 4 체크리스트
 - [ ] Go SDK 구현

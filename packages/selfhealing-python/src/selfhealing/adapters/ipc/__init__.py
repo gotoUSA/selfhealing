@@ -56,10 +56,29 @@ from selfhealing.adapters.ipc.event_stream_proxy import (
     get_event_stream_proxy,
     reset_event_stream_proxy,
 )
+from selfhealing.adapters.ipc.exceptions import (
+    IPCAuthenticationError,
+    IPCAuthorizationError,
+    IPCCircuitBreakerOpenError,
+    IPCConnectionError,
+    IPCError,
+    IPCInternalError,
+    IPCInvalidParamsError,
+    IPCMethodNotFoundError,
+    IPCParseError,
+    IPCRateLimitedError,
+    IPCServiceUnavailableError,
+    IPCTimeoutError,
+)
 from selfhealing.adapters.ipc.grpc_server import (
     SidecarGRPCServer,
     get_grpc_server,
     reset_grpc_server,
+)
+from selfhealing.adapters.ipc.request_handler import (
+    RequestHandler,
+    get_request_handler,
+    reset_request_handler,
 )
 from selfhealing.adapters.ipc.sidecar_ipc_probe import (
     SidecarIPCProbe,
@@ -96,6 +115,23 @@ __all__ = [
     "CBStateSnapshot",
     "get_cb_state_snapshot",
     "reset_cb_state_snapshot",
+    # Request Handler
+    "RequestHandler",
+    "get_request_handler",
+    "reset_request_handler",
+    # Exceptions
+    "IPCError",
+    "IPCConnectionError",
+    "IPCTimeoutError",
+    "IPCAuthenticationError",
+    "IPCAuthorizationError",
+    "IPCMethodNotFoundError",
+    "IPCInvalidParamsError",
+    "IPCParseError",
+    "IPCInternalError",
+    "IPCRateLimitedError",
+    "IPCCircuitBreakerOpenError",
+    "IPCServiceUnavailableError",
     # Metrics
     "sidecar_metrics",
     "record_ipc_request",
