@@ -26,6 +26,7 @@ import json
 import logging
 import socket
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -461,13 +462,17 @@ class FailOpenUDSClient(UDSClient):
     Fail-Open 정책을 강제하는 UDS 클라이언트.
 
     사이드카 장애 시에도 애플리케이션이 계속 동작하도록 보장합니다.
+    실패한 요청은 fallback queue에 저장하고 나중에 재시도합니다.
     """
+
+    DEFAULT_MAX_QUEUE_SIZE = 1000
 
     def __init__(
         self,
         socket_path: str | None = None,
         timeout: float = 1.0,  # 더 짧은 타임아웃
         auth_token: str | None = None,
+        max_queue_size: int = DEFAULT_MAX_QUEUE_SIZE,
     ):
         super().__init__(
             socket_path=socket_path,
@@ -475,6 +480,9 @@ class FailOpenUDSClient(UDSClient):
             auth_token=auth_token,
             fail_open=True,  # 항상 fail-open
         )
+        self._max_queue_size = max_queue_size
+        self._fallback_queue: list[dict[str, Any]] = []
+        self._queue_lock = threading.Lock()
 
     def should_allow(
         self,
@@ -489,3 +497,104 @@ class FailOpenUDSClient(UDSClient):
         """
         result = super().should_allow(service_name, traceparent)
         return result.get("allowed", True)
+
+    def queue_for_retry(self, entry: dict[str, Any]) -> bool:
+        """
+        실패한 요청을 재시도 큐에 저장.
+
+        Args:
+            entry: 저장할 엔트리 (DLQ, audit 등)
+
+        Returns:
+            저장 성공 여부
+        """
+        with self._queue_lock:
+            if len(self._fallback_queue) >= self._max_queue_size:
+                logger.warning(f"[FailOpenUDSClient] Queue full ({self._max_queue_size}), " "dropping oldest entry")
+                self._fallback_queue.pop(0)  # 가장 오래된 항목 제거
+
+            self._fallback_queue.append(entry)
+            return True
+
+    def flush_fallback_queue(self) -> int:
+        """
+        fallback queue의 항목들을 서버로 전송 시도.
+
+        Returns:
+            성공적으로 전송된 항목 수
+        """
+        if not self._connected:
+            if not self.connect():
+                return 0
+
+        flushed = 0
+        failed_entries: list[dict[str, Any]] = []
+
+        with self._queue_lock:
+            entries_to_flush = self._fallback_queue[:]
+            self._fallback_queue.clear()
+
+        for entry in entries_to_flush:
+            try:
+                entry_type = entry.get("entry_type", "dlq")
+                if entry_type == "dlq":
+                    self.dlq_store(**entry.get("data", {}))
+                elif entry_type == "buffer":
+                    self.buffer_store(**entry.get("data", {}))
+                else:
+                    # 기타 타입은 buffer로 저장
+                    self.buffer_store(
+                        entry_type=entry_type,
+                        data=entry.get("data", {}),
+                    )
+                flushed += 1
+                logger.debug(f"[FailOpenUDSClient] Flushed entry: {entry.get('id', 'unknown')}")
+            except UDSClientError as e:
+                logger.warning(f"[FailOpenUDSClient] Failed to flush entry: {e}")
+                failed_entries.append(entry)
+
+        # 실패한 항목은 다시 큐에 추가
+        if failed_entries:
+            with self._queue_lock:
+                self._fallback_queue = failed_entries + self._fallback_queue
+                # 최대 크기 유지
+                if len(self._fallback_queue) > self._max_queue_size:
+                    self._fallback_queue = self._fallback_queue[-self._max_queue_size :]
+
+        return flushed
+
+    def get_queue_size(self) -> int:
+        """현재 큐 크기 반환."""
+        with self._queue_lock:
+            return len(self._fallback_queue)
+
+    def store_with_fallback(
+        self,
+        entry_type: str,
+        data: dict[str, Any],
+    ) -> bool:
+        """
+        데이터 저장 시도, 실패 시 fallback queue에 저장.
+
+        Args:
+            entry_type: 엔트리 타입 (dlq, buffer 등)
+            data: 저장할 데이터
+
+        Returns:
+            서버 저장 성공 여부 (fallback 저장 시 False)
+        """
+        try:
+            if entry_type == "dlq":
+                self.dlq_store(**data)
+            else:
+                self.buffer_store(entry_type=entry_type, data=data)
+            return True
+        except UDSClientError as e:
+            logger.warning(f"[FailOpenUDSClient] Store failed, queueing: {e}")
+            self.queue_for_retry(
+                {
+                    "entry_type": entry_type,
+                    "data": data,
+                }
+            )
+            return False

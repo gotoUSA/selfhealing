@@ -562,34 +562,46 @@ class CBStateSnapshot:
             time.sleep(self.update_interval_ms / 1000.0)
 
     def _sync_from_registry(self) -> None:
-        """레지스트리에서 CB 상태 동기화."""
+        """CB 서비스에서 상태 동기화."""
         try:
-            from selfhealing.core.circuit_breaker import get_circuit_breaker_registry
+            from selfhealing.services import get_circuit_breaker_service
 
-            registry = get_circuit_breaker_registry()
-            if registry is None:
+            cb_service = get_circuit_breaker_service()
+            if cb_service is None:
                 return
 
-            for cb_id in registry.list_circuit_breakers():
-                cb = registry.get(cb_id)
-                if cb is None:
+            # CB 서비스에서 모든 서비스 상태를 가져와 동기화
+            # get_all_states()가 있으면 사용, 없으면 스킵
+            get_all_states = getattr(cb_service, "get_all_states", None)
+            if get_all_states is None:
+                return
+
+            states = get_all_states()
+            for state_info in states:
+                cb_id = state_info.get("service_name", "")
+                if not cb_id:
                     continue
+
+                state_str = state_info.get("state", "closed").upper()
+                state_enum = CBState[state_str] if state_str in CBState.__members__ else CBState.CLOSED
 
                 entry = CBStateEntry(
                     cb_id=cb_id,
-                    state=CBState[cb.state.name],
-                    failure_count=cb.failure_count,
-                    success_count=cb.success_count,
-                    last_failure_ts=(cb.last_failure_time.timestamp() if cb.last_failure_time else 0.0),
-                    last_success_ts=(cb.last_success_time.timestamp() if cb.last_success_time else 0.0),
-                    failure_threshold=cb.failure_threshold,
-                    recovery_timeout_ms=cb.recovery_timeout * 1000,
+                    state=state_enum,
+                    failure_count=state_info.get("failure_count", 0),
+                    success_count=state_info.get("success_count", 0),
+                    last_failure_ts=state_info.get("last_failure_ts", 0.0),
+                    last_success_ts=state_info.get("last_success_ts", 0.0),
+                    failure_threshold=state_info.get("failure_threshold", 5),
+                    recovery_timeout_ms=int(state_info.get("recovery_timeout", 30) * 1000),
                 )
                 self.update_state(entry)
 
         except ImportError:
-            # Registry 모듈 없음
+            # 서비스 모듈 없음
             pass
+        except Exception as e:
+            logger.debug(f"[CBStateSnapshot] Sync from service error: {e}")
 
     def get_stats(self) -> dict[str, Any]:
         """
