@@ -290,19 +290,12 @@ class UnifiedNotificationManager:
         effective_priority = self._get_effective_priority(payload)
 
         # 3. Determine channels
-        channels = payload.channels or self._policy.get_channels(
-            effective_priority, payload.category
-        )
+        channels = payload.channels or self._policy.get_channels(effective_priority, payload.category)
 
         if not channels:
             # Log only
-            logger.info(
-                f"[UnifiedNotification] {payload.category.value}: "
-                f"{payload.title} - {payload.message}"
-            )
-            return NotificationResult(
-                success=True, suppressed=True, suppression_reason="log_only"
-            )
+            logger.info(f"[UnifiedNotification] {payload.category.value}: " f"{payload.title} - {payload.message}")
+            return NotificationResult(success=True, suppressed=True, suppression_reason="log_only")
 
         # 4. Send to each channel
         result = self._send_to_channels(payload, channels, effective_priority)
@@ -346,9 +339,7 @@ class UnifiedNotificationManager:
         dedup_key = payload.dedup_key or f"{payload.source}:{payload.category.value}"
         self._cooldown_cache[dedup_key] = datetime.now(timezone.utc)
 
-    def _get_effective_priority(
-        self, payload: NotificationPayload
-    ) -> NotificationPriority:
+    def _get_effective_priority(self, payload: NotificationPayload) -> NotificationPriority:
         """
         Get effective priority considering emergency level.
 
@@ -439,9 +430,7 @@ class UnifiedNotificationManager:
 
         return result
 
-    def _record_audit(
-        self, payload: NotificationPayload, result: NotificationResult
-    ) -> None:
+    def _record_audit(self, payload: NotificationPayload, result: NotificationResult) -> None:
         """Record notification in audit trail."""
         try:
             from selfhealing.audit import get_audit_logger
@@ -450,8 +439,7 @@ class UnifiedNotificationManager:
             audit_logger.log_event(
                 event_type="notification_sent",
                 entity_type="notification",
-                entity_id=payload.dedup_key
-                or f"{payload.source}:{payload.timestamp.timestamp()}",
+                entity_id=payload.dedup_key or f"{payload.source}:{payload.timestamp.timestamp()}",
                 action="send",
                 details={
                     "title": payload.title,
@@ -516,6 +504,10 @@ def reset_notification_manager() -> None:
     """Reset the notification manager singleton (for testing)."""
     global _manager
     _manager = None
+
+
+# Alias for backward compatibility
+get_notification_service = get_unified_notification_manager
 
 
 # =============================================================================

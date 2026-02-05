@@ -42,6 +42,8 @@ from .worm_adapters import (
     create_worm_adapter,
 )
 
+# pylint: disable=undefined-all-variable
+# Note: The following names are lazily imported via __getattr__
 __all__ = [
     # Default Adapters (Non-invasive)
     "FileAuditLogAdapter",
@@ -78,6 +80,7 @@ __all__ = [
     "PostgreSQLSinkConfig",
     "PostgreSQLSinkConsumer",
 ]
+# pylint: enable=undefined-all-variable
 
 
 # Lazy import for Django adapter (to avoid import errors when Django is not installed)

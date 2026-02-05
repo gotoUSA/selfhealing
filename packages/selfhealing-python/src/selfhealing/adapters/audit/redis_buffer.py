@@ -24,6 +24,7 @@ import socket
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -859,7 +860,8 @@ def create_redis_audit_buffer(
             try:
                 from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter
 
-                fallback = FileAuditLogAdapter(log_dir=fallback_log_dir)
+                fallback_path = Path(fallback_log_dir) / "audit_fallback.jsonl"
+                fallback = FileAuditLogAdapter(file_path=fallback_path)
             except ImportError:
                 logger.debug("[RedisAuditBuffer] FileAuditLogAdapter not available")
 

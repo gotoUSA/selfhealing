@@ -98,6 +98,9 @@ class SignalHooksConfig:
         # Task domain mapping
         self.task_domain_mapping = _get_task_domain_mapping()
 
+        # Domain patterns for task name matching (can be overridden via env)
+        self.domain_patterns: dict[str, list[str]] | None = None
+
         # Excluded tasks (never process these)
         self.excluded_tasks: set[str] = {
             "celery.backend_cleanup",
@@ -839,7 +842,7 @@ def _store_to_dlq(
 
         logger.info(
             f"[SelfHealing DLQ] Stored failed operation: domain={domain}, "
-            f"failure_type={failure_type}, dlq_id={result.entry_id}"
+            f"failure_type={failure_type}, dlq_id={result.dlq_id}"
         )
 
         # Record DLQ metric
