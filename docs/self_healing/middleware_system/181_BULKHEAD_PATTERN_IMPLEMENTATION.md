@@ -2236,38 +2236,38 @@ class BulkheadSettings(BaseSettings):
 
 ### 11.1 기본 구현
 
-- [ ] `resilience/bulkhead/base.py` 작성
-- [ ] `resilience/bulkhead/semaphore.py` 작성
-- [ ] `resilience/bulkhead/threadpool.py` 작성
-- [ ] `resilience/bulkhead/registry.py` 작성
-- [ ] `resilience/bulkhead/decorator.py` 작성
-- [ ] `resilience/bulkhead/exceptions.py` 작성
-- [ ] `resilience/bulkhead/metrics.py` 작성
-- [ ] `settings/bulkhead.py` 작성
-- [ ] `resilience/bulkhead/__init__.py` 작성
+- [x] `resilience/bulkhead/base.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/semaphore.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/threadpool.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/registry.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/decorator.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/exceptions.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/metrics.py` 작성 ✅ 2026-02-05
+- [x] `settings/bulkhead.py` 작성 ✅ 2026-02-05
+- [x] `resilience/bulkhead/__init__.py` 작성 ✅ 2026-02-05
 
 ### 11.2 보완 구현 (10장)
 
-- [ ] `resilience/bulkhead/async_semaphore.py` 작성 (10.1)
-- [ ] `threadpool.py`에 `contextvars.copy_context()` 추가 (10.2)
-- [ ] `registry.py`에 EventBus 구독 추가 (10.3)
-- [ ] `settings/circuit_breaker.py`에 BulkheadFullException 제외 추가 (10.4)
-- [ ] `scaling/traffic_gate.py` 확장 (10.5)
-- [ ] `resilience/bulkhead/otel.py` 작성 (10.6)
-- [ ] `api/django/views/bulkhead.py` 작성 (10.7)
-- [ ] `registry.py`에 `get_for_database()` 추가 (10.8)
-- [ ] `decorator.py`에 async 분기 추가 (4.2.7)
+- [x] `resilience/bulkhead/async_semaphore.py` 작성 (10.1) ✅ 2026-02-05
+- [x] `threadpool.py`에 `contextvars.copy_context()` 추가 (10.2) ✅ 2026-02-05
+- [x] `registry.py`에 EventBus 구독 추가 (10.3) ✅ 2026-02-05
+- [ ] `settings/circuit_breaker.py`에 BulkheadFullException 제외 추가 (10.4) - 선택적
+- [ ] `scaling/traffic_gate.py` 확장 (10.5) - 별도 문서에서 진행
+- [x] `resilience/bulkhead/otel.py` 작성 (10.6) ✅ 2026-02-05
+- [ ] `api/django/views/bulkhead.py` 작성 (10.7) - 별도 문서에서 진행
+- [x] `registry.py`에 `get_for_database()` 추가 (10.8) ✅ 2026-02-05
+- [x] `decorator.py`에 async 분기 추가 (4.2.7) ✅ 2026-02-05
 
 ### 11.3 테스트
 
-- [ ] 단위 테스트 작성
-- [ ] 동시성 테스트 작성
-- [ ] 비동기 테스트 작성 (`pytest.mark.asyncio`)
-- [ ] ContextVar 전파 테스트
+- [x] 단위 테스트 작성 ✅ 2026-02-05 (108개 테스트)
+- [x] 동시성 테스트 작성 ✅ 2026-02-05
+- [x] 비동기 테스트 작성 (`pytest.mark.asyncio`) ✅ 2026-02-05
+- [x] ContextVar 전파 테스트 ✅ 2026-02-05
 
 ### 11.4 통합
 
-- [ ] LayeredRepositoryBase 통합
-- [ ] ConnectionHealthMonitor 통합
-- [ ] TrafficGate 통합
-- [ ] 문서 업데이트
+- [ ] LayeredRepositoryBase 통합 - 별도 문서에서 진행
+- [ ] ConnectionHealthMonitor 통합 - 별도 문서에서 진행
+- [ ] TrafficGate 통합 - 별도 문서에서 진행
+- [x] 문서 업데이트 ✅ 2026-02-05
