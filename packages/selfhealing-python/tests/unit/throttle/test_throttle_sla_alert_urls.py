@@ -14,6 +14,16 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.unit.throttle.conftest import (
+    ALL_URL_ENVS,
+    NO_URL_ENVS,
+    SVC_PAYMENT,
+    TEST_ADMIN_BASE_URL,
+    TEST_DASHBOARD_URL,
+    TEST_RUNBOOK_URL,
+    WARNING_RTT_MS,
+)
+
 
 class TestThrottleSlaActionableUrls:
     """ThrottleSlaActionableUrls 데이터클래스 테스트."""
@@ -80,61 +90,37 @@ class TestThrottleSlaActionableUrls:
 class TestThrottleSlaAlertUrlBuilder:
     """ThrottleSlaAlertUrlBuilder URL 빌더 테스트."""
 
-    def setup_method(self):
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
-        )
-
-        reset_throttle_sla_alert_url_builder()
-
-    def teardown_method(self):
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
-        )
-
-        reset_throttle_sla_alert_url_builder()
+    @pytest.fixture(autouse=True)
+    def _reset(self, reset_url_builder):
+        """각 테스트 전후 URL Builder 싱글톤 리셋."""
 
     def test_all_env_vars_set(self):
         """모든 환경변수 설정 시 URL 생성."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_DASHBOARD_URL": "https://grafana.internal/d/throttle",
-                "THROTTLE_SLA_ADMIN_BASE_URL": "/admin/throttle/",
-                "THROTTLE_SLA_RUNBOOK_URL": "https://docs.internal/runbooks/sla",
-            },
-        ):
+        with patch.dict(os.environ, ALL_URL_ENVS):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
 
             builder = ThrottleSlaAlertUrlBuilder()
             urls = builder.build_sla_alert_urls(
-                service_name="payment",
+                service_name=SVC_PAYMENT,
                 event_type="sla_critical",
             )
 
-            assert "payment" in urls.dashboard_url
-            assert "payment" in urls.admin_url
+            assert SVC_PAYMENT in urls.dashboard_url
+            assert SVC_PAYMENT in urls.admin_url
             assert "sla-critical" in urls.runbook_url
             assert urls.has_any_url()
 
     def test_no_env_vars(self):
         """환경변수 미설정 시 모든 URL None."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_DASHBOARD_URL": "",
-                "THROTTLE_SLA_ADMIN_BASE_URL": "",
-                "THROTTLE_SLA_RUNBOOK_URL": "",
-            },
-        ):
+        with patch.dict(os.environ, NO_URL_ENVS):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
 
             builder = ThrottleSlaAlertUrlBuilder()
-            urls = builder.build_sla_alert_urls(service_name="payment")
+            urls = builder.build_sla_alert_urls(service_name=SVC_PAYMENT)
 
             assert urls.dashboard_url is None
             assert urls.admin_url is None
@@ -143,14 +129,8 @@ class TestThrottleSlaAlertUrlBuilder:
 
     def test_dashboard_only(self):
         """대시보드 환경변수만 설정."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_DASHBOARD_URL": "https://grafana.internal/d/throttle",
-                "THROTTLE_SLA_ADMIN_BASE_URL": "",
-                "THROTTLE_SLA_RUNBOOK_URL": "",
-            },
-        ):
+        envs = {**NO_URL_ENVS, "THROTTLE_SLA_DASHBOARD_URL": TEST_DASHBOARD_URL}
+        with patch.dict(os.environ, envs):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
@@ -166,14 +146,8 @@ class TestThrottleSlaAlertUrlBuilder:
 
     def test_admin_only(self):
         """Admin 환경변수만 설정."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_DASHBOARD_URL": "",
-                "THROTTLE_SLA_ADMIN_BASE_URL": "/admin/throttle/",
-                "THROTTLE_SLA_RUNBOOK_URL": "",
-            },
-        ):
+        envs = {**NO_URL_ENVS, "THROTTLE_SLA_ADMIN_BASE_URL": TEST_ADMIN_BASE_URL}
+        with patch.dict(os.environ, envs):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
@@ -189,48 +163,33 @@ class TestThrottleSlaAlertUrlBuilder:
 
     def test_dashboard_with_rtt(self):
         """대시보드 URL에 rtt 쿼리 파라미터 포함."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_DASHBOARD_URL": "https://grafana.internal/d/throttle",
-            },
-        ):
+        with patch.dict(os.environ, {"THROTTLE_SLA_DASHBOARD_URL": TEST_DASHBOARD_URL}):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
 
             builder = ThrottleSlaAlertUrlBuilder()
-            urls = builder.build_sla_alert_urls(service_name="payment", rtt_ms=250.5)
+            urls = builder.build_sla_alert_urls(service_name=SVC_PAYMENT, rtt_ms=WARNING_RTT_MS)
 
             assert "var-rtt=250" in urls.dashboard_url
-            assert "var-service=payment" in urls.dashboard_url
+            assert f"var-service={SVC_PAYMENT}" in urls.dashboard_url
 
     def test_dashboard_without_rtt(self):
         """rtt_ms=None이면 var-rtt 파라미터 미포함."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_DASHBOARD_URL": "https://grafana.internal/d/throttle",
-            },
-        ):
+        with patch.dict(os.environ, {"THROTTLE_SLA_DASHBOARD_URL": TEST_DASHBOARD_URL}):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
 
             builder = ThrottleSlaAlertUrlBuilder()
-            urls = builder.build_sla_alert_urls(service_name="payment", rtt_ms=None)
+            urls = builder.build_sla_alert_urls(service_name=SVC_PAYMENT, rtt_ms=None)
 
-            assert "var-service=payment" in urls.dashboard_url
+            assert f"var-service={SVC_PAYMENT}" in urls.dashboard_url
             assert "var-rtt" not in urls.dashboard_url
 
     def test_runbook_anchor_format(self):
         """Runbook URL 앵커에서 underscore가 hyphen으로 변환."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_RUNBOOK_URL": "https://docs.internal/runbooks/sla",
-            },
-        ):
+        with patch.dict(os.environ, {"THROTTLE_SLA_RUNBOOK_URL": TEST_RUNBOOK_URL}):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
@@ -245,12 +204,7 @@ class TestThrottleSlaAlertUrlBuilder:
 
     def test_admin_url_includes_event_type(self):
         """Admin URL에 event_type 파라미터 포함."""
-        with patch.dict(
-            os.environ,
-            {
-                "THROTTLE_SLA_ADMIN_BASE_URL": "/admin/throttle/",
-            },
-        ):
+        with patch.dict(os.environ, {"THROTTLE_SLA_ADMIN_BASE_URL": TEST_ADMIN_BASE_URL}):
             from selfhealing.services.throttle.throttle_sla_alert_urls import (
                 ThrottleSlaAlertUrlBuilder,
             )
@@ -267,19 +221,9 @@ class TestThrottleSlaAlertUrlBuilder:
 class TestThrottleSlaAlertUrlBuilderSingleton:
     """싱글톤 패턴 테스트."""
 
-    def setup_method(self):
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
-        )
-
-        reset_throttle_sla_alert_url_builder()
-
-    def teardown_method(self):
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
-        )
-
-        reset_throttle_sla_alert_url_builder()
+    @pytest.fixture(autouse=True)
+    def _reset(self, reset_url_builder):
+        """각 테스트 전후 URL Builder 싱글톤 리셋."""
 
     def test_singleton_same_instance(self):
         """동일 인스턴스 반환."""

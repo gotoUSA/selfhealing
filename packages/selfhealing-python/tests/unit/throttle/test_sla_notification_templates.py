@@ -11,6 +11,29 @@ from __future__ import annotations
 
 import pytest
 
+from tests.unit.throttle.conftest import (
+    CRITICAL_CURRENT_LIMIT,
+    CRITICAL_GRADIENT,
+    CRITICAL_PREVIOUS_LIMIT,
+    CRITICAL_REDUCTION_PERCENT,
+    CRITICAL_RTT_MS,
+    CRITICAL_THRESHOLD_MS,
+    RECOVERED_NEW_LIMIT,
+    RECOVERED_PREVIOUS_LIMIT,
+    RECOVERED_RTT_MS,
+    SVC_DEFAULT,
+    SVC_ORDER,
+    SVC_PAYMENT,
+    WARNING_CURRENT_LIMIT,
+    WARNING_GRADIENT,
+    WARNING_PREVIOUS_LIMIT,
+    WARNING_RTT_MS,
+    WARNING_THRESHOLD_MS,
+    make_warning_event_data,
+    make_critical_event_data,
+    make_recovered_event_data,
+)
+
 
 class TestBuildSlaWarningMessage:
     """SLA Warning 메시지 템플릿 테스트."""
@@ -20,16 +43,8 @@ class TestBuildSlaWarningMessage:
             build_sla_warning_message,
         )
 
-        defaults = dict(
-            rtt_ms=250.0,
-            threshold_ms=200,
-            current_limit=80,
-            previous_limit=100,
-            gradient=0.25,
-            service_name="payment",
-        )
-        defaults.update(overrides)
-        return build_sla_warning_message(**defaults)
+        data = make_warning_event_data(**overrides)
+        return build_sla_warning_message(**data)
 
     def test_basic_required_keys(self):
         """반환 딕셔너리에 title/severity/message/details/actions 포함."""
@@ -56,14 +71,14 @@ class TestBuildSlaWarningMessage:
 
     def test_threshold_in_message(self):
         """임계값이 메시지에 포함."""
-        result = self._build(threshold_ms=200)
-        assert "200" in result["message"]
+        result = self._build(threshold_ms=WARNING_THRESHOLD_MS)
+        assert str(WARNING_THRESHOLD_MS) in result["message"]
 
     def test_limit_change_in_message(self):
         """Limit 변화가 메시지에 포함."""
-        result = self._build(previous_limit=100, current_limit=80)
-        assert "100" in result["message"]
-        assert "80" in result["message"]
+        result = self._build(previous_limit=WARNING_PREVIOUS_LIMIT, current_limit=WARNING_CURRENT_LIMIT)
+        assert str(WARNING_PREVIOUS_LIMIT) in result["message"]
+        assert str(WARNING_CURRENT_LIMIT) in result["message"]
 
     def test_gradient_in_message(self):
         """Gradient 값이 메시지에 포함."""
@@ -103,14 +118,10 @@ class TestBuildSlaWarningMessage:
             build_sla_warning_message,
         )
 
-        result = build_sla_warning_message(
-            rtt_ms=100.0,
-            threshold_ms=50,
-            current_limit=90,
-            previous_limit=100,
-            gradient=0.1,
-        )
-        assert "default" in result["message"]
+        data = make_warning_event_data()
+        del data["service_name"]
+        result = build_sla_warning_message(**data)
+        assert SVC_DEFAULT in result["message"]
 
     def test_details_all_fields_present(self):
         """details에 모든 필수 필드 존재."""
@@ -147,17 +158,8 @@ class TestBuildSlaCriticalMessage:
             build_sla_critical_message,
         )
 
-        defaults = dict(
-            rtt_ms=600.0,
-            threshold_ms=500,
-            current_limit=70,
-            previous_limit=100,
-            reduction_percent=30,
-            gradient=0.5,
-            service_name="order",
-        )
-        defaults.update(overrides)
-        return build_sla_critical_message(**defaults)
+        data = make_critical_event_data(**overrides)
+        return build_sla_critical_message(**data)
 
     def test_severity_is_critical(self):
         """Critical severity는 'critical'."""
@@ -188,8 +190,8 @@ class TestBuildSlaCriticalMessage:
 
     def test_reduction_percent_in_details(self):
         """details에 reduction_percent 존재."""
-        result = self._build(reduction_percent=30)
-        assert result["details"]["reduction_percent"] == 30
+        result = self._build(reduction_percent=CRITICAL_REDUCTION_PERCENT)
+        assert result["details"]["reduction_percent"] == CRITICAL_REDUCTION_PERCENT
 
     def test_with_rtt_change_percent(self):
         """RTT 변화율이 메시지에 포함."""
@@ -209,7 +211,6 @@ class TestBuildSlaCriticalMessage:
     def test_without_region(self):
         """Region=None이면 대괄호 미포함."""
         result = self._build(region=None)
-        # title에 region이 없어야 함
         assert "[]" not in result["title"]
 
     def test_escalate_oncall_in_actions(self):
@@ -229,15 +230,10 @@ class TestBuildSlaCriticalMessage:
             build_sla_critical_message,
         )
 
-        result = build_sla_critical_message(
-            rtt_ms=600.0,
-            threshold_ms=500,
-            current_limit=70,
-            previous_limit=100,
-            reduction_percent=30,
-            gradient=0.5,
-        )
-        assert "default" in result["message"]
+        data = make_critical_event_data()
+        del data["service_name"]
+        result = build_sla_critical_message(**data)
+        assert SVC_DEFAULT in result["message"]
 
     def test_immediate_action_hint(self):
         """메시지에 즉각 조치 힌트 포함."""
@@ -253,14 +249,8 @@ class TestBuildSlaRecoveredMessage:
             build_sla_recovered_message,
         )
 
-        defaults = dict(
-            previous_limit=70,
-            new_limit=100,
-            rtt_ms=50.0,
-            service_name="payment",
-        )
-        defaults.update(overrides)
-        return build_sla_recovered_message(**defaults)
+        data = make_recovered_event_data(**overrides)
+        return build_sla_recovered_message(**data)
 
     def test_severity_is_medium(self):
         """Recovered severity는 'medium'."""
@@ -318,9 +308,7 @@ class TestBuildSlaRecoveredMessage:
             build_sla_recovered_message,
         )
 
-        result = build_sla_recovered_message(
-            previous_limit=70,
-            new_limit=100,
-            rtt_ms=50.0,
-        )
-        assert "default" in result["message"]
+        data = make_recovered_event_data()
+        del data["service_name"]
+        result = build_sla_recovered_message(**data)
+        assert SVC_DEFAULT in result["message"]

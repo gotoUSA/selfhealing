@@ -11,17 +11,23 @@ SLA 알림 핸들러 단위 테스트.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-@dataclass
-class MockEvent:
-    """EventBus 이벤트 Mock."""
-
-    data: dict
+from tests.unit.throttle.conftest import (
+    NOTIFICATION_SOURCE,
+    SVC_DEFAULT,
+    SVC_PAYMENT,
+    MockEvent,
+    make_critical_event,
+    make_critical_event_data,
+    make_notify_result,
+    make_recovered_event,
+    make_recovered_event_data,
+    make_warning_event,
+    make_warning_event_data,
+)
 
 
 # =============================================================================
@@ -40,8 +46,7 @@ class TestGetRegionSafe:
         with patch(
             "selfhealing.services.throttle.sla_notification.get_cluster_identity",
             create=True,
-        ) as mock_get:
-            # 모듈 내 import를 시뮬레이션하기 위해 직접 패치
+        ):
             from selfhealing.services.throttle.sla_notification import _get_region_safe
 
             with patch.dict(
@@ -50,9 +55,7 @@ class TestGetRegionSafe:
                     "selfhealing.core.cluster_identity": MagicMock(get_cluster_identity=MagicMock(return_value=mock_identity)),
                 },
             ):
-                # _get_region_safe는 내부에서 import하므로 재호출
                 result = _get_region_safe()
-                # cluster_identity 모듈이 mock이면 region 반환 또는 None
                 assert result is None or isinstance(result, str)
 
     def test_returns_none_on_import_error(self):
@@ -118,9 +121,7 @@ class TestSubscribeSlaEvents:
         """EventBus 미사용 환경에서 에러 없이 종료."""
         from selfhealing.services.throttle.sla_notification import _subscribe_sla_events
 
-        # ImportError가 발생해도 에러 없이 종료
         with patch.dict("sys.modules", {"selfhealing.services.event_bus": None}):
-            # 모듈 접근 시 ImportError 발생
             _subscribe_sla_events()  # 에러 없이 종료
 
 
@@ -146,20 +147,12 @@ class TestCeleryAsyncDispatch:
                     "selfhealing.adapters.celery.tasks": MagicMock(send_sla_notification=mock_task),
                 },
             ):
-                mod._handle_sla_warning(
-                    MockEvent(
-                        data={
-                            "current_rtt_ms": 250.0,
-                            "threshold_ms": 200,
-                            "service_name": "payment",
-                        }
-                    )
-                )
+                mod._handle_sla_warning(make_warning_event())
 
                 mock_task.apply_async.assert_called_once()
                 kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
                 assert kwargs["notification_type"] == "warning"
-                assert kwargs["event_data"]["service_name"] == "payment"
+                assert kwargs["event_data"]["service_name"] == SVC_PAYMENT
 
     def test_critical_dispatches_to_celery(self):
         """Critical → Celery apply_async 호출."""
@@ -175,15 +168,7 @@ class TestCeleryAsyncDispatch:
                     "selfhealing.adapters.celery.tasks": MagicMock(send_sla_notification=mock_task),
                 },
             ):
-                mod._handle_sla_critical(
-                    MockEvent(
-                        data={
-                            "current_rtt_ms": 600.0,
-                            "threshold_ms": 500,
-                            "service_name": "order",
-                        }
-                    )
-                )
+                mod._handle_sla_critical(make_critical_event())
 
                 mock_task.apply_async.assert_called_once()
                 kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
@@ -203,15 +188,7 @@ class TestCeleryAsyncDispatch:
                     "selfhealing.adapters.celery.tasks": MagicMock(send_sla_notification=mock_task),
                 },
             ):
-                mod._handle_limit_recovered(
-                    MockEvent(
-                        data={
-                            "previous_limit": 70,
-                            "new_limit": 100,
-                            "rtt_ms": 50.0,
-                        }
-                    )
-                )
+                mod._handle_limit_recovered(make_recovered_event())
 
                 mock_task.apply_async.assert_called_once()
                 kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
@@ -231,13 +208,7 @@ class TestCeleryAsyncDispatch:
                     "selfhealing.adapters.celery.tasks": MagicMock(send_sla_notification=mock_task),
                 },
             ):
-                event_data = {
-                    "current_rtt_ms": 300.0,
-                    "threshold_ms": 200,
-                    "service_name": "auth",
-                    "gradient": 0.3,
-                    "rtt_change_percent": 30.0,
-                }
+                event_data = make_warning_event_data(rtt_change_percent=30.0)
                 mod._handle_sla_warning(MockEvent(data=event_data))
 
                 kwargs = mock_task.apply_async.call_args.kwargs["kwargs"]
@@ -257,7 +228,7 @@ class TestCeleryFallbackToSync:
         from selfhealing.services.throttle.sla_notification import _handle_sla_warning
 
         with patch("selfhealing.services.throttle.sla_notification._send_sla_warning_sync") as mock_sync:
-            _handle_sla_warning(MockEvent(data={"current_rtt_ms": 250.0}))
+            _handle_sla_warning(make_warning_event())
             mock_sync.assert_called_once()
 
     def test_critical_fallback_on_import_error(self):
@@ -265,7 +236,7 @@ class TestCeleryFallbackToSync:
         from selfhealing.services.throttle.sla_notification import _handle_sla_critical
 
         with patch("selfhealing.services.throttle.sla_notification._send_sla_critical_sync") as mock_sync:
-            _handle_sla_critical(MockEvent(data={"current_rtt_ms": 600.0}))
+            _handle_sla_critical(make_critical_event())
             mock_sync.assert_called_once()
 
     def test_recovered_fallback_on_import_error(self):
@@ -273,15 +244,7 @@ class TestCeleryFallbackToSync:
         from selfhealing.services.throttle.sla_notification import _handle_limit_recovered
 
         with patch("selfhealing.services.throttle.sla_notification._send_limit_recovered_sync") as mock_sync:
-            _handle_limit_recovered(
-                MockEvent(
-                    data={
-                        "previous_limit": 70,
-                        "new_limit": 100,
-                        "rtt_ms": 50.0,
-                    }
-                )
-            )
+            _handle_limit_recovered(make_recovered_event())
             mock_sync.assert_called_once()
 
     def test_warning_fallback_on_exception(self):
@@ -297,7 +260,7 @@ class TestCeleryFallbackToSync:
             },
         ):
             with patch.object(mod, "_send_sla_warning_sync") as mock_sync:
-                mod._handle_sla_warning(MockEvent(data={"current_rtt_ms": 250.0}))
+                mod._handle_sla_warning(make_warning_event())
                 mock_sync.assert_called_once()
 
 
@@ -309,6 +272,13 @@ class TestCeleryFallbackToSync:
 class TestSendSlaSyncFunctions:
     """동기 전송 함수 상세 테스트."""
 
+    def _patch_notify_sla(self, mock_notify):
+        """notify_sla mock 설정 헬퍼."""
+        return patch.dict(
+            "sys.modules",
+            {"selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify)},
+        )
+
     def test_warning_sync_calls_notify_sla(self):
         """_send_sla_warning_sync가 notify_sla 호출."""
         from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
@@ -317,22 +287,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_warning_sync(
-                    {
-                        "current_rtt_ms": 250.0,
-                        "threshold_ms": 200,
-                        "service_name": "payment",
-                    }
-                )
-
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_warning_sync(make_warning_event_data())
                 mock_notify.assert_called_once()
 
     def test_warning_sync_service_dedup_key(self):
@@ -343,24 +301,13 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_warning_sync(
-                    {
-                        "current_rtt_ms": 250.0,
-                        "threshold_ms": 200,
-                        "service_name": "payment",
-                    }
-                )
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_warning_sync(make_warning_event_data())
 
                 call_kwargs = mock_notify.call_args
-                assert call_kwargs.kwargs.get("domain") == "throttle:payment" or (len(call_kwargs.args) > 0)
+                assert call_kwargs.kwargs.get("domain") == f"throttle:{SVC_PAYMENT}" or len(call_kwargs.args) > 0
 
     def test_warning_sync_region_in_metadata(self):
         """리전 정보가 metadata에 포함."""
@@ -374,21 +321,10 @@ class TestSendSlaSyncFunctions:
                 "selfhealing.services.throttle.sla_notification.notify_sla",
                 create=True,
             ) as mock_notify:
-                mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+                mock_notify.return_value = make_notify_result()
 
-                with patch.dict(
-                    "sys.modules",
-                    {
-                        "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                    },
-                ):
-                    _send_sla_warning_sync(
-                        {
-                            "current_rtt_ms": 250.0,
-                            "threshold_ms": 200,
-                            "service_name": "payment",
-                        }
-                    )
+                with self._patch_notify_sla(mock_notify):
+                    _send_sla_warning_sync(make_warning_event_data())
 
                     call_kwargs = mock_notify.call_args.kwargs
                     assert call_kwargs["metadata"]["region"] == "ap-northeast-2"
@@ -401,21 +337,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_warning_sync(
-                    {
-                        "current_rtt_ms": 250.0,
-                        "threshold_ms": 200,
-                        "service_name": "payment",
-                    }
-                )
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_warning_sync(make_warning_event_data())
 
                 call_kwargs = mock_notify.call_args.kwargs
                 assert call_kwargs["priority"] == "high"
@@ -428,23 +353,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_critical_sync(
-                    {
-                        "current_rtt_ms": 600.0,
-                        "threshold_ms": 500,
-                        "service_name": "order",
-                        "reduction_percent": 30,
-                    }
-                )
-
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_critical_sync(make_critical_event_data())
                 mock_notify.assert_called_once()
 
     def test_critical_sync_priority_critical(self):
@@ -455,21 +367,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_critical_sync(
-                    {
-                        "current_rtt_ms": 600.0,
-                        "threshold_ms": 500,
-                        "service_name": "order",
-                    }
-                )
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_critical_sync(make_critical_event_data())
 
                 call_kwargs = mock_notify.call_args.kwargs
                 assert call_kwargs["priority"] == "critical"
@@ -482,21 +383,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_critical_sync(
-                    {
-                        "current_rtt_ms": 600.0,
-                        "threshold_ms": 500,
-                        "service_name": "order",
-                    }
-                )
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_critical_sync(make_critical_event_data())
 
                 call_kwargs = mock_notify.call_args.kwargs
                 assert call_kwargs["metadata"]["requires_action"] is True
@@ -509,23 +399,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_limit_recovered_sync(
-                    {
-                        "previous_limit": 70,
-                        "new_limit": 100,
-                        "rtt_ms": 50.0,
-                        "service_name": "payment",
-                    }
-                )
-
+            with self._patch_notify_sla(mock_notify):
+                _send_limit_recovered_sync(make_recovered_event_data())
                 mock_notify.assert_called_once()
 
     def test_recovered_sync_priority_medium(self):
@@ -536,21 +413,10 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_limit_recovered_sync(
-                    {
-                        "previous_limit": 70,
-                        "new_limit": 100,
-                        "rtt_ms": 50.0,
-                    }
-                )
+            with self._patch_notify_sla(mock_notify):
+                _send_limit_recovered_sync(make_recovered_event_data())
 
                 call_kwargs = mock_notify.call_args.kwargs
                 assert call_kwargs["priority"] == "medium"
@@ -563,37 +429,33 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_warning_sync({"current_rtt_ms": 100.0})
+            with self._patch_notify_sla(mock_notify):
+                data = make_warning_event_data()
+                del data["service_name"]
+                _send_sla_warning_sync(data)
 
                 call_kwargs = mock_notify.call_args.kwargs
-                assert call_kwargs["domain"] == "throttle:default"
+                assert call_kwargs["domain"] == f"throttle:{SVC_DEFAULT}"
 
     def test_warning_sync_handles_import_error(self):
         """UnifiedNotification 미사용 시 에러 없이 종료."""
         from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
 
-        # notify_sla import 실패해도 에러 없이 종료
-        _send_sla_warning_sync({"current_rtt_ms": 100.0})
+        _send_sla_warning_sync(make_warning_event_data())
 
     def test_critical_sync_handles_exception(self):
         """Critical 전송 예외 시 에러 없이 종료."""
         from selfhealing.services.throttle.sla_notification import _send_sla_critical_sync
 
-        _send_sla_critical_sync({"current_rtt_ms": 600.0})
+        _send_sla_critical_sync(make_critical_event_data())
 
     def test_recovered_sync_handles_exception(self):
         """Recovered 전송 예외 시 에러 없이 종료."""
         from selfhealing.services.throttle.sla_notification import _send_limit_recovered_sync
 
-        _send_limit_recovered_sync({"previous_limit": 70, "new_limit": 100})
+        _send_limit_recovered_sync(make_recovered_event_data())
 
     def test_warning_sync_source_is_adaptive_throttle(self):
         """source가 'adaptive_throttle'."""
@@ -603,23 +465,13 @@ class TestSendSlaSyncFunctions:
             "selfhealing.services.throttle.sla_notification.notify_sla",
             create=True,
         ) as mock_notify:
-            mock_notify.return_value = MagicMock(success=True, channels_sent=["slack"])
+            mock_notify.return_value = make_notify_result()
 
-            with patch.dict(
-                "sys.modules",
-                {
-                    "selfhealing.services.unified_notification": MagicMock(notify_sla=mock_notify),
-                },
-            ):
-                _send_sla_warning_sync(
-                    {
-                        "current_rtt_ms": 250.0,
-                        "service_name": "test",
-                    }
-                )
+            with self._patch_notify_sla(mock_notify):
+                _send_sla_warning_sync(make_warning_event_data())
 
                 call_kwargs = mock_notify.call_args.kwargs
-                assert call_kwargs["source"] == "adaptive_throttle"
+                assert call_kwargs["source"] == NOTIFICATION_SOURCE
 
 
 # =============================================================================
