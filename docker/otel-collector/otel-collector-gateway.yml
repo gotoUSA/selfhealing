@@ -74,6 +74,12 @@ processors:
       - key: collector.role
         value: gateway
         action: upsert
+      - key: region
+        from_attribute: REGION
+        action: upsert
+      - key: cluster_id
+        from_attribute: CLUSTER_ID
+        action: upsert
 
   # Trace 속성 민감 정보 삭제
   attributes/traces:

@@ -152,3 +152,25 @@ data:
           matches: "^(.*)$"
           as: "selfhealing_backpressure_level"
         metricsQuery: 'max(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+
+      # =============================================================================
+      # SelfHealing Throttle Metrics (HPA RTT-based scaling)
+      # =============================================================================
+
+      # Throttle RTT p99
+      # 응답 시간 99백분위 (HPA Adaptive Throttle 연동)
+      - seriesQuery: 'selfhealing_throttle_rtt_ms_bucket{namespace!="",pod!=""}'
+        resources:
+          overrides:
+            namespace:
+              resource: "namespace"
+            pod:
+              resource: "pod"
+        name:
+          as: "selfhealing_throttle_rtt_p99"
+        metricsQuery: >-
+          histogram_quantile(
+            0.99,
+            sum(rate(<<.Series>>{<<.LabelMatchers>>}[5m]))
+            by (<<.GroupBy>>, le)
+          )

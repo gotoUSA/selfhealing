@@ -1,0 +1,104 @@
+groups:
+  - name: throttle_alerts
+    rules:
+      # ── Critical 알람 (for: 1m) ──────────────────────────────────
+
+      # SLA Critical 알람
+      - alert: ThrottleSLACritical
+        expr: increase(selfhealing_throttle_sla_criticals_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Throttle SLA Critical threshold breached"
+          description: "SLA Critical threshold has been breached {{ $value }} times in the last 5 minutes"
+
+      # Full Stop 활성화 알람
+      - alert: ThrottleFullStopActive
+        expr: selfhealing_throttle_full_stop_active == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Throttle Full Stop is ACTIVE"
+          description: "All requests are being blocked due to Full Stop condition"
+
+      # Emergency Level 3 알람
+      - alert: ThrottleEmergencyLevel3
+        expr: selfhealing_throttle_emergency_level >= 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Throttle Emergency Level 3 active"
+          description: "Maximum emergency level is active, gradient adjustments are frozen"
+
+      # ── Warning 알람 (for: 5m) ──────────────────────────────────
+
+      # SLA Warning 알람 (5분간 3회 이상)
+      - alert: ThrottleSLAWarningFrequent
+        expr: increase(selfhealing_throttle_sla_warnings_total[5m]) >= 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frequent SLA warnings detected"
+          description: "SLA Warning threshold breached {{ $value }} times in 5 minutes"
+
+      # Limit 급격한 감소 알람
+      - alert: ThrottleLimitDropped
+        expr: |
+          (selfhealing_throttle_limit - selfhealing_throttle_limit offset 5m)
+          / selfhealing_throttle_limit offset 5m < -0.5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Throttle limit dropped by more than 50%"
+          description: "Current limit: {{ $value }}"
+
+      # 높은 거부율 알람
+      - alert: ThrottleHighDenialRate
+        expr: |
+          rate(selfhealing_throttle_denied_total[5m])
+          / (rate(selfhealing_throttle_requests_total[5m]) + 0.001) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High throttle denial rate (>30%)"
+          description: "{{ $value | humanizePercentage }} of requests are being denied"
+
+      # RTT 지속적 상승 알람
+      - alert: ThrottleRTTIncreasing
+        expr: selfhealing_throttle_gradient > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RTT gradient consistently positive"
+          description: "Response times have been increasing for 5+ minutes (gradient: {{ $value }})"
+
+      # Recovery Dampening 장기화 알람
+      - alert: ThrottleRecoveryStuck
+        expr: selfhealing_throttle_recovery_dampening_active == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recovery dampening taking too long"
+          description: "Recovery dampening has been active for more than 10 minutes"
+
+      # ── Saturation 알람 ─────────────────────────────────────────
+
+      # Throttle Saturation 위험 수준 알람
+      - alert: ThrottleSaturationCritical
+        expr: selfhealing_throttle_saturation_ratio < 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Throttle saturation dangerously low (<20%)"
+          description: >-
+            Current limit is {{ $value | humanizePercentage }} of max_limit.
+            System is heavily throttled.

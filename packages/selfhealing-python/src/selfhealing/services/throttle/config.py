@@ -16,48 +16,33 @@ class ThrottleConfig:
     """Configuration for throttle services."""
 
     # Basic rate limiting
-    initial_limit: int = field(
-        default_factory=lambda: get_throttle_settings().initial_limit
-    )
-    window_seconds: int = field(
-        default_factory=lambda: get_throttle_settings().window_seconds
-    )
+    initial_limit: int = field(default_factory=lambda: get_throttle_settings().initial_limit)
+    window_seconds: int = field(default_factory=lambda: get_throttle_settings().window_seconds)
 
     # Adaptive throttling (Netflix Gradient)
     min_limit: int = field(default_factory=lambda: get_throttle_settings().min_limit)
     max_limit: int = field(default_factory=lambda: get_throttle_settings().max_limit)
 
     # Gradient calculation
-    sample_interval_ms: int = field(
-        default_factory=lambda: get_throttle_settings().sample_interval_ms
-    )
-    smoothing_factor: float = field(
-        default_factory=lambda: get_throttle_settings().smoothing_factor
-    )
+    sample_interval_ms: int = field(default_factory=lambda: get_throttle_settings().sample_interval_ms)
+    smoothing_factor: float = field(default_factory=lambda: get_throttle_settings().smoothing_factor)
 
     # Adjustment rates
-    decrease_ratio: float = field(
-        default_factory=lambda: get_throttle_settings().decrease_ratio
-    )
-    increase_step: int = field(
-        default_factory=lambda: get_throttle_settings().increase_step
-    )
+    decrease_ratio: float = field(default_factory=lambda: get_throttle_settings().decrease_ratio)
+    increase_step: int = field(default_factory=lambda: get_throttle_settings().increase_step)
 
     # SLA thresholds (ms) - trigger aggressive throttling
-    sla_warning_ms: int = field(
-        default_factory=lambda: get_throttle_settings().sla_warning_ms
-    )
-    sla_critical_ms: int = field(
-        default_factory=lambda: get_throttle_settings().sla_critical_ms
-    )
+    sla_warning_ms: int = field(default_factory=lambda: get_throttle_settings().sla_warning_ms)
+    sla_critical_ms: int = field(default_factory=lambda: get_throttle_settings().sla_critical_ms)
 
     # Emergency mode
-    emergency_limit: int = field(
-        default_factory=lambda: get_throttle_settings().emergency_limit
-    )
+    emergency_limit: int = field(default_factory=lambda: get_throttle_settings().emergency_limit)
 
     # Redis key prefix
     key_prefix: str = field(default_factory=lambda: get_throttle_settings().key_prefix)
+
+    # Prometheus metrics service label
+    service_name: str = field(default_factory=lambda: get_throttle_settings().service_name)
 
     @classmethod
     def from_settings(cls) -> ThrottleConfig:
@@ -76,6 +61,7 @@ class ThrottleConfig:
             sla_critical_ms=settings.sla_critical_ms,
             emergency_limit=settings.emergency_limit,
             key_prefix=settings.key_prefix,
+            service_name=settings.service_name,
         )
 
     @classmethod
@@ -87,9 +73,7 @@ class ThrottleConfig:
             window_seconds=data.get("window_seconds", settings.window_seconds),
             min_limit=data.get("min_limit", settings.min_limit),
             max_limit=data.get("max_limit", settings.max_limit),
-            sample_interval_ms=data.get(
-                "sample_interval_ms", settings.sample_interval_ms
-            ),
+            sample_interval_ms=data.get("sample_interval_ms", settings.sample_interval_ms),
             smoothing_factor=data.get("smoothing_factor", settings.smoothing_factor),
             decrease_ratio=data.get("decrease_ratio", settings.decrease_ratio),
             increase_step=data.get("increase_step", settings.increase_step),
@@ -97,6 +81,7 @@ class ThrottleConfig:
             sla_critical_ms=data.get("sla_critical_ms", settings.sla_critical_ms),
             emergency_limit=data.get("emergency_limit", settings.emergency_limit),
             key_prefix=data.get("key_prefix", settings.key_prefix),
+            service_name=data.get("service_name", settings.service_name),
         )
 
 

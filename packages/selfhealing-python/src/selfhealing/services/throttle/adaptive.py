@@ -96,60 +96,173 @@ def _record_limit_history(
 
 
 # =============================================================================
-# Prometheus 메트릭 헬퍼 (Fail-Open)
+# Prometheus 메트릭 — Top-Level Import + 확장 기록 함수
 # =============================================================================
+
+_METRICS_AVAILABLE = False
+_throttle_current_limit = None
+_throttle_rtt_histogram = None
+_throttle_gradient_gauge = None
+_throttle_denied_total = None
+_throttle_emergency_adjustments_total = None
+_throttle_cb_adjustments_total = None
+# 확장 메트릭
+_throttle_requests_total = None
+_throttle_allowed_total = None
+_throttle_sla_warnings_total = None
+_throttle_sla_criticals_total = None
+_throttle_emergency_level_gauge = None
+_throttle_gradient_frozen_gauge = None
+_recovery_active_gauge = None
+_recovery_step_gauge = None
+_full_stop_gauge = None
+_throttle_full_stop_activations_total = None
+_throttle_limit_changes_total = None
+_throttle_limit_change_magnitude = None
+_throttle_saturation_ratio = None
+_throttle_max_limit_gauge = None
+
+try:
+    from selfhealing.services.metrics.definitions import (
+        throttle_current_limit as _throttle_current_limit,
+        throttle_rtt_ms as _throttle_rtt_histogram,
+        throttle_gradient as _throttle_gradient_gauge,
+        throttle_denied_total as _throttle_denied_total,
+        throttle_emergency_adjustments_total as _throttle_emergency_adjustments_total,
+        throttle_cb_adjustments_total as _throttle_cb_adjustments_total,
+        throttle_requests_total as _throttle_requests_total,
+        throttle_allowed_total as _throttle_allowed_total,
+        throttle_sla_warnings_total as _throttle_sla_warnings_total,
+        throttle_sla_criticals_total as _throttle_sla_criticals_total,
+        throttle_emergency_level as _throttle_emergency_level_gauge,
+        throttle_gradient_frozen as _throttle_gradient_frozen_gauge,
+        throttle_recovery_dampening_active as _recovery_active_gauge,
+        throttle_recovery_dampening_step as _recovery_step_gauge,
+        throttle_full_stop_active as _full_stop_gauge,
+        throttle_full_stop_activations_total as _throttle_full_stop_activations_total,
+        throttle_limit_changes_total as _throttle_limit_changes_total,
+        throttle_limit_change_magnitude as _throttle_limit_change_magnitude,
+        throttle_saturation_ratio as _throttle_saturation_ratio,
+        throttle_max_limit as _throttle_max_limit_gauge,
+    )
+
+    _METRICS_AVAILABLE = True
+except ImportError:
+    pass
 
 
 def _record_throttle_metrics(
     service: str,
+    # 기존 파라미터 (하위호환)
     limit: int | None = None,
     rtt_ms: float | None = None,
     gradient: float | None = None,
     denied_reason: str | None = None,
     emergency_level: int | None = None,
     cb_state: str | None = None,
+    # 확장 파라미터
+    request_result: str | None = None,
+    sla_event: str | None = None,
+    gradient_frozen: bool | None = None,
+    recovery_dampening_active: bool | None = None,
+    recovery_dampening_step: int | None = None,
+    full_stop_active: bool | None = None,
+    full_stop_reason: str | None = None,
+    limit_change_direction: str | None = None,
+    limit_change_trigger: str | None = None,
+    limit_change_percent: float | None = None,
+    max_limit: int | None = None,
+    trace_id: str | None = None,
 ) -> None:
     """
-    Throttle 관련 Prometheus 메트릭 기록.
+    Throttle Prometheus 메트릭 기록 (확장 버전).
 
-    메트릭:
-    - selfhealing_throttle_limit: 현재 limit 값
-    - selfhealing_throttle_rtt_ms: RTT 히스토그램
-    - selfhealing_throttle_gradient: 현재 gradient 값
-    - selfhealing_throttle_denied_total: 거부된 요청 카운터
-    - selfhealing_throttle_emergency_adjustments_total: Emergency 조정 카운터
-    - selfhealing_throttle_cb_adjustments_total: CB 조정 카운터
+    기존 시그니처를 확장하여 하위호환 유지.
+    Exemplar는 Fail-Open: 첨부 실패 시 exemplar 없이 기록 계속.
     """
-    try:
-        from selfhealing.services.metrics.definitions import (
-            throttle_current_limit,
-            throttle_rtt_ms as throttle_rtt_histogram,
-            throttle_gradient as throttle_gradient_gauge,
-            throttle_denied_total,
-            throttle_emergency_adjustments_total,
-            throttle_cb_adjustments_total,
-        )
+    if not _METRICS_AVAILABLE:
+        return
 
+    try:
+        exemplar = None
+        if trace_id:
+            exemplar = {"trace_id": trace_id}
+
+        # --- Core metrics ---
         if limit is not None:
-            throttle_current_limit.labels(service=service).set(limit)
+            _throttle_current_limit.labels(service=service).set(limit)
 
         if rtt_ms is not None:
-            throttle_rtt_histogram.labels(service=service).observe(rtt_ms)
+            try:
+                _throttle_rtt_histogram.labels(service=service).observe(rtt_ms, exemplar=exemplar)
+            except TypeError:
+                _throttle_rtt_histogram.labels(service=service).observe(rtt_ms)
 
         if gradient is not None:
-            throttle_gradient_gauge.labels(service=service).set(gradient)
+            _throttle_gradient_gauge.labels(service=service).set(gradient)
 
-        if denied_reason is not None:
-            throttle_denied_total.labels(service=service, reason=denied_reason).inc()
+        # --- Request metrics ---
+        if request_result is not None:
+            _throttle_requests_total.labels(service=service, result=request_result).inc()
+            if request_result == "allowed":
+                try:
+                    _throttle_allowed_total.labels(service=service).inc(exemplar=exemplar)
+                except TypeError:
+                    _throttle_allowed_total.labels(service=service).inc()
+            elif request_result == "denied" and denied_reason:
+                _throttle_denied_total.labels(service=service, reason=denied_reason).inc()
 
+        # --- SLA metrics ---
+        if sla_event == "warning":
+            _throttle_sla_warnings_total.labels(service=service).inc()
+        elif sla_event == "critical":
+            _throttle_sla_criticals_total.labels(service=service).inc()
+
+        # --- Emergency metrics ---
         if emergency_level is not None:
-            throttle_emergency_adjustments_total.labels(level=str(emergency_level)).inc()
+            _throttle_emergency_level_gauge.labels(service=service).set(emergency_level)
+            _throttle_emergency_adjustments_total.labels(level=str(emergency_level)).inc()
+
+        if gradient_frozen is not None:
+            _throttle_gradient_frozen_gauge.labels(service=service).set(1 if gradient_frozen else 0)
 
         if cb_state is not None:
-            throttle_cb_adjustments_total.labels(service=service, cb_state=cb_state).inc()
+            _throttle_cb_adjustments_total.labels(service=service, cb_state=cb_state).inc()
 
-    except ImportError:
-        logger.debug("[AdaptiveThrottle] Metrics module not available")
+        # --- Recovery metrics ---
+        if recovery_dampening_active is not None:
+            _recovery_active_gauge.labels(service=service).set(1 if recovery_dampening_active else 0)
+
+        if recovery_dampening_step is not None:
+            _recovery_step_gauge.labels(service=service).set(recovery_dampening_step)
+
+        # --- Full Stop metrics ---
+        if full_stop_active is not None:
+            _full_stop_gauge.labels(service=service).set(1 if full_stop_active else 0)
+
+        if full_stop_reason is not None:
+            _throttle_full_stop_activations_total.labels(service=service, reason=full_stop_reason).inc()
+
+        # --- Limit change metrics ---
+        if limit_change_direction and limit_change_trigger:
+            _throttle_limit_changes_total.labels(
+                service=service,
+                direction=limit_change_direction,
+                trigger=limit_change_trigger,
+            ).inc()
+
+            if limit_change_percent is not None:
+                _throttle_limit_change_magnitude.labels(
+                    service=service,
+                    direction=limit_change_direction,
+                ).observe(abs(limit_change_percent))
+
+        # --- Saturation metrics ---
+        if limit is not None and max_limit is not None and max_limit > 0:
+            saturation = limit / max_limit
+            _throttle_saturation_ratio.labels(service=service).set(saturation)
+            _throttle_max_limit_gauge.labels(service=service).set(max_limit)
+
     except Exception as e:
         logger.debug(f"[AdaptiveThrottle] Failed to record metrics: {e}")
 
@@ -290,6 +403,24 @@ class GradientCalculator:
         with self._lock:
             return self._smoothed_rtt
 
+    def get_snapshot(self) -> tuple[float | None, float]:
+        """
+        현재 RTT + gradient를 단일 Lock 내에서 반환.
+
+        Lock을 2회 → 1회로 줄여 핫 패스 성능을 개선합니다.
+
+        Returns:
+            (current_rtt_ms, gradient) 튜플
+        """
+        with self._lock:
+            rtt = self._smoothed_rtt
+            if self._smoothed_rtt is None or self._previous_smoothed_rtt is None:
+                return rtt, 0.0
+            if self._previous_smoothed_rtt == 0:
+                return rtt, 0.0
+            grad = (self._smoothed_rtt - self._previous_smoothed_rtt) / self._previous_smoothed_rtt
+            return rtt, grad
+
     def get_stats(self) -> dict:
         """Get calculator statistics."""
         with self._lock:
@@ -351,6 +482,11 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._gradient_calculator = GradientCalculator(
             smoothing_factor=self.config.smoothing_factor,
         )
+
+        # Prometheus 라벨 동적화 — sanitize_label_value()로 안전한 값 보장
+        from selfhealing.services.metrics.registry import sanitize_label_value
+
+        self._service_name: str = sanitize_label_value(self.config.service_name)
 
         # Track last adjustment time
         self._last_adjustment_time: float = 0.0
@@ -484,7 +620,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
 
         # Prometheus 메트릭 기록
         _record_throttle_metrics(
-            service="default",
+            service=self._service_name,
             limit=new_limit,
             denied_reason="rate_limit_429",
         )
@@ -573,14 +709,43 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._gradient_calculator.add_sample(rtt_ms)
         self._maybe_adjust_limit(rtt_ms)
 
-        # Prometheus 메트릭 기록: RTT, gradient, limit
-        gradient = self._gradient_calculator.get_gradient()
+        # Lock 통합: get_snapshot() 단일 호출로 RTT + gradient 취득
+        current_rtt, gradient = self._gradient_calculator.get_snapshot()
+
+        # Exemplar 취득 (Fail-Open)
+        trace_id = None
+        try:
+            from selfhealing.observability import get_current_trace_id_from_otel
+
+            trace_id = get_current_trace_id_from_otel()
+        except Exception:
+            pass
+
+        # 확장 메트릭 기록 — 동적 라벨 + exemplar + saturation
         _record_throttle_metrics(
-            service="default",
+            service=self._service_name,
             limit=self._current_limit,
             rtt_ms=rtt_ms,
             gradient=gradient,
+            emergency_level=self._emergency_level,
+            gradient_frozen=self._gradient_frozen,
+            recovery_dampening_active=self._recovery_dampening_active,
+            recovery_dampening_step=(self._recovery_dampening_step if self._recovery_dampening_active else None),
+            full_stop_active=self._full_stop_active,
+            max_limit=self.config.max_limit,
+            trace_id=trace_id,
         )
+
+        # Limit 변경 메트릭
+        if self._current_limit != previous_limit:
+            direction = "up" if self._current_limit > previous_limit else "down"
+            change_percent = abs(self._current_limit - previous_limit) / max(previous_limit, 1) * 100
+            _record_throttle_metrics(
+                service=self._service_name,
+                limit_change_direction=direction,
+                limit_change_trigger="gradient",
+                limit_change_percent=change_percent,
+            )
 
         # Check if limit was at min and has now recovered
         current_at_min = self._current_limit <= self.config.min_limit
@@ -782,12 +947,22 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         result.current_rtt_ms = self._gradient_calculator.get_current_rtt()
         result.rtt_gradient = self._gradient_calculator.get_gradient()
 
-        # 거부 시 메트릭 기록
-        if not result.allowed:
-            _record_throttle_metrics(
-                service="default",
-                denied_reason=result.reason or "rate_limit_exceeded",
-            )
+        # Exemplar 취득 (Fail-Open)
+        trace_id = None
+        try:
+            from selfhealing.observability import get_current_trace_id_from_otel
+
+            trace_id = get_current_trace_id_from_otel()
+        except Exception:
+            pass
+
+        # 메트릭 기록 — 동적 service 라벨 + 허용/거부 결과
+        _record_throttle_metrics(
+            service=self._service_name,
+            request_result="allowed" if result.allowed else "denied",
+            denied_reason=result.reason if not result.allowed else None,
+            trace_id=trace_id,
+        )
 
         return result
 
@@ -875,7 +1050,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 self.current_limit = new_limit
                 # Emergency 조정 메트릭 기록
                 _record_throttle_metrics(
-                    service="default",
+                    service=self._service_name,
                     limit=new_limit,
                     emergency_level=level,
                 )
@@ -907,7 +1082,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 self.current_limit = new_limit
                 # Emergency 조정 메트릭 기록
                 _record_throttle_metrics(
-                    service="default",
+                    service=self._service_name,
                     limit=new_limit,
                     emergency_level=level,
                 )

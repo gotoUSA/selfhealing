@@ -297,6 +297,14 @@ class ThrottleSettings(BaseSettings):
         description="Redis 키 접두사",
     )
 
+    # ==========================================================================
+    # Prometheus Metrics Label
+    # ==========================================================================
+    service_name: str = Field(
+        default="default",
+        description="Prometheus 메트릭의 service 라벨 값. " "환경변수 SELFHEALING_THROTTLE_SERVICE_NAME으로 주입.",
+    )
+
     @field_validator("max_limit")
     @classmethod
     def validate_max_limit(cls, v: int, info) -> int:

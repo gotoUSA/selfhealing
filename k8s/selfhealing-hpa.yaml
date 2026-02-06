@@ -58,6 +58,16 @@ spec:
           type: Utilization
           averageUtilization: 80
 
+    # 4. Throttle RTT p99 기반 (Adaptive Throttle 연동)
+    # RTT p99 > 500ms 시 스케일 아웃
+    - type: Pods
+      pods:
+        metric:
+          name: selfhealing_throttle_rtt_p99
+        target:
+          type: AverageValue
+          averageValue: "500"
+
   behavior:
     # Scale-Down 정책
     # 300초 안정화로 flapping 방지

@@ -1,0 +1,420 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Adaptive Throttle Monitoring Dashboard - RTT, Limit, Saturation, Emergency, Recovery",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Current Throttle Limit",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_limit{service=\"$service\"}",
+          "legendFormat": "Limit",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "green", "value": 70}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Emergency Level",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 3, "x": 6, "y": 0},
+      "id": 2,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_emergency_level{service=\"$service\"}",
+          "legendFormat": "Level",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 1},
+              {"color": "orange", "value": 2},
+              {"color": "red", "value": 3}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Full Stop Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 3, "x": 9, "y": 0},
+      "id": 3,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_full_stop_active{service=\"$service\"}",
+          "legendFormat": "Full Stop",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "OFF", "color": "green"}}},
+            {"type": "value", "options": {"1": {"text": "ACTIVE", "color": "red"}}}
+          ]
+        }
+      }
+    },
+    {
+      "title": "Throttle Saturation",
+      "type": "gauge",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 4,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_saturation_ratio{service=\"$service\"}",
+          "legendFormat": "Saturation",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 0.2},
+              {"color": "green", "value": 0.5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Recovery Dampening Step",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 5,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_recovery_dampening_active{service=\"$service\"}",
+          "legendFormat": "Active",
+          "refId": "A"
+        },
+        {
+          "expr": "selfhealing_throttle_recovery_dampening_step{service=\"$service\"}",
+          "legendFormat": "Step",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "80%"}}},
+            {"type": "value", "options": {"1": {"text": "90%"}}},
+            {"type": "value", "options": {"2": {"text": "100%"}}}
+          ]
+        }
+      }
+    },
+    {
+      "title": "Throttle Limit Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "id": 6,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_limit{service=\"$service\"}",
+          "legendFormat": "Current Limit",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "RTT Distribution (p50, p90, p99)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "id": 7,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(selfhealing_throttle_rtt_ms_bucket{service=\"$service\"}[5m]))",
+          "legendFormat": "p50",
+          "refId": "A",
+          "exemplar": true
+        },
+        {
+          "expr": "histogram_quantile(0.9, rate(selfhealing_throttle_rtt_ms_bucket{service=\"$service\"}[5m]))",
+          "legendFormat": "p90",
+          "refId": "B",
+          "exemplar": true
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(selfhealing_throttle_rtt_ms_bucket{service=\"$service\"}[5m]))",
+          "legendFormat": "p99",
+          "refId": "C",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "title": "RTT Gradient",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+      "id": 8,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_gradient{service=\"$service\"}",
+          "legendFormat": "Gradient",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": -0.1},
+              {"color": "yellow", "value": 0},
+              {"color": "red", "value": 0.1}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Request Rate (Allowed vs Denied)",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12},
+      "id": 9,
+      "targets": [
+        {
+          "expr": "rate(selfhealing_throttle_requests_total{service=\"$service\", result=\"allowed\"}[5m])",
+          "legendFormat": "Allowed",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(selfhealing_throttle_requests_total{service=\"$service\", result=\"denied\"}[5m])",
+          "legendFormat": "Denied",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "SLA Events",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
+      "id": 10,
+      "targets": [
+        {
+          "expr": "increase(selfhealing_throttle_sla_warnings_total{service=\"$service\"}[5m])",
+          "legendFormat": "Warnings",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(selfhealing_throttle_sla_criticals_total{service=\"$service\"}[5m])",
+          "legendFormat": "Criticals",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Limit Changes by Trigger",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 18},
+      "id": 11,
+      "targets": [
+        {
+          "expr": "increase(selfhealing_throttle_limit_changes_total{service=\"$service\"}[5m])",
+          "legendFormat": "{{direction}} - {{trigger}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Throttle Limit: Current vs Baseline",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 12,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_limit{service=\"$service\"}",
+          "legendFormat": "Current",
+          "refId": "A"
+        },
+        {
+          "expr": "selfhealing_throttle_limit{service=\"$service\"} offset 1h",
+          "legendFormat": "1h ago",
+          "refId": "B"
+        },
+        {
+          "expr": "selfhealing_throttle_limit{service=\"$service\"} offset 1d",
+          "legendFormat": "1d ago",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "1h ago"},
+            "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash"}}]
+          },
+          {
+            "matcher": {"id": "byName", "options": "1d ago"},
+            "properties": [{"id": "custom.lineStyle", "value": {"fill": "dot"}}]
+          }
+        ]
+      }
+    },
+    {
+      "title": "RTT p99: Current vs Baseline",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 13,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(selfhealing_throttle_rtt_ms_bucket{service=\"$service\"}[5m]))",
+          "legendFormat": "Current p99",
+          "refId": "A",
+          "exemplar": true
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(selfhealing_throttle_rtt_ms_bucket{service=\"$service\"}[5m] offset 1h))",
+          "legendFormat": "p99 1h ago",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(selfhealing_throttle_rtt_ms_bucket{service=\"$service\"}[5m] offset 1d))",
+          "legendFormat": "p99 1d ago",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "Saturation Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 32},
+      "id": 14,
+      "targets": [
+        {
+          "expr": "selfhealing_throttle_saturation_ratio{service=\"$service\"}",
+          "legendFormat": "Saturation",
+          "refId": "A"
+        },
+        {
+          "expr": "selfhealing_throttle_saturation_ratio{service=\"$service\"} offset 1h",
+          "legendFormat": "1h ago",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "thresholdsStyle": {"mode": "line+area"}
+          },
+          "thresholds": {
+            "steps": [
+              {"color": "transparent", "value": null},
+              {"color": "red", "value": 0.2}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Denied Rate: Current vs Baseline",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 32},
+      "id": 15,
+      "targets": [
+        {
+          "expr": "rate(selfhealing_throttle_denied_total{service=\"$service\"}[5m])",
+          "legendFormat": "Current",
+          "refId": "A",
+          "exemplar": true
+        },
+        {
+          "expr": "rate(selfhealing_throttle_denied_total{service=\"$service\"}[5m] offset 1h)",
+          "legendFormat": "1h ago",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(selfhealing_throttle_denied_total{service=\"$service\"}[5m] offset 1d)",
+          "legendFormat": "1d ago",
+          "refId": "C"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 30,
+  "style": "dark",
+  "tags": ["throttle", "adaptive", "selfhealing"],
+  "templating": {
+    "list": [
+      {
+        "allValue": null,
+        "current": {"text": "default", "value": "default"},
+        "datasource": "Prometheus",
+        "definition": "label_values(selfhealing_throttle_limit, service)",
+        "description": "Service name for throttle metrics",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Service",
+        "multi": false,
+        "name": "service",
+        "options": [],
+        "query": "label_values(selfhealing_throttle_limit, service)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Adaptive Throttle Monitoring",
+  "uid": "adaptive-throttle",
+  "version": 1
+}

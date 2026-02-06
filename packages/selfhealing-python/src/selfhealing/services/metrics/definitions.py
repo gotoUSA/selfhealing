@@ -307,6 +307,115 @@ throttle_cb_adjustments_total = get_or_create_counter(
     ["service", "cb_state"],
 )
 
+# =============================================================================
+# Adaptive Throttle Extended Metrics
+# =============================================================================
+
+# Request Metrics
+throttle_requests_total = get_or_create_counter(
+    "selfhealing_throttle_requests_total",
+    "Total requests processed by throttle",
+    ["service", "result"],
+)
+
+throttle_allowed_total = get_or_create_counter(
+    "selfhealing_throttle_allowed_total",
+    "Total requests allowed by throttle",
+    ["service"],
+)
+
+# SLA Metrics
+throttle_sla_warnings_total = get_or_create_counter(
+    "selfhealing_throttle_sla_warnings_total",
+    "Total SLA warning threshold breaches",
+    ["service"],
+)
+
+throttle_sla_criticals_total = get_or_create_counter(
+    "selfhealing_throttle_sla_criticals_total",
+    "Total SLA critical threshold breaches",
+    ["service"],
+)
+
+throttle_sla_breach_duration_seconds = get_or_create_histogram(
+    "selfhealing_throttle_sla_breach_duration_seconds",
+    "Duration of SLA breach periods",
+    ["service", "severity"],
+    buckets=(60, 300, 600, 1800, 3600),
+)
+
+# Emergency Metrics
+throttle_emergency_level = get_or_create_gauge(
+    "selfhealing_throttle_emergency_level",
+    "Current emergency level (0-3)",
+    ["service"],
+)
+
+throttle_gradient_frozen = get_or_create_gauge(
+    "selfhealing_throttle_gradient_frozen",
+    "Whether gradient adjustment is frozen (1=yes, 0=no)",
+    ["service"],
+)
+
+# Recovery Metrics
+throttle_recovery_dampening_active = get_or_create_gauge(
+    "selfhealing_throttle_recovery_dampening_active",
+    "Whether recovery dampening is active (1=yes, 0=no)",
+    ["service"],
+)
+
+throttle_recovery_dampening_step = get_or_create_gauge(
+    "selfhealing_throttle_recovery_dampening_step",
+    "Current recovery dampening step (0=80%, 1=90%, 2=100%)",
+    ["service"],
+)
+
+throttle_recovery_completed_total = get_or_create_counter(
+    "selfhealing_throttle_recovery_completed_total",
+    "Total recovery dampening completions",
+    ["service"],
+)
+
+# Full Stop Metrics
+throttle_full_stop_active = get_or_create_gauge(
+    "selfhealing_throttle_full_stop_active",
+    "Whether full stop is active (1=yes, 0=no)",
+    ["service"],
+)
+
+throttle_full_stop_activations_total = get_or_create_counter(
+    "selfhealing_throttle_full_stop_activations_total",
+    "Total full stop activations",
+    ["service", "reason"],
+)
+
+# Limit Change Metrics
+throttle_limit_changes_total = get_or_create_counter(
+    "selfhealing_throttle_limit_changes_total",
+    "Total throttle limit changes",
+    ["service", "direction", "trigger"],
+)
+
+throttle_limit_change_magnitude = get_or_create_histogram(
+    "selfhealing_throttle_limit_change_magnitude",
+    "Magnitude of limit changes (percentage)",
+    ["service", "direction"],
+    buckets=(5, 10, 20, 30, 50, 70, 100),
+)
+
+# Saturation Metrics
+throttle_saturation_ratio = get_or_create_gauge(
+    "selfhealing_throttle_saturation_ratio",
+    "Throttle limit saturation (current_limit / max_limit), 0.0-1.0. " "Lower values mean more throttling is applied",
+    ["service"],
+)
+
+throttle_max_limit = get_or_create_gauge(
+    "selfhealing_throttle_max_limit",
+    "Configured maximum throttle limit",
+    ["service"],
+)
+
 
 # =============================================================================
 # X-Test Regional Boundary Metrics

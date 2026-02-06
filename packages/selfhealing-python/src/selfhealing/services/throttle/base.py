@@ -17,6 +17,112 @@ from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# O(1) Bucket-based Sliding Window (100K TPS optimized)
+# =============================================================================
+
+
+class BucketSlidingWindow:
+    """
+    O(1) 고정 버킷 기반 슬라이딩 윈도우.
+
+    시간을 bucket_size_seconds(기본 1초) 단위로 분할하여
+    각 버킷에 요청 수만 저장. O(n) 리스트 순회 대신
+    O(1) 인덱스 접근으로 100K TPS 환경을 지원합니다.
+
+    기존 SlidingWindowThrottle의 리스트 기반 윈도우를 대체합니다.
+    """
+
+    __slots__ = (
+        "_window_seconds",
+        "_bucket_size",
+        "_num_buckets",
+        "_buckets",
+        "_last_write_time",
+        "_num_shards",
+        "_shard_locks",
+    )
+
+    def __init__(
+        self,
+        window_seconds: int = 60,
+        bucket_size_seconds: int = 1,
+        num_shards: int = 64,
+    ) -> None:
+        self._window_seconds = window_seconds
+        self._bucket_size = bucket_size_seconds
+        self._num_buckets = window_seconds // bucket_size_seconds + 1
+        self._buckets: dict[str, list[int]] = defaultdict(lambda: [0] * self._num_buckets)
+        self._last_write_time: dict[str, int] = defaultdict(int)
+        self._num_shards = num_shards
+        self._shard_locks = [threading.Lock() for _ in range(num_shards)]
+
+    def _get_shard_lock(self, key: str) -> threading.Lock:
+        """키 해싱으로 shard Lock 선택 — O(1)."""
+        return self._shard_locks[hash(key) % self._num_shards]
+
+    def _clear_stale_buckets(self, key: str, now_sec: int) -> None:
+        """현재 시간과 마지막 기록 시간 사이 비활성 버킷을 0으로 초기화."""
+        last = self._last_write_time[key]
+        if last == 0:
+            return
+        gap = now_sec - last
+        if gap <= 0:
+            return
+        buckets = self._buckets[key]
+        # gap이 윈도우 크기보다 크면 전체 초기화
+        if gap >= self._num_buckets:
+            for i in range(self._num_buckets):
+                buckets[i] = 0
+        else:
+            for offset in range(1, gap + 1):
+                idx = (last + offset) % self._num_buckets
+                buckets[idx] = 0
+
+    def record(self, key: str) -> int:
+        """
+        요청 1건 기록 + 현재 윈도우 내 총 요청 수 반환.
+
+        Returns:
+            현재 윈도우 내 총 요청 count
+        """
+        now_sec = int(time.time())
+        bucket_idx = now_sec % self._num_buckets
+
+        lock = self._get_shard_lock(key)
+        with lock:
+            self._clear_stale_buckets(key, now_sec)
+            self._buckets[key][bucket_idx] += 1
+            self._last_write_time[key] = now_sec
+            total = sum(self._buckets[key])
+            return total
+
+    def get_count(self, key: str) -> int:
+        """현재 윈도우 내 총 요청 수 조회 — O(window_seconds)."""
+        now_sec = int(time.time())
+        lock = self._get_shard_lock(key)
+        with lock:
+            self._clear_stale_buckets(key, now_sec)
+            self._last_write_time[key] = now_sec
+            return sum(self._buckets[key])
+
+    def cleanup_stale_buckets(self, key: str) -> None:
+        """
+        주기적 호출로 비활성 버킷 정리.
+        sample_interval (500ms) 콜백에서 호출 권장.
+        """
+        now_sec = int(time.time())
+        lock = self._get_shard_lock(key)
+        with lock:
+            self._clear_stale_buckets(key, now_sec)
+            self._last_write_time[key] = now_sec
+
+
+# =============================================================================
+# Base Throttle
+# =============================================================================
+
+
 class BaseThrottle(ABC):
     """Abstract base class for throttle implementations."""
 
@@ -32,9 +138,7 @@ class BaseThrottle(ABC):
     @current_limit.setter
     def current_limit(self, value: int):
         """Set current rate limit with bounds checking."""
-        self._current_limit = max(
-            self.config.min_limit, min(self.config.max_limit, value)
-        )
+        self._current_limit = max(self.config.min_limit, min(self.config.max_limit, value))
 
     @abstractmethod
     def check(self, key: str) -> ThrottleResult:

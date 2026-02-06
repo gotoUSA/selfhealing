@@ -60,6 +60,12 @@ processors:
       - key: collector.role
         value: agent
         action: upsert
+      - key: region
+        from_attribute: REGION
+        action: upsert
+      - key: cluster_id
+        from_attribute: CLUSTER_ID
+        action: upsert
 
 exporters:
   # Gateway로 OTLP gRPC 전송

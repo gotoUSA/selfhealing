@@ -88,6 +88,12 @@ processors:
       - key: deployment.environment
         value: development
         action: upsert
+      - key: region
+        from_attribute: REGION
+        action: upsert
+      - key: cluster_id
+        from_attribute: CLUSTER_ID
+        action: upsert
 
   # Trace 속성 민감 정보 마스킹
   attributes/traces:

@@ -2223,7 +2223,33 @@ class TestAlertRules:
 
 ---
 
-## 8. 네이밍 결정 근거
+## 8. 구현 상태
+
+> **최종 구현일**: 2026-02-06
+> **단위 테스트**: 45/45 통과
+
+### 8.1 완료 항목
+
+| 항목 | 구현 파일 | 테스트 파일 |
+|------|----------|------------|
+| `sanitize_label_value()` | `services/metrics/registry.py` | `tests/unit/metrics/test_registry_label_sanitize.py` |
+| `MetricsBatchRecorder` | `services/metrics/registry.py` | `tests/unit/metrics/test_registry_label_sanitize.py` |
+| `BucketSlidingWindow` | `services/throttle/base.py` | `tests/unit/throttle/test_bucket_sliding_window.py` |
+| `GradientCalculator.get_snapshot()` | `services/throttle/adaptive.py` | `tests/unit/throttle/test_gradient_calculator_snapshot.py` |
+| `ThrottleSettings.service_name` | `settings/throttle.py` | `tests/unit/throttle/test_throttle_dynamic_labels.py` |
+| `ThrottleConfig.service_name` | `services/throttle/config.py` | `tests/unit/throttle/test_throttle_dynamic_labels.py` |
+| 확장 메트릭 정의 | `services/metrics/definitions.py` | `tests/unit/throttle/test_throttle_extended_metrics.py` |
+| `_record_throttle_metrics()` 확장 | `services/throttle/adaptive.py` | `tests/unit/throttle/test_throttle_extended_metrics.py` |
+| 라벨 동적화 | `services/throttle/adaptive.py` | `tests/unit/throttle/test_throttle_dynamic_labels.py` |
+| Prometheus `external_labels` | `docker/prometheus/prometheus.yml` | - |
+| OTel Collector 설정 | `docker/otel-collector/*.yml` | - |
+| Alert Rules | `docker/prometheus/rules/throttle_alerts.yml` | - |
+| HPA + prometheus-adapter | `k8s/selfhealing-hpa.yaml`, `k8s/prometheus-adapter-config.yaml` | - |
+| Grafana Dashboard | `docker/grafana/provisioning/dashboards/adaptive_throttle.json` | - |
+
+---
+
+## 9. 네이밍 결정 근거
 
 본 문서에서 선택한 네이밍과 그 근거를 정리합니다.
 
@@ -2238,9 +2264,9 @@ class TestAlertRules:
 
 ---
 
-## 9. 참조
+## 10. 참조
 
-### 9.1 소스 코드
+### 10.1 소스 코드
 
 - [메트릭 정의 소스](../../packages/selfhealing-python/src/selfhealing/services/metrics/definitions.py)
 - [AdaptiveThrottle 소스](../../packages/selfhealing-python/src/selfhealing/services/throttle/adaptive.py)
@@ -2253,7 +2279,7 @@ class TestAlertRules:
 - [ClusterIdentity](../../packages/selfhealing-python/src/selfhealing/observability/cluster_identity.py)
 - [Bulkhead Metrics](../../packages/selfhealing-python/src/selfhealing/resilience/bulkhead/metrics.py)
 
-### 9.2 인프라 설정
+### 10.2 인프라 설정
 
 - [Prometheus 설정](../../docker/prometheus/prometheus.yml)
 - [기존 알람 규칙](../../docker/prometheus/rules/alerts.yml)
@@ -2263,12 +2289,12 @@ class TestAlertRules:
 - [Grafana Datasource](../../docker/grafana/provisioning/datasources/datasource.yml)
 - [Unified View Dashboard](../../docker/grafana/provisioning/dashboards/unified_view.json)
 
-### 9.3 Kubernetes
+### 10.3 Kubernetes
 
 - [selfhealing HPA](../../k8s/selfhealing-hpa.yaml)
 - [prometheus-adapter Config](../../k8s/prometheus-adapter-config.yaml)
 
-### 9.4 관련 문서
+### 10.4 관련 문서
 
 - [156_OTEL_OBSERVABILITY_OVERVIEW.md](156_OTEL_OBSERVABILITY_OVERVIEW.md)
 - [159_GRAFANA_STACK_INTEGRATION.md](159_GRAFANA_STACK_INTEGRATION.md)

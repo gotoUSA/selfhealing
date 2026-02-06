@@ -10,6 +10,8 @@ global:
   external_labels:
     environment: 'production'
     service: 'self-healing'
+    region: '${REGION:-ap-northeast-2}'
+    cluster_id: '${CLUSTER_ID:-default}'
 
 # Mimir로 메트릭 복제 (장기 저장용)
 remote_write:
