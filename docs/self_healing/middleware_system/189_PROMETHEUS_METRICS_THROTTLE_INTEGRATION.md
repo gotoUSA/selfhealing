@@ -2226,7 +2226,7 @@ class TestAlertRules:
 ## 8. 구현 상태
 
 > **최종 구현일**: 2026-02-06
-> **단위 테스트**: 45/45 통과
+> **단위 테스트**: 50/50 통과
 
 ### 8.1 완료 항목
 
@@ -2241,6 +2241,7 @@ class TestAlertRules:
 | 확장 메트릭 정의 | `services/metrics/definitions.py` | `tests/unit/throttle/test_throttle_extended_metrics.py` |
 | `_record_throttle_metrics()` 확장 | `services/throttle/adaptive.py` | `tests/unit/throttle/test_throttle_extended_metrics.py` |
 | 라벨 동적화 | `services/throttle/adaptive.py` | `tests/unit/throttle/test_throttle_dynamic_labels.py` |
+| `_maybe_adjust_limit()` SLA 메트릭 | `services/throttle/adaptive.py` | `tests/unit/throttle/test_maybe_adjust_limit_sla_metrics.py` |
 | Prometheus `external_labels` | `docker/prometheus/prometheus.yml` | - |
 | OTel Collector 설정 | `docker/otel-collector/*.yml` | - |
 | Alert Rules | `docker/prometheus/rules/throttle_alerts.yml` | - |

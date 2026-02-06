@@ -816,6 +816,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                     priority_name="CRITICAL",
                 )
 
+                # SLA Critical Prometheus 메트릭 기록
+                _record_throttle_metrics(
+                    service=self._service_name,
+                    sla_event="critical",
+                    limit_change_direction="down",
+                    limit_change_trigger="sla_critical",
+                    limit_change_percent=30,
+                )
+
                 # Limit 변경 이벤트 발행
                 if self._current_limit != previous_limit:
                     _emit_throttle_event(
@@ -856,6 +865,14 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         "service_name": "default",
                     },
                     priority_name="HIGH",
+                )
+
+                # SLA Warning Prometheus 메트릭 기록
+                _record_throttle_metrics(
+                    service=self._service_name,
+                    sla_event="warning",
+                    limit_change_direction="down",
+                    limit_change_trigger="sla_warning",
                 )
 
                 # Limit 변경 이벤트 발행
