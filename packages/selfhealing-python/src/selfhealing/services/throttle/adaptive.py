@@ -328,6 +328,9 @@ EMERGENCY_LEVEL_LIMIT_MULTIPLIERS: dict[int, float] = {
     3: 0.0,  # LEVEL_3: min_limit 고정 (배율 0은 min_limit 사용 표시)
 }
 
+# 429 상황에서 보호할 티어 (CRITICAL 요청은 429 감소 전 limit 기준으로 검사)
+PROTECTED_TIERS_ON_429: set[str] = {"critical"}
+
 
 class AdaptiveThrottle(SlidingWindowThrottle):
     """
@@ -387,6 +390,171 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._recovery_dampening_step: int = 0  # 0=80%, 1=90%, 2=100%
         self._recovery_dampening_last_time: float = 0.0
         self._recovery_dampening_interval_seconds: float = 30.0
+
+        # =====================================================================
+        # 429 Rate Limit 연동 상태
+        # =====================================================================
+        self._rate_limit_keys: dict[str, float] = {}  # key -> cooldown_until
+        self._429_reduction_active: bool = False  # 429 감소 상태
+        self._limit_before_429: int = self.config.initial_limit  # CRITICAL 보호용
+
+        # Conservative Limit 상태 (Min-Winner 정책)
+        self._rtt_suggested_limit: int = self.config.initial_limit
+        self._429_suggested_limit: int = self.config.max_limit
+        self._conservative_enabled: bool = True
+
+        # EventBus 구독 등록
+        self._subscribe_rate_limit_events()
+
+    # =========================================================================
+    # 429 Rate Limit EventBus 연동
+    # =========================================================================
+
+    def _subscribe_rate_limit_events(self) -> None:
+        """Rate Limit 이벤트 구독 등록 (Fail-Open)."""
+        try:
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            bus = get_event_bus()
+
+            # 429 이벤트 구독
+            bus.subscribe(EventType.RATE_LIMIT_429, self._handle_rate_limit_429)
+
+            # Cooldown 종료 이벤트 구독
+            bus.subscribe(EventType.RATE_LIMIT_COOLDOWN_END, self._handle_cooldown_end)
+
+            logger.info("[AdaptiveThrottle] Subscribed to rate limit events")
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] EventBus not available for subscription")
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to subscribe: {e}")
+
+    def _handle_rate_limit_429(self, event) -> None:
+        """
+        429 이벤트 수신 시 limit 조정.
+
+        전략:
+        - consecutive_429s에 따른 단계별 감소
+        - 1회: 20% 감소
+        - 2회: 40% 감소
+        - 3회 이상: 50% 감소 + SLA Warning 발행
+        """
+        # SelfHealingEvent에서 data 추출
+        event_data = event.data if hasattr(event, "data") else event
+
+        key = event_data.get("key", "unknown")
+        consecutive = event_data.get("consecutive_429s", 1)
+        cooldown_until = event_data.get("cooldown_until", 0)
+
+        # Cooldown 상태 저장
+        self._rate_limit_keys[key] = cooldown_until
+
+        # 429 감소 전 limit 저장 (CRITICAL 보호용)
+        if not self._429_reduction_active:
+            self._limit_before_429 = self._current_limit
+
+        self._429_reduction_active = True
+
+        # 감소 비율 결정
+        if consecutive >= 3:
+            reduction_percent = 0.5  # 50%
+        elif consecutive == 2:
+            reduction_percent = 0.6  # 40%
+        else:
+            reduction_percent = 0.8  # 20%
+
+        previous_limit = self._current_limit
+
+        # 429 기반 limit 계산
+        self._429_suggested_limit = max(
+            int(self._current_limit * reduction_percent),
+            self.config.min_limit,
+        )
+
+        # Conservative Limit 적용 (Min-Winner)
+        new_limit = self.conservative_limit
+
+        logger.warning(
+            f"[AdaptiveThrottle] 429 response on '{key}', "
+            f"reducing limit: {previous_limit} → {new_limit} "
+            f"(consecutive={consecutive}, reduction={int((1-reduction_percent)*100)}%)"
+        )
+
+        self.current_limit = new_limit
+
+        # Prometheus 메트릭 기록
+        _record_throttle_metrics(
+            service="default",
+            limit=new_limit,
+            denied_reason="rate_limit_429",
+        )
+
+        # SLA Warning 발행 (3회 이상)
+        if consecutive >= 3:
+            _emit_throttle_event(
+                "THROTTLE_SLA_WARNING",
+                {
+                    "trigger": "rate_limit_429",
+                    "key": key,
+                    "consecutive_429s": consecutive,
+                    "current_limit": new_limit,
+                    "previous_limit": previous_limit,
+                },
+                priority_name="HIGH",
+            )
+
+        # Limit 변경 이벤트 발행
+        _emit_throttle_event(
+            "THROTTLE_LIMIT_CHANGED",
+            {
+                "previous_limit": previous_limit,
+                "new_limit": new_limit,
+                "reason": "rate_limit_429",
+                "key": key,
+                "consecutive_429s": consecutive,
+            },
+            priority_name="HIGH",
+        )
+
+    def _handle_cooldown_end(self, event) -> None:
+        """
+        Cooldown 종료 시 Recovery Dampening 시작.
+
+        CRITICAL 보호 해제 및 기존 RECOVERY_DAMPENING_MULTIPLIERS 활용.
+        """
+        # SelfHealingEvent에서 data 추출
+        event_data = event.data if hasattr(event, "data") else event
+
+        key = event_data.get("key", "unknown")
+
+        # 해당 Key의 429 상태 제거
+        if key in self._rate_limit_keys:
+            del self._rate_limit_keys[key]
+
+        # CRITICAL 보호 해제
+        self._429_reduction_active = False
+
+        # Recovery Dampening 시작 (기존 메서드 활용)
+        self.start_recovery_dampening()
+
+        logger.info(f"[AdaptiveThrottle] Cooldown ended for '{key}', " f"starting recovery dampening (80% → 90% → 100%)")
+
+    def is_rate_limited_for_key(self, key: str) -> bool:
+        """특정 외부 API가 현재 cooldown 상태인지 확인."""
+        cooldown_until = self._rate_limit_keys.get(key, 0)
+        return time.time() < cooldown_until
+
+    @property
+    def conservative_limit(self) -> int:
+        """
+        Min-Winner 정책 적용한 보수적 limit.
+
+        RTT 기반 limit과 429 기반 limit 중 낮은 값 반환.
+        """
+        if not self._conservative_enabled:
+            return self._current_limit
+
+        return min(self._rtt_suggested_limit, self._429_suggested_limit)
 
     def record_response(self, rtt_ms: float) -> None:
         """
@@ -575,8 +743,17 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         priority_name="NORMAL",
                     )
 
-    def check(self, key: str) -> ThrottleResult:
-        """Check if request is allowed with adaptive info."""
+    def check(self, key: str, tier_id: str = "standard") -> ThrottleResult:
+        """
+        Check if request is allowed with adaptive info and priority protection.
+
+        Args:
+            key: 요청 식별자
+            tier_id: 요청 티어 (critical/standard/non_essential)
+
+        Returns:
+            ThrottleResult with adaptive info
+        """
         # Check on Use 패턴: TTL 만료 시 Emergency 상태 동기화
         self.check_and_sync_emergency_state()
 
@@ -584,7 +761,16 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         if self._recovery_dampening_active:
             self.advance_recovery_dampening()
 
-        result = super().check(key)
+        # 429 감소 상태에서 CRITICAL 티어 보호
+        if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
+            # CRITICAL 요청은 429 감소 전 limit 기준으로 검사
+            original_limit = self._current_limit
+            self._current_limit = self._limit_before_429
+            logger.debug(f"[AdaptiveThrottle] CRITICAL tier protected: " f"using pre-429 limit {self._limit_before_429}")
+            result = super().check(key)
+            self._current_limit = original_limit
+        else:
+            result = super().check(key)
 
         # Add adaptive info to result
         result.current_rtt_ms = self._gradient_calculator.get_current_rtt()

@@ -1,10 +1,11 @@
 # 187. Rate Limit Coordinator - AdaptiveThrottle 연동 구현
 
-> **문서 버전**: 1.1.0
+> **문서 버전**: 1.2.0
 > **최종 수정일**: 2026-02-06
 > **작성 근거**: `selfhealing/services/rate_limit_coordinator.py`, `selfhealing/services/throttle/adaptive.py`, `selfhealing/services/throttle/registry.py`
 >
 > **v1.1.0 변경사항**: 9가지 보완 구현 사항 추가 (§10)
+> **v1.2.0 변경사항**: 전체 구현 완료, 단위 테스트 25개 통과 (§13)
 
 ## 1. 개요
 
@@ -1656,13 +1657,72 @@ class TestConservativeLimitPolicy:
 
 ---
 
-## 12. 참조
+---
+
+## 13. 구현 완료 기록 (v1.2.0)
+
+> **구현일**: 2026-02-06
+> **단위 테스트**: 25개 전체 통과
+> **통합 테스트**: 불필요 (모든 컴포넌트 In-process, Kafka는 Mock 검증)
+
+### 13.1 수정된 파일 목록
+
+| 파일 | 변경 유형 | 설명 |
+|------|-----------|------|
+| `services/event_bus.py` | 수정 | `RATE_LIMIT_429`, `RATE_LIMIT_COOLDOWN_START`, `RATE_LIMIT_COOLDOWN_END` EventType 추가 |
+| `services/rate_limit_coordinator.py` | 수정 | EventBus 연동, 디바운싱, Canary Request, Cooldown End 스케줄링 |
+| `services/throttle/adaptive.py` | 수정 | 429 이벤트 수신/처리, Conservative Limit, Priority-aware CRITICAL 보호 |
+| `services/metrics/definitions.py` | 수정 | `rate_limit_429_total`, `rate_limit_cooldown_seconds`, `rate_limit_consecutive_429s`, `rate_limit_throttle_adjustments_total` 추가 |
+| `settings/rate_limit_throttle_integration.py` | 신규 | 429-Throttle 연동 Pydantic Settings |
+| `services/rate_limit/distributed_channel.py` | 신규 | Kafka 기반 분산 429 이벤트 채널 |
+| `meta/rate_limit_escalation.py` | 신규 | 연속 429 임계치 에스컬레이션 핸들러 |
+
+### 13.2 단위 테스트 결과
+
+**테스트 파일**: `packages/selfhealing-python/tests/unit/rate_limit/test_coordinator_throttle_integration.py`
+
+| 테스트 클래스 | 테스트 수 | 결과 |
+|-------------|----------|------|
+| `TestRateLimitCoordinatorEventEmission` | 2 | ✅ 통과 |
+| `TestRateLimitCoordinatorDebouncing` | 3 | ✅ 통과 |
+| `TestRateLimitCoordinatorCanary` | 2 | ✅ 통과 |
+| `TestRateLimitCoordinatorCooldown` | 2 | ✅ 통과 |
+| `TestAdaptiveThrottle429Integration` | 3 | ✅ 통과 |
+| `TestAdaptiveThrottleConservativeLimit` | 2 | ✅ 통과 |
+| `TestAdaptiveThrottlePriorityProtection` | 1 | ✅ 통과 |
+| `TestAdaptiveThrottleCooldownEndRecovery` | 1 | ✅ 통과 |
+| `TestRateLimitEscalationHandler` | 4 | ✅ 통과 |
+| `TestDistributedRateLimitChannel` | 2 | ✅ 통과 |
+| `TestRateLimitThrottleIntegrationSettings` | 3 | ✅ 통과 |
+| **합계** | **25** | **✅ 전체 통과** |
+
+### 13.3 구현 우선순위 완료 상태
+
+| 순위 | 항목 | 상태 |
+|:---:|------|:----:|
+| 1 | 전역 EventBus (Kafka) - DistributedRateLimitChannel | ✅ 완료 |
+| 2 | 에스컬레이션 연동 - RateLimitEscalationHandler | ✅ 완료 |
+| 3 | 디바운싱 - debounce_window_seconds | ✅ 완료 |
+| 4 | Conservative Limit - Min-Winner 정책 | ✅ 완료 |
+| 5 | Key-Service 매핑 - settings 정의 | ✅ 완료 |
+| 6 | COOLDOWN_END 이벤트 - Timer 스케줄링 | ✅ 완료 |
+| 7 | Priority-aware - CRITICAL 티어 보호 | ✅ 완료 |
+| 8 | Canary Request - 복구 정찰 요청 | ✅ 완료 |
+| 9 | 결정론적 테스트 - freezegun 활용 | ✅ 완료 |
+
+---
+
+## 14. 참조
 
 - [RateLimitCoordinator 소스](../../packages/selfhealing-python/src/selfhealing/services/rate_limit_coordinator.py)
 - [AdaptiveThrottle 소스](../../packages/selfhealing-python/src/selfhealing/services/throttle/adaptive.py)
 - [ThrottleRegistry 소스](../../packages/selfhealing-python/src/selfhealing/services/throttle/registry.py)
 - [KafkaEventBus 소스](../../packages/selfhealing-python/src/selfhealing/adapters/kafka/event_bus.py)
 - [EscalationManager 소스](../../packages/selfhealing-python/src/selfhealing/meta/escalation.py)
+- [RateLimitEscalationHandler 소스](../../packages/selfhealing-python/src/selfhealing/meta/rate_limit_escalation.py)
+- [DistributedRateLimitChannel 소스](../../packages/selfhealing-python/src/selfhealing/services/rate_limit/distributed_channel.py)
+- [RateLimitThrottleIntegrationSettings 소스](../../packages/selfhealing-python/src/selfhealing/settings/rate_limit_throttle_integration.py)
+- [단위 테스트](../../packages/selfhealing-python/tests/unit/rate_limit/test_coordinator_throttle_integration.py)
 - [freezegun 테스트 예시](../../../tests/self_healing/integration/test_time_based_behaviors.py)
 - [152_ADAPTIVE_THROTTLE_EVENTBUS_INTEGRATION.md](152_ADAPTIVE_THROTTLE_EVENTBUS_INTEGRATION.md)
 - [155_ADAPTIVE_THROTTLE_P0_MASTER_PLAN.md](155_ADAPTIVE_THROTTLE_P0_MASTER_PLAN.md)

@@ -112,6 +112,18 @@ class EventType(Enum):
     THROTTLE_LIMIT_RECOVERED = "throttle_limit_recovered"
     """Throttle limit 정상 범위 회복 (previous_limit, new_limit 포함)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Rate Limit Coordinator Events (429 통합 대응)
+    # ═══════════════════════════════════════════════════════════════════════════
+    RATE_LIMIT_429 = "rate_limit_429"
+    """외부 API 429 응답 수신 (key, consecutive_429s, cooldown_until 포함)."""
+
+    RATE_LIMIT_COOLDOWN_START = "rate_limit_cooldown_start"
+    """Rate Limit Cooldown 시작 (key, delay, cooldown_until 포함)."""
+
+    RATE_LIMIT_COOLDOWN_END = "rate_limit_cooldown_end"
+    """Rate Limit Cooldown 종료 (key, cooldown_ended_at 포함)."""
+
 
 class EventPriority(Enum):
     """이벤트 처리 우선순위."""

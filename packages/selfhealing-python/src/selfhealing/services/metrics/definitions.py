@@ -346,3 +346,33 @@ canary_governance_bypass_total = get_or_create_counter(
     "Total governance bypasses (Break Glass usage)",
     ["requested_by"],
 )
+
+
+# =============================================================================
+# Rate Limit Coordinator Metrics (429 통합 대응)
+# =============================================================================
+
+rate_limit_429_total = get_or_create_counter(
+    "selfhealing_rate_limit_429_total",
+    "Total 429 responses received from external APIs",
+    ["key", "status_code"],
+)
+
+rate_limit_cooldown_seconds = get_or_create_histogram(
+    "selfhealing_rate_limit_cooldown_seconds",
+    "Cooldown duration after 429 response",
+    ["key"],
+    buckets=(1, 5, 10, 30, 60, 120, 300),
+)
+
+rate_limit_consecutive_429s = get_or_create_gauge(
+    "selfhealing_rate_limit_consecutive_429s",
+    "Current consecutive 429 count per key",
+    ["key"],
+)
+
+rate_limit_throttle_adjustments_total = get_or_create_counter(
+    "selfhealing_rate_limit_throttle_adjustments_total",
+    "Total throttle limit adjustments triggered by 429",
+    ["key", "reduction_percent"],
+)
