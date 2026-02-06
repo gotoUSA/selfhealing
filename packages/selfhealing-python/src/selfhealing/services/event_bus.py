@@ -1589,10 +1589,11 @@ def _on_error_budget_critical_throttle(event: SelfHealingEvent) -> None:
 
 def _on_error_budget_recovered_throttle(event: SelfHealingEvent) -> None:
     """
-    Error Budget 회복 시 limit 제한 해제.
+    Error Budget 회복 시 Recovery Dampening 시작.
 
-    Error Budget이 정상 범위로 회복되면
-    limit 제한을 해제합니다.
+    즉시 initial_limit으로 복구하지 않고
+    Recovery Dampening을 통해 점진적으로 복구합니다.
+    이는 '요요 현상'을 방지하고 안정적인 복구를 보장합니다.
     """
     # 순환 참조 방지: 자기 이벤트 무시
     if event.source == "throttle":
@@ -1602,16 +1603,15 @@ def _on_error_budget_recovered_throttle(event: SelfHealingEvent) -> None:
         from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
         throttle = get_adaptive_throttle()
-        previous_limit = throttle.current_limit
 
-        # initial_limit으로 복원
-        throttle.current_limit = throttle.config.initial_limit
+        # Recovery Dampening 시작 (Jitter 적용)
+        throttle.start_recovery_dampening(apply_jitter=True)
 
-        logger.info(f"[Throttle] Error budget recovered, " f"limit: {previous_limit} → {throttle.current_limit}")
+        logger.info(f"[Throttle] Error budget recovered, " f"starting recovery dampening from {throttle.current_limit}")
     except ImportError:
         logger.debug("[EventHandler] Throttle module not available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for error budget recovery: {e}")
+        logger.warning(f"[EventHandler] Failed to start recovery dampening: {e}")
 
 
 def _on_kill_switch_activated_throttle(event: SelfHealingEvent) -> None:

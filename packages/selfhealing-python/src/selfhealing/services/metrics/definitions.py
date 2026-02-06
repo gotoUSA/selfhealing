@@ -485,3 +485,32 @@ rate_limit_throttle_adjustments_total = get_or_create_counter(
     "Total throttle limit adjustments triggered by 429",
     ["key", "reduction_percent"],
 )
+
+
+# =============================================================================
+# Error Budget - Throttle Integration Metrics
+# =============================================================================
+
+throttle_error_budget_adjustments_total = get_or_create_counter(
+    "selfhealing_throttle_error_budget_adjustments_total",
+    "Total throttle limit adjustments triggered by error budget status changes",
+    ["service", "budget_status"],
+)
+
+throttle_error_budget_multiplier = get_or_create_gauge(
+    "selfhealing_throttle_error_budget_multiplier",
+    "Current error budget multiplier applied to throttle limit (0.0-1.0)",
+    ["service"],
+)
+
+throttle_error_budget_reduction_active = get_or_create_gauge(
+    "selfhealing_throttle_error_budget_reduction_active",
+    "Whether error budget limit reduction is active (1=yes, 0=no)",
+    ["service"],
+)
+
+throttle_error_budget_preemptive_total = get_or_create_counter(
+    "selfhealing_throttle_error_budget_preemptive_total",
+    "Total preemptive throttle reductions based on budget depletion forecast",
+    ["service", "risk_level"],
+)

@@ -24,6 +24,7 @@ class ErrorBudgetGateConfig:
         enabled: 게이트 활성화 여부 (False면 항상 자동화 허용)
         critical_threshold_percent: 이 값 미만이면 자동화 차단 (기본: 10%)
         warning_threshold_percent: 이 값 미만이면 경고 표시 (기본: 20%)
+        threshold_hysteresis_buffer_percent: 임계치 복구 시 적용되는 버퍼 (플래핑 방지, 기본: 2%)
         fail_open: 에러 예산 조회 실패 시 자동화 허용 여부 (기본: True)
         cache_ttl_seconds: 에러 예산 캐시 TTL (기본: 30초)
         fail_open_rate_limit_enabled: Fail-Open 시 Rate Limit 적용 여부 (기본: True)
@@ -39,6 +40,7 @@ class ErrorBudgetGateConfig:
     enabled: bool = True
     critical_threshold_percent: float = 10.0
     warning_threshold_percent: float = 20.0
+    threshold_hysteresis_buffer_percent: float = 2.0
     fail_open: bool = True
     cache_ttl_seconds: int = 30
     # Fail-Open Rate Limiting (최소한의 제약이 있는 방임)
@@ -58,6 +60,7 @@ class ErrorBudgetGateConfig:
             "enabled": self.enabled,
             "critical_threshold_percent": self.critical_threshold_percent,
             "warning_threshold_percent": self.warning_threshold_percent,
+            "threshold_hysteresis_buffer_percent": self.threshold_hysteresis_buffer_percent,
             "fail_open": self.fail_open,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "fail_open_rate_limit_enabled": self.fail_open_rate_limit_enabled,
@@ -76,22 +79,15 @@ class ErrorBudgetGateConfig:
             enabled=data.get("enabled", True),
             critical_threshold_percent=data.get("critical_threshold_percent", 10.0),
             warning_threshold_percent=data.get("warning_threshold_percent", 20.0),
+            threshold_hysteresis_buffer_percent=data.get("threshold_hysteresis_buffer_percent", 2.0),
             fail_open=data.get("fail_open", True),
             cache_ttl_seconds=data.get("cache_ttl_seconds", 30),
             fail_open_rate_limit_enabled=data.get("fail_open_rate_limit_enabled", True),
-            fail_open_rate_limit_per_minute=data.get(
-                "fail_open_rate_limit_per_minute", 10
-            ),
-            fail_open_rate_limit_window_seconds=data.get(
-                "fail_open_rate_limit_window_seconds", 60
-            ),
+            fail_open_rate_limit_per_minute=data.get("fail_open_rate_limit_per_minute", 10),
+            fail_open_rate_limit_window_seconds=data.get("fail_open_rate_limit_window_seconds", 60),
             circuit_breaker_enabled=data.get("circuit_breaker_enabled", True),
-            circuit_breaker_failure_threshold=data.get(
-                "circuit_breaker_failure_threshold", 5
-            ),
-            circuit_breaker_recovery_timeout=data.get(
-                "circuit_breaker_recovery_timeout", 30
-            ),
+            circuit_breaker_failure_threshold=data.get("circuit_breaker_failure_threshold", 5),
+            circuit_breaker_recovery_timeout=data.get("circuit_breaker_recovery_timeout", 30),
             alert_on_fail_open=data.get("alert_on_fail_open", True),
             alert_cooldown_seconds=data.get("alert_cooldown_seconds", 300),
         )

@@ -585,15 +585,15 @@ throttle_error_budget_multiplier = Gauge(
 
 ## 8. 구현 체크리스트
 
-- [ ] `__init__`에 Error Budget 상태 변수 추가
-- [ ] `_subscribe_error_budget_events()` 메서드 구현
-- [ ] `_handle_error_budget_warning()` 구현
-- [ ] `_handle_error_budget_critical()` 구현
-- [ ] `_handle_error_budget_recovered()` 구현
-- [ ] `check()` 메서드에 non_essential 거부 로직 추가
-- [ ] `conservative_limit` 프로퍼티 확장
-- [ ] Prometheus 메트릭 추가
-- [ ] 단위 테스트 작성
+- [x] `__init__`에 Error Budget 상태 변수 추가
+- [x] `_subscribe_error_budget_events()` 메서드 구현
+- [x] `_handle_error_budget_warning()` 구현
+- [x] `_handle_error_budget_critical()` 구현
+- [x] `_handle_error_budget_recovered()` 구현
+- [x] `check()` 메서드에 non_essential 거부 로직 추가
+- [x] `conservative_limit` 프로퍼티 확장
+- [x] Prometheus 메트릭 추가
+- [x] 단위 테스트 작성
 - [ ] 통합 테스트 작성
 
 ---
@@ -1527,22 +1527,22 @@ def _apply_preemptive_reduction(self, forecast: DepletionForecast) -> None:
 
 ### 10.1 Priority 1 (필수)
 
-- [ ] `_handle_error_budget_warning()` SLO 필터링 추가 (#2, #13)
-- [ ] `conservative_limit` Error Budget 배율 통합 (#3)
-- [ ] `_on_error_budget_recovered_throttle()` Recovery Dampening 연결 (#9)
+- [x] `_handle_error_budget_warning()` SLO 필터링 추가 (#2, #13)
+- [x] `conservative_limit` Error Budget 배율 통합 (#3)
+- [x] `_on_error_budget_recovered_throttle()` Recovery Dampening 연결 (#9)
 
 ### 10.2 Priority 2 (권장)
 
-- [ ] `ErrorBudgetGateConfig.threshold_hysteresis_buffer_percent` 추가 (#4)
+- [x] `ErrorBudgetGateConfig.threshold_hysteresis_buffer_percent` 추가 (#4)
 - [ ] Gate `_evaluate()` 히스테리시스 로직 구현 (#4)
-- [ ] `BudgetExhaustedFlagManager` Redis 플래그 구현 (#5)
-- [ ] `register_error_budget_bypass_hooks()` 바이패스 훅 등록 (#8)
-- [ ] 감사 로그 `violation_id` 연결 (#11)
+- [x] `BudgetExhaustedFlagManager` Redis 플래그 구현 (#5)
+- [x] `register_error_budget_bypass_hooks()` 바이패스 훅 등록 (#8)
+- [x] 감사 로그 `violation_id` 연결 (#11)
 
 ### 10.3 Priority 3 (선택)
 
-- [ ] `recovery_jitter_max_seconds` 설정 및 Jitter 적용 (#10)
-- [ ] `BudgetDepletionForecaster` 예측기 구현 (#14)
+- [x] `recovery_jitter_max_seconds` 설정 및 Jitter 적용 (#10)
+- [x] `BudgetDepletionForecaster` 예측기 구현 (#14)
 - [ ] `_check_preemptive_protection()` 선제적 보호 통합 (#14)
 
 ---

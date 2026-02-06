@@ -60,9 +60,7 @@ class HookInfo:
     priority: int
     name: str
     description: str
-    registered_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    registered_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     invocation_count: int = 0
     bypass_count: int = 0
 
@@ -83,9 +81,7 @@ class BypassResult:
     reason: str
     hook_name: str
     priority: int
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     request_path: str = ""
     request_method: str = ""
 
@@ -164,9 +160,7 @@ class BypassRegistry:
             # Check for duplicate registration
             existing = [h for h in cls._hooks if h.name == hook_name]
             if existing:
-                logger.warning(
-                    f"[BypassRegistry] Hook '{hook_name}' already registered, skipping"
-                )
+                logger.warning(f"[BypassRegistry] Hook '{hook_name}' already registered, skipping")
                 return
 
             hook_info = HookInfo(
@@ -181,8 +175,7 @@ class BypassRegistry:
             cls._hooks.sort(key=lambda h: -h.priority)
 
             logger.info(
-                f"[BypassRegistry] Registered hook: {hook_name} "
-                f"(priority={priority}, total_hooks={len(cls._hooks)})"
+                f"[BypassRegistry] Registered hook: {hook_name} " f"(priority={priority}, total_hooks={len(cls._hooks)})"
             )
 
     @classmethod
@@ -241,9 +234,7 @@ class BypassRegistry:
                     return result
 
             except Exception as e:
-                logger.error(
-                    f"[BypassRegistry] Hook '{hook.name}' raised exception: {e}"
-                )
+                logger.error(f"[BypassRegistry] Hook '{hook.name}' raised exception: {e}")
                 # Continue to next hook on error (fail-open for hooks)
 
         # No bypass
@@ -333,9 +324,7 @@ class BypassRegistry:
                 "total_hooks": len(cls._hooks),
                 "total_invocations": total_invocations,
                 "total_bypasses": total_bypasses,
-                "bypass_rate": (
-                    total_bypasses / total_invocations if total_invocations > 0 else 0
-                ),
+                "bypass_rate": (total_bypasses / total_invocations if total_invocations > 0 else 0),
                 "hooks": hooks_list,
             }
 
@@ -360,12 +349,98 @@ def register_bypass_hook(
     """
 
     def decorator(func: Callable[[HttpRequest], bool]) -> Callable:
-        BypassRegistry.register(
-            func, priority=priority, name=name, description=description
-        )
+        BypassRegistry.register(func, priority=priority, name=name, description=description)
         return func
 
     return decorator
+
+
+# =============================================================================
+# Error Budget Bypass Hooks
+# =============================================================================
+
+
+def _error_budget_admin_bypass(request: HttpRequest) -> bool:
+    """
+    Bypass Error Budget Gate restrictions for admin API requests.
+
+    Admin endpoints (/admin/, /api/admin/) always need to be accessible
+    even when error budget is exhausted to allow operations teams to:
+    - Monitor system status
+    - Apply manual overrides
+    - Execute recovery procedures
+
+    Returns:
+        True if request should bypass Error Budget restrictions
+    """
+    path = request.path.lower()
+    admin_prefixes = ("/admin/", "/api/admin/", "/_admin/")
+    return any(path.startswith(prefix) for prefix in admin_prefixes)
+
+
+def _error_budget_critical_path_bypass(request: HttpRequest) -> bool:
+    """
+    Bypass Error Budget Gate restrictions for critical path requests.
+
+    Critical paths are essential operations that must succeed even during
+    error budget exhaustion to maintain system integrity:
+    - Health checks (for load balancer)
+    - Liveness/readiness probes (for Kubernetes)
+    - Internal service-to-service auth
+
+    Returns:
+        True if request should bypass Error Budget restrictions
+    """
+    path = request.path.lower()
+    critical_paths = (
+        "/health",
+        "/healthz",
+        "/ready",
+        "/readyz",
+        "/live",
+        "/livez",
+        "/_internal/",
+        "/api/v1/ping",
+    )
+
+    # Check path-based critical routes
+    if any(path.startswith(critical) or path == critical for critical in critical_paths):
+        return True
+
+    # Check header-based critical path marker
+    critical_header = request.headers.get("X-Critical-Path", "").lower()
+    if critical_header == "true":
+        return True
+
+    return False
+
+
+def register_error_budget_bypass_hooks() -> None:
+    """
+    Register Error Budget bypass hooks with the BypassRegistry.
+
+    Should be called during application initialization to enable
+    critical path and admin bypasses for Error Budget Gate.
+
+    Priorities:
+    - Admin bypass: 950 (high priority, just below platinum)
+    - Critical path bypass: 900 (high priority for health checks)
+    """
+    BypassRegistry.register(
+        _error_budget_admin_bypass,
+        priority=950,
+        name="error_budget_admin",
+        description="Bypass Error Budget restrictions for admin API requests",
+    )
+
+    BypassRegistry.register(
+        _error_budget_critical_path_bypass,
+        priority=900,
+        name="error_budget_critical_path",
+        description="Bypass Error Budget restrictions for critical path requests (health, probes)",
+    )
+
+    logger.info("[ErrorBudgetBypass] Registered admin and critical path bypass hooks")
 
 
 # =============================================================================
@@ -377,4 +452,5 @@ __all__ = [
     "BypassResult",
     "HookInfo",
     "register_bypass_hook",
+    "register_error_budget_bypass_hooks",
 ]

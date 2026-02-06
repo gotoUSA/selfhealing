@@ -121,6 +121,11 @@ _throttle_limit_changes_total = None
 _throttle_limit_change_magnitude = None
 _throttle_saturation_ratio = None
 _throttle_max_limit_gauge = None
+# Error Budget 연동 메트릭
+_throttle_error_budget_adjustments_total = None
+_throttle_error_budget_multiplier_gauge = None
+_throttle_error_budget_reduction_active_gauge = None
+_throttle_error_budget_preemptive_total = None
 
 try:
     from selfhealing.services.metrics.definitions import (
@@ -144,6 +149,10 @@ try:
         throttle_limit_change_magnitude as _throttle_limit_change_magnitude,
         throttle_saturation_ratio as _throttle_saturation_ratio,
         throttle_max_limit as _throttle_max_limit_gauge,
+        throttle_error_budget_adjustments_total as _throttle_error_budget_adjustments_total,
+        throttle_error_budget_multiplier as _throttle_error_budget_multiplier_gauge,
+        throttle_error_budget_reduction_active as _throttle_error_budget_reduction_active_gauge,
+        throttle_error_budget_preemptive_total as _throttle_error_budget_preemptive_total,
     )
 
     _METRICS_AVAILABLE = True
@@ -173,6 +182,11 @@ def _record_throttle_metrics(
     limit_change_percent: float | None = None,
     max_limit: int | None = None,
     trace_id: str | None = None,
+    # Error Budget 연동 파라미터
+    error_budget_status: str | None = None,
+    error_budget_multiplier: float | None = None,
+    error_budget_reduction_active: bool | None = None,
+    error_budget_preemptive_risk_level: str | None = None,
 ) -> None:
     """
     Throttle Prometheus 메트릭 기록 (확장 버전).
@@ -262,6 +276,27 @@ def _record_throttle_metrics(
             saturation = limit / max_limit
             _throttle_saturation_ratio.labels(service=service).set(saturation)
             _throttle_max_limit_gauge.labels(service=service).set(max_limit)
+
+        # --- Error Budget metrics ---
+        if error_budget_status is not None and _throttle_error_budget_adjustments_total:
+            _throttle_error_budget_adjustments_total.labels(
+                service=service,
+                budget_status=error_budget_status,
+            ).inc()
+
+        if error_budget_multiplier is not None and _throttle_error_budget_multiplier_gauge:
+            _throttle_error_budget_multiplier_gauge.labels(service=service).set(error_budget_multiplier)
+
+        if error_budget_reduction_active is not None and _throttle_error_budget_reduction_active_gauge:
+            _throttle_error_budget_reduction_active_gauge.labels(service=service).set(
+                1 if error_budget_reduction_active else 0
+            )
+
+        if error_budget_preemptive_risk_level is not None and _throttle_error_budget_preemptive_total:
+            _throttle_error_budget_preemptive_total.labels(
+                service=service,
+                risk_level=error_budget_preemptive_risk_level,
+            ).inc()
 
     except Exception as e:
         logger.debug(f"[AdaptiveThrottle] Failed to record metrics: {e}")
@@ -539,8 +574,22 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self._429_suggested_limit: int = self.config.max_limit
         self._conservative_enabled: bool = True
 
+        # =====================================================================
+        # Error Budget 연동 상태
+        # =====================================================================
+        self._error_budget_limit_reduction_active: bool = False
+        self._error_budget_multiplier: float = 1.0
+        self._limit_before_error_budget_reduction: int = self.config.initial_limit
+
+        # SLO 필터링 설정 (기본: 전역 예산 반응)
+        self._target_slo_patterns: list[str] = ["availability"]
+
+        # Recovery Jitter 설정 (Thundering Herd 방지)
+        self._recovery_jitter_max_seconds: int = 10
+
         # EventBus 구독 등록
         self._subscribe_rate_limit_events()
+        self._subscribe_error_budget_events()
 
     # =========================================================================
     # 429 Rate Limit EventBus 연동
@@ -690,17 +739,267 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         cooldown_until = self._rate_limit_keys.get(key, 0)
         return time.time() < cooldown_until
 
+    # =========================================================================
+    # Error Budget EventBus 연동
+    # =========================================================================
+
+    def _subscribe_error_budget_events(self) -> None:
+        """Error Budget 이벤트 구독 등록 (Fail-Open)."""
+        try:
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            bus = get_event_bus()
+
+            # ERROR_BUDGET_WARNING 구독
+            bus.subscribe(EventType.ERROR_BUDGET_WARNING, self._handle_error_budget_warning)
+
+            # ERROR_BUDGET_CRITICAL 구독
+            bus.subscribe(EventType.ERROR_BUDGET_CRITICAL, self._handle_error_budget_critical)
+
+            # ERROR_BUDGET_RECOVERED 구독
+            bus.subscribe(EventType.ERROR_BUDGET_RECOVERED, self._handle_error_budget_recovered)
+
+            logger.info("[AdaptiveThrottle] Subscribed to error budget events")
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] EventBus not available for error budget subscription")
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to subscribe to error budget events: {e}")
+
+    def set_target_slo_patterns(self, patterns: list[str]) -> None:
+        """
+        이 Throttle이 반응할 SLO 패턴 설정.
+
+        Args:
+            patterns: SLO name 패턴 리스트 (prefix 매칭)
+                      예: ["availability:payment"] → payment 도메인만 반응
+        """
+        self._target_slo_patterns = patterns
+        logger.info(f"[AdaptiveThrottle] Target SLO patterns: {patterns}")
+
+    def _should_react_to_slo(self, slo_name: str) -> bool:
+        """이벤트의 SLO가 이 Throttle의 반응 대상인지 확인."""
+        if not self._target_slo_patterns:
+            return True  # 패턴 미설정 시 모든 이벤트 반응
+
+        return any(slo_name.startswith(pattern) or pattern == "*" for pattern in self._target_slo_patterns)
+
+    def _handle_error_budget_warning(self, event) -> None:
+        """
+        Error Budget Warning 이벤트 처리.
+
+        Warning 단계 (10-20%): Limit 20% 감소.
+        Recovery Dampening 미적용 (경고 수준이므로 빠른 복구 허용).
+        """
+        event_data = event.data if hasattr(event, "data") else event
+
+        budget_percent = event_data.get("budget_percent", 100.0)
+        slo_name = event_data.get("slo_name", "availability")
+
+        # SLO 필터링
+        if not self._should_react_to_slo(slo_name):
+            logger.debug(
+                f"[AdaptiveThrottle] Ignoring warning for SLO '{slo_name}' "
+                f"(not in target patterns: {self._target_slo_patterns})"
+            )
+            return
+
+        # Warning 상태 진입 시 limit 저장
+        if not self._error_budget_limit_reduction_active:
+            self._limit_before_error_budget_reduction = self._current_limit
+
+        self._error_budget_limit_reduction_active = True
+        self._error_budget_multiplier = 0.8  # 20% 감소
+
+        previous_limit = self._current_limit
+        new_limit = max(
+            int(self._limit_before_error_budget_reduction * self._error_budget_multiplier),
+            self.config.min_limit,
+        )
+
+        self.current_limit = new_limit
+
+        logger.warning(
+            f"[AdaptiveThrottle] Error budget WARNING: {budget_percent:.1f}%, "
+            f"limit reduced: {previous_limit} → {new_limit} (×0.8)"
+        )
+
+        # 메트릭 기록
+        _record_throttle_metrics(
+            service=self._service_name,
+            limit=new_limit,
+            limit_change_direction="down",
+            limit_change_trigger="error_budget_warning",
+            error_budget_status="warning",
+            error_budget_multiplier=self._error_budget_multiplier,
+            error_budget_reduction_active=True,
+        )
+
+        # 감사 로깅
+        _record_audit_safe(
+            action="throttle_error_budget_warning",
+            old_limit=previous_limit,
+            new_limit=new_limit,
+            error_budget_percent=budget_percent,
+            multiplier=self._error_budget_multiplier,
+            extra_data={"slo_name": slo_name},
+        )
+
+    def _handle_error_budget_critical(self, event) -> None:
+        """
+        Error Budget Critical 이벤트 처리.
+
+        Critical 단계 (<10%): Limit 50% 감소.
+        non_essential 티어 요청 거부.
+        """
+        import uuid
+
+        event_data = event.data if hasattr(event, "data") else event
+
+        budget_percent = event_data.get("budget_percent", 100.0)
+        slo_name = event_data.get("slo_name", "availability")
+
+        # SLO 필터링
+        if not self._should_react_to_slo(slo_name):
+            logger.debug(
+                f"[AdaptiveThrottle] Ignoring critical for SLO '{slo_name}' "
+                f"(not in target patterns: {self._target_slo_patterns})"
+            )
+            return
+
+        # 위반 ID 생성 (추적용)
+        violation_id = f"eb-violation-{slo_name}-{uuid.uuid4().hex[:8]}"
+
+        # Critical 상태 진입 시 limit 저장 (Warning이 선행하지 않은 경우)
+        if not self._error_budget_limit_reduction_active:
+            self._limit_before_error_budget_reduction = self._current_limit
+
+        self._error_budget_limit_reduction_active = True
+        self._error_budget_multiplier = 0.5  # 50% 감소
+
+        previous_limit = self._current_limit
+        new_limit = max(
+            int(self._limit_before_error_budget_reduction * self._error_budget_multiplier),
+            self.config.min_limit,
+        )
+
+        self.current_limit = new_limit
+
+        logger.error(
+            f"[AdaptiveThrottle] Error budget CRITICAL: {budget_percent:.1f}%, "
+            f"limit reduced: {previous_limit} → {new_limit} (×0.5), "
+            f"violation_id={violation_id}"
+        )
+
+        # 메트릭 기록
+        _record_throttle_metrics(
+            service=self._service_name,
+            limit=new_limit,
+            limit_change_direction="down",
+            limit_change_trigger="error_budget_critical",
+            error_budget_status="critical",
+            error_budget_multiplier=self._error_budget_multiplier,
+            error_budget_reduction_active=True,
+        )
+
+        # EventBus 발행
+        _emit_throttle_event(
+            "THROTTLE_SLA_WARNING",
+            {
+                "trigger": "error_budget_critical",
+                "budget_percent": budget_percent,
+                "current_limit": new_limit,
+                "previous_limit": previous_limit,
+                "violation_id": violation_id,
+            },
+            priority_name="CRITICAL",
+        )
+
+        # 감사 로깅 (violation_id를 correlation_id로 사용)
+        _record_audit_safe(
+            action="throttle_error_budget_critical",
+            old_limit=previous_limit,
+            new_limit=new_limit,
+            error_budget_percent=budget_percent,
+            multiplier=self._error_budget_multiplier,
+            correlation_id=violation_id,
+            extra_data={
+                "slo_name": slo_name,
+                "violation_id": violation_id,
+            },
+        )
+
+    def _handle_error_budget_recovered(self, event) -> None:
+        """
+        Error Budget 회복 이벤트 처리.
+
+        Recovery Dampening으로 점진적 복구 (80% → 90% → 100%).
+        Thundering Herd 방지를 위한 Jitter 적용.
+        """
+        if not self._error_budget_limit_reduction_active:
+            return
+
+        event_data = event.data if hasattr(event, "data") else event
+        budget_percent = event_data.get("budget_percent", 100.0)
+        slo_name = event_data.get("slo_name", "availability")
+
+        # SLO 필터링
+        if not self._should_react_to_slo(slo_name):
+            logger.debug(
+                f"[AdaptiveThrottle] Ignoring recovery for SLO '{slo_name}' "
+                f"(not in target patterns: {self._target_slo_patterns})"
+            )
+            return
+
+        logger.info(
+            f"[AdaptiveThrottle] Error budget recovered: {budget_percent:.1f}%, " f"starting recovery dampening with jitter"
+        )
+
+        previous_limit = self._current_limit
+
+        # Recovery Dampening 시작
+        self._error_budget_limit_reduction_active = False
+        self._error_budget_multiplier = 1.0
+        self._base_limit_before_emergency = self._limit_before_error_budget_reduction
+        self.start_recovery_dampening(apply_jitter=True)
+
+        # 메트릭 기록
+        _record_throttle_metrics(
+            service=self._service_name,
+            error_budget_status="recovered",
+            error_budget_multiplier=1.0,
+            error_budget_reduction_active=False,
+        )
+
+        # 감사 로깅
+        _record_audit_safe(
+            action="throttle_error_budget_recovered",
+            old_limit=previous_limit,
+            new_limit=self._current_limit,
+            error_budget_percent=budget_percent,
+            extra_data={"slo_name": slo_name, "recovery_mode": "dampening"},
+        )
+
     @property
     def conservative_limit(self) -> int:
         """
         Min-Winner 정책 적용한 보수적 limit.
 
-        RTT 기반 limit과 429 기반 limit 중 낮은 값 반환.
+        RTT 기반 limit, 429 기반 limit, Error Budget 기반 limit 중
+        가장 낮은 값 반환.
         """
         if not self._conservative_enabled:
             return self._current_limit
 
-        return min(self._rtt_suggested_limit, self._429_suggested_limit)
+        # Error Budget 기반 limit 계산
+        error_budget_limit = self.config.max_limit
+        if self._error_budget_limit_reduction_active:
+            error_budget_limit = int(self._limit_before_error_budget_reduction * self._error_budget_multiplier)
+
+        return min(
+            self._rtt_suggested_limit,
+            self._429_suggested_limit,
+            error_budget_limit,
+        )
 
     def record_response(self, rtt_ms: float) -> None:
         """
@@ -998,6 +1297,9 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         """
         Check if request is allowed with adaptive info and priority protection.
 
+        Error Budget Gate 통합:
+        - ERROR_BUDGET_CRITICAL 상태 시 non_essential 티어 추가 거부
+
         Args:
             key: 요청 식별자
             tier_id: 요청 티어 (critical/standard/non_essential)
@@ -1011,6 +1313,35 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         # Recovery Dampening 진행 확인
         if self._recovery_dampening_active:
             self.advance_recovery_dampening()
+
+        # Error Budget Critical 상태에서 non_essential 티어 거부
+        if self._error_budget_limit_reduction_active:
+            if tier_id == "non_essential" and self._error_budget_multiplier <= 0.5:
+                # Exemplar 취득 (Fail-Open)
+                trace_id = None
+                try:
+                    from selfhealing.observability import get_current_trace_id_from_otel
+
+                    trace_id = get_current_trace_id_from_otel()
+                except Exception:
+                    pass
+
+                # 메트릭 기록
+                _record_throttle_metrics(
+                    service=self._service_name,
+                    request_result="denied",
+                    denied_reason="error_budget_critical_non_essential_blocked",
+                    trace_id=trace_id,
+                )
+
+                return ThrottleResult(
+                    allowed=False,
+                    current_count=0,
+                    limit=self._current_limit,
+                    remaining=0,
+                    reset_at=0,
+                    reason="error_budget_critical_non_essential_blocked",
+                )
 
         # 429 감소 상태에서 CRITICAL 티어 보호
         if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
@@ -1563,13 +1894,44 @@ class AdaptiveThrottle(SlidingWindowThrottle):
     # Recovery Dampening 단계별 배율
     RECOVERY_DAMPENING_MULTIPLIERS: tuple[float, ...] = (0.8, 0.9, 1.0)
 
-    def start_recovery_dampening(self) -> None:
+    def start_recovery_dampening(self, apply_jitter: bool = False) -> None:
         """
         Recovery Dampening 시작: 80%부터 점진적으로 복구.
 
         Emergency 비활성화 후 Thundering Herd 방지를 위해
         limit을 80% → 90% → 100%로 점진적으로 복구합니다.
+
+        Args:
+            apply_jitter: Thundering Herd 방지용 랜덤 지연 적용 여부
         """
+        import random
+
+        # Jitter 적용 (Pod간 복구 시점 분산)
+        if apply_jitter and self._recovery_jitter_max_seconds > 0:
+            jitter_seconds = random.uniform(0, self._recovery_jitter_max_seconds)
+
+            logger.info(
+                f"[AdaptiveThrottle] Recovery jitter applied: " f"waiting {jitter_seconds:.2f}s before dampening start"
+            )
+
+            # 비동기 지연 후 실제 복구 시작
+            self._schedule_dampening_start(jitter_seconds)
+            return
+
+        self._do_start_recovery_dampening()
+
+    def _schedule_dampening_start(self, delay_seconds: float) -> None:
+        """지연 후 Dampening 시작 스케줄링."""
+
+        def delayed_start():
+            time.sleep(delay_seconds)
+            self._do_start_recovery_dampening()
+
+        thread = threading.Thread(target=delayed_start, daemon=True)
+        thread.start()
+
+    def _do_start_recovery_dampening(self) -> None:
+        """실제 Recovery Dampening 시작 로직."""
         previous_limit = self._current_limit
         self._recovery_dampening_active = True
         self._recovery_dampening_step = 0
