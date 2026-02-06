@@ -189,36 +189,52 @@ class TestCascadeEventIntegration:
 
     def test_cascade_event_called_for_emergency(self):
         """Emergency 이벤트 시 CascadeEvent 호출 테스트."""
-        from selfhealing.services.throttle.audit import record_throttle_emergency_sync
+        from selfhealing.services.throttle.audit import (
+            record_throttle_emergency_sync,
+            _process_audit_event,
+        )
 
         with patch("selfhealing.audit.cascade_auditor.get_cascade_event_auditor") as mock_get_auditor:
             mock_auditor = MagicMock()
             mock_get_auditor.return_value = mock_auditor
 
-            record_throttle_emergency_sync(
-                old_limit=100,
-                new_limit=50,
-                emergency_level=2,
-                applied_multiplier=0.5,
-            )
+            # 큐에 넣는 대신 직접 처리하도록 패치 (동기화)
+            with patch(
+                "selfhealing.services.throttle.audit._audit_queue.put_nowait",
+                side_effect=lambda data: _process_audit_event(data),
+            ):
+                record_throttle_emergency_sync(
+                    old_limit=100,
+                    new_limit=50,
+                    emergency_level=2,
+                    applied_multiplier=0.5,
+                )
 
             # CascadeEventAuditor가 호출되었는지 확인
             mock_get_auditor.assert_called()
 
     def test_cascade_event_called_for_cb(self):
         """CB 이벤트 시 CascadeEvent 호출 테스트."""
-        from selfhealing.services.throttle.audit import record_throttle_cb_sync
+        from selfhealing.services.throttle.audit import (
+            record_throttle_cb_sync,
+            _process_audit_event,
+        )
 
         with patch("selfhealing.audit.cascade_auditor.get_cascade_event_auditor") as mock_get_auditor:
             mock_auditor = MagicMock()
             mock_get_auditor.return_value = mock_auditor
 
-            record_throttle_cb_sync(
-                old_limit=100,
-                new_limit=0,
-                service_name="test-service",
-                cb_state="OPEN",
-            )
+            # 큐에 넣는 대신 직접 처리하도록 패치 (동기화)
+            with patch(
+                "selfhealing.services.throttle.audit._audit_queue.put_nowait",
+                side_effect=lambda data: _process_audit_event(data),
+            ):
+                record_throttle_cb_sync(
+                    old_limit=100,
+                    new_limit=0,
+                    service_name="test-service",
+                    cb_state="OPEN",
+                )
 
             # CascadeEventAuditor가 호출됨
             mock_get_auditor.assert_called()
