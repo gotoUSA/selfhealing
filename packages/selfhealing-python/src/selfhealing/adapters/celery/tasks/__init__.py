@@ -81,6 +81,11 @@ from .persistence import (
 )
 
 # ============================================================
+# SLA Notification Tasks
+# ============================================================
+from .sla_notification import send_sla_notification
+
+# ============================================================
 # Postmortem Tasks
 # ============================================================
 from .postmortem import (
@@ -112,6 +117,8 @@ __all__ = [
     "check_and_report_sla_breaches",
     "emit_selfhealing_heartbeat",
     "notify_failsafe_recovery",
+    # SLA Notification
+    "send_sla_notification",
     # Postmortem
     "close_incident_group",
     "flush_aggregated_notifications",

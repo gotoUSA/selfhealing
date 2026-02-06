@@ -1759,14 +1759,22 @@ sla_notification_failed_total = get_or_create_counter(
 - [NotificationChannelSettings](../../packages/selfhealing-python/src/selfhealing/settings/notification_channel.py) — max_retry=3, retry_delay_seconds=30
 - [SLASettings](../../packages/selfhealing-python/src/selfhealing/settings/sla.py) — BaseSettings + 싱글톤 + reset 패턴
 
-### v2.0 신규 파일 (구현 예정)
-- `selfhealing/services/throttle/sla_notification.py` — SLA 알림 핸들러 (Section 4.1)
-- `selfhealing/services/throttle/throttle_sla_alert_urls.py` — URL 빌더 (Section 4.3)
-- `selfhealing/services/throttle/sla_notification_templates.py` — 메시지 템플릿 (Section 4.5)
-- `selfhealing/services/throttle/notification_fallback_recorder.py` — 실패 폴백 (Section 5.4)
-- `selfhealing/services/throttle/redis_cooldown_store.py` — Redis 쿨다운 (Section 5.3)
-- `selfhealing/settings/throttle_sla_notification.py` — 설정 (Section 9.1)
-- `selfhealing/adapters/celery/tasks.py` — Celery 태스크 추가 (Section 4.2)
+### v2.0 신규 파일 (구현 완료)
+- `selfhealing/services/throttle/sla_notification.py` — SLA 알림 핸들러 (Section 4.1) ✅
+- `selfhealing/services/throttle/throttle_sla_alert_urls.py` — URL 빌더 (Section 4.3) ✅
+- `selfhealing/services/throttle/sla_notification_templates.py` — 메시지 템플릿 (Section 4.5) ✅
+- `selfhealing/services/throttle/notification_fallback_recorder.py` — 실패 폴백 (Section 5.4) ✅
+- `selfhealing/services/throttle/redis_cooldown_store.py` — Redis 쿨다운 (Section 5.3) ✅
+- `selfhealing/settings/throttle_sla_notification.py` — 설정 (Section 9.1) ✅
+- `selfhealing/adapters/celery/tasks/sla_notification.py` — Celery 태스크 (Section 4.2) ✅
+
+### v2.0 수정 파일 (구현 완료)
+- `selfhealing/services/throttle/adaptive.py` — rtt_change_percent, service_name 이벤트 데이터 추가 (Section 6.2) ✅
+- `selfhealing/services/unified_notification.py` — format_sla_slack_blocks 추가 (Section 4.4) ✅
+- `selfhealing/adapters/celery/tasks/__init__.py` — send_sla_notification 태스크 등록 ✅
+
+### v2.0 단위 테스트 (39/39 통과)
+- `packages/selfhealing-python/tests/unit/throttle/test_sla_notification_integration.py` ✅
 
 ### 관련 설계 문서
 - [23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md](23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md)

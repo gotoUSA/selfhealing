@@ -793,6 +793,116 @@ def format_cb_slack_blocks(
     return {"blocks": blocks}
 
 
+def format_sla_slack_blocks(
+    payload: NotificationPayload,
+    priority: NotificationPriority,
+) -> dict[str, Any]:
+    """
+    SLA 알림용 Slack Block Kit 메시지 포맷.
+
+    RTT/Threshold/Limit/Service 필드와 함께
+    RTT 변화율(%), Region 정보, Actionable 버튼을 포함합니다.
+    URL은 ThrottleSlaAlertUrlBuilder에서 동적 생성됩니다.
+
+    Args:
+        payload: 알림 페이로드
+        priority: 효과적 우선순위 (에스컬레이션 적용 후)
+
+    Returns:
+        Slack Block Kit 형식의 메시지 딕셔너리
+    """
+    from selfhealing.services.throttle.throttle_sla_alert_urls import (
+        get_throttle_sla_alert_url_builder,
+    )
+
+    metadata = payload.metadata or {}
+    service_name = metadata.get("service_name", "default")
+    region = metadata.get("region")
+    rtt_ms = metadata.get("rtt_ms", 0)
+    rtt_change_percent = metadata.get("rtt_change_percent")
+
+    # URL 빌더에서 동적 생성
+    builder = get_throttle_sla_alert_url_builder()
+    urls = builder.build_sla_alert_urls(
+        service_name=service_name,
+        event_type=metadata.get("event_type", "sla_warning"),
+        rtt_ms=rtt_ms,
+    )
+
+    severity_emoji = {
+        NotificationPriority.CRITICAL: "\U0001f534",
+        NotificationPriority.HIGH: "\U0001f7e0",
+        NotificationPriority.MEDIUM: "\U0001f7e1",
+    }.get(priority, "\u26aa")
+
+    fields = [
+        {"type": "mrkdwn", "text": f"*RTT:*\n{rtt_ms:.1f}ms"},
+        {"type": "mrkdwn", "text": f"*Threshold:*\n{metadata.get('threshold_ms', 0)}ms"},
+        {"type": "mrkdwn", "text": f"*Current Limit:*\n{metadata.get('current_limit', 0)}"},
+        {"type": "mrkdwn", "text": f"*Service:*\n{service_name}"},
+    ]
+
+    # RTT 변화율이 있으면 추가
+    if rtt_change_percent is not None:
+        fields.append({"type": "mrkdwn", "text": f"*RTT Change:*\n{rtt_change_percent:+.1f}%"})
+
+    # Region이 있으면 추가
+    if region:
+        fields.append({"type": "mrkdwn", "text": f"*Region:*\n{region}"})
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"{severity_emoji} {payload.title}",
+                "emoji": True,
+            },
+        },
+        {"type": "section", "fields": fields},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Details:*\n{payload.message}"},
+        },
+    ]
+
+    # Actionable 버튼: URL이 설정된 것만 포함
+    action_elements = []
+    if urls.dashboard_url:
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "\U0001f4ca Grafana Dashboard", "emoji": True},
+                "url": urls.dashboard_url,
+                "action_id": "view_throttle_dashboard",
+            }
+        )
+    if urls.admin_url:
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "\u2699\ufe0f Throttle Admin", "emoji": True},
+                "url": urls.admin_url,
+                "action_id": "view_throttle_admin",
+                "style": "primary",
+            }
+        )
+    if urls.runbook_url:
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "\U0001f4d6 SLA Runbook", "emoji": True},
+                "url": urls.runbook_url,
+                "action_id": "view_sla_runbook",
+            }
+        )
+
+    if action_elements:
+        blocks.append({"type": "actions", "elements": action_elements})
+
+    return {"blocks": blocks}
+
+
 def format_cb_notification_with_actions(payload: NotificationPayload) -> dict[str, Any]:
     """
     Circuit Breaker 알림을 Actionable Alert 형식으로 포맷.

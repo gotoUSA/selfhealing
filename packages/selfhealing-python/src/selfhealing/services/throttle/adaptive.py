@@ -635,6 +635,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 self._adaptive_stats["adjustments_down"] += 1
 
                 # SLA Critical 이벤트 발행
+                rtt_change_percent = gradient * 100.0
                 _emit_throttle_event(
                     "THROTTLE_SLA_CRITICAL",
                     {
@@ -644,6 +645,8 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         "previous_limit": previous_limit,
                         "reduction_percent": 30,
                         "gradient": gradient,
+                        "rtt_change_percent": rtt_change_percent,
+                        "service_name": "default",
                     },
                     priority_name="CRITICAL",
                 )
@@ -675,6 +678,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                 self._adaptive_stats["adjustments_down"] += 1
 
                 # SLA Warning 이벤트 발행
+                rtt_change_percent = gradient * 100.0
                 _emit_throttle_event(
                     "THROTTLE_SLA_WARNING",
                     {
@@ -683,6 +687,8 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         "current_limit": self._current_limit,
                         "previous_limit": previous_limit,
                         "gradient": gradient,
+                        "rtt_change_percent": rtt_change_percent,
+                        "service_name": "default",
                     },
                     priority_name="HIGH",
                 )
