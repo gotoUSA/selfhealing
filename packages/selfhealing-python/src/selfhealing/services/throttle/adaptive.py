@@ -979,6 +979,97 @@ class AdaptiveThrottle(SlidingWindowThrottle):
             extra_data={"slo_name": slo_name, "recovery_mode": "dampening"},
         )
 
+    def _check_preemptive_protection(self) -> None:
+        """
+        Burn Rate 기반 선제적 보호 체크.
+
+        예산 소진 예측기(BudgetDepletionForecaster)를 사용하여
+        예산이 빠르게 소진될 것으로 예측되면 선제적으로 limit을 감소합니다.
+        """
+        # 이미 Error Budget 감소 상태면 추가 조치 불필요
+        if self._error_budget_limit_reduction_active:
+            return
+
+        try:
+            from selfhealing.services.error_budget_service import get_error_budget_service
+            from selfhealing.services.error_budget.forecaster import BudgetDepletionForecaster
+
+            service = get_error_budget_service()
+            status = service.get_budget_status()
+
+            forecaster = BudgetDepletionForecaster()
+
+            if forecaster.should_preemptive_throttle(status):
+                forecast = forecaster.forecast(status)
+
+                logger.warning(
+                    f"[AdaptiveThrottle] Preemptive throttle triggered: "
+                    f"risk_level={forecast.risk_level}, "
+                    f"estimated_depletion={forecast.estimated_depletion_hours}, "
+                    f"burn_rate_1h={forecast.burn_rate_1h:.2f}"
+                )
+
+                self._apply_preemptive_reduction(forecast)
+
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] Forecaster or ErrorBudgetService not available")
+        except Exception as e:
+            logger.debug(f"[AdaptiveThrottle] Preemptive check skipped: {e}")
+
+    def _apply_preemptive_reduction(self, forecast) -> None:
+        """
+        선제적 limit 감소 적용.
+
+        Args:
+            forecast: BudgetDepletionForecaster.forecast() 결과
+        """
+        self._limit_before_error_budget_reduction = self._current_limit
+        self._error_budget_limit_reduction_active = True
+
+        # 위험 수준에 따른 배율 결정
+        if forecast.risk_level == "critical":
+            self._error_budget_multiplier = 0.5  # 50% 감소
+        else:
+            self._error_budget_multiplier = 0.8  # 80% 감소 (기본 선제)
+
+        previous_limit = self._current_limit
+        new_limit = max(
+            int(self._limit_before_error_budget_reduction * self._error_budget_multiplier),
+            self.config.min_limit,
+        )
+
+        self.current_limit = new_limit
+
+        logger.warning(
+            f"[AdaptiveThrottle] Preemptive limit reduction applied: "
+            f"{previous_limit} → {new_limit} (×{self._error_budget_multiplier})"
+        )
+
+        # 메트릭 기록
+        _record_throttle_metrics(
+            service=self._service_name,
+            limit=new_limit,
+            limit_change_direction="down",
+            limit_change_trigger="preemptive_protection",
+            error_budget_status=forecast.risk_level,
+            error_budget_multiplier=self._error_budget_multiplier,
+            error_budget_reduction_active=True,
+        )
+
+        # 감사 로깅
+        _record_audit_safe(
+            action="throttle_preemptive_reduction",
+            old_limit=previous_limit,
+            new_limit=new_limit,
+            extra_data={
+                "risk_level": forecast.risk_level,
+                "estimated_depletion_hours": forecast.estimated_depletion_hours,
+                "burn_rate_1h": forecast.burn_rate_1h,
+                "burn_rate_6h": forecast.burn_rate_6h,
+                "is_accelerating": forecast.is_accelerating,
+            },
+        )
+
     @property
     def conservative_limit(self) -> int:
         """
@@ -1878,6 +1969,9 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                     self.activate_full_stop(reason)
                 elif not is_full_stop and self._full_stop_active:
                     self.deactivate_full_stop()
+
+            # Burn Rate 기반 선제적 보호 체크
+            self._check_preemptive_protection()
 
             return False
 

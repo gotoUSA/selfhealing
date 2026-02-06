@@ -76,6 +76,9 @@ class ErrorBudgetGate:
             cooldown_seconds=self._config.alert_cooldown_seconds,
         )
 
+        # 히스테리시스용 상태 추적 (플래핑 방지)
+        self._current_status: GateStatus = GateStatus.OPEN
+
         self._load_config()
 
     def _load_config(self) -> None:
@@ -119,10 +122,7 @@ class ErrorBudgetGate:
         Gate Fault Detector가 적용되어 반복 실패 시 빠른 Fail-Open 처리.
         """
         # Fault Detector 체크
-        if (
-            self._config.circuit_breaker_enabled
-            and not self._fault_detector.can_execute()
-        ):
+        if self._config.circuit_breaker_enabled and not self._fault_detector.can_execute():
             logger.debug("[ErrorBudgetGate] Fault detector DEGRADED - fast fail-open")
             return None
 
@@ -265,12 +265,71 @@ class ErrorBudgetGate:
             return result
 
     def _evaluate(self, budget_percent: float) -> GateCheckResult:
-        """에러 예산 기반 판정."""
-        # 위험 수준 - 차단
-        if budget_percent < self._config.critical_threshold_percent:
-            # 이벤트 발행: 에러 예산 임계치 도달
-            self._emit_error_budget_critical_event(budget_percent)
+        """
+        에러 예산 기반 판정 (히스테리시스 적용).
 
+        플래핑 방지를 위해 진입/복구 임계치를 분리합니다:
+        - 진입 임계치: critical=10%, warning=20%
+        - 복구 임계치: critical=12%, warning=22% (buffer=2%)
+        """
+        # 히스테리시스 적용된 복구 임계치
+        critical_recovery = self._config.critical_threshold_percent + self._config.threshold_hysteresis_buffer_percent
+        warning_recovery = self._config.warning_threshold_percent + self._config.threshold_hysteresis_buffer_percent
+
+        previous_status = self._current_status
+        new_status: GateStatus
+
+        # 현재 상태에 따른 상태 전이 결정
+        if self._current_status == GateStatus.BLOCKED:
+            # BLOCKED → 복구 임계치(12%)로 WARNING 복귀 판정
+            if budget_percent >= critical_recovery:
+                new_status = GateStatus.WARNING
+            else:
+                new_status = GateStatus.BLOCKED
+
+        elif self._current_status == GateStatus.WARNING:
+            # WARNING 상태에서 전이 판정
+            if budget_percent < self._config.critical_threshold_percent:
+                # WARNING → BLOCKED (진입 임계치로 CRITICAL 진입)
+                new_status = GateStatus.BLOCKED
+            elif budget_percent >= warning_recovery:
+                # WARNING → OPEN (복구 임계치 22%로 복귀)
+                new_status = GateStatus.OPEN
+            else:
+                # WARNING 유지
+                new_status = GateStatus.WARNING
+
+        else:
+            # OPEN 상태: 표준 진입 임계치 적용
+            if budget_percent < self._config.critical_threshold_percent:
+                new_status = GateStatus.BLOCKED
+            elif budget_percent < self._config.warning_threshold_percent:
+                new_status = GateStatus.WARNING
+            else:
+                new_status = GateStatus.OPEN
+
+        # 상태 업데이트 및 이벤트 발행
+        self._current_status = new_status
+        result = self._build_gate_check_result(budget_percent, new_status)
+
+        # 상태 변경 시에만 이벤트 발행 (플래핑 시 중복 이벤트 방지)
+        if new_status != previous_status:
+            if new_status == GateStatus.BLOCKED:
+                self._emit_error_budget_critical_event(budget_percent)
+            elif new_status == GateStatus.WARNING and previous_status == GateStatus.OPEN:
+                self._emit_error_budget_warning_event(budget_percent)
+            elif new_status == GateStatus.OPEN and previous_status in (GateStatus.WARNING, GateStatus.BLOCKED):
+                self._emit_error_budget_recovered_event(budget_percent)
+
+        return result
+
+    def _build_gate_check_result(
+        self,
+        budget_percent: float,
+        status: GateStatus,
+    ) -> GateCheckResult:
+        """상태에 따른 GateCheckResult 생성."""
+        if status == GateStatus.BLOCKED:
             return GateCheckResult(
                 allowed=False,
                 status=GateStatus.BLOCKED,
@@ -283,33 +342,24 @@ class ErrorBudgetGate:
                     "에러 예산이 회복되면 자동으로 재개됩니다."
                 ),
             )
-
-        # 경고 수준 - 허용하되 경고
-        if budget_percent < self._config.warning_threshold_percent:
-            # 이벤트 발행: 에러 예산 경고
-            self._emit_error_budget_warning_event(budget_percent)
-
+        elif status == GateStatus.WARNING:
             return GateCheckResult(
                 allowed=True,
                 status=GateStatus.WARNING,
                 error_budget_percent=budget_percent,
                 threshold_percent=self._config.critical_threshold_percent,
                 reason=f"Error budget low: {budget_percent:.1f}% < {self._config.warning_threshold_percent}%",
-                recommendation=(
-                    "에러 예산이 낮습니다. "
-                    "자동화는 계속 허용되지만, 수동 확인을 권장합니다."
-                ),
+                recommendation=("에러 예산이 낮습니다. " "자동화는 계속 허용되지만, 수동 확인을 권장합니다."),
             )
-
-        # 정상 - 허용
-        return GateCheckResult(
-            allowed=True,
-            status=GateStatus.OPEN,
-            error_budget_percent=budget_percent,
-            threshold_percent=self._config.critical_threshold_percent,
-            reason=f"Error budget healthy: {budget_percent:.1f}%",
-            recommendation="자동화 정상 동작 중",
-        )
+        else:
+            return GateCheckResult(
+                allowed=True,
+                status=GateStatus.OPEN,
+                error_budget_percent=budget_percent,
+                threshold_percent=self._config.critical_threshold_percent,
+                reason=f"Error budget healthy: {budget_percent:.1f}%",
+                recommendation="자동화 정상 동작 중",
+            )
 
     def _handle_fail_open(self) -> GateCheckResult:
         """
@@ -320,27 +370,19 @@ class ErrorBudgetGate:
         """
         if not self._config.fail_open:
             # Fail-close (권장하지 않음)
-            logger.error(
-                "[ErrorBudgetGate] FAIL-CLOSE triggered - "
-                "Could not retrieve error budget, blocking automation"
-            )
+            logger.error("[ErrorBudgetGate] FAIL-CLOSE triggered - " "Could not retrieve error budget, blocking automation")
             return GateCheckResult(
                 allowed=False,
                 status=GateStatus.BLOCKED,
                 error_budget_percent=None,
                 threshold_percent=self._config.critical_threshold_percent,
                 reason="Error budget retrieval failed - fail-close policy applied",
-                recommendation=(
-                    "에러 예산 조회에 실패했습니다. "
-                    "Fail-close 정책에 따라 자동화를 차단합니다."
-                ),
+                recommendation=("에러 예산 조회에 실패했습니다. " "Fail-close 정책에 따라 자동화를 차단합니다."),
                 fail_open_triggered=True,
             )
 
         # Fail-open with Rate Limiting
-        logger.warning(
-            "[ErrorBudgetGate] FAIL-OPEN triggered - " "Could not retrieve error budget"
-        )
+        logger.warning("[ErrorBudgetGate] FAIL-OPEN triggered - " "Could not retrieve error budget")
 
         # 메트릭 기록
         try:
@@ -353,9 +395,7 @@ class ErrorBudgetGate:
         # Rate Limit 적용 여부 확인
         if not self._config.fail_open_rate_limit_enabled:
             # Rate Limit 비활성화 - 무조건 허용 (기존 동작)
-            logger.info(
-                "[ErrorBudgetGate] Rate limiting disabled - allowing without limit"
-            )
+            logger.info("[ErrorBudgetGate] Rate limiting disabled - allowing without limit")
             return GateCheckResult(
                 allowed=True,
                 status=GateStatus.FAIL_OPEN,
@@ -374,9 +414,7 @@ class ErrorBudgetGate:
         allowed, remaining, reset_at = self._fail_open_rate_limiter.try_acquire()
 
         if allowed:
-            logger.info(
-                f"[ErrorBudgetGate] FAIL-OPEN allowed (rate limit: {remaining} remaining)"
-            )
+            logger.info(f"[ErrorBudgetGate] FAIL-OPEN allowed (rate limit: {remaining} remaining)")
 
             # Fail-Open 알림 발송
             if self._config.alert_on_fail_open:
@@ -390,10 +428,7 @@ class ErrorBudgetGate:
                 status=GateStatus.FAIL_OPEN,
                 error_budget_percent=None,
                 threshold_percent=self._config.critical_threshold_percent,
-                reason=(
-                    f"Error budget retrieval failed - fail-open with rate limit "
-                    f"({remaining} requests remaining)"
-                ),
+                reason=(f"Error budget retrieval failed - fail-open with rate limit " f"({remaining} requests remaining)"),
                 recommendation=(
                     "에러 예산 조회에 실패했습니다. "
                     f"Rate Limit 내에서 자동화를 허용합니다 (잔여: {remaining}회). "
@@ -406,8 +441,7 @@ class ErrorBudgetGate:
         else:
             # Rate Limit 초과 - 차단
             logger.warning(
-                f"[ErrorBudgetGate] FAIL-OPEN rate limit exceeded - "
-                f"blocking automation (reset at {reset_at.isoformat()})"
+                f"[ErrorBudgetGate] FAIL-OPEN rate limit exceeded - " f"blocking automation (reset at {reset_at.isoformat()})"
             )
 
             # Rate Limit 초과 알림 발송
@@ -460,8 +494,7 @@ class ErrorBudgetGate:
 
         if not result.allowed:
             logger.warning(
-                f"[ErrorBudgetGate] Action blocked: {action or 'unknown'} - "
-                f"Error budget: {result.error_budget_percent}%"
+                f"[ErrorBudgetGate] Action blocked: {action or 'unknown'} - " f"Error budget: {result.error_budget_percent}%"
             )
 
             # 감사 로깅
@@ -560,6 +593,29 @@ class ErrorBudgetGate:
             )
         except Exception as e:
             logger.warning(f"[ErrorBudgetGate] Failed to emit warning event: {e}")
+
+    def _emit_error_budget_recovered_event(self, budget_percent: float) -> None:
+        """에러 예산 회복 이벤트 발행 (WARNING/BLOCKED → OPEN 전이 시)."""
+        try:
+            from selfhealing.services.event_bus import (
+                EventPriority,
+                EventType,
+                get_event_bus,
+            )
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.ERROR_BUDGET_RECOVERED,
+                data={
+                    "budget_percent": budget_percent,
+                    "threshold": self._config.warning_threshold_percent,
+                    "status": "recovered",
+                },
+                source="error_budget_gate",
+                priority=EventPriority.NORMAL,
+            )
+        except Exception as e:
+            logger.warning(f"[ErrorBudgetGate] Failed to emit recovered event: {e}")
 
     # -------------------------------------------------------------------------
     # Rate Limiter & Fault Detector Status

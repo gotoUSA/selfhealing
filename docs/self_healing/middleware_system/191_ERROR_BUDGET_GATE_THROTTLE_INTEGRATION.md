@@ -1534,7 +1534,7 @@ def _apply_preemptive_reduction(self, forecast: DepletionForecast) -> None:
 ### 10.2 Priority 2 (권장)
 
 - [x] `ErrorBudgetGateConfig.threshold_hysteresis_buffer_percent` 추가 (#4)
-- [ ] Gate `_evaluate()` 히스테리시스 로직 구현 (#4)
+- [x] Gate `_evaluate()` 히스테리시스 로직 구현 (#4)
 - [x] `BudgetExhaustedFlagManager` Redis 플래그 구현 (#5)
 - [x] `register_error_budget_bypass_hooks()` 바이패스 훅 등록 (#8)
 - [x] 감사 로그 `violation_id` 연결 (#11)
@@ -1543,7 +1543,7 @@ def _apply_preemptive_reduction(self, forecast: DepletionForecast) -> None:
 
 - [x] `recovery_jitter_max_seconds` 설정 및 Jitter 적용 (#10)
 - [x] `BudgetDepletionForecaster` 예측기 구현 (#14)
-- [ ] `_check_preemptive_protection()` 선제적 보호 통합 (#14)
+- [x] `_check_preemptive_protection()` 선제적 보호 통합 (#14)
 
 ---
 
