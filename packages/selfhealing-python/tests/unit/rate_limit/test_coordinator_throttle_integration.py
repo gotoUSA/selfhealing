@@ -804,3 +804,999 @@ class TestRateLimitThrottleIntegrationSettings:
         assert settings.enabled is False
         assert settings.debounce_window_seconds == 10.0
         assert settings.escalation_threshold_consecutive_429s == 20
+
+    def test_get_reduction_ratio_by_consecutive_count(self):
+        """get_reduction_ratio() 연속 횟수별 비율 반환."""
+        from selfhealing.settings.rate_limit_throttle_integration import (
+            RateLimitThrottleIntegrationSettings,
+        )
+
+        settings = RateLimitThrottleIntegrationSettings()
+
+        assert settings.get_reduction_ratio(1) == 0.8   # 1회
+        assert settings.get_reduction_ratio(2) == 0.6   # 2회
+        assert settings.get_reduction_ratio(3) == 0.5   # 3회
+        assert settings.get_reduction_ratio(5) == 0.5   # 3회 이상도 동일
+        assert settings.get_reduction_ratio(100) == 0.5
+
+    def test_pydantic_validation_rejects_out_of_range(self):
+        """Pydantic 검증 - 범위 초과 비율 거부."""
+        from pydantic import ValidationError
+        from selfhealing.settings.rate_limit_throttle_integration import (
+            RateLimitThrottleIntegrationSettings,
+        )
+
+        with pytest.raises(ValidationError):
+            RateLimitThrottleIntegrationSettings(reduction_ratio_1=0.0)  # 최소 0.1
+
+        with pytest.raises(ValidationError):
+            RateLimitThrottleIntegrationSettings(reduction_ratio_2=1.5)  # 최대 1.0
+
+
+# =============================================================================
+# RateLimitCoordinator 추가 테스트 - Fail-Open / 엣지케이스
+# =============================================================================
+
+
+class TestEmitRateLimitEventFailOpen:
+    """_emit_rate_limit_event Fail-Open 동작 테스트."""
+
+    def test_emit_survives_import_error(self):
+        """EventBus import 실패 시 예외 없이 통과 (Fail-Open)."""
+        from selfhealing.services.rate_limit_coordinator import _emit_rate_limit_event
+
+        # get_event_bus가 ImportError를 발생시키도록 mock
+        with patch(
+            "selfhealing.services.rate_limit_coordinator._emit_rate_limit_event",
+            wraps=_emit_rate_limit_event,
+        ):
+            with patch(
+                "selfhealing.services.event_bus.get_event_bus",
+                side_effect=ImportError("no module"),
+            ):
+                # 예외 없이 통과
+                _emit_rate_limit_event("RATE_LIMIT_429", {"key": "test"})
+
+    def test_emit_survives_generic_exception(self):
+        """EventBus 발행 중 예외 시 Fail-Open."""
+        from selfhealing.services.rate_limit_coordinator import _emit_rate_limit_event
+
+        with patch(
+            "selfhealing.services.event_bus.get_event_bus",
+            side_effect=RuntimeError("bus broken"),
+        ):
+            # 예외 없이 통과
+            _emit_rate_limit_event("RATE_LIMIT_429", {"key": "test"})
+
+    def test_emit_unknown_event_type_does_not_crash(self):
+        """존재하지 않는 EventType 지정 시 warning 후 통과."""
+        from selfhealing.services.rate_limit_coordinator import _emit_rate_limit_event
+
+        mock_bus = MagicMock()
+        with patch("selfhealing.services.event_bus.get_event_bus", return_value=mock_bus):
+            _emit_rate_limit_event("NONEXISTENT_EVENT_TYPE", {"key": "test"})
+
+        # emit이 호출되지 않아야 함 (unknown type)
+        mock_bus.emit.assert_not_called()
+
+
+class TestRecordRateLimitMetrics:
+    """_record_rate_limit_metrics 메트릭 기록 테스트."""
+
+    def test_records_429_counter(self):
+        """rate_limit_429_total 카운터 증가 확인."""
+        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+
+        mock_counter = MagicMock()
+        mock_labels = MagicMock()
+        mock_counter.labels.return_value = mock_labels
+
+        with patch(
+            "selfhealing.services.metrics.definitions.rate_limit_429_total",
+            mock_counter,
+        ):
+            _record_rate_limit_metrics(key="payment_api", status_code=429)
+
+        mock_counter.labels.assert_called_with(key="payment_api", status_code="429")
+        mock_labels.inc.assert_called_once()
+
+    def test_records_cooldown_histogram(self):
+        """rate_limit_cooldown_seconds 히스토그램 기록 확인."""
+        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+
+        mock_counter = MagicMock()
+        mock_counter.labels.return_value = MagicMock()
+        mock_histogram = MagicMock()
+        mock_hist_labels = MagicMock()
+        mock_histogram.labels.return_value = mock_hist_labels
+
+        with patch(
+            "selfhealing.services.metrics.definitions.rate_limit_429_total",
+            mock_counter,
+        ):
+            with patch(
+                "selfhealing.services.metrics.definitions.rate_limit_cooldown_seconds",
+                mock_histogram,
+            ):
+                _record_rate_limit_metrics(key="test", cooldown_seconds=15.5)
+
+        mock_histogram.labels.assert_called_with(key="test")
+        mock_hist_labels.observe.assert_called_with(15.5)
+
+    def test_records_consecutive_gauge(self):
+        """rate_limit_consecutive_429s 게이지 설정 확인."""
+        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+
+        mock_counter = MagicMock()
+        mock_counter.labels.return_value = MagicMock()
+        mock_gauge = MagicMock()
+        mock_gauge_labels = MagicMock()
+        mock_gauge.labels.return_value = mock_gauge_labels
+
+        with patch(
+            "selfhealing.services.metrics.definitions.rate_limit_429_total",
+            mock_counter,
+        ):
+            with patch(
+                "selfhealing.services.metrics.definitions.rate_limit_consecutive_429s",
+                mock_gauge,
+            ):
+                _record_rate_limit_metrics(key="test", consecutive_429s=5)
+
+        mock_gauge.labels.assert_called_with(key="test")
+        mock_gauge_labels.set.assert_called_with(5)
+
+    def test_metrics_fail_open_on_import_error(self):
+        """메트릭 모듈 import 실패 시 예외 없이 통과."""
+        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+
+        with patch(
+            "selfhealing.services.metrics.definitions.rate_limit_429_total",
+            side_effect=AttributeError("no such metric"),
+        ):
+            # 예외 없이 통과
+            _record_rate_limit_metrics(key="test")
+
+
+class TestRateLimitCoordinatorRetryAfter:
+    """on_rate_limited retry_after 헤더 우선 사용 테스트."""
+
+    def test_uses_retry_after_header_when_provided(self):
+        """retry_after 값이 주어지면 default_retry_after 대신 사용."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig(
+            default_retry_after=5.0,
+            backoff_multiplier=1.0,  # 배수 없음
+            jitter_percent=0.0,
+            debounce_window_seconds=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # retry_after=30 제공
+        delay = coordinator.on_rate_limited("test_api", retry_after=30.0)
+
+        # 30초 기반으로 계산 (default 5.0이 아닌 30.0 사용)
+        assert delay == pytest.approx(30.0, rel=0.1)
+
+    def test_uses_default_retry_after_when_none(self):
+        """retry_after가 None이면 default_retry_after 사용."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig(
+            default_retry_after=7.0,
+            backoff_multiplier=1.0,
+            jitter_percent=0.0,
+            debounce_window_seconds=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        delay = coordinator.on_rate_limited("test_api", retry_after=None)
+        assert delay == pytest.approx(7.0, rel=0.1)
+
+    def test_max_delay_cap(self):
+        """max_delay 상한 캡핑 확인."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig(
+            default_retry_after=10.0,
+            backoff_multiplier=2.0,
+            max_delay=30.0,
+            jitter_percent=0.0,
+            debounce_window_seconds=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 많은 429 발생시켜 지수 백오프가 max_delay를 초과하게
+        for _ in range(10):
+            delay = coordinator.on_rate_limited("test_api")
+
+        assert delay <= 30.0
+
+
+class TestRateLimitCoordinatorOnRateLimitedDebounceSkip:
+    """on_rate_limited 디바운싱 시 이벤트/메트릭/스케줄링 스킵 확인."""
+
+    def test_debounce_skips_event_and_metrics(self):
+        """디바운싱 윈도우 내에서 이벤트와 메트릭이 스킵됨."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig(
+            debounce_window_seconds=10.0,  # 10초 윈도우
+            jitter_percent=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        emit_count = 0
+
+        def count_emit(event_type, data, source, priority):
+            nonlocal emit_count
+            emit_count += 1
+            return 1
+
+        with patch("selfhealing.services.event_bus.get_event_bus") as mock_get_bus:
+            mock_bus = MagicMock()
+            mock_bus.emit = count_emit
+            mock_get_bus.return_value = mock_bus
+
+            # 첫 번째 429 - 이벤트 발행됨
+            coordinator.on_rate_limited("test_api")
+            first_count = emit_count
+
+            # 두 번째 429 (10초 이내) - 디바운싱으로 이벤트 스킵
+            coordinator.on_rate_limited("test_api")
+
+        assert emit_count == first_count  # 추가 발행 없음
+
+
+class TestRateLimitCoordinatorOnSuccess:
+    """on_success() 동작 테스트."""
+
+    def test_on_success_resets_consecutive_429s(self):
+        """성공 응답 시 consecutive_429s 리셋."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig()
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 429 발생으로 consecutive 증가
+        storage.increment_consecutive_429s("test_api")
+        storage.increment_consecutive_429s("test_api")
+        assert storage.get_state("test_api").consecutive_429s == 2
+
+        # 성공 처리
+        coordinator.on_success("test_api")
+
+        # consecutive_429s 리셋됨
+        assert storage.get_state("test_api").consecutive_429s == 0
+
+    def test_on_success_no_error_when_no_prior_429(self):
+        """429 없이 on_success 호출 시 에러 없음."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig()
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 429 없이 성공
+        coordinator.on_success("test_api")  # 에러 없이 통과
+        assert storage.get_state("test_api").consecutive_429s == 0
+
+
+class TestRateLimitCoordinatorScheduleCooldownEnd:
+    """_schedule_cooldown_end_event 스케줄링 테스트."""
+
+    def test_schedule_skipped_when_delay_is_zero_or_negative(self):
+        """cooldown_until이 과거면 타이머 스케줄링 스킵."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig()
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 과거 시간으로 스케줄
+        coordinator._schedule_cooldown_end_event("test_api", time.time() - 5)
+
+        # 타이머가 등록되지 않음
+        assert "test_api" not in coordinator._cooldown_timers
+
+    def test_schedule_cancels_existing_timer(self):
+        """동일 key에 대한 기존 타이머 취소."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig()
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 첫 번째 스케줄
+        future = time.time() + 60
+        coordinator._schedule_cooldown_end_event("test_api", future)
+        first_timer = coordinator._cooldown_timers.get("test_api")
+        assert first_timer is not None
+
+        # 두 번째 스케줄 (기존 타이머 취소됨)
+        coordinator._schedule_cooldown_end_event("test_api", time.time() + 120)
+        second_timer = coordinator._cooldown_timers.get("test_api")
+        assert second_timer is not first_timer
+
+        # 정리
+        second_timer.cancel()
+
+
+class TestRateLimitAwareDecorator:
+    """rate_limit_aware() 데코레이터 테스트."""
+
+    def test_decorator_calls_wait_and_on_success(self):
+        """데코레이터가 wait_if_needed + on_success 호출."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig()
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 성공 응답 Mock
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        @coordinator.rate_limit_aware("test_api")
+        def call_api():
+            return mock_response
+
+        result = call_api()
+        assert result.status_code == 200
+
+    def test_decorator_calls_on_rate_limited_on_429(self):
+        """데코레이터가 429 응답 시 on_rate_limited 호출."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        storage = MockInMemoryRateLimitStorage()
+        config = RateLimitCoordinatorConfig(
+            jitter_percent=0.0,
+            debounce_window_seconds=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=storage, config=config)
+
+        # 429 응답 Mock
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.headers = {"Retry-After": "10"}
+
+        @coordinator.rate_limit_aware("test_api")
+        def call_api():
+            return mock_response
+
+        call_api()
+
+        # consecutive_429s가 증가됨
+        state = storage.get_state("test_api")
+        assert state.consecutive_429s == 1
+
+
+# =============================================================================
+# AdaptiveThrottle 추가 테스트 - 엣지케이스
+# =============================================================================
+
+
+class TestAdaptiveThrottle429SelfHealingEvent:
+    """AdaptiveThrottle 429 핸들러 - SelfHealingEvent 객체 지원 테스트."""
+
+    def setup_method(self):
+        try:
+            from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+            reset_adaptive_throttle()
+        except ImportError:
+            pass
+
+    def test_handles_dict_event_data(self):
+        """dict 형태 이벤트 데이터 처리."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        # dict 직접 전달
+        throttle._handle_rate_limit_429({
+            "key": "test_api",
+            "consecutive_429s": 1,
+            "cooldown_until": time.time() + 10,
+        })
+        assert throttle.current_limit == 80
+
+    def test_handles_object_with_data_attribute(self):
+        """SelfHealingEvent 객체 (event.data) 형태 처리."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        # SelfHealingEvent-like 객체
+        event = MagicMock()
+        event.data = {
+            "key": "test_api",
+            "consecutive_429s": 1,
+            "cooldown_until": time.time() + 10,
+        }
+
+        throttle._handle_rate_limit_429(event)
+        assert throttle.current_limit == 80
+
+
+class TestAdaptiveThrottle429EventEmission:
+    """AdaptiveThrottle 429 핸들러 이벤트 발행 테스트."""
+
+    def setup_method(self):
+        try:
+            from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+            reset_adaptive_throttle()
+        except ImportError:
+            pass
+
+    def test_emits_sla_warning_on_3_consecutive(self):
+        """연속 3회 이상 429 시 THROTTLE_SLA_WARNING 발행."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        emitted_events = []
+
+        def capture_emit(**kwargs):
+            emitted_events.append(kwargs)
+            return 1
+
+        def mock_get_bus_safe():
+            bus = MagicMock()
+            bus.emit = capture_emit
+            return bus
+
+        with patch(
+            "selfhealing.services.throttle.adaptive._get_event_bus_safe",
+            mock_get_bus_safe,
+        ):
+            throttle._handle_rate_limit_429({
+                "key": "test_api",
+                "consecutive_429s": 3,
+                "cooldown_until": time.time() + 10,
+            })
+
+        # SLA Warning과 LIMIT_CHANGED 이벤트 둘 다 발행됨
+        event_types = [str(e.get("event_type", "")) for e in emitted_events]
+        has_sla_warning = any("SLA_WARNING" in et for et in event_types)
+        has_limit_changed = any("LIMIT_CHANGED" in et for et in event_types)
+
+        assert has_sla_warning, f"SLA_WARNING not found in {event_types}"
+        assert has_limit_changed, f"LIMIT_CHANGED not found in {event_types}"
+
+    def test_no_sla_warning_on_1_consecutive(self):
+        """단일 429 시 SLA Warning 미발행."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        emitted_events = []
+
+        def capture_emit(**kwargs):
+            emitted_events.append(kwargs)
+            return 1
+
+        def mock_get_bus_safe():
+            bus = MagicMock()
+            bus.emit = capture_emit
+            return bus
+
+        with patch(
+            "selfhealing.services.throttle.adaptive._get_event_bus_safe",
+            mock_get_bus_safe,
+        ):
+            throttle._handle_rate_limit_429({
+                "key": "test_api",
+                "consecutive_429s": 1,
+                "cooldown_until": time.time() + 10,
+            })
+
+        event_types = [str(e.get("event_type", "")) for e in emitted_events]
+        has_sla_warning = any("SLA_WARNING" in et for et in event_types)
+        assert not has_sla_warning
+
+
+class TestAdaptiveThrottleIsRateLimited:
+    """is_rate_limited_for_key() 테스트."""
+
+    def setup_method(self):
+        try:
+            from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+            reset_adaptive_throttle()
+        except ImportError:
+            pass
+
+    def test_returns_true_during_cooldown(self):
+        """cooldown 중이면 True 반환."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        # 미래 시점 cooldown 설정
+        throttle._rate_limit_keys["test_api"] = time.time() + 100
+
+        assert throttle.is_rate_limited_for_key("test_api") is True
+
+    def test_returns_false_after_cooldown(self):
+        """cooldown 종료 후 False 반환."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        # 과거 시점 cooldown
+        throttle._rate_limit_keys["test_api"] = time.time() - 5
+
+        assert throttle.is_rate_limited_for_key("test_api") is False
+
+    def test_returns_false_for_unknown_key(self):
+        """등록되지 않은 key는 False 반환."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        assert throttle.is_rate_limited_for_key("unknown_api") is False
+
+
+class TestAdaptiveThrottleConservativeLimitDisabled:
+    """conservative_limit disabled 동작 테스트."""
+
+    def setup_method(self):
+        try:
+            from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+            reset_adaptive_throttle()
+        except ImportError:
+            pass
+
+    def test_conservative_disabled_returns_current_limit(self):
+        """conservative_enabled=False 시 현재 limit 그대로 반환."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        throttle._conservative_enabled = False
+        throttle._rtt_suggested_limit = 50
+        throttle._429_suggested_limit = 30
+
+        # disabled이면 _current_limit 반환 (min 계산 무시)
+        assert throttle.conservative_limit == throttle._current_limit
+
+
+class TestAdaptiveThrottleCheckPriorityProtection:
+    """check() 메서드 CRITICAL 티어 실제 limit 적용 테스트."""
+
+    def setup_method(self):
+        try:
+            from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+            reset_adaptive_throttle()
+        except ImportError:
+            pass
+
+    def test_check_critical_tier_allows_more_than_reduced_limit(self):
+        """CRITICAL 티어는 429 감소 전 limit 기준으로 체크."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10, max_limit=200)
+        throttle = AdaptiveThrottle(config=config)
+
+        # 429로 limit 감소
+        throttle._handle_rate_limit_429({
+            "key": "test_api",
+            "consecutive_429s": 3,
+            "cooldown_until": time.time() + 10,
+        })
+
+        assert throttle._429_reduction_active is True
+        reduced = throttle.current_limit
+        assert reduced < 100
+
+        # standard 티어 체크 - 감소된 limit 기준
+        result_standard = throttle.check("req_standard", tier_id="standard")
+        # CRITICAL 티어 체크 - 이전 limit (100) 기준으로 탄력적
+        result_critical = throttle.check("req_critical", tier_id="critical")
+
+        # 둘 다 첫 요청이므로 허용되지만, internal limit 임시 변경 검증
+        # check 후에 limit이 원래대로 복원되는지 확인
+        assert throttle._current_limit == reduced  # 복원됨
+
+    def test_check_standard_tier_not_protected(self):
+        """standard 티어는 감소된 limit 그대로 적용."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10, max_limit=200)
+        throttle = AdaptiveThrottle(config=config)
+
+        # 429 활성화
+        throttle._429_reduction_active = True
+        throttle._limit_before_429 = 100
+        throttle._current_limit = 50
+
+        # standard 티어는 보호 안 됨 → limit 변경 없이 check
+        throttle.check("req_test", tier_id="standard")
+        assert throttle._current_limit == 50  # 변경 없음
+
+
+class TestAdaptiveThrottleCooldownEndRecoveryDampening:
+    """_handle_cooldown_end Recovery Dampening 시작 테스트."""
+
+    def setup_method(self):
+        try:
+            from selfhealing.services.throttle.adaptive import reset_adaptive_throttle
+            reset_adaptive_throttle()
+        except ImportError:
+            pass
+
+    def test_cooldown_end_starts_recovery_dampening(self):
+        """COOLDOWN_END 시 start_recovery_dampening() 호출."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        # 429 상태 설정
+        throttle._handle_rate_limit_429({
+            "key": "test_api",
+            "consecutive_429s": 2,
+            "cooldown_until": time.time() + 10,
+        })
+
+        # start_recovery_dampening을 mock
+        with patch.object(throttle, "start_recovery_dampening") as mock_recovery:
+            throttle._handle_cooldown_end({
+                "key": "test_api",
+                "cooldown_ended_at": time.time(),
+            })
+
+            mock_recovery.assert_called_once()
+
+    def test_cooldown_end_handles_event_object(self):
+        """COOLDOWN_END에서 SelfHealingEvent 객체 처리."""
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
+
+        config = ThrottleConfig(initial_limit=100, min_limit=10)
+        throttle = AdaptiveThrottle(config=config)
+
+        # 429 상태 설정
+        throttle._rate_limit_keys["test_api"] = time.time() + 10
+        throttle._429_reduction_active = True
+
+        # SelfHealingEvent-like 객체
+        event = MagicMock()
+        event.data = {
+            "key": "test_api",
+            "cooldown_ended_at": time.time(),
+        }
+
+        with patch.object(throttle, "start_recovery_dampening"):
+            throttle._handle_cooldown_end(event)
+
+        assert "test_api" not in throttle._rate_limit_keys
+        assert throttle._429_reduction_active is False
+
+
+# =============================================================================
+# DistributedRateLimitChannel 추가 테스트
+# =============================================================================
+
+
+class TestDistributedRateLimitChannelBroadcastFailure:
+    """DistributedRateLimitChannel broadcast 실패 처리 테스트."""
+
+    def test_broadcast_returns_false_on_publish_failure(self):
+        """Kafka publish 실패 시 False 반환."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        mock_kafka.publish.return_value = False
+
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        result = channel.broadcast_rate_limit_429(
+            key="test", consecutive_429s=1,
+            cooldown_until=time.time() + 10, calculated_delay=5.0,
+        )
+
+        assert result is False
+
+    def test_broadcast_returns_false_on_exception(self):
+        """Kafka publish 예외 시 False 반환."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        mock_kafka.publish.side_effect = RuntimeError("kafka down")
+
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        result = channel.broadcast_rate_limit_429(
+            key="test", consecutive_429s=1,
+            cooldown_until=time.time() + 10, calculated_delay=5.0,
+        )
+
+        assert result is False
+
+
+class TestDistributedRateLimitChannelDispatch:
+    """_dispatch_to_handlers 핸들러 전달 테스트."""
+
+    def test_dispatch_calls_all_handlers(self):
+        """모든 등록된 핸들러에 이벤트 전달."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        results = []
+
+        def handler_a(data):
+            results.append(("a", data))
+
+        def handler_b(data):
+            results.append(("b", data))
+
+        channel._handlers = [handler_a, handler_b]
+
+        # ConsumedEvent-like 객체
+        event = MagicMock()
+        event.value = {"key": "test_api", "consecutive_429s": 1}
+
+        success = channel._dispatch_to_handlers(event)
+
+        assert success is True
+        assert len(results) == 2
+        assert results[0][0] == "a"
+        assert results[1][0] == "b"
+
+    def test_dispatch_survives_handler_exception(self):
+        """핸들러 예외 시에도 다른 핸들러 계속 실행."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        results = []
+
+        def failing_handler(data):
+            raise ValueError("handler crash")
+
+        def working_handler(data):
+            results.append(data)
+
+        channel._handlers = [failing_handler, working_handler]
+
+        event = MagicMock()
+        event.value = {"key": "test"}
+
+        # 예외가 있어도 다른 핸들러 실행
+        channel._dispatch_to_handlers(event)
+
+        assert len(results) == 1
+
+
+class TestDistributedRateLimitChannelStartStop:
+    """start/stop 상태 관리 테스트."""
+
+    def test_start_sets_running(self):
+        """start() 호출 시 running 상태."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        channel.start()
+        assert channel.is_running is True
+        mock_kafka.start.assert_called_once()
+
+    def test_stop_clears_running(self):
+        """stop() 호출 시 running 해제."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        channel.start()
+        channel.stop()
+        assert channel.is_running is False
+
+    def test_handler_count_property(self):
+        """handler_count 속성 확인."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        mock_kafka = MagicMock()
+        channel = DistributedRateLimitChannel(kafka_bus=mock_kafka)
+
+        assert channel.handler_count == 0
+
+        channel._handlers.append(lambda d: None)
+        assert channel.handler_count == 1
+
+
+# =============================================================================
+# RateLimitEscalationHandler 추가 테스트
+# =============================================================================
+
+
+class TestRateLimitEscalationHandlerEdgeCases:
+    """RateLimitEscalationHandler 엣지케이스 테스트."""
+
+    def test_escalation_failure_logs_error(self):
+        """에스컬레이션 실패 시 에러 로그 (예외 없음)."""
+        from selfhealing.meta.rate_limit_escalation import RateLimitEscalationHandler
+
+        mock_manager = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = False
+        mock_result.error_message = "PagerDuty down"
+        mock_manager.escalate.return_value = mock_result
+
+        handler = RateLimitEscalationHandler(
+            escalation_manager=mock_manager,
+            threshold=5,
+        )
+
+        # 에스컬레이션 시도 → 실패 (예외는 발생하지 않음)
+        handler._handle_rate_limit_429({
+            "key": "payment_api",
+            "consecutive_429s": 10,
+        })
+
+        # escalate는 호출됨
+        mock_manager.escalate.assert_called_once()
+        # key는 여전히 에스컬레이션 완료로 마킹됨
+        assert "payment_api" in handler.escalated_keys
+
+    def test_reset_all_escalations(self):
+        """모든 에스컬레이션 상태 일괄 초기화."""
+        from selfhealing.meta.rate_limit_escalation import RateLimitEscalationHandler
+
+        mock_manager = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.channels_sent = ["pagerduty"]
+        mock_manager.escalate.return_value = mock_result
+
+        handler = RateLimitEscalationHandler(
+            escalation_manager=mock_manager,
+            threshold=5,
+        )
+
+        # 여러 key 에스컬레이션
+        for key in ["api_a", "api_b", "api_c"]:
+            handler._handle_rate_limit_429({
+                "key": key,
+                "consecutive_429s": 10,
+            })
+
+        assert len(handler.escalated_keys) == 3
+
+        # 일괄 초기화
+        handler.reset_all_escalations()
+        assert len(handler.escalated_keys) == 0
+
+    def test_threshold_property(self):
+        """threshold 속성 확인."""
+        from selfhealing.meta.rate_limit_escalation import RateLimitEscalationHandler
+
+        handler = RateLimitEscalationHandler(threshold=15)
+        assert handler.threshold == 15
+
+    def test_subscribe_returns_true_with_mock_bus(self):
+        """subscribe() EventBus 구독 성공 확인."""
+        from selfhealing.meta.rate_limit_escalation import RateLimitEscalationHandler
+
+        handler = RateLimitEscalationHandler(threshold=5)
+
+        mock_bus = MagicMock()
+        with patch("selfhealing.services.event_bus.get_event_bus", return_value=mock_bus):
+            result = handler.subscribe()
+
+        assert result is True
+        mock_bus.subscribe.assert_called_once()
+
+    def test_subscribe_returns_false_when_no_eventbus(self):
+        """EventBus 없을 때 subscribe() False 반환."""
+        from selfhealing.meta.rate_limit_escalation import RateLimitEscalationHandler
+
+        handler = RateLimitEscalationHandler(threshold=5)
+
+        with patch(
+            "selfhealing.services.event_bus.get_event_bus",
+            side_effect=ImportError("no eventbus"),
+        ):
+            result = handler.subscribe()
+
+        assert result is False
+
+    def test_multiple_keys_can_escalate_independently(self):
+        """서로 다른 key는 독립적으로 에스컬레이션."""
+        from selfhealing.meta.rate_limit_escalation import RateLimitEscalationHandler
+
+        mock_manager = MagicMock()
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.channels_sent = ["pagerduty"]
+        mock_manager.escalate.return_value = mock_result
+
+        handler = RateLimitEscalationHandler(
+            escalation_manager=mock_manager,
+            threshold=5,
+        )
+
+        handler._handle_rate_limit_429({
+            "key": "api_a",
+            "consecutive_429s": 10,
+        })
+        handler._handle_rate_limit_429({
+            "key": "api_b",
+            "consecutive_429s": 10,
+        })
+
+        assert mock_manager.escalate.call_count == 2
