@@ -1773,8 +1773,23 @@ sla_notification_failed_total = get_or_create_counter(
 - `selfhealing/services/unified_notification.py` — format_sla_slack_blocks 추가 (Section 4.4) ✅
 - `selfhealing/adapters/celery/tasks/__init__.py` — send_sla_notification 태스크 등록 ✅
 
-### v2.0 단위 테스트 (39/39 통과)
-- `packages/selfhealing-python/tests/unit/throttle/test_sla_notification_integration.py` ✅
+### v2.0 단위 테스트 (179/179 통과, 커버리지 93.33%)
+
+테스트 파일을 모듈별로 분리하여 7개 파일, 179개 테스트로 확장하였습니다.
+
+| 테스트 파일 | 대상 모듈 | 테스트 수 | 커버리지 |
+|------------|----------|----------|---------|
+| `test_sla_notification_templates.py` | `sla_notification_templates.py` | 43 | 100% |
+| `test_throttle_sla_alert_urls.py` | `throttle_sla_alert_urls.py` | 16 | 100% |
+| `test_redis_cooldown_store.py` | `redis_cooldown_store.py` | 17 | 100% |
+| `test_notification_fallback_recorder.py` | `notification_fallback_recorder.py` | 12 | 92.50% |
+| `test_sla_notification_handler.py` | `sla_notification.py` (핸들러) | 28 | 84.68% |
+| `test_throttle_sla_notification_settings.py` | `throttle_sla_notification.py` (설정) | 28 | 100% |
+| `test_format_sla_slack_blocks.py` | `unified_notification.py` (Slack 블록) | 22 | — |
+| `test_sla_celery_task.py` | `sla_notification.py` (Celery 태스크) | 13 | 100% |
+| **합계** | **7개 모듈** | **179** | **93.33%** |
+
+테스트 경로: `packages/selfhealing-python/tests/unit/throttle/` ✅
 
 ### 관련 설계 문서
 - [23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md](23_CIRCUIT_BREAKER_NOTIFICATION_DESIGN.md)
