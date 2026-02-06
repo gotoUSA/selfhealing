@@ -79,9 +79,7 @@ class RetryConfig:
     backoff_base: int = 4
     backoff_max: int = 180
     jitter_percent: int = 25
-    retryable_exceptions: tuple[type[Exception], ...] = field(
-        default_factory=lambda: (Exception,)
-    )
+    retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=lambda: (Exception,))
     non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
     enable_dlq: bool = True
     domain: str = "default"
@@ -89,6 +87,17 @@ class RetryConfig:
     # Rate limit awareness settings
     rate_limit_aware: bool = True  # Enable Self-DDoS prevention
     rate_limit_key: str | None = None  # Custom key, defaults to domain
+
+    # Throttle awareness settings (v2.0)
+    throttle_aware: bool = True  # Enable Throttle-aware backoff
+    throttle_backoff_multiplier_cap: float = 4.0  # Maximum multiplier cap
+
+    # Critical tier settings (v2.0)
+    critical_tier_full_stop_grace_retries: int = 1
+    """CRITICAL 티어 요청은 FULL_STOP에서도 추가 재시도 허용 횟수"""
+
+    critical_tier_full_stop_max_delay: int = 720
+    """CRITICAL 티어 FULL_STOP 시 최대 대기 시간 (12분)"""
 
     @classmethod
     def from_settings(cls, domain: str = "default") -> RetryConfig:
@@ -170,6 +179,11 @@ class RetryHandler:
     - Coordinates cooldown across all workers
     - Uses distributed storage (Redis/DB)
 
+    Throttle-aware Backoff (v2.0):
+    - Dynamically adjusts backoff based on system load
+    - Full Stop detection for immediate DLQ routing
+    - Adaptive retry budget management
+
     Usage:
         handler = RetryHandler(domain="payment")
         result = handler.execute(my_function, arg1, arg2, kwarg=value)
@@ -185,6 +199,8 @@ class RetryHandler:
         config: RetryConfig | None = None,
         domain: str = "default",
         rate_limit_coordinator: RateLimitCoordinator | None = None,
+        throttle_aware: bool | None = None,
+        service_name: str | None = None,
     ):
         """
         Initialize the retry handler.
@@ -193,19 +209,49 @@ class RetryHandler:
             config: RetryConfig instance, or None to load from settings
             domain: Domain for per-domain configuration
             rate_limit_coordinator: Optional coordinator for rate limiting
+            throttle_aware: Override throttle awareness (defaults to config)
+            service_name: Service name for Throttle Registry (defaults to domain)
         """
         self.config = config or RetryConfig.from_settings(domain)
-        self.backoff = BackoffCalculator(
-            BackoffConfig(
-                base=self.config.backoff_base,
-                max_delay=self.config.backoff_max,
-                jitter_percent=self.config.jitter_percent,
+
+        # Throttle-aware 설정 결정 (파라미터 > config)
+        self._throttle_aware = throttle_aware if throttle_aware is not None else self.config.throttle_aware
+
+        # 서비스명 결정 (파라미터 > domain)
+        effective_service_name = service_name or domain
+
+        # Backoff 계산기 선택
+        if self._throttle_aware:
+            from .backoff_calculator import ThrottleAwareBackoffCalculator
+
+            self.backoff = ThrottleAwareBackoffCalculator(
+                BackoffConfig(
+                    base=self.config.backoff_base,
+                    max_delay=self.config.backoff_max,
+                    jitter_percent=self.config.jitter_percent,
+                ),
+                service_name=effective_service_name,
             )
-        )
+        else:
+            self.backoff = BackoffCalculator(
+                BackoffConfig(
+                    base=self.config.backoff_base,
+                    max_delay=self.config.backoff_max,
+                    jitter_percent=self.config.jitter_percent,
+                )
+            )
 
         # Rate limit coordinator for Self-DDoS prevention
         self._rate_limit_coordinator = rate_limit_coordinator
         self._rate_limit_key = self.config.rate_limit_key or self.config.domain
+
+        # Adaptive Retry Budget (v2.0)
+        from .backoff_calculator import AdaptiveRetryBudget
+
+        self._retry_budget = AdaptiveRetryBudget()
+
+        # 마지막 백오프 정보 (DLQ 메타데이터용)
+        self._last_backoff_info: dict[str, Any] | None = None
 
     @property
     def rate_limit_coordinator(self) -> RateLimitCoordinator | None:
@@ -216,9 +262,7 @@ class RetryHandler:
 
                 self._rate_limit_coordinator = get_rate_limit_coordinator()
             except Exception as e:
-                logger.warning(
-                    f"[RetryHandler] Could not initialize rate limit coordinator: {e}"
-                )
+                logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
         return self._rate_limit_coordinator
 
     def _log_retry_audit(
@@ -296,10 +340,7 @@ class RetryHandler:
             "quota exceeded",
         ]
 
-        is_rate_limited = any(
-            indicator in error_str or indicator in error_type
-            for indicator in rate_limit_indicators
-        )
+        is_rate_limited = any(indicator in error_str or indicator in error_type for indicator in rate_limit_indicators)
 
         # Try to extract retry-after from exception
         retry_after = None
@@ -317,19 +358,27 @@ class RetryHandler:
 
         return is_rate_limited, retry_after
 
-    def should_retry(self, exception: Exception, attempt: int) -> bool:
+    def should_retry(
+        self,
+        exception: Exception,
+        attempt: int,
+        effective_max_attempts: int | None = None,
+    ) -> bool:
         """
         Determine if an exception should trigger a retry.
 
         Args:
             exception: The exception that occurred
             attempt: Current attempt number
+            effective_max_attempts: CRITICAL 티어 grace retry 포함한 최대 시도 횟수
 
         Returns:
             True if should retry, False otherwise
         """
+        max_attempts = effective_max_attempts or self.config.max_attempts
+
         # Check if max attempts reached
-        if attempt >= self.config.max_attempts:
+        if attempt >= max_attempts:
             return False
 
         # Check non-retryable exceptions first
@@ -348,9 +397,7 @@ class RetryHandler:
         if coordinator:
             result = coordinator.wait_if_needed(self._rate_limit_key)
             if result.waited:
-                logger.info(
-                    f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown"
-                )
+                logger.info(f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown")
 
     def _handle_rate_limit_error(self, exception: Exception) -> None:
         """Handle rate limit error by setting global cooldown."""
@@ -363,27 +410,118 @@ class RetryHandler:
                     key=self._rate_limit_key,
                     retry_after=retry_after,
                 )
-                logger.warning(
-                    f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s"
-                )
+                logger.warning(f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s")
 
-    def get_next_delay(self, attempt: int) -> int:
+    def get_next_delay(self, attempt: int, is_critical_tier: bool = False) -> int:
         """
         Get the delay before the next retry attempt.
 
+        Throttle-aware 모드 시 시스템 상태 반영.
+
         Args:
             attempt: Current attempt number
+            is_critical_tier: CRITICAL 티어 요청 여부 (Full Stop 시 grace retry 허용)
 
         Returns:
-            Delay in seconds
+            Delay in seconds. -1 indicates Full Stop (immediate DLQ routing).
         """
+        if self._throttle_aware and hasattr(self.backoff, "calculate_with_throttle_context"):
+            delay, multiplier, reason = self.backoff.calculate_with_throttle_context(attempt)
+
+            # 백오프 정보 저장 (DLQ 메타데이터용)
+            self._last_backoff_info = {
+                "delay": delay,
+                "multiplier": multiplier,
+                "reason": reason,
+            }
+
+            # Full Stop 시 즉시 DLQ 이동 신호
+            if delay < 0:
+                # CRITICAL 티어는 grace retry 허용
+                if is_critical_tier:
+                    grace_attempts = self.config.critical_tier_full_stop_grace_retries
+                    grace_attempt_number = attempt - self.config.max_attempts
+
+                    if grace_attempt_number <= grace_attempts:
+                        logger.warning(
+                            f"[RetryHandler] CRITICAL tier grace retry "
+                            f"{grace_attempt_number}/{grace_attempts} during FULL_STOP"
+                        )
+                        self._record_critical_tier_grace_metric()
+                        return self.config.critical_tier_full_stop_max_delay
+
+                logger.warning(f"[RetryHandler] Full Stop active, skipping retry for attempt {attempt}")
+                return -1
+
+            if multiplier > 1.0:
+                logger.info(
+                    f"[RetryHandler] Backoff adjusted: {self.backoff.calculate(attempt)}s → "
+                    f"{delay}s (×{multiplier:.1f}, reason={reason})"
+                )
+
+            return delay
+
         return self.backoff.calculate(attempt)
+
+    def _record_critical_tier_grace_metric(self) -> None:
+        """CRITICAL 티어 grace retry 메트릭 기록."""
+        try:
+            from .metrics.definitions import retry_critical_tier_grace_retries_total
+
+            retry_critical_tier_grace_retries_total.labels(domain=self.config.domain).inc()
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    def get_combined_delay(self, attempt: int, is_critical_tier: bool = False) -> int:
+        """
+        429 쿨다운과 Throttle 백오프 중 긴 값 반환.
+
+        합산 대신 max() 선택으로 사용자 체감 대기 시간 개선.
+
+        Args:
+            attempt: Current attempt number
+            is_critical_tier: CRITICAL 티어 요청 여부
+
+        Returns:
+            Combined delay in seconds. -1 indicates Full Stop.
+        """
+        throttle_delay = self.get_next_delay(attempt, is_critical_tier)
+
+        # Full Stop 신호는 그대로 전달
+        if throttle_delay < 0:
+            return throttle_delay
+
+        # 429 쿨다운 남은 시간 조회 (대기하지 않고 확인만)
+        coordinator = self.rate_limit_coordinator
+        if coordinator:
+            try:
+                state = coordinator._storage.get_state(self._rate_limit_key)
+                if state.is_in_cooldown:
+                    rate_limit_delay = int(state.remaining_cooldown)
+
+                    # max() 선택
+                    combined = max(rate_limit_delay, throttle_delay)
+
+                    if combined != throttle_delay:
+                        logger.info(
+                            f"[RetryHandler] Using 429 cooldown ({rate_limit_delay}s) "
+                            f"over throttle backoff ({throttle_delay}s)"
+                        )
+
+                    return combined
+            except Exception as e:
+                logger.debug(f"[RetryHandler] Rate limit state check failed: {e}")
+
+        return throttle_delay
 
     def execute(
         self,
         func: Callable[..., T],
         *args: Any,
         context: dict[str, Any] | None = None,
+        is_critical_tier: bool = False,
         **kwargs: Any,
     ) -> RetryResult:
         """
@@ -394,6 +532,12 @@ class RetryHandler:
         - Sets global cooldown on 429 errors
         - Coordinates across all workers via distributed storage
 
+        Throttle-aware Backoff (v2.0):
+        - Full Stop 시 재시도 없이 즉시 DLQ 이동
+        - Emergency 시 Backoff 배율 적용
+        - Adaptive Retry Budget으로 재시도 비율 제한
+        - CRITICAL 티어는 Full Stop 시 grace retry 허용
+
         Note: This is a synchronous implementation. For async tasks,
         use the Celery-based retry mechanism.
 
@@ -401,6 +545,7 @@ class RetryHandler:
             func: Function to execute
             *args: Positional arguments for the function
             context: Optional context for forensic logging
+            is_critical_tier: CRITICAL 티어 요청 여부 (Full Stop 시 grace retry 허용)
             **kwargs: Keyword arguments for the function
 
         Returns:
@@ -408,17 +553,12 @@ class RetryHandler:
         """
         # Kill Switch 체크: 시스템이 비활성화되면 재시도 없이 즉시 실패 반환
         if not _is_system_enabled():
-            logger.warning(
-                f"[RetryHandler] execute blocked: Kill Switch is active. "
-                f"domain={self.config.domain}"
-            )
+            logger.warning(f"[RetryHandler] execute blocked: Kill Switch is active. " f"domain={self.config.domain}")
             return RetryResult(
                 success=False,
                 action=RetryAction.ABORT,
                 attempt=0,
-                error=Exception(
-                    "Kill Switch is active: self-healing system is disabled"
-                ),
+                error=Exception("Kill Switch is active: self-healing system is disabled"),
             )
 
         # ErrorBudgetGate 체크: 에러 예산이 임계치 이하면 재시도 차단
@@ -443,8 +583,21 @@ class RetryHandler:
         last_error: Exception | None = None
         retry_history: list[dict[str, Any]] = []
 
-        while attempt < self.config.max_attempts:
+        # CRITICAL 티어는 grace retry 포함한 최대 시도 횟수
+        effective_max_attempts = self.config.max_attempts
+        if is_critical_tier:
+            effective_max_attempts += self.config.critical_tier_full_stop_grace_retries
+
+        while attempt < effective_max_attempts:
             attempt += 1
+
+            # Adaptive Retry Budget: 요청 기록
+            self._retry_budget.record_request(is_retry=(attempt > 1))
+
+            # Adaptive Retry Budget: 재시도 예산 확인 (CRITICAL 티어는 우회)
+            if attempt > 1 and not is_critical_tier and not self._retry_budget.should_allow_retry():
+                logger.warning(f"[RetryHandler] Retry budget exhausted: " f"{self._retry_budget.get_stats()}")
+                break
 
             # Self-DDoS prevention: Wait if rate limited
             self._wait_for_rate_limit()
@@ -456,9 +609,7 @@ class RetryHandler:
                 if self.rate_limit_coordinator:
                     self.rate_limit_coordinator.on_success(self._rate_limit_key)
 
-                logger.debug(
-                    f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}"
-                )
+                logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
 
                 # Audit 기록: 재시도 성공
                 self._log_retry_audit(
@@ -485,35 +636,45 @@ class RetryHandler:
                     }
                 )
 
-                logger.warning(
-                    f"[RetryHandler] Attempt {attempt}/{self.config.max_attempts} failed: {e}"
-                )
+                logger.warning(f"[RetryHandler] Attempt {attempt}/{effective_max_attempts} failed: {e}")
 
                 # Self-DDoS prevention: Handle rate limit errors
                 rate_limited, _ = self.is_rate_limit_error(e)
                 self._handle_rate_limit_error(e)
 
-                # Audit 기록: 재시도 시도 (실패)
+                # Throttle-aware delay 계산 (Full Stop 감지 포함)
                 next_delay = None
-                if self.should_retry(e, attempt):
-                    next_delay = self.get_next_delay(attempt)
+                throttle_reason = None
+                if self.should_retry(e, attempt, effective_max_attempts):
+                    next_delay = self.get_combined_delay(attempt, is_critical_tier)
+
+                    # Full Stop 신호 처리 (-1)
+                    if next_delay < 0:
+                        logger.warning("[RetryHandler] Full Stop triggered, moving to DLQ immediately")
+                        break  # while 루프 탈출 → DLQ 이동
+
+                    # Throttle 상태에 따라 예산 조정
+                    if self._last_backoff_info:
+                        throttle_reason = self._last_backoff_info.get("reason")
+                        self._retry_budget.adjust_budget_for_throttle_state(throttle_reason or "normal")
 
                 self._log_retry_audit(
                     attempt=attempt,
                     success=False,
                     error_type=type(e).__name__,
                     error_message=str(e)[:500],
-                    wait_time=next_delay,
+                    wait_time=next_delay if next_delay and next_delay > 0 else None,
                     rate_limited=rate_limited,
-                    context=context,
+                    context={
+                        **(context or {}),
+                        "throttle_aware_backoff": self._throttle_aware,
+                        "throttle_reason": throttle_reason,
+                    },
                 )
 
-                if self.should_retry(e, attempt):
+                if self.should_retry(e, attempt, effective_max_attempts) and next_delay is not None and next_delay >= 0:
                     delay = next_delay
-                    logger.info(
-                        f"[RetryHandler] Will retry in {delay}s "
-                        f"(attempt {attempt + 1}/{self.config.max_attempts})"
-                    )
+                    logger.info(f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{effective_max_attempts})")
                     # For synchronous execution, we don't actually sleep
                     # The caller (usually Celery) handles the delay
                     continue
@@ -521,10 +682,7 @@ class RetryHandler:
                     break
 
         # Max retries exceeded or non-retryable error
-        logger.error(
-            f"[RetryHandler] Max retries exceeded ({attempt}/{self.config.max_attempts}), "
-            f"last error: {last_error}"
-        )
+        logger.error(f"[RetryHandler] Max retries exceeded ({attempt}/{effective_max_attempts}), " f"last error: {last_error}")
 
         # Move to DLQ if enabled
         dlq_id = None
@@ -534,6 +692,7 @@ class RetryHandler:
                 attempt=attempt,
                 context=context,
                 retry_history=retry_history,
+                backoff_info=self._last_backoff_info,
             )
 
         return RetryResult(
@@ -550,6 +709,7 @@ class RetryHandler:
         attempt: int,
         context: dict[str, Any] | None,
         retry_history: list[dict[str, Any]],
+        backoff_info: dict[str, Any] | None = None,
     ) -> int | None:
         """
         Move the failed operation to the Dead Letter Queue.
@@ -559,6 +719,7 @@ class RetryHandler:
             attempt: Final attempt number
             context: Additional context for forensic logging
             retry_history: History of all retry attempts
+            backoff_info: Throttle-aware backoff 정보 (v2.0)
 
         Returns:
             DLQ record ID or None if DLQ is disabled
@@ -568,6 +729,25 @@ class RetryHandler:
         try:
             context = context or {}
             error_type = type(last_error).__name__ if last_error else "Unknown"
+
+            # 기본 메타데이터
+            metadata = {
+                "retry_history": retry_history,
+                "max_attempts": self.config.max_attempts,
+                "domain": self.config.domain,
+                "final_attempt": attempt,
+            }
+
+            # Throttle-aware backoff 정보 추가 (v2.0)
+            if backoff_info:
+                metadata.update(
+                    {
+                        "final_delay_seconds": backoff_info.get("delay"),
+                        "backoff_multiplier": backoff_info.get("multiplier"),
+                        "throttle_reason": backoff_info.get("reason"),
+                        "throttle_aware_enabled": self._throttle_aware,
+                    }
+                )
 
             result = store_to_dlq(
                 domain=self.config.domain,
@@ -580,12 +760,7 @@ class RetryHandler:
                 snapshot_data=context.get("snapshot_data", {}),
                 request_data=context.get("request_data", {}),
                 response_data=context.get("response_data", {}),
-                metadata={
-                    "retry_history": retry_history,
-                    "max_attempts": self.config.max_attempts,
-                    "domain": self.config.domain,
-                    "final_attempt": attempt,
-                },
+                metadata=metadata,
                 next_action_hint="Review error and retry if transient",
                 recommended_action="manual_check",
             )
@@ -594,9 +769,7 @@ class RetryHandler:
                 logger.info(f"[RetryHandler] Created DLQ entry: id={result.dlq_id}")
                 return result.dlq_id
             else:
-                logger.error(
-                    f"[RetryHandler] Failed to create DLQ entry: {result.error}"
-                )
+                logger.error(f"[RetryHandler] Failed to create DLQ entry: {result.error}")
                 return None
 
         except Exception as dlq_error:

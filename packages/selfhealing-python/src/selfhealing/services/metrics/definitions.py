@@ -514,3 +514,41 @@ throttle_error_budget_preemptive_total = get_or_create_counter(
     "Total preemptive throttle reductions based on budget depletion forecast",
     ["service", "risk_level"],
 )
+
+
+# =============================================================================
+# Retry Backoff Throttle Integration Metrics
+# =============================================================================
+
+retry_backoff_multiplier = get_or_create_histogram(
+    "selfhealing_retry_backoff_multiplier",
+    "Backoff multiplier applied due to throttle state",
+    ["domain", "reason"],
+    buckets=(1.0, 1.5, 2.0, 2.5, 3.0, 4.0),
+)
+
+retry_throttle_full_stop_skips_total = get_or_create_counter(
+    "selfhealing_retry_throttle_full_stop_skips_total",
+    "Total retries skipped due to throttle full stop",
+    ["domain"],
+)
+
+retry_backoff_original_seconds = get_or_create_histogram(
+    "selfhealing_retry_backoff_original_seconds",
+    "Original backoff delay before throttle multiplier",
+    ["domain"],
+    buckets=(1, 4, 16, 64, 180),
+)
+
+retry_backoff_adjusted_seconds = get_or_create_histogram(
+    "selfhealing_retry_backoff_adjusted_seconds",
+    "Adjusted backoff delay after throttle multiplier",
+    ["domain"],
+    buckets=(1, 4, 16, 64, 180, 360, 720),
+)
+
+retry_critical_tier_grace_retries_total = get_or_create_counter(
+    "selfhealing_retry_critical_tier_grace_total",
+    "Total CRITICAL tier grace retries during FULL_STOP",
+    ["domain"],
+)

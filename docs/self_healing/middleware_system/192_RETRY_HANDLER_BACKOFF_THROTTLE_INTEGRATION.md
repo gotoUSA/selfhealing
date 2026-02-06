@@ -671,17 +671,17 @@ retry_throttle_full_stop_skips_total = Counter(
 
 ## 7. 구현 체크리스트
 
-- [ ] `ThrottleState` dataclass 정의
-- [ ] `ThrottleAwareBackoffCalculator` 클래스 구현
-- [ ] `BACKOFF_MULTIPLIERS` 상수 정의
-- [ ] `calculate_with_throttle_context()` 메서드 구현
-- [ ] `RetryHandler.__init__` 수정 (`throttle_aware` 파라미터)
-- [ ] `RetryHandler.get_next_delay()` 수정
-- [ ] `RetryHandler.execute()` Full Stop 처리 추가
-- [ ] `RetryConfig` 확장 (`throttle_aware`, `throttle_backoff_multiplier_cap`)
-- [ ] 단위 테스트 작성
-- [ ] 통합 테스트 작성
-- [ ] Prometheus 메트릭 추가
+- [x] `ThrottleState` dataclass 정의
+- [x] `ThrottleAwareBackoffCalculator` 클래스 구현
+- [x] `BACKOFF_MULTIPLIERS` 상수 정의
+- [x] `calculate_with_throttle_context()` 메서드 구현
+- [x] `RetryHandler.__init__` 수정 (`throttle_aware` 파라미터)
+- [x] `RetryHandler.get_next_delay()` 수정
+- [x] `RetryHandler.execute()` Full Stop 처리 추가
+- [x] `RetryConfig` 확장 (`throttle_aware`, `throttle_backoff_multiplier_cap`)
+- [x] 단위 테스트 작성
+- [x] 통합 테스트 작성
+- [x] Prometheus 메트릭 추가
 
 ---
 
@@ -1884,32 +1884,32 @@ class FallbackMode(str, Enum):
 
 ### 10.1 기존 체크리스트
 
-- [ ] `ThrottleState` dataclass 정의
-- [ ] `ThrottleAwareBackoffCalculator` 클래스 구현
-- [ ] `BACKOFF_MULTIPLIERS` 상수 정의
-- [ ] `calculate_with_throttle_context()` 메서드 구현
-- [ ] `RetryHandler.__init__` 수정 (`throttle_aware` 파라미터)
-- [ ] `RetryHandler.get_next_delay()` 수정
-- [ ] `RetryHandler.execute()` Full Stop 처리 추가
-- [ ] `RetryConfig` 확장 (`throttle_aware`, `throttle_backoff_multiplier_cap`)
-- [ ] 단위 테스트 작성
-- [ ] 통합 테스트 작성
-- [ ] Prometheus 메트릭 추가
+- [x] `ThrottleState` dataclass 정의
+- [x] `ThrottleAwareBackoffCalculator` 클래스 구현
+- [x] `BACKOFF_MULTIPLIERS` 상수 정의
+- [x] `calculate_with_throttle_context()` 메서드 구현
+- [x] `RetryHandler.__init__` 수정 (`throttle_aware` 파라미터)
+- [x] `RetryHandler.get_next_delay()` 수정
+- [x] `RetryHandler.execute()` Full Stop 처리 추가
+- [x] `RetryConfig` 확장 (`throttle_aware`, `throttle_backoff_multiplier_cap`)
+- [x] 단위 테스트 작성
+- [x] 통합 테스트 작성
+- [x] Prometheus 메트릭 추가
 
 ### 10.2 v2.0 추가 체크리스트
 
-- [ ] `SYSTEM_TIMEOUT_SECONDS` 상수 정의 (§9.1)
-- [ ] `PushBasedThrottleStateCache` 클래스 구현 (§9.2)
-- [ ] EventBus 구독 기본 활성화 (§9.2)
-- [ ] `GlobalThrottleState` dataclass 정의 (§9.3)
-- [ ] `GlobalThrottleStateManager` 클래스 구현 (§9.3)
-- [ ] `service_name` 파라미터 추가 및 `ThrottleRegistry` 연동 (§9.4)
-- [ ] `get_combined_delay()` 메서드 구현 (§9.5)
-- [ ] `_check_error_budget_critical_or_warning()` 메서드 구현 (§9.6)
-- [ ] DLQ 메타데이터 확장 (`backoff_info`) (§9.7)
-- [ ] `critical_tier_full_stop_grace_retries` 설정 추가 (§9.8)
-- [ ] `definitions.py`에 4개 메트릭 등록 (§9.9)
-- [ ] `AdaptiveRetryBudget` 클래스 구현 (§9.11)
+- [x] `SYSTEM_TIMEOUT_SECONDS` 상수 정의 (§9.1)
+- [x] `PushBasedThrottleStateCache` 클래스 구현 (§9.2)
+- [x] EventBus 구독 기본 활성화 (§9.2)
+- [x] `GlobalThrottleState` dataclass 정의 (§9.3)
+- [x] `GlobalThrottleStateManager` 클래스 구현 (§9.3)
+- [x] `service_name` 파라미터 추가 및 `ThrottleRegistry` 연동 (§9.4)
+- [x] `get_combined_delay()` 메서드 구현 (§9.5)
+- [x] `_check_error_budget_critical_or_warning()` 메서드 구현 (§9.6)
+- [x] DLQ 메타데이터 확장 (`backoff_info`) (§9.7)
+- [x] `critical_tier_full_stop_grace_retries` 설정 추가 (§9.8)
+- [x] `definitions.py`에 4개 메트릭 등록 (§9.9)
+- [x] `AdaptiveRetryBudget` 클래스 구현 (§9.11)
 - [ ] End-to-End Resilience 테스트 작성 (§9.10)
 
 ---
