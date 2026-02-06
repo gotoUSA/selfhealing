@@ -1496,52 +1496,52 @@ throttle_dlq_fallback_total = Counter(
 
 ### 7.1 기본 구현 (v1.0.0)
 
-- [ ] `AdaptiveThrottle._init_dlq_service()` 메서드 추가
-- [ ] `AdaptiveThrottle.acquire()` `store_rejection` 파라미터 추가
-- [ ] `AdaptiveThrottle._store_throttle_rejection_to_dlq()` 메서드 추가
-- [ ] `AdaptiveThrottle._subscribe_throttle_recovery_for_replay()` 메서드 추가
-- [ ] `AdaptiveThrottle._on_throttle_recovery_trigger_replay()` 메서드 추가
-- [ ] `AdaptiveThrottle._trigger_throttle_rejection_replay()` 메서드 추가
-- [ ] `AdaptiveThrottle._is_throttle_healthy_for_replay()` 메서드 추가
-- [ ] `ReplayOperationsMixin.replay_throttle_aware()` 메서드 추가
-- [ ] `ReplayOperationsMixin.replay_all_throttle_aware()` 메서드 추가
-- [ ] `DLQReplayResult.retry_after` 필드 추가
-- [ ] `DLQBatchReplayResult` dataclass 추가
-- [ ] `ThrottleConfig` 신규 필드 추가
-- [ ] 신규 `EventType` 정의
-- [ ] 단위 테스트 작성
+- [x] `AdaptiveThrottle._init_dlq_service()` 메서드 추가
+- [x] `AdaptiveThrottle.acquire()` `store_rejection` 파라미터 추가
+- [x] `AdaptiveThrottle._store_throttle_rejection_to_dlq()` 메서드 추가
+- [x] `AdaptiveThrottle._subscribe_throttle_recovery_for_replay()` 메서드 추가
+- [x] `AdaptiveThrottle._on_throttle_recovery_trigger_replay()` 메서드 추가
+- [x] `AdaptiveThrottle._trigger_throttle_rejection_replay()` 메서드 추가
+- [x] `AdaptiveThrottle._is_throttle_healthy_for_replay()` 메서드 추가
+- [x] `ReplayOperationsMixin.replay_throttle_aware()` 메서드 추가
+- [x] `ReplayOperationsMixin.replay_all_throttle_aware()` 메서드 추가
+- [x] `DLQReplayResult.retry_after` 필드 추가
+- [x] `DLQBatchReplayResult` dataclass 추가
+- [x] `ThrottleConfig` 신규 필드 추가
+- [x] 신규 `EventType` 정의
+- [x] 단위 테스트 작성
 - [ ] 통합 테스트 작성
-- [ ] Prometheus 메트릭 추가
+- [x] Prometheus 메트릭 추가
 
 ### 7.2 보완 구현 (v1.1.0)
 
 **P0 — 안전성 필수**
-- [ ] **[Review 6]** `_trigger_throttle_rejection_replay()`: `query()` → `get_replayable_entries()` 변경
-- [ ] **[Review 6]** `replay_throttle_aware()`: `entry.can_retry` 가드 + `permanently_failed` 상태 처리
-- [ ] **[Review 6]** `replay_all_throttle_aware()`: `query()` → `get_replayable_entries()` 변경
-- [ ] **[Review 6]** `replay_all_throttle_aware()`: `executor` 파라미터 제거
-- [ ] **[Review 7]** `replay_throttle_aware()`: `executor(entry)` / `_default_executor(entry)` → `_execute_replay(entry)` 변경
-- [ ] **[Review 7]** `_execute_replay()` 파이프라인 검증 테스트 작성
+- [x] **[Review 6]** `_trigger_throttle_rejection_replay()`: `query()` → `get_replayable_entries()` 변경
+- [x] **[Review 6]** `replay_throttle_aware()`: `entry.can_retry` 가드 + `permanently_failed` 상태 처리
+- [x] **[Review 6]** `replay_all_throttle_aware()`: `query()` → `get_replayable_entries()` 변경
+- [x] **[Review 6]** `replay_all_throttle_aware()`: `executor` 파라미터 제거
+- [x] **[Review 7]** `replay_throttle_aware()`: `executor(entry)` / `_default_executor(entry)` → `_execute_replay(entry)` 변경
+- [x] **[Review 7]** `_execute_replay()` 파이프라인 검증 테스트 작성
 
 **P1 — 안정성 강화**
-- [ ] **[Review 10]** `replay_throttle_aware()`: `expires_at` TTL 검증 추가
-- [ ] **[Review 10]** TTL 만료 엔트리 `status="expired"` 전환 로직
-- [ ] **[Review 10]** `throttle_replay_ttl_expired_total` 메트릭 추가
+- [x] **[Review 10]** `replay_throttle_aware()`: `expires_at` TTL 검증 추가
+- [x] **[Review 10]** TTL 만료 엔트리 `status="expired"` 전환 로직
+- [x] **[Review 10]** `throttle_replay_ttl_expired_total` 메트릭 추가
 
 **P2 — 개선 사항**
-- [ ] **[Review 3]** `_store_throttle_rejection_to_dlq()`: Hedging 필터 + tier_id 샘플링 로직 추가
-- [ ] **[Review 3]** `ThrottleConfig`: `dlq_store_sampling_rate`, `dlq_store_non_essential` 필드 추가
-- [ ] **[Review 4]** `_write_to_local_fallback()`: `DiskPersistentBuffer.put()` 1차 Fallback 추가
-- [ ] **[Review 4]** `_write_to_local_fallback()`: stderr 3차 Fallback 추가
-- [ ] **[Review 8]** `_store_throttle_rejection_to_dlq()`: `original_trace_id` metadata 추가
-- [ ] **[Review 8]** `_store_throttle_rejection_to_dlq()`: `tier_id` metadata 추가
-- [ ] **[Review 9]** `_store_throttle_rejection_to_dlq()`: `context.get("hedged")` 필터 추가
-- [ ] **[Review 9]** `throttle_rejection_hedged_skipped_total` 메트릭 추가
+- [x] **[Review 3]** `_store_throttle_rejection_to_dlq()`: Hedging 필터 + tier_id 샘플링 로직 추가
+- [x] **[Review 3]** `ThrottleConfig`: `dlq_store_sampling_rate`, `dlq_store_non_essential` 필드 추가
+- [x] **[Review 4]** `_write_to_local_fallback()`: `DiskPersistentBuffer.put()` 1차 Fallback 추가
+- [x] **[Review 4]** `_write_to_local_fallback()`: stderr 3차 Fallback 추가
+- [x] **[Review 8]** `_store_throttle_rejection_to_dlq()`: `original_trace_id` metadata 추가
+- [x] **[Review 8]** `_store_throttle_rejection_to_dlq()`: `tier_id` metadata 추가
+- [x] **[Review 9]** `_store_throttle_rejection_to_dlq()`: `context.get("hedged")` 필터 추가
+- [x] **[Review 9]** `throttle_rejection_hedged_skipped_total` 메트릭 추가
 
 **P3 — 개선 사항**
-- [ ] **[Review 5]** `_calculate_adaptive_replay_interval()` 메서드 추가
-- [ ] **[Review 5]** `_calculate_adaptive_batch_size()` 메서드 추가
-- [ ] **[Review 5]** `throttle_replay_adaptive_interval_ms` Gauge 메트릭 추가
+- [x] **[Review 5]** `_calculate_adaptive_replay_interval()` 메서드 추가
+- [x] **[Review 5]** `_calculate_adaptive_batch_size()` 메서드 추가
+- [x] **[Review 5]** `throttle_replay_adaptive_interval_ms` Gauge 메트릭 추가
 
 ---
 

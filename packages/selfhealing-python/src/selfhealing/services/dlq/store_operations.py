@@ -187,6 +187,13 @@ class StoreOperationsMixin:
                 }
             )
             logger.info(f"[DLQService] Fallback saved to DiskPersistentBuffer: " f"domain={entry_data.get('domain')}")
+            # Fallback 채널 메트릭 기록 (Fail-Open)
+            try:
+                from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
+
+                throttle_dlq_fallback_total.labels(channel="disk_persistent_buffer").inc()
+            except Exception:
+                pass
             return "disk_persistent_buffer://dlq_fallback"
         except ImportError:
             logger.debug("[DLQService] DiskPersistentBuffer not available")
@@ -209,6 +216,13 @@ class StoreOperationsMixin:
                     f.write(json.dumps(fallback_entry, default=str) + "\n")
 
                 logger.info(f"[DLQService] Fallback entry saved to JSONL: " f"domain={entry_data.get('domain')}")
+                # Fallback 채널 메트릭 기록 (Fail-Open)
+                try:
+                    from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
+
+                    throttle_dlq_fallback_total.labels(channel="jsonl").inc()
+                except Exception:
+                    pass
                 return str(DLQ_FALLBACK_PATH)
 
         except Exception as fallback_error:
@@ -224,6 +238,13 @@ class StoreOperationsMixin:
             logger.critical(
                 f"[DLQService] CRITICAL: All fallback methods failed! " f"DB: {original_error}, JSONL: {fallback_error}"
             )
+            # Fallback 채널 메트릭 기록 (Fail-Open)
+            try:
+                from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
+
+                throttle_dlq_fallback_total.labels(channel="stderr").inc()
+            except Exception:
+                pass
             return None
 
     def store_with_forensic_context(

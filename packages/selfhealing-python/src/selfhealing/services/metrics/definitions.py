@@ -552,3 +552,63 @@ retry_critical_tier_grace_retries_total = get_or_create_counter(
     "Total CRITICAL tier grace retries during FULL_STOP",
     ["domain"],
 )
+
+
+# =============================================================================
+# Throttle DLQ Replay Integration Metrics (거부 요청 DLQ 저장/Replay 연동)
+# =============================================================================
+
+throttle_rejection_dlq_stored_total = get_or_create_counter(
+    "selfhealing_throttle_rejection_dlq_stored_total",
+    "Total throttle rejections stored to DLQ",
+    ["reason", "domain"],
+)
+
+throttle_recovery_replay_total = get_or_create_counter(
+    "selfhealing_throttle_recovery_replay_total",
+    "Total entries replayed on throttle recovery",
+    ["domain", "result"],
+)
+
+throttle_replay_delay_seconds = get_or_create_histogram(
+    "selfhealing_throttle_replay_delay_seconds",
+    "Time between rejection and successful replay",
+    ["domain"],
+    buckets=(1, 5, 10, 30, 60, 120, 300, 600),
+)
+
+throttle_rejection_sampled_out_total = get_or_create_counter(
+    "selfhealing_throttle_rejection_sampled_out_total",
+    "Total throttle rejections filtered by sampling",
+    ["tier_id", "reason"],
+)
+
+throttle_rejection_hedged_skipped_total = get_or_create_counter(
+    "selfhealing_throttle_rejection_hedged_skipped_total",
+    "Total hedged requests skipped from DLQ storage",
+    ["domain"],
+)
+
+throttle_replay_ttl_expired_total = get_or_create_counter(
+    "selfhealing_throttle_replay_ttl_expired_total",
+    "Total entries skipped due to TTL expiry during replay",
+    ["domain"],
+)
+
+throttle_replay_permanently_failed_total = get_or_create_counter(
+    "selfhealing_throttle_replay_permanently_failed_total",
+    "Total entries marked permanently_failed (max_retries exhausted)",
+    ["domain"],
+)
+
+throttle_replay_adaptive_interval_ms = get_or_create_gauge(
+    "selfhealing_throttle_replay_adaptive_interval_ms",
+    "Current adaptive replay interval based on capacity ratio",
+    ["service"],
+)
+
+throttle_dlq_fallback_total = get_or_create_counter(
+    "selfhealing_throttle_dlq_fallback_total",
+    "Total DLQ fallback writes by channel",
+    ["channel"],
+)

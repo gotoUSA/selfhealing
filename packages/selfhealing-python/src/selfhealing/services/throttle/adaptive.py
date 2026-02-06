@@ -1392,9 +1392,19 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
                         gradient=gradient,
                     )
 
-    def check(self, key: str, tier_id: str = "standard") -> ThrottleResult:
+    def check(
+        self,
+        key: str,
+        tier_id: str = "standard",
+        context: dict | None = None,
+        store_rejection: bool = True,
+    ) -> ThrottleResult:
         """
         Check if request is allowed with adaptive info and priority protection.
+
+        거부 시 DLQ 자동 저장:
+        - context가 제공되고 store_rejection=True이면 거부 요청을 DLQ에 저장
+        - store_rejection=False이면 DLQ 저장 생략 (Replay 거부 등 순환 방지)
 
         Error Budget Gate 통합:
         - ERROR_BUDGET_CRITICAL 상태 시 non_essential 티어 추가 거부
@@ -1402,6 +1412,8 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         Args:
             key: 요청 식별자
             tier_id: 요청 티어 (critical/standard/non_essential)
+            context: 요청 컨텍스트 (DLQ 저장용, domain/tier_id/trace_id 등)
+            store_rejection: 거부 시 DLQ 저장 여부 (기본 True)
 
         Returns:
             ThrottleResult with adaptive info
@@ -1433,7 +1445,7 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
                     trace_id=trace_id,
                 )
 
-                return ThrottleResult(
+                result = ThrottleResult(
                     allowed=False,
                     current_count=0,
                     limit=self._current_limit,
@@ -1441,6 +1453,12 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
                     reset_at=0,
                     reason="error_budget_critical_non_essential_blocked",
                 )
+
+                # 거부 시 DLQ 자동 저장
+                if store_rejection and context:
+                    self._auto_store_rejection_to_dlq(context, result.reason)
+
+                return result
 
         # 429 감소 상태에서 CRITICAL 티어 보호
         if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
@@ -1474,7 +1492,27 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
             trace_id=trace_id,
         )
 
+        # 거부 시 DLQ 자동 저장
+        if not result.allowed and store_rejection and context:
+            self._auto_store_rejection_to_dlq(context, result.reason or self.get_rejection_reason())
+
         return result
+
+    def _auto_store_rejection_to_dlq(
+        self,
+        context: dict,
+        rejection_reason: str,
+    ) -> None:
+        """
+        check() 거부 시 DLQ 자동 저장 (Fail-Open).
+
+        ThrottleDLQReplayMixin.store_throttle_rejection_to_dlq() 위임.
+        DLQ 서비스 미사용 또는 예외 시 무시하고 Throttle 동작 계속.
+        """
+        try:
+            self.store_throttle_rejection_to_dlq(context, rejection_reason)
+        except Exception as e:
+            logger.debug(f"[AdaptiveThrottle] DLQ auto-store failed (Fail-Open): {e}")
 
     def get_stats(self) -> dict:
         """Get adaptive throttle statistics."""

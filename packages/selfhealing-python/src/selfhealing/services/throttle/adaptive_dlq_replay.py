@@ -26,6 +26,50 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Prometheus 메트릭 (Fail-Open: import 실패 시 기록 생략)
+# =============================================================================
+
+_DLQ_METRICS_AVAILABLE = False
+_throttle_rejection_dlq_stored_total = None
+_throttle_rejection_sampled_out_total = None
+_throttle_rejection_hedged_skipped_total = None
+_throttle_recovery_replay_total = None
+_throttle_replay_adaptive_interval_ms = None
+_throttle_replay_permanently_failed_total = None
+
+try:
+    from selfhealing.services.metrics.definitions import (
+        throttle_rejection_dlq_stored_total as _throttle_rejection_dlq_stored_total,
+        throttle_rejection_sampled_out_total as _throttle_rejection_sampled_out_total,
+        throttle_rejection_hedged_skipped_total as _throttle_rejection_hedged_skipped_total,
+        throttle_recovery_replay_total as _throttle_recovery_replay_total,
+        throttle_replay_adaptive_interval_ms as _throttle_replay_adaptive_interval_ms,
+        throttle_replay_permanently_failed_total as _throttle_replay_permanently_failed_total,
+    )
+
+    _DLQ_METRICS_AVAILABLE = True
+except ImportError:
+    pass
+
+
+def _record_dlq_replay_metric(
+    metric,
+    labels: dict[str, str],
+    value: float | None = None,
+) -> None:
+    """Prometheus 메트릭 기록 (Fail-Open). Counter는 inc, Gauge는 set."""
+    if not _DLQ_METRICS_AVAILABLE or metric is None:
+        return
+    try:
+        if value is not None:
+            metric.labels(**labels).set(value)
+        else:
+            metric.labels(**labels).inc()
+    except Exception:
+        pass
+
+
 class ThrottleDLQReplayMixin:
     """
     AdaptiveThrottle에 DLQ 거부 저장 및 Recovery Replay 기능을 추가하는 Mixin.
@@ -93,6 +137,10 @@ class ThrottleDLQReplayMixin:
         # Hedging 보조 요청 필터 (HedgingResult.hedged=True인 보조 요청 제외)
         if context.get("hedged", False):
             logger.debug("[AdaptiveThrottle] Skipping DLQ store for hedged request")
+            _record_dlq_replay_metric(
+                _throttle_rejection_hedged_skipped_total,
+                {"domain": context.get("domain", "throttle_rejection")},
+            )
             return
 
         # tier_id 기반 샘플링
@@ -100,12 +148,20 @@ class ThrottleDLQReplayMixin:
 
         if tier_id == "non_essential":
             logger.debug("[AdaptiveThrottle] Skipping DLQ store for non_essential tier")
+            _record_dlq_replay_metric(
+                _throttle_rejection_sampled_out_total,
+                {"tier_id": "non_essential", "reason": "non_essential"},
+            )
             return
 
         if tier_id == "standard":
             sampling_rate = getattr(self.config, "dlq_store_sampling_rate", 1.0)
             if random.random() > sampling_rate:
                 logger.debug(f"[AdaptiveThrottle] Sampled out DLQ store " f"(rate={sampling_rate})")
+                _record_dlq_replay_metric(
+                    _throttle_rejection_sampled_out_total,
+                    {"tier_id": "standard", "reason": "sampling_rate"},
+                )
                 return
 
         # DLQ 저장 실행
@@ -132,6 +188,12 @@ class ThrottleDLQReplayMixin:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
                 recommended_action="auto_replay",
+            )
+
+            # 메트릭 기록: DLQ 저장 성공
+            _record_dlq_replay_metric(
+                _throttle_rejection_dlq_stored_total,
+                {"reason": rejection_reason, "domain": context.get("domain", "throttle_rejection")},
             )
 
             # EventBus 이벤트 발행
@@ -283,6 +345,10 @@ class ThrottleDLQReplayMixin:
                     self._dlq_service.resolve_entry(entry.id, notes="permanently_failed")
                 except Exception:
                     pass
+                _record_dlq_replay_metric(
+                    _throttle_replay_permanently_failed_total,
+                    {"domain": entry.domain},
+                )
                 failed += 1
                 continue
 
@@ -294,12 +360,25 @@ class ThrottleDLQReplayMixin:
 
             if result.success:
                 replayed += 1
+                _record_dlq_replay_metric(
+                    _throttle_recovery_replay_total,
+                    {"domain": entry.domain, "result": "succeeded"},
+                )
             else:
                 failed += 1
+                _record_dlq_replay_metric(
+                    _throttle_recovery_replay_total,
+                    {"domain": entry.domain, "result": "failed"},
+                )
 
             # Adaptive Pacing: 배치 크기마다 용량 비율 기반 대기
             if (replayed + failed) % self._replay_batch_size == 0:
                 adaptive_interval = self._calculate_adaptive_replay_interval()
+                _record_dlq_replay_metric(
+                    _throttle_replay_adaptive_interval_ms,
+                    {"service": getattr(self, "_service_name", "unknown")},
+                    value=adaptive_interval,
+                )
                 time.sleep(adaptive_interval / 1000)
 
         # Replay 완료 이벤트

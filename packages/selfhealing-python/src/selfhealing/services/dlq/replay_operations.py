@@ -176,6 +176,17 @@ class ReplayOperationsMixin:
                     resolution_type="ttl_expired",
                     resolution_note=f"Expired at {entry.expires_at.isoformat()}",
                 )
+                # TTL 만료 메트릭 기록 (Fail-Open)
+                try:
+                    from selfhealing.services.metrics.definitions import (
+                        throttle_replay_ttl_expired_total,
+                    )
+
+                    throttle_replay_ttl_expired_total.labels(
+                        domain=entry.domain,
+                    ).inc()
+                except Exception:
+                    pass
                 return DLQThrottleReplayResult(
                     success=False,
                     error=f"Entry expired at {entry.expires_at.isoformat()}",
