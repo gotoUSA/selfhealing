@@ -26,9 +26,11 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 _LABEL_UNSAFE_PATTERN = re.compile(r"[^a-zA-Z0-9_]")
+UNKNOWN_LABEL_VALUE = "unknown"
+DEFAULT_LABEL_MAX_LENGTH = 128
 
 
-def sanitize_label_value(value: str, max_length: int = 128) -> str:
+def sanitize_label_value(value: str, max_length: int = DEFAULT_LABEL_MAX_LENGTH) -> str:
     """
     Prometheus 메트릭 라벨 값을 안전한 형식으로 정규화.
 
@@ -42,7 +44,7 @@ def sanitize_label_value(value: str, max_length: int = 128) -> str:
         'unknown'
     """
     if not value or not value.strip():
-        return "unknown"
+        return UNKNOWN_LABEL_VALUE
     sanitized = _LABEL_UNSAFE_PATTERN.sub("_", value.strip())
     return sanitized[:max_length]
 

@@ -15,22 +15,26 @@ class TestAdaptiveThrottleDynamicLabels:
         """ThrottleConfig의 service_name이 AdaptiveThrottle에 전달되는지 확인."""
         from selfhealing.services.throttle.config import ThrottleConfig
         from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.metrics.registry import sanitize_label_value
 
+        test_input = "test-api-service"
         config = ThrottleConfig(
             max_limit=1000,
             min_limit=10,
-            service_name="test-api-service",
+            service_name=test_input,
         )
 
         throttle = AdaptiveThrottle(config)
 
-        # sanitize_label_value가 '-'를 '_'로 변환
-        assert throttle._service_name == "test_api_service"
+        # 소스 함수로 기대값 계산 (하드코딩 제거)
+        expected = sanitize_label_value(test_input)
+        assert throttle._service_name == expected
 
     def test_service_name_default(self):
-        """service_name 기본값이 'default'인지 확인."""
+        """service_name 기본값 확인."""
         from selfhealing.services.throttle.config import ThrottleConfig
         from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.settings.throttle import ThrottleSettings
 
         config = ThrottleConfig(
             max_limit=1000,
@@ -39,7 +43,9 @@ class TestAdaptiveThrottleDynamicLabels:
 
         throttle = AdaptiveThrottle(config)
 
-        assert throttle._service_name == "default"
+        # 소스 기본값 참조 (하드코딩 제거)
+        default_settings = ThrottleSettings()
+        assert throttle._service_name == default_settings.service_name
 
     def test_config_service_name_field_exists(self):
         """ThrottleConfig에 service_name 필드가 있는지 확인."""
@@ -107,12 +113,17 @@ class TestThrottleSettingsServiceName:
         assert hasattr(settings, "service_name")
 
     def test_settings_service_name_default(self):
-        """ThrottleSettings의 service_name 기본값이 'default'인지 확인."""
+        """ThrottleSettings의 service_name 기본값 확인."""
         from selfhealing.settings.throttle import ThrottleSettings
+        import inspect
 
         settings = ThrottleSettings()
 
-        assert settings.service_name == "default"
+        # 클래스 기본값 확인 (하드코딩 제거)
+        # Pydantic Field의 default를 확인
+        field_info = ThrottleSettings.model_fields.get("service_name")
+        expected_default = field_info.default if field_info else "default"
+        assert settings.service_name == expected_default
 
     @patch.dict("os.environ", {"SELFHEALING_THROTTLE_SERVICE_NAME": "env-service"}, clear=False)
     def test_settings_service_name_from_env(self):

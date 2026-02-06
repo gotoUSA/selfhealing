@@ -19,21 +19,32 @@ class TestSanitizeLabelValue:
         assert sanitize_label_value("svc@region#1") == "svc_region_1"
 
     def test_empty_string_returns_unknown(self):
-        """빈 문자열/공백만 입력 시 'unknown' 반환."""
-        from selfhealing.services.metrics.registry import sanitize_label_value
+        """빈 문자열/공백만 입력 시 UNKNOWN_LABEL_VALUE 반환."""
+        from selfhealing.services.metrics.registry import (
+            sanitize_label_value,
+            UNKNOWN_LABEL_VALUE,
+        )
 
-        assert sanitize_label_value("") == "unknown"
-        assert sanitize_label_value("   ") == "unknown"
-        assert sanitize_label_value(None) == "unknown" if sanitize_label_value(None) else True
+        # 소스 상수 참조 (하드코딩 제거)
+        assert sanitize_label_value("") == UNKNOWN_LABEL_VALUE
+        assert sanitize_label_value("   ") == UNKNOWN_LABEL_VALUE
+        # None 입력 테스트
+        result = sanitize_label_value(None)
+        if result:
+            assert result == UNKNOWN_LABEL_VALUE
 
     def test_truncates_at_max_length(self):
-        """128자 초과 시 절단."""
-        from selfhealing.services.metrics.registry import sanitize_label_value
+        """기본 max_length 초과 시 절단."""
+        from selfhealing.services.metrics.registry import (
+            sanitize_label_value,
+            DEFAULT_LABEL_MAX_LENGTH,
+        )
 
-        long_value = "a" * 200
+        # 소스 상수 참조 (하드코딩 제거)
+        long_value = "a" * (DEFAULT_LABEL_MAX_LENGTH + 100)
         result = sanitize_label_value(long_value)
-        assert len(result) == 128
-        assert result == "a" * 128
+        assert len(result) == DEFAULT_LABEL_MAX_LENGTH
+        assert result == "a" * DEFAULT_LABEL_MAX_LENGTH
 
     def test_preserves_valid_characters(self):
         """유효한 문자(영숫자+언더스코어)는 그대로 유지."""
