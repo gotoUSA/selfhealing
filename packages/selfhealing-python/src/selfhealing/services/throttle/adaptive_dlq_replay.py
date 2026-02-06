@@ -1,0 +1,372 @@
+"""
+AdaptiveThrottle DLQ Replay 연동 모듈.
+
+Throttle 거부 요청을 DLQ에 저장하고, Recovery 시 자동 Replay하는 기능 제공.
+
+주요 기능:
+- Throttle 거부 시 DLQ 저장 (Hedging 필터, tier_id 샘플링, trace_id 보존)
+- Recovery 이벤트 수신 시 자동 Replay 트리거
+- Adaptive Pacing: capacity_ratio 기반 간격/배치 동적 조정
+- Death Spiral 방지: get_replayable_entries() + can_retry 가드
+"""
+
+from __future__ import annotations
+
+import logging
+import random
+import threading
+import time
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.services.dlq import DLQService
+    from selfhealing.services.throttle.config import ThrottleConfig
+
+logger = logging.getLogger(__name__)
+
+
+class ThrottleDLQReplayMixin:
+    """
+    AdaptiveThrottle에 DLQ 거부 저장 및 Recovery Replay 기능을 추가하는 Mixin.
+
+    사용법:
+        AdaptiveThrottle 클래스에서 이 Mixin의 메서드를 호출하여
+        거부 요청을 DLQ에 저장하고, Recovery 시 자동 Replay를 수행.
+    """
+
+    def _init_dlq_replay_integration(self) -> None:
+        """
+        DLQ Replay 연동 초기화.
+
+        DLQ 서비스 로딩 및 Recovery 이벤트 구독.
+        Fail-Open: DLQ 불가 시에도 Throttle 본연의 기능에 영향 없음.
+        """
+        self._dlq_service: DLQService | None = None
+        self._dlq_replay_enabled: bool = getattr(self.config, "dlq_on_rejection", True)
+        self._auto_replay_on_recovery: bool = getattr(self.config, "auto_replay_on_recovery", True)
+        self._replay_batch_size: int = getattr(self.config, "replay_batch_size", 10)
+        self._replay_interval_ms: int = getattr(self.config, "replay_interval_ms", 100)
+        self._replay_min_recovery_percent: float = getattr(self.config, "replay_min_recovery_percent", 50.0)
+
+        if self._dlq_replay_enabled:
+            self._load_dlq_service()
+
+        if self._auto_replay_on_recovery:
+            self._subscribe_recovery_for_dlq_replay()
+
+    def _load_dlq_service(self) -> None:
+        """DLQ 서비스 로드 (Fail-Open: import 실패 시 None)."""
+        try:
+            from selfhealing.services.dlq import get_dlq_service
+
+            self._dlq_service = get_dlq_service()
+        except Exception:
+            self._dlq_service = None
+            logger.debug("[AdaptiveThrottle] DLQ service not available, " "rejection storage disabled")
+
+    # =========================================================================
+    # Throttle 거부 시 DLQ 저장
+    # =========================================================================
+
+    def store_throttle_rejection_to_dlq(
+        self,
+        context: dict[str, Any],
+        rejection_reason: str,
+    ) -> None:
+        """
+        Throttle 거부된 요청을 DLQ에 저장.
+
+        필터링 순서:
+        1. Hedging 보조 요청 필터 (hedged=True → 저장 스킵)
+        2. tier_id 기반 샘플링 (critical=100%, standard=sampling_rate, non_essential=스킵)
+
+        저장 시 metadata에 throttle_state, original_trace_id, tier_id 포함.
+
+        Args:
+            context: 요청 컨텍스트 (domain, tier_id, hedged, trace_id 등)
+            rejection_reason: 거부 사유 (full_stop, emergency_level_N, capacity_exceeded 등)
+        """
+        if not self._dlq_service:
+            return
+
+        # Hedging 보조 요청 필터 (HedgingResult.hedged=True인 보조 요청 제외)
+        if context.get("hedged", False):
+            logger.debug("[AdaptiveThrottle] Skipping DLQ store for hedged request")
+            return
+
+        # tier_id 기반 샘플링
+        tier_id = context.get("tier_id", "standard")
+
+        if tier_id == "non_essential":
+            logger.debug("[AdaptiveThrottle] Skipping DLQ store for non_essential tier")
+            return
+
+        if tier_id == "standard":
+            sampling_rate = getattr(self.config, "dlq_store_sampling_rate", 1.0)
+            if random.random() > sampling_rate:
+                logger.debug(f"[AdaptiveThrottle] Sampled out DLQ store " f"(rate={sampling_rate})")
+                return
+
+        # DLQ 저장 실행
+        try:
+            self._dlq_service.store_failure(
+                domain=context.get("domain", "throttle_rejection"),
+                failure_type="throttle_rejected",
+                entity_type=context.get("entity_type"),
+                entity_id=context.get("entity_id"),
+                error_code=f"THROTTLE_{rejection_reason.upper()}",
+                error_message=f"Request rejected by AdaptiveThrottle: {rejection_reason}",
+                request_data=context.get("request_data", {}),
+                metadata={
+                    "throttle_state": {
+                        "current_limit": self._current_limit,
+                        "initial_limit": self.config.initial_limit,
+                        "emergency_level": self._emergency_level,
+                        "full_stop_active": self._full_stop_active,
+                        "rejection_reason": rejection_reason,
+                    },
+                    "original_trace_id": context.get("trace_id"),
+                    "tier_id": tier_id,
+                    "request_id": context.get("request_id"),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                recommended_action="auto_replay",
+            )
+
+            # EventBus 이벤트 발행
+            self._emit_rejection_stored_event(
+                entry_domain=context.get("domain", "throttle_rejection"),
+                rejection_reason=rejection_reason,
+                tier_id=tier_id,
+            )
+
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to store rejection to DLQ: {e}")
+
+    def _emit_rejection_stored_event(
+        self,
+        entry_domain: str,
+        rejection_reason: str,
+        tier_id: str,
+    ) -> None:
+        """Throttle 거부 DLQ 저장 이벤트 발행 (Fail-Open)."""
+        try:
+            from selfhealing.services.throttle.adaptive import _emit_throttle_event
+
+            _emit_throttle_event(
+                "THROTTLE_REJECTION_STORED",
+                {
+                    "domain": entry_domain,
+                    "reason": rejection_reason,
+                    "tier_id": tier_id,
+                },
+            )
+        except Exception:
+            pass
+
+    def get_rejection_reason(self) -> str:
+        """현재 Throttle 상태 기반 거부 사유 결정."""
+        if self._full_stop_active:
+            return "full_stop"
+        if self._emergency_level >= 3:
+            return f"emergency_level_{self._emergency_level}"
+        if self._current_limit <= 0:
+            return "limit_exhausted"
+        return "capacity_exceeded"
+
+    # =========================================================================
+    # Recovery 시 자동 Replay
+    # =========================================================================
+
+    def _subscribe_recovery_for_dlq_replay(self) -> None:
+        """THROTTLE_LIMIT_RECOVERED 이벤트 구독하여 자동 DLQ Replay 트리거."""
+        try:
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            bus = get_event_bus()
+            bus.subscribe(
+                EventType.THROTTLE_LIMIT_RECOVERED,
+                self._on_recovery_trigger_dlq_replay,
+            )
+            logger.info("[AdaptiveThrottle] Subscribed to THROTTLE_LIMIT_RECOVERED " "for DLQ auto-replay")
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] EventBus not available, " "auto-replay subscription skipped")
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to subscribe recovery for replay: {e}")
+
+    def _on_recovery_trigger_dlq_replay(self, event) -> None:
+        """
+        Recovery 이벤트 수신 시 DLQ Replay 트리거.
+
+        replay_min_recovery_percent 미만이면 Replay 스킵.
+        데몬 스레드에서 비동기로 실행하여 EventBus 블록을 방지.
+        """
+        if not self._dlq_service:
+            return
+
+        event_data = event.data if hasattr(event, "data") else event
+        previous_limit = event_data.get("previous_limit", 0)
+        new_limit = event_data.get("new_limit", 0)
+
+        # Recovery percent 계산 (initial_limit 기준)
+        if self.config.initial_limit > 0:
+            recovery_percent = (new_limit / self.config.initial_limit) * 100
+        else:
+            recovery_percent = 0
+
+        if recovery_percent < self._replay_min_recovery_percent:
+            logger.debug(
+                f"[AdaptiveThrottle] Recovery {recovery_percent:.1f}% "
+                f"< {self._replay_min_recovery_percent}%, skipping DLQ replay"
+            )
+            return
+
+        # 비동기 Replay (EventBus 핸들러 블록 방지)
+        thread = threading.Thread(
+            target=self._execute_dlq_replay_on_recovery,
+            kwargs={"recovery_percent": recovery_percent},
+            daemon=True,
+        )
+        thread.start()
+
+    def _execute_dlq_replay_on_recovery(self, recovery_percent: float) -> None:
+        """
+        Throttle Recovery 후 DLQ Replay 실행.
+
+        get_replayable_entries()로 retry_count < max_retries 엔트리만 조회.
+        Throttle 건강 상태 확인 및 Adaptive Pacing 적용.
+        """
+        if not self._dlq_service:
+            return
+
+        try:
+            from selfhealing.services.throttle.adaptive import _emit_throttle_event
+
+            _emit_throttle_event(
+                "THROTTLE_REJECTION_REPLAY_STARTED",
+                {"recovery_percent": recovery_percent},
+            )
+        except Exception:
+            pass
+
+        # get_replayable_entries() 사용 (retry_count < max_retries 자동 필터)
+        pending_entries = self._dlq_service.get_replayable_entries(
+            domain="throttle_rejection",
+            limit=self._replay_batch_size,
+        )
+
+        if not pending_entries:
+            return
+
+        logger.info(
+            f"[AdaptiveThrottle] Starting DLQ replay for " f"{len(pending_entries)} entries (recovery={recovery_percent:.1f}%)"
+        )
+
+        replayed = 0
+        failed = 0
+
+        for entry in pending_entries:
+            # Throttle 건강 상태 재확인
+            if not self._is_healthy_for_dlq_replay():
+                logger.warning(f"[AdaptiveThrottle] Throttle health degraded, " f"pausing DLQ replay (replayed={replayed})")
+                break
+
+            # can_retry 소진 확인 (FailedOperationData.can_retry)
+            if not entry.can_retry:
+                logger.warning(
+                    f"[AdaptiveThrottle] Entry {entry.id} exhausted retries "
+                    f"({entry.retry_count}/{entry.max_retries}), "
+                    f"marking permanently_failed"
+                )
+                try:
+                    self._dlq_service.resolve_entry(entry.id, notes="permanently_failed")
+                except Exception:
+                    pass
+                failed += 1
+                continue
+
+            # Replay 실행 (replay_throttle_aware)
+            result = self._dlq_service.replay_throttle_aware(
+                entry_id=entry.id,
+                throttle=self,
+            )
+
+            if result.success:
+                replayed += 1
+            else:
+                failed += 1
+
+            # Adaptive Pacing: 배치 크기마다 용량 비율 기반 대기
+            if (replayed + failed) % self._replay_batch_size == 0:
+                adaptive_interval = self._calculate_adaptive_replay_interval()
+                time.sleep(adaptive_interval / 1000)
+
+        # Replay 완료 이벤트
+        try:
+            from selfhealing.services.throttle.adaptive import _emit_throttle_event
+
+            _emit_throttle_event(
+                "THROTTLE_REJECTION_REPLAY_COMPLETED",
+                {
+                    "replayed": replayed,
+                    "failed": failed,
+                    "remaining": len(pending_entries) - replayed - failed,
+                },
+            )
+        except Exception:
+            pass
+
+    def _is_healthy_for_dlq_replay(self) -> bool:
+        """Replay 계속 가능 여부 확인 (Full Stop, Emergency, 50% 미만 capacity 시 중단)."""
+        if self._full_stop_active:
+            return False
+        if self._emergency_level > 0:
+            return False
+        capacity_ratio = self._current_limit / max(self.config.initial_limit, 1)
+        if capacity_ratio < 0.5:
+            return False
+        return True
+
+    # =========================================================================
+    # Adaptive Pacing (capacity_ratio 기반 동적 간격)
+    # =========================================================================
+
+    def _calculate_adaptive_replay_interval(self) -> float:
+        """
+        Throttle capacity_ratio 기반 동적 Replay 간격 계산.
+
+        90%+ → 기본 간격, 70~90% → 2배, 50~70% → 4배, 50% 미만 → 10배.
+
+        Returns:
+            밀리초 단위 간격
+        """
+        capacity_ratio = self._current_limit / max(self.config.initial_limit, 1)
+
+        if capacity_ratio >= 0.9:
+            return self._replay_interval_ms
+        elif capacity_ratio >= 0.7:
+            return self._replay_interval_ms * 2
+        elif capacity_ratio >= 0.5:
+            return self._replay_interval_ms * 4
+        else:
+            return self._replay_interval_ms * 10
+
+    def _calculate_adaptive_batch_size(self) -> int:
+        """
+        ThrottleResult.remaining 기반 동적 배치 크기 계산.
+
+        남은 permit의 50% 이내에서 배치 크기 결정.
+
+        Returns:
+            동적 배치 크기 (최소 1)
+        """
+        try:
+            check_result = self.check(
+                key=f"{self.config.key_prefix}:replay_probe",
+                tier_id="standard",
+            )
+            adaptive_size = max(1, check_result.remaining // 2)
+            return min(adaptive_size, self._replay_batch_size)
+        except Exception:
+            return self._replay_batch_size

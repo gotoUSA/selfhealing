@@ -35,6 +35,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from selfhealing.services.throttle.adaptive_dlq_replay import ThrottleDLQReplayMixin
 from selfhealing.services.throttle.base import SlidingWindowThrottle
 from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
 
@@ -498,12 +499,13 @@ EMERGENCY_LEVEL_LIMIT_MULTIPLIERS: dict[int, float] = {
 PROTECTED_TIERS_ON_429: set[str] = {"critical"}
 
 
-class AdaptiveThrottle(SlidingWindowThrottle):
+class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
     """
     Netflix Gradient-based Adaptive Throttle.
 
     Dynamically adjusts rate limits based on response time trends.
     Extends SlidingWindowThrottle with gradient-based limit adjustment.
+    Includes DLQ integration for throttle rejection storage and recovery replay.
 
     Emergency Mode 연동:
     - Emergency Level에 따라 limit 자동 조정
@@ -590,6 +592,12 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         # EventBus 구독 등록
         self._subscribe_rate_limit_events()
         self._subscribe_error_budget_events()
+
+        # DLQ Replay 연동 초기화 (Fail-Open)
+        try:
+            self._init_dlq_replay_integration()
+        except Exception:
+            logger.debug("[AdaptiveThrottle] DLQ replay integration init skipped")
 
     # =========================================================================
     # 429 Rate Limit EventBus 연동

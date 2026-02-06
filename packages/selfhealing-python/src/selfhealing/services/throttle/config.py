@@ -44,6 +44,17 @@ class ThrottleConfig:
     # Prometheus metrics service label
     service_name: str = field(default_factory=lambda: get_throttle_settings().service_name)
 
+    # =========================================================================
+    # DLQ 연동 설정 (Throttle 거부 요청 DLQ 저장 및 Recovery 시 자동 Replay)
+    # =========================================================================
+    dlq_on_rejection: bool = True
+    auto_replay_on_recovery: bool = True
+    replay_batch_size: int = 10
+    replay_interval_ms: int = 100
+    replay_min_recovery_percent: float = 50.0
+    dlq_store_sampling_rate: float = 1.0
+    dlq_store_non_essential: bool = False
+
     @classmethod
     def from_settings(cls) -> ThrottleConfig:
         """Create config from settings."""
@@ -62,6 +73,7 @@ class ThrottleConfig:
             emergency_limit=settings.emergency_limit,
             key_prefix=settings.key_prefix,
             service_name=settings.service_name,
+            # DLQ 연동은 기본값 사용 (Settings에서 관리하지 않음)
         )
 
     @classmethod
@@ -82,6 +94,13 @@ class ThrottleConfig:
             emergency_limit=data.get("emergency_limit", settings.emergency_limit),
             key_prefix=data.get("key_prefix", settings.key_prefix),
             service_name=data.get("service_name", settings.service_name),
+            dlq_on_rejection=data.get("dlq_on_rejection", True),
+            auto_replay_on_recovery=data.get("auto_replay_on_recovery", True),
+            replay_batch_size=data.get("replay_batch_size", 10),
+            replay_interval_ms=data.get("replay_interval_ms", 100),
+            replay_min_recovery_percent=data.get("replay_min_recovery_percent", 50.0),
+            dlq_store_sampling_rate=data.get("dlq_store_sampling_rate", 1.0),
+            dlq_store_non_essential=data.get("dlq_store_non_essential", False),
         )
 
 

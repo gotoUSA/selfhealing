@@ -23,6 +23,8 @@ from selfhealing.services.dlq_models import (
     DLQBatchReplayStats,
     DLQConfig,
     DLQEntryResult,
+    DLQThrottleBatchReplayResult,
+    DLQThrottleReplayResult,
 )
 
 # Import base and mixins
@@ -124,6 +126,8 @@ __all__ = [
     "DLQConfig",
     "DLQEntryResult",
     "DLQBatchReplayStats",
+    "DLQThrottleReplayResult",
+    "DLQThrottleBatchReplayResult",
     # Service
     "DLQService",
     "DLQServiceBase",

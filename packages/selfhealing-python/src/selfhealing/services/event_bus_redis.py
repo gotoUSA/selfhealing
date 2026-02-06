@@ -91,6 +91,11 @@ EVENT_TYPE_TO_CHANNEL: dict[EventType, EventChannel] = {
     EventType.THROTTLE_SLA_WARNING: EventChannel.THROTTLE,
     EventType.THROTTLE_SLA_CRITICAL: EventChannel.GLOBAL,
     EventType.THROTTLE_LIMIT_RECOVERED: EventChannel.THROTTLE,
+    # Throttle + DLQ 연동
+    EventType.THROTTLE_REJECTION_STORED: EventChannel.THROTTLE,
+    EventType.THROTTLE_REJECTION_REPLAY_STARTED: EventChannel.THROTTLE,
+    EventType.THROTTLE_REJECTION_REPLAY_COMPLETED: EventChannel.THROTTLE,
+    EventType.THROTTLE_REJECTION_REPLAY_FAILED: EventChannel.THROTTLE,
 }
 
 # 기존 호환성을 위한 기본 채널

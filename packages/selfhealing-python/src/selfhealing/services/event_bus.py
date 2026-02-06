@@ -124,6 +124,21 @@ class EventType(Enum):
     RATE_LIMIT_COOLDOWN_END = "rate_limit_cooldown_end"
     """Rate Limit Cooldown 종료 (key, cooldown_ended_at 포함)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Throttle + DLQ 연동 이벤트
+    # ═══════════════════════════════════════════════════════════════════════════
+    THROTTLE_REJECTION_STORED = "throttle_rejection_stored"
+    """Throttle 거부 요청이 DLQ에 저장됨 (entry_id, reason, domain, tier_id 포함)."""
+
+    THROTTLE_REJECTION_REPLAY_STARTED = "throttle_rejection_replay_started"
+    """Throttle Recovery 시 DLQ Replay 시작 (recovery_percent 포함)."""
+
+    THROTTLE_REJECTION_REPLAY_COMPLETED = "throttle_rejection_replay_completed"
+    """Throttle Recovery DLQ Replay 완료 (replayed, failed, remaining 포함)."""
+
+    THROTTLE_REJECTION_REPLAY_FAILED = "throttle_rejection_replay_failed"
+    """Throttle Recovery DLQ Replay 실패 (error 포함)."""
+
 
 class EventPriority(Enum):
     """이벤트 처리 우선순위."""

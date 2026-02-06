@@ -173,3 +173,29 @@ class ResolveResult:
     resolved_at: str
     notes: str = ""
     error: str | None = None
+
+
+# =============================================================================
+# Throttle-aware Replay Result Data Classes
+# =============================================================================
+
+
+@dataclass
+class DLQThrottleReplayResult:
+    """Result of a single throttle-aware DLQ replay operation."""
+
+    success: bool
+    entry_id: int | None = None
+    error: str | None = None
+    retry_after: float | None = None  # Throttle 거부 시 재시도 대기 시간(초)
+
+
+@dataclass
+class DLQThrottleBatchReplayResult:
+    """Result of a batch throttle-aware DLQ replay operation."""
+
+    total: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    skipped: int = 0
+    early_stop_reason: str | None = None

@@ -159,21 +159,41 @@ class StoreOperationsMixin:
         original_error: str,
     ) -> str | None:
         """
-        Local file fallback for zero data loss.
+        3단계 Fallback 체인으로 DLQ 데이터 무손실 보장.
 
-        Repository(DB) 실패 시 로컬 파일에 저장하여 데이터 유실 방지.
-        나중에 reconciliation 프로세스가 복구 처리.
+        1차: DiskPersistentBuffer (LMDB) - CRC32 무결성, Group Commit, Pod 재시작 내구성
+        2차: JSONL 파일 - DiskPersistentBuffer 불가 시
+        3차: stderr 출력 - 모든 Fallback 실패 시 최소한의 기록
 
         Args:
             entry_data: DLQ 엔트리 데이터
             original_error: 원래 발생한 에러
 
         Returns:
-            저장된 파일 경로 (성공 시), None (실패 시)
-
-        Code reference:
-            coordination/critical_path_fallback.py#L230-245
+            저장된 경로 (성공 시), None (실패 시)
         """
+        # 1차: DiskPersistentBuffer (LMDB 기반, audit/persistence/disk_buffer.py)
+        try:
+            from selfhealing.audit.persistence.disk_buffer import DiskBufferAdapter
+
+            buffer = DiskBufferAdapter.get_instance()
+            buffer.put(
+                {
+                    "category": "dlq_fallback",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "original_error": original_error,
+                    "entry_data": entry_data,
+                    "pending_reconciliation": True,
+                }
+            )
+            logger.info(f"[DLQService] Fallback saved to DiskPersistentBuffer: " f"domain={entry_data.get('domain')}")
+            return "disk_persistent_buffer://dlq_fallback"
+        except ImportError:
+            logger.debug("[DLQService] DiskPersistentBuffer not available")
+        except Exception as e:
+            logger.warning(f"[DLQService] DiskPersistentBuffer failed: {e}")
+
+        # 2차: JSONL 파일 (기존 방식)
         try:
             with self._fallback_lock:
                 DLQ_FALLBACK_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -188,13 +208,21 @@ class StoreOperationsMixin:
                 with open(DLQ_FALLBACK_PATH, "a", encoding="utf-8") as f:
                     f.write(json.dumps(fallback_entry, default=str) + "\n")
 
-                logger.info(f"[DLQService] Fallback entry saved: domain={entry_data.get('domain')}")
+                logger.info(f"[DLQService] Fallback entry saved to JSONL: " f"domain={entry_data.get('domain')}")
                 return str(DLQ_FALLBACK_PATH)
 
         except Exception as fallback_error:
+            # 3차: stderr 출력 (최후 수단)
+            import sys
+
+            print(
+                f"[DLQ CRITICAL] All fallbacks failed. "
+                f"DB: {original_error}, JSONL: {fallback_error}. "
+                f"Data: {json.dumps(entry_data, default=str)[:500]}",
+                file=sys.stderr,
+            )
             logger.critical(
-                f"[DLQService] CRITICAL: Both DB and fallback failed! "
-                f"DB error: {original_error}, Fallback error: {fallback_error}"
+                f"[DLQService] CRITICAL: All fallback methods failed! " f"DB: {original_error}, JSONL: {fallback_error}"
             )
             return None
 
