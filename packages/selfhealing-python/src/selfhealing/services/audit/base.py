@@ -50,20 +50,12 @@ def _get_wal():
         config = WALConfig(
             wal_dir=wal_dir,
             max_file_size_mb=int(os.environ.get("AUDIT_WAL_MAX_FILE_SIZE_MB", 100)),
-            sync_on_write=os.environ.get("AUDIT_WAL_SYNC_ON_WRITE", "true").lower()
-            == "true",
+            sync_on_write=os.environ.get("AUDIT_WAL_SYNC_ON_WRITE", "true").lower() == "true",
             max_files=int(os.environ.get("AUDIT_WAL_MAX_FILES", 10)),
             file_prefix="audit_helpers_wal",
-            group_commit_enabled=os.environ.get(
-                "AUDIT_WAL_GROUP_COMMIT", "false"
-            ).lower()
-            == "true",
-            group_commit_max_entries=int(
-                os.environ.get("AUDIT_WAL_GROUP_COMMIT_MAX_ENTRIES", 100)
-            ),
-            group_commit_max_wait_ms=int(
-                os.environ.get("AUDIT_WAL_GROUP_COMMIT_MAX_WAIT_MS", 10)
-            ),
+            group_commit_enabled=os.environ.get("AUDIT_WAL_GROUP_COMMIT", "false").lower() == "true",
+            group_commit_max_entries=int(os.environ.get("AUDIT_WAL_GROUP_COMMIT_MAX_ENTRIES", 100)),
+            group_commit_max_wait_ms=int(os.environ.get("AUDIT_WAL_GROUP_COMMIT_MAX_WAIT_MS", 10)),
         )
 
         _wal_instance = WriteAheadLog(config=config)
@@ -127,16 +119,58 @@ def _get_celery_context() -> dict | None:
     return None
 
 
-def _save_to_memory_buffer(entry: dict) -> None:
-    """실패 시 메모리 버퍼에 저장."""
+def _save_to_fallback_buffer(entry: dict) -> None:
+    """
+    Fallback 버퍼에 저장.
+
+    Fallback 체인:
+    1. DiskPersistentBuffer (영속) - LMDB 기반, Pod 재시작에도 데이터 보존
+    2. InMemoryAuditBuffer (레거시 호환) - 휘발성
+    3. stderr (최후의 수단) - 로그 수집기가 캡처
+
+    WAL 기록 실패 시 호출되어 데이터 손실 방지.
+    """
+    # 1차: DiskPersistentBuffer (영속)
+    try:
+        from selfhealing.audit.persistence.disk_buffer import DiskPersistentBuffer
+
+        buffer = DiskPersistentBuffer.get_instance()
+        buffer.put(entry)
+        logger.debug("[AuditHelpers] Saved to DiskPersistentBuffer")
+        return
+
+    except ImportError:
+        logger.debug("[AuditHelpers] DiskPersistentBuffer not available")
+    except Exception as e:
+        logger.warning(f"[AuditHelpers] DiskPersistentBuffer failed: {e}")
+
+    # 2차: InMemoryAuditBuffer (레거시 호환)
     try:
         from selfhealing.audit.resilience import InMemoryAuditBuffer
 
         buffer = InMemoryAuditBuffer.get_instance()
         buffer.add(entry)
-        logger.warning("[AuditHelpers] Entry saved to in-memory buffer")
-    except Exception as buffer_error:
-        logger.critical(f"[AuditHelpers] Memory buffer also failed: {buffer_error}")
+        logger.warning("[AuditHelpers] Entry saved to in-memory buffer (fallback)")
+        return
+
+    except Exception as e:
+        logger.warning(f"[AuditHelpers] InMemoryAuditBuffer failed: {e}")
+
+    # 3차: stderr (최후의 수단)
+    import json
+    import sys
+
+    try:
+        sys.stderr.write(f"[AUDIT_FALLBACK] {json.dumps(entry)}\n")
+        sys.stderr.flush()
+        logger.error("[AuditHelpers] Entry written to stderr (last resort)")
+    except Exception as e:
+        logger.critical(f"[AuditHelpers] All fallback buffers failed: {e}")
+
+
+def _save_to_memory_buffer(entry: dict) -> None:
+    """실패 시 메모리 버퍼에 저장 (레거시 호환 별칭)."""
+    _save_to_fallback_buffer(entry)
 
 
 def _write_to_wal(
@@ -212,9 +246,7 @@ def _write_to_wal(
         # 성공 시 메모리 버퍼 플러시 시도
         _try_flush_memory_buffer()
 
-        logger.debug(
-            f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={final_trace_id}"
-        )
+        logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={final_trace_id}")
         return seq
     except Exception as e:
         logger.error(f"[AuditHelpers] WAL write failed (CRITICAL): {e}")
