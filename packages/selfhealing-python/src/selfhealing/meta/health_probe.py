@@ -17,6 +17,7 @@ from enum import Enum
 from typing import Any
 
 from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
+from selfhealing.meta.audit_probe import AuditSystemProbe
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +407,7 @@ class HealthProbeManager:
             DLQProbe(),
             RecoveryPipelineProbe(),
             RedisProbe(),
+            AuditSystemProbe(),
         ]
 
     def add_probe(self, probe: HealthProbe) -> None:

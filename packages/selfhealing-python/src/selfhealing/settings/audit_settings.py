@@ -158,6 +158,23 @@ class AuditSettings(BaseSettings):
         description="Redis Audit 버퍼 TTL (초). 기본 24시간.",
     )
 
+    # ==========================================================================
+    # Throttle Audit Sampling - 감사 이벤트 샘플링 비율
+    # ==========================================================================
+    sampling_rate_limit_adjusted: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="Limit 조정 이벤트 샘플링 비율 (0.1 = 10%). 고빈도 이벤트 제어용.",
+    )
+
+    sampling_rate_429: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="429 응답 이벤트 샘플링 비율 (0.5 = 50%). Rate limiting 시 과다 로깅 방지.",
+    )
+
 
 # ==========================================================================
 # Singleton 관리

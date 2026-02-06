@@ -652,6 +652,16 @@ class AdaptiveThrottle(SlidingWindowThrottle):
             priority_name="HIGH",
         )
 
+        # 감사 로깅 (429 응답 처리)
+        _record_audit_safe(
+            action="throttle_429_response",
+            old_limit=previous_limit,
+            new_limit=new_limit,
+            key=key,
+            consecutive_429s=consecutive,
+            reduction_percent=int((1 - reduction_percent) * 100),
+        )
+
     def _handle_cooldown_end(self, event) -> None:
         """
         Cooldown 종료 시 Recovery Dampening 시작.
@@ -838,6 +848,20 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         },
                         priority_name="HIGH",
                     )
+
+                # 감사 로깅 (SLA Critical → CascadeEvent 포함)
+                smoothed_rtt, _ = self._gradient_calculator.get_snapshot()
+                _record_audit_safe(
+                    action="throttle_sla_critical",
+                    old_limit=previous_limit,
+                    new_limit=self._current_limit,
+                    rtt_ms=rtt_ms,
+                    threshold_ms=self.config.sla_critical_ms,
+                    smoothed_rtt_ms=smoothed_rtt,
+                    gradient=gradient,
+                    trigger_source="sla_critical",
+                    extra_data={"reduction_percent": 30},
+                )
                 return
 
             if rtt_ms >= self.config.sla_warning_ms:
@@ -888,6 +912,19 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         },
                         priority_name="NORMAL",
                     )
+
+                # 감사 로깅 (SLA Warning)
+                smoothed_rtt, _ = self._gradient_calculator.get_snapshot()
+                _record_audit_safe(
+                    action="throttle_sla_warning",
+                    old_limit=previous_limit,
+                    new_limit=self._current_limit,
+                    rtt_ms=rtt_ms,
+                    threshold_ms=self.config.sla_warning_ms,
+                    smoothed_rtt_ms=smoothed_rtt,
+                    gradient=gradient,
+                    trigger_source="sla_warning",
+                )
                 return
 
             # Gradient-based adjustment
@@ -911,6 +948,19 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                         priority_name="NORMAL",
                     )
 
+                    # 감사 로깅 (Gradient 기반 limit 감소)
+                    smoothed_rtt, _ = self._gradient_calculator.get_snapshot()
+                    _record_audit_safe(
+                        action="throttle_limit_adjusted",
+                        old_limit=previous_limit,
+                        new_limit=self._current_limit,
+                        reason="gradient_increase",
+                        trigger_source="gradient",
+                        rtt_ms=rtt_ms,
+                        smoothed_rtt_ms=smoothed_rtt,
+                        gradient=gradient,
+                    )
+
             elif gradient < -0.05:  # RTT decreasing more than 5%
                 new_limit = self._current_limit + self.config.increase_step
                 logger.debug(f"[AdaptiveThrottle] Gradient={gradient:.3f} < 0, " f"limit: {self._current_limit} → {new_limit}")
@@ -929,6 +979,19 @@ class AdaptiveThrottle(SlidingWindowThrottle):
                             "rtt_ms": rtt_ms,
                         },
                         priority_name="NORMAL",
+                    )
+
+                    # 감사 로깅 (Gradient 기반 limit 증가)
+                    smoothed_rtt, _ = self._gradient_calculator.get_snapshot()
+                    _record_audit_safe(
+                        action="throttle_limit_adjusted",
+                        old_limit=previous_limit,
+                        new_limit=self._current_limit,
+                        reason="gradient_decrease",
+                        trigger_source="gradient",
+                        rtt_ms=rtt_ms,
+                        smoothed_rtt_ms=smoothed_rtt,
+                        gradient=gradient,
                     )
 
     def check(self, key: str, tier_id: str = "standard") -> ThrottleResult:
@@ -1381,6 +1444,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         except Exception as e:
             logger.warning(f"[AdaptiveThrottle] Failed to emit KILL_SWITCH: {e}")
 
+        # 감사 로깅 (Full Stop 활성화 → CascadeEvent 포함)
+        _record_audit_safe(
+            action="throttle_full_stop_activated",
+            old_limit=previous_limit,
+            new_limit=0,
+            full_stop_reason=reason,
+            trigger_source="full_stop",
+        )
+
     def deactivate_full_stop(self) -> None:
         """
         Full Stop 비활성화: limit 복구 시작.
@@ -1394,6 +1466,14 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self.start_recovery_dampening()
 
         logger.warning(f"[AdaptiveThrottle] FULL STOP DEACTIVATED, " f"starting recovery dampening")
+
+        # 감사 로깅 (Full Stop 비활성화 → CascadeEvent 포함)
+        _record_audit_safe(
+            action="throttle_full_stop_deactivated",
+            old_limit=0,
+            new_limit=self._current_limit,
+            trigger_source="full_stop_recovery",
+        )
 
     def is_full_stop_active(self) -> bool:
         """Full Stop 활성화 여부."""
@@ -1490,6 +1570,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         Emergency 비활성화 후 Thundering Herd 방지를 위해
         limit을 80% → 90% → 100%로 점진적으로 복구합니다.
         """
+        previous_limit = self._current_limit
         self._recovery_dampening_active = True
         self._recovery_dampening_step = 0
         self._recovery_dampening_last_time = time.time()
@@ -1499,6 +1580,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         self.current_limit = target_limit
 
         logger.info(f"[AdaptiveThrottle] Recovery dampening started: " f"step=0 (80%), limit={target_limit}")
+
+        # 감사 로깅 (Recovery Dampening 시작)
+        _record_audit_safe(
+            action="throttle_recovery_started",
+            old_limit=previous_limit,
+            new_limit=target_limit,
+            recovery_step=0,
+            recovery_multiplier=self.RECOVERY_DAMPENING_MULTIPLIERS[0],
+        )
 
     def advance_recovery_dampening(self) -> bool:
         """
@@ -1549,6 +1639,7 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         if not self._recovery_dampening_active:
             return
 
+        previous_limit = self._current_limit
         self._recovery_dampening_active = False
         self._recovery_dampening_step = 0
 
@@ -1557,6 +1648,15 @@ class AdaptiveThrottle(SlidingWindowThrottle):
 
         logger.info(
             f"[AdaptiveThrottle] Recovery dampening completed immediately: " f"limit={self._base_limit_before_emergency}"
+        )
+
+        # 감사 로깅 (Recovery Dampening 완료)
+        _record_audit_safe(
+            action="throttle_recovery_completed",
+            old_limit=previous_limit,
+            new_limit=self._base_limit_before_emergency,
+            recovery_step=len(self.RECOVERY_DAMPENING_MULTIPLIERS),
+            recovery_multiplier=1.0,
         )
 
     def is_recovery_dampening_active(self) -> bool:
@@ -1616,6 +1716,40 @@ class AdaptiveThrottle(SlidingWindowThrottle):
         logger.warning(f"[AdaptiveThrottle] Rolled back to base limit: " f"{previous} → {self._base_limit_before_emergency}")
 
         return self._base_limit_before_emergency
+
+    # =========================================================================
+    # 설정 스냅샷 (감사 로깅용)
+    # =========================================================================
+
+    def get_config_snapshot(self) -> dict:
+        """
+        현재 Throttle 설정 상태 스냅샷 반환.
+
+        감사 로깅 및 설정 변경 추적에 사용됩니다.
+
+        Returns:
+            현재 설정 상태 딕셔너리
+        """
+        # GradientCalculator에서 RTT와 Gradient 가져오기
+        smoothed_rtt, current_gradient = self._gradient_calculator.get_snapshot()
+
+        return {
+            "current_limit": self._current_limit,
+            "initial_limit": self.config.initial_limit,
+            "min_limit": self.config.min_limit,
+            "max_limit": self.config.max_limit,
+            "emergency_mode_active": self._emergency_mode_active,
+            "emergency_level": self._emergency_level,
+            "full_stop_active": self._full_stop_active,
+            "recovery_dampening_active": self._recovery_dampening_active,
+            "gradient_frozen": self._gradient_frozen,
+            "smoothed_rtt_ms": smoothed_rtt,
+            "current_gradient": current_gradient,
+            "429_reduction_active": self._429_reduction_active,
+            "service_name": self._service_name,
+            "sla_warning_ms": self.config.sla_warning_ms,
+            "sla_critical_ms": self.config.sla_critical_ms,
+        }
 
 
 # =============================================================================
