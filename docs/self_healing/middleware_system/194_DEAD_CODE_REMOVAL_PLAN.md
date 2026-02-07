@@ -1,0 +1,219 @@
+# 194. 데드코드 제거 계획
+
+> **문서 버전**: 1.0.0
+> **최종 수정일**: 2026-02-07
+> **작성 근거**:
+> - `selfhealing/core/constants.py` (Line 67-100)
+> - `selfhealing/core/types.py` (Line 100-120: SecurityIncidentData)
+> - `selfhealing/core/types.py` (Line 54-63: DomainType)
+> - `selfhealing/interfaces/repositories.py` (Line 49-57: FailedOperationStatus 106 usages)
+> - `selfhealing/interfaces/repositories.py` (Line 60-63: CircuitBreakerStateEnum 74 usages)
+> **우선순위**: 🔴 P0 (제로 리스크, 즉시 실행 가능)
+
+---
+
+## 1. 개요
+
+코드 일관성 조사 결과, 어디서도 import 되지 않는 데드코드(dead code)가 확인되었습니다.
+이 문서는 **사용처가 0인 코드**만을 대상으로 하며, **`list_code_usages` 결과를 근거로** 작성되었습니다.
+
+---
+
+## 2. 제거 대상 목록
+
+### 2.1 `core/constants.py` — `FailedOperationStatus` (사용처: 0)
+
+**파일 위치**: `selfhealing/core/constants.py` Line 67-83
+
+```python
+class FailedOperationStatus:
+    """Failed operation status constants."""
+
+    PENDING = "pending"
+    RETRYING = "retrying"           # ← interfaces 버전에는 없는 값
+    RESOLVED = "resolved"
+    PERMANENTLY_FAILED = "permanently_failed"  # ← interfaces 버전에는 없는 값
+    EXPIRED = "expired"
+
+    CHOICES = [
+        (PENDING, "Pending - Awaiting retry"),
+        (RETRYING, "Retrying - In progress"),
+        (RESOLVED, "Resolved - Successfully completed"),
+        (PERMANENTLY_FAILED, "Permanently Failed - Max retries exceeded"),
+        (EXPIRED, "Expired - TTL exceeded"),
+    ]
+```
+
+**근거**: `list_code_usages("FailedOperationStatus", core/constants.py)` → **0건**
+
+**대조**: `interfaces/repositories.py`의 `FailedOperationStatus(str, Enum)` → **106건** 사용 중
+
+| 비교 항목 | `core/constants.py` (데드) | `interfaces/repositories.py` (활성) |
+|-----------|---------------------------|--------------------------------------|
+| 구현 방식 | 평문 클래스 | `str, Enum` |
+| 상태값 | `PENDING, RETRYING, RESOLVED, PERMANENTLY_FAILED, EXPIRED` | `PENDING, REVIEWING, REPLAYED, REQUIRES_REVIEW, RESOLVED, REJECTED, ARCHIVED, EXPIRED` |
+| 사용처 | 0건 | 106건 |
+
+---
+
+### 2.2 `core/constants.py` — `CircuitBreakerState` (사용처: 0)
+
+**파일 위치**: `selfhealing/core/constants.py` Line 86-98
+
+```python
+class CircuitBreakerState:
+    """Circuit breaker state constants."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    CHOICES = [
+        (CLOSED, "Closed - Normal operation"),
+        (OPEN, "Open - Blocking requests"),
+        (HALF_OPEN, "Half Open - Testing recovery"),
+    ]
+```
+
+**근거**: `list_code_usages("CircuitBreakerState", core/constants.py)` → **0건**
+
+**대조**: 동일한 값을 가진 활성 정의들:
+
+| 위치 | 사용처 수 |
+|------|----------|
+| `services/circuit_breaker/config.py` `CircuitState` (plain class) | 117건 |
+| `interfaces/repositories.py` `CircuitBreakerStateEnum(str, Enum)` | 74건 |
+| `audit/graceful_degradation/enums.py` `CircuitState(str, Enum)` | 48건 |
+| `audit/resilience/circuit_breaker.py` `CircuitState(Enum)` | 64건 |
+
+---
+
+### 2.3 `core/types.py` — `SecurityIncidentData` (프로덕션 사용처: 0)
+
+**파일 위치**: `selfhealing/core/types.py` Line 100-113
+
+```python
+@dataclass
+class SecurityIncidentData:
+    """Data transfer object for security incidents (domain-neutral)."""
+
+    id: int
+    incident_type: str
+    severity: str
+    source_ip: str | None = None
+    user_id: int | None = None
+    entity_refs: dict[str, Any] = field(default_factory=dict)
+    description: str = ""
+    context: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+    is_resolved: bool = False
+```
+
+**근거**: `list_code_usages("SecurityIncidentData")` 결과, `core/types.py` 버전은 프로덕션 코드에서 0건 import. `core/__init__.py`에서 re-export만 존재.
+
+**대조**: `interfaces/repositories.py`의 `SecurityIncidentData` (Line 237-280)에는 `status`, `user_agent`, `investigation_notes`, `investigated_at`, `detected_by` 등 추가 필드 보유 — 실제 어댑터 코드에서 사용.
+
+| 필드 비교 | `core/types.py` (데드) | `interfaces/repositories.py` (활성) |
+|-----------|----------------------|--------------------------------------|
+| `status` | ❌ 없음 | ✅ 있음 |
+| `user_agent` | ❌ 없음 | ✅ 있음 |
+| `investigation_notes` | ❌ 없음 | ✅ 있음 |
+| `investigated_at` | ❌ 없음 | ✅ 있음 |
+| `detected_by` | ❌ 없음 | ✅ 있음 |
+| `context` | ✅ 있음 | ❌ 없음 |
+| `is_resolved` | ✅ 있음 (bool) | ❌ 없음 (status로 대체) |
+
+---
+
+### 2.4 `core/types.py` — `DomainType` (사용처: 0)
+
+**파일 위치**: `selfhealing/core/types.py` Line 54-63
+
+```python
+class DomainType(str, Enum):
+    """Business domains that can be protected by self-healing (domain-neutral)."""
+
+    EXTERNAL_SERVICE = "external_service"
+    INTERNAL_PROCESS = "internal_process"
+    ASYNC_TASK = "async_task"
+    NOTIFICATION = "notification"
+    DATA_SYNC = "data_sync"
+    GENERAL = "general"
+```
+
+**근거**: `list_code_usages("DomainType")` 결과, `core/__init__.py` re-export 외 실제 사용 0건.
+
+**대조**: `interfaces/repositories.py`의 `FailedOperationDomain(str, Enum)` (Line 29-44)이 동일 역할이며 `CUSTOM` 확장 포인트 포함.
+
+---
+
+## 3. 실행 계획
+
+### Phase 1: 데드코드 삭제
+
+| 순서 | 대상 | 파일 | 행동 |
+|------|------|------|------|
+| 1 | `FailedOperationStatus` | `core/constants.py` | 클래스 전체 삭제 |
+| 2 | `CircuitBreakerState` | `core/constants.py` | 클래스 전체 삭제 |
+| 3 | `SecurityIncidentData` | `core/types.py` | 클래스 전체 삭제 |
+| 4 | `DomainType` | `core/types.py` | 클래스 전체 삭제 |
+
+### Phase 2: re-export 정리
+
+삭제된 심볼의 re-export를 제거합니다.
+
+| 파일 | 삭제할 re-export |
+|------|-----------------|
+| `core/__init__.py` (Line 133-140) | `DomainType`, `SecurityIncidentData` |
+| `__init__.py` (공개 API) | 현재 `SecurityIncidentData`, `DomainType` export 없음 → 변경 불필요 |
+
+### Phase 3: 검증
+
+```bash
+# 1. grep으로 잔여 참조 확인
+grep -rn "from selfhealing.core.constants import.*FailedOperationStatus" packages/selfhealing-python/
+grep -rn "from selfhealing.core.constants import.*CircuitBreakerState" packages/selfhealing-python/
+grep -rn "DomainType" packages/selfhealing-python/src/
+grep -rn "core.types.*SecurityIncidentData" packages/selfhealing-python/
+
+# 2. 테스트 실행
+cd packages/selfhealing-python && python -m pytest tests/ -x --tb=short
+```
+
+---
+
+## 4. 영향 범위
+
+| 항목 | 영향도 |
+|------|--------|
+| 프로덕션 코드 | ⚪ 없음 (사용처 0건) |
+| 테스트 코드 | ⚪ 없음 (직접 import 없음) |
+| 공개 API (`__init__.py`) | ⚪ 없음 (해당 심볼 미노출) |
+| 하위 호환성 | 🟡 `core/__init__.py` re-export 제거 필요 (`DomainType`, `SecurityIncidentData`) |
+
+---
+
+## 5. `core/constants.py` 잔존 코드 (활성)
+
+삭제 **대상 아님** — 사용 중인 코드:
+
+| 클래스 | 사용처 수 | 주요 소비자 |
+|--------|----------|------------|
+| `ControlAPIActions` | 33건 | `api/django/views/circuit_breaker.py`, `services/control_api_service.py` |
+| `ControlAPIEnvironments` | 활성 | `services/control_api_service.py` |
+| `RiskLevels` | 활성 | `services/control_api_service.py` |
+
+삭제 후 `core/constants.py`에는 `ControlAPIActions`, `ControlAPIEnvironments`, `RiskLevels`만 남습니다.
+
+---
+
+## 6. 리스크 평가
+
+| 리스크 | 수준 | 대응 |
+|--------|------|------|
+| 런타임 에러 | ⚪ 제로 | 사용처 0건이므로 import 실패 불가 |
+| 테스트 실패 | ⚪ 제로 | 직접 참조하는 테스트 없음 |
+| re-export 깨짐 | 🟡 낮음 | `core/__init__.py`에서 `DomainType`, `SecurityIncidentData` re-export 제거 필요 |
+
+**결론**: 제로 리스크 작업으로, 다른 리팩토링의 선행 작업으로 즉시 실행 가능합니다.
