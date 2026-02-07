@@ -25,7 +25,7 @@ from selfhealing.services.coordination.recovery_dashboard import (
     PendingApprovalsInfo,
     RecoveryStats,
     RegionalStatusInfo,
-    RecoveryAction,
+    RecoveryActionWidget,
     get_status_display,
     get_status_color,
     get_recovery_dashboard_service,
@@ -110,8 +110,8 @@ class TestRecoveryDashboardServiceDataClasses:
         assert result["priority"] == 100
 
     def test_recovery_action_to_dict(self):
-        """RecoveryAction.to_dict() 테스트."""
-        action = RecoveryAction(
+        """RecoveryActionWidget.to_dict() 테스트."""
+        action = RecoveryActionWidget(
             action="start_recovery",
             label="복구 시작",
             enabled=True,
@@ -252,9 +252,7 @@ class TestRecoveryDashboardService:
         assert result.pending_approvals.count == 0
         assert result.timestamp != ""
 
-    def test_get_widget_data_with_pending_approvals(
-        self, service, mock_approval_manager
-    ):
+    def test_get_widget_data_with_pending_approvals(self, service, mock_approval_manager):
         """대기 중인 승인 있을 때 테스트."""
         # Mock pending requests
         pending_request = Mock()
@@ -293,23 +291,17 @@ class TestRecoveryDashboardService:
 
     def test_determine_recovery_health_healthy(self, service):
         """건강 상태 판단 - healthy."""
-        result = service._determine_recovery_health(
-            pending_count=0, stale_count=0, active_sessions=0
-        )
+        result = service._determine_recovery_health(pending_count=0, stale_count=0, active_sessions=0)
         assert result == "healthy"
 
     def test_determine_recovery_health_warning(self, service):
         """건강 상태 판단 - warning."""
-        result = service._determine_recovery_health(
-            pending_count=6, stale_count=1, active_sessions=0
-        )
+        result = service._determine_recovery_health(pending_count=6, stale_count=1, active_sessions=0)
         assert result == "warning"
 
     def test_determine_recovery_health_critical(self, service):
         """건강 상태 판단 - critical."""
-        result = service._determine_recovery_health(
-            pending_count=10, stale_count=5, active_sessions=0
-        )
+        result = service._determine_recovery_health(pending_count=10, stale_count=5, active_sessions=0)
         assert result == "critical"
 
     def test_get_available_actions_no_session(self, service):
