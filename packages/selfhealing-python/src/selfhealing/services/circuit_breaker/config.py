@@ -16,13 +16,9 @@ from selfhealing.settings import get_config
 # Circuit Breaker State Enum
 # =============================================================================
 
-
-class CircuitState:
-    """Circuit breaker state constants."""
-
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
+# 정규 소스: interfaces/repositories.py의 CircuitBreakerStateEnum(str, Enum)
+# 하위 호환을 위해 alias 유지 — 소비자 코드 변경 0건
+from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
 
 
 # =============================================================================
@@ -45,9 +41,7 @@ class CircuitBreakerConfig:
 
     # Sliding window for rate-based threshold (optional, used when failure_rate_threshold > 0)
     sliding_window_size: int = 100  # Number of calls to track
-    failure_rate_threshold: float = (
-        0.0  # 0 = disabled, >0 = percentage (e.g., 50.0 = 50%)
-    )
+    failure_rate_threshold: float = 0.0  # 0 = disabled, >0 = percentage (e.g., 50.0 = 50%)
 
     # Fallback strategy when CB is open
     # Options: "block" (default), "cache", "dlq", "default_response"
@@ -91,46 +85,20 @@ class CircuitBreakerConfig:
                 success_threshold=runtime_config.get("success_threshold", 2),
                 minimum_calls=runtime_config.get("minimum_calls", 10),
                 sliding_window_size=runtime_config.get("sliding_window_size", 100),
-                failure_rate_threshold=runtime_config.get(
-                    "failure_rate_threshold", 0.0
-                ),
+                failure_rate_threshold=runtime_config.get("failure_rate_threshold", 0.0),
                 fallback_strategy=runtime_config.get("fallback_strategy", "block"),
-                fallback_cache_ttl_seconds=runtime_config.get(
-                    "fallback_cache_ttl_seconds", 300
-                ),
-                cb_open_burn_rate_multiplier=runtime_config.get(
-                    "cb_open_burn_rate_multiplier", 10.0
-                ),
-                manual_override_ttl_minutes=runtime_config.get(
-                    "manual_override_ttl_minutes", 90
-                ),
-                half_open_request_limit=runtime_config.get(
-                    "half_open_request_limit", 10
-                ),
-                max_pending_duration_hours=runtime_config.get(
-                    "max_pending_duration_hours", 4
-                ),
-                max_retry_lifetime_hours=runtime_config.get(
-                    "max_retry_lifetime_hours", 24
-                ),
-                rate_limit_cascade_threshold=runtime_config.get(
-                    "rate_limit_cascade_threshold", 10
-                ),
-                rate_limit_cascade_window_seconds=runtime_config.get(
-                    "rate_limit_cascade_window_seconds", 60
-                ),
-                self_ddos_protection_enabled=runtime_config.get(
-                    "self_ddos_protection_enabled", True
-                ),
-                self_ddos_request_threshold=runtime_config.get(
-                    "self_ddos_request_threshold", 100
-                ),
-                self_ddos_window_seconds=runtime_config.get(
-                    "self_ddos_window_seconds", 10
-                ),
-                self_ddos_backoff_multiplier=runtime_config.get(
-                    "self_ddos_backoff_multiplier", 2.0
-                ),
+                fallback_cache_ttl_seconds=runtime_config.get("fallback_cache_ttl_seconds", 300),
+                cb_open_burn_rate_multiplier=runtime_config.get("cb_open_burn_rate_multiplier", 10.0),
+                manual_override_ttl_minutes=runtime_config.get("manual_override_ttl_minutes", 90),
+                half_open_request_limit=runtime_config.get("half_open_request_limit", 10),
+                max_pending_duration_hours=runtime_config.get("max_pending_duration_hours", 4),
+                max_retry_lifetime_hours=runtime_config.get("max_retry_lifetime_hours", 24),
+                rate_limit_cascade_threshold=runtime_config.get("rate_limit_cascade_threshold", 10),
+                rate_limit_cascade_window_seconds=runtime_config.get("rate_limit_cascade_window_seconds", 60),
+                self_ddos_protection_enabled=runtime_config.get("self_ddos_protection_enabled", True),
+                self_ddos_request_threshold=runtime_config.get("self_ddos_request_threshold", 100),
+                self_ddos_window_seconds=runtime_config.get("self_ddos_window_seconds", 10),
+                self_ddos_backoff_multiplier=runtime_config.get("self_ddos_backoff_multiplier", 2.0),
             )
         except Exception:
             pass  # Fall through to static config
@@ -146,22 +114,12 @@ class CircuitBreakerConfig:
             sliding_window_size=getattr(cb_settings, "sliding_window_size", 100),
             failure_rate_threshold=getattr(cb_settings, "failure_rate_threshold", 0.0),
             fallback_strategy=getattr(cb_settings, "fallback_strategy", "block"),
-            fallback_cache_ttl_seconds=getattr(
-                cb_settings, "fallback_cache_ttl_seconds", 300
-            ),
-            cb_open_burn_rate_multiplier=getattr(
-                cb_settings, "cb_open_burn_rate_multiplier", 10.0
-            ),
-            manual_override_ttl_minutes=getattr(
-                cb_settings, "manual_override_ttl_minutes", 90
-            ),
+            fallback_cache_ttl_seconds=getattr(cb_settings, "fallback_cache_ttl_seconds", 300),
+            cb_open_burn_rate_multiplier=getattr(cb_settings, "cb_open_burn_rate_multiplier", 10.0),
+            manual_override_ttl_minutes=getattr(cb_settings, "manual_override_ttl_minutes", 90),
             half_open_request_limit=getattr(cb_settings, "half_open_request_limit", 10),
-            max_pending_duration_hours=getattr(
-                cb_settings, "max_pending_duration_hours", 4
-            ),
-            max_retry_lifetime_hours=getattr(
-                cb_settings, "max_retry_lifetime_hours", 24
-            ),
+            max_pending_duration_hours=getattr(cb_settings, "max_pending_duration_hours", 4),
+            max_retry_lifetime_hours=getattr(cb_settings, "max_retry_lifetime_hours", 24),
             rate_limit_cascade_threshold=cb_settings.rate_limit_cascade_threshold,
             rate_limit_cascade_window_seconds=cb_settings.rate_limit_cascade_window_seconds,
             self_ddos_protection_enabled=cb_settings.self_ddos_protection_enabled,
@@ -197,9 +155,7 @@ class FallbackResult:
         return cls(allowed=False, fallback_used=False, message=message)
 
     @classmethod
-    def from_cache(
-        cls, data: Any, message: str = "Stale data from cache"
-    ) -> FallbackResult:
+    def from_cache(cls, data: Any, message: str = "Stale data from cache") -> FallbackResult:
         """Request served from cache (stale data)."""
         return cls(
             allowed=False,
@@ -210,9 +166,7 @@ class FallbackResult:
         )
 
     @classmethod
-    def to_dlq(
-        cls, message: str = "Request queued for later retry"
-    ) -> FallbackResult:
+    def to_dlq(cls, message: str = "Request queued for later retry") -> FallbackResult:
         """Request queued to DLQ for later processing."""
         return cls(
             allowed=False,
@@ -222,9 +176,7 @@ class FallbackResult:
         )
 
     @classmethod
-    def default_response(
-        cls, data: Any, message: str = "Default fallback response"
-    ) -> FallbackResult:
+    def default_response(cls, data: Any, message: str = "Default fallback response") -> FallbackResult:
         """Request served with a default/static response."""
         return cls(
             allowed=False,

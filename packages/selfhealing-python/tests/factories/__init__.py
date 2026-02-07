@@ -34,7 +34,6 @@ from tests.factories.constants import (
     Services,
     FailureTypes,
     Status,
-    CircuitState,
 )
 from tests.factories.data_factory import (
     TestDataFactory,
@@ -62,7 +61,6 @@ __all__ = [
     "Services",
     "FailureTypes",
     "Status",
-    "CircuitState",
     # Data Factory
     "TestDataFactory",
     "MockCircuitBreakerStateData",

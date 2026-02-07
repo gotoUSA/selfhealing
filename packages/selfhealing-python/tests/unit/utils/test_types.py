@@ -41,7 +41,7 @@ class TestCircuitState:
     """Tests for CircuitState enum."""
 
     def test_states_exist(self):
-        from selfhealing.core.types import CircuitState
+        from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
 
         assert CircuitState.CLOSED == "closed"
         assert CircuitState.OPEN == "open"

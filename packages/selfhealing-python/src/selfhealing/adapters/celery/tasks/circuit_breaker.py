@@ -30,9 +30,7 @@ logger = get_task_logger(__name__)
     soft_time_limit=290,
     acks_late=True,
 )
-def conditional_replay_on_circuit_close(
-    self, service_name: str, max_items: int = 50
-) -> dict:
+def conditional_replay_on_circuit_close(self, service_name: str, max_items: int = 50) -> dict:
     """
     Trigger conditional replay when a circuit breaker closes.
 
@@ -46,10 +44,7 @@ def conditional_replay_on_circuit_close(
     Returns:
         Dictionary with replay result summary
     """
-    logger.info(
-        f"[Circuit Recovery] Starting conditional replay for '{service_name}', "
-        f"max_items={max_items}"
-    )
+    logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
 
     try:
         # Error Budget Gate 체크: 에러 예산 부족 시 Replay 차단
@@ -148,7 +143,7 @@ def check_circuit_breaker_recovery(self) -> dict:
 
     try:
         from selfhealing.core.timezone import now
-        from selfhealing.core.types import CircuitState
+        from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
         from selfhealing.factory import ProviderRegistry
 
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
@@ -180,8 +175,7 @@ def check_circuit_breaker_recovery(self) -> dict:
                 if success:
                     transitioned.append(service_name)
                     logger.info(
-                        f"[Circuit Check] Transitioned '{service_name}' "
-                        f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                        f"[Circuit Check] Transitioned '{service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
                     )
 
         return {
@@ -225,9 +219,7 @@ def force_open_circuit_breaker(
     Returns:
         Dictionary with operation result
     """
-    logger.warning(
-        f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}"
-    )
+    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -244,9 +236,7 @@ def force_open_circuit_breaker(
         )
 
         if success:
-            logger.warning(
-                f"[Circuit Breaker] Successfully opened circuit for '{service_name}'"
-            )
+            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
             return {
                 "success": True,
                 "service_name": service_name,
@@ -299,9 +289,7 @@ def force_close_circuit_breaker(
     Returns:
         Dictionary with operation result
     """
-    logger.info(
-        f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}"
-    )
+    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -316,11 +304,7 @@ def force_close_circuit_breaker(
                 "error": f"Circuit breaker '{service_name}' not found",
             }
 
-        previous_state = (
-            current_state.state.value
-            if hasattr(current_state.state, "value")
-            else str(current_state.state)
-        )
+        previous_state = current_state.state.value if hasattr(current_state.state, "value") else str(current_state.state)
 
         success = cb_repo.atomic_force_close(
             service_name=service_name,
@@ -329,9 +313,7 @@ def force_close_circuit_breaker(
         )
 
         if success:
-            logger.info(
-                f"[Circuit Breaker] Successfully closed circuit for '{service_name}'"
-            )
+            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
 
             if trigger_replay:
                 conditional_replay_on_circuit_close.delay(service_name)
@@ -385,7 +367,7 @@ def expire_manual_overrides(self) -> dict:
 
     try:
         from selfhealing.core.timezone import now
-        from selfhealing.core.types import CircuitState
+        from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
         from selfhealing.factory import ProviderRegistry
 
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
@@ -402,9 +384,7 @@ def expire_manual_overrides(self) -> dict:
             if not expires_at or expires_at >= current_time:
                 continue
 
-            previous_state = (
-                state.state.value if hasattr(state.state, "value") else str(state.state)
-            )
+            previous_state = state.state.value if hasattr(state.state, "value") else str(state.state)
             new_state = previous_state
 
             if state.state == CircuitState.OPEN:
@@ -438,8 +418,7 @@ def expire_manual_overrides(self) -> dict:
             )
 
             logger.warning(
-                f"[Circuit Breaker] Expired manual override for '{service_name}': "
-                f"{previous_state} -> {new_state}"
+                f"[Circuit Breaker] Expired manual override for '{service_name}': " f"{previous_state} -> {new_state}"
             )
 
         return {

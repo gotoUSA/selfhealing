@@ -1,14 +1,15 @@
 # 196. CircuitState 5중 정의 통합 계획
 
-> **문서 버전**: 1.0.0
+> **문서 버전**: 1.1.0
 > **최종 수정일**: 2026-02-07
+> **구현 상태**: ✅ Phase 1-4 완료 (2026-02-07)
 > **작성 근거**:
-> - `selfhealing/core/types.py` (Line 40-47: CircuitState(str, Enum))
-> - `selfhealing/services/circuit_breaker/config.py` (Line 20-25: CircuitState plain class)
-> - `selfhealing/audit/resilience/circuit_breaker.py` (Line 19-24: CircuitState(Enum))
-> - `selfhealing/audit/graceful_degradation/enums.py` (Line 39-44: CircuitState(str, Enum))
-> - `tests/factories/constants.py` (Line 61-65: CircuitState plain class)
-> - `selfhealing/interfaces/repositories.py` (Line 60-63: CircuitBreakerStateEnum(str, Enum))
+> - ~~`selfhealing/core/types.py` (Line 40-47: CircuitState(str, Enum))~~ → **삭제됨**
+> - ~~`selfhealing/services/circuit_breaker/config.py` (Line 20-25: CircuitState plain class)~~ → **alias로 대체**
+> - `selfhealing/audit/resilience/circuit_breaker.py` (Line 19-24: CircuitState(Enum)) → 독립 유지
+> - `selfhealing/audit/graceful_degradation/enums.py` (Line 39-44: CircuitState(str, Enum)) → 독립 유지
+> - ~~`tests/factories/constants.py` (Line 61-65: CircuitState plain class)~~ → **삭제됨**
+> - `selfhealing/interfaces/repositories.py` (Line 60-63: CircuitBreakerStateEnum(str, Enum)) → **정규 소스**
 > **선행 조건**: 194번 데드코드 제거 완료
 > **우선순위**: 🟠 P1
 
@@ -157,32 +158,35 @@ CircuitBreakerStateEnum = CircuitState  # deprecated alias
 
 ## 5. 실행 계획
 
-### Phase 1: 테스트 전용 데드코드 제거
+### Phase 1: 테스트 전용 데드코드 제거 ✅ 완료
 
 | 대상 | 파일 | 행동 |
 |------|------|------|
-| `CircuitState` (plain class) | `tests/factories/constants.py` L61-65 | 삭제 (re-export 외 사용 0건) |
-| `DefaultValues.CB_STATE_*` | `tests/factories/constants.py` L100-102 | `CircuitBreakerStateEnum` 사용으로 변경 |
-| `CircuitState` re-export | `tests/factories/__init__.py` L31 | 삭제 |
+| `CircuitState` (plain class) | `tests/factories/constants.py` L61-65 | ✅ 삭제 완료 |
+| `DefaultValues.CB_STATE_*` | `tests/factories/constants.py` L100-102 | ✅ `CircuitBreakerStateEnum` 사용으로 변경 완료 |
+| `CircuitState` re-export | `tests/factories/__init__.py` L31 | ✅ 삭제 완료 |
+| `CircuitState` import | `tests/factories/test_factories.py` L21 | ✅ `CircuitBreakerStateEnum as CircuitState`로 변경 |
 
-### Phase 2: `core/types.py`의 `CircuitState` 제거
+### Phase 2: `core/types.py`의 `CircuitState` 제거 ✅ 완료
 
 | 대상 | 행동 |
 |------|------|
-| `core/types.py` L40-47 `CircuitState(str, Enum)` | 삭제 |
-| `core/__init__.py` L126 re-export | `interfaces.repositories.CircuitBreakerStateEnum`으로 변경 |
-| `__init__.py` L11 공개 API | `interfaces.repositories`에서 import |
+| `core/types.py` L40-47 `CircuitState(str, Enum)` | ✅ 삭제 완료 |
+| `core/__init__.py` L126 re-export | ✅ `interfaces.repositories.CircuitBreakerStateEnum as CircuitState`으로 변경 |
+| `__init__.py` L11 공개 API | ✅ `interfaces.repositories`에서 import |
+| `tests/unit/utils/test_types.py` L44 | ✅ `interfaces.repositories`에서 import으로 변경 |
+| `tests/factories/data_factory.py` L18 | ✅ `interfaces.repositories`에서 import으로 변경 |
 
-### Phase 3: `services/circuit_breaker/config.py`의 `CircuitState` 대체
+### Phase 3: `services/circuit_breaker/config.py`의 `CircuitState` 대체 ✅ 완료
 
 | 대상 | 변경 |
 |------|------|
-| `config.py` L20-25 `CircuitState` (plain class) | 삭제 |
-| `config.py` | `from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState` 추가 |
-| `services/circuit_breaker/__init__.py` L52 | re-export 경로 변경 |
-| `services/circuit_breaker/manual_control.py` L16 | import 경로 변경 |
-| `services/circuit_breaker_service.py` L32 | import 경로 변경 |
-| `services/circuit_breaker/stale_cache_integration.py` L25 | import 경로 변경 |
+| `config.py` L20-25 `CircuitState` (plain class) | ✅ 삭제, alias로 대체 |
+| `config.py` | ✅ `from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState` 추가 |
+| `services/circuit_breaker/__init__.py` L52 | 변경 불필요 (config.py에서 alias 유지) |
+| `services/circuit_breaker/manual_control.py` L16 | 변경 불필요 (config.py에서 alias 유지) |
+| `services/circuit_breaker_service.py` L32 | 변경 불필요 (config.py에서 alias 유지) |
+| `services/circuit_breaker/stale_cache_integration.py` L25 | 변경 불필요 (config.py에서 alias 유지) |
 
 **또는** `config.py`에서 alias로 유지:
 ```python
@@ -191,12 +195,12 @@ from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as Circu
 ```
 이 방식은 **소비자 코드 변경 0건**으로 가장 안전합니다.
 
-### Phase 4: Celery task import 변경
+### Phase 4: Celery task import 변경 ✅ 완료
 
 | 파일 | 라인 | 변경 |
 |------|------|------|
-| `adapters/celery/tasks/circuit_breaker.py` | L151 | `from selfhealing.core.types import CircuitState` → `from selfhealing.services.circuit_breaker.config import CircuitState` 또는 `from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState` |
-| `adapters/celery/tasks/circuit_breaker.py` | L388 | 동일 변경 |
+| `adapters/celery/tasks/circuit_breaker.py` | L151 | ✅ `from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState` |
+| `adapters/celery/tasks/circuit_breaker.py` | L388 | ✅ 동일 변경 |
 
 ### Phase 5: Audit 서브시스템 — 보류 (독립 유지)
 
@@ -225,7 +229,8 @@ from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as Circu
 | 카테고리 | 수정 파일 수 | 상세 |
 |---------|------------|------|
 | 소스 코드 | 5개 | `core/types.py`, `core/__init__.py`, `__init__.py`, `services/circuit_breaker/config.py`, `adapters/celery/tasks/circuit_breaker.py` |
-| 테스트 코드 | 3개 | `tests/factories/constants.py`, `tests/factories/__init__.py`, `tests/unit/utils/test_types.py` |
+| 테스트 코드 | 4개 | `tests/factories/constants.py`, `tests/factories/__init__.py`, `tests/unit/utils/test_types.py`, `tests/factories/test_factories.py` |
+| 팩토리 코드 | 1개 | `tests/factories/data_factory.py` |
 | Audit 코드 | 0개 | 변경 안 함 |
 
 ---

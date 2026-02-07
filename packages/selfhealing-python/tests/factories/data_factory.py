@@ -18,9 +18,9 @@ from unittest.mock import Mock
 from selfhealing.core.types import (
     FailureType,
     OperationStatus,
-    CircuitState,
 )
 from selfhealing.interfaces.repositories import (
+    CircuitBreakerStateEnum as CircuitState,
     FailedOperationData,
     CircuitBreakerStateData,
 )

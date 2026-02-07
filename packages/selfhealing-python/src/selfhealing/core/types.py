@@ -37,14 +37,6 @@ class OperationStatus(str, Enum):
     MANUAL_REVIEW = "manual_review"
 
 
-class CircuitState(str, Enum):
-    """State of a circuit breaker."""
-
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
-
-
 class RetryContext(TypedDict, total=False):
     """Context information for retry operations."""
 
