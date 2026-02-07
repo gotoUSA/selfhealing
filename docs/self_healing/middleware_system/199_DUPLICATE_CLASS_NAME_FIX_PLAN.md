@@ -2690,7 +2690,7 @@ class AutoTuningHistoryView(View):
 | 18 | `NotificationResult` 이름 변경 3곳 (Item 15) | 중간 | services 3곳 동시 | ✅ 완료 (2026-02-07) |
 | 19 | `HealthCheckResult` 이름 변경 (Item 12) | 중간 | 두 곳 모두 변경 | ✅ 완료 (2026-02-07) |
 | 20 | `WatchdogConfig` 이름 변경 (Item 16) | 중간 | 두 곳 모두 변경 | ✅ 완료 (2026-02-07) |
-| 21 | `PaginatedResult` 이름 변경 (Item 25) | 중간 | 필드·타입·구현 3중 불일치 |
+| 21 | `PaginatedResult` 이름 변경 (Item 25) | 중간 | 필드·타입·구현 3중 불일치 | ✅ 완료 (2026-02-08) |
 | 22 | `RequestContext` 이름 변경 (Item 26) | 중간 | core/__init__.py export 변경 |
 | 23 | `EventPriority` 이름 변경 (Item 27) | 중간 | 값 방향 정반대 |
 | 24 | `PoolHealthStatus` 이름 변경 (Item 28) | 중간 | core/__init__.py export + pool_watchdog |
