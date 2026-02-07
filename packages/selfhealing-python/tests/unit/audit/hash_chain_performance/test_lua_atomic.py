@@ -13,7 +13,7 @@ class TestLuaAtomicHashChain:
     
     def test_reserve_sequence_atomic(self):
         """Test atomic sequence reservation."""
-        from selfhealing.audit.hash_chain_performance import LuaAtomicHashChain
+        from selfhealing.audit.performance import LuaAtomicHashChain
         
         redis = MockRedisClient()
         lua_chain = LuaAtomicHashChain(redis, key_prefix="test:")
@@ -29,7 +29,7 @@ class TestLuaAtomicHashChain:
     
     def test_reserve_sequence_increments(self):
         """Test that sequence increments correctly."""
-        from selfhealing.audit.hash_chain_performance import LuaAtomicHashChain
+        from selfhealing.audit.performance import LuaAtomicHashChain
         
         redis = MockRedisClient()
         lua_chain = LuaAtomicHashChain(redis, key_prefix="test:")
@@ -44,7 +44,7 @@ class TestLuaAtomicHashChain:
     
     def test_commit_sequence_atomic(self):
         """Test atomic sequence commit."""
-        from selfhealing.audit.hash_chain_performance import LuaAtomicHashChain
+        from selfhealing.audit.performance import LuaAtomicHashChain
         
         redis = MockRedisClient()
         lua_chain = LuaAtomicHashChain(redis, key_prefix="test:")
@@ -64,7 +64,7 @@ class TestLuaAtomicHashChain:
     
     def test_commit_nonexistent_fails(self):
         """Test commit of non-existent pending fails."""
-        from selfhealing.audit.hash_chain_performance import LuaAtomicHashChain
+        from selfhealing.audit.performance import LuaAtomicHashChain
         
         redis = MockRedisClient()
         lua_chain = LuaAtomicHashChain(redis, key_prefix="test:")
@@ -76,7 +76,7 @@ class TestLuaAtomicHashChain:
     
     def test_redis_failure_handling(self):
         """Test handling of Redis failures."""
-        from selfhealing.audit.hash_chain_performance import LuaAtomicHashChain
+        from selfhealing.audit.performance import LuaAtomicHashChain
         
         redis = MockRedisClient(should_fail=True)
         lua_chain = LuaAtomicHashChain(redis, key_prefix="test:")

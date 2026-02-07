@@ -54,7 +54,7 @@ class TestSamplingVerifier:
 
     def test_valid_chain_passes(self):
         """Test that valid chain passes verification."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             SamplingVerifier,
             SamplingConfig,
         )
@@ -71,7 +71,7 @@ class TestSamplingVerifier:
 
     def test_tampered_chain_detected(self):
         """Test that tampered chain is detected."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             SamplingVerifier,
             SamplingConfig,
         )
@@ -91,7 +91,7 @@ class TestSamplingVerifier:
 
     def test_empty_chain_passes(self):
         """Test that empty chain passes."""
-        from selfhealing.audit.hash_chain_performance import SamplingVerifier
+        from selfhealing.audit.performance import SamplingVerifier
 
         verifier = SamplingVerifier()
 
@@ -102,7 +102,7 @@ class TestSamplingVerifier:
 
     def test_sampling_reduces_checks(self):
         """Test that sampling reduces number of checks."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             SamplingVerifier,
             SamplingConfig,
         )

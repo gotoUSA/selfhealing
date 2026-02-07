@@ -203,9 +203,6 @@ from .security_notification import (
     notify_security_incident,
 )
 
-# Alias for backward compatibility
-DOMAINS = DEFAULT_DOMAINS
-
 
 # =============================================================================
 # __all__ - IDE 인텔리센스 최적화
@@ -271,6 +268,5 @@ __all__ = [
     # === Metrics ===
     "record_sla_breach",
     "collect_all_metrics",
-    "DOMAINS",
     "ALERTING_RULES",
 ]

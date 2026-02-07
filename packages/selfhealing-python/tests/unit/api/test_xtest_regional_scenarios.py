@@ -178,7 +178,7 @@ class TestRegionalOverrideConflictScenario:
     @pytest.fixture(scope="class")
     def scenario(self):
         """RegionalOverrideConflictScenario 인스턴스 생성 (Redis Mock 주입)."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             RegionalOverrideConflictScenario,
         )
 
@@ -313,7 +313,7 @@ class TestMultiRegionIsolationTestScenario:
     @pytest.fixture(scope="class")
     def scenario(self):
         """MultiRegionIsolationTestScenario 인스턴스 생성 (Redis Mock 주입)."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             MultiRegionIsolationTestScenario,
         )
 
@@ -405,7 +405,7 @@ class TestScenarioRegistry:
 
     def test_scenario_registry_contains_regional_scenarios(self):
         """레지스트리에 새 리전 시나리오가 등록되어 있는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             SCENARIO_REGISTRY,
             list_available_scenarios,
         )
@@ -419,7 +419,7 @@ class TestScenarioRegistry:
 
     def test_get_scenario_class_returns_correct_class(self):
         """get_scenario_class가 올바른 클래스를 반환하는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             get_scenario_class,
             RegionalOverrideConflictScenario,
             MultiRegionIsolationTestScenario,
@@ -430,7 +430,7 @@ class TestScenarioRegistry:
 
     def test_regional_scenarios_extend_integration_scenario(self):
         """새 시나리오들이 IntegrationScenario를 상속하는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             IntegrationScenario,
             RegionalOverrideConflictScenario,
             MultiRegionIsolationTestScenario,
@@ -446,7 +446,7 @@ class TestStateTransitionMatrix:
     @pytest.fixture(scope="class")
     def scenario_result(self):
         """시나리오 실행 결과 캐싱 (클래스 내 1회만 실행)."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             RegionalOverrideConflictScenario,
         )
 
@@ -590,7 +590,7 @@ class TestHelperMethods:
 
     def test_set_global_state_helper(self, mock_redis_client):
         """_set_global_state() 헬퍼 메서드 테스트."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             RegionalOverrideConflictScenario,
         )
         from selfhealing.api.django.views.xtest.scenarios.regional import (
@@ -625,7 +625,7 @@ class TestHelperMethods:
 
     def test_set_regional_state_helper(self, mock_redis_client):
         """_set_regional_state() 헬퍼 메서드 테스트."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             RegionalOverrideConflictScenario,
         )
         from selfhealing.api.django.views.xtest.scenarios.regional import (
@@ -660,7 +660,7 @@ class TestHelperMethods:
 
     def test_set_admin_override_helper(self, mock_redis_client):
         """_set_admin_override() 헬퍼 메서드 테스트."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             RegionalOverrideConflictScenario,
         )
         from selfhealing.api.django.views.xtest.scenarios.regional import (

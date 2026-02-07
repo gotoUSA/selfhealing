@@ -837,12 +837,6 @@ def generate_postmortem_data(
     }
 
 
-# Deprecated aliases for backward compatibility
-_collect_service_states = collect_service_states
-_build_timeline = build_timeline
-_generate_postmortem_data = generate_postmortem_data
-
-
 # =============================================================================
 # Module Exports
 # =============================================================================
@@ -868,8 +862,4 @@ __all__ = [
     "collect_service_states",
     "build_timeline",
     "generate_postmortem_data",
-    # Deprecated aliases (underscore prefix)
-    "_collect_service_states",
-    "_build_timeline",
-    "_generate_postmortem_data",
 ]

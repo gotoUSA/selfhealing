@@ -406,4 +406,3 @@ def get_audit_logger() -> AuditLogger:
 
 # 하위 호환 alias (deprecated)
 ConfigChangeEvent = AuditConfigChangeEvent
-AuditAction = ConfigAuditAction

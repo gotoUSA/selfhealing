@@ -7,7 +7,7 @@ import pytest
 import time
 from unittest.mock import patch
 
-from selfhealing.metrics.jitter import (
+from selfhealing.utils.jitter import (
     with_jitter,
     calculate_jitter,
     sleep_with_jitter,

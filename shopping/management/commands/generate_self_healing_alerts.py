@@ -20,7 +20,8 @@ import yaml
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from selfhealing.services import ALERTING_RULES, DOMAINS
+from selfhealing.services import ALERTING_RULES
+from selfhealing.services.metrics.registry import DEFAULT_DOMAINS
 
 
 class Command(BaseCommand):
@@ -73,7 +74,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Generated alerting rules: {output_path}"))
         self.stdout.write(f"  - Total rules: {len(ALERTING_RULES)}")
-        self.stdout.write(f"  - Domains: {', '.join(DOMAINS)}")
+        self.stdout.write(f"  - Domains: {', '.join(DEFAULT_DOMAINS)}")
 
     def _generate_yaml(self) -> str:
         """Generate Prometheus alerting rules YAML from ALERTING_RULES."""
@@ -149,7 +150,7 @@ class Command(BaseCommand):
 # Generated rules: {count}
 
 """.format(
-            domains=", ".join(DOMAINS), count=len(ALERTING_RULES)
+            domains=", ".join(DEFAULT_DOMAINS), count=len(ALERTING_RULES)
         )
 
         yaml_output = yaml.dump(output, default_flow_style=False, sort_keys=False, allow_unicode=True)

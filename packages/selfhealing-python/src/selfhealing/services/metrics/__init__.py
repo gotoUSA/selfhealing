@@ -96,23 +96,12 @@ from .registry import (
 from .updaters import (
     collect_all_metrics,
     track_recovery_time,
-    track_replay,
     update_circuit_breaker_gauges,
     update_dlq_pending_gauges,
     update_dlq_status_gauges,
     update_retry_success_rates,
     update_shadow_log_metrics,
 )
-
-# =============================================================================
-# Backward Compatibility - Private helper aliases
-# =============================================================================
-
-# Legacy private function names (deprecated but maintained for compatibility)
-_get_or_create_counter = get_or_create_counter
-_get_or_create_gauge = get_or_create_gauge
-_get_or_create_histogram = get_or_create_histogram
-
 
 __all__ = [
     # Registry
@@ -192,12 +181,7 @@ __all__ = [
     "update_circuit_breaker_gauges",
     "update_retry_success_rates",
     "track_recovery_time",
-    "track_replay",
     "collect_all_metrics",
     # Alerting Rules
     "ALERTING_RULES",
-    # Legacy compatibility
-    "_get_or_create_counter",
-    "_get_or_create_gauge",
-    "_get_or_create_histogram",
 ]

@@ -208,9 +208,7 @@ try:
         max_retries=_cleanup_settings.purge_dlq_max_retries,
         default_retry_delay=_cleanup_settings.purge_dlq_retry_delay,
     )
-    def purge_archived_dlq_entries_task(
-        self, older_than_days: int = 90, dry_run: bool = False
-    ):
+    def purge_archived_dlq_entries_task(self, older_than_days: int = 90, dry_run: bool = False):
         """Celery task wrapper for purge_archived_dlq_entries."""
         return purge_archived_dlq_entries(older_than_days, dry_run)
 
@@ -271,66 +269,6 @@ def get_cleanup_beat_schedule() -> dict[str, Any]:
         return {}
 
 
-# =============================================================================
-# Backward Compatibility - Legacy Class Aliases
-# =============================================================================
-# 기존 클래스 기반 태스크를 사용하는 코드를 위한 호환성 레이어
-
-
-class _LegacyTaskWrapper:
-    """Legacy class-based task wrapper for backward compatibility."""
-
-    def __init__(self, name: str, func):
-        self.name = name
-        self._func = func
-
-    def run(self, *args, **kwargs):
-        return self._func(*args, **kwargs)
-
-
-# Legacy aliases
-ArchiveOldDLQEntriesTask = _LegacyTaskWrapper(
-    "selfhealing.archive_old_dlq_entries", archive_old_dlq_entries
-)
-CleanupExpiredConfigTask = _LegacyTaskWrapper(
-    "selfhealing.cleanup_expired_config", cleanup_expired_config
-)
-ExpireApprovalRequestsTask = _LegacyTaskWrapper(
-    "selfhealing.expire_approval_requests", expire_approval_requests
-)
-PurgeArchivedDLQEntriesTask = _LegacyTaskWrapper(
-    "selfhealing.purge_archived_dlq_entries", purge_archived_dlq_entries
-)
-
-# Legacy task list
-CLEANUP_TASKS = [
-    ArchiveOldDLQEntriesTask,
-    CleanupExpiredConfigTask,
-    ExpireApprovalRequestsTask,
-    PurgeArchivedDLQEntriesTask,
-]
-
-
-def register_cleanup_tasks_with_celery(app):
-    """
-    Celery app에 청소부 레인 태스크 등록.
-
-    Legacy compatibility function. With the new shared_task approach,
-    tasks are automatically registered when the module is imported.
-
-    Usage:
-        from celery import Celery
-        from selfhealing.tasks.cleanup_tasks import register_cleanup_tasks_with_celery
-
-        app = Celery('myproject')
-        register_cleanup_tasks_with_celery(app)
-    """
-    logger.info(
-        "[CleanupTasks] register_cleanup_tasks_with_celery called - "
-        "tasks are now auto-registered via shared_task"
-    )
-
-
 __all__ = [
     # Thin wrapper functions
     "archive_old_dlq_entries",
@@ -339,13 +277,6 @@ __all__ = [
     "purge_archived_dlq_entries",
     # Beat schedule
     "get_cleanup_beat_schedule",
-    # Legacy compatibility
-    "ArchiveOldDLQEntriesTask",
-    "CleanupExpiredConfigTask",
-    "ExpireApprovalRequestsTask",
-    "PurgeArchivedDLQEntriesTask",
-    "CLEANUP_TASKS",
-    "register_cleanup_tasks_with_celery",
     # Service re-exports (for testing convenience)
     "CleanupResult",
     "CleanupService",

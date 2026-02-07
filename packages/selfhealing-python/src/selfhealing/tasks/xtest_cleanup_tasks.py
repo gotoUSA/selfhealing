@@ -169,46 +169,12 @@ def get_xtest_cleanup_beat_schedule() -> dict[str, Any]:
         return {}
 
 
-# =============================================================================
-# Backward Compatibility - Legacy Class Aliases
-# =============================================================================
-
-# _LegacyTaskWrapper: 단일 소스는 cleanup_tasks.py (Item 58 중복 제거)
-from selfhealing.tasks.cleanup_tasks import _LegacyTaskWrapper
-
-
-# Legacy aliases
-CleanupXTestArtifactsTask = _LegacyTaskWrapper("selfhealing.cleanup_xtest_artifacts", cleanup_xtest_artifacts)
-
-# Legacy task list
-XTEST_CLEANUP_TASKS = [
-    CleanupXTestArtifactsTask,
-]
-
-
-def register_xtest_cleanup_tasks_with_celery(app):
-    """
-    Celery app에 X-Test Cleanup 태스크 등록.
-
-    Legacy compatibility function. With the new shared_task approach,
-    tasks are automatically registered when the module is imported.
-    """
-    logger.info(
-        "[XTestCleanupTasks] register_xtest_cleanup_tasks_with_celery called - "
-        "tasks are now auto-registered via shared_task"
-    )
-
-
 __all__ = [
     # Thin wrapper functions
     "cleanup_xtest_artifacts",
     "get_xtest_cleanup_stats",
     # Beat schedule
     "get_xtest_cleanup_beat_schedule",
-    # Legacy compatibility
-    "CleanupXTestArtifactsTask",
-    "XTEST_CLEANUP_TASKS",
-    "register_xtest_cleanup_tasks_with_celery",
     # Celery availability flag
     "CELERY_TASKS_AVAILABLE",
 ]

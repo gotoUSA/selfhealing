@@ -648,50 +648,10 @@ class ErrorBudgetGate:
         status["enabled"] = self._config.circuit_breaker_enabled
         return status
 
-    # 하위 호환성을 위한 별칭 (Deprecated)
-    def get_circuit_breaker_status(self) -> dict[str, Any]:
-        """
-        Gate Fault Detector 현재 상태 조회.
-
-        .. deprecated:: 2.0.0
-            Use :meth:`get_fault_detector_status` instead.
-            Will be removed in version 3.0.0.
-        """
-        import warnings
-
-        warnings.warn(
-            "get_circuit_breaker_status() is deprecated. "
-            "Use get_fault_detector_status() instead. "
-            "This method will be removed in v3.0.0.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.get_fault_detector_status()
-
     def reset_fault_detector(self) -> None:
         """Gate Fault Detector 리셋."""
         self._fault_detector.reset()
         logger.info("[ErrorBudgetGate] Fault detector reset by admin action")
-
-    # 하위 호환성을 위한 별칭 (Deprecated)
-    def reset_circuit_breaker(self) -> None:
-        """
-        Gate Fault Detector 리셋.
-
-        .. deprecated:: 2.0.0
-            Use :meth:`reset_fault_detector` instead.
-            Will be removed in version 3.0.0.
-        """
-        import warnings
-
-        warnings.warn(
-            "reset_circuit_breaker() is deprecated. "
-            "Use reset_fault_detector() instead. "
-            "This method will be removed in v3.0.0.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.reset_fault_detector()
 
     def get_alert_status(self) -> dict[str, Any]:
         """Alert Manager 현재 상태 조회."""

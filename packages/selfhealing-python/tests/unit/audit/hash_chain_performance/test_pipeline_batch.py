@@ -13,7 +13,7 @@ class TestPipelineBatchQuery:
     
     def test_get_multiple_chain_states(self):
         """Test batch retrieval of chain states."""
-        from selfhealing.audit.hash_chain_performance import PipelineBatchQuery
+        from selfhealing.audit.performance import PipelineBatchQuery
         
         redis = MockRedisClient()
         
@@ -38,7 +38,7 @@ class TestPipelineBatchQuery:
     
     def test_missing_chain_returns_default(self):
         """Test that missing chains return default values."""
-        from selfhealing.audit.hash_chain_performance import PipelineBatchQuery
+        from selfhealing.audit.performance import PipelineBatchQuery
         
         redis = MockRedisClient()
         batch = PipelineBatchQuery(redis, key_prefix="test:")
@@ -50,7 +50,7 @@ class TestPipelineBatchQuery:
     
     def test_empty_list_returns_empty(self):
         """Test empty input returns empty result."""
-        from selfhealing.audit.hash_chain_performance import PipelineBatchQuery
+        from selfhealing.audit.performance import PipelineBatchQuery
         
         redis = MockRedisClient()
         batch = PipelineBatchQuery(redis, key_prefix="test:")
@@ -61,7 +61,7 @@ class TestPipelineBatchQuery:
     
     def test_batch_check_pending(self):
         """Test batch checking of pending sequences."""
-        from selfhealing.audit.hash_chain_performance import PipelineBatchQuery
+        from selfhealing.audit.performance import PipelineBatchQuery
         
         redis = MockRedisClient()
         

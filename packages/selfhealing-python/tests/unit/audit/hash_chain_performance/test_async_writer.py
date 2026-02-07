@@ -14,7 +14,7 @@ class TestAsyncAuditWriter:
     
     def test_async_write_queues_entry(self):
         """Test that entries are queued."""
-        from selfhealing.audit.hash_chain_performance import AsyncAuditWriter
+        from selfhealing.audit.performance import AsyncAuditWriter
         
         written = []
         
@@ -38,7 +38,7 @@ class TestAsyncAuditWriter:
     
     def test_queue_full_handling(self):
         """Test handling when queue is full."""
-        from selfhealing.audit.hash_chain_performance import AsyncAuditWriter
+        from selfhealing.audit.performance import AsyncAuditWriter
         
         def slow_writer(entry):
             time.sleep(0.1)
@@ -60,7 +60,7 @@ class TestAsyncAuditWriter:
     
     def test_stats_tracking(self):
         """Test that statistics are tracked."""
-        from selfhealing.audit.hash_chain_performance import AsyncAuditWriter
+        from selfhealing.audit.performance import AsyncAuditWriter
         
         written_count = 0
         

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.audit import (
-    AuditAction,
+    ConfigAuditAction,
     AuditLogger,
     ConfigChangeEvent,
     LocalFileBackend,
@@ -28,7 +28,7 @@ class TestConfigChangeEvent:
         event = ConfigChangeEvent(
             config_type="RETRY_CONFIG",
             config_key="max_retries",
-            action=AuditAction.UPDATE,
+            action=ConfigAuditAction.UPDATE,
             old_value=3,
             new_value=5,
             user="admin",
@@ -37,7 +37,7 @@ class TestConfigChangeEvent:
 
         assert event.config_type == "RETRY_CONFIG"
         assert event.config_key == "max_retries"
-        assert event.action == AuditAction.UPDATE
+        assert event.action == ConfigAuditAction.UPDATE
         assert event.old_value == 3
         assert event.new_value == 5
 
@@ -46,7 +46,7 @@ class TestConfigChangeEvent:
         event = ConfigChangeEvent(
             config_type="CIRCUIT_BREAKER",
             config_key="failure_threshold",
-            action=AuditAction.UPDATE,
+            action=ConfigAuditAction.UPDATE,
             old_value=5,
             new_value=10,
         )
@@ -80,7 +80,7 @@ class TestAuditLogger:
             event = ConfigChangeEvent(
                 config_type="RETRY_CONFIG",
                 config_key="max_retries",
-                action=AuditAction.UPDATE,
+                action=ConfigAuditAction.UPDATE,
                 old_value={"value": 3},  # Use dict instead of int
                 new_value={"value": 5},
                 user="admin",
@@ -137,7 +137,7 @@ class TestAuditLogger:
             event = ConfigChangeEvent(
                 config_type="TEST",
                 config_key="key",
-                action=AuditAction.UPDATE,
+                action=ConfigAuditAction.UPDATE,
                 old_value={"v": 1},
                 new_value={"v": 2},
             )
@@ -168,7 +168,7 @@ class TestAuditLogger:
             event = ConfigChangeEvent(
                 config_type="TEST",
                 config_key="key",
-                action=AuditAction.UPDATE,
+                action=ConfigAuditAction.UPDATE,
                 ip_address="10.20.30.40",
             )
 
@@ -195,7 +195,7 @@ class TestAuditLogger:
             event = ConfigChangeEvent(
                 config_type="AUTH_CONFIG",
                 config_key="settings",
-                action=AuditAction.UPDATE,
+                action=ConfigAuditAction.UPDATE,
                 old_value={"username": "admin", "password": "old_secret"},
                 new_value={"username": "admin", "password": "new_secret"},
             )
@@ -372,14 +372,14 @@ class TestGlobalLogger:
             AuditLogger._instance = None
 
 
-class TestAuditAction:
-    """Tests for AuditAction enum."""
+class TestConfigAuditAction:
+    """Tests for ConfigAuditAction enum."""
 
     def test_action_values(self):
         """Test action enum values."""
-        assert AuditAction.CREATE.value == "create"
-        assert AuditAction.UPDATE.value == "update"
-        assert AuditAction.DELETE.value == "delete"
-        assert AuditAction.READ.value == "read"
-        assert AuditAction.APPLY.value == "apply"
-        assert AuditAction.ROLLBACK.value == "rollback"
+        assert ConfigAuditAction.CREATE.value == "create"
+        assert ConfigAuditAction.UPDATE.value == "update"
+        assert ConfigAuditAction.DELETE.value == "delete"
+        assert ConfigAuditAction.READ.value == "read"
+        assert ConfigAuditAction.APPLY.value == "apply"
+        assert ConfigAuditAction.ROLLBACK.value == "rollback"

@@ -15,7 +15,7 @@ class TestBatchFlushWriter:
     
     def test_write_buffers_entries(self):
         """Test that entries are buffered."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             BatchFlushWriter,
             BatchFlushConfig,
         )
@@ -37,7 +37,7 @@ class TestBatchFlushWriter:
     
     def test_flush_on_batch_size(self):
         """Test automatic flush when batch size reached."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             BatchFlushWriter,
             BatchFlushConfig,
         )
@@ -64,7 +64,7 @@ class TestBatchFlushWriter:
     
     def test_force_flush(self):
         """Test force flush."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             BatchFlushWriter,
             BatchFlushConfig,
         )
@@ -87,7 +87,7 @@ class TestBatchFlushWriter:
     
     def test_get_stats(self):
         """Test statistics retrieval."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             BatchFlushWriter,
             BatchFlushConfig,
         )

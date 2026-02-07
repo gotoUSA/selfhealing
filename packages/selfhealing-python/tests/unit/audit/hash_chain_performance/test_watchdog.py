@@ -15,7 +15,7 @@ class TestPendingSequenceWatchdog:
     
     def test_register_and_commit(self):
         """Test registering and committing sequences."""
-        from selfhealing.audit.hash_chain_performance import PendingSequenceWatchdog
+        from selfhealing.audit.performance import PendingSequenceWatchdog
         
         redis = MockRedisClient()
         watchdog = PendingSequenceWatchdog(redis, key_prefix="test:")
@@ -33,7 +33,7 @@ class TestPendingSequenceWatchdog:
     
     def test_mark_failed_cleans_redis(self):
         """Test that mark_failed cleans up Redis."""
-        from selfhealing.audit.hash_chain_performance import PendingSequenceWatchdog
+        from selfhealing.audit.performance import PendingSequenceWatchdog
         
         redis = MockRedisClient()
         redis._hashes["test:audit:hash_chain:pending:5"] = {"data": "test"}
@@ -49,7 +49,7 @@ class TestPendingSequenceWatchdog:
     
     def test_watchdog_lifecycle(self):
         """Test watchdog start/stop lifecycle."""
-        from selfhealing.audit.hash_chain_performance import PendingSequenceWatchdog
+        from selfhealing.audit.performance import PendingSequenceWatchdog
         
         redis = MockRedisClient()
         watchdog = PendingSequenceWatchdog(
@@ -70,7 +70,7 @@ class TestPendingSequenceWatchdog:
     
     def test_stats(self):
         """Test statistics retrieval."""
-        from selfhealing.audit.hash_chain_performance import PendingSequenceWatchdog
+        from selfhealing.audit.performance import PendingSequenceWatchdog
         
         redis = MockRedisClient()
         watchdog = PendingSequenceWatchdog(redis, key_prefix="test:")

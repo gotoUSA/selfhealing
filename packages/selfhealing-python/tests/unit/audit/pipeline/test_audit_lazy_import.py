@@ -46,11 +46,11 @@ class TestAuditLazyImport:
         """Extra logger symbols should be lazily loaded."""
         from selfhealing.audit import (
             ConfigChangeEvent,
-            AuditAction,
+            ConfigAuditAction,
         )
 
         assert ConfigChangeEvent is not None
-        assert AuditAction is not None
+        assert ConfigAuditAction is not None
 
     def test_lazy_import_masking_extras(self):
         """Extra masking symbols should be lazily loaded."""

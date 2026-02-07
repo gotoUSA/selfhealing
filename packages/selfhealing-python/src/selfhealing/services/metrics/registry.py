@@ -201,13 +201,6 @@ def get_registered_domains() -> list[str]:
     return sorted(all_domains)
 
 
-# Legacy compatibility
-@property
-def DOMAINS() -> list[str]:
-    """@deprecated: use get_registered_domains()"""
-    return get_registered_domains()
-
-
 # Pre-register common domains for backward compatibility
 for _domain in DEFAULT_DOMAINS:
     register_domain(_domain)

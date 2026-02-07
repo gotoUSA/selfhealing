@@ -27,7 +27,7 @@ from selfhealing.api.django.views.xtest.integration import (
     FullSnapshotView,
     ResetView,
 )
-from selfhealing.api.django.views.xtest.integration_scenarios import (
+from selfhealing.api.django.views.xtest.scenarios import (
     SCENARIO_REGISTRY,
     ScenarioStatus,
     ScenarioResult,
@@ -606,7 +606,7 @@ class TestScenarioExecution:
 
     def test_scenario_has_correct_steps_count(self, mock_cb_service, mock_dlq_service, mock_snapshot):
         """CB Open DLQ 시나리오가 6단계인지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             CBOpenDLQScenario,
         )
 
@@ -621,7 +621,7 @@ class TestScenarioExecution:
 
     def test_scenario_timeline_generated(self, mock_cb_service, mock_dlq_service, mock_snapshot):
         """시나리오 실행 시 타임라인이 생성되는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             CBOpenDLQScenario,
         )
 
@@ -638,7 +638,7 @@ class TestScenarioExecution:
 
     def test_scenario_snapshot_collected(self, mock_cb_service, mock_dlq_service, mock_snapshot):
         """시나리오 완료 후 스냅샷이 수집되는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             CBOpenDLQScenario,
         )
 

@@ -5,7 +5,6 @@ Tests for compliance tasks implementation:
 - RunComplianceCheckTask
 - GenerateFinOpsReportTask
 - CollectSelfHealingMetricsTask
-- GenerateDailyAutonomousReportTask
 """
 
 import pytest
@@ -20,7 +19,6 @@ from selfhealing.tasks.compliance_tasks import (
     COMPLIANCE_TASKS,
     get_compliance_beat_schedule,
 )
-from selfhealing.tasks.daily_report import GenerateDailyAutonomousReportTask
 from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
@@ -38,7 +36,7 @@ class TestRunComplianceCheckTask:
     def test_task_metadata(self):
         """태스크 메타데이터 확인."""
         task = RunComplianceCheckTask()
-        
+
         assert task.name == "selfhealing.run_compliance_check"
         assert task.notification_policy.timing == NotificationTiming.AFTER
         assert task.notification_policy.threshold == 0
@@ -49,8 +47,8 @@ class TestRunComplianceCheckTask:
     def test_run_all_passed(self):
         """모든 검사 통과."""
         task = RunComplianceCheckTask()
-        
-        with patch.object(task, 'run') as mock_run:
+
+        with patch.object(task, "run") as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "check_type": "all",
@@ -60,9 +58,9 @@ class TestRunComplianceCheckTask:
                 "violations": [],
                 "compliance_score": 100.0,
             }
-            
+
             result = mock_run(check_type="all")
-            
+
             assert result["success"] is True
             assert result["violation_count"] == 0
             assert result["passed_count"] == 10
@@ -71,8 +69,8 @@ class TestRunComplianceCheckTask:
     def test_run_with_violations(self):
         """위반 있는 경우."""
         task = RunComplianceCheckTask()
-        
-        with patch.object(task, 'run') as mock_run:
+
+        with patch.object(task, "run") as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "check_type": "dora",
@@ -82,9 +80,9 @@ class TestRunComplianceCheckTask:
                 "violations": [{"id": "v001", "check_id": "DORA-001", "severity": "high"}],
                 "compliance_score": 70.0,
             }
-            
+
             result = mock_run(check_type="dora")
-            
+
             assert result["success"] is True
             assert result["violation_count"] == 3
             assert len(result["violations"]) == 1
@@ -93,10 +91,10 @@ class TestRunComplianceCheckTask:
     def test_get_standards_for_type(self):
         """검사 유형별 표준 반환."""
         task = RunComplianceCheckTask()
-        
+
         # "all"은 None 반환
         assert task._get_standards_for_type("all") is None
-        
+
         # 특정 유형은 해당 표준 반환 (모듈 임포트 실패 시 None)
         result = task._get_standards_for_type("dora")
         # 임포트 성공 시 리스트, 실패 시 None
@@ -105,7 +103,7 @@ class TestRunComplianceCheckTask:
     def test_get_severity(self):
         """위반 수에 따른 심각도."""
         task = RunComplianceCheckTask()
-        
+
         assert task._get_severity({"violation_count": 0}) == "info"
         assert task._get_severity({"violation_count": 5}) == "warning"
         assert task._get_severity({"violation_count": 15}) == "critical"
@@ -113,17 +111,17 @@ class TestRunComplianceCheckTask:
     def test_get_summary_message_all_passed(self):
         """모두 통과 메시지."""
         task = RunComplianceCheckTask()
-        
+
         result = {"success": True, "violation_count": 0, "total_checks": 10}
         message = task._get_summary_message(result)
-        
+
         assert "통과" in message
         assert "10" in message
 
     def test_get_summary_message_with_violations(self):
         """위반 있을 때 메시지."""
         task = RunComplianceCheckTask()
-        
+
         result = {
             "success": True,
             "violation_count": 3,
@@ -132,7 +130,7 @@ class TestRunComplianceCheckTask:
             "compliance_score": 70.0,
         }
         message = task._get_summary_message(result)
-        
+
         assert "위반" in message
         assert "3" in message
         assert "70" in message
@@ -140,10 +138,10 @@ class TestRunComplianceCheckTask:
     def test_get_summary_message_error(self):
         """에러 메시지."""
         task = RunComplianceCheckTask()
-        
+
         result = {"success": False, "error": "Service unavailable"}
         message = task._get_summary_message(result)
-        
+
         assert "실패" in message
         assert "Service unavailable" in message
 
@@ -159,7 +157,7 @@ class TestGenerateFinOpsReportTask:
     def test_task_metadata(self):
         """태스크 메타데이터 확인."""
         task = GenerateFinOpsReportTask()
-        
+
         assert task.name == "selfhealing.generate_finops_report"
         assert task.notification_policy.timing == NotificationTiming.AFTER
         assert task.notification_policy.aggregate is False
@@ -169,8 +167,8 @@ class TestGenerateFinOpsReportTask:
     def test_run_success(self):
         """성공적인 리포트 생성."""
         task = GenerateFinOpsReportTask()
-        
-        with patch.object(task, 'run') as mock_run:
+
+        with patch.object(task, "run") as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "report_id": "finops-weekly-20260102",
@@ -182,9 +180,9 @@ class TestGenerateFinOpsReportTask:
                 "by_stage": {"stage16": 0.5, "stage26": 0.7},
                 "by_operation": {"retry": 0.8, "archive": 0.4},
             }
-            
+
             result = mock_run(period="weekly")
-            
+
             assert result["success"] is True
             assert result["period"] == "weekly"
             assert result["total_cost"] == 1.2345
@@ -194,22 +192,22 @@ class TestGenerateFinOpsReportTask:
     def test_run_daily_period(self):
         """일일 리포트 기간 테스트."""
         task = GenerateFinOpsReportTask()
-        
-        with patch.object(task, 'run') as mock_run:
+
+        with patch.object(task, "run") as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "period": "daily",
                 "total_cost": 0.5,
             }
-            
+
             result = mock_run(period="daily")
-            
+
             assert result["period"] == "daily"
 
     def test_calculate_savings(self):
         """비용 절감 계산."""
         task = GenerateFinOpsReportTask()
-        
+
         # 현재는 0.0 반환
         savings = task._calculate_savings(None, "weekly", None)
         assert savings == 0.0
@@ -217,7 +215,7 @@ class TestGenerateFinOpsReportTask:
     def test_get_summary_message_success(self):
         """성공 메시지."""
         task = GenerateFinOpsReportTask()
-        
+
         result = {
             "success": True,
             "period": "weekly",
@@ -226,7 +224,7 @@ class TestGenerateFinOpsReportTask:
             "success_rate": 98.0,
         }
         message = task._get_summary_message(result)
-        
+
         assert "FinOps" in message
         assert "weekly" in message
         assert "$" in message or "2.5" in message
@@ -234,10 +232,10 @@ class TestGenerateFinOpsReportTask:
     def test_get_summary_message_error(self):
         """에러 메시지."""
         task = GenerateFinOpsReportTask()
-        
+
         result = {"success": False, "error": "Database connection failed"}
         message = task._get_summary_message(result)
-        
+
         assert "실패" in message
 
 
@@ -252,136 +250,54 @@ class TestCollectSelfHealingMetricsTask:
     def test_task_metadata(self):
         """태스크 메타데이터 확인."""
         task = CollectSelfHealingMetricsTask()
-        
+
         assert task.name == "selfhealing.collect_self_healing_metrics"
         assert task.notification_policy.timing == NotificationTiming.AGGREGATED
         assert task.notification_policy.aggregate is True
         # threshold가 무한대로 설정되어 알림이 발생하지 않음
-        assert task.notification_policy.threshold == float('inf')
+        assert task.notification_policy.threshold == float("inf")
 
     def test_run_basic(self):
         """기본 메트릭 수집."""
         task = CollectSelfHealingMetricsTask()
-        
-        with patch.object(task, 'run') as mock_run:
+
+        with patch.object(task, "run") as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "metrics_collected": 5,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            
+
             result = mock_run()
-            
+
             assert result["success"] is True
             assert result["metrics_collected"] >= 0
 
     def test_run_with_all_components(self):
         """모든 컴포넌트 메트릭 수집."""
         task = CollectSelfHealingMetricsTask()
-        
-        with patch.object(task, 'run') as mock_run:
+
+        with patch.object(task, "run") as mock_run:
             mock_run.return_value = {
                 "success": True,
                 "metrics_collected": 10,
                 "timestamp": "2026-01-02T00:00:00Z",
             }
-            
+
             result = mock_run()
-            
+
             assert result["success"] is True
             assert result["metrics_collected"] == 10
 
     def test_get_summary_message(self):
         """메시지 생성."""
         task = CollectSelfHealingMetricsTask()
-        
+
         result = {"success": True, "metrics_collected": 10}
         message = task._get_summary_message(result)
-        
+
         assert "메트릭" in message
         assert "10" in message
-
-
-# =============================================================================
-# GenerateDailyAutonomousReportTask Tests
-# =============================================================================
-
-
-class TestGenerateDailyAutonomousReportTask:
-    """GenerateDailyAutonomousReportTask 테스트.
-    
-    NOTE: 구현이 _LegacyTaskWrapper로 변경됨.
-    - notification_policy는 더 이상 태스크 클래스에 없음
-    - _get_summary_message는 서비스 레이어로 이동됨
-    - 테스트는 현재 API에 맞게 수정됨
-    """
-
-    def test_task_metadata(self):
-        """태스크 메타데이터 확인."""
-        task = GenerateDailyAutonomousReportTask()
-        
-        # _LegacyTaskWrapper는 name만 가지고 있음
-        assert task.name == "selfhealing.generate_daily_autonomous_report"
-        # notification_policy는 서비스 레이어에서 처리됨 - 태스크에서 제거됨
-
-    def test_run_with_collector_unavailable(self):
-        """DailyReportCollector 없을 때."""
-        task = GenerateDailyAutonomousReportTask()
-        
-        # ImportError 발생 시 기본 리포트 반환
-        with patch(
-            "selfhealing.tasks.daily_report.generate_daily_autonomous_report"
-        ) as mock_run:
-            mock_run.return_value = {
-                "success": True,
-                "date": "2026-01-02",
-                "total_tasks": 0,
-                "summary": {},
-            }
-            
-            result = task.run()
-            
-            mock_run.assert_called_once()
-
-    def test_run_with_collector(self):
-        """DailyReportCollector 있을 때."""
-        task = GenerateDailyAutonomousReportTask()
-        
-        with patch(
-            "selfhealing.tasks.daily_report.generate_daily_autonomous_report"
-        ) as mock_run:
-            mock_run.return_value = {
-                "success": True,
-                "date": "2026-01-02",
-                "total_tasks": 15,
-                "summary": {
-                    "archived_count": 100,
-                    "expired_count": 20,
-                    "recovered_count": 5,
-                },
-            }
-            
-            result = task.run()
-            
-            mock_run.assert_called_once()
-
-    def test_run_returns_dict(self):
-        """run() 메서드가 dict를 반환하는지 확인."""
-        task = GenerateDailyAutonomousReportTask()
-        
-        with patch(
-            "selfhealing.tasks.daily_report.generate_daily_autonomous_report"
-        ) as mock_run:
-            mock_run.return_value = {
-                "success": True,
-                "date": "2026-01-02",
-                "summary": {},
-            }
-            
-            result = task.run()
-            
-            assert isinstance(result, dict)
-            assert "success" in result
 
 
 # =============================================================================
@@ -395,7 +311,7 @@ class TestComplianceBeatSchedule:
     def test_schedule_contains_all_tasks(self):
         """스케줄에 모든 태스크 포함 확인."""
         schedule = get_compliance_beat_schedule()
-        
+
         # compliance_tasks.py에는 3개 태스크만 포함
         assert "run-compliance-check" in schedule
         assert "generate-finops-report" in schedule
@@ -404,7 +320,7 @@ class TestComplianceBeatSchedule:
     def test_schedule_queue_assignments(self):
         """큐 할당 확인."""
         schedule = get_compliance_beat_schedule()
-        
+
         # compliance_tasks.py에는 3개 태스크만 포함
         assert schedule["run-compliance-check"]["options"]["queue"] == "compliance"
         assert schedule["generate-finops-report"]["options"]["queue"] == "reports"
@@ -413,7 +329,7 @@ class TestComplianceBeatSchedule:
     def test_schedule_task_names(self):
         """태스크 이름 확인."""
         schedule = get_compliance_beat_schedule()
-        
+
         # compliance_tasks.py에는 3개 태스크만 포함
         assert schedule["run-compliance-check"]["task"] == "selfhealing.run_compliance_check"
         assert schedule["generate-finops-report"]["task"] == "selfhealing.generate_finops_report"
@@ -422,7 +338,7 @@ class TestComplianceBeatSchedule:
     def test_finops_report_weekly_schedule(self):
         """FinOps 리포트 주간 스케줄."""
         schedule = get_compliance_beat_schedule()
-        
+
         finops = schedule["generate-finops-report"]
         # day_of_week=1 (월요일)
         assert finops["kwargs"]["period"] == "weekly"
@@ -440,9 +356,9 @@ class TestComplianceTaskRegistry:
         """모든 태스크가 레지스트리에 있는지 확인."""
         # compliance_tasks.py에는 3개 태스크만 포함
         assert len(COMPLIANCE_TASKS) == 3
-        
+
         task_classes = [t.__name__ for t in COMPLIANCE_TASKS]
-        
+
         assert "RunComplianceCheckTask" in task_classes
         assert "GenerateFinOpsReportTask" in task_classes
         assert "CollectSelfHealingMetricsTask" in task_classes
@@ -473,18 +389,18 @@ class TestComplianceTasksIntegration:
         for task_class in COMPLIANCE_TASKS:
             task = task_class()
             assert task is not None
-            assert hasattr(task, 'run')
-            assert hasattr(task, '_get_summary_message')
+            assert hasattr(task, "run")
+            assert hasattr(task, "_get_summary_message")
 
     def test_notification_channels_configured(self):
         """알림 채널 설정 확인."""
         # 규정 준수와 FinOps는 Slack + Email
         compliance_task = RunComplianceCheckTask()
         finops_task = GenerateFinOpsReportTask()
-        
+
         assert "email" in compliance_task.notification_policy.channels
         assert "email" in finops_task.notification_policy.channels
-        
+
         # 메트릭 수집은 기본 (알림 없음)
         metrics_task = CollectSelfHealingMetricsTask()
-        assert metrics_task.notification_policy.threshold == float('inf')
+        assert metrics_task.notification_policy.threshold == float("inf")

@@ -16,7 +16,7 @@ class TestHashChainPerformanceManager:
     
     def test_initialization(self):
         """Test manager initialization."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         redis = MockRedisClient()
         manager = HashChainPerformanceManager(
@@ -30,7 +30,7 @@ class TestHashChainPerformanceManager:
     
     def test_lazy_init_lua_chain(self):
         """Test lazy initialization of lua_chain."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         redis = MockRedisClient()
         manager = HashChainPerformanceManager(redis_client=redis)
@@ -46,7 +46,7 @@ class TestHashChainPerformanceManager:
     
     def test_lazy_init_batch_query(self):
         """Test lazy initialization of batch_query."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         redis = MockRedisClient()
         manager = HashChainPerformanceManager(redis_client=redis)
@@ -58,7 +58,7 @@ class TestHashChainPerformanceManager:
     
     def test_lazy_init_sampler(self):
         """Test lazy initialization of sampler."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         manager = HashChainPerformanceManager()
         
@@ -69,7 +69,7 @@ class TestHashChainPerformanceManager:
     
     def test_no_redis_raises_error(self):
         """Test that components requiring Redis raise error."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         manager = HashChainPerformanceManager()  # No Redis
         
@@ -81,7 +81,7 @@ class TestHashChainPerformanceManager:
     
     def test_get_batch_writer(self):
         """Test creating batch writer."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             HashChainPerformanceManager,
             BatchFlushWriter,
         )
@@ -97,7 +97,7 @@ class TestHashChainPerformanceManager:
     
     def test_get_async_writer(self):
         """Test creating async writer."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             HashChainPerformanceManager,
             AsyncAuditWriter,
         )
@@ -114,7 +114,7 @@ class TestHashChainPerformanceManager:
     
     def test_get_watchdog(self):
         """Test getting watchdog."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             HashChainPerformanceManager,
             PendingSequenceWatchdog,
         )
@@ -129,7 +129,7 @@ class TestHashChainPerformanceManager:
     
     def test_start_watchdog(self):
         """Test starting watchdog."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         redis = MockRedisClient()
         manager = HashChainPerformanceManager(redis_client=redis)
@@ -143,7 +143,7 @@ class TestHashChainPerformanceManager:
     
     def test_stop_all(self):
         """Test stopping all components."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         redis = MockRedisClient()
         manager = HashChainPerformanceManager(redis_client=redis)
@@ -156,7 +156,7 @@ class TestHashChainPerformanceManager:
     
     def test_get_all_stats(self):
         """Test getting all statistics."""
-        from selfhealing.audit.hash_chain_performance import HashChainPerformanceManager
+        from selfhealing.audit.performance import HashChainPerformanceManager
         
         redis = MockRedisClient()
         manager = HashChainPerformanceManager(redis_client=redis)

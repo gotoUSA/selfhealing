@@ -57,9 +57,7 @@ class GateFaultDetector:
         with self._lock:
             self._failure_threshold = failure_threshold
             self._recovery_timeout = recovery_timeout
-            logger.info(
-                f"[CircuitBreaker] Updated: threshold={failure_threshold}, timeout={recovery_timeout}s"
-            )
+            logger.info(f"[CircuitBreaker] Updated: threshold={failure_threshold}, timeout={recovery_timeout}s")
 
     def can_execute(self) -> bool:
         """요청 실행 가능 여부."""
@@ -70,14 +68,10 @@ class GateFaultDetector:
             if self._state == GateFaultState.DEGRADED:
                 # 복구 시간이 지났는지 확인
                 if self._last_failure_time:
-                    elapsed = (
-                        datetime.now(timezone.utc) - self._last_failure_time
-                    ).total_seconds()
+                    elapsed = (datetime.now(timezone.utc) - self._last_failure_time).total_seconds()
                     if elapsed >= self._recovery_timeout:
                         self._state = GateFaultState.RECOVERING
-                        logger.info(
-                            "[GateFaultDetector] State: DEGRADED -> RECOVERING (attempting recovery)"
-                        )
+                        logger.info("[GateFaultDetector] State: DEGRADED -> RECOVERING (attempting recovery)")
                         return True
                 return False
 
@@ -88,9 +82,7 @@ class GateFaultDetector:
         """성공 기록."""
         with self._lock:
             if self._state == GateFaultState.RECOVERING:
-                logger.info(
-                    "[GateFaultDetector] State: RECOVERING -> HEALTHY (recovered)"
-                )
+                logger.info("[GateFaultDetector] State: RECOVERING -> HEALTHY (recovered)")
             self._state = GateFaultState.HEALTHY
             self._failure_count = 0
 
@@ -103,9 +95,7 @@ class GateFaultDetector:
             if self._state == GateFaultState.RECOVERING:
                 # 복구 실패 - 다시 DEGRADED
                 self._state = GateFaultState.DEGRADED
-                logger.warning(
-                    "[GateFaultDetector] State: RECOVERING -> DEGRADED (recovery failed)"
-                )
+                logger.warning("[GateFaultDetector] State: RECOVERING -> DEGRADED (recovery failed)")
             elif self._failure_count >= self._failure_threshold:
                 self._state = GateFaultState.DEGRADED
                 logger.warning(
@@ -121,11 +111,7 @@ class GateFaultDetector:
                 "failure_count": self._failure_count,
                 "failure_threshold": self._failure_threshold,
                 "recovery_timeout": self._recovery_timeout,
-                "last_failure_time": (
-                    self._last_failure_time.isoformat()
-                    if self._last_failure_time
-                    else None
-                ),
+                "last_failure_time": (self._last_failure_time.isoformat() if self._last_failure_time else None),
             }
 
     def reset(self) -> None:
@@ -137,48 +123,7 @@ class GateFaultDetector:
             logger.info("[GateFaultDetector] Reset to HEALTHY state")
 
 
-# =============================================================================
-# 하위 호환성 별칭 (Deprecated) - __getattr__ 패턴으로 경고 발생
-# =============================================================================
-
-# Deprecated 별칭 매핑 - 접근 시 DeprecationWarning 발생
-_DEPRECATED_ALIASES = {
-    "CircuitState": ("GateFaultState", GateFaultState),
-    "InMemoryCircuitBreaker": ("GateFaultDetector", GateFaultDetector),
-}
-
-_deprecated_warned: set = set()
-
-
-def __getattr__(name: str):
-    """
-    Deprecated 별칭 접근 시 DeprecationWarning 발생.
-
-    .. deprecated:: 2.0.0
-        CircuitState -> GateFaultState
-        InMemoryCircuitBreaker -> GateFaultDetector
-        Will be removed in version 3.0.0.
-    """
-    import warnings
-
-    if name in _DEPRECATED_ALIASES:
-        new_name, actual_class = _DEPRECATED_ALIASES[name]
-        if name not in _deprecated_warned:
-            warnings.warn(
-                f"'{name}' is deprecated. Use '{new_name}' instead. "
-                f"This alias will be removed in v3.0.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _deprecated_warned.add(name)
-        return actual_class
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 __all__ = [
     "GateFaultState",
     "GateFaultDetector",
-    # Deprecated aliases (접근 시 DeprecationWarning 발생)
-    "CircuitState",
-    "InMemoryCircuitBreaker",
 ]

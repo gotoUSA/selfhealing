@@ -209,9 +209,7 @@ def update_retry_success_rates(
 
 
 @contextmanager
-def track_recovery_time(
-    domain: str, resolution_type: str
-) -> Generator[None, None, None]:
+def track_recovery_time(domain: str, resolution_type: str) -> Generator[None, None, None]:
     """
     Context manager to track recovery time.
 
@@ -228,35 +226,7 @@ def track_recovery_time(
     finally:
         end = now()
         duration = (end - start).total_seconds()
-        recovery_time_seconds.labels(
-            domain=domain, resolution_type=resolution_type
-        ).observe(duration)
-
-
-def track_replay(replay_type: str = "single"):
-    """
-    Decorator to track replay attempts.
-
-    .. deprecated:: 2.0.0
-        Use :func:`selfhealing.metrics.decorators.track_replay` instead.
-        This function will be removed in version 3.0.0.
-
-    Usage:
-        @track_replay("batch")
-        def batch_replay(...)
-    """
-    import warnings
-
-    warnings.warn(
-        "track_replay from selfhealing.services.metrics.updaters is deprecated. "
-        "Use selfhealing.metrics.decorators.track_replay instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    # Re-export from the canonical location
-    from selfhealing.metrics.decorators import track_replay as _track_replay
-
-    return _track_replay(replay_type=replay_type)
+        recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
 
 
 # =============================================================================

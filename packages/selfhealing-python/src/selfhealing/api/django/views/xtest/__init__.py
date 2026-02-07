@@ -104,7 +104,7 @@ from .integration import (
 )
 
 # Integration Scenario utilities
-from .integration_scenarios import (
+from .scenarios import (
     SCENARIO_REGISTRY,
     IntegrationScenario,
     ScenarioResult,
@@ -159,11 +159,6 @@ from .throttle_simulation import (
     ThrottleRTTDelayInjectionView,
     ThrottleStatusView as ThrottleXTestStatusView,
 )
-
-# Legacy aliases for backward compatibility
-_collect_system_snapshot = collect_system_snapshot
-_add_healing_event = add_healing_event
-_add_healing_incident = add_healing_incident
 
 __all__ = [
     # Base utilities
@@ -238,8 +233,4 @@ __all__ = [
     "ThrottleRTTDelayInjectionView",
     "ThrottleXTestStatusView",
     "ThrottleXTestResetView",
-    # Legacy aliases
-    "_collect_system_snapshot",
-    "_add_healing_event",
-    "_add_healing_incident",
 ]

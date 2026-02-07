@@ -52,7 +52,7 @@ from selfhealing.services.error_budget_gate.config import (
 from selfhealing.services.error_budget_gate.exceptions import (
     AutomationBlockedError,
 )
-from selfhealing.services.error_budget_gate.fault_detector import (  # Deprecated aliases는 __getattr__을 통해 lazy load됨
+from selfhealing.services.error_budget_gate.fault_detector import (
     GateFaultDetector,
     GateFaultState,
 )
@@ -72,45 +72,6 @@ from selfhealing.services.error_budget_gate.rate_limiter import (
     InMemoryRateLimiter,
 )
 
-# =============================================================================
-# Deprecated 별칭 - __getattr__ 패턴으로 DeprecationWarning 발생
-# =============================================================================
-
-_DEPRECATED_ALIASES = {
-    "CircuitState": "GateFaultState",
-    "InMemoryCircuitBreaker": "GateFaultDetector",
-}
-
-_deprecated_warned_init: set = set()
-
-
-def __getattr__(name: str):
-    """
-    Deprecated 별칭 접근 시 DeprecationWarning 발생.
-
-    .. deprecated:: 2.0.0
-        CircuitState -> GateFaultState
-        InMemoryCircuitBreaker -> GateFaultDetector
-        Will be removed in version 3.0.0.
-    """
-    import warnings
-
-    from selfhealing.services.error_budget_gate import fault_detector
-
-    if name in _DEPRECATED_ALIASES:
-        new_name = _DEPRECATED_ALIASES[name]
-        if name not in _deprecated_warned_init:
-            warnings.warn(
-                f"'{name}' is deprecated. Use '{new_name}' instead. "
-                f"This alias will be removed in v3.0.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            _deprecated_warned_init.add(name)
-        return getattr(fault_detector, new_name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 __all__ = [
     # Configuration
     "ErrorBudgetGateConfig",
@@ -121,9 +82,6 @@ __all__ = [
     "GateFaultState",
     "GateFaultDetector",
     "GateAlertManager",
-    # Deprecated aliases (backward compatibility)
-    "CircuitState",
-    "InMemoryCircuitBreaker",
     # Exceptions
     "AutomationBlockedError",
     # Main Gate

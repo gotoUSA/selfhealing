@@ -371,7 +371,3 @@ class RecoveryAccountabilityConfig:
     def from_dict(cls, data: dict[str, Any]) -> RecoveryAccountabilityConfig:
         """딕셔너리에서 생성."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
-
-
-# 하위 호환 alias (deprecated)
-ActionResult = CoordinationActionResult

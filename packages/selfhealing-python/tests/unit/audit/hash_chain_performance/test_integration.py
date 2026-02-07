@@ -23,7 +23,7 @@ class TestPerformanceIntegration:
 
     def test_full_write_flow_with_performance_components(self):
         """Test complete write flow using performance components."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             HashChainPerformanceManager,
             BatchFlushConfig,
         )
@@ -87,7 +87,7 @@ class TestPerformanceIntegration:
 
     def test_sampling_verification_performance(self):
         """Test that sampling is faster than full verification."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             SamplingVerifier,
             SamplingConfig,
         )
@@ -142,7 +142,7 @@ class TestPerformanceIntegration:
 
     def test_concurrent_batch_writes(self):
         """Test concurrent writes to batch writer."""
-        from selfhealing.audit.hash_chain_performance import (
+        from selfhealing.audit.performance import (
             BatchFlushWriter,
             BatchFlushConfig,
         )

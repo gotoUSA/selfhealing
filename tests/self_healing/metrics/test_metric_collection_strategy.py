@@ -283,7 +283,7 @@ class TestJitter:
 
     def test_calculate_jitter(self):
         """Jitter 계산."""
-        from selfhealing.metrics.jitter import calculate_jitter
+        from selfhealing.utils.jitter import calculate_jitter
 
         for _ in range(10):
             jitter = calculate_jitter(max_delay_seconds=10.0)
@@ -291,7 +291,7 @@ class TestJitter:
 
     def test_calculate_jitter_with_min(self):
         """최소값 포함 Jitter 계산."""
-        from selfhealing.metrics.jitter import calculate_jitter
+        from selfhealing.utils.jitter import calculate_jitter
 
         for _ in range(10):
             jitter = calculate_jitter(max_delay_seconds=10.0, min_delay_seconds=5.0)
@@ -299,7 +299,7 @@ class TestJitter:
 
     def test_jitter_config_from_env(self):
         """환경 변수에서 JitterConfig 로드."""
-        from selfhealing.metrics.jitter import JitterConfig
+        from selfhealing.utils.jitter import JitterConfig
 
         with patch.dict(
             "os.environ",
@@ -314,14 +314,14 @@ class TestJitter:
 
     def test_jitter_config_disabled(self):
         """Jitter 비활성화 시 0 반환."""
-        from selfhealing.metrics.jitter import JitterConfig
+        from selfhealing.utils.jitter import JitterConfig
 
         config = JitterConfig(enabled=False)
         assert config.get_delay() == 0.0
 
     def test_with_jitter_decorator(self):
         """with_jitter 데코레이터."""
-        from selfhealing.metrics.jitter import with_jitter
+        from selfhealing.utils.jitter import with_jitter
 
         call_count = 0
 

@@ -46,9 +46,7 @@ class XTestCleanupResult:
     scenario_results_cleared: int = 0
     errors: list[str] = field(default_factory=list)
     cleaned_session_ids: list[str] = field(default_factory=list)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         """직렬화용 딕셔너리 변환."""
@@ -133,9 +131,7 @@ class XTestCleanupService:
                 logger.debug("[XTestCleanup] No expired sessions found")
                 return result
 
-            logger.info(
-                f"[XTestCleanup] Found {len(expired_sessions)} expired sessions"
-            )
+            logger.info(f"[XTestCleanup] Found {len(expired_sessions)} expired sessions")
 
             for session in expired_sessions:
                 try:
@@ -237,9 +233,7 @@ class XTestCleanupService:
                         restored_count += 1
                         logger.debug(f"[XTestCleanup] Restored CB: {service_name}")
                     except Exception as e:
-                        logger.warning(
-                            f"[XTestCleanup] Failed to restore CB {service_name}: {e}"
-                        )
+                        logger.warning(f"[XTestCleanup] Failed to restore CB {service_name}: {e}")
 
         except ImportError:
             logger.debug("[XTestCleanup] Circuit Breaker service not available")
@@ -364,7 +358,7 @@ class XTestCleanupService:
         cleared_count = 0
 
         try:
-            from selfhealing.api.django.views.xtest.integration_scenarios import (
+            from selfhealing.api.django.views.xtest.scenarios import (
                 clear_scenario_results,
             )
 
@@ -404,12 +398,8 @@ class XTestCleanupService:
             if self.redis:
                 idempotency_keys = self.redis.keys(f"{XTEST_IDEMPOTENCY_PREFIX}*")
                 rate_limit_keys = self.redis.keys(f"{XTEST_RATE_LIMIT_PREFIX}*")
-                stats["pending_idempotency_clears"] = (
-                    len(idempotency_keys) if idempotency_keys else 0
-                )
-                stats["pending_rate_limit_resets"] = (
-                    len(rate_limit_keys) if rate_limit_keys else 0
-                )
+                stats["pending_idempotency_clears"] = len(idempotency_keys) if idempotency_keys else 0
+                stats["pending_rate_limit_resets"] = len(rate_limit_keys) if rate_limit_keys else 0
 
         except Exception as e:
             logger.error(f"[XTestCleanup] Stats collection failed: {e}")

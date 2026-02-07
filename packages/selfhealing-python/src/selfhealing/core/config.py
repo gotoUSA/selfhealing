@@ -94,16 +94,6 @@ class ApprovalRequest:
     expires_at: str = ""  # ISO format
 
 
-# =============================================================================
-# Legacy Aliases for external code that imports specific types
-# =============================================================================
-
-# For code that still uses from selfhealing.core.config import SLAThresholds
-SLAThresholds = SLAConfig
-SecurityThresholds = SecurityConfig
-NotificationLimits = NotificationConfig
-
-
 __all__ = [
     # Settings classes (re-exported)
     "SelfHealingConfig",
@@ -141,8 +131,4 @@ __all__ = [
     "get_circuit_breaker_advanced_settings",
     # Data models
     "ApprovalRequest",
-    # Legacy aliases
-    "SLAThresholds",
-    "SecurityThresholds",
-    "NotificationLimits",
 ]

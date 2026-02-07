@@ -392,7 +392,3 @@ def calculate_backoff(
     )
     calculator = LegacyBackoffCalculator(config)
     return calculator.calculate(attempt)
-
-
-# 하위 호환 alias (deprecated)
-BackoffCalculator = BackoffStrategy

@@ -16,6 +16,3 @@ __all__ = [
     "ResilientStorageConfig",
     "ResilientStorageMode",
 ]
-
-# 하위 호환 alias (deprecated)
-StorageMode = ResilientStorageMode

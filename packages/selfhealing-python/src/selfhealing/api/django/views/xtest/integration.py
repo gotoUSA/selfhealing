@@ -36,7 +36,7 @@ from rest_framework.views import APIView
 from selfhealing.services.audit.xtest_audit import log_xtest_scenario_audit
 
 from .base import XTestModeMixin, collect_system_snapshot
-from .integration_scenarios import (
+from .scenarios import (
     clear_scenario_results,
     get_scenario_class,
     get_scenario_result,

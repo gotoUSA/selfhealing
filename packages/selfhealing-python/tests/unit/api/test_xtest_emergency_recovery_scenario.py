@@ -42,7 +42,7 @@ class TestFullEmergencyRecoveryScenario:
     @pytest.fixture(scope="class")
     def scenario(self):
         """FullEmergencyRecoveryScenario 인스턴스 생성."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             FullEmergencyRecoveryScenario,
         )
 
@@ -90,7 +90,7 @@ class TestFullEmergencyRecoveryScenario:
 
     def test_skip_wait_option_skips_health_check_delay(self):
         """skip_wait=True 옵션이 HEALTH_CHECK 대기를 스킵하는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             FullEmergencyRecoveryScenario,
         )
 
@@ -172,7 +172,7 @@ class TestSafetyInterlockCanaryRollbackScenario:
     @pytest.fixture(scope="class")
     def scenario(self):
         """SafetyInterlockCanaryRollbackScenario 인스턴스 생성."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             SafetyInterlockCanaryRollbackScenario,
         )
 
@@ -257,7 +257,7 @@ class TestScenarioRegistry:
 
     def test_scenario_registry_contains_new_scenarios(self):
         """레지스트리에 새 시나리오가 등록되어 있는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             SCENARIO_REGISTRY,
         )
 
@@ -266,7 +266,7 @@ class TestScenarioRegistry:
 
     def test_get_scenario_class_returns_correct_class(self):
         """get_scenario_class가 올바른 클래스를 반환하는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             get_scenario_class,
             FullEmergencyRecoveryScenario,
             SafetyInterlockCanaryRollbackScenario,
@@ -280,7 +280,7 @@ class TestScenarioRegistry:
 
     def test_list_available_scenarios_includes_new_scenarios(self):
         """list_available_scenarios가 새 시나리오를 포함하는지 확인."""
-        from selfhealing.api.django.views.xtest.integration_scenarios import (
+        from selfhealing.api.django.views.xtest.scenarios import (
             list_available_scenarios,
         )
 

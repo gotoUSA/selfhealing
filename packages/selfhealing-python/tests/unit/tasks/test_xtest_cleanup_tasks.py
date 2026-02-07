@@ -168,30 +168,8 @@ class TestGetXTestCleanupBeatSchedule:
         assert "cleanup-xtest-artifacts" in schedule
 
 
-class TestLegacyCompatibility:
-    """Legacy 호환성 테스트."""
-
-    def test_legacy_task_wrapper_exists(self):
-        """Legacy 태스크 래퍼 존재 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import CleanupXTestArtifactsTask
-
-        assert CleanupXTestArtifactsTask is not None
-        assert CleanupXTestArtifactsTask.name == "selfhealing.cleanup_xtest_artifacts"
-
-    def test_legacy_task_list_exists(self):
-        """Legacy 태스크 목록 존재 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import XTEST_CLEANUP_TASKS
-
-        assert isinstance(XTEST_CLEANUP_TASKS, list)
-        assert len(XTEST_CLEANUP_TASKS) >= 1
-
-    def test_register_function_exists(self):
-        """Celery 등록 함수 존재 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import (
-            register_xtest_cleanup_tasks_with_celery,
-        )
-
-        assert callable(register_xtest_cleanup_tasks_with_celery)
+class TestCeleryAvailability:
+    """Celery availability flag 테스트."""
 
     def test_celery_tasks_available_flag(self):
         """CELERY_TASKS_AVAILABLE 플래그 존재 검증."""

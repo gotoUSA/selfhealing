@@ -310,7 +310,6 @@ def register_all_tasks_with_celery(app) -> None:
     Args:
         app: Celery application instance
     """
-    from selfhealing.tasks.cleanup_tasks import register_cleanup_tasks_with_celery
     from selfhealing.tasks.compliance_tasks import register_compliance_tasks_with_celery
     from selfhealing.tasks.intelligence_tasks import (
         register_intelligence_tasks_with_celery,
@@ -319,7 +318,6 @@ def register_all_tasks_with_celery(app) -> None:
         register_traffic_aware_tasks_with_celery,
     )
 
-    register_cleanup_tasks_with_celery(app)
     register_intelligence_tasks_with_celery(app)
     register_compliance_tasks_with_celery(app)
     register_traffic_aware_tasks_with_celery(app)

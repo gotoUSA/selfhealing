@@ -26,8 +26,8 @@ from selfhealing.api.django.serializers.metric_sync import (
     MetricSyncResponseSerializer,
 )
 
-# Re-export from parent serializers.py for backwards compatibility
-from selfhealing.api.django.serializers_legacy import (  # Constants; Request Serializers; Response Serializers; Status & List Serializers; Metrics Serializers
+# Control API Serializers
+from selfhealing.api.django.serializers.control import (
     AuditLogListResponseSerializer,
     AuditLogSerializer,
     ControlAPIActions,

@@ -246,38 +246,3 @@ class StoreOperationsMixin:
             except Exception:
                 pass
             return None
-
-    def store_with_forensic_context(
-        self,
-        domain: str,
-        failure_type: str,
-        forensic_context: Any,
-        entity_type: str | None = None,
-        entity_id: str | None = None,
-        user_id: int | None = None,
-        error_code: str = "",
-        error_message: str = "",
-        next_action_hint: str = "",
-        recommended_action: str = "",
-        request: Any = None,
-    ):
-        """
-        DEPRECATED: ForensicContext has been removed from the system.
-
-        Use store_failure() directly instead with explicit parameters.
-        This method is kept for backward compatibility but will raise an error.
-
-        Args:
-            domain: Business domain
-            failure_type: Specific failure type
-            forensic_context: No longer supported
-            ...
-
-        Raises:
-            NotImplementedError: ForensicContext is no longer available
-        """
-        raise NotImplementedError(
-            "store_with_forensic_context() is deprecated. "
-            "ForensicContext has been removed from the system. "
-            "Use store_failure() directly with explicit parameters instead."
-        )

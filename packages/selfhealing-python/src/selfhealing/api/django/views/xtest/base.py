@@ -806,8 +806,3 @@ def clear_healing_events() -> int:
         count = len(_healing_events)
         _healing_events = []
         return count
-
-
-# Legacy alias for backward compatibility
-_collect_system_snapshot = collect_system_snapshot
-_add_healing_event = add_healing_event
