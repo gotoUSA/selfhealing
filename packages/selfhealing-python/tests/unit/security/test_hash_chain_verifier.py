@@ -9,6 +9,8 @@ Tests:
 - 엣지 케이스 테스트
 """
 
+from __future__ import annotations
+
 import json
 import os
 import struct
@@ -16,7 +18,7 @@ import tempfile
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -110,7 +112,7 @@ class TestHashChainManager:
 
         # 체인 연결 확인
         for i in range(1, len(entries)):
-            assert entries[i]["integrity"]["previous_hash"] == entries[i-1]["integrity"]["current_hash"]
+            assert entries[i]["integrity"]["previous_hash"] == entries[i - 1]["integrity"]["current_hash"]
 
     def test_get_state(self):
         """상태 조회."""
@@ -152,13 +154,10 @@ class TestHashChainManager:
 class TestHashChainVerifier:
     """HashChainVerifier 테스트."""
 
-    def _create_valid_chain(self, count: int = 5) -> List[Dict[str, Any]]:
+    def _create_valid_chain(self, count: int = 5) -> list[dict[str, Any]]:
         """유효한 해시 체인 생성."""
         manager = HashChainManager()
-        return [
-            manager.add_integrity({"event": f"event_{i}", "data": f"data_{i}"})
-            for i in range(count)
-        ]
+        return [manager.add_integrity({"event": f"event_{i}", "data": f"data_{i}"}) for i in range(count)]
 
     def test_verify_chain_valid(self):
         """유효한 체인 검증."""
@@ -217,7 +216,7 @@ class TestHashChainVerifier:
     def test_find_tampering_all_issues(self):
         """모든 문제 찾기."""
         entries = self._create_valid_chain(10)
-        
+
         # 여러 문제 생성
         entries[2]["data"] = "TAMPERED"  # 변조
         entries[5]["integrity"]["previous_hash"] = "FAKE"  # 체인 끊김
@@ -274,7 +273,7 @@ class TestAuditIntegrityVerifier:
             # 파일 읽고 변조
             with open(file_path, "r") as f:
                 lines = f.readlines()
-            
+
             entry = json.loads(lines[2])
             entry["data"] = "TAMPERED"
             lines[2] = json.dumps(entry) + "\n"
@@ -315,7 +314,7 @@ class TestAuditIntegrityVerifier:
             self._create_valid_audit_file(str(subdir), "audit2.jsonl", 3)
 
             verifier = AuditIntegrityVerifier()
-            
+
             # 비재귀
             summary_flat = verifier.verify_directory(Path(tmpdir), recursive=False)
             assert summary_flat.total_files == 1
@@ -348,10 +347,10 @@ class TestWALVerification:
         with open(file_path, "wb") as f:
             for i in range(count):
                 entry = {"seq": i + 1, "ts": datetime.now(timezone.utc).timestamp(), "data": {"event": f"event_{i}"}}
-                entry_bytes = json.dumps(entry, separators=(',', ':')).encode('utf-8')
-                checksum = zlib.crc32(entry_bytes) & 0xffffffff
+                entry_bytes = json.dumps(entry, separators=(",", ":")).encode("utf-8")
+                checksum = zlib.crc32(entry_bytes) & 0xFFFFFFFF
                 checksum_str = f"{checksum:08x}"
-                
+
                 # Format: [4-byte length][checksum:8][entry_bytes]
                 record = struct.pack(">I", len(entry_bytes)) + checksum_str.encode("ascii") + entry_bytes
                 f.write(record)
@@ -545,10 +544,7 @@ class TestEdgeCases:
     def test_large_chain(self):
         """대용량 체인."""
         manager = HashChainManager()
-        entries = [
-            manager.add_integrity({"event": f"event_{i}", "data": "x" * 100})
-            for i in range(1000)
-        ]
+        entries = [manager.add_integrity({"event": f"event_{i}", "data": "x" * 100}) for i in range(1000)]
 
         verifier = HashChainVerifier()
         is_valid, error = verifier.verify_chain(entries)
@@ -572,16 +568,7 @@ class TestEdgeCases:
         """중첩 데이터 구조."""
         manager = HashChainManager()
         entries = [
-            manager.add_integrity({
-                "event": "nested",
-                "data": {
-                    "level1": {
-                        "level2": {
-                            "level3": [1, 2, 3, {"key": "value"}]
-                        }
-                    }
-                }
-            })
+            manager.add_integrity({"event": "nested", "data": {"level1": {"level2": {"level3": [1, 2, 3, {"key": "value"}]}}}})
         ]
 
         verifier = HashChainVerifier()

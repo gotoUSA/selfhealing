@@ -13,13 +13,15 @@ Audit:
 - cancel_pending_change: log_config_apply_audit(status="cancelled")
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from selfhealing.core.apply_strategy import ApplyOptions, ApplyStrategy
 from selfhealing.core.state_backend import get_state_backend
@@ -71,7 +73,7 @@ class PendingConfigChange:
 
 
 # Singleton
-_pending_config_service: Optional["PendingConfigService"] = None
+_pending_config_service: PendingConfigService | None = None
 _service_lock = threading.Lock()
 
 
@@ -159,9 +161,7 @@ class PendingConfigService:
 
             # Calculate scheduled time
             if apply_options.strategy == ApplyStrategy.DELAYED:
-                scheduled_time = datetime.now(timezone.utc) + timedelta(
-                    seconds=apply_options.delay_seconds
-                )
+                scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=apply_options.delay_seconds)
             else:
                 scheduled_time = datetime.now(timezone.utc)
 
@@ -178,8 +178,7 @@ class PendingConfigService:
             self._save_state()
 
             logger.info(
-                f"[PendingConfig] Created pending change {change_id} "
-                f"for {config_type}, scheduled at {scheduled_time}"
+                f"[PendingConfig] Created pending change {change_id} " f"for {config_type}, scheduled at {scheduled_time}"
             )
 
             return change
@@ -189,26 +188,17 @@ class PendingConfigService:
         with self._lock:
             return self._pending.get(change_id)
 
-    def get_pending_changes_for_config(
-        self, config_type: str
-    ) -> list[PendingConfigChange]:
+    def get_pending_changes_for_config(self, config_type: str) -> list[PendingConfigChange]:
         """Get all pending changes for a config type."""
         with self._lock:
             return [
-                c
-                for c in self._pending.values()
-                if c.config_type == config_type
-                and c.status == PendingStatus.PENDING.value
+                c for c in self._pending.values() if c.config_type == config_type and c.status == PendingStatus.PENDING.value
             ]
 
     def get_all_pending_changes(self) -> list[PendingConfigChange]:
         """Get all pending changes."""
         with self._lock:
-            return [
-                c
-                for c in self._pending.values()
-                if c.status == PendingStatus.PENDING.value
-            ]
+            return [c for c in self._pending.values() if c.status == PendingStatus.PENDING.value]
 
     def get_due_changes(self) -> list[PendingConfigChange]:
         """Get all changes that are due to be applied."""
@@ -244,9 +234,7 @@ class PendingConfigService:
                 return None
 
             if change.status != PendingStatus.PENDING.value:
-                logger.warning(
-                    f"[PendingConfig] Cannot cancel {change_id}: status is {change.status}"
-                )
+                logger.warning(f"[PendingConfig] Cannot cancel {change_id}: status is {change.status}")
                 return None
 
             change.status = PendingStatus.CANCELLED.value
@@ -310,9 +298,7 @@ class PendingConfigService:
             self._move_to_history(change)
             self._save_state()
 
-            logger.error(
-                f"[PendingConfig] Failed to apply {change_id}: {error_message}"
-            )
+            logger.error(f"[PendingConfig] Failed to apply {change_id}: {error_message}")
             return change
 
     def get_history(
@@ -350,9 +336,7 @@ class PendingConfigService:
 
             if expired:
                 self._save_state()
-                logger.info(
-                    f"[PendingConfig] Cleaned up {len(expired)} expired changes"
-                )
+                logger.info(f"[PendingConfig] Cleaned up {len(expired)} expired changes")
 
             return len(expired)
 

@@ -12,8 +12,6 @@ Layered Circuit Breaker State Repository Package.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from selfhealing.adapters.memory.drift_reconciliation import DriftReconciler
 from selfhealing.interfaces.repositories import (
     CircuitBreakerStateRepository,

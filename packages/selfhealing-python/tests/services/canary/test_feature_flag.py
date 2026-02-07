@@ -10,10 +10,10 @@ CanaryFeatureFlag 모듈 단위 테스트.
 
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md (Step 6)
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
 from unittest.mock import Mock, MagicMock
 
 import pytest
@@ -471,10 +471,7 @@ class TestCanaryFeatureFlag:
         feature_flag.register_flag(flag)
 
         # 동일 사용자에 대해 여러 번 평가해도 동일 결과
-        decisions = [
-            feature_flag.evaluate(mock_request, "hash_test")
-            for _ in range(10)
-        ]
+        decisions = [feature_flag.evaluate(mock_request, "hash_test") for _ in range(10)]
 
         first_result = decisions[0].use_canary
         assert all(d.use_canary == first_result for d in decisions)
@@ -515,10 +512,7 @@ class TestCanaryFeatureFlag:
         feature_flag.register_flag(flag)
 
         # 무작위이므로 결과가 다를 수 있음
-        decisions = [
-            feature_flag.evaluate(mock_request, "random_test")
-            for _ in range(100)
-        ]
+        decisions = [feature_flag.evaluate(mock_request, "random_test") for _ in range(100)]
 
         # 50% 비율이면 대략 반반이어야 함 (완전히 정확하진 않음)
         canary_count = sum(1 for d in decisions if d.use_canary)

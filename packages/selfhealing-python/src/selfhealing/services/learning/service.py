@@ -2,12 +2,14 @@
 Self-Learning DNA Service - 자가 학습 서비스
 """
 
+from __future__ import annotations
+
 import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
 
 from .models import (
     BlacklistedParameter,
@@ -118,10 +120,7 @@ class ParameterBlacklist:
         # StateBackend에 영속화
         self._save_to_storage()
 
-        logger.warning(
-            f"[ParameterBlacklist] Registered: {key} "
-            f"blocked_values={blocked_values} reason={reason.value}"
-        )
+        logger.warning(f"[ParameterBlacklist] Registered: {key} " f"blocked_values={blocked_values} reason={reason.value}")
 
         return entry
 
@@ -163,11 +162,7 @@ class ParameterBlacklist:
 
         with self._lock:
             # 만료된 항목 제거
-            expired_keys = [
-                k
-                for k, v in self._blacklist.items()
-                if v.expires_at and now_time > v.expires_at
-            ]
+            expired_keys = [k for k, v in self._blacklist.items() if v.expires_at and now_time > v.expires_at]
             for k in expired_keys:
                 del self._blacklist[k]
 
@@ -208,12 +203,8 @@ class ParameterBlacklist:
             if stored:
                 with self._lock:
                     for key, entry_dict in stored.items():
-                        self._blacklist[key] = BlacklistedParameter.from_dict(
-                            entry_dict
-                        )
-                logger.info(
-                    f"[ParameterBlacklist] Loaded {len(self._blacklist)} entries from storage"
-                )
+                        self._blacklist[key] = BlacklistedParameter.from_dict(entry_dict)
+                logger.info(f"[ParameterBlacklist] Loaded {len(self._blacklist)} entries from storage")
         except Exception as e:
             logger.warning(f"[ParameterBlacklist] Failed to load from storage: {e}")
 
@@ -228,14 +219,10 @@ class ParameterBlacklist:
 
         try:
             with self._lock:
-                serialized = {
-                    key: entry.to_dict() for key, entry in self._blacklist.items()
-                }
+                serialized = {key: entry.to_dict() for key, entry in self._blacklist.items()}
 
             self._backend.set(self.STORAGE_KEY, serialized)
-            logger.debug(
-                f"[ParameterBlacklist] Saved {len(serialized)} entries to storage"
-            )
+            logger.debug(f"[ParameterBlacklist] Saved {len(serialized)} entries to storage")
         except Exception as e:
             logger.error(f"[ParameterBlacklist] Failed to save to storage: {e}")
 
@@ -247,7 +234,7 @@ class LearningService:
     패턴을 학습하고 최적화 제안을 생성합니다.
     """
 
-    _instance: Optional["LearningService"] = None
+    _instance: LearningService | None = None
     _lock = Lock()
 
     def __new__(cls) -> "LearningService":
@@ -464,9 +451,7 @@ class LearningService:
     def _detect_anomaly(self, metric: PerformanceMetric) -> None:
         """이상 탐지"""
         # 같은 메트릭의 최근 값들 가져오기
-        recent_values = [
-            m.value for m in self._metrics[-100:] if m.metric_name == metric.metric_name
-        ]
+        recent_values = [m.value for m in self._metrics[-100:] if m.metric_name == metric.metric_name]
 
         if len(recent_values) < 10:
             return
@@ -572,9 +557,7 @@ class LearningService:
             for p in patterns:
                 pattern_names[p.name].append(stage)
 
-        common_patterns = {
-            name: stages for name, stages in pattern_names.items() if len(stages) > 1
-        }
+        common_patterns = {name: stages for name, stages in pattern_names.items() if len(stages) > 1}
 
         return {
             "total_stages": len(patterns_by_stage),
@@ -742,9 +725,6 @@ class LearningService:
             True if manual only mode
         """
         for pattern in self._patterns.values():
-            if (
-                pattern.name == f"ManualOnlyMode:{module}"
-                and pattern.features.get("manual_only") is True
-            ):
+            if pattern.name == f"ManualOnlyMode:{module}" and pattern.features.get("manual_only") is True:
                 return True
         return False

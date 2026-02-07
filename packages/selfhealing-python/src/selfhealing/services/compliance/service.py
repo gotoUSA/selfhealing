@@ -2,12 +2,13 @@
 Compliance DNA Service - 규정 준수 관리 서비스
 """
 
+from __future__ import annotations
+
 import logging
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Optional
 
 from .models import (
     ComplianceCheck,
@@ -148,7 +149,7 @@ class ComplianceService:
     규정 준수 상태를 추적하고 리포트를 생성합니다.
     """
 
-    _instance: Optional["ComplianceService"] = None
+    _instance: ComplianceService | None = None
     _lock = Lock()
 
     def __new__(cls) -> "ComplianceService":
@@ -261,9 +262,7 @@ class ComplianceService:
                 if hasattr(exp, "executed_at") and exp.executed_at:
                     try:
                         if isinstance(exp.executed_at, str):
-                            exp_time = datetime.fromisoformat(
-                                exp.executed_at.replace("Z", "+00:00")
-                            )
+                            exp_time = datetime.fromisoformat(exp.executed_at.replace("Z", "+00:00"))
                         else:
                             exp_time = exp.executed_at
 
@@ -282,10 +281,7 @@ class ComplianceService:
             min_required = 4
 
             if total_count < min_required:
-                logger.warning(
-                    f"[Compliance] DORA-003: Insufficient experiments "
-                    f"({total_count}/{min_required})"
-                )
+                logger.warning(f"[Compliance] DORA-003: Insufficient experiments " f"({total_count}/{min_required})")
                 return False
 
             # 통과: 실패한 실험도 "복원력 한계 발견"으로 인정
@@ -396,11 +392,7 @@ class ComplianceService:
                 check_id=check_id,
                 stage_name=stage_name,
                 standard=check.standard,
-                severity=(
-                    ViolationSeverity.HIGH
-                    if check.required
-                    else ViolationSeverity.MEDIUM
-                ),
+                severity=(ViolationSeverity.HIGH if check.required else ViolationSeverity.MEDIUM),
                 message=f"{check.name} 검사 실패",
                 details=details,
                 remediation=f"{check.description}을 확인하세요",
@@ -415,11 +407,7 @@ class ComplianceService:
                 check_id=check_id,
                 passed=False,
                 violation_id=violation.violation_id,
-                severity=(
-                    violation.severity.value
-                    if hasattr(violation.severity, "value")
-                    else str(violation.severity)
-                ),
+                severity=(violation.severity.value if hasattr(violation.severity, "value") else str(violation.severity)),
                 message=violation.message,
             )
             return violation
@@ -487,10 +475,7 @@ class ComplianceService:
         )
 
         self._reports.append(report)
-        logger.info(
-            f"Compliance report generated: {stage_name}, "
-            f"score={score:.1f}%, violations={len(violations)}"
-        )
+        logger.info(f"Compliance report generated: {stage_name}, " f"score={score:.1f}%, violations={len(violations)}")
 
         return report
 

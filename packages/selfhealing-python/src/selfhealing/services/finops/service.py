@@ -2,11 +2,12 @@
 FinOps DNA Service - 비용 관리 서비스
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from threading import Lock
-from typing import Optional
 
 from .models import CostAlert, CostBudget, CostRecord, CostReport, CostTier
 
@@ -33,7 +34,7 @@ class FinOpsService:
     복구 비용을 추적하고 예산을 관리합니다.
     """
 
-    _instance: Optional["FinOpsService"] = None
+    _instance: FinOpsService | None = None
     _lock = Lock()
 
     def __new__(cls) -> "FinOpsService":
@@ -136,8 +137,7 @@ class FinOpsService:
 
             # 알림 체크
             if budget.should_alert and not any(
-                a.stage_name == stage_name and a.alert_type == "threshold"
-                for a in self._alerts[-10:]  # 최근 10개만 체크
+                a.stage_name == stage_name and a.alert_type == "threshold" for a in self._alerts[-10:]  # 최근 10개만 체크
             ):
                 self._create_alert(
                     alert_type="threshold",
@@ -159,10 +159,7 @@ class FinOpsService:
                         budget_limit=budget.max_budget,
                         severity="critical",
                     )
-                    raise ValueError(
-                        f"Budget exceeded for {stage_name}: "
-                        f"${new_total} > ${budget.max_budget}"
-                    )
+                    raise ValueError(f"Budget exceeded for {stage_name}: " f"${new_total} > ${budget.max_budget}")
 
             budget.current_spent = new_total
 
@@ -205,11 +202,7 @@ class FinOpsService:
             alert_type=alert_type,
             current_cost=float(current_cost),
             budget_limit=float(budget_limit),
-            usage_percent=(
-                (float(current_cost) / float(budget_limit) * 100)
-                if budget_limit > 0
-                else None
-            ),
+            usage_percent=((float(current_cost) / float(budget_limit) * 100) if budget_limit > 0 else None),
             severity=severity,
             message=message,
         )
@@ -285,10 +278,7 @@ class FinOpsService:
 
         # 해당 기간의 기록 필터링
         filtered_records = [
-            r
-            for r in self._records
-            if r.timestamp >= start_date
-            and (stage_name is None or r.stage_name == stage_name)
+            r for r in self._records if r.timestamp >= start_date and (stage_name is None or r.stage_name == stage_name)
         ]
 
         # 집계
@@ -299,18 +289,12 @@ class FinOpsService:
 
         for record in filtered_records:
             total_cost += record.cost
-            by_stage[record.stage_name] = (
-                by_stage.get(record.stage_name, Decimal("0")) + record.cost
-            )
-            by_operation[record.operation] = (
-                by_operation.get(record.operation, Decimal("0")) + record.cost
-            )
+            by_stage[record.stage_name] = by_stage.get(record.stage_name, Decimal("0")) + record.cost
+            by_operation[record.operation] = by_operation.get(record.operation, Decimal("0")) + record.cost
             if record.success:
                 success_count += 1
 
-        success_rate = (
-            (success_count / len(filtered_records) * 100) if filtered_records else 100.0
-        )
+        success_rate = (success_count / len(filtered_records) * 100) if filtered_records else 100.0
 
         return CostReport(
             period=period,
@@ -472,9 +456,7 @@ class FinOpsService:
             ValueError: 예산 초과 시 (hard_limit=True인 경우)
         """
         if dry_run:
-            logger.debug(
-                f"[FinOps] Chaos cost skipped for dry_run experiment: {experiment_id}"
-            )
+            logger.debug(f"[FinOps] Chaos cost skipped for dry_run experiment: {experiment_id}")
             return None
 
         chaos_budget = self.get_chaos_budget()

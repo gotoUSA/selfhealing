@@ -11,11 +11,13 @@ WAL batch_write_entries() 테스트.
 7. 복구 시 배치 기록 엔트리 정상 읽기
 """
 
+from __future__ import annotations
+
 import os
 import tempfile
 import threading
 import time
-from typing import List, Dict, Any
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -184,7 +186,7 @@ class TestBatchWriteEntries:
         results = []
         errors = []
 
-        def batch_writer(entries: List[Dict[str, Any]]):
+        def batch_writer(entries: list[dict[str, Any]]):
             try:
                 seqs = wal.batch_write_entries(entries)
                 results.extend(seqs)

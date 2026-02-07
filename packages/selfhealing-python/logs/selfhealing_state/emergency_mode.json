@@ -1,15 +1,18 @@
 {
   "level": 0,
   "is_active": false,
-  "activated_at": null,
-  "activated_by": null,
-  "activation_reason": null,
+  "activated_at": "2026-02-07T08:22:20.111455+00:00",
+  "activated_by": "test",
+  "activation_reason": "Setup",
   "expires_at": null,
-  "deactivated_at": null,
-  "deactivated_by": null,
+  "deactivated_at": "2026-02-07T08:22:20.159548+00:00",
+  "deactivated_by": "test_user",
   "is_auto_triggered": false,
   "is_recovering": false,
   "recovery_started_at": null,
   "target_level": null,
-  "metadata": null
+  "metadata": {
+    "is_chaos_experiment": false,
+    "classification": "infrastructure_incident"
+  }
 }

@@ -5,11 +5,13 @@ Provides a unified interface for logging configuration changes
 with privacy protection, tamper detection, and multi-backend support.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from selfhealing.audit.backends import (
     CompositeBackend,
@@ -83,7 +85,7 @@ class AuditLogger:
     """
 
     # Singleton instance
-    _instance: Optional["AuditLogger"] = None
+    _instance: AuditLogger | None = None
 
     def __init__(
         self,

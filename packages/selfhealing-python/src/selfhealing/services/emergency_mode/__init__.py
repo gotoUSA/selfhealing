@@ -42,8 +42,6 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Optional
-
 # Enums
 from .enums import EMERGENCY_LEVEL_RULES, EmergencyLevel
 

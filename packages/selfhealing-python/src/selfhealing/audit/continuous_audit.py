@@ -12,6 +12,8 @@ Design Philosophy:
 - 포맷팅은 사용자 책임
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -20,7 +22,7 @@ import time
 from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.audit.config import AuditConfig
 from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
@@ -93,9 +95,9 @@ class ContinuousAuditRecorder:
         fallback_to_stdout: bool = True,
         # WAL 연동
         wal_enabled: bool = False,
-        wal_config: Optional["WALConfig"] = None,
+        wal_config: WALConfig | None = None,
         # Checkpoint Strategy 연동
-        checkpoint_strategy: Optional["CheckpointStorageStrategy"] = None,
+        checkpoint_strategy: CheckpointStorageStrategy | None = None,
         checkpoint_namespace: str = "default",
         # Checkpoint Back-pressure 설정
         checkpoint_save_interval: int = 10,

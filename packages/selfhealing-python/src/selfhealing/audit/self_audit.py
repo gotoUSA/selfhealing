@@ -22,13 +22,15 @@ Usage:
     )
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +100,7 @@ class SelfAuditLogger:
     - 싱글톤 패턴
     """
 
-    _instance: Optional["SelfAuditLogger"] = None
+    _instance: SelfAuditLogger | None = None
     _lock = threading.Lock()
 
     # 실패로 간주되는 이벤트
@@ -211,9 +213,7 @@ class SelfAuditLogger:
                 }
                 self._recent_events.append(event_record)
                 if len(self._recent_events) > self._max_recent_events:
-                    self._recent_events = self._recent_events[
-                        -self._max_recent_events :
-                    ]
+                    self._recent_events = self._recent_events[-self._max_recent_events :]
 
             # 로그 레벨 결정
             if event_type in self.FAILURE_EVENTS:

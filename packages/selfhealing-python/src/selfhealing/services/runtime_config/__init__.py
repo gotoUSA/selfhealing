@@ -41,7 +41,6 @@ All exports are maintained for backward compatibility.
 from __future__ import annotations
 
 import threading
-from typing import Optional
 
 from .advanced_configs import AdvancedConfigMixin
 from .approval import ApprovalMixin

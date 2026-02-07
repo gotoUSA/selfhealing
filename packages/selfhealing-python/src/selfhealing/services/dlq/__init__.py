@@ -16,7 +16,7 @@ Note: Admin/Dashboard operations (cleanup, archive, purge, list, entry managemen
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 # Import models from separate module
 from selfhealing.services.dlq_models import (

@@ -8,10 +8,11 @@ Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
 - 격리 해제: log_blast_radius_audit (action="release_isolation")
 """
 
+from __future__ import annotations
+
 import logging
 import uuid
 from threading import Lock
-from typing import Optional
 
 from selfhealing.services.audit import log_blast_radius_audit
 
@@ -32,7 +33,7 @@ class BlastRadiusService:
     장애 영향 범위를 분석하고 관리합니다.
     """
 
-    _instance: Optional["BlastRadiusService"] = None
+    _instance: BlastRadiusService | None = None
     _lock = Lock()
 
     def __new__(cls) -> "BlastRadiusService":
@@ -187,9 +188,7 @@ class BlastRadiusService:
         assessment_id = str(uuid.uuid4())[:8]
 
         # 연쇄 영향 분석
-        all_affected, dependencies_analyzed = self._analyze_cascading_impact(
-            failing_services
-        )
+        all_affected, dependencies_analyzed = self._analyze_cascading_impact(failing_services)
 
         # 영향 수준 결정
         level = self._determine_blast_radius_level(len(all_affected))
@@ -201,9 +200,7 @@ class BlastRadiusService:
         cascading_risk = self._check_cascading_risk(all_affected)
 
         # 추천사항 생성
-        recommendations = self._generate_recommendations(
-            level, cascading_risk, all_affected
-        )
+        recommendations = self._generate_recommendations(level, cascading_risk, all_affected)
 
         assessment = self._create_assessment(
             assessment_id=assessment_id,
@@ -219,19 +216,14 @@ class BlastRadiusService:
         )
 
         self._assessments.append(assessment)
-        logger.info(
-            f"Impact assessed: {assessment_id}, level={level.value}, "
-            f"affected={len(all_affected)} services"
-        )
+        logger.info(f"Impact assessed: {assessment_id}, level={level.value}, " f"affected={len(all_affected)} services")
 
         # 자동 격리 체크
         self._check_and_auto_isolate(stage_name, level, failing_services)
 
         return assessment
 
-    def _analyze_cascading_impact(
-        self, failing_services: list[str]
-    ) -> tuple[set[str], int]:
+    def _analyze_cascading_impact(self, failing_services: list[str]) -> tuple[set[str], int]:
         """
         연쇄 영향 분석
 
@@ -471,9 +463,7 @@ class BlastRadiusService:
         if min_level:
             level_order = [l.value for l in BlastRadiusLevel]
             min_index = level_order.index(min_level.value)
-            assessments = [
-                a for a in assessments if level_order.index(a.level.value) >= min_index
-            ]
+            assessments = [a for a in assessments if level_order.index(a.level.value) >= min_index]
 
         return assessments
 

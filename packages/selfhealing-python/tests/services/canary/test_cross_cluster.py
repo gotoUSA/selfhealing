@@ -11,10 +11,10 @@ CrossCluster 모듈 단위 테스트.
 
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md (Step 5)
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
 from unittest.mock import Mock, patch
 
 import pytest
@@ -263,13 +263,13 @@ class TestLoggingNotificationBackend:
         import logging
         import sys
         from io import StringIO
-        
+
         backend = LoggingNotificationBackend()
 
         # stderr 캡처로 로그 확인 (caplog가 캡처하지 못하는 경우 대비)
         captured_stderr = StringIO()
         old_stderr = sys.stderr
-        
+
         # 로거에 핸들러 추가
         test_logger = logging.getLogger("selfhealing.services.canary.cross_cluster")
         handler = logging.StreamHandler(captured_stderr)
@@ -277,7 +277,7 @@ class TestLoggingNotificationBackend:
         test_logger.addHandler(handler)
         original_level = test_logger.level
         test_logger.setLevel(logging.INFO)
-        
+
         try:
             result = backend.send(
                 channel="#test-channel",
@@ -289,7 +289,7 @@ class TestLoggingNotificationBackend:
             test_logger.setLevel(original_level)
 
         assert result is True
-        
+
         # caplog 또는 captured_stderr에서 확인
         log_output = caplog.text + captured_stderr.getvalue()
         assert "CrossClusterNotification" in log_output
@@ -415,7 +415,7 @@ class TestCrossClusterPropagationRequest:
         sample_config_change: ConfigChange,
     ):
         """요청 승인 테스트."""
-        applied_requests: List[PropagationRequest] = []
+        applied_requests: list[PropagationRequest] = []
 
         def on_apply(request: PropagationRequest) -> bool:
             applied_requests.append(request)

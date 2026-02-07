@@ -2,13 +2,14 @@
 Rollback DNA Service - 롤백 관리 서비스
 """
 
+from __future__ import annotations
+
 import logging
 import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Optional
 
 from .models import (
     RollbackPolicy,
@@ -28,7 +29,7 @@ class RollbackService:
     안전한 자동 롤백을 관리합니다.
     """
 
-    _instance: Optional["RollbackService"] = None
+    _instance: RollbackService | None = None
     _lock = Lock()
 
     def __new__(cls) -> "RollbackService":
@@ -285,11 +286,7 @@ class RollbackService:
             self._log_audit(
                 request_id=request_id,
                 stage_name=request.stage_name,
-                state=(
-                    result.state.value
-                    if hasattr(result.state, "value")
-                    else str(result.state)
-                ),
+                state=(result.state.value if hasattr(result.state, "value") else str(result.state)),
                 triggered_by=request.triggered_by,
                 reason=request.reason,
                 source_version=request.source_version,
@@ -324,15 +321,12 @@ class RollbackService:
         """롤백 결과 조회"""
         return self._results.get(request_id)
 
-    def get_pending_requests(
-        self, stage_name: str | None = None
-    ) -> list[RollbackRequest]:
+    def get_pending_requests(self, stage_name: str | None = None) -> list[RollbackRequest]:
         """대기 중인 요청 조회"""
         pending = [
             req
             for req_id, req in self._requests.items()
-            if self._results.get(req_id)
-            and self._results[req_id].state == RollbackState.PENDING
+            if self._results.get(req_id) and self._results[req_id].state == RollbackState.PENDING
         ]
         if stage_name:
             pending = [r for r in pending if r.stage_name == stage_name]

@@ -4,9 +4,11 @@ Forensic Bridge 테스트 공통 설정.
 이 패키지의 모든 테스트에서 사용하는 fixtures와 mocks.
 """
 
+from __future__ import annotations
+
 import pytest
 import tempfile
-from typing import Any, Dict, List
+from typing import Any
 
 
 # =============================================================================
@@ -16,25 +18,27 @@ from typing import Any, Dict, List
 
 class MockAuditAdapter:
     """테스트용 Audit 어댑터."""
-    
+
     def __init__(self):
-        self.events: List[Dict[str, Any]] = []
-    
+        self.events: list[dict[str, Any]] = []
+
     def log_event(
         self,
         event_type: str,
         source: str,
-        details: Dict[str, Any],
+        details: dict[str, Any],
     ) -> None:
-        self.events.append({
-            "event_type": event_type,
-            "source": source,
-            "details": details,
-        })
-    
-    def get_events_by_type(self, event_type: str) -> List[Dict[str, Any]]:
+        self.events.append(
+            {
+                "event_type": event_type,
+                "source": source,
+                "details": details,
+            }
+        )
+
+    def get_events_by_type(self, event_type: str) -> list[dict[str, Any]]:
         return [e for e in self.events if e["event_type"] == event_type]
-    
+
     def clear(self) -> None:
         self.events.clear()
 

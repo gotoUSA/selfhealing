@@ -13,7 +13,6 @@ Tests for:
 
 import pytest
 from unittest.mock import MagicMock, patch
-from typing import List
 
 
 class TestCircuitBreakerOpenedNotifyHandler:

@@ -9,8 +9,10 @@ Usage:
     >>> adapter.log(entry)
 """
 
+from __future__ import annotations
+
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.core.protocols import AuditLogAdapter
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # 기본 어댑터 인스턴스 (싱글톤)
-_default_adapter: Optional["AuditLogAdapter"] = None
+_default_adapter: AuditLogAdapter | None = None
 
 
 def get_audit_adapter() -> "AuditLogAdapter":

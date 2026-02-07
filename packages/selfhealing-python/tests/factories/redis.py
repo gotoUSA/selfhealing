@@ -8,33 +8,35 @@ Mock Redis Client for Testing.
 이 통합된 구현은 양쪽 기능을 모두 지원합니다.
 """
 
+from __future__ import annotations
+
 import fnmatch
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class MockPipeline:
     """
     Mock Redis Pipeline.
-    
+
     Redis 파이프라인을 모방하여 여러 명령을 배치로 실행합니다.
     context manager 프로토콜을 지원합니다.
     """
-    
+
     def __init__(self, redis: "MockRedisClient"):
         self._redis = redis
-        self._commands: List[tuple] = []
-    
+        self._commands: list[tuple] = []
+
     def get(self, key: str) -> "MockPipeline":
         """GET 명령 추가."""
         self._commands.append(("get", key))
         return self
-    
+
     def set(self, key: str, value: Any, ex: int = None, nx: bool = False) -> "MockPipeline":
         """SET 명령 추가."""
         self._commands.append(("set", key, value, ex, nx))
         return self
-    
+
     def delete(self, *keys: str) -> "MockPipeline":
         """DELETE 명령 추가."""
         decoded_keys = []
@@ -45,38 +47,38 @@ class MockPipeline:
                 decoded_keys.append(k)
         self._commands.append(("delete", tuple(decoded_keys)))
         return self
-    
-    def hset(self, key: str, mapping: Dict[str, Any] = None, **kwargs) -> "MockPipeline":
+
+    def hset(self, key: str, mapping: dict[str, Any] = None, **kwargs) -> "MockPipeline":
         """HSET 명령 추가."""
         self._commands.append(("hset", key, mapping or kwargs))
         return self
-    
+
     def hget(self, key: str, field: str) -> "MockPipeline":
         """HGET 명령 추가."""
         self._commands.append(("hget", key, field))
         return self
-    
+
     def hgetall(self, key: str) -> "MockPipeline":
         """HGETALL 명령 추가."""
         self._commands.append(("hgetall", key))
         return self
-    
+
     def exists(self, key: str) -> "MockPipeline":
         """EXISTS 명령 추가."""
         self._commands.append(("exists", key))
         return self
-    
+
     def incr(self, key: str) -> "MockPipeline":
         """INCR 명령 추가."""
         self._commands.append(("incr", key))
         return self
-    
+
     def expire(self, key: str, seconds: int) -> "MockPipeline":
         """EXPIRE 명령 추가."""
         self._commands.append(("expire", key, seconds))
         return self
-    
-    def execute(self) -> List[Any]:
+
+    def execute(self) -> list[Any]:
         """배치된 명령들을 실행하고 결과 반환."""
         results = []
         for cmd in self._commands:
@@ -111,10 +113,10 @@ class MockPipeline:
                 results.append(e)
         self._commands = []
         return results
-    
+
     def __enter__(self) -> "MockPipeline":
         return self
-    
+
     def __exit__(self, *args) -> None:
         pass
 
@@ -122,26 +124,26 @@ class MockPipeline:
 class MockDistributedLock:
     """
     Mock Distributed Lock.
-    
+
     분산 락을 모방합니다. graceful_degradation 테스트에서 사용.
     """
-    
+
     def __init__(self, *args, **kwargs):
         self._acquired = False
-    
+
     def acquire(self, blocking: bool = True) -> bool:
         """락 획득."""
         self._acquired = True
         return True
-    
+
     def release(self) -> None:
         """락 해제."""
         self._acquired = False
-    
+
     def __enter__(self) -> "MockDistributedLock":
         self.acquire()
         return self
-    
+
     def __exit__(self, *args) -> None:
         self.release()
 
@@ -149,9 +151,9 @@ class MockDistributedLock:
 class MockRedisClient:
     """
     테스트용 통합 Mock Redis 클라이언트.
-    
+
     hash_chain_core와 graceful_degradation의 MockRedisClient를 통합합니다.
-    
+
     Features:
         - 기본 GET/SET/DELETE 지원
         - Hash 명령 (HGET, HSET, HGETALL)
@@ -160,52 +162,52 @@ class MockRedisClient:
         - Pipeline 지원
         - 실패 모드 (should_fail)
         - Thread-safe 연산
-    
+
     Usage:
         # 정상 모드
         redis = MockRedisClient()
         redis.set("key", "value")
         assert redis.get("key") == b"value"
-        
+
         # 실패 모드
         failing_redis = MockRedisClient(should_fail=True)
         # 모든 연산이 ConnectionError 발생
     """
-    
+
     def __init__(self, should_fail: bool = False):
         """
         Mock Redis 클라이언트 초기화.
-        
+
         Args:
             should_fail: True면 모든 연산에서 ConnectionError 발생
         """
-        self._data: Dict[str, Any] = {}
-        self._hashes: Dict[str, Dict[str, Any]] = {}
-        self._lists: Dict[str, List[str]] = {}
+        self._data: dict[str, Any] = {}
+        self._hashes: dict[str, dict[str, Any]] = {}
+        self._lists: dict[str, list[str]] = {}
         self._should_fail = should_fail
         self._lock = threading.Lock()
-    
+
     def set_should_fail(self, should_fail: bool) -> None:
         """실패 모드 설정."""
         self._should_fail = should_fail
-    
+
     def _check_failure(self) -> None:
         """실패 모드 확인 및 예외 발생."""
         if self._should_fail:
             raise ConnectionError("Redis connection failed")
-    
+
     # =========================================================================
     # String 명령
     # =========================================================================
-    
-    def get(self, key: str) -> Optional[bytes]:
+
+    def get(self, key: str) -> bytes | None:
         """GET 명령."""
         self._check_failure()
         value = self._data.get(key)
         if value is not None:
             return str(value).encode() if not isinstance(value, bytes) else value
         return None
-    
+
     def set(
         self,
         key: str,
@@ -216,7 +218,7 @@ class MockRedisClient:
     ) -> bool:
         """
         SET 명령.
-        
+
         Args:
             key: 키
             value: 값
@@ -230,7 +232,7 @@ class MockRedisClient:
                 return False
             self._data[key] = value
             return True
-    
+
     def delete(self, *keys: str) -> int:
         """DELETE 명령."""
         self._check_failure()
@@ -246,17 +248,13 @@ class MockRedisClient:
                 del self._lists[key]
                 count += 1
         return count
-    
-    def keys(self, pattern: str) -> List[bytes]:
+
+    def keys(self, pattern: str) -> list[bytes]:
         """KEYS 명령 (패턴 매칭)."""
         self._check_failure()
-        matching = [
-            k.encode() if isinstance(k, str) else k
-            for k in self._data.keys()
-            if fnmatch.fnmatch(k, pattern)
-        ]
+        matching = [k.encode() if isinstance(k, str) else k for k in self._data.keys() if fnmatch.fnmatch(k, pattern)]
         return matching
-    
+
     def incr(self, key: str) -> int:
         """INCR 명령."""
         self._check_failure()
@@ -265,7 +263,7 @@ class MockRedisClient:
             new_value = current + 1
             self._data[key] = new_value
             return new_value
-    
+
     def decr(self, key: str) -> int:
         """DECR 명령."""
         self._check_failure()
@@ -274,12 +272,12 @@ class MockRedisClient:
             new_value = current - 1
             self._data[key] = new_value
             return new_value
-    
+
     def expire(self, key: str, seconds: int) -> int:
         """EXPIRE 명령 (Mock: 실제 만료 없음)."""
         self._check_failure()
         return 1 if key in self._data or key in self._hashes else 0
-    
+
     def exists(self, *keys: str) -> int:
         """EXISTS 명령."""
         self._check_failure()
@@ -288,12 +286,12 @@ class MockRedisClient:
             if key in self._data or key in self._hashes or key in self._lists:
                 count += 1
         return count
-    
+
     # =========================================================================
     # Hash 명령
     # =========================================================================
-    
-    def hget(self, key: str, field: str) -> Optional[bytes]:
+
+    def hget(self, key: str, field: str) -> bytes | None:
         """HGET 명령."""
         self._check_failure()
         hash_data = self._hashes.get(key, {})
@@ -301,8 +299,8 @@ class MockRedisClient:
         if value is not None:
             return str(value).encode() if not isinstance(value, bytes) else value
         return None
-    
-    def hset(self, key: str, mapping: Dict[str, Any] = None, **kwargs) -> int:
+
+    def hset(self, key: str, mapping: dict[str, Any] = None, **kwargs) -> int:
         """HSET 명령."""
         self._check_failure()
         if mapping is None:
@@ -312,17 +310,16 @@ class MockRedisClient:
                 self._hashes[key] = {}
             self._hashes[key].update({str(k): str(v) for k, v in mapping.items()})
             return len(mapping)
-    
-    def hgetall(self, key: str) -> Dict[bytes, bytes]:
+
+    def hgetall(self, key: str) -> dict[bytes, bytes]:
         """HGETALL 명령."""
         self._check_failure()
         hash_data = self._hashes.get(key, {})
         return {
-            k.encode() if isinstance(k, str) else k: 
-            str(v).encode() if not isinstance(v, bytes) else v
+            k.encode() if isinstance(k, str) else k: str(v).encode() if not isinstance(v, bytes) else v
             for k, v in hash_data.items()
         }
-    
+
     def hdel(self, key: str, *fields: str) -> int:
         """HDEL 명령."""
         self._check_failure()
@@ -334,11 +331,11 @@ class MockRedisClient:
                 del self._hashes[key][field]
                 count += 1
         return count
-    
+
     # =========================================================================
     # List 명령
     # =========================================================================
-    
+
     def lpush(self, key: str, *values: str) -> int:
         """LPUSH 명령."""
         self._check_failure()
@@ -347,7 +344,7 @@ class MockRedisClient:
         for v in values:
             self._lists[key].insert(0, v)
         return len(self._lists[key])
-    
+
     def rpush(self, key: str, *values: str) -> int:
         """RPUSH 명령."""
         self._check_failure()
@@ -356,15 +353,15 @@ class MockRedisClient:
         for v in values:
             self._lists[key].append(v)
         return len(self._lists[key])
-    
+
     def ltrim(self, key: str, start: int, end: int) -> bool:
         """LTRIM 명령."""
         self._check_failure()
         if key in self._lists:
-            self._lists[key] = self._lists[key][start:end + 1]
+            self._lists[key] = self._lists[key][start : end + 1]
         return True
-    
-    def lrange(self, key: str, start: int, end: int) -> List[bytes]:
+
+    def lrange(self, key: str, start: int, end: int) -> list[bytes]:
         """LRANGE 명령."""
         self._check_failure()
         if key not in self._lists:
@@ -374,29 +371,29 @@ class MockRedisClient:
         else:
             end = end + 1
         return [v.encode() if isinstance(v, str) else v for v in self._lists[key][start:end]]
-    
+
     def llen(self, key: str) -> int:
         """LLEN 명령."""
         self._check_failure()
         return len(self._lists.get(key, []))
-    
+
     # =========================================================================
     # Pipeline
     # =========================================================================
-    
+
     def pipeline(self, transaction: bool = True) -> MockPipeline:
         """Pipeline 생성."""
         return MockPipeline(self)
-    
+
     # =========================================================================
     # Connection
     # =========================================================================
-    
+
     def ping(self) -> bool:
         """PING 명령."""
         self._check_failure()
         return True
-    
+
     def flushdb(self) -> bool:
         """FLUSHDB 명령."""
         self._check_failure()
@@ -404,30 +401,30 @@ class MockRedisClient:
         self._hashes.clear()
         self._lists.clear()
         return True
-    
+
     def close(self) -> None:
         """연결 종료 (Mock: 아무것도 안함)."""
         pass
-    
+
     # =========================================================================
     # Pub/Sub (Mock)
     # =========================================================================
-    
+
     def publish(self, channel: str, message: str) -> int:
         """PUBLISH 명령 (Mock: 수신자 0)."""
         self._check_failure()
         return 0
-    
+
     # =========================================================================
     # Scripting
     # =========================================================================
-    
+
     def __init_scripts(self):
         """스크립트 저장소 초기화 (lazy init)."""
-        if not hasattr(self, '_scripts'):
-            self._scripts: Dict[str, str] = {}
+        if not hasattr(self, "_scripts"):
+            self._scripts: dict[str, str] = {}
             self._script_counter = 0
-    
+
     def script_load(self, script: str) -> str:
         """SCRIPT LOAD 명령 - 스크립트를 로드하고 SHA 반환."""
         self._check_failure()
@@ -436,18 +433,18 @@ class MockRedisClient:
         sha = f"sha_{self._script_counter}"
         self._scripts[sha] = script
         return sha
-    
+
     def eval(self, script: str, numkeys: int, *args) -> Any:
         """
         EVAL 명령 (Lua 스크립트 실행 모의).
-        
+
         지원 패턴:
         1. Lock release (check-and-delete)
         2. Atomic sequence (INCR + HGET)
         3. Pending commit (EXISTS + DEL)
         """
         self._check_failure()
-        
+
         # Pattern 1: Atomic sequence reservation (INCR + HGET)
         if "INCR" in script and "HGET" in script:
             seq_key = args[0] if len(args) > 0 else "seq"
@@ -456,7 +453,7 @@ class MockRedisClient:
             prev_hash = self.hget(hash_key, "previous_hash")
             prev_hash = prev_hash.decode() if prev_hash else "GENESIS"
             return [new_seq, prev_hash]
-        
+
         # Pattern 2: Pending commit (EXISTS + DEL)
         if "EXISTS" in script and "DEL" in script:
             pending_key = args[0] if len(args) > 0 else "pending"
@@ -464,12 +461,12 @@ class MockRedisClient:
                 self.delete(pending_key)
                 return {"ok": True}
             return {"err": "PENDING_NOT_FOUND"}
-        
+
         # Pattern 3: Lock release (check-and-delete)
         if numkeys == 1 and len(args) >= 2:
             key = args[0]
             expected_value = args[1]
-            
+
             with self._lock:
                 current = self._data.get(key)
                 if current == expected_value:
@@ -477,9 +474,9 @@ class MockRedisClient:
                         del self._data[key]
                     return 1
             return 0
-        
+
         return 0
-    
+
     def evalsha(self, sha: str, numkeys: int, *args) -> Any:
         """EVALSHA 명령 - SHA로 스크립트 실행."""
         self._check_failure()
@@ -487,16 +484,16 @@ class MockRedisClient:
         if sha in self._scripts:
             return self.eval(self._scripts[sha], numkeys, *args)
         raise Exception("NOSCRIPT")
-    
+
     def pexpire(self, key: str, milliseconds: int) -> int:
         """PEXPIRE 명령 (Mock: TTL 설정 없이 존재 여부만 반환)."""
         self._check_failure()
         return 1 if key in self._data or key in self._hashes else 0
-    
+
     # =========================================================================
     # Utility
     # =========================================================================
-    
+
     def clear(self) -> None:
         """모든 데이터 초기화."""
         self._data.clear()

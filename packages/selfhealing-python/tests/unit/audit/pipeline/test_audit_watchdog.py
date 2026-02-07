@@ -11,13 +11,14 @@ Tests:
 - Thread safety
 """
 
+from __future__ import annotations
+
 import json
 import os
 import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -68,13 +69,16 @@ class TestWatchdogConfig:
     def test_from_env(self):
         """환경 변수에서 설정 로드 테스트 (deprecated, from_settings로 전환)."""
         from selfhealing.settings.audit_watchdog import reset_audit_watchdog_settings
-        
-        with patch.dict(os.environ, {
-            "SELFHEALING_AUDIT_WATCHDOG_HEARTBEAT_URL": "http://test.com/ping",
-            "SELFHEALING_AUDIT_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS": "45.0",
-            "SELFHEALING_AUDIT_WATCHDOG_MISSED_THRESHOLD": "5",
-            "SELFHEALING_AUDIT_WATCHDOG_LOCAL_HEARTBEAT_FILE": "/tmp/test_heartbeat.json",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "SELFHEALING_AUDIT_WATCHDOG_HEARTBEAT_URL": "http://test.com/ping",
+                "SELFHEALING_AUDIT_WATCHDOG_HEARTBEAT_INTERVAL_SECONDS": "45.0",
+                "SELFHEALING_AUDIT_WATCHDOG_MISSED_THRESHOLD": "5",
+                "SELFHEALING_AUDIT_WATCHDOG_LOCAL_HEARTBEAT_FILE": "/tmp/test_heartbeat.json",
+            },
+        ):
             reset_audit_watchdog_settings()  # 싱글톤 리셋
             config = WatchdogConfig.from_settings()
 
@@ -89,8 +93,12 @@ class TestWatchdogConfig:
         """환경 변수 없을 때 기본값 테스트."""
         with patch.dict(os.environ, {}, clear=True):
             # 기존 환경 변수 제거
-            for key in ["AUDIT_HEARTBEAT_URL", "AUDIT_HEARTBEAT_INTERVAL",
-                        "AUDIT_HEARTBEAT_MISSED_THRESHOLD", "AUDIT_HEARTBEAT_FILE"]:
+            for key in [
+                "AUDIT_HEARTBEAT_URL",
+                "AUDIT_HEARTBEAT_INTERVAL",
+                "AUDIT_HEARTBEAT_MISSED_THRESHOLD",
+                "AUDIT_HEARTBEAT_FILE",
+            ]:
                 os.environ.pop(key, None)
 
             config = WatchdogConfig.from_env()
@@ -233,9 +241,7 @@ class TestAuditWatchdogLocalFile:
 
     def test_local_file_heartbeat(self):
         """로컬 파일 heartbeat 테스트."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             heartbeat_file = f.name
 
         try:
@@ -266,11 +272,11 @@ class TestAuditWatchdogLocalFile:
         """잘못된 경로에 로컬 파일 heartbeat 테스트."""
         import tempfile
         import os
-        
+
         # Windows/Linux 모두에서 실패하는 경로 사용
         # 존재하지 않는 드라이브/디렉토리 조합
         invalid_path = os.path.join(tempfile.gettempdir(), "nonexistent_12345", "subdir", "heartbeat.json")
-        
+
         config = WatchdogConfig(
             heartbeat_interval_seconds=0.05,
             local_heartbeat_file=invalid_path,
@@ -341,7 +347,7 @@ class TestAuditWatchdogFailure:
 
     def test_degraded_state(self):
         """실패 시 DEGRADED 상태 전환 테스트.
-        
+
         Note: 이 테스트는 heartbeat 실패 시 DEGRADED 상태로 전환되는지 확인합니다.
         타이밍에 민감하므로 폴링 방식으로 상태 변경을 대기합니다.
         """
@@ -358,7 +364,7 @@ class TestAuditWatchdogFailure:
         watchdog = AuditWatchdog(config=config)
 
         watchdog.start()
-        
+
         # 폴링 방식으로 DEGRADED 상태 대기 (최대 1초)
         deadline = time.time() + 1.0
         while time.time() < deadline:
@@ -366,8 +372,7 @@ class TestAuditWatchdogFailure:
                 break
             time.sleep(0.02)
 
-        assert watchdog.state == WatchdogState.DEGRADED, \
-            f"Expected DEGRADED state but got {watchdog.state}"
+        assert watchdog.state == WatchdogState.DEGRADED, f"Expected DEGRADED state but got {watchdog.state}"
         assert watchdog.is_running  # DEGRADED도 running으로 간주
 
         watchdog.stop()
@@ -404,14 +409,15 @@ class TestWatchdogChecker:
 
     def test_is_alive_valid(self):
         """유효한 heartbeat 파일로 is_alive 테스트."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             heartbeat_file = f.name
-            json.dump({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "pid": os.getpid(),
-            }, f)
+            json.dump(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "pid": os.getpid(),
+                },
+                f,
+            )
 
         try:
             checker = WatchdogChecker(
@@ -425,15 +431,16 @@ class TestWatchdogChecker:
 
     def test_is_alive_expired(self):
         """만료된 heartbeat 파일로 is_alive 테스트."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             heartbeat_file = f.name
             old_time = datetime.now(timezone.utc) - timedelta(minutes=5)
-            json.dump({
-                "timestamp": old_time.isoformat(),
-                "pid": os.getpid(),
-            }, f)
+            json.dump(
+                {
+                    "timestamp": old_time.isoformat(),
+                    "pid": os.getpid(),
+                },
+                f,
+            )
 
         try:
             checker = WatchdogChecker(
@@ -456,9 +463,7 @@ class TestWatchdogChecker:
 
     def test_is_alive_invalid_json(self):
         """잘못된 JSON 파일 테스트."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             heartbeat_file = f.name
             f.write("not valid json")
 
@@ -474,13 +479,14 @@ class TestWatchdogChecker:
 
     def test_get_age_seconds(self):
         """경과 시간 조회 테스트."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             heartbeat_file = f.name
-            json.dump({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }, f)
+            json.dump(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                f,
+            )
 
         try:
             checker = WatchdogChecker(heartbeat_file=heartbeat_file)
@@ -493,9 +499,7 @@ class TestWatchdogChecker:
 
     def test_read_heartbeat(self):
         """Heartbeat 파일 읽기 테스트."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             heartbeat_file = f.name
             data = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -532,21 +536,21 @@ class TestSingletonFunctions:
 
     def test_start_watchdog(self):
         """start_watchdog 함수 테스트.
-        
+
         Note: 이 테스트는 start_watchdog()의 기본 동작만 검증합니다.
         stop 후 상태 검증은 TestAuditWatchdogLifecycle::test_start_stop에서 수행됩니다.
         싱글톤 상태 격리는 conftest.py의 auto_reset_watchdog_singleton fixture가 담당합니다.
         """
         # start_watchdog 함수를 사용한 테스트
         config = WatchdogConfig(heartbeat_interval_seconds=1.0)
-        
+
         # start_watchdog 호출 (싱글톤 생성 및 시작)
         watchdog = start_watchdog(config=config)
-        
+
         # 핵심 검증: watchdog가 실행 중인지 확인
         assert watchdog is not None, "start_watchdog should return watchdog instance"
         assert watchdog.is_running, "Watchdog should be running after start"
-        
+
         # 정리는 conftest.py의 auto_reset_watchdog_singleton fixture가 담당
 
     def test_stop_watchdog_without_start(self):
@@ -580,7 +584,7 @@ class TestThreadSafety:
         watchdog = AuditWatchdog(config=config)
         watchdog.start()
 
-        results: List[WatchdogStats] = []
+        results: list[WatchdogStats] = []
         lock = threading.Lock()
 
         def get_stats_thread():

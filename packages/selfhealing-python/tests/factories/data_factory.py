@@ -10,9 +10,11 @@ Test Data Factory.
 - 새 테스트 작성 시간 단축
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 from unittest.mock import Mock
 
 from selfhealing.core.types import (
@@ -42,18 +44,18 @@ class MockCircuitBreakerStateData:
     state: str = DefaultValues.CB_STATE_CLOSED
     failure_count: int = 0
     success_count: int = 0
-    last_failure_time: Optional[datetime] = None
-    last_success_time: Optional[datetime] = None
-    opened_at: Optional[datetime] = None
-    opened_by_id: Optional[int] = None
+    last_failure_time: datetime | None = None
+    last_success_time: datetime | None = None
+    opened_at: datetime | None = None
+    opened_by_id: int | None = None
     opened_reason: str = ""
     half_open_request_count: int = 0
-    last_failure_at: Optional[datetime] = None
-    last_success_at: Optional[datetime] = None
+    last_failure_at: datetime | None = None
+    last_success_at: datetime | None = None
     manually_controlled: bool = False
-    controlled_by_id: Optional[int] = None
+    controlled_by_id: int | None = None
     control_reason: str = ""
-    manual_override_expires_at: Optional[datetime] = None
+    manual_override_expires_at: datetime | None = None
 
 
 class TestDataFactory:
@@ -89,8 +91,8 @@ class TestDataFactory:
         state: str = DefaultValues.CB_STATE_CLOSED,
         failure_count: int = 0,
         success_count: int = 0,
-        opened_at: Optional[datetime] = None,
-        opened_by_id: Optional[int] = None,
+        opened_at: datetime | None = None,
+        opened_by_id: int | None = None,
         opened_reason: str = "",
         **kwargs,
     ) -> MockCircuitBreakerStateData:
@@ -154,10 +156,10 @@ class TestDataFactory:
         status: str = DefaultValues.STATUS_PENDING,
         retry_count: int = 0,
         max_retries: int = DefaultValues.DEFAULT_MAX_RETRIES,
-        created_at: Optional[datetime] = None,
+        created_at: datetime | None = None,
         error_message: str = "Connection timed out",
         error_code: str = "TIMEOUT",
-        snapshot_data: Optional[Dict[str, Any]] = None,
+        snapshot_data: dict[str, Any] | None = None,
         entity_type: str = "order",
         entity_id: str = "order-123",
         **kwargs,
@@ -287,10 +289,10 @@ class TestDataFactory:
     @staticmethod
     def audit_log_entry(
         event: str = "test_event",
-        timestamp: Optional[datetime] = None,
-        data: Optional[Dict[str, Any]] = None,
+        timestamp: datetime | None = None,
+        data: dict[str, Any] | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         감사 로그 엔트리 생성.
 

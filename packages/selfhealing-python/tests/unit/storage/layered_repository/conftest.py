@@ -8,7 +8,6 @@ import pytest
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Optional
 from unittest.mock import MagicMock
 
 
@@ -18,6 +17,7 @@ def mock_l2_repo():
     from selfhealing.adapters.memory.circuit_breaker import (
         InMemoryCircuitBreakerStateRepository,
     )
+
     mock = MagicMock(spec=InMemoryCircuitBreakerStateRepository)
     mock.get_all.return_value = []
     return mock
@@ -27,6 +27,7 @@ def mock_l2_repo():
 def shadow_logger():
     """Shadow Logger fixture."""
     from selfhealing.adapters.memory.circuit_breaker import get_shadow_logger
+
     logger = get_shadow_logger()
     logger.clear()
     yield logger
@@ -37,6 +38,7 @@ def shadow_logger():
 def drift_reconciler():
     """Drift Reconciler fixture."""
     from selfhealing.adapters.memory.circuit_breaker import get_drift_reconciler
+
     reconciler = get_drift_reconciler()
     reconciler.clear_history()
     yield reconciler

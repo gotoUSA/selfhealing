@@ -5,7 +5,6 @@ Circuit Breaker Advanced Protection Tests
 """
 
 import pytest
-from typing import List
 
 from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
@@ -107,12 +106,7 @@ class TestSheddingLevel:
 
     def test_valid_shedding_level(self):
         """정상적인 Shedding 레벨 생성."""
-        level = SheddingLevel(
-            error_rate=30.0,
-            shed_criticality=["low"],
-            traffic_limit=50.0,
-            description="Level 1"
-        )
+        level = SheddingLevel(error_rate=30.0, shed_criticality=["low"], traffic_limit=50.0, description="Level 1")
         assert level.error_rate == 30.0
         assert level.shed_criticality == ["low"]
         assert level.traffic_limit == 50.0
@@ -160,17 +154,17 @@ class TestLoadSheddingPolicy:
     def test_default_levels_progressive(self):
         """기본 레벨은 점진적으로 강화됨."""
         policy = LoadSheddingPolicy()
-        
+
         # Level 1: 30% 에러율, low만 50% 제한
         assert policy.levels[0].error_rate == 30.0
         assert policy.levels[0].shed_criticality == ["low"]
         assert policy.levels[0].traffic_limit == 50.0
-        
+
         # Level 2: 50% 에러율, low+medium 80% 제한
         assert policy.levels[1].error_rate == 50.0
         assert "medium" in policy.levels[1].shed_criticality
         assert policy.levels[1].traffic_limit == 20.0
-        
+
         # Level 3: 70% 에러율, low+medium 완전 차단
         assert policy.levels[2].error_rate == 70.0
         assert policy.levels[2].traffic_limit == 0.0
@@ -181,11 +175,7 @@ class TestLoadSheddingPolicy:
             SheddingLevel(error_rate=40.0, shed_criticality=["low"], traffic_limit=60.0),
             SheddingLevel(error_rate=80.0, shed_criticality=["low", "medium"], traffic_limit=0.0),
         ]
-        policy = LoadSheddingPolicy(
-            enabled=True,
-            trigger_threshold=40.0,
-            levels=custom_levels
-        )
+        policy = LoadSheddingPolicy(enabled=True, trigger_threshold=40.0, levels=custom_levels)
         assert policy.trigger_threshold == 40.0
         assert len(policy.levels) == 2
 
@@ -200,12 +190,7 @@ class TestCanaryStage:
 
     def test_valid_canary_stage(self):
         """정상적인 Canary 단계 생성."""
-        stage = CanaryStage(
-            traffic_percent=10.0,
-            duration_seconds=5,
-            required_success_rate=95.0,
-            description="Stage 1"
-        )
+        stage = CanaryStage(traffic_percent=10.0, duration_seconds=5, required_success_rate=95.0, description="Stage 1")
         assert stage.traffic_percent == 10.0
         assert stage.duration_seconds == 5
         assert stage.required_success_rate == 95.0
@@ -291,13 +276,9 @@ class TestThresholdMultiplier:
 
     def test_infinity_for_lockdown(self):
         """LOCKDOWN용 무한대 배율."""
-        multiplier = ThresholdMultiplier(
-            failure=float('inf'),
-            window=float('inf'),
-            description="잠금: 자동 OPEN 금지"
-        )
-        assert multiplier.failure == float('inf')
-        assert multiplier.window == float('inf')
+        multiplier = ThresholdMultiplier(failure=float("inf"), window=float("inf"), description="잠금: 자동 OPEN 금지")
+        assert multiplier.failure == float("inf")
+        assert multiplier.window == float("inf")
 
     def test_negative_failure_raises_error(self):
         """음수 failure 배율은 에러 발생."""
@@ -351,8 +332,8 @@ class TestAdaptiveThresholdPolicy:
         """LOCKDOWN 레벨 조정된 임계값 (무한대)."""
         policy = AdaptiveThresholdPolicy()
         failure, window = policy.get_adjusted_threshold("LOCKDOWN")
-        assert failure == float('inf')
-        assert window == float('inf')
+        assert failure == float("inf")
+        assert window == float("inf")
 
     def test_get_adjusted_threshold_unknown_level(self):
         """알 수 없는 레벨은 NORMAL로 폴백."""
@@ -364,12 +345,12 @@ class TestAdaptiveThresholdPolicy:
     def test_progressive_multipliers(self):
         """Emergency Level이 높아질수록 더 보수적 (배율 증가)."""
         policy = AdaptiveThresholdPolicy()
-        
+
         normal = policy.level_multipliers["NORMAL"]
         elevated = policy.level_multipliers["ELEVATED"]
         high = policy.level_multipliers["HIGH"]
         critical = policy.level_multipliers["CRITICAL"]
-        
+
         assert normal.failure < elevated.failure < high.failure < critical.failure
         assert normal.window < elevated.window < high.window < critical.window
 
@@ -429,7 +410,7 @@ class TestCircuitBreakerAdvancedConfig:
                 ServiceConfig(service_id="order-api", criticality="high"),
             ]
         )
-        
+
         service = config.get_service_config("payment-api")
         assert service is not None
         assert service.service_id == "payment-api"
@@ -451,7 +432,7 @@ class TestCircuitBreakerAdvancedConfig:
                 ServiceConfig(service_id="review-api", criticality="low"),
             ]
         )
-        
+
         critical_services = config.get_services_by_criticality("critical")
         assert len(critical_services) == 2
         assert all(s.criticality == "critical" for s in critical_services)
@@ -465,7 +446,7 @@ class TestCircuitBreakerAdvancedConfig:
                 ServiceConfig(service_id="recommend-api", criticality="low", shed_priority=5),
             ]
         )
-        
+
         targets = config.get_shedding_targets(["low"])
         assert len(targets) == 2
         # 높은 priority가 먼저 (먼저 차단됨)
@@ -479,7 +460,7 @@ class TestCircuitBreakerAdvancedConfig:
                 ServiceConfig(service_id="payment-api", criticality="critical", shed_priority=0),
             ]
         )
-        
+
         # critical을 포함해도 shed_priority=0이면 제외
         targets = config.get_shedding_targets(["critical"])
         assert len(targets) == 0
@@ -538,7 +519,7 @@ class TestFreezeModeState:
             active=True,
             activated_at="2026-01-05T14:30:00Z",
             reason="LOCKDOWN 진입으로 인한 Freeze Mode 활성화",
-            activated_by="system"
+            activated_by="system",
         )
         assert state.active is True
         assert state.activated_at == "2026-01-05T14:30:00Z"
@@ -547,10 +528,7 @@ class TestFreezeModeState:
     def test_operator_activation(self):
         """운영자에 의한 활성화."""
         state = FreezeModeState(
-            active=True,
-            activated_at="2026-01-05T14:30:00Z",
-            reason="긴급 점검",
-            activated_by="operator:admin"
+            active=True, activated_at="2026-01-05T14:30:00Z", reason="긴급 점검", activated_by="operator:admin"
         )
         assert state.activated_by == "operator:admin"
 
@@ -562,7 +540,7 @@ class TestFreezeModeState:
 
 class TestCoreConfigIntegration:
     """core/config.py 통합 테스트.
-    
+
     NOTE: Pydantic v2 마이그레이션 후 API 변경됨.
     - circuit_breaker_advanced는 분리된 설정으로 관리
     - get_circuit_breaker_advanced_settings()로 접근
@@ -578,7 +556,7 @@ class TestCoreConfigIntegration:
     def test_default_values(self):
         """기본값 확인."""
         cb_advanced = get_circuit_breaker_advanced_settings()
-        
+
         assert cb_advanced.enabled is True
         assert cb_advanced.load_shedding_enabled is True
         assert cb_advanced.adaptive_threshold_enabled is True
@@ -594,7 +572,7 @@ class TestCoreConfigIntegration:
             "panic_threshold_percent": 80.0,
         }
         config = CoreCBAdvancedConfig.model_validate(config_dict)
-        
+
         assert config.enabled is False
         assert config.panic_threshold_percent == 80.0
 
@@ -602,7 +580,7 @@ class TestCoreConfigIntegration:
         """Pydantic v2 model_dump로 설정 직렬화."""
         config = CoreCBAdvancedConfig()
         config_dict = config.model_dump()
-        
+
         assert "enabled" in config_dict
         assert config_dict["enabled"] is True
         assert config_dict["panic_threshold_percent"] == 70.0
@@ -643,12 +621,12 @@ class TestDesignDecisions:
         """Canary 단계는 Thundering Herd 방지를 위해 점진적."""
         strategy = RecoveryStrategy()
         stages = strategy.canary_stages
-        
+
         # 연속 단계 간 트래픽 비율 차이 확인
         for i in range(len(stages) - 1):
             current = stages[i].traffic_percent
             next_stage = stages[i + 1].traffic_percent
-            ratio = next_stage / current if current > 0 else float('inf')
+            ratio = next_stage / current if current > 0 else float("inf")
             # 5배 이상 급증하지 않도록 (10→50 대신 10→30→60 등)
             assert ratio <= 5, f"Stage {i} to {i+1} ratio is {ratio}, should be <= 5"
 
@@ -656,18 +634,18 @@ class TestDesignDecisions:
         """LOCKDOWN에서 Adaptive Threshold는 무한대로 자동 OPEN 금지."""
         policy = AdaptiveThresholdPolicy()
         failure, window = policy.get_adjusted_threshold("LOCKDOWN")
-        
-        assert failure == float('inf')
-        assert window == float('inf')
+
+        assert failure == float("inf")
+        assert window == float("inf")
 
     def test_emergency_level_more_conservative(self):
         """위기 상황일수록 더 보수적 (더 높은 임계값)."""
         policy = AdaptiveThresholdPolicy()
-        
+
         levels = ["NORMAL", "ELEVATED", "HIGH", "CRITICAL"]
         prev_failure = 0
         prev_window = 0
-        
+
         for level in levels:
             failure, window = policy.get_adjusted_threshold(level)
             assert failure > prev_failure, f"{level} should be more conservative than previous"
