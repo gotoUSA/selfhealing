@@ -126,13 +126,11 @@ from selfhealing.core.tls_handler import (
 from selfhealing.core.types import (
     CircuitBreakerStateData,
     CircuitState,
-    DomainType,
     FailedOperationData,
     FailureType,
     MetricsSnapshot,
     OperationStatus,
     RetryContext,
-    SecurityIncidentData,
 )
 
 __all__ = [
@@ -140,10 +138,8 @@ __all__ = [
     "FailureType",
     "OperationStatus",
     "CircuitState",
-    "DomainType",
     "FailedOperationData",
     "CircuitBreakerStateData",
-    "SecurityIncidentData",
     "RetryContext",
     "MetricsSnapshot",
     # Backoff - Strategy implementations

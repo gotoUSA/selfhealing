@@ -45,17 +45,6 @@ class CircuitState(str, Enum):
     HALF_OPEN = "half_open"
 
 
-class DomainType(str, Enum):
-    """Business domains that can be protected by self-healing (domain-neutral)."""
-
-    EXTERNAL_SERVICE = "external_service"
-    INTERNAL_PROCESS = "internal_process"
-    ASYNC_TASK = "async_task"
-    NOTIFICATION = "notification"
-    DATA_SYNC = "data_sync"
-    GENERAL = "general"
-
-
 @dataclass
 class FailedOperationData:
     """Data transfer object for failed operations."""
@@ -99,23 +88,6 @@ class CircuitBreakerStateData:
     id: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-@dataclass
-class SecurityIncidentData:
-    """Data transfer object for security incidents (domain-neutral)."""
-
-    id: int
-    incident_type: str
-    severity: str
-    source_ip: str | None = None
-    user_id: int | None = None
-    entity_refs: dict[str, Any] = field(default_factory=dict)
-    description: str = ""
-    context: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime | None = None
-    resolved_at: datetime | None = None
-    is_resolved: bool = False
 
 
 class RetryContext(TypedDict, total=False):

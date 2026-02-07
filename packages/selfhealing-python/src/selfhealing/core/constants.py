@@ -54,35 +54,3 @@ class RiskLevels:
     HIGH = "high"
     CRITICAL = "critical"
     FORBIDDEN = "forbidden"
-
-
-class FailedOperationStatus:
-    """Failed operation status constants."""
-
-    PENDING = "pending"
-    RETRYING = "retrying"
-    RESOLVED = "resolved"
-    PERMANENTLY_FAILED = "permanently_failed"
-    EXPIRED = "expired"
-
-    CHOICES = [
-        (PENDING, "Pending - Awaiting retry"),
-        (RETRYING, "Retrying - In progress"),
-        (RESOLVED, "Resolved - Successfully completed"),
-        (PERMANENTLY_FAILED, "Permanently Failed - Max retries exceeded"),
-        (EXPIRED, "Expired - TTL exceeded"),
-    ]
-
-
-class CircuitBreakerState:
-    """Circuit breaker state constants."""
-
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
-
-    CHOICES = [
-        (CLOSED, "Closed - Normal operation"),
-        (OPEN, "Open - Blocking requests"),
-        (HALF_OPEN, "Half Open - Testing recovery"),
-    ]

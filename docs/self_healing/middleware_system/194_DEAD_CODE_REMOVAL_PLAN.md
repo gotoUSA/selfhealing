@@ -1,7 +1,9 @@
 # 194. 데드코드 제거 계획
 
-> **문서 버전**: 1.0.0
+> **문서 버전**: 1.1.0
 > **최종 수정일**: 2026-02-07
+> **구현 완료일**: 2026-02-07
+> **상태**: ✅ 완료
 > **작성 근거**:
 > - `selfhealing/core/constants.py` (Line 67-100)
 > - `selfhealing/core/types.py` (Line 100-120: SecurityIncidentData)
@@ -217,3 +219,28 @@ cd packages/selfhealing-python && python -m pytest tests/ -x --tb=short
 | re-export 깨짐 | 🟡 낮음 | `core/__init__.py`에서 `DomainType`, `SecurityIncidentData` re-export 제거 필요 |
 
 **결론**: 제로 리스크 작업으로, 다른 리팩토링의 선행 작업으로 즉시 실행 가능합니다.
+
+---
+
+## 7. 구현 결과
+
+> **구현일**: 2026-02-07
+
+### 수행된 변경
+
+| 순서 | 대상 | 파일 | 결과 |
+|------|------|------|------|
+| 1 | `FailedOperationStatus` | `core/constants.py` | ✅ 클래스 전체 삭제 |
+| 2 | `CircuitBreakerState` | `core/constants.py` | ✅ 클래스 전체 삭제 |
+| 3 | `SecurityIncidentData` | `core/types.py` | ✅ 클래스 전체 삭제 |
+| 4 | `DomainType` | `core/types.py` | ✅ 클래스 전체 삭제 |
+| 5 | re-export 정리 | `core/__init__.py` | ✅ `DomainType`, `SecurityIncidentData` import 및 `__all__` 제거 |
+
+### 검증 결과
+
+| 검증 항목 | 결과 |
+|-----------|------|
+| `list_code_usages` 사전 확인 | ✅ 4개 심볼 모두 프로덕션 사용처 0건 확인 |
+| grep 잔여 참조 확인 | ✅ src 내 잔여 import 0건 |
+| core 단위 테스트 (257건) | ✅ 전체 통과 |
+| 전체 테스트 (4,009건) | ✅ 4,008 passed, 1 skipped (1 failed는 기존 실패, 변경과 무관) |
