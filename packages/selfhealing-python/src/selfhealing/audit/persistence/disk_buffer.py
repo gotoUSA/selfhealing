@@ -1218,26 +1218,24 @@ def _shutdown_disk_buffer() -> None:
     if _disk_buffer_instance is None:
         return
 
-    try:
-        logger.info("[DiskBuffer] Graceful shutdown starting...")
+    # atexit 시점에서 logging stream이 닫힐 수 있으므로
+    # 로깅 실패 시 "--- Logging error ---" 출력을 억제
+    logging.raiseExceptions = False
 
+    try:
         # 1. Group Commit 버퍼 강제 플러시
         if _disk_buffer_instance._settings.group_commit_enabled:
             _disk_buffer_instance.flush_group_commit()
-            logger.debug("[DiskBuffer] Group commit buffer flushed")
 
         # 2. LMDB fsync (데이터 안전 보장)
         if _disk_buffer_instance._env:
             _disk_buffer_instance._env.sync()
-            logger.debug("[DiskBuffer] LMDB synced")
 
         # 3. 버퍼 종료
         _disk_buffer_instance.close()
 
-        logger.info("[DiskBuffer] Graceful shutdown complete")
-
-    except Exception as e:
-        logger.error(f"[DiskBuffer] Shutdown error: {e}")
+    except Exception:
+        pass
 
     finally:
         _disk_buffer_instance = None

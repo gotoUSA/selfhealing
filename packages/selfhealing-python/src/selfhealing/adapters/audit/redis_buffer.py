@@ -781,14 +781,15 @@ class RedisAuditBuffer:
 
         메모리 fallback 버퍼의 데이터를 Redis로 저장 시도.
         """
-        logger.info("[RedisAuditBuffer] Graceful shutdown started")
+        # atexit 시점에서 logging stream이 닫힐 수 있으므로
+        # 로깅 실패 시 "--- Logging error ---" 출력을 억제
+        logging.raiseExceptions = False
 
         try:
             # 메모리 버퍼 → Redis 저장
             with self._fallback_lock:
                 if self._fallback_buffer:
                     entries = list(self._fallback_buffer)
-                    logger.info(f"[RedisAuditBuffer] Flushing {len(entries)} entries from fallback")
 
                     # 도메인별로 그룹핑하여 배치 저장
                     by_domain: dict[str, list] = {}
@@ -802,15 +803,13 @@ class RedisAuditBuffer:
                         try:
                             # _log_batch_chunk 직접 호출 (log_batch는 폴백 버퍼 재진입 유발)
                             self._log_batch_chunk(domain_entries, domain)
-                        except Exception as e:
-                            logger.warning(f"[RedisAuditBuffer] Shutdown flush failed for {domain}: {e}")
+                        except Exception:
+                            pass
 
                     self._fallback_buffer.clear()
 
-        except Exception as e:
-            logger.error(f"[RedisAuditBuffer] Graceful shutdown error: {e}")
-
-        logger.info("[RedisAuditBuffer] Graceful shutdown completed")
+        except Exception:
+            pass
 
     def clear_domain(self, domain: str) -> int:
         """
