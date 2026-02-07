@@ -12,7 +12,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from .enums import CircuitBreakerConfig, CircuitState
+from .enums import HashChainCircuitBreakerConfig, CircuitState
 
 if TYPE_CHECKING:
     from .degradation_manager import HashChainDegradationManager
@@ -54,7 +54,7 @@ class HashChainCircuitBreaker:
     def __init__(
         self,
         name: str = "hash_chain_redis",
-        config: CircuitBreakerConfig | None = None,
+        config: HashChainCircuitBreakerConfig | None = None,
         degradation_manager: HashChainDegradationManager | None = None,
     ):
         """
@@ -66,7 +66,7 @@ class HashChainCircuitBreaker:
             degradation_manager: Optional degradation manager for integration
         """
         self._name = name
-        self._config = config or CircuitBreakerConfig()
+        self._config = config or HashChainCircuitBreakerConfig()
         self._degradation_manager = degradation_manager
         self._lock = threading.RLock()
 
@@ -162,9 +162,7 @@ class HashChainCircuitBreaker:
         """Transition to OPEN state."""
         self._state = CircuitState.OPEN
         self._state_changes += 1
-        logger.warning(
-            f"[CircuitBreaker:{self._name}] → OPEN (failures: {self._failure_count})"
-        )
+        logger.warning(f"[CircuitBreaker:{self._name}] → OPEN (failures: {self._failure_count})")
 
     def _transition_to_closed(self) -> None:
         """Transition to CLOSED state."""

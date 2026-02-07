@@ -45,7 +45,7 @@ from .config import AuditConfig
 from .continuous_audit import ContinuousAuditRecorder
 from .resilience import (
     AuditMetrics,
-    CircuitBreakerConfig,
+    AuditCircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitState,
     DegradedModeManager,
@@ -80,9 +80,7 @@ class ResilientRecorderConfig:
     enable_syslog_fallback: bool = True
 
     @classmethod
-    def from_settings(
-        cls, settings: ResilientRecorderSettings | None = None
-    ) -> "ResilientRecorderConfig":
+    def from_settings(cls, settings: ResilientRecorderSettings | None = None) -> "ResilientRecorderConfig":
         """
         ResilientRecorderSettings에서 Config 생성.
 
@@ -100,9 +98,7 @@ class ResilientRecorderConfig:
             "DROP_NEWEST": BackpressureStrategy.DROP_NEWEST,
             "BLOCK": BackpressureStrategy.BLOCK,
         }
-        strategy = strategy_map.get(
-            s.backpressure_strategy, BackpressureStrategy.DROP_OLDEST
-        )
+        strategy = strategy_map.get(s.backpressure_strategy, BackpressureStrategy.DROP_OLDEST)
 
         return cls(
             buffer_capacity=s.buffer_capacity,
@@ -182,7 +178,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         self._cb_registry = CircuitBreakerRegistry.get_instance()
         self._circuit_breaker = self._cb_registry.get_or_create(
             "audit_primary",
-            CircuitBreakerConfig(
+            AuditCircuitBreakerConfig(
                 failure_threshold=self._resilient_config.circuit_failure_threshold,
                 success_threshold=self._resilient_config.circuit_success_threshold,
                 timeout_seconds=self._resilient_config.circuit_timeout_seconds,
@@ -211,9 +207,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
             self._init_fallback_adapter()
 
         # Self-audit 로깅
-        self_audit().log(
-            SelfAuditEvent.INITIALIZED, "ResilientContinuousAuditRecorder initialized"
-        )
+        self_audit().log(SelfAuditEvent.INITIALIZED, "ResilientContinuousAuditRecorder initialized")
 
         # Background flush 시작
         if self._resilient_config.enable_background_flush:
@@ -348,9 +342,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 processed += 1
 
         if processed > 0:
-            logger.debug(
-                f"[ResilientRecorder] Flushed {processed}/{len(batch)} entries"
-            )
+            logger.debug(f"[ResilientRecorder] Flushed {processed}/{len(batch)} entries")
 
         return processed
 

@@ -25,8 +25,8 @@ class CircuitState(Enum):
 
 
 @dataclass
-class CircuitBreakerConfig:
-    """Configuration for circuit breaker."""
+class AuditCircuitBreakerConfig:
+    """Configuration for audit circuit breaker."""
 
     failure_threshold: int = 3  # Failures before opening
     success_threshold: int = 2  # Successes to close from half-open
@@ -42,9 +42,7 @@ class CircuitBreakerState:
     failure_count: int = 0
     success_count: int = 0
     last_failure_time: datetime | None = None
-    last_state_change: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    last_state_change: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     total_failures: int = 0
     total_successes: int = 0
 
@@ -77,7 +75,7 @@ class CircuitBreaker:
     def __init__(
         self,
         name: str,
-        config: CircuitBreakerConfig | None = None,
+        config: AuditCircuitBreakerConfig | None = None,
     ):
         """
         Initialize circuit breaker.
@@ -87,7 +85,7 @@ class CircuitBreaker:
             config: Circuit breaker configuration
         """
         self.name = name
-        self.config = config or CircuitBreakerConfig()
+        self.config = config or AuditCircuitBreakerConfig()
         self._state = CircuitBreakerState()
         self._lock = threading.RLock()
 
@@ -146,9 +144,7 @@ class CircuitBreaker:
     def _check_timeout(self) -> None:
         """Check if open circuit should transition to half-open."""
         if self._state.state == CircuitState.OPEN:
-            time_since_change = (
-                datetime.now(timezone.utc) - self._state.last_state_change
-            ).total_seconds()
+            time_since_change = (datetime.now(timezone.utc) - self._state.last_state_change).total_seconds()
 
             if time_since_change >= self.config.timeout_seconds:
                 self._transition_to(CircuitState.HALF_OPEN)
@@ -165,9 +161,7 @@ class CircuitBreaker:
         elif new_state == CircuitState.HALF_OPEN:
             self._state.success_count = 0
 
-        logger.warning(
-            f"[CircuitBreaker:{self.name}] State transition: {old_state.value} -> {new_state.value}"
-        )
+        logger.warning(f"[CircuitBreaker:{self.name}] State transition: {old_state.value} -> {new_state.value}")
 
     def reset(self) -> None:
         """Manually reset circuit breaker to closed state."""
@@ -191,11 +185,7 @@ class CircuitBreaker:
                 "success_count": self._state.success_count,
                 "total_failures": self._state.total_failures,
                 "total_successes": self._state.total_successes,
-                "last_failure_time": (
-                    self._state.last_failure_time.isoformat()
-                    if self._state.last_failure_time
-                    else None
-                ),
+                "last_failure_time": (self._state.last_failure_time.isoformat() if self._state.last_failure_time else None),
                 "last_state_change": self._state.last_state_change.isoformat(),
                 "config": {
                     "failure_threshold": self.config.failure_threshold,
@@ -231,7 +221,7 @@ class CircuitBreakerRegistry:
     def get_or_create(
         self,
         name: str,
-        config: CircuitBreakerConfig | None = None,
+        config: AuditCircuitBreakerConfig | None = None,
     ) -> CircuitBreaker:
         """Get existing or create new circuit breaker."""
         with self._registry_lock:
@@ -258,11 +248,7 @@ class CircuitBreakerRegistry:
     def get_open_circuits(self) -> list[str]:
         """Get names of all open circuits."""
         with self._registry_lock:
-            return [
-                name
-                for name, cb in self._breakers.items()
-                if cb.state == CircuitState.OPEN
-            ]
+            return [name for name, cb in self._breakers.items() if cb.state == CircuitState.OPEN]
 
 
 def get_circuit_breaker(name: str) -> CircuitBreaker:
@@ -272,7 +258,7 @@ def get_circuit_breaker(name: str) -> CircuitBreaker:
 
 __all__ = [
     "CircuitState",
-    "CircuitBreakerConfig",
+    "AuditCircuitBreakerConfig",
     "CircuitBreakerState",
     "CircuitBreaker",
     "CircuitBreakerRegistry",

@@ -21,7 +21,7 @@ from selfhealing.core.safety_bounds import SafetyBounds
 from selfhealing.core.auto_rollback_guard import (
     AutoRollbackGuard,
     GuardState,
-    DegradationLevel,
+    RollbackSeverity,
 )
 from selfhealing.services.auto_tuning.adjustment_recorder import AdjustmentRecorder
 from selfhealing.services.auto_tuning.models import TuningState
@@ -172,8 +172,8 @@ class TestAutoRollbackGuard:
             metrics_provider=self.metrics_provider,
             config_applier=self.config_applier,
         )
-        assert guard._assess_degradation(0.02, 200) == DegradationLevel.NONE
-        assert guard._assess_degradation(0.35, 12000) == DegradationLevel.CRITICAL
+        assert guard._assess_degradation(0.02, 200) == RollbackSeverity.NONE
+        assert guard._assess_degradation(0.35, 12000) == RollbackSeverity.CRITICAL
     
     def test_start_stop(self):
         """시작/중지"""

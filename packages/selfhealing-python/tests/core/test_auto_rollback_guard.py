@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch, call
 from selfhealing.core.auto_rollback_guard import (
     AutoRollbackGuard,
     GuardState,
-    DegradationLevel,
+    RollbackSeverity,
     HealthCheckResult,
     SafeDefault,
 )
@@ -189,42 +189,42 @@ class TestDegradationAssessment:
     def test_assess_none_degradation(self, guard):
         """저하 없음."""
         level = guard._assess_degradation(error_rate=0.01, latency_p99=100)
-        assert level == DegradationLevel.NONE
+        assert level == RollbackSeverity.NONE
 
     def test_assess_minor_degradation_by_error_rate(self, guard):
         """경미한 저하 - 에러율 5% 이상."""
         level = guard._assess_degradation(error_rate=0.06, latency_p99=100)
-        assert level == DegradationLevel.MINOR
+        assert level == RollbackSeverity.MINOR
 
     def test_assess_minor_degradation_by_latency(self, guard):
         """경미한 저하 - 레이턴시 3초 이상."""
         level = guard._assess_degradation(error_rate=0.01, latency_p99=3500)
-        assert level == DegradationLevel.MINOR
+        assert level == RollbackSeverity.MINOR
 
     def test_assess_major_degradation_by_error_rate(self, guard):
         """심각한 저하 - 에러율 10% 이상."""
         level = guard._assess_degradation(error_rate=0.12, latency_p99=100)
-        assert level == DegradationLevel.MAJOR
+        assert level == RollbackSeverity.MAJOR
 
     def test_assess_major_degradation_by_latency(self, guard):
         """심각한 저하 - 레이턴시 5초 이상."""
         level = guard._assess_degradation(error_rate=0.01, latency_p99=5500)
-        assert level == DegradationLevel.MAJOR
+        assert level == RollbackSeverity.MAJOR
 
     def test_assess_critical_degradation_by_error_rate(self, guard):
         """긴급 저하 - 에러율 30% 이상."""
         level = guard._assess_degradation(error_rate=0.35, latency_p99=100)
-        assert level == DegradationLevel.CRITICAL
+        assert level == RollbackSeverity.CRITICAL
 
     def test_assess_critical_degradation_by_latency(self, guard):
         """긴급 저하 - 레이턴시 10초 이상."""
         level = guard._assess_degradation(error_rate=0.01, latency_p99=12000)
-        assert level == DegradationLevel.CRITICAL
+        assert level == RollbackSeverity.CRITICAL
 
     def test_assess_critical_takes_precedence(self, guard):
         """CRITICAL이 MAJOR보다 우선."""
         level = guard._assess_degradation(error_rate=0.35, latency_p99=5500)
-        assert level == DegradationLevel.CRITICAL
+        assert level == RollbackSeverity.CRITICAL
 
 
 # =============================================================================
@@ -239,33 +239,33 @@ class TestHealthCheckResult:
         """정상 결과."""
         result = HealthCheckResult(
             healthy=True,
-            degradation_level=DegradationLevel.NONE,
+            degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
             latency_p99_ms=100,
             throughput_rps=1000,
         )
 
         assert result.healthy is True
-        assert result.degradation_level == DegradationLevel.NONE
+        assert result.degradation_level == RollbackSeverity.NONE
 
     def test_unhealthy_result(self):
         """비정상 결과."""
         result = HealthCheckResult(
             healthy=False,
-            degradation_level=DegradationLevel.CRITICAL,
+            degradation_level=RollbackSeverity.CRITICAL,
             error_rate=0.5,
             latency_p99_ms=15000,
             throughput_rps=100,
         )
 
         assert result.healthy is False
-        assert result.degradation_level == DegradationLevel.CRITICAL
+        assert result.degradation_level == RollbackSeverity.CRITICAL
 
     def test_result_timestamp(self):
         """타임스탬프 자동 설정."""
         result = HealthCheckResult(
             healthy=True,
-            degradation_level=DegradationLevel.NONE,
+            degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
             latency_p99_ms=100,
             throughput_rps=1000,
@@ -458,7 +458,7 @@ class TestGetStatus:
         # 헬스체크 결과 추가
         result = HealthCheckResult(
             healthy=True,
-            degradation_level=DegradationLevel.NONE,
+            degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
             latency_p99_ms=100,
             throughput_rps=1000,
@@ -537,19 +537,19 @@ class TestGuardState:
 
 
 # =============================================================================
-# DegradationLevel Tests
+# RollbackSeverity Tests
 # =============================================================================
 
 
-class TestDegradationLevel:
-    """Test DegradationLevel enum."""
+class TestRollbackSeverity:
+    """Test RollbackSeverity enum."""
 
     def test_degradation_levels_exist(self):
         """모든 저하 수준 확인."""
-        assert DegradationLevel.NONE == "none"
-        assert DegradationLevel.MINOR == "minor"
-        assert DegradationLevel.MAJOR == "major"
-        assert DegradationLevel.CRITICAL == "critical"
+        assert RollbackSeverity.NONE == "none"
+        assert RollbackSeverity.MINOR == "minor"
+        assert RollbackSeverity.MAJOR == "major"
+        assert RollbackSeverity.CRITICAL == "critical"
 
 
 # =============================================================================
@@ -600,7 +600,7 @@ class TestHandleHealthResult:
 
         result = HealthCheckResult(
             healthy=True,
-            degradation_level=DegradationLevel.NONE,
+            degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
             latency_p99_ms=100,
             throughput_rps=1000,
@@ -617,7 +617,7 @@ class TestHandleHealthResult:
 
         result = HealthCheckResult(
             healthy=False,
-            degradation_level=DegradationLevel.MINOR,
+            degradation_level=RollbackSeverity.MINOR,
             error_rate=0.06,
             latency_p99_ms=100,
             throughput_rps=1000,
@@ -631,7 +631,7 @@ class TestHandleHealthResult:
         """긴급 저하 시 긴급 복구 트리거."""
         result = HealthCheckResult(
             healthy=False,
-            degradation_level=DegradationLevel.CRITICAL,
+            degradation_level=RollbackSeverity.CRITICAL,
             error_rate=0.35,
             latency_p99_ms=100,
             throughput_rps=1000,
@@ -684,7 +684,7 @@ class TestEdgeCases:
         for i in range(150):
             result = HealthCheckResult(
                 healthy=True,
-                degradation_level=DegradationLevel.NONE,
+                degradation_level=RollbackSeverity.NONE,
                 error_rate=0.01,
                 latency_p99_ms=100,
                 throughput_rps=1000,

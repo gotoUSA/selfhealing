@@ -1,5 +1,11 @@
 # 198. 동명이의(同名異義) 클래스 이름 변경 계획
 
+> **상태**: ✅ 구현 완료 (2026-02-07)
+> - #1 `DegradationLevel` → `RollbackSeverity` (3파일) — 테스트 71 passed
+> - #2 `FallbackResult` → `CircuitBreakerFallbackResult` (5파일) — 테스트 49 passed
+> - #3 `CircuitBreakerConfig` → `AuditCircuitBreakerConfig` (6파일) — 테스트 67 passed
+> - #4 `CircuitBreakerConfig` → `HashChainCircuitBreakerConfig` (6파일) — 테스트 45 passed
+
 > **목적**: 서로 다른 모듈에 같은 이름으로 정의되었지만 의미·구조가 완전히 다른 클래스들의 이름을 문맥에 맞게 변경하여 혼동을 제거한다.
 >
 > **원칙**: 이름만 같을 뿐 enum 값, 필드, 용도가 다른 클래스를 대상으로 한다.

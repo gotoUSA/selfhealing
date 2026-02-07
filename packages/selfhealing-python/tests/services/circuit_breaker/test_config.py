@@ -6,7 +6,7 @@ Covers:
 - CircuitBreakerConfig dataclass
 - from_settings class method
 - CircuitBreakerResult
-- FallbackResult
+- CircuitBreakerFallbackResult
 """
 
 import pytest
@@ -182,34 +182,34 @@ class TestCircuitBreakerResult:
         assert d["service_name"] == "test_service"
 
 
-class TestFallbackResult:
-    """Tests for FallbackResult dataclass."""
+class TestCircuitBreakerFallbackResult:
+    """Tests for CircuitBreakerFallbackResult dataclass."""
     
     def test_fallback_result_allow(self):
-        """Test FallbackResult.allow() factory."""
-        from selfhealing.services.circuit_breaker.config import FallbackResult
+        """Test CircuitBreakerFallbackResult.allow() factory."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
         
-        result = FallbackResult.allow()
+        result = CircuitBreakerFallbackResult.allow()
         
         assert result.allowed is True
         assert result.fallback_used is False
     
     def test_fallback_result_block(self):
-        """Test FallbackResult.block() factory."""
-        from selfhealing.services.circuit_breaker.config import FallbackResult
+        """Test CircuitBreakerFallbackResult.block() factory."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
         
-        result = FallbackResult.block(message="Circuit breaker is open")
+        result = CircuitBreakerFallbackResult.block(message="Circuit breaker is open")
         
         assert result.allowed is False
         assert result.fallback_used is False
         assert result.message == "Circuit breaker is open"
     
     def test_fallback_result_from_cache(self):
-        """Test FallbackResult.from_cache() factory."""
-        from selfhealing.services.circuit_breaker.config import FallbackResult
+        """Test CircuitBreakerFallbackResult.from_cache() factory."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
         
         cached_data = {"data": "cached"}
-        result = FallbackResult.from_cache(cached_data)
+        result = CircuitBreakerFallbackResult.from_cache(cached_data)
         
         assert result.allowed is False
         assert result.fallback_used is True
@@ -217,21 +217,21 @@ class TestFallbackResult:
         assert result.fallback_data == cached_data
     
     def test_fallback_result_to_dlq(self):
-        """Test FallbackResult.to_dlq() factory."""
-        from selfhealing.services.circuit_breaker.config import FallbackResult
+        """Test CircuitBreakerFallbackResult.to_dlq() factory."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
         
-        result = FallbackResult.to_dlq()
+        result = CircuitBreakerFallbackResult.to_dlq()
         
         assert result.allowed is False
         assert result.fallback_used is True
         assert result.fallback_type == "dlq"
     
     def test_fallback_result_default_response(self):
-        """Test FallbackResult.default_response() factory."""
-        from selfhealing.services.circuit_breaker.config import FallbackResult
+        """Test CircuitBreakerFallbackResult.default_response() factory."""
+        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
         
         default_data = {"status": "unavailable"}
-        result = FallbackResult.default_response(default_data)
+        result = CircuitBreakerFallbackResult.default_response(default_data)
         
         assert result.allowed is False
         assert result.fallback_used is True

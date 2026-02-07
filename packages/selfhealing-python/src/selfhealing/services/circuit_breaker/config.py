@@ -135,7 +135,7 @@ class CircuitBreakerConfig:
 
 
 @dataclass
-class FallbackResult:
+class CircuitBreakerFallbackResult:
     """Result when circuit breaker provides a fallback response."""
 
     allowed: bool  # Whether the request should proceed
@@ -145,17 +145,17 @@ class FallbackResult:
     message: str = ""
 
     @classmethod
-    def allow(cls) -> FallbackResult:
+    def allow(cls) -> CircuitBreakerFallbackResult:
         """Request allowed to proceed normally."""
         return cls(allowed=True, fallback_used=False)
 
     @classmethod
-    def block(cls, message: str = "Circuit breaker is open") -> FallbackResult:
+    def block(cls, message: str = "Circuit breaker is open") -> CircuitBreakerFallbackResult:
         """Request blocked with no fallback."""
         return cls(allowed=False, fallback_used=False, message=message)
 
     @classmethod
-    def from_cache(cls, data: Any, message: str = "Stale data from cache") -> FallbackResult:
+    def from_cache(cls, data: Any, message: str = "Stale data from cache") -> CircuitBreakerFallbackResult:
         """Request served from cache (stale data)."""
         return cls(
             allowed=False,
@@ -166,7 +166,7 @@ class FallbackResult:
         )
 
     @classmethod
-    def to_dlq(cls, message: str = "Request queued for later retry") -> FallbackResult:
+    def to_dlq(cls, message: str = "Request queued for later retry") -> CircuitBreakerFallbackResult:
         """Request queued to DLQ for later processing."""
         return cls(
             allowed=False,
@@ -176,7 +176,7 @@ class FallbackResult:
         )
 
     @classmethod
-    def default_response(cls, data: Any, message: str = "Default fallback response") -> FallbackResult:
+    def default_response(cls, data: Any, message: str = "Default fallback response") -> CircuitBreakerFallbackResult:
         """Request served with a default/static response."""
         return cls(
             allowed=False,

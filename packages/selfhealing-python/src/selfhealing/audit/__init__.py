@@ -97,7 +97,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "get_default_backend": ("selfhealing.audit.backends", "get_default_backend"),
     # resilience (15개)
     "CircuitBreaker": ("selfhealing.audit.resilience", "CircuitBreaker"),
-    "CircuitBreakerConfig": ("selfhealing.audit.resilience", "CircuitBreakerConfig"),
+    "AuditCircuitBreakerConfig": ("selfhealing.audit.resilience", "AuditCircuitBreakerConfig"),
     "CircuitBreakerRegistry": (
         "selfhealing.audit.resilience",
         "CircuitBreakerRegistry",
@@ -366,7 +366,7 @@ if TYPE_CHECKING:
     from selfhealing.audit.resilience import (
         AuditMetrics,
         CircuitBreaker,
-        CircuitBreakerConfig,
+        AuditCircuitBreakerConfig,
         CircuitBreakerRegistry,
         CircuitBreakerState,
         CircuitState,
@@ -462,7 +462,7 @@ __all__ = [
     "create_composite_backend",
     # Resilience
     "CircuitBreaker",
-    "CircuitBreakerConfig",
+    "AuditCircuitBreakerConfig",
     "CircuitBreakerRegistry",
     "CircuitBreakerState",
     "CircuitState",

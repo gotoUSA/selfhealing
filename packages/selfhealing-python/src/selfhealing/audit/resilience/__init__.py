@@ -38,7 +38,7 @@ from .buffer import (
 )
 from .circuit_breaker import (
     CircuitBreaker,
-    CircuitBreakerConfig,
+    AuditCircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitBreakerState,
     CircuitState,
@@ -61,7 +61,7 @@ from .syslog_fallback import (
 __all__ = [
     # Circuit Breaker
     "CircuitState",
-    "CircuitBreakerConfig",
+    "AuditCircuitBreakerConfig",
     "CircuitBreakerState",
     "CircuitBreaker",
     "CircuitBreakerRegistry",

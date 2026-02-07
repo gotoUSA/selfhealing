@@ -23,7 +23,7 @@ import pytest
 from selfhealing.audit.resilience import (
     AuditMetrics,
     CircuitBreaker,
-    CircuitBreakerConfig,
+    AuditCircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitState,
     DegradedModeManager,
@@ -51,7 +51,7 @@ class TestCircuitBreaker:
 
     def test_opens_after_failure_threshold(self):
         """Test that circuit opens after reaching failure threshold."""
-        config = CircuitBreakerConfig(failure_threshold=3)
+        config = AuditCircuitBreakerConfig(failure_threshold=3)
         cb = CircuitBreaker("test", config)
 
         # Record failures up to threshold
@@ -66,7 +66,7 @@ class TestCircuitBreaker:
 
     def test_cannot_execute_when_open(self):
         """Test that calls are blocked when open."""
-        config = CircuitBreakerConfig(failure_threshold=1)
+        config = AuditCircuitBreakerConfig(failure_threshold=1)
         cb = CircuitBreaker("test", config)
 
         cb.record_failure()
@@ -75,7 +75,7 @@ class TestCircuitBreaker:
 
     def test_transitions_to_half_open_after_timeout(self):
         """Test transition to half-open after timeout."""
-        config = CircuitBreakerConfig(
+        config = AuditCircuitBreakerConfig(
             failure_threshold=1,
             timeout_seconds=0.1,  # 100ms for testing
         )
@@ -92,7 +92,7 @@ class TestCircuitBreaker:
 
     def test_can_execute_when_half_open(self):
         """Test that limited calls are allowed when half-open."""
-        config = CircuitBreakerConfig(
+        config = AuditCircuitBreakerConfig(
             failure_threshold=1,
             timeout_seconds=0.01,
         )
@@ -106,7 +106,7 @@ class TestCircuitBreaker:
 
     def test_closes_after_success_in_half_open(self):
         """Test that circuit closes after successes in half-open."""
-        config = CircuitBreakerConfig(
+        config = AuditCircuitBreakerConfig(
             failure_threshold=1,
             success_threshold=2,
             timeout_seconds=0.01,
@@ -125,7 +125,7 @@ class TestCircuitBreaker:
 
     def test_reopens_on_failure_in_half_open(self):
         """Test that circuit reopens on failure in half-open."""
-        config = CircuitBreakerConfig(
+        config = AuditCircuitBreakerConfig(
             failure_threshold=1,
             timeout_seconds=0.01,
         )
@@ -140,7 +140,7 @@ class TestCircuitBreaker:
 
     def test_success_resets_failure_count(self):
         """Test that success in closed state resets failure count."""
-        config = CircuitBreakerConfig(failure_threshold=3)
+        config = AuditCircuitBreakerConfig(failure_threshold=3)
         cb = CircuitBreaker("test", config)
 
         cb.record_failure()
@@ -154,7 +154,7 @@ class TestCircuitBreaker:
 
     def test_manual_reset(self):
         """Test manual circuit reset."""
-        config = CircuitBreakerConfig(failure_threshold=1)
+        config = AuditCircuitBreakerConfig(failure_threshold=1)
         cb = CircuitBreaker("test", config)
 
         cb.record_failure()
@@ -187,7 +187,7 @@ class TestCircuitBreaker:
 
     def test_thread_safety(self):
         """Test thread safety of circuit breaker."""
-        config = CircuitBreakerConfig(failure_threshold=100)
+        config = AuditCircuitBreakerConfig(failure_threshold=100)
         cb = CircuitBreaker("test", config)
 
         def record_operations():
@@ -254,7 +254,7 @@ class TestCircuitBreakerRegistry:
         CircuitBreakerRegistry._instance = None
         registry = CircuitBreakerRegistry.get_instance()
 
-        cb1 = registry.get_or_create("backend1", CircuitBreakerConfig(failure_threshold=1))
+        cb1 = registry.get_or_create("backend1", AuditCircuitBreakerConfig(failure_threshold=1))
         cb2 = registry.get_or_create("backend2")
 
         cb1.record_failure()  # Opens backend1
@@ -271,8 +271,8 @@ class TestCircuitBreakerRegistry:
         CircuitBreakerRegistry._instance = None
         registry = CircuitBreakerRegistry.get_instance()
 
-        cb1 = registry.get_or_create("backend1", CircuitBreakerConfig(failure_threshold=1))
-        cb2 = registry.get_or_create("backend2", CircuitBreakerConfig(failure_threshold=1))
+        cb1 = registry.get_or_create("backend1", AuditCircuitBreakerConfig(failure_threshold=1))
+        cb2 = registry.get_or_create("backend2", AuditCircuitBreakerConfig(failure_threshold=1))
 
         cb1.record_failure()
         cb2.record_failure()

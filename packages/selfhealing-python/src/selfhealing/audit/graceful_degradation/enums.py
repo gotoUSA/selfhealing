@@ -76,23 +76,17 @@ class FallbackConfig:
 
         s = settings or get_graceful_degradation_settings()
         return cls(
-            redis_timeout_seconds=overrides.get(
-                "redis_timeout_seconds", s.redis_timeout_seconds
-            ),
-            replica_timeout_seconds=overrides.get(
-                "replica_timeout_seconds", s.replica_timeout_seconds
-            ),
+            redis_timeout_seconds=overrides.get("redis_timeout_seconds", s.redis_timeout_seconds),
+            replica_timeout_seconds=overrides.get("replica_timeout_seconds", s.replica_timeout_seconds),
             local_file_path=overrides.get("local_file_path", None),
-            memory_max_entries=overrides.get(
-                "memory_max_entries", s.memory_max_entries
-            ),
+            memory_max_entries=overrides.get("memory_max_entries", s.memory_max_entries),
             key_prefix=overrides.get("key_prefix", s.key_prefix),
         )
 
 
 @dataclass
-class CircuitBreakerConfig:
-    """Configuration for circuit breaker."""
+class HashChainCircuitBreakerConfig:
+    """Configuration for hash chain circuit breaker."""
 
     failure_threshold: int = 5
     recovery_timeout_seconds: float = 30.0
@@ -104,16 +98,16 @@ class CircuitBreakerConfig:
         cls,
         settings: GracefulDegradationSettings | None = None,
         **overrides,
-    ) -> CircuitBreakerConfig:
+    ) -> HashChainCircuitBreakerConfig:
         """
-        Settings에서 CircuitBreakerConfig 인스턴스 생성.
+        Settings에서 HashChainCircuitBreakerConfig 인스턴스 생성.
 
         Args:
             settings: GracefulDegradationSettings 인스턴스 (없으면 싱글톤 사용)
             **overrides: 개별 필드 오버라이드
 
         Returns:
-            CircuitBreakerConfig: Settings 기반 인스턴스
+            HashChainCircuitBreakerConfig: Settings 기반 인스턴스
         """
         from selfhealing.settings.graceful_degradation import (
             get_graceful_degradation_settings,
@@ -121,18 +115,10 @@ class CircuitBreakerConfig:
 
         s = settings or get_graceful_degradation_settings()
         return cls(
-            failure_threshold=overrides.get(
-                "failure_threshold", s.cb_failure_threshold
-            ),
-            recovery_timeout_seconds=overrides.get(
-                "recovery_timeout_seconds", s.cb_recovery_timeout_seconds
-            ),
-            half_open_requests=overrides.get(
-                "half_open_requests", s.cb_half_open_requests
-            ),
-            success_threshold=overrides.get(
-                "success_threshold", s.cb_success_threshold
-            ),
+            failure_threshold=overrides.get("failure_threshold", s.cb_failure_threshold),
+            recovery_timeout_seconds=overrides.get("recovery_timeout_seconds", s.cb_recovery_timeout_seconds),
+            half_open_requests=overrides.get("half_open_requests", s.cb_half_open_requests),
+            success_threshold=overrides.get("success_threshold", s.cb_success_threshold),
         )
 
 
@@ -140,5 +126,5 @@ __all__ = [
     "DegradationLevel",
     "CircuitState",
     "FallbackConfig",
-    "CircuitBreakerConfig",
+    "HashChainCircuitBreakerConfig",
 ]

@@ -55,7 +55,7 @@ class GuardState(str, Enum):
     RECOVERING = "recovering"
 
 
-class DegradationLevel(str, Enum):
+class RollbackSeverity(str, Enum):
     """저하 수준"""
 
     NONE = "none"
@@ -69,7 +69,7 @@ class HealthCheckResult:
     """헬스체크 결과"""
 
     healthy: bool
-    degradation_level: DegradationLevel
+    degradation_level: RollbackSeverity
     error_rate: float
     latency_p99_ms: float
     throughput_rps: float
@@ -262,7 +262,7 @@ class AutoRollbackGuard:
         degradation = self._assess_degradation(error_rate, latency_p99)
 
         result = HealthCheckResult(
-            healthy=degradation == DegradationLevel.NONE,
+            healthy=degradation == RollbackSeverity.NONE,
             degradation_level=degradation,
             error_rate=error_rate,
             latency_p99_ms=latency_p99,
@@ -279,25 +279,25 @@ class AutoRollbackGuard:
 
     def _assess_degradation(
         self, error_rate: float, latency_p99: float
-    ) -> DegradationLevel:
+    ) -> RollbackSeverity:
         """저하 수준 평가"""
         # 에러율 기반 판단
         if error_rate >= self.ERROR_RATE_CRITICAL:
-            return DegradationLevel.CRITICAL
+            return RollbackSeverity.CRITICAL
         if error_rate >= self.ERROR_RATE_MAJOR:
-            return DegradationLevel.MAJOR
+            return RollbackSeverity.MAJOR
 
         # 레이턴시 기반 판단
         if latency_p99 >= self.LATENCY_CRITICAL_MS:
-            return DegradationLevel.CRITICAL
+            return RollbackSeverity.CRITICAL
         if latency_p99 >= self.LATENCY_MAJOR_MS:
-            return DegradationLevel.MAJOR
+            return RollbackSeverity.MAJOR
 
         # 경미한 저하 (에러 5% 이상 또는 레이턴시 3초 이상)
         if error_rate >= 0.05 or latency_p99 >= 3000:
-            return DegradationLevel.MINOR
+            return RollbackSeverity.MINOR
 
-        return DegradationLevel.NONE
+        return RollbackSeverity.NONE
 
     def _handle_health_result(self, result: HealthCheckResult):
         """헬스체크 결과 처리"""
@@ -312,9 +312,9 @@ class AutoRollbackGuard:
             # 저하 감지됨
             self._consecutive_failures += 1
 
-            if result.degradation_level == DegradationLevel.CRITICAL:
+            if result.degradation_level == RollbackSeverity.CRITICAL:
                 self._handle_critical_degradation(result)
-            elif result.degradation_level == DegradationLevel.MAJOR:
+            elif result.degradation_level == RollbackSeverity.MAJOR:
                 self._handle_major_degradation(result)
             else:
                 self._handle_minor_degradation(result)
@@ -607,7 +607,7 @@ class AutoRollbackGuard:
 __all__ = [
     "AutoRollbackGuard",
     "GuardState",
-    "DegradationLevel",
+    "RollbackSeverity",
     "HealthCheckResult",
     "SafeDefault",
 ]

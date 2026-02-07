@@ -8,7 +8,7 @@ Components:
 - DegradationLevel: Degradation level enum
 - CircuitState: Circuit breaker state enum
 - FallbackConfig: Configuration for fallback chain
-- CircuitBreakerConfig: Configuration for circuit breaker
+- CircuitBreakerConfig: Configuration for circuit breaker → HashChainCircuitBreakerConfig
 - HashChainFallbackChain: Multi-tier fallback chain
 - DegradedEntryInfo: Info about degraded entries
 - DegradedEntryMarker: Marks and tracks degraded entries
@@ -33,7 +33,7 @@ Usage:
 from .circuit_breaker import HashChainCircuitBreaker
 from .degradation_manager import HashChainDegradationManager
 from .enums import (
-    CircuitBreakerConfig,
+    HashChainCircuitBreakerConfig,
     CircuitState,
     DegradationLevel,
     FallbackConfig,
@@ -48,7 +48,7 @@ __all__ = [
     "DegradationLevel",
     "CircuitState",
     "FallbackConfig",
-    "CircuitBreakerConfig",
+    "HashChainCircuitBreakerConfig",
     # Fallback chain
     "HashChainFallbackChain",
     # Degraded marker

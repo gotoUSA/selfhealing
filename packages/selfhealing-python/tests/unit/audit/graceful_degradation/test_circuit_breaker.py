@@ -28,11 +28,11 @@ class TestHashChainCircuitBreaker:
         """Test circuit opens after failure threshold."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
             CircuitState,
         )
         
-        config = CircuitBreakerConfig(failure_threshold=3)
+        config = HashChainCircuitBreakerConfig(failure_threshold=3)
         cb = HashChainCircuitBreaker(config=config)
         
         for _ in range(3):
@@ -45,11 +45,11 @@ class TestHashChainCircuitBreaker:
         """Test circuit transitions to half-open after timeout."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
             CircuitState,
         )
         
-        config = CircuitBreakerConfig(
+        config = HashChainCircuitBreakerConfig(
             failure_threshold=2,
             recovery_timeout_seconds=0.1,
         )
@@ -68,10 +68,10 @@ class TestHashChainCircuitBreaker:
         """Test half-open allows limited requests."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
         )
         
-        config = CircuitBreakerConfig(
+        config = HashChainCircuitBreakerConfig(
             failure_threshold=2,
             recovery_timeout_seconds=0.1,
             half_open_requests=2,
@@ -92,11 +92,11 @@ class TestHashChainCircuitBreaker:
         """Test circuit closes after successful requests in half-open."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
             CircuitState,
         )
         
-        config = CircuitBreakerConfig(
+        config = HashChainCircuitBreakerConfig(
             failure_threshold=2,
             recovery_timeout_seconds=0.1,
             success_threshold=2,
@@ -118,11 +118,11 @@ class TestHashChainCircuitBreaker:
         """Test circuit reopens on failure in half-open state."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
             CircuitState,
         )
         
-        config = CircuitBreakerConfig(
+        config = HashChainCircuitBreakerConfig(
             failure_threshold=2,
             recovery_timeout_seconds=0.1,
         )
@@ -155,11 +155,11 @@ class TestHashChainCircuitBreaker:
         """Test force closed."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
             CircuitState,
         )
         
-        config = CircuitBreakerConfig(failure_threshold=1)
+        config = HashChainCircuitBreakerConfig(failure_threshold=1)
         cb = HashChainCircuitBreaker(config=config)
         
         cb.record_failure()
@@ -189,7 +189,7 @@ class TestHashChainCircuitBreaker:
         """Test circuit breaker notifies degradation manager."""
         from selfhealing.audit.graceful_degradation import (
             HashChainCircuitBreaker,
-            CircuitBreakerConfig,
+            HashChainCircuitBreakerConfig,
             CircuitState,
             HashChainDegradationManager,
             DegradationLevel,
@@ -201,7 +201,7 @@ class TestHashChainCircuitBreaker:
         mock_redis = MockRedisClient()
         degradation_mgr = HashChainDegradationManager(redis_client=mock_redis)
         
-        config = CircuitBreakerConfig(failure_threshold=2)
+        config = HashChainCircuitBreakerConfig(failure_threshold=2)
         cb = HashChainCircuitBreaker(
             config=config,
             degradation_manager=degradation_mgr,

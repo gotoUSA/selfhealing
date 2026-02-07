@@ -62,7 +62,7 @@ from .service import CircuitBreakerService
 # =============================================================================
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # config (추가 타입)
-    "FallbackResult": (".config", "FallbackResult"),
+    "CircuitBreakerFallbackResult": (".config", "CircuitBreakerFallbackResult"),
     # rate_limit_tracker
     "RateLimitTracker": (".rate_limit_tracker", "RateLimitTracker"),
     "get_rate_limit_tracker": (".rate_limit_tracker", "get_rate_limit_tracker"),
@@ -258,9 +258,7 @@ def __getattr__(name: str) -> object:
             _loaded_symbols[name] = getattr(module, attr_name)
         return _loaded_symbols[name]
 
-    raise AttributeError(
-        f"module 'selfhealing.services.circuit_breaker' has no attribute '{name}'"
-    )
+    raise AttributeError(f"module 'selfhealing.services.circuit_breaker' has no attribute '{name}'")
 
 
 def __dir__() -> list[str]:
@@ -309,7 +307,7 @@ if TYPE_CHECKING:
         start_canary_recovery,
         stop_canary_recovery,
     )
-    from .config import FallbackResult
+    from .config import CircuitBreakerFallbackResult
     from .convenience import (
         force_close_circuit,
         get_protection_status,
@@ -427,7 +425,7 @@ __all__ = [
     "should_allow_request",
     "force_open_circuit",
     # Config (additional)
-    "FallbackResult",
+    "CircuitBreakerFallbackResult",
     # Rate limit tracking
     "RateLimitTracker",
     "get_rate_limit_tracker",

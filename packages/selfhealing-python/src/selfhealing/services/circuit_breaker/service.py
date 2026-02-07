@@ -27,7 +27,7 @@ from .config import (
     CircuitBreakerConfig,
     CircuitBreakerResult,
     CircuitState,
-    FallbackResult,
+    CircuitBreakerFallbackResult,
 )
 from .manual_control import ManualControlMixin
 from .protection import ProtectionMixin
@@ -296,7 +296,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         cache_key: str | None = None,
         default_response: Any | None = None,
         request_data: dict[str, Any] | None = None,
-    ) -> FallbackResult:
+    ) -> CircuitBreakerFallbackResult:
         """
         Check if requests should be allowed with fallback strategy support.
 
@@ -312,19 +312,19 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             request_data: Optional request data for DLQ queueing
 
         Returns:
-            FallbackResult with decision and optional fallback data
+            CircuitBreakerFallbackResult with decision and optional fallback data
         """
         if not self.is_enabled:
-            return FallbackResult.allow()
+            return CircuitBreakerFallbackResult.allow()
 
         state = self.get_or_create_state(service_name)
 
         if state.state == CircuitState.CLOSED:
-            return FallbackResult.allow()
+            return CircuitBreakerFallbackResult.allow()
 
         if state.state == CircuitState.HALF_OPEN:
             # Allow limited requests for testing
-            return FallbackResult.allow()
+            return CircuitBreakerFallbackResult.allow()
 
         # CB is OPEN - apply fallback strategy
         strategy = self.config.fallback_strategy
@@ -334,7 +334,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             cached_data = self._get_cached_data(cache_key)
             if cached_data is not None:
                 logger.info(f"[CircuitBreaker] Serving stale cache for '{service_name}' " f"(key: {cache_key})")
-                return FallbackResult.from_cache(
+                return CircuitBreakerFallbackResult.from_cache(
                     data=cached_data,
                     message=f"Circuit open for {service_name}, serving cached data",
                 )
@@ -344,17 +344,19 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             success = self._enqueue_to_dlq(service_name, request_data)
             if success:
                 logger.info(f"[CircuitBreaker] Queued request to DLQ for '{service_name}'")
-                return FallbackResult.to_dlq(message=f"Circuit open for {service_name}, request queued for retry")
+                return CircuitBreakerFallbackResult.to_dlq(
+                    message=f"Circuit open for {service_name}, request queued for retry"
+                )
 
         if strategy == "default_response" and default_response is not None:
             logger.info(f"[CircuitBreaker] Returning default response for '{service_name}'")
-            return FallbackResult.default_response(
+            return CircuitBreakerFallbackResult.default_response(
                 data=default_response,
                 message=f"Circuit open for {service_name}, using default response",
             )
 
         # Default: block
-        return FallbackResult.block(message=f"Circuit breaker open for {service_name}")
+        return CircuitBreakerFallbackResult.block(message=f"Circuit breaker open for {service_name}")
 
     def _get_cached_data(self, cache_key: str) -> Any | None:
         """

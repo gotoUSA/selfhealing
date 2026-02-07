@@ -51,7 +51,7 @@ from selfhealing.audit.graceful_degradation import (
     DegradedEntryMarker,
     HashChainDegradationManager,
     CircuitState,
-    CircuitBreakerConfig as RealCircuitBreakerConfig,
+    HashChainCircuitBreakerConfig as RealCircuitBreakerConfig,
     HashChainCircuitBreaker,
     HashChainGracefulDegradationManager,
 )
