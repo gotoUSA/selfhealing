@@ -3,7 +3,7 @@ Unit tests for DLQService API business logic methods.
 
 Tests for DLQService:
 - replay()
-- Data classes (ReplayResult, CleanupStats, PaginatedResult, RetryResult, ResolveResult)
+- Data classes (ReplayResult, CleanupStats, DLQPaginatedResult, RetryResult, ResolveResult)
 """
 
 import pytest
@@ -17,7 +17,7 @@ from selfhealing.services.dlq_service import (
 )
 from selfhealing.services.dlq_models import (
     CleanupStats,
-    PaginatedResult,
+    DLQPaginatedResult,
     RetryResult,
     ResolveResult,
     ReplayResult,
@@ -73,12 +73,12 @@ class TestCleanupStats:
         assert stats.can_purge == 25
 
 
-class TestPaginatedResult:
-    """Tests for PaginatedResult dataclass."""
+class TestDLQPaginatedResult:
+    """Tests for DLQPaginatedResult dataclass."""
 
     def test_default_values(self):
         """Test default values."""
-        result = PaginatedResult()
+        result = DLQPaginatedResult()
         assert result.results == []
         assert result.page == 1
         assert result.page_size == 20
@@ -130,12 +130,12 @@ class TestDLQServiceReplay:
         """Test replay returns ReplayResult."""
         mock_repo = Mock()
         mock_repo.find_by_status.return_value = []
-        
+
         config = DLQConfig(enabled=True)
         service = DLQService(config=config, repository=mock_repo)
-        
+
         result = service.replay(domain="payment", batch_size=10)
-        
+
         assert isinstance(result, ReplayResult)
         assert result.processed == 0
 
@@ -145,15 +145,15 @@ class TestDLQServiceReplay:
         mock_entry.id = 1
         mock_entry.domain = "payment"
         mock_entry.failure_type = "PG_TIMEOUT"
-        
+
         mock_repo = Mock()
         mock_repo.find_by_status.return_value = [mock_entry]
-        
+
         config = DLQConfig(enabled=True)
         service = DLQService(config=config, repository=mock_repo)
-        
+
         result = service.replay(domain="payment", batch_size=10)
-        
+
         assert result.processed == 1
 
 
@@ -164,8 +164,9 @@ class TestGetDLQService:
         """Test get_dlq_service returns DLQService instance."""
         # Reset singleton
         import selfhealing.services.dlq_service as dlq_module
+
         dlq_module._dlq_service = None
-        
+
         service = get_dlq_service()
         assert isinstance(service, DLQService)
 

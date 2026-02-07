@@ -138,8 +138,8 @@ class CleanupStats:
 
 
 @dataclass
-class PaginatedResult:
-    """Paginated result for list operations."""
+class DLQPaginatedResult:
+    """Paginated result for DLQ list operations."""
 
     results: list[dict[str, Any]] = field(default_factory=list)
     page: int = 1

@@ -12,7 +12,7 @@ Tests:
 5. JitterConfig.from_settings()
 6. FallbackConfig.from_settings()
 7. HashChainCircuitBreakerConfig.from_settings()
-8. WatchdogConfig.from_settings()
+8. CanaryWatchdogConfig.from_settings()
 """
 
 import os
@@ -285,8 +285,8 @@ class TestGracefulDegradationFromSettings:
             assert config.memory_max_entries == 5000
 
 
-class TestWatchdogConfigFromSettings:
-    """WatchdogConfig.from_settings() 동작 검증."""
+class TestCanaryWatchdogConfigFromSettings:
+    """CanaryWatchdogConfig.from_settings() 동작 검증."""
 
     @pytest.fixture(autouse=True)
     def reset_settings(self):
@@ -299,9 +299,9 @@ class TestWatchdogConfigFromSettings:
 
     def test_default_values(self):
         """기본값으로 인스턴스 생성."""
-        from selfhealing.tasks.canary_watchdog import WatchdogConfig
+        from selfhealing.tasks.canary_watchdog import CanaryWatchdogConfig
 
-        config = WatchdogConfig.from_settings()
+        config = CanaryWatchdogConfig.from_settings()
 
         assert config.zombie_threshold_minutes == 30
         assert config.auto_rollback_after_minutes == 60
@@ -320,10 +320,10 @@ class TestWatchdogConfigFromSettings:
             },
         ):
             from selfhealing.settings.canary_watchdog import reset_canary_watchdog_settings
-            from selfhealing.tasks.canary_watchdog import WatchdogConfig
+            from selfhealing.tasks.canary_watchdog import CanaryWatchdogConfig
 
             reset_canary_watchdog_settings()
-            config = WatchdogConfig.from_settings()
+            config = CanaryWatchdogConfig.from_settings()
 
             assert config.zombie_threshold_minutes == 45
             assert config.auto_rollback_after_minutes == 90
@@ -339,7 +339,7 @@ class TestFromSettingsPatternConsistency:
         from selfhealing.audit.ring_buffer import RingBuffer
         from selfhealing.utils.jitter import JitterConfig
         from selfhealing.audit.graceful_degradation.enums import FallbackConfig, HashChainCircuitBreakerConfig
-        from selfhealing.tasks.canary_watchdog import WatchdogConfig
+        from selfhealing.tasks.canary_watchdog import CanaryWatchdogConfig
 
         assert isinstance(ExponentialBackoff.from_settings(), ExponentialBackoff)
         assert isinstance(LinearBackoff.from_settings(), LinearBackoff)
@@ -348,7 +348,7 @@ class TestFromSettingsPatternConsistency:
         assert isinstance(JitterConfig.from_settings(), JitterConfig)
         assert isinstance(FallbackConfig.from_settings(), FallbackConfig)
         assert isinstance(HashChainCircuitBreakerConfig.from_settings(), HashChainCircuitBreakerConfig)
-        assert isinstance(WatchdogConfig.from_settings(), WatchdogConfig)
+        assert isinstance(CanaryWatchdogConfig.from_settings(), CanaryWatchdogConfig)
 
     def test_from_settings_accepts_overrides(self):
         """from_settings()가 overrides 파라미터를 지원하는지 검증."""
