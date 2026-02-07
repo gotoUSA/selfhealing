@@ -13,7 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from .base import (
-    ConfigChangeEvent,
+    DeploymentConfigChange,
     DeploymentEvent,
     DeploymentSource,
     DeploymentType,
@@ -45,7 +45,7 @@ class MockDeploymentAdapter:
     def __init__(
         self,
         mock_deployments: list[DeploymentEvent] | None = None,
-        mock_config_changes: list[ConfigChangeEvent] | None = None,
+        mock_config_changes: list[DeploymentConfigChange] | None = None,
     ):
         """
         Mock 어댑터 초기화.
@@ -63,7 +63,7 @@ class MockDeploymentAdapter:
         """테스트용 배포 데이터 설정."""
         self._mock_deployments = deployments
 
-    def set_mock_config_changes(self, changes: list[ConfigChangeEvent]) -> None:
+    def set_mock_config_changes(self, changes: list[DeploymentConfigChange]) -> None:
         """테스트용 설정 변경 데이터 설정."""
         self._mock_config_changes = changes
 
@@ -207,7 +207,7 @@ class MockDeploymentAdapter:
         start_time: datetime,
         end_time: datetime,
         namespace: str = "default",
-    ) -> list[ConfigChangeEvent]:
+    ) -> list[DeploymentConfigChange]:
         """
         지정된 시간 범위 내의 설정 변경 이력을 조회합니다.
 
@@ -300,7 +300,7 @@ def create_sample_config_change(
     minutes_ago: int,
     service_name: str = "",
     namespace: str = "default",
-) -> ConfigChangeEvent:
+) -> DeploymentConfigChange:
     """
     테스트용 샘플 설정 변경 이벤트 생성.
 
@@ -313,11 +313,11 @@ def create_sample_config_change(
         namespace: 네임스페이스
 
     Returns:
-        ConfigChangeEvent 인스턴스
+        DeploymentConfigChange 인스턴스
     """
     changed_at = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
 
-    return ConfigChangeEvent(
+    return DeploymentConfigChange(
         change_id=f"config-{uuid4().hex[:8]}",
         config_key=config_key,
         old_value=old_value,

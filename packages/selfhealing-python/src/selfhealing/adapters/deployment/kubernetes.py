@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .base import (
-    ConfigChangeEvent,
+    DeploymentConfigChange,
     DeploymentEvent,
     DeploymentSource,
     DeploymentType,
@@ -337,7 +337,7 @@ class KubernetesDeploymentAdapter:
         start_time: datetime,
         end_time: datetime,
         namespace: str = "default",
-    ) -> list[ConfigChangeEvent]:
+    ) -> list[DeploymentConfigChange]:
         """
         지정된 시간 범위 내의 설정 변경 이력을 조회합니다.
 

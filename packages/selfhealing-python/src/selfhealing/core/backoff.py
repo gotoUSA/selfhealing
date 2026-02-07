@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
-class BackoffCalculator(ABC):
+class BackoffStrategy(ABC):
     """Abstract base class for backoff calculation strategies."""
 
     @abstractmethod
@@ -33,7 +33,7 @@ class BackoffCalculator(ABC):
 
 
 @dataclass
-class ExponentialBackoff(BackoffCalculator):
+class ExponentialBackoff(BackoffStrategy):
     """
     Exponential backoff strategy.
 
@@ -88,7 +88,7 @@ class ExponentialBackoff(BackoffCalculator):
 
 
 @dataclass
-class LinearBackoff(BackoffCalculator):
+class LinearBackoff(BackoffStrategy):
     """
     Linear backoff strategy.
 
@@ -142,7 +142,7 @@ class LinearBackoff(BackoffCalculator):
 
 
 @dataclass
-class ConstantBackoff(BackoffCalculator):
+class ConstantBackoff(BackoffStrategy):
     """
     Constant backoff strategy.
 
@@ -191,7 +191,7 @@ class ConstantBackoff(BackoffCalculator):
 
 
 @dataclass
-class DecorrelatedJitterBackoff(BackoffCalculator):
+class DecorrelatedJitterBackoff(BackoffStrategy):
     """
     Decorrelated jitter backoff strategy (AWS-style).
 
@@ -239,9 +239,7 @@ class DecorrelatedJitterBackoff(BackoffCalculator):
         self._previous_delay = None
 
 
-def get_backoff_calculator(
-    strategy: str = "exponential", **kwargs
-) -> BackoffCalculator:
+def get_backoff_calculator(strategy: str = "exponential", **kwargs) -> BackoffStrategy:
     """
     Factory function to create a backoff calculator.
 
@@ -250,7 +248,7 @@ def get_backoff_calculator(
         **kwargs: Strategy-specific parameters
 
     Returns:
-        A BackoffCalculator instance
+        A BackoffStrategy instance
 
     Raises:
         ValueError: If an unknown strategy is specified
@@ -263,10 +261,7 @@ def get_backoff_calculator(
     }
 
     if strategy not in strategies:
-        raise ValueError(
-            f"Unknown backoff strategy: {strategy}. "
-            f"Available: {list(strategies.keys())}"
-        )
+        raise ValueError(f"Unknown backoff strategy: {strategy}. " f"Available: {list(strategies.keys())}")
 
     return strategies[strategy](**kwargs)
 
@@ -369,10 +364,7 @@ class LegacyBackoffCalculator:
         Returns:
             List of delay values in seconds
         """
-        return [
-            self.calculate(attempt, with_jitter)
-            for attempt in range(1, max_attempts + 1)
-        ]
+        return [self.calculate(attempt, with_jitter) for attempt in range(1, max_attempts + 1)]
 
 
 def calculate_backoff(
@@ -400,3 +392,7 @@ def calculate_backoff(
     )
     calculator = LegacyBackoffCalculator(config)
     return calculator.calculate(attempt)
+
+
+# 하위 호환 alias (deprecated)
+BackoffCalculator = BackoffStrategy

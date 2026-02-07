@@ -2710,17 +2710,17 @@ class AutoTuningHistoryView(View):
 | 38 | `CanaryState` + `CanaryStage` + `CanaryDecision` 이름 변경 (Item 48-50) | 중간 | circuit_breaker/canary_recovery 3개 동시 | ✅ 완료 (2026-02-08) |
 | 39 | `BlockReason` 이름 변경 (Item 51) | 중간 | chaos/safety_guard 내부용 | ✅ 완료 (2026-02-08) |
 | 40 | `BlastRadiusPolicy` 이름 변경 (Item 52) | 중간 | chaos/blast_radius 내부용 | ✅ 완료 (2026-02-08) |
-| 41 | `CBStateCache` 이름 변경 (Item 17) | 높음 | core/__init__.py export + IPC 서버 |
-| 42 | `ProviderRegistry` 이름 변경 (Item 23) | 높음 | services/factory + deprecated 연동 |
-| 43 | `ConfigChangeEvent` 이름 변경 (Item 18) | 높음 | audit/__init__.py export + deployment |
-| 44 | `AuditAction` 이름 변경 (Item 19) | 높음 | interfaces 6곳+ import |
-| 45 | `ForensicSettings` 이름 변경 (Item 20) | 높음 | config.py 전역 사용 |
-| 46 | `StorageMode` 이름 변경 (Item 21) | 높음 | adapters 전체 영향 |
-| 47 | `BackoffConfig` + `BackoffCalculator` 통합 (Item 53-54) | 높음 | core/backoff.py ABC + 구체 구현 쌍 변경 |
-| 48 | `ApprovalRequest` 이름 변경 (Item 55) | 높음 | core/config.py + chaos 승인 |
-| 49 | `ActionResult` 이름 변경 (Item 56) | 높음 | core/action_executor + coordination |
-| 50 | `LayeredCircuitBreakerStateRepository` 레거시 파일 정리 (Item 57) | 높음 | adapters 패키지 구조 변경 |
-| 51 | `AutoTuningHistoryView` 이름 변경 + 인증 (Item 59) | 높음 | 보안 영향 + URL 라우팅 |
+| 41 | `CBStateCache` 이름 변경 (Item 17) | 높음 | core/__init__.py export + IPC 서버 | ✅ |
+| 42 | `ProviderRegistry` 이름 변경 (Item 23) | 높음 | services/factory + deprecated 연동 | ✅ |
+| 43 | `ConfigChangeEvent` 이름 변경 (Item 18) | 높음 | audit/__init__.py export + deployment | ✅ |
+| 44 | `AuditAction` 이름 변경 (Item 19) | 높음 | interfaces 6곳+ import | ✅ |
+| 45 | `ForensicSettings` 이름 변경 (Item 20) | 높음 | config.py 전역 사용 | ✅ |
+| 46 | `StorageMode` 이름 변경 (Item 21) | 높음 | adapters 전체 영향 | ✅ |
+| 47 | `BackoffConfig` + `BackoffCalculator` 통합 (Item 53-54) | 높음 | core/backoff.py ABC + 구체 구현 쌍 변경 | ✅ |
+| 48 | `ApprovalRequest` 이름 변경 (Item 55) | 높음 | core/config.py + chaos 승인 | ✅ |
+| 49 | `ActionResult` 이름 변경 (Item 56) | 높음 | core/action_executor + coordination | ✅ |
+| 50 | `LayeredCircuitBreakerStateRepository` 레거시 파일 정리 (Item 57) | 높음 | adapters 패키지 구조 변경 | ✅ |
+| 51 | `AutoTuningHistoryView` 이름 변경 + 인증 (Item 59) | 높음 | 보안 영향 + URL 라우팅 | ✅ |
 
 ---
 
@@ -2810,3 +2810,46 @@ class AutoTuningHistoryView(View):
 | `tests/unit/replay/test_dlq_service.py` | `PaginatedResult` → `DLQPaginatedResult` |
 | `tests/integration/test_settings_from_settings_pattern.py` | `WatchdogConfig` → `CanaryWatchdogConfig` (Phase 1 누락분 보완) |
 
+### Phase 3: 순서 41-51 완료 (높음 우선순위 일괄)
+
+**테스트 결과**: 680 passed (핵심 모듈 대상) + 2022 passed (audit/storage/coordination/provider 대상) — 전체 임포트 검증 통과
+
+**소스 파일 변경 목록**:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `adapters/ipc/cb_state_cache.py` | `CBStateCache` → `IPCStateCache` (클래스명 + 로그 프리픽스 14곳), 하위호환 alias 추가 |
+| `adapters/ipc/uds_server.py` | `CBStateCache` → `IPCStateCache` import 갱신 |
+| `adapters/ipc/grpc_server.py` | `CBStateCache` → `IPCStateCache` import 갱신 |
+| `adapters/ipc/__init__.py` | `IPCStateCache` re-export + docstring 갱신 |
+| `services/factory/registry.py` | `ProviderRegistry` → `ServiceProviderRegistry`, 로그 프리픽스 갱신, alias 추가 |
+| `services/factory/__init__.py` | `ServiceProviderRegistry` re-export 추가 |
+| `audit/logger.py` | `ConfigChangeEvent` → `AuditConfigChangeEvent`, `AuditAction` → `ConfigAuditAction`, alias 2개 추가 |
+| `audit/__init__.py` | `AuditConfigChangeEvent`, `ConfigAuditAction` lazy import + `__all__` 갱신 |
+| `services/governance_api_service.py` | `ConfigAuditAction` import + `OVERRIDE` → string literal 수정 |
+| `services/metric_sync_service.py` | `ConfigAuditAction.APPLY` import 갱신 |
+| `adapters/deployment/base.py` | `ConfigChangeEvent` → `DeploymentConfigChange`, alias 추가 |
+| `adapters/deployment/__init__.py` | `DeploymentConfigChange` re-export + alias |
+| `adapters/deployment/mock.py` | `DeploymentConfigChange` import 갱신 |
+| `adapters/deployment/kubernetes.py` | `DeploymentConfigChange` import 갱신 |
+| `config.py` | `ForensicSettings` → `ForensicContextConfig`, `__all__` + alias 추가 |
+| `adapters/resilient/backend.py` | `StorageMode` → `ResilientStorageMode` (28곳), alias 추가 |
+| `adapters/resilient/__init__.py` | `ResilientStorageMode` re-export + alias |
+| `core/backoff.py` | `BackoffCalculator(ABC)` → `BackoffStrategy(ABC)`, 서브클래스 4개 상속 갱신, alias 추가 |
+| `core/__init__.py` | `BackoffStrategy` import + `__all__` 추가 |
+| `services/chaos/blast_radius.py` | `ApprovalRequest` → `ChaosApprovalRequest` (12곳) |
+| `services/coordination/models.py` | `ActionResult` → `CoordinationActionResult`, alias 추가 |
+| `services/coordination/__init__.py` | `CoordinationActionResult` re-export |
+| `services/coordination/coordinator.py` | `CoordinationActionResult` import 갱신 |
+| `adapters/memory/layered_repository.py` → `_layered_repository_legacy.py` | 레거시 파일 이름 변경 + deprecation docstring |
+| `audit/continuous_audit_api.py` | `AutoTuningHistoryView` → `ContinuousAuditAutoTuningView` + `LoginRequiredMixin` 추가, alias |
+
+**테스트 파일 변경 목록**:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `tests/services/test_provider_registry_isolation.py` | `ServiceProviderRegistry` import 갱신 |
+| `tests/unit/storage/test_resilient_storage.py` | `ResilientStorageMode` import 갱신 |
+| `tests/unit/postmortem/test_deployment_correlator.py` | `DeploymentConfigChange` import 갱신 |
+| `tests/services/coordination/test_coordinator_cascade.py` | `CoordinationActionResult` import 갱신 |
+| `tests/services/coordination/test_models.py` | `CoordinationActionResult` import 갱신 |

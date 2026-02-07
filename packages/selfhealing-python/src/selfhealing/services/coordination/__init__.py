@@ -82,7 +82,7 @@ from .idempotent_step_handlers import (
     reset_idempotent_step_handler_registry,
 )
 from .models import (
-    ActionResult,
+    CoordinationActionResult,
     CoordinationAction,
     CoordinationResult,
     OverrideTTLConfig,
@@ -193,7 +193,7 @@ __all__ = [
     "CoordinationAction",
     "ScopedEmergencyState",
     "OverrideTTLConfig",
-    "ActionResult",
+    "CoordinationActionResult",
     "CoordinationResult",
     # Phase 4: Recovery Accountability
     "RecoveryAccountabilityConfig",

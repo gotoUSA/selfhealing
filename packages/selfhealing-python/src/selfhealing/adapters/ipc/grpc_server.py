@@ -37,7 +37,7 @@ from selfhealing.adapters.ipc.auth import (
     SidecarAuthenticator,
     get_sidecar_authenticator,
 )
-from selfhealing.adapters.ipc.cb_state_cache import CBStateCache, get_cb_state_cache
+from selfhealing.adapters.ipc.cb_state_cache import IPCStateCache, get_cb_state_cache
 from selfhealing.adapters.ipc.event_stream_proxy import (
     EventStreamProxy,
     get_event_stream_proxy,
@@ -88,7 +88,7 @@ class SidecarGRPCServer:
         port: int = DEFAULT_PORT,
         host: str = "localhost",
         authenticator: SidecarAuthenticator | None = None,
-        cb_cache: CBStateCache | None = None,
+        cb_cache: IPCStateCache | None = None,
         event_proxy: EventStreamProxy | None = None,
         max_workers: int = MAX_WORKERS,
     ):

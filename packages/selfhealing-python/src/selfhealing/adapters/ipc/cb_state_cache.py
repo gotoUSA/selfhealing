@@ -10,9 +10,9 @@
 - Thread-safe 구현
 
 Usage:
-    from selfhealing.adapters.ipc.cb_state_cache import CBStateCache
+    from selfhealing.adapters.ipc.cb_state_cache import IPCStateCache
 
-    cache = CBStateCache(ttl_seconds=5.0)
+    cache = IPCStateCache(ttl_seconds=5.0)
 
     # 캐시 조회
     cached, hit = cache.get("payment_gateway")
@@ -72,9 +72,9 @@ class CacheStats:
         return self.hits / total if total > 0 else 0.0
 
 
-class CBStateCache:
+class IPCStateCache:
     """
-    서킷 브레이커 상태 로컬 캐시.
+    서킷 브레이커 상태 로컬 캐시 (IPC 어댑터 전용).
 
     전략:
     - TTL 기반 만료 (기본 5초)
@@ -120,11 +120,11 @@ class CBStateCache:
             ]:
                 bus.subscribe(event_type, self._on_state_change)
 
-            logger.debug("[CBStateCache] Registered EventBus invalidation handlers")
+            logger.debug("[IPCStateCache] Registered EventBus invalidation handlers")
         except ImportError:
-            logger.debug("[CBStateCache] EventBus not available")
+            logger.debug("[IPCStateCache] EventBus not available")
         except Exception as e:
-            logger.warning(f"[CBStateCache] EventBus registration failed: {e}")
+            logger.warning(f"[IPCStateCache] EventBus registration failed: {e}")
 
     def _on_state_change(self, event: Any) -> None:
         """이벤트 기반 즉시 무효화."""
@@ -132,9 +132,9 @@ class CBStateCache:
             service_name = event.data.get("service_name")
             if service_name:
                 self.invalidate(service_name)
-                logger.debug(f"[CBStateCache] Invalidated '{service_name}' " f"on {event.event_type.value}")
+                logger.debug(f"[IPCStateCache] Invalidated '{service_name}' " f"on {event.event_type.value}")
         except Exception as e:
-            logger.warning(f"[CBStateCache] Event handler error: {e}")
+            logger.warning(f"[IPCStateCache] Event handler error: {e}")
 
     def get(self, service_name: str) -> tuple[Any, bool]:
         """
@@ -302,14 +302,14 @@ class CBStateBatchCache:
     여러 서비스의 상태를 한 번에 조회/저장할 수 있습니다.
     """
 
-    def __init__(self, cache: CBStateCache | None = None):
+    def __init__(self, cache: IPCStateCache | None = None):
         """
         배치 캐시 초기화.
 
         Args:
             cache: 기존 캐시 인스턴스 (None이면 새로 생성)
         """
-        self._cache = cache or CBStateCache()
+        self._cache = cache or IPCStateCache()
 
     def get_batch(
         self,
@@ -347,7 +347,7 @@ class CBStateBatchCache:
             self._cache.set(name, value)
 
     @property
-    def cache(self) -> CBStateCache:
+    def cache(self) -> IPCStateCache:
         """기본 캐시 인스턴스."""
         return self._cache
 
@@ -356,14 +356,14 @@ class CBStateBatchCache:
 # 싱글톤 인스턴스
 # =============================================================================
 
-_cache: CBStateCache | None = None
+_cache: IPCStateCache | None = None
 
 
-def get_cb_state_cache() -> CBStateCache:
+def get_cb_state_cache() -> IPCStateCache:
     """싱글톤 캐시 인스턴스 반환."""
     global _cache
     if _cache is None:
-        _cache = CBStateCache()
+        _cache = IPCStateCache()
     return _cache
 
 
@@ -373,3 +373,7 @@ def reset_cb_state_cache() -> None:
     if _cache is not None:
         _cache.close()
     _cache = None
+
+
+# 하위 호환 alias (deprecated)
+CBStateCache = IPCStateCache

@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timezone
 
 from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views import View
 
 logger = logging.getLogger(__name__)
@@ -143,9 +144,7 @@ class ContinuousAuditDetailView(View):
                 timestamp = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
             except ValueError:
-                return JsonResponse(
-                    {"error": "Invalid timestamp in log ID"}, status=400
-                )
+                return JsonResponse({"error": "Invalid timestamp in log ID"}, status=400)
 
             # 시퀀스 번호로 찾기
             sequence = int(parts[2])
@@ -161,18 +160,16 @@ class ContinuousAuditDetailView(View):
                 if integrity.get("sequence") == sequence:
                     return JsonResponse({"entry": entry})
 
-            return JsonResponse(
-                {"error": f"Log entry '{log_id}' not found"}, status=404
-            )
+            return JsonResponse({"error": f"Log entry '{log_id}' not found"}, status=404)
 
         except Exception as e:
             logger.error(f"[ContinuousAuditDetailView] Error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
 
-class AutoTuningHistoryView(View):
+class ContinuousAuditAutoTuningView(LoginRequiredMixin, View):
     """
-    자율 조정 이력 조회.
+    자율 조정 이력 조회 (인증 필요).
 
     GET /api/self-healing/audit/auto-tuning/
 
@@ -208,8 +205,12 @@ class AutoTuningHistoryView(View):
             )
 
         except Exception as e:
-            logger.error(f"[AutoTuningHistoryView] Error: {e}")
+            logger.error(f"[ContinuousAuditAutoTuningView] Error: {e}")
             return JsonResponse({"error": str(e)}, status=500)
+
+
+# ── 하위 호환 별칭 ──────────────────────────────────────────
+AutoTuningHistoryView = ContinuousAuditAutoTuningView
 
 
 class DriftHistoryView(View):
@@ -391,9 +392,7 @@ class ExportJSONLView(View):
                 generate(),
                 content_type="application/x-ndjson",
             )
-            response["Content-Disposition"] = (
-                'attachment; filename="audit_export.jsonl"'
-            )
+            response["Content-Disposition"] = 'attachment; filename="audit_export.jsonl"'
 
             return response
 
@@ -505,7 +504,7 @@ def get_continuous_audit_urlpatterns():
             name="audit-log-detail",
         ),
         # 도메인별 이력
-        path("auto-tuning/", AutoTuningHistoryView.as_view(), name="audit-auto-tuning"),
+        path("auto-tuning/", ContinuousAuditAutoTuningView.as_view(), name="audit-auto-tuning"),
         path("drift/", DriftHistoryView.as_view(), name="audit-drift"),
         path("compliance/", ComplianceHistoryView.as_view(), name="audit-compliance"),
         # 무결성 검증

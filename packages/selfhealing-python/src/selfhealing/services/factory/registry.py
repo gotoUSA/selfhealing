@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ProviderRegistry:
+class ServiceProviderRegistry:
     """
     Central registry for all pluggable components.
 
@@ -86,7 +86,7 @@ class ProviderRegistry:
             provider_class: Adapter class implementing CacheProviderInterface
         """
         cls._cache_providers[name] = provider_class
-        logger.info(f"[ProviderRegistry] Registered cache provider: {name}")
+        logger.info(f"[ServiceProviderRegistry] Registered cache provider: {name}")
 
     @classmethod
     def get_cache(
@@ -135,7 +135,7 @@ class ProviderRegistry:
             provider_class: Adapter class implementing TaskQueueInterface
         """
         cls._task_queues[name] = provider_class
-        logger.info(f"[ProviderRegistry] Registered task queue: {name}")
+        logger.info(f"[ServiceProviderRegistry] Registered task queue: {name}")
 
     @classmethod
     def get_queue(
@@ -189,10 +189,10 @@ class ProviderRegistry:
         """
         if cache:
             cls._default_cache = cache
-            logger.debug(f"[ProviderRegistry] Default cache: {cache}")
+            logger.debug(f"[ServiceProviderRegistry] Default cache: {cache}")
         if queue:
             cls._default_queue = queue
-            logger.debug(f"[ProviderRegistry] Default queue: {queue}")
+            logger.debug(f"[ServiceProviderRegistry] Default queue: {queue}")
 
     @classmethod
     def list_providers(cls) -> dict[str, list]:
@@ -242,14 +242,14 @@ class ProviderRegistry:
             cache = cls.get_cache()
             results["cache"] = cache.health_check()
         except Exception as e:
-            logger.error(f"[ProviderRegistry] Cache health check failed: {e}")
+            logger.error(f"[ServiceProviderRegistry] Cache health check failed: {e}")
             results["cache"] = False
 
         try:
             queue = cls.get_queue()
             results["queue"] = queue.health_check()
         except Exception as e:
-            logger.error(f"[ProviderRegistry] Queue health check failed: {e}")
+            logger.error(f"[ServiceProviderRegistry] Queue health check failed: {e}")
             results["queue"] = False
 
         return results
@@ -367,7 +367,7 @@ class ProviderRegistry:
         cls._queue_instances.clear()
         cls._default_cache = "redis"
         cls._default_queue = "celery"
-        logger.debug("[ProviderRegistry] Reset all registrations")
+        logger.debug("[ServiceProviderRegistry] Reset all registrations")
 
     @classmethod
     def reset_instances(cls) -> None:
@@ -378,7 +378,7 @@ class ProviderRegistry:
         """
         cls._cache_instances.clear()
         cls._queue_instances.clear()
-        logger.debug("[ProviderRegistry] Reset all instances")
+        logger.debug("[ServiceProviderRegistry] Reset all instances")
 
     @classmethod
     def configure_for_testing(cls) -> None:
@@ -397,7 +397,7 @@ class ProviderRegistry:
             queue="sync",
         )
 
-        logger.info("[ProviderRegistry] Configured for testing")
+        logger.info("[ServiceProviderRegistry] Configured for testing")
 
     @classmethod
     def configure_for_production(cls) -> None:
@@ -416,7 +416,7 @@ class ProviderRegistry:
             queue="celery",
         )
 
-        logger.info("[ProviderRegistry] Configured for production")
+        logger.info("[ServiceProviderRegistry] Configured for production")
 
     # =========================================================================
     # Test Isolation Context Managers
@@ -424,9 +424,7 @@ class ProviderRegistry:
 
     @classmethod
     @contextmanager
-    def override_provider(
-        cls, provider_type: str, mock_instance: Any
-    ) -> Generator[None, None, None]:
+    def override_provider(cls, provider_type: str, mock_instance: Any) -> Generator[None, None, None]:
         """
         테스트용 Provider 임시 교체 (Context Manager).
 
@@ -453,27 +451,17 @@ class ProviderRegistry:
             ValueError: provider_type이 "cache" 또는 "queue"가 아닌 경우
         """
         if provider_type not in ("cache", "queue"):
-            raise ValueError(
-                f"Unknown provider_type: {provider_type}. "
-                f"Must be 'cache' or 'queue'."
-            )
+            raise ValueError(f"Unknown provider_type: {provider_type}. " f"Must be 'cache' or 'queue'.")
 
-        instances = (
-            cls._cache_instances if provider_type == "cache" else cls._queue_instances
-        )
-        default_name = (
-            cls._default_cache if provider_type == "cache" else cls._default_queue
-        )
+        instances = cls._cache_instances if provider_type == "cache" else cls._queue_instances
+        default_name = cls._default_cache if provider_type == "cache" else cls._default_queue
 
         # 기존 인스턴스 백업
         old_instance = instances.get(default_name)
 
         # Mock 인스턴스 설정
         instances[default_name] = mock_instance
-        logger.debug(
-            f"[ProviderRegistry] Override {provider_type}: "
-            f"{type(mock_instance).__name__}"
-        )
+        logger.debug(f"[ServiceProviderRegistry] Override {provider_type}: " f"{type(mock_instance).__name__}")
 
         try:
             yield
@@ -483,7 +471,7 @@ class ProviderRegistry:
                 instances[default_name] = old_instance
             else:
                 instances.pop(default_name, None)
-            logger.debug(f"[ProviderRegistry] Restored {provider_type}")
+            logger.debug(f"[ServiceProviderRegistry] Restored {provider_type}")
 
     @classmethod
     @contextmanager
@@ -514,7 +502,7 @@ class ProviderRegistry:
         cls._cache_instances = {}
         cls._queue_instances = {}
 
-        logger.debug("[ProviderRegistry] Entering isolated test context")
+        logger.debug("[ServiceProviderRegistry] Entering isolated test context")
 
         try:
             yield cls
@@ -524,4 +512,8 @@ class ProviderRegistry:
             cls._queue_instances = old_queue_instances
             cls._default_cache = old_default_cache
             cls._default_queue = old_default_queue
-            logger.debug("[ProviderRegistry] Exited isolated test context")
+            logger.debug("[ServiceProviderRegistry] Exited isolated test context")
+
+
+# 하위 호환 alias (deprecated)
+ProviderRegistry = ServiceProviderRegistry

@@ -135,9 +135,7 @@ class ScopedEmergencyState:
             "emergency_level": self.emergency_level.value,
             "governance_mode": self.governance_mode,
             "scope": self.scope.value,
-            "activated_at": (
-                self.activated_at.isoformat() if self.activated_at else None
-            ),
+            "activated_at": (self.activated_at.isoformat() if self.activated_at else None),
             "activated_by": self.activated_by,
             "reason": self.reason,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
@@ -228,7 +226,7 @@ class OverrideTTLConfig:
 
 
 @dataclass
-class ActionResult:
+class CoordinationActionResult:
     """
     액션 실행 결과.
     """
@@ -285,7 +283,7 @@ class CoordinationResult:
     cascade_event_id: str
     """Cascade Event ID (감사 추적용)."""
 
-    executed_actions: list[ActionResult] = field(default_factory=list)
+    executed_actions: list[CoordinationActionResult] = field(default_factory=list)
     """실행된 액션 결과 목록."""
 
     trigger_type: str = ""
@@ -338,17 +336,13 @@ class RecoveryAccountabilityConfig:
     ready_to_restore_timeout_hours: int = 24
     """READY_TO_RESTORE 상태 최대 유지 시간. 초과 시 알림 에스컬레이션."""
 
-    acknowledgement_required_roles: list[str] = field(
-        default_factory=lambda: ["admin", "sre_lead"]
-    )
+    acknowledgement_required_roles: list[str] = field(default_factory=lambda: ["admin", "sre_lead"])
     """복구 승인 가능 역할."""
 
     auto_restore_after_hours: float = 8.0
     """자동 복구까지 대기 시간 (시간). requires_manual_acknowledgement=False일 때만 적용."""
 
-    escalation_channels: list[str] = field(
-        default_factory=lambda: ["slack", "pagerduty"]
-    )
+    escalation_channels: list[str] = field(default_factory=lambda: ["slack", "pagerduty"])
     """에스컬레이션 알림 채널."""
 
     def can_acknowledge(self, role: str) -> bool:
@@ -377,3 +371,7 @@ class RecoveryAccountabilityConfig:
     def from_dict(cls, data: dict[str, Any]) -> RecoveryAccountabilityConfig:
         """딕셔너리에서 생성."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+# 하위 호환 alias (deprecated)
+ActionResult = CoordinationActionResult

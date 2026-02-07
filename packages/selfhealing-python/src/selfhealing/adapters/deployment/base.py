@@ -5,7 +5,7 @@ Deployment Adapter Base Interface and Data Models.
 
 Data Models:
 - DeploymentEvent: 배포 이벤트 정보
-- ConfigChangeEvent: 설정 변경 이벤트 정보
+- DeploymentConfigChange: 설정 변경 이벤트 정보
 
 Interfaces:
 - ExternalDeploymentAdapter: 외부 배포 시스템 어댑터 프로토콜
@@ -145,7 +145,7 @@ class DeploymentEvent:
 
 
 @dataclass
-class ConfigChangeEvent:
+class DeploymentConfigChange:
     """
     설정 변경 이벤트 정보.
 
@@ -317,7 +317,7 @@ class ExternalDeploymentAdapter(Protocol):
         start_time: datetime,
         end_time: datetime,
         namespace: str = "default",
-    ) -> list[ConfigChangeEvent]:
+    ) -> list[DeploymentConfigChange]:
         """
         지정된 시간 범위 내의 설정 변경 이력을 조회합니다.
 

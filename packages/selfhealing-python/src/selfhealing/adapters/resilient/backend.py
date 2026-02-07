@@ -24,7 +24,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class StorageMode(Enum):
+class ResilientStorageMode(Enum):
     """Storage operation mode."""
 
     REDIS = "redis"  # Normal mode - Redis only
@@ -75,7 +75,7 @@ class ResilientStorageBackend:
             config: Storage configuration. Uses defaults if not provided.
         """
         self.config = config or ResilientStorageConfig()
-        self._mode = StorageMode.REDIS
+        self._mode = ResilientStorageMode.REDIS
         self._lock = threading.RLock()
 
         # Redis client
@@ -151,7 +151,7 @@ class ResilientStorageBackend:
 
         except Exception as e:
             logger.warning(f"[ResilientStorage] Redis init failed: {e}")
-            self._mode = StorageMode.DEGRADED
+            self._mode = ResilientStorageMode.DEGRADED
 
             if self._shadow:
                 self._shadow.record_sync_failure(
@@ -224,7 +224,7 @@ class ResilientStorageBackend:
             logger.info(f"[ResilientStorage] Found {stats.last_sequence} WAL entries to check")
 
             # If Redis is unavailable, defer recovery
-            if self._mode == StorageMode.DEGRADED:
+            if self._mode == ResilientStorageMode.DEGRADED:
                 logger.warning("[ResilientStorage] Redis unavailable, WAL recovery deferred")
                 return
 
@@ -280,19 +280,19 @@ class ResilientStorageBackend:
     # =========================================================================
 
     @property
-    def mode(self) -> StorageMode:
+    def mode(self) -> ResilientStorageMode:
         """Get current storage mode."""
         return self._mode
 
     @property
     def is_degraded(self) -> bool:
         """Check if operating in degraded mode."""
-        return self._mode != StorageMode.REDIS
+        return self._mode != ResilientStorageMode.REDIS
 
     @property
     def is_redis_available(self) -> bool:
         """Check if Redis is available."""
-        return self._redis_initialized and self._mode == StorageMode.REDIS
+        return self._redis_initialized and self._mode == ResilientStorageMode.REDIS
 
     # =========================================================================
     # Core Operations
@@ -310,7 +310,7 @@ class ResilientStorageBackend:
         """
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 return self._redis.get(full_key)
             except Exception:
@@ -336,7 +336,7 @@ class ResilientStorageBackend:
         """
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 self._redis.set(full_key, value)
                 return True
@@ -382,7 +382,7 @@ class ResilientStorageBackend:
         """Delete value by key."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 self._redis.delete(full_key)
                 return True
@@ -410,7 +410,7 @@ class ResilientStorageBackend:
         """Get hash field value."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 result = self._redis._redis.hget(full_key, field)
                 if result is None:
@@ -428,7 +428,7 @@ class ResilientStorageBackend:
         """Set hash fields."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 # Convert all values to strings for Redis
                 str_mapping = {str(k): str(v) for k, v in mapping.items()}
@@ -470,7 +470,7 @@ class ResilientStorageBackend:
         """Get all hash fields."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 result = self._redis._redis.hgetall(full_key)
                 if not result:
@@ -490,7 +490,7 @@ class ResilientStorageBackend:
         """Delete hash field."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 self._redis._redis.hdel(full_key, field)
                 return True
@@ -521,7 +521,7 @@ class ResilientStorageBackend:
         """Push values to list head."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 import json
 
@@ -541,7 +541,7 @@ class ResilientStorageBackend:
         """Get list range."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 import json
 
@@ -557,7 +557,7 @@ class ResilientStorageBackend:
         """Trim list to specified range."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 self._redis._redis.ltrim(full_key, start, end)
                 return True
@@ -577,7 +577,7 @@ class ResilientStorageBackend:
         """Add members to sorted set with scores."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 return self._redis._redis.zadd(full_key, mapping)
             except Exception:
@@ -595,7 +595,7 @@ class ResilientStorageBackend:
         """Get sorted set range by index."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 result = self._redis._redis.zrange(full_key, start, end)
                 return [v.decode() if isinstance(v, bytes) else v for v in result]
@@ -611,7 +611,7 @@ class ResilientStorageBackend:
         """Remove members from sorted set."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 return self._redis._redis.zrem(full_key, *members)
             except Exception:
@@ -628,7 +628,7 @@ class ResilientStorageBackend:
         """Get sorted set cardinality."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 return self._redis._redis.zcard(full_key)
             except Exception:
@@ -644,7 +644,7 @@ class ResilientStorageBackend:
         """Atomically increment counter."""
         full_key = self._get_full_key(key)
 
-        if self._mode == StorageMode.REDIS and self._redis:
+        if self._mode == ResilientStorageMode.REDIS and self._redis:
             try:
                 return self._redis._redis.incr(full_key)
             except Exception:
@@ -664,8 +664,8 @@ class ResilientStorageBackend:
     def _switch_to_degraded(self) -> None:
         """Switch to degraded mode on Redis failure."""
         with self._lock:
-            if self._mode != StorageMode.DEGRADED:
-                self._mode = StorageMode.DEGRADED
+            if self._mode != ResilientStorageMode.DEGRADED:
+                self._mode = ResilientStorageMode.DEGRADED
                 logger.critical("[ResilientStorage] Switched to DEGRADED mode. " "Using Memory + WAL fallback.")
 
     def check_and_recover(self) -> bool:
@@ -677,7 +677,7 @@ class ResilientStorageBackend:
         Returns:
             True if recovered to Redis mode
         """
-        if self._mode != StorageMode.DEGRADED:
+        if self._mode != ResilientStorageMode.DEGRADED:
             return False
 
         # Check health
@@ -714,7 +714,7 @@ class ResilientStorageBackend:
         """
         try:
             with self._lock:
-                self._mode = StorageMode.RECOVERING
+                self._mode = ResilientStorageMode.RECOVERING
 
             # 1. Replay WAL to Redis
             if self._wal and self._wal_initialized:
@@ -736,7 +736,7 @@ class ResilientStorageBackend:
                 self._wal.cleanup_processed(self._last_processed_wal_seq)
 
             with self._lock:
-                self._mode = StorageMode.REDIS
+                self._mode = ResilientStorageMode.REDIS
 
             logger.info("[ResilientStorage] Recovered to REDIS mode")
             return True
@@ -744,7 +744,7 @@ class ResilientStorageBackend:
         except Exception as e:
             logger.error(f"[ResilientStorage] Recovery failed: {e}")
             with self._lock:
-                self._mode = StorageMode.DEGRADED
+                self._mode = ResilientStorageMode.DEGRADED
             return False
 
     def _sync_memory_to_redis(self) -> None:
@@ -859,3 +859,7 @@ def reset_storage_backend() -> None:
         if _storage_backend:
             _storage_backend.close()
         _storage_backend = None
+
+
+# 하위 호환 alias (deprecated)
+StorageMode = ResilientStorageMode

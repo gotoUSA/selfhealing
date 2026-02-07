@@ -21,6 +21,7 @@ from selfhealing.core.action_executor import (
 from selfhealing.core.adaptive_jitter import AdaptiveJitter
 from selfhealing.core.backoff import (
     BackoffConfig,
+    BackoffStrategy,
     ConstantBackoff,
     DecorrelatedJitterBackoff,
     ExponentialBackoff,
@@ -145,6 +146,7 @@ __all__ = [
     "RetryContext",
     "MetricsSnapshot",
     # Backoff - Strategy implementations
+    "BackoffStrategy",  # ABC for all backoff strategies
     "ExponentialBackoff",
     "LinearBackoff",
     "ConstantBackoff",

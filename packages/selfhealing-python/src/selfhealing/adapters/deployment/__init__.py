@@ -6,7 +6,7 @@ Deployment Adapters Package.
 
 Components:
 - DeploymentEvent: 배포 이벤트 데이터 모델
-- ConfigChangeEvent: 설정 변경 이벤트 데이터 모델
+- DeploymentConfigChange: 설정 변경 이벤트 데이터 모델
 - ExternalDeploymentAdapter: 외부 배포 시스템 어댑터 인터페이스
 - MockDeploymentAdapter: 테스트용 Mock 어댑터
 - KubernetesDeploymentAdapter: Kubernetes API 연동 어댑터
@@ -15,7 +15,7 @@ Components:
 from __future__ import annotations
 
 from .base import (
-    ConfigChangeEvent,
+    DeploymentConfigChange,
     DeploymentEvent,
     DeploymentType,
     DeploymentSource,
@@ -27,7 +27,7 @@ from .kubernetes import KubernetesDeploymentAdapter
 __all__ = [
     # Models
     "DeploymentEvent",
-    "ConfigChangeEvent",
+    "DeploymentConfigChange",
     "DeploymentType",
     "DeploymentSource",
     # Interfaces
@@ -36,3 +36,6 @@ __all__ = [
     "MockDeploymentAdapter",
     "KubernetesDeploymentAdapter",
 ]
+
+# 하위 호환 alias (deprecated)
+ConfigChangeEvent = DeploymentConfigChange

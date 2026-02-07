@@ -28,7 +28,7 @@ from selfhealing.audit.trace import get_trace_id, get_trace_id_full
 logger = logging.getLogger(__name__)
 
 
-class AuditAction(Enum):
+class ConfigAuditAction(Enum):
     """Types of audit actions."""
 
     CREATE = "create"
@@ -42,7 +42,7 @@ class AuditAction(Enum):
 
 
 @dataclass
-class ConfigChangeEvent:
+class AuditConfigChangeEvent:
     """
     Represents a configuration change event.
 
@@ -51,7 +51,7 @@ class ConfigChangeEvent:
 
     config_type: str
     config_key: str
-    action: AuditAction | str
+    action: ConfigAuditAction | str
     old_value: Any = None
     new_value: Any = None
     reason: str | None = None
@@ -66,7 +66,7 @@ class ConfigChangeEvent:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         result = asdict(self)
-        if isinstance(result["action"], AuditAction):
+        if isinstance(result["action"], ConfigAuditAction):
             result["action"] = result["action"].value
         return result
 
@@ -134,14 +134,14 @@ class AuditLogger:
 
     def log_change(
         self,
-        event: ConfigChangeEvent | dict[str, Any],
+        event: AuditConfigChangeEvent | dict[str, Any],
         request=None,
     ) -> bool:
         """
         Log a configuration change event.
 
         Args:
-            event: ConfigChangeEvent or dict with event data
+            event: AuditConfigChangeEvent or dict with event data
             request: Optional Django/Flask request object for IP extraction
 
         Returns:
@@ -149,7 +149,7 @@ class AuditLogger:
         """
         try:
             # Convert to dict if needed
-            if isinstance(event, ConfigChangeEvent):
+            if isinstance(event, AuditConfigChangeEvent):
                 event_dict = event.to_dict()
             else:
                 event_dict = dict(event)
@@ -202,10 +202,10 @@ class AuditLogger:
             request: Django/Flask request object
             **kwargs: Additional metadata
         """
-        event = ConfigChangeEvent(
+        event = AuditConfigChangeEvent(
             config_type=config_type,
             config_key=config_key,
-            action=AuditAction.UPDATE,
+            action=ConfigAuditAction.UPDATE,
             old_value=old_value,
             new_value=new_value,
             user=user,
@@ -235,10 +235,10 @@ class AuditLogger:
         batch_id = get_trace_id() or self._generate_batch_id()
 
         for change in changes:
-            event = ConfigChangeEvent(
+            event = AuditConfigChangeEvent(
                 config_type=config_type,
                 config_key=change.get("key", ""),
-                action=AuditAction.UPDATE,
+                action=ConfigAuditAction.UPDATE,
                 old_value=change.get("old_value"),
                 new_value=change.get("new_value"),
                 user=user,
@@ -402,3 +402,8 @@ def log_config_change(
 def get_audit_logger() -> AuditLogger:
     """Get the global audit logger instance."""
     return AuditLogger.get_instance()
+
+
+# 하위 호환 alias (deprecated)
+ConfigChangeEvent = AuditConfigChangeEvent
+AuditAction = ConfigAuditAction

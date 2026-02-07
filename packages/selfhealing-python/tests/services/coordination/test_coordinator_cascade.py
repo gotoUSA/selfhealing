@@ -25,7 +25,7 @@ from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.coordination.enums import ActionType
 from selfhealing.services.coordination.models import (
     CoordinationAction,
-    ActionResult,
+    CoordinationActionResult,
 )
 from selfhealing.services.coordination.coordinator import EmergencyCoordinator
 

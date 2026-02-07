@@ -28,7 +28,7 @@ from .base import (
 )
 
 # Provider Registry for pluggable architecture
-from .registry import ProviderRegistry
+from .registry import ProviderRegistry, ServiceProviderRegistry
 
 # Repository factory functions
 from .repository import (
@@ -63,7 +63,8 @@ __all__ = [
     "configure_service_factory",
     "reset_service_factory",
     # Provider Registry
-    "ProviderRegistry",
+    "ServiceProviderRegistry",
+    "ProviderRegistry",  # deprecated alias
     # Repository factories
     "create_failed_operation_repository",
     "create_circuit_breaker_repository",

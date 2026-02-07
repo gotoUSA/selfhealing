@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from selfhealing.adapters.deployment import (
-    ConfigChangeEvent,
+    DeploymentConfigChange,
     DeploymentEvent,
     DeploymentSource,
     DeploymentType,
@@ -60,7 +60,7 @@ def sample_deployment():
 def sample_config_change():
     """샘플 설정 변경 이벤트."""
     changed_at = datetime.now(timezone.utc) - timedelta(minutes=5)
-    return ConfigChangeEvent(
+    return DeploymentConfigChange(
         change_id="config-001",
         config_key="payment.timeout",
         old_value="30",
@@ -126,8 +126,8 @@ class TestDeploymentEvent:
         assert "[ROLLBACK]" in result["event_type"]
 
 
-class TestConfigChangeEvent:
-    """ConfigChangeEvent 모델 테스트."""
+class TestDeploymentConfigChange:
+    """DeploymentConfigChange 모델 테스트."""
 
     def test_to_dict(self, sample_config_change):
         """to_dict 변환 테스트."""
@@ -339,7 +339,7 @@ class TestDeploymentCorrelator:
     def test_correlate_incident_config_changed(self, mock_adapter):
         """설정 변경 후 10분 내 인시던트 - 높은 상관관계."""
         # 5분 전 설정 변경
-        config_change = ConfigChangeEvent(
+        config_change = DeploymentConfigChange(
             change_id="config-001",
             config_key="payment.timeout",
             old_value="30",

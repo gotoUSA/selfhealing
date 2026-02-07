@@ -21,7 +21,7 @@ Usage:
         UDSClient,
         SidecarGRPCServer,
         SidecarAuthenticator,
-        CBStateCache,
+        IPCStateCache,
         EventStreamProxy,
         CBStateSnapshot,
         get_cb_state_snapshot,
@@ -42,6 +42,7 @@ Usage:
 
 from selfhealing.adapters.ipc.auth import SidecarAuthenticator
 from selfhealing.adapters.ipc.cb_state_cache import (
+    IPCStateCache,
     CBStateCache,
     get_cb_state_cache,
     reset_cb_state_cache,
@@ -104,7 +105,8 @@ __all__ = [
     # Auth
     "SidecarAuthenticator",
     # Cache
-    "CBStateCache",
+    "IPCStateCache",
+    "CBStateCache",  # deprecated alias
     "get_cb_state_cache",
     "reset_cb_state_cache",
     # Event Proxy

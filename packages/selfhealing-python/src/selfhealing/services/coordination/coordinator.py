@@ -30,7 +30,7 @@ from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from .anti_flapping import AntiFlappingGuard
 from .enums import ActionType
 from .models import (
-    ActionResult,
+    CoordinationActionResult,
     CoordinationAction,
     CoordinationResult,
     OverrideTTLConfig,
@@ -286,7 +286,7 @@ class EmergencyCoordinator:
         old_level: EmergencyLevel,
         new_level: EmergencyLevel,
         namespace: str,
-        results: list[ActionResult],
+        results: list[CoordinationActionResult],
         request: Any | None = None,
     ) -> None:
         """
@@ -385,7 +385,7 @@ class EmergencyCoordinator:
         action: CoordinationAction,
         namespace: str,
         trigger_event_id: str,
-    ) -> ActionResult:
+    ) -> CoordinationActionResult:
         """
         개별 액션 실행.
 
@@ -406,7 +406,7 @@ class EmergencyCoordinator:
                 namespace=namespace,
                 context={"trigger_event_id": trigger_event_id},
             )
-            return ActionResult(
+            return CoordinationActionResult(
                 success=True,
                 action_type=action.type,
                 event_id=dry_run_event_id,
@@ -431,7 +431,7 @@ class EmergencyCoordinator:
                 f"on {namespace}, ttl={effective_ttl}min"
             )
 
-            return ActionResult(
+            return CoordinationActionResult(
                 success=True,
                 action_type=action.type,
                 event_id=event_id,
@@ -444,7 +444,7 @@ class EmergencyCoordinator:
                 f"[Coordinator] Action failed: {action.type.value} "
                 f"on {namespace}: {e}"
             )
-            return ActionResult(
+            return CoordinationActionResult(
                 success=False,
                 action_type=action.type,
                 event_id=event_id,

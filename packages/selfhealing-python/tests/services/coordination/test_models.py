@@ -5,7 +5,7 @@ Tests:
 - CoordinationAction with TTL enforcement
 - ScopedEmergencyState namespace isolation
 - OverrideTTLConfig TTL enforcement logic
-- ActionResult and CoordinationResult
+- CoordinationActionResult and CoordinationResult
 """
 
 import pytest
@@ -17,7 +17,7 @@ from selfhealing.services.coordination.models import (
     CoordinationAction,
     ScopedEmergencyState,
     OverrideTTLConfig,
-    ActionResult,
+    CoordinationActionResult,
     CoordinationResult,
 )
 
@@ -238,11 +238,11 @@ class TestOverrideTTLConfig:
 
 
 class TestActionResult:
-    """ActionResult 테스트."""
+    """CoordinationActionResult 테스트."""
     
     def test_create_success_result(self):
         """성공 결과 생성."""
-        result = ActionResult(
+        result = CoordinationActionResult(
             success=True,
             action_type=ActionType.GOVERNANCE_STRICT,
             event_id="action-123",
@@ -254,7 +254,7 @@ class TestActionResult:
     
     def test_create_failure_result(self):
         """실패 결과 생성."""
-        result = ActionResult(
+        result = CoordinationActionResult(
             success=False,
             action_type=ActionType.CANARY_ROLLBACK,
             event_id="action-456",
@@ -267,7 +267,7 @@ class TestActionResult:
     
     def test_to_dict(self):
         """딕셔너리 변환."""
-        result = ActionResult(
+        result = CoordinationActionResult(
             success=True,
             action_type=ActionType.BUDGET_MULTIPLIER,
             event_id="action-789",
@@ -286,7 +286,7 @@ class TestCoordinationResult:
     
     def test_create_result(self):
         """결과 생성."""
-        action_result = ActionResult(
+        action_result = CoordinationActionResult(
             success=True,
             action_type=ActionType.GOVERNANCE_STRICT,
             event_id="action-1",

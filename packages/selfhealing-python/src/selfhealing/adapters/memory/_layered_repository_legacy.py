@@ -1,5 +1,8 @@
 """
-Layered Circuit Breaker State Repository
+[DEPRECATED] Layered Circuit Breaker State Repository — 레거시 모놀리식 구현.
+
+리팩토링된 구현은 adapters/memory/layered_repository/ 패키지를 사용하세요.
+이 파일은 마이그레이션 기간 참조용으로만 보존됩니다.
 
 하이브리드 레이어드 저장소 (L1 Memory + L2 Shared Storage).
 
@@ -71,9 +74,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         if cls._executor is None:
             with cls._executor_lock:
                 if cls._executor is None:
-                    cls._executor = ThreadPoolExecutor(
-                        max_workers=4, thread_name_prefix="l2_sync"
-                    )
+                    cls._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="l2_sync")
         return cls._executor
 
     def __init__(
@@ -179,23 +180,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._metrics["l2_latency_total_ms"] += elapsed_ms
             self._metrics["l2_latency_count"] += 1
 
-            logger.info(
-                f"[LayeredRepo] L2 initial load completed: "
-                f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms"
-            )
+            logger.info(f"[LayeredRepo] L2 initial load completed: " f"{len(all_states)} states loaded in {elapsed_ms:.1f}ms")
 
         except FuturesTimeoutError:
             self._handle_l2_timeout("initial_load", None)
-            logger.warning(
-                f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). "
-                f"Starting with empty L1."
-            )
+            logger.warning(f"[LayeredRepo] L2 initial load timeout ({timeout*1000:.0f}ms). " f"Starting with empty L1.")
         except Exception as e:
             self._handle_l2_error("initial_load", None, e)
-            logger.warning(
-                f"[LayeredRepo] L2 initial load failed: {e}. "
-                f"Starting with empty L1."
-            )
+            logger.warning(f"[LayeredRepo] L2 initial load failed: {e}. " f"Starting with empty L1.")
 
     def _load_from_l2(self) -> None:
         """L2에서 L1으로 초기 데이터 로드 (레거시, 타임아웃 없음)."""
@@ -341,9 +333,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             executor = self._get_executor()
             executor.submit(_run_reconciliation)
         except Exception as e:
-            logger.warning(
-                f"[LayeredRepo] Failed to schedule drift reconciliation: {e}"
-            )
+            logger.warning(f"[LayeredRepo] Failed to schedule drift reconciliation: {e}")
 
     def _reconcile_all_drift(self) -> dict[str, Any]:
         """모든 서비스의 L1/L2 드리프트 해결."""
@@ -361,17 +351,12 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             try:
                 timeout = self._get_timeout_seconds()
                 executor = self._get_executor()
-                future = executor.submit(
-                    self._l2.get_by_service_name, l1_state.service_name
-                )
+                future = executor.submit(self._l2.get_by_service_name, l1_state.service_name)
 
                 try:
                     l2_state = future.result(timeout=timeout)
                 except FuturesTimeoutError:
-                    logger.warning(
-                        f"[LayeredRepo] Drift reconciliation timeout for "
-                        f"{l1_state.service_name}, skipping"
-                    )
+                    logger.warning(f"[LayeredRepo] Drift reconciliation timeout for " f"{l1_state.service_name}, skipping")
                     continue
 
                 if l2_state is None:
@@ -416,10 +401,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                         "error": str(e),
                     }
                 )
-                logger.warning(
-                    f"[LayeredRepo] Drift reconciliation error for "
-                    f"{l1_state.service_name}: {e}"
-                )
+                logger.warning(f"[LayeredRepo] Drift reconciliation error for " f"{l1_state.service_name}: {e}")
 
         self._metrics["drift_reconciliation_count"] += reconciled_count
 
@@ -488,19 +470,14 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
         except FuturesTimeoutError:
             self._handle_l2_timeout("sync", service_name)
-            logger.warning(
-                f"[LayeredRepo] L2 sync timeout for {service_name} "
-                f"({timeout*1000:.0f}ms). L1 isolated."
-            )
+            logger.warning(f"[LayeredRepo] L2 sync timeout for {service_name} " f"({timeout*1000:.0f}ms). L1 isolated.")
             return False
 
         except Exception as e:
             self._handle_l2_error("sync", service_name, e, state.state)
             return False
 
-    def _sync_to_l2_async(
-        self, service_name: str, state: CircuitBreakerStateData
-    ) -> None:
+    def _sync_to_l2_async(self, service_name: str, state: CircuitBreakerStateData) -> None:
         """L2로 비동기 동기화 (백그라운드, 타임아웃 적용)."""
         if not self._l2:
             return
@@ -524,9 +501,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     # CircuitBreakerStateRepository Interface Implementation (L1 Priority)
     # =========================================================================
 
-    def get_by_service_name(
-        self, service_name: str
-    ) -> CircuitBreakerStateData | None:
+    def get_by_service_name(self, service_name: str) -> CircuitBreakerStateData | None:
         """L1에서 조회. L1에 없으면 L2 확인 후 L1에 캐시."""
         result = self._l1.get_by_service_name(service_name)
 
@@ -686,9 +661,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         ttl_minutes: int = 90,
     ) -> tuple:
         """L1에서 강제 open 후 L2 동기화."""
-        result = self._l1.atomic_force_open(
-            service_name, reason, controlled_by_id, ttl_minutes
-        )
+        result = self._l1.atomic_force_open(service_name, reason, controlled_by_id, ttl_minutes)
         if result[0]:
             self._sync_state_after_l1_change(service_name)
         return result
@@ -725,9 +698,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         ttl_minutes: int = 90,
     ) -> bool:
         """L1에서 수동 제어 설정 후 L2 동기화."""
-        result = self._l1.set_manual_control(
-            service_name, controlled_by_id, reason, ttl_minutes
-        )
+        result = self._l1.set_manual_control(service_name, controlled_by_id, reason, ttl_minutes)
         if result:
             self._sync_state_after_l1_change(service_name)
         return result
@@ -747,9 +718,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """저장소 정보 조회 (L2 상태 및 메트릭 포함)."""
         avg_latency_ms = 0.0
         if self._metrics["l2_latency_count"] > 0:
-            avg_latency_ms = (
-                self._metrics["l2_latency_total_ms"] / self._metrics["l2_latency_count"]
-            )
+            avg_latency_ms = self._metrics["l2_latency_total_ms"] / self._metrics["l2_latency_count"]
 
         return {
             "l1_type": "memory",
@@ -760,23 +729,15 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "l2_healthy": self._l2_healthy,
             "l2_was_unhealthy": self._l2_was_unhealthy,
             "l2_consecutive_failures": self._l2_consecutive_failures,
-            "l2_last_error_time": (
-                self._l2_last_error_time.isoformat()
-                if self._l2_last_error_time
-                else None
-            ),
+            "l2_last_error_time": (self._l2_last_error_time.isoformat() if self._l2_last_error_time else None),
             "sync_interval_seconds": self._sync_interval,
-            "last_sync_time": (
-                self._last_sync_time.isoformat() if self._last_sync_time else None
-            ),
+            "last_sync_time": (self._last_sync_time.isoformat() if self._last_sync_time else None),
             "timeout_ms": self._get_timeout_seconds() * 1000,
             "metrics": {
                 "timeout_count": self._metrics["l2_timeout_count"],
                 "sync_failure_count": self._metrics["l2_sync_failure_count"],
                 "sync_success_count": self._metrics["l2_sync_success_count"],
-                "drift_reconciliation_count": self._metrics[
-                    "drift_reconciliation_count"
-                ],
+                "drift_reconciliation_count": self._metrics["drift_reconciliation_count"],
                 "avg_latency_ms": round(avg_latency_ms, 2),
             },
             "shadow_log": self._shadow_logger.get_stats(),
@@ -789,11 +750,7 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             "healthy": self._l2_healthy,
             "was_unhealthy": self._l2_was_unhealthy,
             "consecutive_failures": self._l2_consecutive_failures,
-            "last_error_time": (
-                self._l2_last_error_time.isoformat()
-                if self._l2_last_error_time
-                else None
-            ),
+            "last_error_time": (self._l2_last_error_time.isoformat() if self._l2_last_error_time else None),
             "adapter_type": self._adapter_type,
             "timeout_ms": self._get_timeout_seconds() * 1000,
         }
@@ -878,12 +835,8 @@ class LayeredCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 "service_name": r.service_name,
                 "l1_state": r.l1_state,
                 "l2_state": r.l2_state,
-                "l1_updated_at": (
-                    r.l1_updated_at.isoformat() if r.l1_updated_at else None
-                ),
-                "l2_updated_at": (
-                    r.l2_updated_at.isoformat() if r.l2_updated_at else None
-                ),
+                "l1_updated_at": (r.l1_updated_at.isoformat() if r.l1_updated_at else None),
+                "l2_updated_at": (r.l2_updated_at.isoformat() if r.l2_updated_at else None),
                 "winner": r.winner,
                 "result": r.result.value,
                 "reconciled_at": r.reconciled_at.isoformat(),

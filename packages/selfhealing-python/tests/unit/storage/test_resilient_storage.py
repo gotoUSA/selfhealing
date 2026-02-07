@@ -14,16 +14,16 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 
 
-class TestStorageMode:
-    """Tests for StorageMode enum."""
+class TestResilientStorageMode:
+    """Tests for ResilientStorageMode enum."""
     
     def test_storage_mode_values(self):
-        """Verify StorageMode enum values."""
-        from selfhealing.adapters.resilient.backend import StorageMode
+        """Verify ResilientStorageMode enum values."""
+        from selfhealing.adapters.resilient.backend import ResilientStorageMode
         
-        assert StorageMode.REDIS.value == "redis"
-        assert StorageMode.DEGRADED.value == "degraded"
-        assert StorageMode.RECOVERING.value == "recovering"
+        assert ResilientStorageMode.REDIS.value == "redis"
+        assert ResilientStorageMode.DEGRADED.value == "degraded"
+        assert ResilientStorageMode.RECOVERING.value == "recovering"
 
 
 class TestResilientStorageConfig:
@@ -115,7 +115,7 @@ class TestResilientStorageBackend:
         from selfhealing.adapters.resilient.backend import (
             ResilientStorageBackend,
             ResilientStorageConfig,
-            StorageMode,
+            ResilientStorageMode,
             reset_storage_backend,
         )
         
@@ -143,7 +143,7 @@ class TestResilientStorageBackend:
             value = backend.get("test_key")
             assert value == {"value": 123}
             
-            assert backend.mode == StorageMode.REDIS
+            assert backend.mode == ResilientStorageMode.REDIS
             
             backend.close()
             reset_storage_backend()
@@ -189,7 +189,7 @@ class TestResilientStorageBackend:
         from selfhealing.adapters.resilient.backend import (
             ResilientStorageBackend,
             ResilientStorageConfig,
-            StorageMode,
+            ResilientStorageMode,
             reset_storage_backend,
         )
         
@@ -208,7 +208,7 @@ class TestResilientStorageBackend:
             backend = ResilientStorageBackend(config)
             
             # Should be in degraded mode
-            assert backend.mode == StorageMode.DEGRADED
+            assert backend.mode == ResilientStorageMode.DEGRADED
             assert backend.is_degraded is True
             
             backend.close()
@@ -216,12 +216,12 @@ class TestResilientStorageBackend:
     
     def test_degraded_mode_uses_memory(self, backend_memory_only):
         """Degraded mode stores in memory."""
-        from selfhealing.adapters.resilient.backend import StorageMode
+        from selfhealing.adapters.resilient.backend import ResilientStorageMode
         
         backend = backend_memory_only
         
         # Verify degraded mode
-        assert backend.mode == StorageMode.DEGRADED
+        assert backend.mode == ResilientStorageMode.DEGRADED
         
         # Set value
         backend.set("key1", {"data": "test"})
@@ -239,7 +239,7 @@ class TestResilientStorageBackend:
         from selfhealing.adapters.resilient.backend import (
             ResilientStorageBackend,
             ResilientStorageConfig,
-            StorageMode,
+            ResilientStorageMode,
             reset_storage_backend,
         )
         

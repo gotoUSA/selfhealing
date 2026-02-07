@@ -92,11 +92,7 @@ class GovernanceApiService:
 
         return {
             "generated_at": now.isoformat(),
-            "operating_mode": (
-                operating_mode.value
-                if hasattr(operating_mode, "value")
-                else str(operating_mode)
-            ),
+            "operating_mode": (operating_mode.value if hasattr(operating_mode, "value") else str(operating_mode)),
             "overall_health": overall_health,
             "sync_status": sync_status,
             "snapshot_health": snapshot_health,
@@ -179,9 +175,7 @@ class GovernanceApiService:
         manager.force_global_mode(target_mode, reason=reason or f"Forced by {actor}")
 
         # EmergencyModeTracker 연동 (자동 만료 기능)
-        tracker_result = self._sync_emergency_tracker(
-            mode_upper, actor, reason, old_mode
-        )
+        tracker_result = self._sync_emergency_tracker(mode_upper, actor, reason, old_mode)
 
         # Audit 로깅
         self._log_mode_change(actor, old_mode, target_mode, reason)
@@ -190,9 +184,7 @@ class GovernanceApiService:
             "status": "mode_changed",
             "changed_at": datetime.now(timezone.utc).isoformat(),
             "actor": actor,
-            "previous_mode": (
-                old_mode.value if hasattr(old_mode, "value") else str(old_mode)
-            ),
+            "previous_mode": (old_mode.value if hasattr(old_mode, "value") else str(old_mode)),
             "current_mode": target_mode.value,
             "reason": reason,
             "warning": self._get_mode_warning(target_mode),
@@ -232,9 +224,7 @@ class GovernanceApiService:
 
             tracker = get_emergency_tracker()
 
-            old_mode_str = (
-                old_mode.value if hasattr(old_mode, "value") else str(old_mode)
-            )
+            old_mode_str = old_mode.value if hasattr(old_mode, "value") else str(old_mode)
 
             if mode == "STRICT":
                 # 긴급 모드 활성화 (자동 만료 추적 시작)
@@ -244,8 +234,7 @@ class GovernanceApiService:
                     mode="STRICT",
                 )
                 logger.info(
-                    f"[Governance] Emergency tracker activated: "
-                    f"actor={actor}, expires_at={result.get('expiry_hours', 8)}h"
+                    f"[Governance] Emergency tracker activated: " f"actor={actor}, expires_at={result.get('expiry_hours', 8)}h"
                 )
 
                 # 만료 시각 계산
@@ -261,9 +250,7 @@ class GovernanceApiService:
                     restored_by=actor,
                     reason=reason or "Mode restored to NORMAL",
                 )
-                logger.info(
-                    f"[Governance] Emergency tracker deactivated: actor={actor}"
-                )
+                logger.info(f"[Governance] Emergency tracker deactivated: actor={actor}")
                 return result
 
         except ImportError:
@@ -287,9 +274,7 @@ class GovernanceApiService:
             logger.warning(f"[Governance] Failed to get reliability states: {e}")
             return {}
 
-    def _build_domains_status(
-        self, reliability_states: dict[str, Any]
-    ) -> dict[str, dict[str, Any]]:
+    def _build_domains_status(self, reliability_states: dict[str, Any]) -> dict[str, dict[str, Any]]:
         """도메인별 상태 빌드."""
         domains = {}
 
@@ -301,13 +286,9 @@ class GovernanceApiService:
                     "operating_mode": getattr(state, "operating_mode", "unknown"),
                     "last_sync_time": getattr(state, "last_sync_time", None),
                     "last_sync_source": getattr(state, "last_sync_source", "none"),
-                    "consecutive_syncs": getattr(
-                        state, "consecutive_successful_syncs", 0
-                    ),
+                    "consecutive_syncs": getattr(state, "consecutive_successful_syncs", 0),
                     "is_data_fresh": getattr(state, "is_data_fresh", False),
-                    "stabilization_progress": getattr(
-                        state, "stabilization_progress", 0.0
-                    ),
+                    "stabilization_progress": getattr(state, "stabilization_progress", 0.0),
                     "dlq_pending": {
                         "value": getattr(state, "current_value", 0),
                         "is_synced": getattr(state, "is_data_fresh", False),
@@ -345,15 +326,9 @@ class GovernanceApiService:
             mode_priority = {"EMERGENCY": 0, "STRICT": 1, "CAUTIOUS": 2, "NORMAL": 3}
             sorted_modes = sorted(
                 modes,
-                key=lambda m: mode_priority.get(
-                    m.value if hasattr(m, "value") else str(m), 3
-                ),
+                key=lambda m: mode_priority.get(m.value if hasattr(m, "value") else str(m), 3),
             )
-            return (
-                sorted_modes[0].value
-                if hasattr(sorted_modes[0], "value")
-                else str(sorted_modes[0])
-            )
+            return sorted_modes[0].value if hasattr(sorted_modes[0], "value") else str(sorted_modes[0])
 
     def _classify_overall_health(self, reliability_states: dict[str, Any]) -> str:
         """전반적 건강 상태 분류."""
@@ -399,16 +374,10 @@ class GovernanceApiService:
                 is_stale = False
 
             if hasattr(state, "consecutive_successful_syncs"):
-                total_consecutive = max(
-                    total_consecutive, state.consecutive_successful_syncs
-                )
+                total_consecutive = max(total_consecutive, state.consecutive_successful_syncs)
 
         return {
-            "last_sync_at": (
-                datetime.fromtimestamp(last_sync_time, tz=timezone.utc).isoformat()
-                if last_sync_time
-                else None
-            ),
+            "last_sync_at": (datetime.fromtimestamp(last_sync_time, tz=timezone.utc).isoformat() if last_sync_time else None),
             "last_sync_actor": last_sync_actor,
             "is_stale": is_stale,
             "consecutive_syncs": total_consecutive,
@@ -479,9 +448,7 @@ class GovernanceApiService:
         Startup Hydration의 Jitter가 적용된 경우 그 시간을 반환.
         """
         if self._next_scheduled_sync:
-            return datetime.fromtimestamp(
-                self._next_scheduled_sync, tz=timezone.utc
-            ).isoformat()
+            return datetime.fromtimestamp(self._next_scheduled_sync, tz=timezone.utc).isoformat()
         return None
 
     def _log_mode_change(
@@ -494,22 +461,17 @@ class GovernanceApiService:
         """모드 변경 Audit 로깅."""
         try:
             from selfhealing.audit.logger import (
-                AuditAction,
                 AuditLogger,
-                ConfigChangeEvent,
+                AuditConfigChangeEvent,
             )
 
             audit_logger = AuditLogger.get_instance()
-            event = ConfigChangeEvent(
+            event = AuditConfigChangeEvent(
                 config_type="governance",
                 config_key="operating_mode",
-                action=AuditAction.OVERRIDE,
-                old_value=(
-                    old_mode.value if hasattr(old_mode, "value") else str(old_mode)
-                ),
-                new_value=(
-                    new_mode.value if hasattr(new_mode, "value") else str(new_mode)
-                ),
+                action="override",
+                old_value=(old_mode.value if hasattr(old_mode, "value") else str(old_mode)),
+                new_value=(new_mode.value if hasattr(new_mode, "value") else str(new_mode)),
                 reason=reason or "Manual mode change",
                 user=actor,
                 source="api",

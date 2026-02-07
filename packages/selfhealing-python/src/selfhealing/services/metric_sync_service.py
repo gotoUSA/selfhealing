@@ -150,9 +150,7 @@ class MetricSyncService:
             "recommendation": recommendation,
         }
 
-    def _capture_current_state(
-        self, domains: list[str] | None
-    ) -> dict[str, dict[str, Any]]:
+    def _capture_current_state(self, domains: list[str] | None) -> dict[str, dict[str, Any]]:
         """현재 인메모리(Gauge) 상태 캡처."""
         result: dict[str, dict[str, Any]] = {
             "dlq_pending": {},
@@ -183,9 +181,7 @@ class MetricSyncService:
 
         return result
 
-    def _get_actual_state(
-        self, domains: list[str] | None
-    ) -> dict[str, dict[str, Any]]:
+    def _get_actual_state(self, domains: list[str] | None) -> dict[str, dict[str, Any]]:
         """DB에서 실제 상태 조회."""
         result: dict[str, dict[str, Any]] = {
             "dlq_pending": {},
@@ -197,17 +193,13 @@ class MetricSyncService:
 
         for domain in target_domains:
             try:
-                result["dlq_pending"][domain] = self.adapter.get_dlq_pending_count(
-                    domain
-                )
+                result["dlq_pending"][domain] = self.adapter.get_dlq_pending_count(domain)
             except Exception as e:
                 logger.warning(f"Failed to get DLQ pending for {domain}: {e}")
                 result["dlq_pending"][domain] = 0
 
             try:
-                result["retry_rate"][domain] = self.adapter.get_retry_success_rate(
-                    domain
-                )
+                result["retry_rate"][domain] = self.adapter.get_retry_success_rate(domain)
             except Exception as e:
                 logger.warning(f"Failed to get retry rate for {domain}: {e}")
                 result["retry_rate"][domain] = 0.0
@@ -346,16 +338,16 @@ class MetricSyncService:
         """Audit 로깅."""
         try:
             from selfhealing.audit.logger import (
-                AuditAction,
+                ConfigAuditAction,
                 AuditLogger,
-                ConfigChangeEvent,
+                AuditConfigChangeEvent,
             )
 
             audit_logger = AuditLogger.get_instance()
-            event = ConfigChangeEvent(
+            event = AuditConfigChangeEvent(
                 config_type="metric_sync",
                 config_key="manual_sync",
-                action=AuditAction.APPLY,
+                action=ConfigAuditAction.APPLY,
                 old_value=None,
                 new_value={
                     "domains": domains or "all",

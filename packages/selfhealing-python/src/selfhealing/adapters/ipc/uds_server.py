@@ -39,7 +39,7 @@ from selfhealing.adapters.ipc.auth import (
     SidecarAuthenticator,
     get_sidecar_authenticator,
 )
-from selfhealing.adapters.ipc.cb_state_cache import CBStateCache, get_cb_state_cache
+from selfhealing.adapters.ipc.cb_state_cache import IPCStateCache, get_cb_state_cache
 from selfhealing.adapters.ipc.protocol.json_rpc import (
     JSONRPCErrorCode,
     JSONRPCParseError,
@@ -101,7 +101,7 @@ class UDSServer:
         self,
         socket_path: str | None = None,
         authenticator: SidecarAuthenticator | None = None,
-        cb_cache: CBStateCache | None = None,
+        cb_cache: IPCStateCache | None = None,
     ):
         """
         UDS 서버 초기화.

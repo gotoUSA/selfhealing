@@ -8,11 +8,14 @@ for zero data loss guarantees.
 from selfhealing.adapters.resilient.backend import (
     ResilientStorageBackend,
     ResilientStorageConfig,
-    StorageMode,
+    ResilientStorageMode,
 )
 
 __all__ = [
     "ResilientStorageBackend",
     "ResilientStorageConfig",
-    "StorageMode",
+    "ResilientStorageMode",
 ]
+
+# 하위 호환 alias (deprecated)
+StorageMode = ResilientStorageMode

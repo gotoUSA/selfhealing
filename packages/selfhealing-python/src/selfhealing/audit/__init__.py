@@ -64,8 +64,10 @@ from selfhealing.audit.trace import (
 # =============================================================================
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # logger (추가)
-    "ConfigChangeEvent": ("selfhealing.audit.logger", "ConfigChangeEvent"),
-    "AuditAction": ("selfhealing.audit.logger", "AuditAction"),
+    "AuditConfigChangeEvent": ("selfhealing.audit.logger", "AuditConfigChangeEvent"),
+    "ConfigChangeEvent": ("selfhealing.audit.logger", "ConfigChangeEvent"),  # deprecated alias
+    "ConfigAuditAction": ("selfhealing.audit.logger", "ConfigAuditAction"),
+    "AuditAction": ("selfhealing.audit.logger", "AuditAction"),  # deprecated alias
     # masking (추가)
     "mask_sensitive_fields": ("selfhealing.audit.masking", "mask_sensitive_fields"),
     "extract_ip_from_request": ("selfhealing.audit.masking", "extract_ip_from_request"),
@@ -362,7 +364,7 @@ if TYPE_CHECKING:
         HashChainVerifier,
         verify_audit_log_integrity,
     )
-    from selfhealing.audit.logger import AuditAction, ConfigChangeEvent
+    from selfhealing.audit.logger import ConfigAuditAction, AuditAction, AuditConfigChangeEvent, ConfigChangeEvent
     from selfhealing.audit.masking import extract_ip_from_request, mask_sensitive_fields
     from selfhealing.audit.resilience import (
         AuditMetrics,
@@ -427,8 +429,10 @@ __all__ = [
     "AuditLogger",
     "get_audit_logger",
     "log_config_change",
-    "ConfigChangeEvent",
-    "AuditAction",
+    "AuditConfigChangeEvent",
+    "ConfigChangeEvent",  # deprecated alias
+    "ConfigAuditAction",
+    "AuditAction",  # deprecated alias
     # Masking utilities
     "mask_ip",
     "mask_email",
