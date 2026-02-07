@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.adapters.ipc.cb_state_cache import (
-    CacheEntry,
+    IPCCacheEntry,
     CacheStats,
     CBStateCache,
     get_cb_state_cache,
@@ -25,12 +25,12 @@ from selfhealing.adapters.ipc.cb_state_cache import (
 )
 
 
-class TestCacheEntry:
-    """CacheEntry 테스트."""
+class TestIPCCacheEntry:
+    """IPCCacheEntry 테스트."""
 
     def test_create_entry(self):
         """캐시 엔트리 생성."""
-        entry = CacheEntry(value={"allowed": True}, expires_at=time.time() + 10)
+        entry = IPCCacheEntry(value={"allowed": True}, expires_at=time.time() + 10)
 
         assert entry.value == {"allowed": True}
         assert entry.expires_at > time.time()

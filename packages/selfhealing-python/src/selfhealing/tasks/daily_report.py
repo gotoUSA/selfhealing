@@ -137,8 +137,12 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-class _LegacyTaskWrapper:
-    """Backward compatibility wrapper for class-based task."""
+class _DailyReportLegacyTask:
+    """Backward compatibility wrapper for class-based task.
+
+    Renamed from _LegacyTaskWrapper to avoid conflict with
+    cleanup_tasks._LegacyTaskWrapper (Item 58).
+    """
 
     name = "selfhealing.generate_daily_autonomous_report"
 
@@ -148,7 +152,7 @@ class _LegacyTaskWrapper:
 
 
 # Legacy class-based task alias
-GenerateDailyAutonomousReportTask = _LegacyTaskWrapper
+GenerateDailyAutonomousReportTask = _DailyReportLegacyTask
 
 
 __all__ = [

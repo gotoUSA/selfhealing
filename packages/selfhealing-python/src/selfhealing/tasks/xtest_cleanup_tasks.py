@@ -173,22 +173,12 @@ def get_xtest_cleanup_beat_schedule() -> dict[str, Any]:
 # Backward Compatibility - Legacy Class Aliases
 # =============================================================================
 
-
-class _LegacyTaskWrapper:
-    """Legacy class-based task wrapper for backward compatibility."""
-
-    def __init__(self, name: str, func):
-        self.name = name
-        self._func = func
-
-    def run(self, *args, **kwargs):
-        return self._func(*args, **kwargs)
+# _LegacyTaskWrapper: 단일 소스는 cleanup_tasks.py (Item 58 중복 제거)
+from selfhealing.tasks.cleanup_tasks import _LegacyTaskWrapper
 
 
 # Legacy aliases
-CleanupXTestArtifactsTask = _LegacyTaskWrapper(
-    "selfhealing.cleanup_xtest_artifacts", cleanup_xtest_artifacts
-)
+CleanupXTestArtifactsTask = _LegacyTaskWrapper("selfhealing.cleanup_xtest_artifacts", cleanup_xtest_artifacts)
 
 # Legacy task list
 XTEST_CLEANUP_TASKS = [

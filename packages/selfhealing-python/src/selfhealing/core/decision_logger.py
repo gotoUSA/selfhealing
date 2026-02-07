@@ -32,7 +32,7 @@ class ReasonCode(str, Enum):
     INTERVENTION_ALLOWED = "INTERVENTION_ALLOWED"
 
 
-class EventType(str, Enum):
+class DecisionBoundaryEventType(str, Enum):
     """Decision boundary event types."""
 
     ENTER_PRE_DECISION_ZONE = "ENTER_PRE_DECISION_ZONE"
@@ -52,7 +52,7 @@ def log_enter_pre_decision_zone(
         policy_version: Optional policy snapshot reference
     """
     record = {
-        "event": EventType.ENTER_PRE_DECISION_ZONE.value,
+        "event": DecisionBoundaryEventType.ENTER_PRE_DECISION_ZONE.value,
         "service_name": service_name,
         "policy_version": policy_version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -76,7 +76,7 @@ def log_intervention_evaluated(
         policy_version: Optional policy snapshot reference
     """
     record = {
-        "event": EventType.INTERVENTION_EVALUATED.value,
+        "event": DecisionBoundaryEventType.INTERVENTION_EVALUATED.value,
         "allowed": allowed,
         "reason": reason.value,
         "service_name": service_name,
@@ -98,7 +98,7 @@ def log_exit_pre_decision_zone(
         policy_version: Optional policy snapshot reference
     """
     record = {
-        "event": EventType.EXIT_PRE_DECISION_ZONE.value,
+        "event": DecisionBoundaryEventType.EXIT_PRE_DECISION_ZONE.value,
         "service_name": service_name,
         "policy_version": policy_version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -154,7 +154,7 @@ class DecisionLogger:
 
 __all__ = [
     "ReasonCode",
-    "EventType",
+    "DecisionBoundaryEventType",
     "DecisionLogger",
     "log_enter_pre_decision_zone",
     "log_intervention_evaluated",

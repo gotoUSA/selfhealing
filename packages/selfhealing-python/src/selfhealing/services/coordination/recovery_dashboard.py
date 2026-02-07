@@ -198,7 +198,7 @@ class RegionalStatusInfo:
 
 
 @dataclass
-class RecoveryAction:
+class RecoveryActionWidget:
     """사용 가능한 복구 액션."""
 
     action: str = ""
@@ -248,7 +248,7 @@ class RecoveryWidgetData:
     regional_status: list[RegionalStatusInfo] = field(default_factory=list)
     """리전별 상태 목록."""
 
-    actions: list[RecoveryAction] = field(default_factory=list)
+    actions: list[RecoveryActionWidget] = field(default_factory=list)
     """사용 가능한 액션 목록."""
 
     timestamp: str = ""
@@ -598,14 +598,14 @@ class RecoveryDashboardService:
         has_active_session: bool,
         pending_count: int,
         stale_count: int,
-    ) -> list[RecoveryAction]:
+    ) -> list[RecoveryActionWidget]:
         """사용 가능한 액션 목록 생성."""
         actions = []
 
         # 복구 시작 가능 (세션 없을 때)
         if not has_active_session and status == RecoveryStatus.NOT_STARTED:
             actions.append(
-                RecoveryAction(
+                RecoveryActionWidget(
                     action="start_recovery",
                     label="복구 시작",
                     enabled=True,
@@ -618,7 +618,7 @@ class RecoveryDashboardService:
             RecoveryStatus.HEALTH_CHECK,
         ):
             actions.append(
-                RecoveryAction(
+                RecoveryActionWidget(
                     action="abort_recovery",
                     label="복구 중단",
                     enabled=True,
@@ -628,7 +628,7 @@ class RecoveryDashboardService:
         # 승인 대기 중
         if pending_count > 0:
             actions.append(
-                RecoveryAction(
+                RecoveryActionWidget(
                     action="approve_recovery",
                     label=f"승인 대기 ({pending_count}건)",
                     enabled=True,

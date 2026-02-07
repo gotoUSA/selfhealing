@@ -23,7 +23,7 @@ from typing import Any
 from .models import (
     NotificationChannel,
     NotificationConfig,
-    NotificationResult,
+    ChannelDeliveryResult,
     SecurityNotificationResult,
     _get_notification_limits,
 )
@@ -174,7 +174,7 @@ __all__ = [
     # Models
     "NotificationChannel",
     "NotificationConfig",
-    "NotificationResult",
+    "ChannelDeliveryResult",
     "SecurityNotificationResult",
     # Constants
     "SLACK_BLOCK_TEXT_LIMIT",

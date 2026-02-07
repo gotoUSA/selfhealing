@@ -12,7 +12,7 @@ from selfhealing.core.auto_rollback_guard import (
     AutoRollbackGuard,
     GuardState,
     RollbackSeverity,
-    HealthCheckResult,
+    RollbackHealthAssessment,
     SafeDefault,
 )
 
@@ -232,12 +232,12 @@ class TestDegradationAssessment:
 # =============================================================================
 
 
-class TestHealthCheckResult:
-    """Test HealthCheckResult dataclass."""
+class TestRollbackHealthAssessment:
+    """Test RollbackHealthAssessment dataclass."""
 
     def test_healthy_result(self):
         """정상 결과."""
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=True,
             degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
@@ -250,7 +250,7 @@ class TestHealthCheckResult:
 
     def test_unhealthy_result(self):
         """비정상 결과."""
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=False,
             degradation_level=RollbackSeverity.CRITICAL,
             error_rate=0.5,
@@ -263,7 +263,7 @@ class TestHealthCheckResult:
 
     def test_result_timestamp(self):
         """타임스탬프 자동 설정."""
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=True,
             degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
@@ -456,7 +456,7 @@ class TestGetStatus:
     def test_get_status_with_health_history(self, guard):
         """헬스 이력 포함 상태 조회."""
         # 헬스체크 결과 추가
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=True,
             degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
@@ -598,7 +598,7 @@ class TestHandleHealthResult:
         guard._consecutive_failures = 5
         guard._state = GuardState.ALERT
 
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=True,
             degradation_level=RollbackSeverity.NONE,
             error_rate=0.01,
@@ -615,7 +615,7 @@ class TestHandleHealthResult:
         """경미한 저하 시 실패 카운터 증가."""
         guard._consecutive_failures = 0
 
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=False,
             degradation_level=RollbackSeverity.MINOR,
             error_rate=0.06,
@@ -629,7 +629,7 @@ class TestHandleHealthResult:
 
     def test_handle_critical_triggers_emergency(self, guard, config_applier):
         """긴급 저하 시 긴급 복구 트리거."""
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=False,
             degradation_level=RollbackSeverity.CRITICAL,
             error_rate=0.35,
@@ -682,7 +682,7 @@ class TestEdgeCases:
     def test_health_history_limit(self, guard):
         """헬스 이력 최대 100개 제한."""
         for i in range(150):
-            result = HealthCheckResult(
+            result = RollbackHealthAssessment(
                 healthy=True,
                 degradation_level=RollbackSeverity.NONE,
                 error_rate=0.01,

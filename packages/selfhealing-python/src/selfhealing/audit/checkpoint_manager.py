@@ -95,10 +95,8 @@ class CheckpointData:
         )
 
 
-class CheckpointError(Exception):
-    """체크포인트 관련 에러."""
-
-    pass
+# CheckpointError: 단일 소스는 checkpoint_strategy.py (Item 1 중복 제거)
+from selfhealing.audit.checkpoint_strategy import CheckpointError  # noqa: F401
 
 
 class CheckpointManager:

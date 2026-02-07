@@ -250,7 +250,7 @@ def reset_watchdog_singleton():
             # 테스트 코드
     """
     import selfhealing.audit.audit_watchdog as aw_module
-    from selfhealing.audit.audit_watchdog import WatchdogState
+    from selfhealing.audit.audit_watchdog import AuditWatchdogStatus
 
     # Setup: 기존 싱글톤 정리
     if aw_module._watchdog_instance is not None:

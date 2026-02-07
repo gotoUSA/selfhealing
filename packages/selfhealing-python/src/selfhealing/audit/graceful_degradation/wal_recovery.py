@@ -2,7 +2,7 @@
 WAL Recovery for Hash Chain.
 
 Contains:
-- HashChainWALEntry: WAL entry dataclass
+- HashChainRecoveryWALEntry: WAL entry dataclass
 - HashChainWALRecovery: WAL-based recovery for hash chain operations
 """
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class HashChainWALEntry:
+class HashChainRecoveryWALEntry:
     """WAL entry for hash chain operation."""
 
     sequence: int
@@ -401,4 +401,4 @@ class HashChainWALRecovery:
         }
 
 
-__all__ = ["HashChainWALEntry", "HashChainWALRecovery"]
+__all__ = ["HashChainRecoveryWALEntry", "HashChainWALRecovery"]

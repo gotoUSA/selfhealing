@@ -34,29 +34,14 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Data Classes
+# Data Classes - StatusCounts/RecentActivity 단일 소스는 interfaces/statistics.py
+# (Item 37-38 중복 제거)
 # =============================================================================
 
-
-@dataclass
-class StatusCounts:
-    """Status counts for DLQ entries."""
-
-    total: int = 0
-    pending: int = 0
-    resolved: int = 0
-    failed: int = 0
-    archived: int = 0
-
-
-@dataclass
-class RecentActivity:
-    """Recent activity statistics."""
-
-    new_failures_24h: int = 0
-    resolved_24h: int = 0
-    new_failures_7d: int = 0
-    resolved_7d: int = 0
+from selfhealing.interfaces.statistics import (
+    RecentActivity,
+    StatusCounts,
+)
 
 
 @dataclass
@@ -104,10 +89,10 @@ class DashboardSummary:
                 "resolution_rate_percent": self.resolution_rate_percent,
             },
             "recent_activity": {
-                "new_failures_24h": self.recent_activity.new_failures_24h,
-                "resolved_24h": self.recent_activity.resolved_24h,
-                "new_failures_7d": self.recent_activity.new_failures_7d,
-                "resolved_7d": self.recent_activity.resolved_7d,
+                "new_failures_24h": self.recent_activity.new_in_24h,
+                "resolved_24h": self.recent_activity.resolved_in_24h,
+                "new_failures_7d": self.recent_activity.new_in_7d,
+                "resolved_7d": self.recent_activity.resolved_in_7d,
             },
             "distribution": {
                 "by_domain": self.distribution.by_domain,
@@ -227,9 +212,7 @@ class DashboardService:
             logger.warning(f"[Dashboard] Cache read error: {e}")
         return None
 
-    def _set_cached(
-        self, key: str, value: dict[str, Any], ttl_seconds: int = None
-    ) -> None:
+    def _set_cached(self, key: str, value: dict[str, Any], ttl_seconds: int = None) -> None:
         """Set cached value with TTL."""
         if not self.cache:
             return
@@ -319,10 +302,10 @@ class DashboardService:
                 archived=overview.get("archived", 0),
             ),
             recent_activity=RecentActivity(
-                new_failures_24h=recent.get("new_failures_24h", 0),
-                resolved_24h=recent.get("resolved_24h", 0),
-                new_failures_7d=recent.get("new_failures_7d", 0),
-                resolved_7d=recent.get("resolved_7d", 0),
+                new_in_24h=recent.get("new_failures_24h", 0),
+                resolved_in_24h=recent.get("resolved_24h", 0),
+                new_in_7d=recent.get("new_failures_7d", 0),
+                resolved_in_7d=recent.get("resolved_7d", 0),
             ),
             distribution=Distribution(
                 by_domain=dist.get("by_domain", []),
@@ -403,10 +386,10 @@ class DashboardService:
         try:
             activity = self.stats_repo.get_recent_activity(hours=hours, days=days)
             return RecentActivity(
-                new_failures_24h=activity.new_in_24h,
-                resolved_24h=activity.resolved_in_24h,
-                new_failures_7d=activity.new_in_7d,
-                resolved_7d=activity.resolved_in_7d,
+                new_in_24h=activity.new_in_24h,
+                resolved_in_24h=activity.resolved_in_24h,
+                new_in_7d=activity.new_in_7d,
+                resolved_in_7d=activity.resolved_in_7d,
             )
         except Exception as e:
             logger.error(f"[Dashboard] get_recent_activity error: {e}")
@@ -430,10 +413,7 @@ class DashboardService:
 
             return Distribution(
                 by_domain=[{"domain": d.domain, "count": d.count} for d in domain_dist],
-                by_failure_type=[
-                    {"failure_type": f.failure_type, "count": f.count}
-                    for f in failure_dist
-                ],
+                by_failure_type=[{"failure_type": f.failure_type, "count": f.count} for f in failure_dist],
             )
         except Exception as e:
             logger.error(f"[Dashboard] get_distribution error: {e}")

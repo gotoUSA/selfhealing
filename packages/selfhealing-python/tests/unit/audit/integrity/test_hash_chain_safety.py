@@ -28,7 +28,7 @@ from selfhealing.audit.hash_chain_safety import (
     MonotonicTimer,
     MonotonicTimestamp,
     HashChainWAL,
-    HashChainWALEntry,
+    HashChainSafetyWALEntry,
     AtomicMergeSwap,
     ShardedDateLock,
     IntegrityAuditTrail,

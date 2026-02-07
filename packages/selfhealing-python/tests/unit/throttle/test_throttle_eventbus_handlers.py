@@ -303,7 +303,7 @@ class TestErrorBudgetRecoveredThrottleHandler:
         reset_adaptive_throttle()
 
     def test_restores_initial_limit_on_error_budget_recovered(self):
-        """Error Budget 회복 시 initial_limit으로 복원."""
+        """Error Budget 회복 시 Recovery Dampening 시작."""
         from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
         throttle = get_adaptive_throttle()
@@ -315,9 +315,10 @@ class TestErrorBudgetRecoveredThrottleHandler:
             source="error_budget_gate",
         )
 
-        _on_error_budget_recovered_throttle(event)
-
-        assert throttle.current_limit == throttle.config.initial_limit
+        with patch.object(throttle, "start_recovery_dampening") as mock_dampening:
+            _on_error_budget_recovered_throttle(event)
+            # Recovery Dampening이 시작되어야 함 (jitter 적용)
+            mock_dampening.assert_called_once_with(apply_jitter=True)
 
     def test_ignores_self_source_events(self):
         """source='throttle' 이벤트 무시."""

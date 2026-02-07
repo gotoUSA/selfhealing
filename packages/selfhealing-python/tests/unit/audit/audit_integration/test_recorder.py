@@ -81,7 +81,7 @@ class TestIntegratedAuditRecorder:
             IntegratedAuditRecorder,
             AuditEventObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         mock_recorder = self._create_mock_recorder()
@@ -92,7 +92,7 @@ class TestIntegratedAuditRecorder:
         integrated.attach_observer(observer1)
         integrated.attach_observer(observer2)
 
-        event = AuditEventData(event_type=AuditEventType.CIRCUIT_OPENED)
+        event = AuditEventData(event_type=AuditObserverEventType.CIRCUIT_OPENED)
         integrated._notify_observers(event)
 
         observer1.on_event.assert_called_once_with(event)
@@ -103,7 +103,7 @@ class TestIntegratedAuditRecorder:
         from selfhealing.audit.audit_integration import (
             IntegratedAuditRecorder,
             AuditEventObserver,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         mock_recorder = self._create_mock_recorder()
@@ -121,14 +121,14 @@ class TestIntegratedAuditRecorder:
         # RECORD_SUCCESS 이벤트가 전파되어야 함
         observer.on_event.assert_called()
         call_args = observer.on_event.call_args[0][0]
-        assert call_args.event_type == AuditEventType.RECORD_SUCCESS
+        assert call_args.event_type == AuditObserverEventType.RECORD_SUCCESS
 
     def test_record_with_events_failure(self):
         """record_with_events 실패 시 이벤트 전파."""
         from selfhealing.audit.audit_integration import (
             IntegratedAuditRecorder,
             AuditEventObserver,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         mock_recorder = self._create_mock_recorder()
@@ -148,14 +148,14 @@ class TestIntegratedAuditRecorder:
         # RECORD_FAILED 이벤트가 전파되어야 함
         observer.on_event.assert_called()
         call_args = observer.on_event.call_args[0][0]
-        assert call_args.event_type == AuditEventType.RECORD_FAILED
+        assert call_args.event_type == AuditObserverEventType.RECORD_FAILED
 
     def test_circuit_state_change_detection(self):
         """Circuit Breaker 상태 변경 감지."""
         from selfhealing.audit.audit_integration import (
             IntegratedAuditRecorder,
             AuditEventObserver,
-            AuditEventType,
+            AuditObserverEventType,
         )
         from selfhealing.audit.resilience import CircuitState
         
@@ -183,7 +183,7 @@ class TestIntegratedAuditRecorder:
         # CIRCUIT_OPENED 이벤트가 전파되어야 함
         calls = observer.on_event.call_args_list
         event_types = [call[0][0].event_type for call in calls]
-        assert AuditEventType.CIRCUIT_OPENED in event_types
+        assert AuditObserverEventType.CIRCUIT_OPENED in event_types
 
     def test_get_health_status_with_async_logger(self):
         """AsyncLogger 포함 헬스 상태."""

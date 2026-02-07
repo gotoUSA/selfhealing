@@ -28,20 +28,14 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+# HealthStatus: 단일 소스는 meta/health_probe.py (Item 9 중복 제거)
+from selfhealing.meta.health_probe import HealthStatus
+
 logger = logging.getLogger(__name__)
 
 
-class HealthStatus(Enum):
-    """IPC 헬스 상태."""
-
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    UNHEALTHY = "unhealthy"
-    UNKNOWN = "unknown"
-
-
 @dataclass
-class HealthCheckResult:
+class SidecarProbeResult:
     """헬스 체크 결과."""
 
     status: HealthStatus
@@ -128,7 +122,7 @@ class SidecarIPCProbe:
         self.history_size = history_size
 
         self._metrics = IPCHealthMetrics()
-        self._history: list[HealthCheckResult] = []
+        self._history: list[SidecarProbeResult] = []
         self._last_check: datetime | None = None
 
         # 서버 참조 (lazy loading)
@@ -237,7 +231,7 @@ class SidecarIPCProbe:
         self._metrics = metrics
         return metrics
 
-    def check(self) -> HealthCheckResult:
+    def check(self) -> SidecarProbeResult:
         """
         헬스 체크 수행.
 
@@ -252,7 +246,7 @@ class SidecarIPCProbe:
 
             latency_ms = (time.time() - start_time) * 1000
 
-            result = HealthCheckResult(
+            result = SidecarProbeResult(
                 status=status,
                 message=message,
                 details=metrics.to_dict(),
@@ -263,7 +257,7 @@ class SidecarIPCProbe:
             latency_ms = (time.time() - start_time) * 1000
             logger.error(f"[SidecarIPCProbe] Health check error: {e}")
 
-            result = HealthCheckResult(
+            result = SidecarProbeResult(
                 status=HealthStatus.UNKNOWN,
                 message=f"Health check failed: {e}",
                 latency_ms=latency_ms,

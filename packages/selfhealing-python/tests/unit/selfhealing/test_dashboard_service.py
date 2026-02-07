@@ -60,23 +60,23 @@ class TestRecentActivity:
     def test_default_values(self):
         """Test default values."""
         activity = RecentActivity()
-        assert activity.new_failures_24h == 0
-        assert activity.resolved_24h == 0
-        assert activity.new_failures_7d == 0
-        assert activity.resolved_7d == 0
+        assert activity.new_in_24h == 0
+        assert activity.resolved_in_24h == 0
+        assert activity.new_in_7d == 0
+        assert activity.resolved_in_7d == 0
 
     def test_custom_values(self):
         """Test custom values."""
         activity = RecentActivity(
-            new_failures_24h=5,
-            resolved_24h=3,
-            new_failures_7d=20,
-            resolved_7d=15,
+            new_in_24h=5,
+            resolved_in_24h=3,
+            new_in_7d=20,
+            resolved_in_7d=15,
         )
-        assert activity.new_failures_24h == 5
-        assert activity.resolved_24h == 3
-        assert activity.new_failures_7d == 20
-        assert activity.resolved_7d == 15
+        assert activity.new_in_24h == 5
+        assert activity.resolved_in_24h == 3
+        assert activity.new_in_7d == 20
+        assert activity.resolved_in_7d == 15
 
 
 class TestDistribution:
@@ -124,7 +124,7 @@ class TestDashboardSummary:
             timestamp="2025-12-19T10:00:00+09:00",
             health_status="healthy",
             status_counts=StatusCounts(total=100, pending=0, resolved=80, failed=0, archived=20),
-            recent_activity=RecentActivity(new_failures_24h=2, resolved_24h=5, new_failures_7d=10, resolved_7d=15),
+            recent_activity=RecentActivity(new_in_24h=2, resolved_in_24h=5, new_in_7d=10, resolved_in_7d=15),
             distribution=Distribution(
                 by_domain=[{"domain": "order", "count": 5}],
                 by_failure_type=[{"failure_type": "network", "count": 3}],
@@ -218,19 +218,15 @@ class TestDashboardServiceWithMockedRepo:
     def mock_stats_repo(self):
         """Create a mock statistics repository."""
         mock = MagicMock()
-        mock.get_status_counts.return_value = StatusCounts(
-            total=80, pending=10, resolved=50, failed=5, archived=15
-        )
-        mock.get_recent_activity.return_value = MagicMock(
-            new_failures_24h=5, resolved_24h=3, new_failures_7d=20, resolved_7d=15
+        mock.get_status_counts.return_value = StatusCounts(total=80, pending=10, resolved=50, failed=5, archived=15)
+        mock.get_recent_activity.return_value = RecentActivity(
+            new_in_24h=5, resolved_in_24h=3, new_in_7d=20, resolved_in_7d=15
         )
         mock.get_distribution.return_value = MagicMock(
             by_domain=[{"domain": "order", "count": 10}],
             by_failure_type=[{"failure_type": "network", "count": 5}],
         )
-        mock.get_alerts.return_value = MagicMock(
-            high_retry_count=3, avg_retry_count=2.5
-        )
+        mock.get_alerts.return_value = MagicMock(high_retry_count=3, avg_retry_count=2.5)
         return mock
 
     @pytest.fixture
@@ -295,12 +291,8 @@ class TestDashboardServiceGetSummary:
         from datetime import datetime, timezone
 
         mock_now.return_value = datetime(2025, 12, 19, 10, 0, 0, tzinfo=timezone.utc)
-        mock_counts.return_value = StatusCounts(
-            total=100, pending=10, resolved=70, failed=5, archived=15
-        )
-        mock_activity.return_value = RecentActivity(
-            new_failures_24h=3, resolved_24h=5, new_failures_7d=15, resolved_7d=20
-        )
+        mock_counts.return_value = StatusCounts(total=100, pending=10, resolved=70, failed=5, archived=15)
+        mock_activity.return_value = RecentActivity(new_in_24h=3, resolved_in_24h=5, new_in_7d=15, resolved_in_7d=20)
         mock_dist.return_value = Distribution(
             by_domain=[{"domain": "order", "count": 5}],
             by_failure_type=[{"failure_type": "network", "count": 3}],
@@ -341,15 +333,11 @@ class TestDashboardCaching:
         service = DashboardService(cache=mock_cache)
         # Also mock stats_repo to avoid ProviderRegistry dependency
         mock_repo = Mock()
-        mock_repo.get_status_counts.return_value = StatusCounts(
-            total=100, pending=10, resolved=70, failed=5, archived=15
-        )
+        mock_repo.get_status_counts.return_value = StatusCounts(total=100, pending=10, resolved=70, failed=5, archived=15)
         mock_repo.get_recent_activity.return_value = RecentActivity(
-            new_failures_24h=5, resolved_24h=3, new_failures_7d=20, resolved_7d=15
+            new_in_24h=5, resolved_in_24h=3, new_in_7d=20, resolved_in_7d=15
         )
-        mock_repo.get_distribution.return_value = Distribution(
-            by_domain=[], by_failure_type=[]
-        )
+        mock_repo.get_distribution.return_value = Distribution(by_domain=[], by_failure_type=[])
         mock_repo.get_alerts.return_value = AlertInfo(high_retry_count=0, avg_retry_count=0.0)
         service._stats_repo = mock_repo
         return service
@@ -359,7 +347,14 @@ class TestDashboardCaching:
         cached_data = {
             "timestamp": "2025-12-21T10:00:00Z",
             "health_status": "healthy",
-            "overview": {"total": 10, "pending": 0, "resolved": 5, "failed": 0, "archived": 5, "resolution_rate_percent": 50.0},
+            "overview": {
+                "total": 10,
+                "pending": 0,
+                "resolved": 5,
+                "failed": 0,
+                "archived": 5,
+                "resolution_rate_percent": 50.0,
+            },
             "recent_activity": {"new_failures_24h": 0, "resolved_24h": 2, "new_failures_7d": 5, "resolved_7d": 5},
             "distribution": {"by_domain": [], "by_failure_type": []},
             "alerts": {"high_retry_count": 0, "avg_retry_count": 0.0},

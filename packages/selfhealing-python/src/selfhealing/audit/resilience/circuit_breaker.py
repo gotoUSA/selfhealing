@@ -13,15 +13,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+# CircuitState: 단일 소스는 graceful_degradation/enums.py (Item 2 중복 제거)
+# str, Enum 으로 통일하여 JSON 직렬화 호환
+from selfhealing.audit.graceful_degradation.enums import CircuitState  # noqa: F401
+
 logger = logging.getLogger(__name__)
-
-
-class CircuitState(Enum):
-    """Circuit breaker states."""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject all calls
-    HALF_OPEN = "half_open"  # Testing if backend recovered
 
 
 @dataclass

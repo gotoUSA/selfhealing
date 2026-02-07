@@ -101,9 +101,9 @@ class TestAutoPromoteGovernance:
     @pytest.fixture
     def watchdog(self):
         """Watchdog fixture."""
-        from selfhealing.tasks.canary_watchdog import RolloutWatchdog, WatchdogConfig
+        from selfhealing.tasks.canary_watchdog import RolloutWatchdog, CanaryWatchdogConfig
 
-        config = WatchdogConfig(enable_auto_promote=True)
+        config = CanaryWatchdogConfig(enable_auto_promote=True)
         watchdog = RolloutWatchdog(config)
         watchdog._service = MagicMock()
         return watchdog
@@ -205,9 +205,9 @@ class TestZombieExemption:
     @pytest.fixture
     def watchdog(self):
         """Watchdog fixture."""
-        from selfhealing.tasks.canary_watchdog import RolloutWatchdog, WatchdogConfig
+        from selfhealing.tasks.canary_watchdog import RolloutWatchdog, CanaryWatchdogConfig
 
-        config = WatchdogConfig(zombie_threshold_minutes=30)
+        config = CanaryWatchdogConfig(zombie_threshold_minutes=30)
         return RolloutWatchdog(config)
 
     def test_error_budget_paused_not_zombie(self, watchdog):

@@ -71,14 +71,8 @@ def __getattr__(name: str):
 # Enums
 # =============================================================================
 
-
-class NotificationChannel(str, Enum):
-    """Available notification channels."""
-
-    SLACK = "slack"
-    EMAIL = "email"
-    SMS = "sms"
-    PAGERDUTY = "pagerduty"
+# NotificationChannel: 단일 소스는 interfaces/notification.py (Item 3 중복 제거)
+from selfhealing.interfaces.notification import NotificationChannel  # noqa: E402, F401
 
 
 # =============================================================================
@@ -119,18 +113,12 @@ class NotificationConfig:
 
         return cls(
             slack_webhook_url=getattr(notification, "slack_webhook_url", ""),
-            slack_critical_channel=getattr(
-                notification, "critical_channel", "#critical-alerts"
-            ),
+            slack_critical_channel=getattr(notification, "critical_channel", "#critical-alerts"),
             slack_high_channel=getattr(notification, "high_channel", "#ops-alerts"),
             slack_medium_channel=getattr(notification, "medium_channel", "#dev-alerts"),
-            email_critical_recipients=getattr(
-                notification, "email_critical_recipients", []
-            ),
+            email_critical_recipients=getattr(notification, "email_critical_recipients", []),
             email_high_recipients=getattr(notification, "email_high_recipients", []),
-            sms_critical_recipients=getattr(
-                notification, "sms_critical_recipients", []
-            ),
+            sms_critical_recipients=getattr(notification, "sms_critical_recipients", []),
             pagerduty_service_key=getattr(notification, "pagerduty_service_key", ""),
             pagerduty_enabled=getattr(notification, "pagerduty_enabled", False),
             enabled=notification.enabled,
@@ -144,7 +132,7 @@ class NotificationConfig:
 
 
 @dataclass
-class NotificationResult:
+class ChannelDeliveryResult:
     """Result of a notification attempt."""
 
     channel: str
@@ -158,7 +146,7 @@ class SecurityNotificationResult:
     """Aggregate result of all notification attempts."""
 
     incident_id: int
-    results: list[NotificationResult] = field(default_factory=list)
+    results: list[ChannelDeliveryResult] = field(default_factory=list)
 
     @property
     def all_success(self) -> bool:
@@ -170,6 +158,6 @@ class SecurityNotificationResult:
         """Check if any notification was successful."""
         return any(r.success for r in self.results)
 
-    def add_result(self, result: NotificationResult) -> None:
+    def add_result(self, result: ChannelDeliveryResult) -> None:
         """Add a notification result."""
         self.results.append(result)

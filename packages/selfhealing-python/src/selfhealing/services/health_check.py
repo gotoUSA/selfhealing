@@ -50,8 +50,12 @@ class PoolInfo:
 
 
 @dataclass
-class HealthStatus:
-    """전체 헬스 상태."""
+class SystemHealthSummary:
+    """전체 헬스 상태.
+
+    Renamed from HealthStatus to avoid conflict with
+    meta.health_probe.HealthStatus Enum (Item 22).
+    """
 
     status: str  # healthy, degraded, unhealthy
     checks: dict[str, str] = field(default_factory=dict)
@@ -272,7 +276,7 @@ class HealthCheckService:
             is_ready=ready,
         )
 
-    def get_overall_health(self) -> HealthStatus:
+    def get_overall_health(self) -> SystemHealthSummary:
         """
         전체 시스템 헬스 체크.
 
@@ -310,7 +314,7 @@ class HealthCheckService:
             f"status={health_status} services={services_count}"
         )
 
-        return HealthStatus(
+        return SystemHealthSummary(
             status=health_status,
             checks={
                 "database": db_status,

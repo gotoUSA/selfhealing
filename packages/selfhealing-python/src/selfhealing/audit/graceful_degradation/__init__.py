@@ -12,7 +12,7 @@ Components:
 - HashChainFallbackChain: Multi-tier fallback chain
 - DegradedEntryInfo: Info about degraded entries
 - DegradedEntryMarker: Marks and tracks degraded entries
-- HashChainWALEntry: WAL entry dataclass
+- HashChainRecoveryWALEntry: WAL entry dataclass
 - HashChainWALRecovery: WAL-based recovery
 - HashChainDegradationManager: Degradation level management
 - HashChainCircuitBreaker: Circuit breaker for Redis operations
@@ -41,7 +41,7 @@ from .enums import (
 from .fallback import HashChainFallbackChain
 from .manager import HashChainGracefulDegradationManager
 from .marker import DegradedEntryInfo, DegradedEntryMarker
-from .wal_recovery import HashChainWALEntry, HashChainWALRecovery
+from .wal_recovery import HashChainRecoveryWALEntry, HashChainWALRecovery
 
 __all__ = [
     # Enums and configs
@@ -55,7 +55,7 @@ __all__ = [
     "DegradedEntryInfo",
     "DegradedEntryMarker",
     # WAL recovery
-    "HashChainWALEntry",
+    "HashChainRecoveryWALEntry",
     "HashChainWALRecovery",
     # Degradation manager
     "HashChainDegradationManager",

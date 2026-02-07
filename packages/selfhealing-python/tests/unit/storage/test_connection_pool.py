@@ -23,7 +23,7 @@ from selfhealing.core.pool_monitor import (
     PoolStatsProvider,
 )
 from selfhealing.core.pool_watchdog import (
-    RecoveryAction,
+    PoolRecoveryAction,
     PoolWatchdog,
     PoolRecoveryHandler,
 )
@@ -120,9 +120,9 @@ class TestPoolHealthMonitoring:
             active_connections=50,
             available_connections=50,
         )
-        
+
         assert stats.usage_percent == 50.0
-        
+
     def test_pool_stats_zero_max(self):
         """max_connections가 0일 때"""
         stats = PoolStats(
@@ -131,7 +131,7 @@ class TestPoolHealthMonitoring:
             active_connections=0,
             available_connections=0,
         )
-        
+
         assert stats.usage_percent == 0.0
 
 
@@ -170,13 +170,9 @@ class TestConnectionLeakDetection:
     def test_track_connection_with_stack_trace(self):
         """스택 트레이스와 함께 연결 추적"""
         monitor = ConnectionPoolMonitor()
-        
-        monitor.on_connection_acquired(
-            "conn_1",
-            stack_trace="File xyz.py, line 123",
-            query_info="SELECT * FROM users"
-        )
-        
+
+        monitor.on_connection_acquired("conn_1", stack_trace="File xyz.py, line 123", query_info="SELECT * FROM users")
+
         assert "conn_1" in monitor._active_connections
         info = monitor._active_connections["conn_1"]
         assert info.stack_trace == "File xyz.py, line 123"
@@ -185,24 +181,24 @@ class TestConnectionLeakDetection:
     def test_release_nonexistent_connection(self):
         """존재하지 않는 연결 반환 시도"""
         monitor = ConnectionPoolMonitor()
-        
+
         # Should not raise exception
         monitor.on_connection_released("nonexistent")
-        
+
         assert "nonexistent" not in monitor._active_connections
 
 
 class TestPoolTrendAnalysis:
     """Pool trend analysis tests"""
-    
+
     def test_insufficient_data(self):
         """데이터 부족 시"""
         monitor = ConnectionPoolMonitor()
-        
+
         trend = monitor.get_trend()
-        
+
         assert trend["trend"] == "insufficient_data"
-    
+
     def test_stable_trend(self):
         """안정적인 트렌드"""
         stats = PoolStats(
@@ -213,13 +209,13 @@ class TestPoolTrendAnalysis:
         )
         provider = MockPoolStatsProvider(stats)
         monitor = ConnectionPoolMonitor(stats_provider=provider)
-        
+
         # Record several samples
         for _ in range(15):
             monitor.check_health()
-        
+
         trend = monitor.get_trend()
-        
+
         assert trend["trend"] == "stable"
 
 
@@ -245,7 +241,7 @@ class TestPoolWatchdogRecovery:
 
         result = watchdog.check_and_recover()
 
-        assert result.action == RecoveryAction.ALERT_ONLY
+        assert result.action == PoolRecoveryAction.ALERT_ONLY
         assert alert_callback.called
 
     def test_close_leaked_connections(self):
@@ -276,7 +272,7 @@ class TestPoolWatchdogRecovery:
 
         result = watchdog.check_and_recover()
 
-        assert result.action == RecoveryAction.CLOSE_LEAKED
+        assert result.action == PoolRecoveryAction.CLOSE_LEAKED
         assert result.connections_closed == 1
 
     def test_expand_pool_on_exhaustion(self):
@@ -303,7 +299,7 @@ class TestPoolWatchdogRecovery:
 
         result = watchdog.check_and_recover()
 
-        assert result.action == RecoveryAction.EXPAND_POOL
+        assert result.action == PoolRecoveryAction.EXPAND_POOL
         assert result.success is True
 
     def test_circuit_break_on_max_expansion(self):
@@ -327,13 +323,13 @@ class TestPoolWatchdogRecovery:
             auto_expand=True,
             max_expansion=5,
         )
-        
+
         # 이미 max expansion에 도달했다고 가정
         watchdog._expanded_by = 5
 
         result = watchdog.check_and_recover()
 
-        assert result.action == RecoveryAction.CIRCUIT_BREAK
+        assert result.action == PoolRecoveryAction.CIRCUIT_BREAK
         assert result.success is False
 
     def test_healthy_pool_no_action(self):
@@ -351,7 +347,7 @@ class TestPoolWatchdogRecovery:
 
         result = watchdog.check_and_recover()
 
-        assert result.action == RecoveryAction.NONE
+        assert result.action == PoolRecoveryAction.NONE
         assert result.success is True
 
     def test_shrink_pool_after_recovery(self):
@@ -402,5 +398,5 @@ class TestPoolWatchdogRecovery:
 
         # 예외가 발생해도 정상 동작해야 함
         result = watchdog.check_and_recover()
-        
-        assert result.action == RecoveryAction.ALERT_ONLY
+
+        assert result.action == PoolRecoveryAction.ALERT_ONLY

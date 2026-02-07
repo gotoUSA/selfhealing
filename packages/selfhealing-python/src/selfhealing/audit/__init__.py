@@ -153,7 +153,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # ring_buffer (3개)
     "RingBuffer": ("selfhealing.audit.ring_buffer", "RingBuffer"),
     "RingBufferStats": ("selfhealing.audit.ring_buffer", "RingBufferStats"),
-    "BackpressureStrategy": ("selfhealing.audit.ring_buffer", "BackpressureStrategy"),
+    "BackpressureStrategy": ("selfhealing.scaling.config", "BackpressureStrategy"),
     # self_audit (3개) - self_audit 함수는 직접 import (모듈명 충돌)
     "SelfAuditLogger": ("selfhealing.audit.self_audit", "SelfAuditLogger"),
     "SelfAuditEvent": ("selfhealing.audit.self_audit", "SelfAuditEvent"),
@@ -189,8 +189,8 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "create_wal": ("selfhealing.audit.wal", "create_wal"),
     # audit_watchdog (9개)
     "AuditWatchdog": ("selfhealing.audit.audit_watchdog", "AuditWatchdog"),
-    "WatchdogConfig": ("selfhealing.audit.audit_watchdog", "WatchdogConfig"),
-    "WatchdogState": ("selfhealing.audit.audit_watchdog", "WatchdogState"),
+    "AuditWatchdogConfig": ("selfhealing.audit.audit_watchdog", "AuditWatchdogConfig"),
+    "AuditWatchdogStatus": ("selfhealing.audit.audit_watchdog", "AuditWatchdogStatus"),
     "WatchdogStats": ("selfhealing.audit.audit_watchdog", "WatchdogStats"),
     "HeartbeatTarget": ("selfhealing.audit.audit_watchdog", "HeartbeatTarget"),
     "WatchdogChecker": ("selfhealing.audit.audit_watchdog", "WatchdogChecker"),
@@ -212,10 +212,10 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     ),
     "OutputFormat": ("selfhealing.audit.verify_audit_integrity", "OutputFormat"),
     # audit_integration (10개)
-    "EventSeverity": ("selfhealing.audit.audit_integration", "EventSeverity"),
+    "EventSeverity": ("selfhealing.utils.async_logger", "EventSeverity"),
     "AsyncLoggerConfig": ("selfhealing.audit.audit_integration", "AsyncLoggerConfig"),
     "AsyncLoggerAdapter": ("selfhealing.audit.audit_integration", "AsyncLoggerAdapter"),
-    "AuditEventType": ("selfhealing.audit.audit_integration", "AuditEventType"),
+    "AuditObserverEventType": ("selfhealing.audit.audit_integration", "AuditObserverEventType"),
     "AuditEventData": ("selfhealing.audit.audit_integration", "AuditEventData"),
     "AuditEventObserver": ("selfhealing.audit.audit_integration", "AuditEventObserver"),
     "AsyncLoggerObserver": (
@@ -246,15 +246,16 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "RFC3161Client": ("selfhealing.audit.signed_manifest", "RFC3161Client"),
     "SignedManifest": ("selfhealing.audit.signed_manifest", "SignedManifest"),
     "ManifestEntry": ("selfhealing.audit.signed_manifest", "ManifestEntry"),
-    # event_buffer (4개)
+    # event_buffer (5개)
+    "AuditEventType": ("selfhealing.audit.event_buffer", "AuditEventType"),
+    "BufferEventType": ("selfhealing.audit.event_buffer", "AuditEventType"),  # backward-compat alias
     "AuditEvent": ("selfhealing.audit.event_buffer", "AuditEvent"),
-    "BufferEventType": ("selfhealing.audit.event_buffer", "AuditEventType"),
     "RequestAuditBuffer": ("selfhealing.audit.event_buffer", "RequestAuditBuffer"),
     "add_audit_event": ("selfhealing.audit.event_buffer", "add_audit_event"),
     # checkpoint_manager (4개)
     "CheckpointManager": ("selfhealing.audit.checkpoint_manager", "CheckpointManager"),
     "CheckpointData": ("selfhealing.audit.checkpoint_manager", "CheckpointData"),
-    "CheckpointError": ("selfhealing.audit.checkpoint_manager", "CheckpointError"),
+    "CheckpointError": ("selfhealing.audit.checkpoint_strategy", "CheckpointError"),
     "get_checkpoint_manager": ("selfhealing.audit.checkpoint_manager", "get_checkpoint_manager"),
 }
 
@@ -287,7 +288,7 @@ if TYPE_CHECKING:
         AsyncLoggerObserver,
         AuditEventData,
         AuditEventObserver,
-        AuditEventType,
+        AuditObserverEventType,
         EventSeverity,
         IntegratedAuditRecorder,
         configure_integration,
@@ -297,8 +298,8 @@ if TYPE_CHECKING:
         AuditWatchdog,
         HeartbeatTarget,
         WatchdogChecker,
-        WatchdogConfig,
-        WatchdogState,
+        AuditWatchdogConfig,
+        AuditWatchdogStatus,
         WatchdogStats,
         get_watchdog,
         start_watchdog,
@@ -346,10 +347,10 @@ if TYPE_CHECKING:
     )
     from selfhealing.audit.event_buffer import (
         AuditEvent,
+        AuditEventType,
         RequestAuditBuffer,
         add_audit_event,
     )
-    from selfhealing.audit.event_buffer import AuditEventType as BufferEventType
     from selfhealing.audit.export import (
         AuditExporter,
         ExportFormat,
@@ -521,8 +522,8 @@ __all__ = [
     "create_wal",
     # Audit Watchdog (Dead Man's Switch)
     "AuditWatchdog",
-    "WatchdogConfig",
-    "WatchdogState",
+    "AuditWatchdogConfig",
+    "AuditWatchdogStatus",
     "WatchdogStats",
     "HeartbeatTarget",
     "WatchdogChecker",
@@ -538,7 +539,7 @@ __all__ = [
     "EventSeverity",
     "AsyncLoggerConfig",
     "AsyncLoggerAdapter",
-    "AuditEventType",
+    "AuditObserverEventType",
     "AuditEventData",
     "AuditEventObserver",
     "AsyncLoggerObserver",

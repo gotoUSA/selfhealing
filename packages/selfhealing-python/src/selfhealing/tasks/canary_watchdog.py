@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class WatchdogConfig:
+class CanaryWatchdogConfig:
     """
     Watchdog 설정.
 
@@ -77,16 +77,16 @@ class WatchdogConfig:
         cls,
         settings: CanaryWatchdogSettings | None = None,
         **overrides,
-    ) -> WatchdogConfig:
+    ) -> CanaryWatchdogConfig:
         """
-        Settings에서 WatchdogConfig 인스턴스 생성.
+        Settings에서 CanaryWatchdogConfig 인스턴스 생성.
 
         Args:
             settings: CanaryWatchdogSettings 인스턴스 (없으면 싱글톤 사용)
             **overrides: 개별 필드 오버라이드
 
         Returns:
-            WatchdogConfig: Settings 기반 인스턴스
+            CanaryWatchdogConfig: Settings 기반 인스턴스
         """
         from selfhealing.settings.canary_watchdog import get_canary_watchdog_settings
 
@@ -200,14 +200,14 @@ class RolloutWatchdog:
             print(f"Found {result.zombie_count} zombie rollouts")
     """
 
-    def __init__(self, config: WatchdogConfig = None):
+    def __init__(self, config: CanaryWatchdogConfig = None):
         """
         RolloutWatchdog 초기화.
 
         Args:
             config: Watchdog 설정 (기본값 사용 시 None)
         """
-        self.config = config or WatchdogConfig()
+        self.config = config or CanaryWatchdogConfig()
         self._service = None
 
     @property
@@ -534,7 +534,7 @@ class RolloutWatchdog:
 _watchdog: RolloutWatchdog | None = None
 
 
-def get_rollout_watchdog(config: WatchdogConfig = None) -> RolloutWatchdog:
+def get_rollout_watchdog(config: CanaryWatchdogConfig = None) -> RolloutWatchdog:
     """
     RolloutWatchdog 싱글톤 반환.
 

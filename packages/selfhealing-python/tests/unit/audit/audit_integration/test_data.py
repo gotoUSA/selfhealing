@@ -17,10 +17,10 @@ class TestAuditEventData:
         """기본 타임스탬프 생성."""
         from selfhealing.audit.audit_integration import (
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
-        event = AuditEventData(event_type=AuditEventType.CIRCUIT_OPENED)
+        event = AuditEventData(event_type=AuditObserverEventType.CIRCUIT_OPENED)
 
         assert event.timestamp is not None
         assert isinstance(event.timestamp, datetime)
@@ -29,11 +29,11 @@ class TestAuditEventData:
         """커스텀 details."""
         from selfhealing.audit.audit_integration import (
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         event = AuditEventData(
-            event_type=AuditEventType.FALLBACK_ACTIVATED,
+            event_type=AuditObserverEventType.FALLBACK_ACTIVATED,
             details={"fallback_type": "file", "reason": "primary_failed"},
         )
 

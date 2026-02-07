@@ -21,14 +21,8 @@ from selfhealing.services.corruption_shield.validators import (
 
 logger = logging.getLogger(__name__)
 
-
-class ViolationSeverity(Enum):
-    """Violation severity levels."""
-
-    CRITICAL = "critical"  # Immediate block, security incident
-    HIGH = "high"  # Block, log to DLQ
-    MEDIUM = "medium"  # Warn, may block
-    LOW = "low"  # Log only
+# ViolationSeverity: 단일 소스는 services/compliance/models.py (Item 34 중복 제거)
+from selfhealing.services.compliance.models import ViolationSeverity  # noqa: E402, F401
 
 
 @dataclass
@@ -200,9 +194,7 @@ class CorruptionShield:
         """차단 여부 판단."""
         if not block_on_violation or is_valid:
             return False
-        critical_violations = [
-            v for v in violations if v.severity in ("critical", "high")
-        ]
+        critical_violations = [v for v in violations if v.severity in ("critical", "high")]
         return len(critical_violations) > 0
 
     def _update_stats(self, is_valid: bool, blocked: bool) -> None:
@@ -270,11 +262,7 @@ class CorruptionShield:
                 buffer = RequestAuditBuffer.get_or_create(request)
 
                 # 배칭: 단일 이벤트에 모든 violations 포함
-                event_type = (
-                    AuditEventType.CORRUPTION_BLOCKED
-                    if result.blocked
-                    else AuditEventType.CORRUPTION_DETECTED
-                )
+                event_type = AuditEventType.CORRUPTION_BLOCKED if result.blocked else AuditEventType.CORRUPTION_DETECTED
 
                 buffer.add(
                     event_type=event_type,
@@ -301,8 +289,7 @@ class CorruptionShield:
         except ImportError:
             # _write_to_wal 미사용 환경: 로거로 폴백
             logger.warning(
-                f"[CorruptionShield/Audit] {len(result.violations)} violations detected, "
-                f"blocked={result.blocked}"
+                f"[CorruptionShield/Audit] {len(result.violations)} violations detected, " f"blocked={result.blocked}"
             )
 
     def _log_violations(self, data: dict, result: ValidationResult) -> None:
@@ -314,8 +301,7 @@ class CorruptionShield:
 
             logger.log(
                 log_level,
-                f"[CorruptionShield] {violation.layer} violation: "
-                f"{violation.code} - {violation.message}",
+                f"[CorruptionShield] {violation.layer} violation: " f"{violation.code} - {violation.message}",
             )
 
         # Log to security incident if configured
@@ -359,9 +345,7 @@ class CorruptionShield:
                     },
                 )
         except Exception as e:
-            logger.warning(
-                f"[CorruptionShield] Failed to create security incident: {e}"
-            )
+            logger.warning(f"[CorruptionShield] Failed to create security incident: {e}")
 
     def _map_to_violation_type(self, violation) -> str:
         """

@@ -13,7 +13,7 @@ import requests
 
 from .models import (
     NotificationConfig,
-    NotificationResult,
+    ChannelDeliveryResult,
     _get_notification_limits,
 )
 
@@ -25,7 +25,7 @@ class PagerDutyHandlerMixin:
 
     config: NotificationConfig
 
-    def _trigger_pagerduty(self, incident: Any) -> NotificationResult:
+    def _trigger_pagerduty(self, incident: Any) -> ChannelDeliveryResult:
         """
         Trigger a PagerDuty incident from an incident object.
 
@@ -36,7 +36,7 @@ class PagerDutyHandlerMixin:
             incident: Incident object with id, incident_type, description, source_ip
 
         Returns:
-            NotificationResult
+            ChannelDeliveryResult
         """
         return self._trigger_pagerduty_by_data(
             incident_id=incident.id,
@@ -51,7 +51,7 @@ class PagerDutyHandlerMixin:
         incident_type: str,
         description: str,
         source_ip: str | None,
-    ) -> NotificationResult:
+    ) -> ChannelDeliveryResult:
         """
         Trigger a PagerDuty incident.
 
@@ -62,10 +62,10 @@ class PagerDutyHandlerMixin:
             source_ip: Source IP address
 
         Returns:
-            NotificationResult
+            ChannelDeliveryResult
         """
         if not self.config.pagerduty_service_key:
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=False,
                 error="PagerDuty service key not configured",
@@ -73,7 +73,7 @@ class PagerDutyHandlerMixin:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] PagerDuty: {incident_type}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=True,
                 message="[DRY RUN] Would trigger PagerDuty incident",
@@ -105,13 +105,13 @@ class PagerDutyHandlerMixin:
             )
 
             if response.status_code in (200, 202):
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="pagerduty",
                     success=True,
                     message="PagerDuty incident triggered",
                 )
             else:
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="pagerduty",
                     success=False,
                     error=f"HTTP {response.status_code}",
@@ -119,16 +119,16 @@ class PagerDutyHandlerMixin:
 
         except Exception as e:
             logger.error(f"[Security Notification] PagerDuty error: {e}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=False,
                 error=str(e),
             )
 
-    def _send_pagerduty_alert(self, message: dict[str, Any]) -> NotificationResult:
+    def _send_pagerduty_alert(self, message: dict[str, Any]) -> ChannelDeliveryResult:
         """Send PagerDuty alert notification."""
         if not self.config.pagerduty_service_key:
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=False,
                 error="PagerDuty service key not configured",
@@ -136,7 +136,7 @@ class PagerDutyHandlerMixin:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] PagerDuty alert: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=True,
                 message="[DRY RUN] Would trigger PagerDuty alert",
@@ -170,13 +170,13 @@ class PagerDutyHandlerMixin:
             )
 
             if response.status_code in (200, 202):
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="pagerduty",
                     success=True,
                     message="PagerDuty alert triggered",
                 )
             else:
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="pagerduty",
                     success=False,
                     error=f"HTTP {response.status_code}",
@@ -184,4 +184,4 @@ class PagerDutyHandlerMixin:
 
         except Exception as e:
             logger.error(f"[Security Notification] PagerDuty alert error: {e}")
-            return NotificationResult(channel="pagerduty", success=False, error=str(e))
+            return ChannelDeliveryResult(channel="pagerduty", success=False, error=str(e))

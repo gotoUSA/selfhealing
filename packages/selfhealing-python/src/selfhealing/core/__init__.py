@@ -47,7 +47,7 @@ from selfhealing.core.connection_health import (
 )
 from selfhealing.core.decision_logger import (
     DecisionLogger,
-    EventType,
+    DecisionBoundaryEventType,
     ReasonCode,
     log_enter_pre_decision_zone,
     log_exit_pre_decision_zone,
@@ -82,8 +82,8 @@ from selfhealing.core.pool_monitor import (
 from selfhealing.core.pool_watchdog import (
     PoolRecoveryHandler,
     PoolWatchdog,
-    RecoveryAction,
-    RecoveryResult,
+    PoolRecoveryAction,
+    PoolRecoveryResult,
 )
 from selfhealing.core.request_context import (
     RequestContext,
@@ -162,8 +162,8 @@ __all__ = [
     "PoolStatsProvider",
     "ConnectionPoolMonitor",
     # Pool Watchdog (Stage 26)
-    "RecoveryAction",
-    "RecoveryResult",
+    "PoolRecoveryAction",
+    "PoolRecoveryResult",
     "PoolRecoveryHandler",
     "PoolWatchdog",
     # Shutdown Coordinator (Stage 27)
@@ -214,7 +214,7 @@ __all__ = [
     "CertificateAlertManager",
     # Decision Logger (Skeleton - Observability)
     "ReasonCode",
-    "EventType",
+    "DecisionBoundaryEventType",
     "DecisionLogger",
     "log_enter_pre_decision_zone",
     "log_intervention_evaluated",

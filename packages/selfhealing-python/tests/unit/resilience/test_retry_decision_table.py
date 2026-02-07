@@ -352,6 +352,7 @@ class TestRetryHandlerDelayCalculation:
             backoff_base=4,
             backoff_max=180,
             jitter_percent=0,
+            throttle_aware=False,
         )
         handler = RetryHandler(config=config)
 
@@ -368,6 +369,7 @@ class TestRetryHandlerDelayCalculation:
             backoff_base=4,
             backoff_max=50,
             jitter_percent=0,
+            throttle_aware=False,
         )
         handler = RetryHandler(config=config)
 

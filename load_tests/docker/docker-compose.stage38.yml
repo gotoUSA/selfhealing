@@ -172,9 +172,9 @@ services:
     container_name: stage38-decision-validator
     command: >
       python -c "
-      from selfhealing.core.decision_logger import EventType, ReasonCode
+      from selfhealing.core.decision_logger import DecisionBoundaryEventType, ReasonCode
       print('=== Stage 38: Decision Record Schema Validation ===')
-      print(f'Event Types (frozen): {[e.value for e in EventType]}')
+      print(f'Event Types (frozen): {[e.value for e in DecisionBoundaryEventType]}')
       print(f'Reason Codes (frozen): {[r.value for r in ReasonCode]}')
       print('Schema validation: PASSED')
       print('No new fields or enums detected.')

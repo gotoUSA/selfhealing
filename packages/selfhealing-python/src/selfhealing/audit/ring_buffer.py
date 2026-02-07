@@ -18,16 +18,12 @@ from enum import Enum
 from threading import Lock
 from typing import Generic, TypeVar
 
+# BackpressureStrategy: 단일 소스는 scaling/config.py (Item 6 중복 제거)
+from selfhealing.scaling.config import BackpressureStrategy  # noqa: E402, F401
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
-
-
-class BackpressureStrategy(Enum):
-    """배압 전략."""
-
-    DROP_OLDEST = "drop_oldest"  # 권장: 비침투
-    DROP_NEWEST = "drop_newest"
 
 
 @dataclass

@@ -48,17 +48,10 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Event Severity (AsyncLogger 호환)
+# Event Severity - 단일 소스는 utils/async_logger.py (Item 4 중복 제거)
 # =============================================================================
 
-
-class EventSeverity(Enum):
-    """이벤트 심각도 (AsyncLogger 호환)."""
-
-    DEBUG = 0
-    INFO = 1
-    WARNING = 2
-    CRITICAL = 3
+from selfhealing.utils.async_logger import EventSeverity  # noqa: E402, F401
 
 
 # =============================================================================
@@ -432,7 +425,7 @@ class AsyncLoggerAdapter:
 # =============================================================================
 
 
-class AuditEventType(Enum):
+class AuditObserverEventType(Enum):
     """감사 이벤트 유형."""
 
     # Record events
@@ -462,7 +455,7 @@ class AuditEventType(Enum):
 class AuditEventData:
     """감사 이벤트 데이터."""
 
-    event_type: AuditEventType
+    event_type: AuditObserverEventType
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     details: dict[str, Any] = field(default_factory=dict)
 
@@ -494,47 +487,47 @@ class AsyncLoggerObserver(AuditEventObserver):
         event_type = event.event_type
 
         # 이벤트 유형별 변환
-        if event_type == AuditEventType.CIRCUIT_OPENED:
+        if event_type == AuditObserverEventType.CIRCUIT_OPENED:
             self._async_logger.log_cb_event(
                 service=event.details.get("service", "audit_primary"),
                 state="OPEN",
                 reason=event.details.get("reason", ""),
             )
-        elif event_type == AuditEventType.CIRCUIT_CLOSED:
+        elif event_type == AuditObserverEventType.CIRCUIT_CLOSED:
             self._async_logger.log_cb_event(
                 service=event.details.get("service", "audit_primary"),
                 state="CLOSED",
             )
-        elif event_type == AuditEventType.FALLBACK_ACTIVATED:
+        elif event_type == AuditObserverEventType.FALLBACK_ACTIVATED:
             self._async_logger.log_fallback_activated(
                 fallback_type=event.details.get("fallback_type", "file"),
                 reason=event.details.get("reason", "primary_failed"),
             )
-        elif event_type == AuditEventType.SYSLOG_ACTIVATED:
+        elif event_type == AuditObserverEventType.SYSLOG_ACTIVATED:
             self._async_logger.log_emergency_event(
                 level="CRITICAL",
                 action="trigger",
                 reason="all_backends_failed",
             )
-        elif event_type == AuditEventType.PRIMARY_RECOVERED:
+        elif event_type == AuditObserverEventType.PRIMARY_RECOVERED:
             self._async_logger.log_recovery_event(
                 service=event.details.get("service", "audit_primary"),
                 recovery_time_ms=event.details.get("recovery_time_ms", 0),
                 success=True,
             )
-        elif event_type == AuditEventType.DEGRADED_MODE_ENTERED:
+        elif event_type == AuditObserverEventType.DEGRADED_MODE_ENTERED:
             self._async_logger.log_emergency_event(
                 level="WARNING",
                 action="trigger",
                 reason="degraded_mode",
             )
-        elif event_type == AuditEventType.RECORD_SUCCESS:
+        elif event_type == AuditObserverEventType.RECORD_SUCCESS:
             self._async_logger.log_audit_event(
                 action=event.details.get("action", "unknown"),
                 success=True,
                 audit_id=event.details.get("audit_id", ""),
             )
-        elif event_type == AuditEventType.RECORD_FAILED:
+        elif event_type == AuditObserverEventType.RECORD_FAILED:
             self._async_logger.log_audit_event(
                 action=event.details.get("action", "unknown"),
                 success=False,
@@ -638,7 +631,7 @@ class IntegratedAuditRecorder:
             if current_state.value == "open":
                 self._notify_observers(
                     AuditEventData(
-                        event_type=AuditEventType.CIRCUIT_OPENED,
+                        event_type=AuditObserverEventType.CIRCUIT_OPENED,
                         details={"service": "audit_primary"},
                     )
                 )
@@ -646,20 +639,20 @@ class IntegratedAuditRecorder:
                 if self._last_circuit_state.value == "open":
                     self._notify_observers(
                         AuditEventData(
-                            event_type=AuditEventType.PRIMARY_RECOVERED,
+                            event_type=AuditObserverEventType.PRIMARY_RECOVERED,
                             details={"service": "audit_primary"},
                         )
                     )
                 self._notify_observers(
                     AuditEventData(
-                        event_type=AuditEventType.CIRCUIT_CLOSED,
+                        event_type=AuditObserverEventType.CIRCUIT_CLOSED,
                         details={"service": "audit_primary"},
                     )
                 )
             elif current_state.value == "half_open":
                 self._notify_observers(
                     AuditEventData(
-                        event_type=AuditEventType.CIRCUIT_HALF_OPEN,
+                        event_type=AuditObserverEventType.CIRCUIT_HALF_OPEN,
                         details={"service": "audit_primary"},
                     )
                 )
@@ -680,7 +673,7 @@ class IntegratedAuditRecorder:
             if self._enable_auto_async_logging:
                 self._notify_observers(
                     AuditEventData(
-                        event_type=AuditEventType.RECORD_SUCCESS,
+                        event_type=AuditObserverEventType.RECORD_SUCCESS,
                         details={
                             "action": entry.action,
                             "audit_id": audit_id,
@@ -698,7 +691,7 @@ class IntegratedAuditRecorder:
             if self._enable_auto_async_logging:
                 self._notify_observers(
                     AuditEventData(
-                        event_type=AuditEventType.RECORD_FAILED,
+                        event_type=AuditObserverEventType.RECORD_FAILED,
                         details={
                             "action": entry.action,
                             "error": str(e),
@@ -819,7 +812,7 @@ __all__ = [
     "EventSeverity",
     "AsyncLoggerConfig",
     "AsyncLoggerAdapter",
-    "AuditEventType",
+    "AuditObserverEventType",
     "AuditEventData",
     "AuditEventObserver",
     "AsyncLoggerObserver",

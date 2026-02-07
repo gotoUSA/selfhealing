@@ -98,7 +98,7 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     handle_security_violation → from selfhealing.services.security import handle_security_violation
     SecurityNotificationService → from selfhealing.services.security_notification import SecurityNotificationService
     SecurityNotificationResult → from selfhealing.services.security_notification import SecurityNotificationResult
-    NotificationResult   → from selfhealing.services.security_notification import NotificationResult
+    ChannelDeliveryResult    → from selfhealing.services.security_notification import ChannelDeliveryResult
     NotificationConfig   → from selfhealing.services.security_notification import NotificationConfig
     NotificationChannel  → from selfhealing.services.security_notification import NotificationChannel
     get_security_notification_service → from selfhealing.services.security_notification import get_security_notification_service
@@ -196,7 +196,7 @@ from .security import (
 from .security_notification import (
     NotificationChannel,
     NotificationConfig,
-    NotificationResult,
+    ChannelDeliveryResult,
     SecurityNotificationResult,
     SecurityNotificationService,
     get_security_notification_service,
@@ -265,7 +265,7 @@ __all__ = [
     "SecurityNotificationResult",
     "NotificationConfig",
     "NotificationChannel",
-    "NotificationResult",
+    "ChannelDeliveryResult",
     "get_security_notification_service",
     "notify_security_incident",
     # === Metrics ===

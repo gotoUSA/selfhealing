@@ -24,7 +24,7 @@ from .pool_monitor import (
 logger = logging.getLogger(__name__)
 
 
-class RecoveryAction(str, Enum):
+class PoolRecoveryAction(str, Enum):
     """Types of recovery actions"""
 
     NONE = "none"
@@ -35,10 +35,10 @@ class RecoveryAction(str, Enum):
 
 
 @dataclass
-class RecoveryResult:
+class PoolRecoveryResult:
     """Result of a recovery action"""
 
-    action: RecoveryAction
+    action: PoolRecoveryAction
     success: bool
     message: str
     timestamp: datetime
@@ -96,7 +96,7 @@ class PoolWatchdog:
         self._max_expansion = max_expansion
         self._expanded_by = 0
 
-    def check_and_recover(self) -> RecoveryResult:
+    def check_and_recover(self) -> PoolRecoveryResult:
         """
         Check pool health and take recovery action if needed.
         Returns the action taken.
@@ -107,8 +107,8 @@ class PoolWatchdog:
             # If we expanded before, consider shrinking
             if self._expanded_by > 0:
                 return self._try_shrink(stats)
-            return RecoveryResult(
-                action=RecoveryAction.NONE,
+            return PoolRecoveryResult(
+                action=PoolRecoveryAction.NONE,
                 success=True,
                 message="Pool is healthy",
                 timestamp=datetime.now(timezone.utc),
@@ -123,14 +123,14 @@ class PoolWatchdog:
         if status in (PoolHealthStatus.WARNING, PoolHealthStatus.CRITICAL):
             return self._handle_high_usage(status, stats)
 
-        return RecoveryResult(
-            action=RecoveryAction.NONE,
+        return PoolRecoveryResult(
+            action=PoolRecoveryAction.NONE,
             success=True,
             message=f"Status: {status.value}",
             timestamp=datetime.now(timezone.utc),
         )
 
-    def _handle_leak(self) -> RecoveryResult:
+    def _handle_leak(self) -> PoolRecoveryResult:
         """Handle suspected connection leak"""
         leak_report = self._monitor.detect_leaks()
 
@@ -140,8 +140,8 @@ class PoolWatchdog:
         )
 
         if not self._auto_close_leaked or not self._recovery_handler:
-            return RecoveryResult(
-                action=RecoveryAction.ALERT_ONLY,
+            return PoolRecoveryResult(
+                action=PoolRecoveryAction.ALERT_ONLY,
                 success=True,
                 message=f"Leak alert sent for {leak_report.leak_count} connections",
                 timestamp=datetime.now(timezone.utc),
@@ -159,15 +159,15 @@ class PoolWatchdog:
                     f"Failed to close connection {conn_info.connection_id}: {e}"
                 )
 
-        return RecoveryResult(
-            action=RecoveryAction.CLOSE_LEAKED,
+        return PoolRecoveryResult(
+            action=PoolRecoveryAction.CLOSE_LEAKED,
             success=closed > 0,
             message=f"Closed {closed}/{leak_report.leak_count} leaked connections",
             timestamp=datetime.now(timezone.utc),
             connections_closed=closed,
         )
 
-    def _handle_exhaustion(self, stats: PoolStats) -> RecoveryResult:
+    def _handle_exhaustion(self, stats: PoolStats) -> PoolRecoveryResult:
         """Handle pool exhaustion"""
         self._send_alert(
             f"Connection pool exhausted: {stats.waiting_requests} requests waiting",
@@ -175,8 +175,8 @@ class PoolWatchdog:
         )
 
         if not self._auto_expand or not self._recovery_handler:
-            return RecoveryResult(
-                action=RecoveryAction.ALERT_ONLY,
+            return PoolRecoveryResult(
+                action=PoolRecoveryAction.ALERT_ONLY,
                 success=True,
                 message="Pool exhausted, alert sent",
                 timestamp=datetime.now(timezone.utc),
@@ -184,8 +184,8 @@ class PoolWatchdog:
 
         # Try to expand pool
         if self._expanded_by >= self._max_expansion:
-            return RecoveryResult(
-                action=RecoveryAction.CIRCUIT_BREAK,
+            return PoolRecoveryResult(
+                action=PoolRecoveryAction.CIRCUIT_BREAK,
                 success=False,
                 message="Max expansion reached, circuit breaking",
                 timestamp=datetime.now(timezone.utc),
@@ -197,8 +197,8 @@ class PoolWatchdog:
         if success:
             self._expanded_by += expand_by
 
-        return RecoveryResult(
-            action=RecoveryAction.EXPAND_POOL,
+        return PoolRecoveryResult(
+            action=PoolRecoveryAction.EXPAND_POOL,
             success=success,
             message=f"Expanded pool by {expand_by}" if success else "Failed to expand",
             timestamp=datetime.now(timezone.utc),
@@ -206,34 +206,34 @@ class PoolWatchdog:
 
     def _handle_high_usage(
         self, status: PoolHealthStatus, stats: PoolStats
-    ) -> RecoveryResult:
+    ) -> PoolRecoveryResult:
         """Handle high usage warning/critical"""
         self._send_alert(
             f"Pool usage {status.value}: {stats.usage_percent:.1f}%", status
         )
 
-        return RecoveryResult(
-            action=RecoveryAction.ALERT_ONLY,
+        return PoolRecoveryResult(
+            action=PoolRecoveryAction.ALERT_ONLY,
             success=True,
             message=f"Alert sent for {status.value} usage",
             timestamp=datetime.now(timezone.utc),
         )
 
-    def _try_shrink(self, stats: PoolStats) -> RecoveryResult:
+    def _try_shrink(self, stats: PoolStats) -> PoolRecoveryResult:
         """Try to shrink pool back to normal if healthy"""
         if stats.usage_percent < 50 and self._recovery_handler:
             target = stats.max_connections - self._expanded_by
             if self._recovery_handler.shrink_pool(target):
                 self._expanded_by = 0
-                return RecoveryResult(
-                    action=RecoveryAction.NONE,
+                return PoolRecoveryResult(
+                    action=PoolRecoveryAction.NONE,
                     success=True,
                     message="Pool shrunk back to normal",
                     timestamp=datetime.now(timezone.utc),
                 )
 
-        return RecoveryResult(
-            action=RecoveryAction.NONE,
+        return PoolRecoveryResult(
+            action=PoolRecoveryAction.NONE,
             success=True,
             message="Pool healthy, monitoring",
             timestamp=datetime.now(timezone.utc),

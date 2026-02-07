@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class CacheEntry:
+class IPCCacheEntry:
     """캐시 엔트리."""
 
     value: Any
@@ -97,7 +97,7 @@ class CBStateCache:
             ttl_seconds: 캐시 TTL (초)
             enable_event_invalidation: EventBus 무효화 활성화 여부
         """
-        self._cache: dict[str, CacheEntry] = {}
+        self._cache: dict[str, IPCCacheEntry] = {}
         self._lock = threading.RLock()
         self._ttl = ttl_seconds
         self._stats = CacheStats()
@@ -176,7 +176,7 @@ class CBStateCache:
             if len(self._cache) >= self.MAX_ENTRIES:
                 self._cleanup_expired()
 
-            self._cache[service_name] = CacheEntry(
+            self._cache[service_name] = IPCCacheEntry(
                 value=value,
                 expires_at=time.time() + self._ttl,
             )

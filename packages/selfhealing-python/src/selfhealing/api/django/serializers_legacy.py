@@ -8,59 +8,14 @@ These are Django REST Framework serializers for the REST API endpoints.
 from rest_framework import serializers
 
 # =============================================================================
-# Constants
+# Constants - 단일 소스는 core/constants.py (Item 31-33 중복 제거)
 # =============================================================================
 
-
-class ControlAPIActions:
-    """Control API Action constants."""
-
-    ALLOW = "allow"
-    BLOCK = "block"
-    OVERRIDE = "override"
-    RESET = "reset"
-    INJECT_FAILURE = "inject_failure"
-    INJECT_SUCCESS = "inject_success"
-
-    CHOICES = [
-        (ALLOW, "Allow - Enable service operations (CB → CLOSED)"),
-        (BLOCK, "Block - Disable service operations (CB → OPEN)"),
-        (OVERRIDE, "Override - Temporarily bypass rules"),
-        (RESET, "Reset - Revert to default configuration"),
-        (INJECT_FAILURE, "Inject Failure - Simulate failures (non-ops only)"),
-        (
-            INJECT_SUCCESS,
-            "Inject Success - Record successes for CB recovery (test only)",
-        ),
-    ]
-
-    ALL = [ALLOW, BLOCK, OVERRIDE, RESET, INJECT_FAILURE, INJECT_SUCCESS]
-
-
-class ControlAPIEnvironments:
-    """Control API Environment constants."""
-
-    TEST = "test"
-    CHAOS = "chaos"
-    OPS = "ops"
-
-    CHOICES = [
-        (TEST, "Test - CI/CD validation"),
-        (CHAOS, "Chaos - Resilience testing"),
-        (OPS, "Ops - Production control"),
-    ]
-
-    ALL = [TEST, CHAOS, OPS]
-
-
-class RiskLevels:
-    """Risk level constants."""
-
-    INFO = "info"
-    WARNING = "warning"
-    HIGH = "high"
-    CRITICAL = "critical"
-    FORBIDDEN = "forbidden"
+from selfhealing.core.constants import (  # noqa: E402
+    ControlAPIActions,
+    ControlAPIEnvironments,
+    RiskLevels,
+)
 
 
 # =============================================================================
@@ -119,10 +74,7 @@ class ControlRequestSerializer(serializers.Serializer):
         ttl_minutes = data.get("ttl_minutes")
 
         # Rule 1: inject_failure forbidden in ops
-        if (
-            action == ControlAPIActions.INJECT_FAILURE
-            and environment == ControlAPIEnvironments.OPS
-        ):
+        if action == ControlAPIActions.INJECT_FAILURE and environment == ControlAPIEnvironments.OPS:
             raise serializers.ValidationError(
                 {
                     "action": "inject_failure is FORBIDDEN in ops environment",
@@ -131,10 +83,7 @@ class ControlRequestSerializer(serializers.Serializer):
             )
 
         # Rule 2: override in ops requires TTL (max 60 minutes)
-        if (
-            action == ControlAPIActions.OVERRIDE
-            and environment == ControlAPIEnvironments.OPS
-        ):
+        if action == ControlAPIActions.OVERRIDE and environment == ControlAPIEnvironments.OPS:
             if not ttl_minutes:
                 raise serializers.ValidationError(
                     {

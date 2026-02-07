@@ -13,7 +13,7 @@ import pytest
 
 from selfhealing.core.decision_logger import (
     ReasonCode,
-    EventType,
+    DecisionBoundaryEventType,
     DecisionLogger,
     log_enter_pre_decision_zone,
     log_intervention_evaluated,
@@ -46,18 +46,18 @@ class TestReasonCode:
         assert len(ReasonCode) == 4
 
 
-class TestEventType:
-    """Test EventType enum."""
+class TestDecisionBoundaryEventType:
+    """Test DecisionBoundaryEventType enum."""
 
     def test_event_types_exist(self):
         """Verify all required event types exist."""
-        assert EventType.ENTER_PRE_DECISION_ZONE == "ENTER_PRE_DECISION_ZONE"
-        assert EventType.INTERVENTION_EVALUATED == "INTERVENTION_EVALUATED"
-        assert EventType.EXIT_PRE_DECISION_ZONE == "EXIT_PRE_DECISION_ZONE"
+        assert DecisionBoundaryEventType.ENTER_PRE_DECISION_ZONE == "ENTER_PRE_DECISION_ZONE"
+        assert DecisionBoundaryEventType.INTERVENTION_EVALUATED == "INTERVENTION_EVALUATED"
+        assert DecisionBoundaryEventType.EXIT_PRE_DECISION_ZONE == "EXIT_PRE_DECISION_ZONE"
 
     def test_only_three_event_types(self):
         """Verify exactly 3 event types exist."""
-        assert len(EventType) == 3
+        assert len(DecisionBoundaryEventType) == 3
 
 
 class TestModuleFunctions:
@@ -152,16 +152,16 @@ class TestLogOutput:
         """Verify logs are produced with required fields."""
         import json
         import io
-        
+
         # Create a string buffer handler to capture logs
         log_buffer = io.StringIO()
         handler = logging.StreamHandler(log_buffer)
         handler.setLevel(logging.INFO)
-        
+
         decision_logger = logging.getLogger("selfhealing.decision_record")
         decision_logger.addHandler(handler)
         decision_logger.setLevel(logging.INFO)
-        
+
         try:
             log_enter_pre_decision_zone(service_name="test_service")
             log_intervention_evaluated(
@@ -170,16 +170,16 @@ class TestLogOutput:
                 reason=ReasonCode.INTERVENTION_ALLOWED,
             )
             log_exit_pre_decision_zone(service_name="test_service")
-            
+
             handler.flush()
             log_content = log_buffer.getvalue()
-            log_lines = [line for line in log_content.strip().split('\n') if line]
-            
+            log_lines = [line for line in log_content.strip().split("\n") if line]
+
             # Parse JSON records
             json_records = []
             for line in log_lines:
                 json_records.append(json.loads(line))
-            
+
             assert len(json_records) == 3
 
             # Verify ENTER event
@@ -208,21 +208,21 @@ class TestLogOutput:
         """Verify policy_version is included when provided."""
         import json
         import io
-        
+
         log_buffer = io.StringIO()
         handler = logging.StreamHandler(log_buffer)
         handler.setLevel(logging.INFO)
-        
+
         decision_logger = logging.getLogger("selfhealing.decision_record")
         decision_logger.addHandler(handler)
         decision_logger.setLevel(logging.INFO)
-        
+
         try:
             log_enter_pre_decision_zone(
                 service_name="test_service",
                 policy_version="v1.0.0",
             )
-            
+
             handler.flush()
             log_content = log_buffer.getvalue()
             record = json.loads(log_content.strip())
@@ -241,11 +241,11 @@ class TestLogOutput:
         log_buffer = io.StringIO()
         handler = logging.StreamHandler(log_buffer)
         handler.setLevel(logging.INFO)
-        
+
         decision_logger = logging.getLogger("selfhealing.decision_record")
         decision_logger.addHandler(handler)
         decision_logger.setLevel(logging.INFO)
-        
+
         try:
             log_enter_pre_decision_zone(service_name="test")
             log_intervention_evaluated(
@@ -256,8 +256,8 @@ class TestLogOutput:
 
             handler.flush()
             log_content = log_buffer.getvalue()
-            log_lines = [line for line in log_content.strip().split('\n') if line]
-            
+            log_lines = [line for line in log_content.strip().split("\n") if line]
+
             json_records = [json.loads(line) for line in log_lines]
 
             enter_record = json_records[0]
@@ -276,7 +276,7 @@ class TestImportFromCore:
         """Verify all symbols are exported from core.__init__."""
         from selfhealing.core import (
             ReasonCode,
-            EventType,
+            DecisionBoundaryEventType,
             DecisionLogger,
             log_enter_pre_decision_zone,
             log_intervention_evaluated,
@@ -284,7 +284,7 @@ class TestImportFromCore:
         )
 
         assert ReasonCode is not None
-        assert EventType is not None
+        assert DecisionBoundaryEventType is not None
         assert DecisionLogger is not None
         assert callable(log_enter_pre_decision_zone)
         assert callable(log_intervention_evaluated)

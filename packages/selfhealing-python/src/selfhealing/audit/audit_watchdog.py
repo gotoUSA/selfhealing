@@ -9,7 +9,7 @@ Audit Watchdog - Dead Man's Switch Pattern.
 Usage:
     from selfhealing.audit.audit_watchdog import (
         AuditWatchdog,
-        WatchdogConfig,
+        AuditWatchdogConfig,
         HeartbeatTarget,
     )
 
@@ -18,7 +18,7 @@ Usage:
     watchdog.start()
 
     # 커스텀 설정
-    config = WatchdogConfig(
+    config = AuditWatchdogConfig(
         heartbeat_interval_seconds=30.0,
         missed_threshold=3,
         targets=[
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class WatchdogState(Enum):
+class AuditWatchdogStatus(Enum):
     """Watchdog 상태."""
 
     STOPPED = "stopped"
@@ -83,7 +83,7 @@ class HeartbeatTarget:
 
 
 @dataclass
-class WatchdogConfig:
+class AuditWatchdogConfig:
     """Watchdog 설정."""
 
     # Heartbeat 주기 (초)
@@ -108,16 +108,16 @@ class WatchdogConfig:
         cls,
         settings: AuditWatchdogSettings | None = None,
         **overrides,
-    ) -> WatchdogConfig:
+    ) -> AuditWatchdogConfig:
         """
-        Settings에서 WatchdogConfig 인스턴스 생성.
+        Settings에서 AuditWatchdogConfig 인스턴스 생성.
 
         Args:
             settings: AuditWatchdogSettings 인스턴스 (없으면 싱글톤 사용)
             **overrides: 개별 필드 오버라이드
 
         Returns:
-            WatchdogConfig: Settings 기반 인스턴스
+            AuditWatchdogConfig: Settings 기반 인스턴스
         """
         from selfhealing.settings.audit_watchdog import get_audit_watchdog_settings
 
@@ -149,7 +149,7 @@ class WatchdogConfig:
         )
 
     @classmethod
-    def from_env(cls) -> WatchdogConfig:
+    def from_env(cls) -> AuditWatchdogConfig:
         """
         환경 변수에서 설정 로드.
 
@@ -194,7 +194,7 @@ class AuditWatchdog:
 
     def __init__(
         self,
-        config: WatchdogConfig | None = None,
+        config: AuditWatchdogConfig | None = None,
         on_alive: Callable[[], None] | None = None,
         on_dead: Callable[[int], None] | None = None,
     ):
@@ -206,8 +206,8 @@ class AuditWatchdog:
             on_alive: 정상 heartbeat 콜백 (deprecated, use config.on_heartbeat_success)
             on_dead: 임계값 초과 콜백 (deprecated, use config.on_threshold_exceeded)
         """
-        self._config = config or WatchdogConfig.from_env()
-        self._state = WatchdogState.STOPPED
+        self._config = config or AuditWatchdogConfig.from_env()
+        self._state = AuditWatchdogStatus.STOPPED
         self._stats = WatchdogStats()
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -221,23 +221,23 @@ class AuditWatchdog:
             self._config.on_threshold_exceeded = on_dead
 
     @property
-    def state(self) -> WatchdogState:
+    def state(self) -> AuditWatchdogStatus:
         """현재 상태 조회."""
         return self._state
 
     @property
     def is_running(self) -> bool:
         """실행 중 여부."""
-        return self._state in (WatchdogState.RUNNING, WatchdogState.DEGRADED)
+        return self._state in (AuditWatchdogStatus.RUNNING, AuditWatchdogStatus.DEGRADED)
 
     def start(self) -> None:
         """Watchdog 시작."""
         with self._lock:
-            if self._state != WatchdogState.STOPPED:
+            if self._state != AuditWatchdogStatus.STOPPED:
                 logger.warning("Watchdog already running")
                 return
 
-            self._state = WatchdogState.RUNNING
+            self._state = AuditWatchdogStatus.RUNNING
             self._start_time = datetime.now(timezone.utc)
             self._stop_event.clear()
 
@@ -263,11 +263,11 @@ class AuditWatchdog:
     def stop(self, timeout: float = 5.0) -> None:
         """Watchdog 중지."""
         with self._lock:
-            if self._state == WatchdogState.STOPPED:
+            if self._state == AuditWatchdogStatus.STOPPED:
                 return
 
             self._stop_event.set()
-            self._state = WatchdogState.STOPPED
+            self._state = AuditWatchdogStatus.STOPPED
 
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=timeout)
@@ -361,7 +361,7 @@ class AuditWatchdog:
                 self._stats.successful_heartbeats += 1
                 self._stats.consecutive_failures = 0
                 self._stats.last_heartbeat_time = now
-                self._state = WatchdogState.RUNNING
+                self._state = AuditWatchdogStatus.RUNNING
 
                 if self._config.on_heartbeat_success:
                     try:
@@ -373,7 +373,7 @@ class AuditWatchdog:
                 self._stats.consecutive_failures += 1
                 self._stats.last_failure_time = now
                 self._stats.last_failure_reason = failure_reason
-                self._state = WatchdogState.DEGRADED
+                self._state = AuditWatchdogStatus.DEGRADED
 
                 self_audit().log(
                     SelfAuditEvent.HEARTBEAT_MISSED,
@@ -529,7 +529,7 @@ def get_watchdog() -> AuditWatchdog:
     return _watchdog_instance
 
 
-def start_watchdog(config: WatchdogConfig | None = None) -> AuditWatchdog:
+def start_watchdog(config: AuditWatchdogConfig | None = None) -> AuditWatchdog:
     """Watchdog 시작 (편의 함수)."""
     global _watchdog_instance
     with _watchdog_lock:

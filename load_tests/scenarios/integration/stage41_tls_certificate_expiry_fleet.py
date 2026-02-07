@@ -141,13 +141,13 @@ def _get_decision_logger():
     """Lazy import decision logger to avoid import errors in IDE."""
     from selfhealing.core.decision_logger import (
         DecisionLogger,
-        EventType,
+        DecisionBoundaryEventType,
         ReasonCode,
     )
 
     return {
         "DecisionLogger": DecisionLogger,
-        "EventType": EventType,
+        "EventType": DecisionBoundaryEventType,
         "ReasonCode": ReasonCode,
     }
 

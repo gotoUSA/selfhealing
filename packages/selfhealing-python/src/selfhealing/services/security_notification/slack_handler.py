@@ -13,7 +13,7 @@ import requests
 
 from .models import (
     NotificationConfig,
-    NotificationResult,
+    ChannelDeliveryResult,
     _get_notification_limits,
 )
 
@@ -25,7 +25,7 @@ class SlackHandlerMixin:
 
     config: NotificationConfig
 
-    def _send_slack(self, message: dict[str, Any], channel: str) -> NotificationResult:
+    def _send_slack(self, message: dict[str, Any], channel: str) -> ChannelDeliveryResult:
         """
         Send a Slack notification.
 
@@ -34,10 +34,10 @@ class SlackHandlerMixin:
             channel: Slack channel to send to
 
         Returns:
-            NotificationResult
+            ChannelDeliveryResult
         """
         if not self.config.slack_webhook_url:
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="slack",
                 success=False,
                 error="Slack webhook URL not configured",
@@ -45,7 +45,7 @@ class SlackHandlerMixin:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] Slack to {channel}: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="slack",
                 success=True,
                 message=f"[DRY RUN] Would send to {channel}",
@@ -63,13 +63,13 @@ class SlackHandlerMixin:
             )
 
             if response.status_code == 200:
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="slack",
                     success=True,
                     message=f"Sent to {channel}",
                 )
             else:
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="slack",
                     success=False,
                     error=f"HTTP {response.status_code}: {response.text[:100]}",
@@ -77,7 +77,7 @@ class SlackHandlerMixin:
 
         except Exception as e:
             logger.error(f"[Security Notification] Slack error: {e}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="slack",
                 success=False,
                 error=str(e),
@@ -157,7 +157,7 @@ class SlackHandlerMixin:
 
     def _send_slack_alert(
         self, message: dict[str, Any], channel: str
-    ) -> NotificationResult:
+    ) -> ChannelDeliveryResult:
         """
         Send a Slack alert notification (general purpose).
 
@@ -166,10 +166,10 @@ class SlackHandlerMixin:
             channel: Slack channel to send to
 
         Returns:
-            NotificationResult
+            ChannelDeliveryResult
         """
         if not self.config.slack_webhook_url:
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="slack",
                 success=False,
                 error="Slack webhook URL not configured",
@@ -177,7 +177,7 @@ class SlackHandlerMixin:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] Slack alert to {channel}: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="slack",
                 success=True,
                 message=f"[DRY RUN] Would send alert to {channel}",
@@ -194,13 +194,13 @@ class SlackHandlerMixin:
             )
 
             if response.status_code == 200:
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="slack",
                     success=True,
                     message=f"Alert sent to {channel}",
                 )
             else:
-                return NotificationResult(
+                return ChannelDeliveryResult(
                     channel="slack",
                     success=False,
                     error=f"HTTP {response.status_code}: {response.text[:100]}",
@@ -208,7 +208,7 @@ class SlackHandlerMixin:
 
         except Exception as e:
             logger.error(f"[Security Notification] Slack alert error: {e}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="slack",
                 success=False,
                 error=str(e),

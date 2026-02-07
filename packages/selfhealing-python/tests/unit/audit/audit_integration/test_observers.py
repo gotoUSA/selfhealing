@@ -19,7 +19,7 @@ class TestAuditEventObserver:
         from selfhealing.audit.audit_integration import (
             AuditEventObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
 
         class TestObserver(AuditEventObserver):
@@ -30,12 +30,12 @@ class TestAuditEventObserver:
                 self.events.append(event)
 
         observer = TestObserver()
-        event = AuditEventData(event_type=AuditEventType.CIRCUIT_OPENED)
+        event = AuditEventData(event_type=AuditObserverEventType.CIRCUIT_OPENED)
 
         observer.on_event(event)
 
         assert len(observer.events) == 1
-        assert observer.events[0].event_type == AuditEventType.CIRCUIT_OPENED
+        assert observer.events[0].event_type == AuditObserverEventType.CIRCUIT_OPENED
 
 
 class TestAsyncLoggerObserver:
@@ -47,7 +47,7 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         flushed = []
@@ -55,7 +55,7 @@ class TestAsyncLoggerObserver:
         observer = AsyncLoggerObserver(adapter)
 
         event = AuditEventData(
-            event_type=AuditEventType.CIRCUIT_OPENED,
+            event_type=AuditObserverEventType.CIRCUIT_OPENED,
             details={"service": "test_service"},
         )
 
@@ -72,14 +72,14 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         adapter = AsyncLoggerAdapter()
         observer = AsyncLoggerObserver(adapter)
 
         event = AuditEventData(
-            event_type=AuditEventType.CIRCUIT_CLOSED,
+            event_type=AuditObserverEventType.CIRCUIT_CLOSED,
             details={"service": "test_service"},
         )
 
@@ -94,7 +94,7 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         flushed = []
@@ -102,7 +102,7 @@ class TestAsyncLoggerObserver:
         observer = AsyncLoggerObserver(adapter)
 
         event = AuditEventData(
-            event_type=AuditEventType.FALLBACK_ACTIVATED,
+            event_type=AuditObserverEventType.FALLBACK_ACTIVATED,
             details={"fallback_type": "file", "reason": "primary_failed"},
         )
 
@@ -118,14 +118,14 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)
 
-        event = AuditEventData(event_type=AuditEventType.SYSLOG_ACTIVATED)
+        event = AuditEventData(event_type=AuditObserverEventType.SYSLOG_ACTIVATED)
 
         observer.on_event(event)
         time.sleep(0.1)
@@ -140,14 +140,14 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         adapter = AsyncLoggerAdapter()
         observer = AsyncLoggerObserver(adapter)
 
         event = AuditEventData(
-            event_type=AuditEventType.PRIMARY_RECOVERED,
+            event_type=AuditObserverEventType.PRIMARY_RECOVERED,
             details={"service": "audit_primary", "recovery_time_ms": 100},
         )
 
@@ -164,14 +164,14 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)
 
-        event = AuditEventData(event_type=AuditEventType.DEGRADED_MODE_ENTERED)
+        event = AuditEventData(event_type=AuditObserverEventType.DEGRADED_MODE_ENTERED)
 
         observer.on_event(event)
         time.sleep(0.1)
@@ -186,14 +186,14 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         adapter = AsyncLoggerAdapter()
         observer = AsyncLoggerObserver(adapter)
 
         event = AuditEventData(
-            event_type=AuditEventType.RECORD_SUCCESS,
+            event_type=AuditObserverEventType.RECORD_SUCCESS,
             details={"action": "auto_tuning", "audit_id": "audit-123"},
         )
 
@@ -210,7 +210,7 @@ class TestAsyncLoggerObserver:
             AsyncLoggerAdapter,
             AsyncLoggerObserver,
             AuditEventData,
-            AuditEventType,
+            AuditObserverEventType,
         )
         
         flushed = []
@@ -218,7 +218,7 @@ class TestAsyncLoggerObserver:
         observer = AsyncLoggerObserver(adapter)
 
         event = AuditEventData(
-            event_type=AuditEventType.RECORD_FAILED,
+            event_type=AuditObserverEventType.RECORD_FAILED,
             details={"action": "auto_tuning", "error": "DB error"},
         )
 

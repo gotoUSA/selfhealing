@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from selfhealing.services.health_check import (
     HealthCheckService,
-    HealthStatus,
+    SystemHealthSummary,
     ReadinessStatus,
     PoolHealthStatus,
     DatabaseCheck,
@@ -232,7 +232,7 @@ class TestHealthCheckService:
 
         result = self.service.get_overall_health()
 
-        assert isinstance(result, HealthStatus)
+        assert isinstance(result, SystemHealthSummary)
         assert result.status == "healthy"
         assert result.checks["database"] == "healthy"
         assert result.checks["circuit_breaker"] == "enabled"
@@ -249,7 +249,7 @@ class TestHealthCheckService:
 
         result = self.service.get_overall_health()
 
-        assert isinstance(result, HealthStatus)
+        assert isinstance(result, SystemHealthSummary)
         assert result.status == "degraded"
         assert result.checks["database"] == "unhealthy"
         assert result.services_count == 0
@@ -332,8 +332,8 @@ class TestDataClasses:
         assert result["latency_ms"] == 1.5
 
     def test_health_status_to_dict(self):
-        """HealthStatus.to_dict()."""
-        status = HealthStatus(
+        """SystemHealthSummary.to_dict()."""
+        status = SystemHealthSummary(
             status="healthy",
             checks={"database": "healthy"},
             services_count=5,

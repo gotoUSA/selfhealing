@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.adapters.ipc.sidecar_ipc_probe import (
-    HealthCheckResult,
+    SidecarProbeResult,
     HealthStatus,
     IPCHealthMetrics,
     SidecarIPCProbe,
@@ -35,12 +35,12 @@ class TestHealthStatus:
         assert HealthStatus.UNKNOWN.value == "unknown"
 
 
-class TestHealthCheckResult:
-    """HealthCheckResult 테스트."""
+class TestSidecarProbeResult:
+    """SidecarProbeResult 테스트."""
 
     def test_create_result(self):
         """결과 생성."""
-        result = HealthCheckResult(
+        result = SidecarProbeResult(
             status=HealthStatus.HEALTHY,
             message="All systems operational",
         )
@@ -52,7 +52,7 @@ class TestHealthCheckResult:
 
     def test_to_dict(self):
         """딕셔너리 변환."""
-        result = HealthCheckResult(
+        result = SidecarProbeResult(
             status=HealthStatus.DEGRADED,
             message="High latency",
             latency_ms=150.5,
@@ -133,12 +133,12 @@ class TestSidecarIPCProbe:
         assert probe.check_interval_seconds == 60.0
 
     def test_check_returns_result(self):
-        """check() 메서드가 HealthCheckResult 반환."""
+        """check() 메서드가 SidecarProbeResult 반환."""
         probe = SidecarIPCProbe()
 
         result = probe.check()
 
-        assert isinstance(result, HealthCheckResult)
+        assert isinstance(result, SidecarProbeResult)
         assert result.status in [
             HealthStatus.HEALTHY,
             HealthStatus.DEGRADED,

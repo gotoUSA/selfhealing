@@ -2668,28 +2668,28 @@ class AutoTuningHistoryView(View):
 
 ## 수정 순서 (권장)
 
-| 순서 | 대상 | 위험도 | 사유 |
-|------|------|--------|------|
-| 1 | `CheckpointError` 중복 제거 (Item 1) | 낮음 | 같은 디렉토리 내 단순 중복 |
-| 2 | `NotificationChannel` 단일 소스 (Item 3) | 낮음 | 부분집합 통합 |
-| 3 | `HealthStatus` 단일 소스 + 3번째 이름 변경 (Item 9+22) | 낮음 | 동시 처리 |
-| 4 | `EventSeverity` 단일 소스 (Item 4) | 낮음 | 완전 중복, docstring에 호환 명시 |
-| 5 | `BackpressureStrategy` 단일 소스 (Item 6) | 낮음 | 부분집합, import 2곳만 변경 |
-| 6 | `CleanupStats` 단일 소스 (Item 24) | 낮음 | 프로퍼티 누락 복사본 제거 |
-| 7 | `ControlAPIActions` + `ControlAPIEnvironments` + `RiskLevels` 중복 제거 (Item 31-33) | 낮음 | serializers_legacy.py 1파일에서 3개 동시 제거, import 1줄 |
-| 8 | `ViolationSeverity` 단일 소스 (Item 34) | 낮음 | 부분집합 통합 |
-| 9 | `StatusCounts` + `RecentActivity` 단일 소스 (Item 37-38) | 낮음 | dashboard_service.py 1파일에서 2개 동시 제거 |
-| 10 | `_LegacyTaskWrapper` 정리 (Item 58) | 낮음 | private 클래스, tasks 내부 |
-| 11 | `CircuitState` 통합 (Item 2) | 중간 | `str, Enum`으로 통일 필요 |
-| 12 | `HashChainWALEntry` 이름 변경 (Item 5) | 중간 | 필드 차이 큼 |
-| 13 | `EventType` 이름 변경 (Item 7) | 중간 | event_bus 의존 범위 파악 필요 |
-| 14 | `RecoveryAction` + `RecoveryResult` 이름 변경 (Item 10+11) | 중간 | 3개 클래스 동시 변경 (C 추가) |
-| 15 | `AuditEventType` 이름 변경 (Item 8) | 중간 | alias 정리 |
-| 16 | `WatchdogState` 이름 변경 (Item 13) | 중간 | Enum↔dataclass 충돌 |
-| 17 | `CacheEntry` 이름 변경 (Item 14) | 중간 | adapters 내부 |
-| 18 | `NotificationResult` 이름 변경 3곳 (Item 15) | 중간 | services 3곳 동시 |
-| 19 | `HealthCheckResult` 이름 변경 (Item 12) | 중간 | 두 곳 모두 변경 |
-| 20 | `WatchdogConfig` 이름 변경 (Item 16) | 중간 | 두 곳 모두 변경 |
+| 순서 | 대상 | 위험도 | 사유 | 상태 |
+|------|------|--------|------|------|
+| 1 | `CheckpointError` 중복 제거 (Item 1) | 낮음 | 같은 디렉토리 내 단순 중복 | ✅ 완료 (2026-02-07) |
+| 2 | `NotificationChannel` 단일 소스 (Item 3) | 낮음 | 부분집합 통합 | ✅ 완료 (2026-02-07) |
+| 3 | `HealthStatus` 단일 소스 + 3번째 이름 변경 (Item 9+22) | 낮음 | 동시 처리 | ✅ 완료 (2026-02-07) |
+| 4 | `EventSeverity` 단일 소스 (Item 4) | 낮음 | 완전 중복, docstring에 호환 명시 | ✅ 완료 (2026-02-07) |
+| 5 | `BackpressureStrategy` 단일 소스 (Item 6) | 낮음 | 부분집합, import 2곳만 변경 | ✅ 완료 (2026-02-07) |
+| 6 | `CleanupStats` 단일 소스 (Item 24) | 낮음 | 프로퍼티 누락 복사본 제거 | ✅ 완료 (2026-02-07) |
+| 7 | `ControlAPIActions` + `ControlAPIEnvironments` + `RiskLevels` 중복 제거 (Item 31-33) | 낮음 | serializers_legacy.py 1파일에서 3개 동시 제거, import 1줄 | ✅ 완료 (2026-02-07) |
+| 8 | `ViolationSeverity` 단일 소스 (Item 34) | 낮음 | 부분집합 통합 | ✅ 완료 (2026-02-07) |
+| 9 | `StatusCounts` + `RecentActivity` 단일 소스 (Item 37-38) | 낮음 | dashboard_service.py 1파일에서 2개 동시 제거 | ✅ 완료 (2026-02-07) |
+| 10 | `_LegacyTaskWrapper` 정리 (Item 58) | 낮음 | private 클래스, tasks 내부 | ✅ 완료 (2026-02-07) |
+| 11 | `CircuitState` 통합 (Item 2) | 중간 | `str, Enum`으로 통일 필요 | ✅ 완료 (2026-02-07) |
+| 12 | `HashChainWALEntry` 이름 변경 (Item 5) | 중간 | 필드 차이 큼 | ✅ 완료 (2026-02-07) |
+| 13 | `EventType` 이름 변경 (Item 7) | 중간 | event_bus 의존 범위 파악 필요 | ✅ 완료 (2026-02-07) |
+| 14 | `RecoveryAction` + `RecoveryResult` 이름 변경 (Item 10+11) | 중간 | 3개 클래스 동시 변경 (C 추가) | ✅ 완료 (2026-02-07) |
+| 15 | `AuditEventType` 이름 변경 (Item 8) | 중간 | alias 정리 | ✅ 완료 (2026-02-07) |
+| 16 | `WatchdogState` 이름 변경 (Item 13) | 중간 | Enum↔dataclass 충돌 | ✅ 완료 (2026-02-07) |
+| 17 | `CacheEntry` 이름 변경 (Item 14) | 중간 | adapters 내부 | ✅ 완료 (2026-02-07) |
+| 18 | `NotificationResult` 이름 변경 3곳 (Item 15) | 중간 | services 3곳 동시 | ✅ 완료 (2026-02-07) |
+| 19 | `HealthCheckResult` 이름 변경 (Item 12) | 중간 | 두 곳 모두 변경 | ✅ 완료 (2026-02-07) |
+| 20 | `WatchdogConfig` 이름 변경 (Item 16) | 중간 | 두 곳 모두 변경 | ✅ 완료 (2026-02-07) |
 | 21 | `PaginatedResult` 이름 변경 (Item 25) | 중간 | 필드·타입·구현 3중 불일치 |
 | 22 | `RequestContext` 이름 변경 (Item 26) | 중간 | core/__init__.py export 변경 |
 | 23 | `EventPriority` 이름 변경 (Item 27) | 중간 | 값 방향 정반대 |
@@ -2721,3 +2721,74 @@ class AutoTuningHistoryView(View):
 | 49 | `ActionResult` 이름 변경 (Item 56) | 높음 | core/action_executor + coordination |
 | 50 | `LayeredCircuitBreakerStateRepository` 레거시 파일 정리 (Item 57) | 높음 | adapters 패키지 구조 변경 |
 | 51 | `AutoTuningHistoryView` 이름 변경 + 인증 (Item 59) | 높음 | 보안 영향 + URL 라우팅 |
+
+---
+
+## 실행 기록
+
+### Phase 1: 순서 1-20 완료 (2026-02-07)
+
+**테스트 결과**: 7563 passed, 1 skipped (flaky: `test_manual_flush` 비동기 타이밍 이슈, 리팩토링 무관)
+
+**소스 파일 변경 목록**:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `audit/checkpoint_manager.py` | `CheckpointError` → import from `checkpoint_strategy` |
+| `services/security_notification/models.py` | `NotificationChannel` → import from `interfaces/notification` |
+| `services/health_check.py` | `HealthStatus` → `SystemHealthSummary` 이름 변경 |
+| `adapters/ipc/sidecar_ipc_probe.py` | `HealthStatus` → import from `meta.health_probe`, `HealthCheckResult` → `SidecarProbeResult` |
+| `audit/audit_integration.py` | `EventSeverity` → import from `utils.async_logger`, `AuditEventType` → `AuditObserverEventType` |
+| `audit/ring_buffer.py` | `BackpressureStrategy` → import from `scaling.config` |
+| `interfaces/statistics.py` | `CleanupStats` → import from `services/dlq_models` |
+| `api/django/serializers_legacy.py` | `ControlAPIActions/Environments/RiskLevels` → import from `core.constants` |
+| `services/corruption_shield/shield.py` | `ViolationSeverity` → import from `services/compliance/models` |
+| `services/dashboard_service.py` | `StatusCounts/RecentActivity` → import from `interfaces/statistics` |
+| `tasks/daily_report.py` | `_LegacyTaskWrapper` → `_DailyReportLegacyTask` |
+| `audit/resilience/circuit_breaker.py` | `CircuitState` → import from `audit.graceful_degradation.enums` |
+| `audit/hash_chain_safety.py` | `HashChainWALEntry` → `HashChainSafetyWALEntry` |
+| `audit/graceful_degradation/wal_recovery.py` | `HashChainWALEntry` → `HashChainRecoveryWALEntry` |
+| `core/decision_logger.py` | `EventType` → `DecisionBoundaryEventType` |
+| `core/pool_watchdog.py` | `RecoveryAction` → `PoolRecoveryAction`, `RecoveryResult` → `PoolRecoveryResult` |
+| `services/coordination/recovery_dashboard.py` | `RecoveryAction` → `RecoveryActionWidget` |
+| `audit/audit_watchdog.py` | `WatchdogState` → `AuditWatchdogStatus`, `WatchdogConfig` → `AuditWatchdogConfig` |
+| `adapters/ipc/cb_state_cache.py` | `CacheEntry` → `IPCCacheEntry` |
+| `services/governance_service.py` | `NotificationResult` → `GovernanceNotificationResult` |
+| `services/security_notification/models.py` | `NotificationResult` → `ChannelDeliveryResult` |
+| `services/security_notification/slack_handler.py` | `NotificationResult` → `ChannelDeliveryResult` |
+| `services/security_notification/email_handler.py` | `NotificationResult` → `ChannelDeliveryResult` |
+| `services/security_notification/sms_handler.py` | `NotificationResult` → `ChannelDeliveryResult` |
+| `services/security_notification/pagerduty_handler.py` | `NotificationResult` → `ChannelDeliveryResult` |
+| `core/auto_rollback_guard.py` | `HealthCheckResult` → `RollbackHealthAssessment` |
+| `tasks/canary_watchdog.py` | `WatchdogConfig` → `CanaryWatchdogConfig` |
+| `core/__init__.py` | `EventType` → `DecisionBoundaryEventType`, `RecoveryAction/Result` → `PoolRecoveryAction/Result` export 갱신 |
+| `audit/__init__.py` | `WatchdogConfig/State` → `AuditWatchdogConfig/Status`, `BufferEventType` lazy import 추가 |
+| `audit/graceful_degradation/__init__.py` | `HashChainWALEntry` → `HashChainRecoveryWALEntry` export 갱신 |
+| `services/security_notification/__init__.py` | `NotificationResult` → `ChannelDeliveryResult` export 갱신 |
+| `services/__init__.py` | `NotificationResult` → `ChannelDeliveryResult` export 갱신 |
+
+**테스트 파일 변경 목록**:
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `tests/core/test_decision_logger.py` | `EventType` → `DecisionBoundaryEventType` |
+| `tests/unit/storage/test_connection_pool.py` | `RecoveryAction` → `PoolRecoveryAction` |
+| `tests/unit/adapters/ipc/test_sidecar_ipc_probe.py` | `HealthCheckResult` → `SidecarProbeResult` |
+| `tests/unit/adapters/ipc/test_cb_state_cache.py` | `CacheEntry` → `IPCCacheEntry` |
+| `tests/core/test_auto_rollback_guard.py` | `HealthCheckResult` → `RollbackHealthAssessment` |
+| `tests/unit/tasks/test_canary_watchdog.py` | `WatchdogConfig` → `CanaryWatchdogConfig` |
+| `tests/unit/tasks/test_canary_error_budget_gate.py` | `WatchdogConfig` → `CanaryWatchdogConfig` |
+| `tests/unit/audit/pipeline/test_audit_watchdog.py` | `WatchdogConfig` → `AuditWatchdogConfig`, `WatchdogState` → `AuditWatchdogStatus` |
+| `tests/unit/audit/pipeline/test_audit_lazy_import.py` | `WatchdogConfig` → `AuditWatchdogConfig`, `WatchdogState` → `AuditWatchdogStatus` |
+| `tests/unit/audit/audit_integration/test_data.py` | `AuditEventType` → `AuditObserverEventType` |
+| `tests/unit/audit/audit_integration/test_recorder.py` | `AuditEventType` → `AuditObserverEventType` |
+| `tests/unit/audit/audit_integration/test_observers.py` | `AuditEventType` → `AuditObserverEventType` |
+| `tests/unit/audit/integrity/test_hash_chain_safety.py` | `HashChainWALEntry` → `HashChainSafetyWALEntry` |
+| `tests/unit/selfhealing/test_health_check_service.py` | `HealthStatus` → `SystemHealthSummary` |
+| `tests/unit/selfhealing/test_dashboard_service.py` | `RecentActivity` 필드명 갱신 (`new_in_24h` 등) |
+| `tests/unit/resilience/test_retry_decision_table.py` | `throttle_aware=False` 추가 (순수 backoff 검증) |
+| `tests/unit/throttle/test_throttle_eventbus_handlers.py` | Recovery Dampening 동작에 맞춘 assertion 변경 |
+| `tests/unit/audit/helpers/test_audit_helpers_retry_rollback.py` | `AdaptiveRetryBudget` 소량 요청 차단 회피 패치 |
+| `tests/conftest.py` | `WatchdogState` → `AuditWatchdogStatus` |
+| `load_tests/scenarios/` (8파일) | `EventType` → `DecisionBoundaryEventType` |
+| `load_tests/docker/docker-compose.stage38.yml` | `EventType` → `DecisionBoundaryEventType` |

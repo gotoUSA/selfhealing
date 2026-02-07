@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch, MagicMock
 from selfhealing.utils.time import utc_now
 from selfhealing.tasks.canary_watchdog import (
     RolloutWatchdog,
-    WatchdogConfig,
+    CanaryWatchdogConfig,
     WatchdogResult,
     ZombieRollout,
     get_rollout_watchdog,
@@ -46,7 +46,7 @@ def reset_singleton():
 @pytest.fixture
 def watchdog_config():
     """테스트용 Watchdog 설정."""
-    return WatchdogConfig(
+    return CanaryWatchdogConfig(
         zombie_threshold_minutes=30,
         auto_rollback_after_minutes=60,
         max_stage_duration_minutes=15,
@@ -130,16 +130,16 @@ def paused_rollout():
 
 
 # =============================================================================
-# WatchdogConfig Tests
+# CanaryWatchdogConfig Tests
 # =============================================================================
 
 
-class TestWatchdogConfig:
-    """WatchdogConfig 테스트."""
+class TestCanaryWatchdogConfig:
+    """CanaryWatchdogConfig 테스트."""
 
     def test_default_values(self):
         """기본값 확인."""
-        config = WatchdogConfig()
+        config = CanaryWatchdogConfig()
 
         assert config.zombie_threshold_minutes == 30
         assert config.auto_rollback_after_minutes == 60
@@ -149,7 +149,7 @@ class TestWatchdogConfig:
 
     def test_custom_values(self):
         """사용자 정의 값."""
-        config = WatchdogConfig(
+        config = CanaryWatchdogConfig(
             zombie_threshold_minutes=15,
             enable_auto_rollback=False,
         )
@@ -365,7 +365,7 @@ class TestRolloutWatchdog:
 
     def test_auto_promote_disabled(self, sample_rollout):
         """auto_promote 비활성화 시 프로모션 안함."""
-        config = WatchdogConfig(enable_auto_promote=False)
+        config = CanaryWatchdogConfig(enable_auto_promote=False)
         watchdog = RolloutWatchdog(config=config)
 
         mock_service = Mock()

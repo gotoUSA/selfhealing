@@ -191,7 +191,7 @@ class MonotonicTimestamp:
 
 
 @dataclass
-class HashChainWALEntry:
+class HashChainSafetyWALEntry:
     """WAL entry for hash chain operations."""
 
     sequence: int
@@ -212,7 +212,7 @@ class HashChainWALEntry:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "HashChainWALEntry":
+    def from_dict(cls, d: dict[str, Any]) -> "HashChainSafetyWALEntry":
         return cls(
             sequence=d["seq"],
             operation=d["op"],
@@ -314,7 +314,7 @@ class HashChainWAL:
         with self._lock:
             self._sequence += 1
 
-            wal_entry = HashChainWALEntry(
+            wal_entry = HashChainSafetyWALEntry(
                 sequence=self._sequence,
                 operation=operation,
                 entry_data=entry_data,
@@ -379,7 +379,7 @@ class HashChainWAL:
 
             return True
 
-    def get_uncommitted_entries(self) -> list[HashChainWALEntry]:
+    def get_uncommitted_entries(self) -> list[HashChainSafetyWALEntry]:
         """
         Get all uncommitted WAL entries for recovery.
 
@@ -393,7 +393,7 @@ class HashChainWAL:
             return []
 
         # Track status by sequence
-        entries: dict[int, HashChainWALEntry] = {}
+        entries: dict[int, HashChainSafetyWALEntry] = {}
         committed_seqs: set = set()
         aborted_seqs: set = set()
 
@@ -414,7 +414,7 @@ class HashChainWAL:
                         elif status == "ABORTED":
                             aborted_seqs.add(seq)
                         elif "op" in data:  # Full entry
-                            entries[seq] = HashChainWALEntry.from_dict(data)
+                            entries[seq] = HashChainSafetyWALEntry.from_dict(data)
                     except json.JSONDecodeError:
                         continue
 

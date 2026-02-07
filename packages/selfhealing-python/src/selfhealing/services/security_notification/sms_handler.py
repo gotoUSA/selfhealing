@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .models import NotificationConfig, NotificationResult
+from .models import NotificationConfig, ChannelDeliveryResult
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class SMSHandlerMixin:
 
     def _send_sms(
         self, message: dict[str, Any], recipients: list[str]
-    ) -> NotificationResult:
+    ) -> ChannelDeliveryResult:
         """
         Send SMS notification (critical incidents only).
 
@@ -30,10 +30,10 @@ class SMSHandlerMixin:
             recipients: List of phone numbers
 
         Returns:
-            NotificationResult
+            ChannelDeliveryResult
         """
         if not recipients:
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="sms",
                 success=False,
                 error="No SMS recipients configured",
@@ -41,7 +41,7 @@ class SMSHandlerMixin:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] SMS to {recipients}: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="sms",
                 success=True,
                 message=f"[DRY RUN] Would send to {len(recipients)} recipients",
@@ -67,7 +67,7 @@ class SMSHandlerMixin:
             # for recipient in recipients:
             #     client.messages.create(body=sms_body, from_=from_number, to=recipient)
 
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="sms",
                 success=True,
                 message=f"SMS logged for {len(recipients)} recipients (integration pending)",
@@ -75,7 +75,7 @@ class SMSHandlerMixin:
 
         except Exception as e:
             logger.error(f"[Security Notification] SMS error: {e}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="sms",
                 success=False,
                 error=str(e),
@@ -83,11 +83,11 @@ class SMSHandlerMixin:
 
     def _send_sms_alert(
         self, message: dict[str, Any], recipients: list[str]
-    ) -> NotificationResult:
+    ) -> ChannelDeliveryResult:
         """Send SMS alert notification."""
         if self.config.dry_run:
             logger.info(f"[DRY RUN] SMS alert to {recipients}: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="sms",
                 success=True,
                 message=f"[DRY RUN] Would send alert to {len(recipients)} recipients",
@@ -95,7 +95,7 @@ class SMSHandlerMixin:
 
         sms_body = f"[{message['severity']}] {message['title'][:50]}: {message['description'][:100]}"
         logger.info(f"[Security Notification] SMS alert would send: {sms_body}")
-        return NotificationResult(
+        return ChannelDeliveryResult(
             channel="sms",
             success=True,
             message=f"SMS alert logged for {len(recipients)} recipients",

@@ -27,8 +27,8 @@ from selfhealing.audit.audit_watchdog import (
     AuditWatchdog,
     HeartbeatTarget,
     WatchdogChecker,
-    WatchdogConfig,
-    WatchdogState,
+    AuditWatchdogConfig,
+    AuditWatchdogStatus,
     WatchdogStats,
     get_watchdog,
     start_watchdog,
@@ -37,12 +37,12 @@ from selfhealing.audit.audit_watchdog import (
 from selfhealing.audit.self_audit import SelfAuditLogger
 
 
-class TestWatchdogConfig:
-    """WatchdogConfig tests."""
+class TestAuditWatchdogConfig:
+    """AuditWatchdogConfig tests."""
 
     def test_default_config(self):
         """기본 설정 테스트."""
-        config = WatchdogConfig()
+        config = AuditWatchdogConfig()
 
         assert config.heartbeat_interval_seconds == 30.0
         assert config.missed_threshold == 3
@@ -54,7 +54,7 @@ class TestWatchdogConfig:
         targets = [
             HeartbeatTarget(name="test", url="http://example.com/ping"),
         ]
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=60.0,
             missed_threshold=5,
             targets=targets,
@@ -80,7 +80,7 @@ class TestWatchdogConfig:
             },
         ):
             reset_audit_watchdog_settings()  # 싱글톤 리셋
-            config = WatchdogConfig.from_settings()
+            config = AuditWatchdogConfig.from_settings()
 
             assert config.heartbeat_interval_seconds == 45.0
             assert config.missed_threshold == 5
@@ -101,7 +101,7 @@ class TestWatchdogConfig:
             ]:
                 os.environ.pop(key, None)
 
-            config = WatchdogConfig.from_env()
+            config = AuditWatchdogConfig.from_env()
 
             assert config.heartbeat_interval_seconds == 30.0
             assert config.missed_threshold == 3
@@ -149,27 +149,27 @@ class TestAuditWatchdogLifecycle:
         """초기 상태 테스트."""
         watchdog = AuditWatchdog()
 
-        assert watchdog.state == WatchdogState.STOPPED
+        assert watchdog.state == AuditWatchdogStatus.STOPPED
         assert not watchdog.is_running
 
     def test_start_stop(self):
         """시작/중지 테스트."""
-        config = WatchdogConfig(heartbeat_interval_seconds=0.1)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=0.1)
         watchdog = AuditWatchdog(config=config)
 
         watchdog.start()
-        assert watchdog.state == WatchdogState.RUNNING
+        assert watchdog.state == AuditWatchdogStatus.RUNNING
         assert watchdog.is_running
 
         time.sleep(0.15)  # heartbeat 한 번 실행되도록
 
         watchdog.stop()
-        assert watchdog.state == WatchdogState.STOPPED
+        assert watchdog.state == AuditWatchdogStatus.STOPPED
         assert not watchdog.is_running
 
     def test_double_start(self):
         """중복 시작 테스트."""
-        config = WatchdogConfig(heartbeat_interval_seconds=0.1)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=0.1)
         watchdog = AuditWatchdog(config=config)
 
         watchdog.start()
@@ -186,7 +186,7 @@ class TestAuditWatchdogLifecycle:
         watchdog.stop()  # 이미 중지 상태
         watchdog.stop()  # 두 번째 호출도 안전
 
-        assert watchdog.state == WatchdogState.STOPPED
+        assert watchdog.state == AuditWatchdogStatus.STOPPED
 
 
 class TestAuditWatchdogHeartbeat:
@@ -194,7 +194,7 @@ class TestAuditWatchdogHeartbeat:
 
     def test_heartbeat_stats(self):
         """Heartbeat 통계 테스트."""
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.05,
             targets=[],  # 타겟 없음 - 항상 성공
         )
@@ -223,7 +223,7 @@ class TestAuditWatchdogHeartbeat:
     def test_success_callback(self):
         """성공 콜백 테스트."""
         callback = MagicMock()
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.05,
             on_heartbeat_success=callback,
         )
@@ -245,7 +245,7 @@ class TestAuditWatchdogLocalFile:
             heartbeat_file = f.name
 
         try:
-            config = WatchdogConfig(
+            config = AuditWatchdogConfig(
                 heartbeat_interval_seconds=0.05,
                 local_heartbeat_file=heartbeat_file,
             )
@@ -277,7 +277,7 @@ class TestAuditWatchdogLocalFile:
         # 존재하지 않는 드라이브/디렉토리 조합
         invalid_path = os.path.join(tempfile.gettempdir(), "nonexistent_12345", "subdir", "heartbeat.json")
 
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.05,
             local_heartbeat_file=invalid_path,
         )
@@ -300,7 +300,7 @@ class TestAuditWatchdogFailure:
     def test_failure_callback(self):
         """실패 콜백 테스트."""
         failure_callback = MagicMock()
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.05,
             targets=[
                 HeartbeatTarget(
@@ -322,7 +322,7 @@ class TestAuditWatchdogFailure:
     def test_threshold_exceeded_callback(self):
         """임계값 초과 콜백 테스트."""
         threshold_callback = MagicMock()
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.03,
             missed_threshold=2,
             targets=[
@@ -351,7 +351,7 @@ class TestAuditWatchdogFailure:
         Note: 이 테스트는 heartbeat 실패 시 DEGRADED 상태로 전환되는지 확인합니다.
         타이밍에 민감하므로 폴링 방식으로 상태 변경을 대기합니다.
         """
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.05,
             targets=[
                 HeartbeatTarget(
@@ -368,11 +368,11 @@ class TestAuditWatchdogFailure:
         # 폴링 방식으로 DEGRADED 상태 대기 (최대 1초)
         deadline = time.time() + 1.0
         while time.time() < deadline:
-            if watchdog.state == WatchdogState.DEGRADED:
+            if watchdog.state == AuditWatchdogStatus.DEGRADED:
                 break
             time.sleep(0.02)
 
-        assert watchdog.state == WatchdogState.DEGRADED, f"Expected DEGRADED state but got {watchdog.state}"
+        assert watchdog.state == AuditWatchdogStatus.DEGRADED, f"Expected DEGRADED state but got {watchdog.state}"
         assert watchdog.is_running  # DEGRADED도 running으로 간주
 
         watchdog.stop()
@@ -383,7 +383,7 @@ class TestAuditWatchdogDisabledTarget:
 
     def test_disabled_target_skipped(self):
         """비활성화된 타겟은 건너뛰기 테스트."""
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.05,
             targets=[
                 HeartbeatTarget(
@@ -542,7 +542,7 @@ class TestSingletonFunctions:
         싱글톤 상태 격리는 conftest.py의 auto_reset_watchdog_singleton fixture가 담당합니다.
         """
         # start_watchdog 함수를 사용한 테스트
-        config = WatchdogConfig(heartbeat_interval_seconds=1.0)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=1.0)
 
         # start_watchdog 호출 (싱글톤 생성 및 시작)
         watchdog = start_watchdog(config=config)
@@ -580,7 +580,7 @@ class TestThreadSafety:
 
     def test_concurrent_get_stats(self):
         """동시 get_stats() 호출 테스트."""
-        config = WatchdogConfig(heartbeat_interval_seconds=0.02)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=0.02)
         watchdog = AuditWatchdog(config=config)
         watchdog.start()
 
@@ -614,7 +614,7 @@ class TestLegacyCallbacks:
     def test_on_alive_callback(self):
         """레거시 on_alive 콜백 테스트."""
         callback = MagicMock()
-        config = WatchdogConfig(heartbeat_interval_seconds=0.05)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=0.05)
         watchdog = AuditWatchdog(config=config, on_alive=callback)
 
         watchdog.start()
@@ -626,7 +626,7 @@ class TestLegacyCallbacks:
     def test_on_dead_callback(self):
         """레거시 on_dead 콜백 테스트."""
         callback = MagicMock()
-        config = WatchdogConfig(
+        config = AuditWatchdogConfig(
             heartbeat_interval_seconds=0.03,
             missed_threshold=1,
             targets=[
@@ -655,7 +655,7 @@ class TestSelfAuditIntegration:
 
     def test_startup_logged(self):
         """시작 시 self-audit 로깅 테스트."""
-        config = WatchdogConfig(heartbeat_interval_seconds=1.0)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=1.0)
         watchdog = AuditWatchdog(config=config)
 
         watchdog.start()
@@ -669,7 +669,7 @@ class TestSelfAuditIntegration:
 
     def test_shutdown_logged(self):
         """종료 시 self-audit 로깅 테스트."""
-        config = WatchdogConfig(heartbeat_interval_seconds=1.0)
+        config = AuditWatchdogConfig(heartbeat_interval_seconds=1.0)
         watchdog = AuditWatchdog(config=config)
 
         watchdog.start()

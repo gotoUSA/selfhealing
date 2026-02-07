@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .models import NotificationConfig, NotificationResult
+from .models import NotificationConfig, ChannelDeliveryResult
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class EmailHandlerMixin:
 
     def _send_email(
         self, message: dict[str, Any], recipients: list[str]
-    ) -> NotificationResult:
+    ) -> ChannelDeliveryResult:
         """
         Send an email notification.
 
@@ -33,10 +33,10 @@ class EmailHandlerMixin:
             recipients: List of email addresses
 
         Returns:
-            NotificationResult
+            ChannelDeliveryResult
         """
         if not recipients:
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="email",
                 success=False,
                 error="No email recipients configured",
@@ -44,7 +44,7 @@ class EmailHandlerMixin:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] Email to {recipients}: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="email",
                 success=True,
                 message=f"[DRY RUN] Would send to {len(recipients)} recipients",
@@ -64,7 +64,7 @@ class EmailHandlerMixin:
             logger.debug(f"[Security Notification] Email body: {body[:200]}...")
 
             # Return success - actual email sending should be handled by application
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="email",
                 success=True,
                 message=f"Email prepared for {len(recipients)} recipients (actual sending delegated to app)",
@@ -72,7 +72,7 @@ class EmailHandlerMixin:
 
         except Exception as e:
             logger.error(f"[Security Notification] Email error: {e}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="email",
                 success=False,
                 error=str(e),
@@ -114,11 +114,11 @@ This is an automated security alert. Do not reply to this email.
 
     def _send_email_alert(
         self, message: dict[str, Any], recipients: list[str]
-    ) -> NotificationResult:
+    ) -> ChannelDeliveryResult:
         """Send email alert notification."""
         if self.config.dry_run:
             logger.info(f"[DRY RUN] Email alert to {recipients}: {message['title']}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="email",
                 success=True,
                 message=f"[DRY RUN] Would send alert to {len(recipients)} recipients",
@@ -127,11 +127,11 @@ This is an automated security alert. Do not reply to this email.
         try:
             subject = f"[{message['severity']}] {message['title']}"
             logger.info(f"[Security Notification] Email alert prepared: {subject}")
-            return NotificationResult(
+            return ChannelDeliveryResult(
                 channel="email",
                 success=True,
                 message=f"Email alert prepared for {len(recipients)} recipients",
             )
         except Exception as e:
             logger.error(f"[Security Notification] Email alert error: {e}")
-            return NotificationResult(channel="email", success=False, error=str(e))
+            return ChannelDeliveryResult(channel="email", success=False, error=str(e))

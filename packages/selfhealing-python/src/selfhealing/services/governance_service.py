@@ -60,7 +60,7 @@ class ExpiryCheckResult:
 
 
 @dataclass
-class NotificationResult:
+class GovernanceNotificationResult:
     """알림 발송 결과."""
 
     sent: bool
@@ -375,7 +375,7 @@ class GovernanceService(GovernanceCheckMixin):
         title: str,
         message: str,
         status: dict[str, Any],
-    ) -> NotificationResult:
+    ) -> GovernanceNotificationResult:
         """
         알림 발송.
 
@@ -398,11 +398,11 @@ class GovernanceService(GovernanceCheckMixin):
             #     severity="critical" if event_type == "auto_restore" else "warning",
             # )
 
-            return NotificationResult(sent=True, channels=channels)
+            return GovernanceNotificationResult(sent=True, channels=channels)
 
         except Exception as e:
             logger.error(f"[GovernanceService] Failed to send notification: {e}")
-            return NotificationResult(sent=False, error=str(e))
+            return GovernanceNotificationResult(sent=False, error=str(e))
 
 
 # =============================================================================
@@ -429,6 +429,6 @@ def get_governance_service() -> GovernanceService:
 __all__ = [
     "GovernanceService",
     "ExpiryCheckResult",
-    "NotificationResult",
+    "GovernanceNotificationResult",
     "get_governance_service",
 ]

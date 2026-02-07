@@ -266,8 +266,8 @@ class TestAuditLazyImport:
         """Watchdog symbols should be lazily loaded."""
         from selfhealing.audit import (
             AuditWatchdog,
-            WatchdogConfig,
-            WatchdogState,
+            AuditWatchdogConfig,
+            AuditWatchdogStatus,
             WatchdogStats,
             HeartbeatTarget,
             WatchdogChecker,
@@ -277,8 +277,8 @@ class TestAuditLazyImport:
         )
 
         assert AuditWatchdog is not None
-        assert WatchdogConfig is not None
-        assert WatchdogState is not None
+        assert AuditWatchdogConfig is not None
+        assert AuditWatchdogStatus is not None
         assert WatchdogStats is not None
         assert HeartbeatTarget is not None
         assert WatchdogChecker is not None

@@ -65,7 +65,7 @@ class RollbackSeverity(str, Enum):
 
 
 @dataclass
-class HealthCheckResult:
+class RollbackHealthAssessment:
     """헬스체크 결과"""
 
     healthy: bool
@@ -190,7 +190,7 @@ class AutoRollbackGuard:
         self._thread: threading.Thread | None = None
 
         # 헬스체크 이력
-        self._health_history: list[HealthCheckResult] = []
+        self._health_history: list[RollbackHealthAssessment] = []
         self._consecutive_failures = 0
         self._last_rollback_time: datetime | None = None
 
@@ -261,7 +261,7 @@ class AutoRollbackGuard:
         # 저하 수준 판단
         degradation = self._assess_degradation(error_rate, latency_p99)
 
-        result = HealthCheckResult(
+        result = RollbackHealthAssessment(
             healthy=degradation == RollbackSeverity.NONE,
             degradation_level=degradation,
             error_rate=error_rate,
@@ -299,7 +299,7 @@ class AutoRollbackGuard:
 
         return RollbackSeverity.NONE
 
-    def _handle_health_result(self, result: HealthCheckResult):
+    def _handle_health_result(self, result: RollbackHealthAssessment):
         """헬스체크 결과 처리"""
         with self._lock:
             if result.healthy:
@@ -319,7 +319,7 @@ class AutoRollbackGuard:
             else:
                 self._handle_minor_degradation(result)
 
-    def _handle_minor_degradation(self, result: HealthCheckResult):
+    def _handle_minor_degradation(self, result: RollbackHealthAssessment):
         """경미한 저하 처리 - 알림만"""
         if self._consecutive_failures >= self.CONSECUTIVE_FAILURES_ALERT:
             self._state = GuardState.ALERT
@@ -329,7 +329,7 @@ class AutoRollbackGuard:
                 f"레이턴시: {result.latency_p99_ms:.0f}ms)",
             )
 
-    def _handle_major_degradation(self, result: HealthCheckResult):
+    def _handle_major_degradation(self, result: RollbackHealthAssessment):
         """심각한 저하 처리 - 롤백 고려"""
         self._state = GuardState.ALERT
         self._send_alert(
@@ -342,7 +342,7 @@ class AutoRollbackGuard:
         if self._consecutive_failures >= self.CONSECUTIVE_FAILURES_ALERT:
             self._execute_rollback("major_degradation_consecutive")
 
-    def _handle_critical_degradation(self, result: HealthCheckResult):
+    def _handle_critical_degradation(self, result: RollbackHealthAssessment):
         """긴급 저하 처리 - 즉시 롤백"""
         self._state = GuardState.EMERGENCY
         self._send_alert(
@@ -608,6 +608,6 @@ __all__ = [
     "AutoRollbackGuard",
     "GuardState",
     "RollbackSeverity",
-    "HealthCheckResult",
+    "RollbackHealthAssessment",
     "SafeDefault",
 ]

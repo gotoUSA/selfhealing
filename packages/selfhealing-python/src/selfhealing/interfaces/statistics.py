@@ -69,14 +69,9 @@ class RecentActivity:
     trend: str = "stable"  # up, down, stable
 
 
-@dataclass
-class CleanupStats:
-    """Cleanup operation statistics."""
-
-    total: int = 0
-    by_status: dict[str, int] = field(default_factory=dict)
-    resolved_older_than_30_days: int = 0
-    archived_older_than_90_days: int = 0
+# CleanupStats: 단일 소스는 services/dlq_models.py (Item 24 중복 제거)
+# dlq_models.py 버전이 can_archive/can_purge 프로퍼티 포함
+from selfhealing.services.dlq_models import CleanupStats  # noqa: E402, F401
 
 
 @dataclass
@@ -231,9 +226,7 @@ class StatisticsRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    def get_failure_type_distribution(
-        self, limit: int = 10
-    ) -> list[FailureTypeDistribution]:
+    def get_failure_type_distribution(self, limit: int = 10) -> list[FailureTypeDistribution]:
         """
         Get distribution of DLQ entries by failure type.
 
