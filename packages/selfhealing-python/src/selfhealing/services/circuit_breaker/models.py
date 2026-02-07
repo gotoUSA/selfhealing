@@ -161,7 +161,7 @@ class LoadSheddingPolicy:
 
 
 @dataclass
-class CanaryStage:
+class CanaryRecoveryStageConfig:
     """
     개별 Canary 단계.
 
@@ -213,27 +213,27 @@ class RecoveryStrategy:
     type: str = "canary"  # "immediate" | "canary"
 
     # Canary 단계 설정 (기본 4단계)
-    canary_stages: list[CanaryStage] = field(
+    canary_stages: list[CanaryRecoveryStageConfig] = field(
         default_factory=lambda: [
-            CanaryStage(
+            CanaryRecoveryStageConfig(
                 traffic_percent=10.0,
                 duration_seconds=5,
                 required_success_rate=95.0,
                 description="Stage 1: 10% 트래픽으로 5초간 관찰",
             ),
-            CanaryStage(
+            CanaryRecoveryStageConfig(
                 traffic_percent=30.0,
                 duration_seconds=5,
                 required_success_rate=95.0,
                 description="Stage 2: 30% 트래픽으로 5초간 관찰",
             ),
-            CanaryStage(
+            CanaryRecoveryStageConfig(
                 traffic_percent=60.0,
                 duration_seconds=5,
                 required_success_rate=90.0,
                 description="Stage 3: 60% 트래픽으로 5초간 관찰",
             ),
-            CanaryStage(
+            CanaryRecoveryStageConfig(
                 traffic_percent=100.0,
                 duration_seconds=0,
                 required_success_rate=90.0,

@@ -4,7 +4,7 @@ Canary + Stale Cache Integration
 HALF_OPEN 상태에서 Canary 비율(10%→30%→60%)의 요청만 백엔드로 보내고,
 나머지 요청은 즉시 Stale Cache를 반환합니다.
 
-결과: 
+결과:
 - 90%의 사용자는 에러 없이 서비스 이용 (약간 오래된 데이터)
 - 10%의 요청으로 백엔드 안정성 검증
 """
@@ -19,7 +19,7 @@ from typing import Any, Generic, TypeVar
 
 from selfhealing.services.circuit_breaker.canary_recovery import (
     CanaryRecoveryManager,
-    CanaryState,
+    CanaryRecoveryStage,
     get_canary_recovery_manager,
 )
 from selfhealing.services.circuit_breaker.config import CircuitState
@@ -145,7 +145,7 @@ class CanaryWithStaleDecision:
     stale_data: Any | None = None
     stale_age_seconds: float = 0.0
     is_canary_request: bool = False
-    current_stage: CanaryState | None = None
+    current_stage: CanaryRecoveryStage | None = None
     traffic_percent: float = 0.0
     reason: str = ""
     reject: bool = False
@@ -532,7 +532,7 @@ class CanaryWithStaleCacheService:
         service_id: str,
         cache_key: str,
         cb_state: str,
-        current_stage: CanaryState | None = None,
+        current_stage: CanaryRecoveryStage | None = None,
         traffic_percent: float = 0.0,
     ) -> CanaryWithStaleDecision:
         """

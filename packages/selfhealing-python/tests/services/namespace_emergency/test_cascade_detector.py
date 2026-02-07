@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 from selfhealing.services.namespace_emergency.cascade_detector import (
     RegionalCascadeDetector,
-    CascadeEvent,
+    CascadeDetectionEvent,
     get_cascade_detector,
     reset_cascade_detector,
     DEFAULT_ESCALATION_THRESHOLD,
@@ -27,12 +27,12 @@ from selfhealing.services.coordination.enums import EmergencyScope
 from selfhealing.services.coordination.models import ScopedEmergencyState
 
 
-class TestCascadeEvent:
-    """CascadeEvent 데이터클래스 테스트."""
+class TestCascadeDetectionEvent:
+    """CascadeDetectionEvent 데이터클래스 테스트."""
     
     def test_default_values(self):
         """기본값 생성."""
-        event = CascadeEvent()
+        event = CascadeDetectionEvent()
         
         assert event.event_id == ""
         assert event.affected_regions == []
@@ -41,7 +41,7 @@ class TestCascadeEvent:
     
     def test_to_dict(self):
         """딕셔너리 변환."""
-        event = CascadeEvent(
+        event = CascadeDetectionEvent(
             event_id="cascade-123",
             affected_regions=["seoul", "tokyo"],
             total_strict_count=2,

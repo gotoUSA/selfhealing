@@ -30,7 +30,7 @@ from selfhealing.services.namespace_emergency.atomic_query import (
     get_atomic_state_query,
 )
 from selfhealing.services.namespace_emergency.cascade_detector import (
-    CascadeEvent,
+    CascadeDetectionEvent,
     RegionalCascadeDetector,
     get_cascade_detector,
     reset_cascade_detector,
@@ -80,7 +80,7 @@ __all__ = [
     "reset_namespaced_emergency_tracker",
     "GLOBAL_NAMESPACE",
     "RegionalCascadeDetector",
-    "CascadeEvent",
+    "CascadeDetectionEvent",
     "get_cascade_detector",
     "reset_cascade_detector",
     "ScopedEmergencyState",

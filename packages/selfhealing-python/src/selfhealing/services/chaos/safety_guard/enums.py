@@ -1,7 +1,7 @@
 """
 Safety Guard Enums.
 
-Contains SafetyStatus and BlockReason enums.
+Contains SafetyStatus and ChaosBlockReason enums.
 """
 
 from enum import Enum
@@ -23,7 +23,7 @@ class SafetyStatus(str, Enum):
     """Could not complete safety checks. Fail-safe: BLOCKED."""
 
 
-class BlockReason(str, Enum):
+class ChaosBlockReason(str, Enum):
     """Reasons for blocking an experiment."""
 
     LOW_ERROR_BUDGET = "low_error_budget"

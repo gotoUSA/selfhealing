@@ -40,7 +40,7 @@ from .circuit_breaker import (
     CircuitBreaker,
     AuditCircuitBreakerConfig,
     CircuitBreakerRegistry,
-    CircuitBreakerState,
+    CircuitBreakerSnapshot,
     CircuitState,
     get_circuit_breaker,
 )
@@ -62,7 +62,7 @@ __all__ = [
     # Circuit Breaker
     "CircuitState",
     "AuditCircuitBreakerConfig",
-    "CircuitBreakerState",
+    "CircuitBreakerSnapshot",
     "CircuitBreaker",
     "CircuitBreakerRegistry",
     "get_circuit_breaker",

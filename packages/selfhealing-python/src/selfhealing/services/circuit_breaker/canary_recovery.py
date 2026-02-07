@@ -22,7 +22,7 @@ from enum import Enum
 from typing import Any
 
 from selfhealing.services.circuit_breaker.models import (
-    CanaryStage,
+    CanaryRecoveryStageConfig,
     RecoveryStrategy,
 )
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class CanaryState(str, Enum):
+class CanaryRecoveryStage(str, Enum):
     """
     Canary Recovery 상태.
 
@@ -67,7 +67,7 @@ class CanaryStageMetrics:
         current_success_rate: 현재 성공률
     """
 
-    stage: CanaryState
+    stage: CanaryRecoveryStage
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     total_requests: int = 0
     success_count: int = 0
@@ -128,7 +128,7 @@ class CanaryRecoveryState:
     """
 
     service_id: str
-    current_stage: CanaryState = CanaryState.NOT_IN_CANARY
+    current_stage: CanaryRecoveryStage = CanaryRecoveryStage.NOT_IN_CANARY
     stage_index: int = -1
     metrics: CanaryStageMetrics | None = None
     recovery_started_at: datetime | None = None
@@ -137,11 +137,11 @@ class CanaryRecoveryState:
 
     def start_recovery(self, strategy: RecoveryStrategy) -> None:
         """Canary 복구 시작."""
-        self.current_stage = CanaryState.CANARY_1
+        self.current_stage = CanaryRecoveryStage.CANARY_1
         self.stage_index = 0
         self.recovery_started_at = datetime.now(timezone.utc)
         self.recovery_strategy = strategy
-        self.metrics = CanaryStageMetrics(stage=CanaryState.CANARY_1)
+        self.metrics = CanaryStageMetrics(stage=CanaryRecoveryStage.CANARY_1)
         self.stage_history = []
 
     def advance_stage(self) -> bool:
@@ -163,17 +163,17 @@ class CanaryRecoveryState:
 
         if next_index >= len(self.recovery_strategy.canary_stages):
             # 모든 단계 완료 → CLOSED
-            self.current_stage = CanaryState.NOT_IN_CANARY
+            self.current_stage = CanaryRecoveryStage.NOT_IN_CANARY
             self.stage_index = -1
             self.metrics = None
             return False
 
         # 다음 Canary 단계 설정
         stage_names = [
-            CanaryState.CANARY_1,
-            CanaryState.CANARY_2,
-            CanaryState.CANARY_3,
-            CanaryState.CANARY_4,
+            CanaryRecoveryStage.CANARY_1,
+            CanaryRecoveryStage.CANARY_2,
+            CanaryRecoveryStage.CANARY_3,
+            CanaryRecoveryStage.CANARY_4,
         ]
         self.stage_index = next_index
         self.current_stage = stage_names[min(next_index, len(stage_names) - 1)]
@@ -190,16 +190,16 @@ class CanaryRecoveryState:
                 }
             )
 
-        self.current_stage = CanaryState.NOT_IN_CANARY
+        self.current_stage = CanaryRecoveryStage.NOT_IN_CANARY
         self.stage_index = -1
         self.metrics = None
         self.recovery_started_at = None
 
     def is_in_canary(self) -> bool:
         """Canary 복구 진행 중인지 확인."""
-        return self.current_stage != CanaryState.NOT_IN_CANARY
+        return self.current_stage != CanaryRecoveryStage.NOT_IN_CANARY
 
-    def get_current_config(self) -> CanaryStage | None:
+    def get_current_config(self) -> CanaryRecoveryStageConfig | None:
         """현재 단계의 설정 반환."""
         if self.recovery_strategy is None or self.stage_index < 0:
             return None
@@ -215,11 +215,7 @@ class CanaryRecoveryState:
             "stage_index": self.stage_index,
             "is_in_canary": self.is_in_canary(),
             "metrics": self.metrics.to_dict() if self.metrics else None,
-            "recovery_started_at": (
-                self.recovery_started_at.isoformat()
-                if self.recovery_started_at
-                else None
-            ),
+            "recovery_started_at": (self.recovery_started_at.isoformat() if self.recovery_started_at else None),
             "stage_history": self.stage_history,
         }
 
@@ -230,7 +226,7 @@ class CanaryRecoveryState:
 
 
 @dataclass
-class CanaryDecision:
+class CanaryRecoveryDecision:
     """
     Canary 요청 허용 결정 결과.
 
@@ -246,7 +242,7 @@ class CanaryDecision:
     allow_backend: bool = False
     is_canary_request: bool = False
     use_stale_cache: bool = False
-    current_stage: CanaryState | None = None
+    current_stage: CanaryRecoveryStage | None = None
     traffic_percent: float = 0.0
     reason: str = ""
 
@@ -283,8 +279,8 @@ class CanaryStageTransitionResult:
     """
 
     transitioned: bool = False
-    previous_stage: CanaryState | None = None
-    new_stage: CanaryState | None = None
+    previous_stage: CanaryRecoveryStage | None = None
+    new_stage: CanaryRecoveryStage | None = None
     success_rate: float = 0.0
     reason: str = ""
     completed: bool = False
@@ -294,9 +290,7 @@ class CanaryStageTransitionResult:
         """딕셔너리로 변환."""
         return {
             "transitioned": self.transitioned,
-            "previous_stage": (
-                self.previous_stage.value if self.previous_stage else None
-            ),
+            "previous_stage": (self.previous_stage.value if self.previous_stage else None),
             "new_stage": self.new_stage.value if self.new_stage else None,
             "success_rate": self.success_rate,
             "reason": self.reason,
@@ -422,9 +416,7 @@ class CanaryRecoveryManager:
 
             # immediate 전략이면 Canary 사용 안 함
             if effective_strategy.type == "immediate":
-                logger.info(
-                    f"[CanaryRecovery] {service_id}: immediate strategy, skipping canary"
-                )
+                logger.info(f"[CanaryRecovery] {service_id}: immediate strategy, skipping canary")
                 return CanaryRecoveryState(service_id=service_id)
 
             # Canary 복구 상태 생성
@@ -457,9 +449,7 @@ class CanaryRecoveryManager:
                 return False
 
             state.reset()
-            logger.info(
-                f"[CanaryRecovery] {service_id}: Stopped canary recovery, reason={reason}"
-            )
+            logger.info(f"[CanaryRecovery] {service_id}: Stopped canary recovery, reason={reason}")
             return True
 
     def get_recovery_state(self, service_id: str) -> CanaryRecoveryState | None:
@@ -493,7 +483,7 @@ class CanaryRecoveryManager:
     # Request Decision
     # =========================================================================
 
-    def should_allow_request(self, service_id: str) -> CanaryDecision:
+    def should_allow_request(self, service_id: str) -> CanaryRecoveryDecision:
         """
         요청 허용 결정 (Canary 비율 적용).
 
@@ -501,14 +491,14 @@ class CanaryRecoveryManager:
             service_id: 서비스 ID
 
         Returns:
-            CanaryDecision: 요청 허용 결정
+            CanaryRecoveryDecision: 요청 허용 결정
         """
         with self._state_lock:
             state = self._recovery_states.get(service_id)
 
             # Canary 복구 중이 아니면 전부 허용
             if state is None or not state.is_in_canary():
-                return CanaryDecision(
+                return CanaryRecoveryDecision(
                     allow_backend=True,
                     is_canary_request=False,
                     reason="not in canary recovery",
@@ -517,7 +507,7 @@ class CanaryRecoveryManager:
             # 현재 단계 설정 가져오기
             stage_config = state.get_current_config()
             if stage_config is None:
-                return CanaryDecision(
+                return CanaryRecoveryDecision(
                     allow_backend=True,
                     is_canary_request=False,
                     reason="no stage config",
@@ -527,7 +517,7 @@ class CanaryRecoveryManager:
             is_canary = random.random() * 100 < stage_config.traffic_percent
 
             if is_canary:
-                return CanaryDecision(
+                return CanaryRecoveryDecision(
                     allow_backend=True,
                     is_canary_request=True,
                     use_stale_cache=False,
@@ -536,7 +526,7 @@ class CanaryRecoveryManager:
                     reason=f"canary request ({stage_config.traffic_percent}%)",
                 )
             else:
-                return CanaryDecision(
+                return CanaryRecoveryDecision(
                     allow_backend=False,
                     is_canary_request=False,
                     use_stale_cache=True,
@@ -681,10 +671,7 @@ class CanaryRecoveryManager:
                     completed=True,
                 )
 
-                logger.info(
-                    f"[CanaryRecovery] {service_id}: Recovery COMPLETED, "
-                    f"final success_rate={success_rate:.1f}%"
-                )
+                logger.info(f"[CanaryRecovery] {service_id}: Recovery COMPLETED, " f"final success_rate={success_rate:.1f}%")
 
                 if self._on_recovery_completed:
                     self._on_recovery_completed(service_id, state.to_dict())
@@ -700,19 +687,12 @@ class CanaryRecoveryManager:
     def get_all_recovery_states(self) -> dict[str, dict[str, Any]]:
         """모든 서비스의 Canary 복구 상태 조회."""
         with self._state_lock:
-            return {
-                service_id: state.to_dict()
-                for service_id, state in self._recovery_states.items()
-            }
+            return {service_id: state.to_dict() for service_id, state in self._recovery_states.items()}
 
     def get_active_recoveries(self) -> list[str]:
         """현재 Canary 복구 중인 서비스 목록."""
         with self._state_lock:
-            return [
-                service_id
-                for service_id, state in self._recovery_states.items()
-                if state.is_in_canary()
-            ]
+            return [service_id for service_id, state in self._recovery_states.items() if state.is_in_canary()]
 
     def get_recovery_stats(self, service_id: str) -> dict[str, Any] | None:
         """
@@ -791,7 +771,7 @@ def is_in_canary_recovery(service_id: str) -> bool:
     return get_canary_recovery_manager().is_in_canary_recovery(service_id)
 
 
-def canary_should_allow_request(service_id: str) -> CanaryDecision:
+def canary_should_allow_request(service_id: str) -> CanaryRecoveryDecision:
     """Canary 요청 허용 결정."""
     return get_canary_recovery_manager().should_allow_request(service_id)
 

@@ -22,7 +22,7 @@ from selfhealing.services.circuit_breaker.canary_recovery import (
     get_canary_recovery_manager,
 )
 from selfhealing.services.circuit_breaker.models import (
-    CanaryStage,
+    CanaryRecoveryStageConfig,
     RecoveryStrategy,
 )
 from selfhealing.services.circuit_breaker.service_config import (
@@ -212,25 +212,25 @@ class RecoveryStrategySelector:
                 strict_mode=True,
                 on_stage_failure="restart",
                 canary_stages=[
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=5.0,
                         duration_seconds=10,
                         required_success_rate=99.0,
                         description="Critical Stage 1: 5% for 10s",
                     ),
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=20.0,
                         duration_seconds=10,
                         required_success_rate=98.0,
                         description="Critical Stage 2: 20% for 10s",
                     ),
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=50.0,
                         duration_seconds=10,
                         required_success_rate=97.0,
                         description="Critical Stage 3: 50% for 10s",
                     ),
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=100.0,
                         duration_seconds=0,
                         required_success_rate=95.0,
@@ -248,19 +248,19 @@ class RecoveryStrategySelector:
                 strict_mode=False,
                 on_stage_failure="restart",
                 canary_stages=[
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=20.0,
                         duration_seconds=5,
                         required_success_rate=90.0,
                         description="Medium Stage 1: 20% for 5s",
                     ),
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=50.0,
                         duration_seconds=5,
                         required_success_rate=85.0,
                         description="Medium Stage 2: 50% for 5s",
                     ),
-                    CanaryStage(
+                    CanaryRecoveryStageConfig(
                         traffic_percent=100.0,
                         duration_seconds=0,
                         required_success_rate=80.0,
@@ -333,9 +333,7 @@ class RecoveryStrategySelector:
             source="default",
         )
 
-    def set_criticality_strategy(
-        self, criticality: str, strategy: RecoveryStrategy
-    ) -> None:
+    def set_criticality_strategy(self, criticality: str, strategy: RecoveryStrategy) -> None:
         """
         Criticality별 기본 전략 설정.
 
@@ -378,9 +376,7 @@ class RecoveryStrategySelector:
                 )
             else:
                 # Immediate 전략 - 즉시 100% 허용
-                logger.info(
-                    f"[RecoveryStrategy] {service_id}: Using immediate recovery"
-                )
+                logger.info(f"[RecoveryStrategy] {service_id}: Using immediate recovery")
 
             self._active_recoveries[service_id] = selection.strategy_type
             return selection
@@ -405,9 +401,7 @@ class RecoveryStrategySelector:
             if strategy_type == "canary":
                 self._canary_manager.stop_canary_recovery(service_id, reason)
 
-            logger.info(
-                f"[RecoveryStrategy] {service_id}: Stopped recovery, reason={reason}"
-            )
+            logger.info(f"[RecoveryStrategy] {service_id}: Stopped recovery, reason={reason}")
             return True
 
     def is_in_recovery(self, service_id: str) -> bool:
@@ -473,11 +467,7 @@ class RecoveryStrategySelector:
                 use_stale_cache=stale_decision.use_stale,
                 stale_data=stale_decision.stale_data,
                 strategy_type="canary",
-                current_stage=(
-                    stale_decision.current_stage.value
-                    if stale_decision.current_stage
-                    else None
-                ),
+                current_stage=(stale_decision.current_stage.value if stale_decision.current_stage else None),
                 traffic_percent=stale_decision.traffic_percent,
                 reason=stale_decision.reason,
             )
@@ -490,11 +480,7 @@ class RecoveryStrategySelector:
             is_canary_request=canary_decision.is_canary_request,
             use_stale_cache=canary_decision.use_stale_cache,
             strategy_type="canary",
-            current_stage=(
-                canary_decision.current_stage.value
-                if canary_decision.current_stage
-                else None
-            ),
+            current_stage=(canary_decision.current_stage.value if canary_decision.current_stage else None),
             traffic_percent=canary_decision.traffic_percent,
             reason=canary_decision.reason,
         )

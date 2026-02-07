@@ -11,7 +11,7 @@ from selfhealing.services.health_check import (
     HealthCheckService,
     SystemHealthSummary,
     ReadinessStatus,
-    PoolHealthStatus,
+    PoolHealthSummary,
     DatabaseCheck,
     PoolInfo,
     get_health_check_service,
@@ -36,7 +36,7 @@ class TestHealthCheckService:
         mock_repo = MagicMock()
         mock_repo.ping.return_value = True
         mock_repo_class.return_value = mock_repo
-        
+
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
@@ -60,7 +60,7 @@ class TestHealthCheckService:
         mock_repo = MagicMock()
         mock_repo.ping.side_effect = Exception("Connection refused")
         mock_repo_class.return_value = mock_repo
-        
+
         mock_conn = MagicMock()
         mock_connections.__getitem__.return_value = mock_conn
 
@@ -81,11 +81,11 @@ class TestHealthCheckService:
     def test_check_all_databases(self, mock_connections, mock_repo_class):
         """모든 DB 연결 확인."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default", "replica"]))
-        
+
         mock_repo = MagicMock()
         mock_repo.ping.return_value = True
         mock_repo_class.return_value = mock_repo
-        
+
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
@@ -159,7 +159,7 @@ class TestHealthCheckService:
 
         result = self.service.get_pool_health()
 
-        assert isinstance(result, PoolHealthStatus)
+        assert isinstance(result, PoolHealthSummary)
         assert result.status == "healthy"
         assert result.error is None
 
@@ -170,7 +170,7 @@ class TestHealthCheckService:
 
         result = self.service.get_pool_health()
 
-        assert isinstance(result, PoolHealthStatus)
+        assert isinstance(result, PoolHealthSummary)
         assert result.status == "error"
         assert result.error == "Pool error"
 
@@ -182,11 +182,11 @@ class TestHealthCheckService:
     def test_get_readiness_ready(self, mock_connections):
         """모든 DB 정상일 때 ready."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default"]))
-        
+
         mock_cursor = MagicMock()
         mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
         mock_cursor.__exit__ = MagicMock(return_value=False)
-        
+
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
@@ -222,12 +222,10 @@ class TestHealthCheckService:
     @patch.object(HealthCheckService, "check_database")
     def test_get_overall_health_healthy(self, mock_check_db, mock_get_count, mock_now):
         """전체 헬스 체크 - 정상."""
-        mock_check_db.return_value = DatabaseCheck(
-            alias="default", vendor="postgresql", is_connected=True, is_usable=True
-        )
-        
+        mock_check_db.return_value = DatabaseCheck(alias="default", vendor="postgresql", is_connected=True, is_usable=True)
+
         mock_get_count.return_value = 5
-        
+
         mock_now.return_value.isoformat.return_value = "2025-12-19T00:00:00Z"
 
         result = self.service.get_overall_health()
@@ -267,11 +265,11 @@ class TestHealthCheckService:
     def test_is_ready_true(self, mock_connections, mock_repo_class):
         """is_ready - 정상."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default"]))
-        
+
         mock_repo = MagicMock()
         mock_repo.ping.return_value = True
         mock_repo_class.return_value = mock_repo
-        
+
         mock_conn = MagicMock()
         mock_conn.vendor = "postgresql"
         mock_conn.is_usable.return_value = True
@@ -284,11 +282,11 @@ class TestHealthCheckService:
     def test_is_ready_false(self, mock_connections, mock_repo_class):
         """is_ready - 실패."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default"]))
-        
+
         mock_repo = MagicMock()
         mock_repo.ping.side_effect = Exception("Connection refused")
         mock_repo_class.return_value = mock_repo
-        
+
         mock_conn = MagicMock()
         mock_connections.__getitem__.return_value = mock_conn
 
@@ -302,6 +300,7 @@ class TestGetHealthCheckService:
         """싱글톤 인스턴스 반환."""
         # Reset singleton
         import selfhealing.services.health_check as module
+
         module._health_check_service = None
 
         service1 = get_health_check_service()
@@ -323,9 +322,9 @@ class TestDataClasses:
             is_usable=True,
             latency_ms=1.5,
         )
-        
+
         result = check.to_dict()
-        
+
         assert result["alias"] == "default"
         assert result["vendor"] == "postgresql"
         assert result["is_connected"] is True
@@ -339,9 +338,9 @@ class TestDataClasses:
             services_count=5,
             timestamp="2025-12-19T00:00:00Z",
         )
-        
+
         result = status.to_dict()
-        
+
         assert result["status"] == "healthy"
         assert result["checks"]["database"] == "healthy"
         assert result["services_count"] == 5
@@ -353,20 +352,20 @@ class TestDataClasses:
             checks={"database_default": "ready"},
             is_ready=True,
         )
-        
+
         result = status.to_dict()
-        
+
         assert result["status"] == "ready"
         assert result["is_ready"] is True
 
-    def test_pool_health_status_to_dict(self):
-        """PoolHealthStatus.to_dict()."""
-        status = PoolHealthStatus(
+    def test_pool_health_summary_to_dict(self):
+        """PoolHealthSummary.to_dict()."""
+        status = PoolHealthSummary(
             status="healthy",
             pool_info={"alias": "default"},
         )
-        
+
         result = status.to_dict()
-        
+
         assert result["status"] == "healthy"
         assert result["pool_info"]["alias"] == "default"

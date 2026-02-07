@@ -31,8 +31,8 @@ class AuditCircuitBreakerConfig:
 
 
 @dataclass
-class CircuitBreakerState:
-    """Current state of a circuit breaker."""
+class CircuitBreakerSnapshot:
+    """Snapshot of a circuit breaker's current state."""
 
     state: CircuitState = CircuitState.CLOSED
     failure_count: int = 0
@@ -82,7 +82,7 @@ class CircuitBreaker:
         """
         self.name = name
         self.config = config or AuditCircuitBreakerConfig()
-        self._state = CircuitBreakerState()
+        self._state = CircuitBreakerSnapshot()
         self._lock = threading.RLock()
 
     @property
@@ -255,7 +255,7 @@ def get_circuit_breaker(name: str) -> CircuitBreaker:
 __all__ = [
     "CircuitState",
     "AuditCircuitBreakerConfig",
-    "CircuitBreakerState",
+    "CircuitBreakerSnapshot",
     "CircuitBreaker",
     "CircuitBreakerRegistry",
     "get_circuit_breaker",

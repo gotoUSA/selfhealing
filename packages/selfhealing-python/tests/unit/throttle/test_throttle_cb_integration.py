@@ -22,7 +22,6 @@ from selfhealing.services.throttle.adaptive import (
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.registry import (
-    CircuitBreakerState,
     ServiceThrottleConfig,
     ThrottleRegistry,
     get_throttle_registry,

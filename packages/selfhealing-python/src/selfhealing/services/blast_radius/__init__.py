@@ -12,7 +12,7 @@ from .models import (
     BlastRadiusLevel,
     BlastRadiusPolicy,
     ImpactAssessment,
-    ServiceDependency,
+    ServiceDependencyEdge,
 )
 from .service import BlastRadiusService
 
@@ -21,5 +21,5 @@ __all__ = [
     "BlastRadiusPolicy",
     "BlastRadiusLevel",
     "ImpactAssessment",
-    "ServiceDependency",
+    "ServiceDependencyEdge",
 ]

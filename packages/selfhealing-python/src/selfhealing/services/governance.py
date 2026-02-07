@@ -66,7 +66,7 @@ class OperationMode(Enum):
 
 
 @dataclass
-class EmergencyState:
+class GovernanceEmergencyState:
     """
     긴급 모드 상태 정보.
 
@@ -97,7 +97,7 @@ class EmergencyState:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> EmergencyState:
+    def from_dict(cls, data: dict[str, Any]) -> GovernanceEmergencyState:
         """Create from dictionary."""
         if not data:
             return cls()
@@ -138,7 +138,7 @@ class EmergencyModeTracker:
     def __init__(self):
         """Initialize EmergencyModeTracker."""
         self._lock = threading.RLock()
-        self._state: EmergencyState | None = None
+        self._state: GovernanceEmergencyState | None = None
         self._notification_handlers: list[Callable] = []
 
     def _get_backend(self):
@@ -165,28 +165,28 @@ class EmergencyModeTracker:
                 "notify_channels": ["slack", "email"],
             }
 
-    def _load_state(self) -> EmergencyState:
+    def _load_state(self) -> GovernanceEmergencyState:
         """Load state from backend."""
         if self._state is not None:
             return self._state
 
         backend = self._get_backend()
         data = backend.get(EMERGENCY_STATE_STORAGE_KEY)
-        self._state = EmergencyState.from_dict(data) if data else EmergencyState()
+        self._state = GovernanceEmergencyState.from_dict(data) if data else GovernanceEmergencyState()
         return self._state
 
-    def _save_state(self, state: EmergencyState) -> None:
+    def _save_state(self, state: GovernanceEmergencyState) -> None:
         """Save state to backend."""
         backend = self._get_backend()
         backend.set(EMERGENCY_STATE_STORAGE_KEY, state.to_dict())
         self._state = state
 
-    def get_current_state(self) -> EmergencyState:
+    def get_current_state(self) -> GovernanceEmergencyState:
         """
         Get current emergency state.
 
         Returns:
-            EmergencyState: 현재 긴급 모드 상태
+            GovernanceEmergencyState: 현재 긴급 모드 상태
         """
         with self._lock:
             return self._load_state()
@@ -446,7 +446,7 @@ class EmergencyModeTracker:
     def _send_notification(
         self,
         event_type: str,
-        state: EmergencyState,
+        state: GovernanceEmergencyState,
         config: dict[str, Any],
         extra: dict[str, Any] | None = None,
     ) -> None:
@@ -481,7 +481,7 @@ class EmergencyModeTracker:
     def _build_notification_message(
         self,
         event_type: str,
-        state: EmergencyState,
+        state: GovernanceEmergencyState,
         extra: dict[str, Any] | None = None,
     ) -> str:
         """Build notification message."""

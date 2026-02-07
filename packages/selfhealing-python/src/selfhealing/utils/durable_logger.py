@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from selfhealing.utils.async_logger import (
     AsyncHealingLogger,
-    EventPriority,
+    LogFlushPriority,
     EventSeverity,
     PrioritizedEvent,
     SEVERITY_PRIORITY_MAP,
@@ -124,7 +124,7 @@ class DurableEventLogger(AsyncHealingLogger):
             cls._stats["events_logged"] += 1
 
         # 2. Priority 결정 및 큐에 추가
-        priority = SEVERITY_PRIORITY_MAP.get(severity, EventPriority.INFO)
+        priority = SEVERITY_PRIORITY_MAP.get(severity, LogFlushPriority.INFO)
         prioritized = PrioritizedEvent(
             priority=priority,
             timestamp=time.time(),
@@ -182,7 +182,7 @@ class DurableEventLogger(AsyncHealingLogger):
 
                 # 복구된 이벤트는 일반 우선순위로 처리
                 prioritized = PrioritizedEvent(
-                    priority=EventPriority.INFO,
+                    priority=LogFlushPriority.INFO,
                     timestamp=entry.timestamp,
                     event=event,
                 )

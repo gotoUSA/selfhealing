@@ -3,7 +3,7 @@ Unit tests for DLQService API business logic methods.
 
 Tests for DLQService:
 - replay()
-- Data classes (ReplayResult, CleanupStats, DLQPaginatedResult, RetryResult, ResolveResult)
+- Data classes (ReplayResult, CleanupStats, DLQPaginatedResult, DlqReplayResult, ResolveResult)
 """
 
 import pytest
@@ -18,7 +18,7 @@ from selfhealing.services.dlq_service import (
 from selfhealing.services.dlq_models import (
     CleanupStats,
     DLQPaginatedResult,
-    RetryResult,
+    DlqReplayResult,
     ResolveResult,
     ReplayResult,
 )
@@ -88,12 +88,12 @@ class TestDLQPaginatedResult:
         assert result.has_previous is False
 
 
-class TestRetryResult:
-    """Tests for RetryResult dataclass."""
+class TestDlqReplayResult:
+    """Tests for DlqReplayResult dataclass."""
 
     def test_success_result(self):
         """Test successful retry result."""
-        result = RetryResult(
+        result = DlqReplayResult(
             success=True,
             id=1,
             retry_count=3,

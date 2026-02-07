@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch, MagicMock
 from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
     RecoveryStrategy,
-    CanaryStage,
+    CanaryRecoveryStageConfig,
 )
 
 
@@ -178,7 +178,7 @@ class TestCanaryWithStaleCacheService:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=100.0, duration_seconds=5, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=5, required_success_rate=90.0),
             ],
         )
         manager.start_canary_recovery("payment-api", strategy)
@@ -212,7 +212,7 @@ class TestCanaryWithStaleCacheService:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=0.0, duration_seconds=5, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=0.0, duration_seconds=5, required_success_rate=90.0),
             ],
         )
         manager.start_canary_recovery("payment-api", strategy)

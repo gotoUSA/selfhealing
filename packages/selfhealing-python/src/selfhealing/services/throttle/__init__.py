@@ -60,7 +60,6 @@ from selfhealing.services.throttle.redis_lua import (
     ThrottleLuaScripts,
 )
 from selfhealing.services.throttle.registry import (
-    CircuitBreakerState,
     ServiceThrottleConfig,
     ServiceThrottleState,
     ThrottleRegistry,
@@ -94,7 +93,6 @@ __all__ = [
     "ThrottleRegistry",
     "ServiceThrottleConfig",
     "ServiceThrottleState",
-    "CircuitBreakerState",
     "get_throttle_registry",
     "reset_throttle_registry",
     # CB Bridge

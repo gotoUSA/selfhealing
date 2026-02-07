@@ -21,7 +21,7 @@ from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
     SheddingLevel,
     LoadSheddingPolicy,
-    CanaryStage,
+    CanaryRecoveryStageConfig,
     RecoveryStrategy,
     ThresholdMultiplier,
     AdaptiveThresholdPolicy,
@@ -85,9 +85,9 @@ from selfhealing.services.circuit_breaker.blast_radius_integration import (
 
 # Canary Recovery
 from selfhealing.services.circuit_breaker.canary_recovery import (
-    CanaryState,
+    CanaryRecoveryStage,
     CanaryRecoveryManager,
-    CanaryDecision,
+    CanaryRecoveryDecision,
     get_canary_recovery_manager,
     reset_canary_recovery_manager,
     start_canary_recovery,
@@ -306,9 +306,9 @@ class TestEndToEndFlow:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
-                CanaryStage(traffic_percent=50.0, duration_seconds=0, required_success_rate=90.0),
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=50.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
 
@@ -350,7 +350,7 @@ class TestEndToEndFlow:
         # 4. 두 메커니즘 독립적으로 동작 확인
         assert shedding_manager.evaluate_shedding("review-api") <= 50.0
         canary_decision = canary_should_allow_request("order-api")
-        assert canary_decision.current_stage == CanaryState.CANARY_1
+        assert canary_decision.current_stage == CanaryRecoveryStage.CANARY_1
 
 
 # =============================================================================
@@ -484,7 +484,7 @@ class TestFailureScenarios:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
 
@@ -553,15 +553,15 @@ class TestRecoveryScenarios:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=80.0),
-                CanaryStage(traffic_percent=30.0, duration_seconds=0, required_success_rate=80.0),
-                CanaryStage(traffic_percent=60.0, duration_seconds=0, required_success_rate=80.0),
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=30.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=60.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=80.0),
             ],
         )
 
         state = start_canary_recovery("payment-api", strategy)
-        assert state.current_stage == CanaryState.CANARY_1
+        assert state.current_stage == CanaryRecoveryStage.CANARY_1
 
         # Stage 1 성공 (10%)
         for _ in range(15):
@@ -652,8 +652,8 @@ class TestAuditTrail:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=80.0),
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=80.0),
             ],
         )
 
@@ -720,7 +720,7 @@ class TestBoundaryConditions:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=0.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=0.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
 

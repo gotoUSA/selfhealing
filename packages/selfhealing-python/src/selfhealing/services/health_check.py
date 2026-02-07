@@ -79,8 +79,8 @@ class ReadinessStatus:
 
 
 @dataclass
-class PoolHealthStatus:
-    """커넥션 풀 헬스 상태."""
+class PoolHealthSummary:
+    """커넥션 풀 헬스 상태 요약."""
 
     status: str  # healthy, degraded, error
     pool_info: dict[str, Any] = field(default_factory=dict)
@@ -229,23 +229,23 @@ class HealthCheckService:
                 error=str(e),
             )
 
-    def get_pool_health(self) -> PoolHealthStatus:
+    def get_pool_health(self) -> PoolHealthSummary:
         """
         전체 커넥션 풀 헬스 상태.
 
         Returns:
-            PoolHealthStatus: 풀 헬스 상태
+            PoolHealthSummary: 풀 헬스 상태
         """
         pool_info = self.check_connection_pool("default")
 
         if pool_info.error:
-            return PoolHealthStatus(
+            return PoolHealthSummary(
                 status="error",
                 pool_info=pool_info.to_dict(),
                 error=pool_info.error,
             )
 
-        return PoolHealthStatus(
+        return PoolHealthSummary(
             status=pool_info.status,
             pool_info=pool_info.to_dict(),
         )

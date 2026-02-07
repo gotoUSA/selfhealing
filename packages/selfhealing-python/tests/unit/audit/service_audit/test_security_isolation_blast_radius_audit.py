@@ -495,7 +495,7 @@ class TestBlastRadiusServiceAuditIntegration:
 
             policy = service.set_policy(
                 stage_name="production",
-                level=BlastRadiusLevel.LIMITED,
+                level=BlastRadiusLevel.CONTAINED,
                 max_affected_percentage=15.0,
                 auto_isolate=True,
             )
@@ -504,7 +504,7 @@ class TestBlastRadiusServiceAuditIntegration:
             call_kwargs = mock_audit.call_args[1]
             assert call_kwargs["target_service"] == "production"
             assert call_kwargs["action"] == "set_policy"
-            assert call_kwargs["blast_radius"] == "limited"
+            assert call_kwargs["blast_radius"] == "contained"
             assert call_kwargs["traffic_percent"] == 15.0
 
     def test_add_dependency_calls_audit(self):

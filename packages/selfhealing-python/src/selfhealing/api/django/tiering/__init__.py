@@ -40,7 +40,7 @@ from .defaults import (
 # Enums
 from .enums import (
     OverrideIdentifierType,
-    PatternType,
+    TierMatchType,
     TierFallbackReason,
 )
 
@@ -64,13 +64,13 @@ from .registry import (
 # Validator
 from .validator import (
     TierConfigValidator,
-    ValidationResult,
+    TierValidationResult,
 )
 
 __all__ = [
     # Enums
     "TierFallbackReason",
-    "PatternType",
+    "TierMatchType",
     "OverrideIdentifierType",
     # Models
     "TierResult",
@@ -87,7 +87,7 @@ __all__ = [
     "TieringCircuitBreaker",
     "get_tiering_circuit_breaker",
     # Validator
-    "ValidationResult",
+    "TierValidationResult",
     "TierConfigValidator",
     # Registry
     "TierRegistry",

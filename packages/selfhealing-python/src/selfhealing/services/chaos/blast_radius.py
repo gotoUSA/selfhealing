@@ -58,7 +58,7 @@ class ApprovalStatus(str, Enum):
 
 
 @dataclass
-class BlastRadiusPolicy:
+class ChaosBlastRadiusPolicy:
     """Policy configuration for blast radius management."""
 
     # Scope-based restrictions
@@ -128,7 +128,7 @@ class BlastRadiusPolicy:
         }
 
     @classmethod
-    def from_settings(cls) -> BlastRadiusPolicy:
+    def from_settings(cls) -> ChaosBlastRadiusPolicy:
         """
         LayeredSettings에서 정책 로드.
 
@@ -136,7 +136,7 @@ class BlastRadiusPolicy:
         91_CONFIG_INVENTORY.md §6.12, §12.1 참조.
 
         Returns:
-            Settings 기반 BlastRadiusPolicy
+            Settings 기반 ChaosBlastRadiusPolicy
         """
         settings = get_layered_settings(ChaosBlastRadiusSettings, "chaos_blast_radius")
 
@@ -158,7 +158,7 @@ class BlastRadiusPolicy:
         )
 
     @classmethod
-    def from_env(cls) -> BlastRadiusPolicy:
+    def from_env(cls) -> ChaosBlastRadiusPolicy:
         """
         환경변수에서 정책 로드.
 
@@ -170,7 +170,7 @@ class BlastRadiusPolicy:
             CHAOS_ALLOW_OUTSIDE_WINDOW: 유지보수 윈도우 외 허용 (기본: false)
 
         Returns:
-            환경변수 기반 BlastRadiusPolicy
+            환경변수 기반 ChaosBlastRadiusPolicy
 
         Example:
             # .env
@@ -351,9 +351,9 @@ class BlastRadiusManager:
             manager.request_approval(...)
     """
 
-    def __init__(self, policy: BlastRadiusPolicy | None = None):
+    def __init__(self, policy: ChaosBlastRadiusPolicy | None = None):
         """Initialize BlastRadiusManager."""
-        self._policy = policy or BlastRadiusPolicy()
+        self._policy = policy or ChaosBlastRadiusPolicy()
         self._lock = threading.RLock()
 
         # Tracking state
@@ -397,11 +397,11 @@ class BlastRadiusManager:
     # Policy Management
     # =========================================================================
 
-    def get_policy(self) -> BlastRadiusPolicy:
+    def get_policy(self) -> ChaosBlastRadiusPolicy:
         """Get current policy."""
         return self._policy
 
-    def update_policy(self, **kwargs) -> BlastRadiusPolicy:
+    def update_policy(self, **kwargs) -> ChaosBlastRadiusPolicy:
         """
         Update policy settings.
 

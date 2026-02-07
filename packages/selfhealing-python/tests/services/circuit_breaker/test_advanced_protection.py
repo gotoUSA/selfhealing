@@ -10,7 +10,7 @@ from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
     SheddingLevel,
     LoadSheddingPolicy,
-    CanaryStage,
+    CanaryRecoveryStageConfig,
     RecoveryStrategy,
     ThresholdMultiplier,
     AdaptiveThresholdPolicy,
@@ -181,16 +181,16 @@ class TestLoadSheddingPolicy:
 
 
 # =============================================================================
-# CanaryStage Tests
+# CanaryRecoveryStageConfig Tests
 # =============================================================================
 
 
-class TestCanaryStage:
-    """CanaryStage 데이터 모델 테스트."""
+class TestCanaryRecoveryStageConfig:
+    """CanaryRecoveryStageConfig 데이터 모델 테스트."""
 
     def test_valid_canary_stage(self):
         """정상적인 Canary 단계 생성."""
-        stage = CanaryStage(traffic_percent=10.0, duration_seconds=5, required_success_rate=95.0, description="Stage 1")
+        stage = CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=5, required_success_rate=95.0, description="Stage 1")
         assert stage.traffic_percent == 10.0
         assert stage.duration_seconds == 5
         assert stage.required_success_rate == 95.0
@@ -198,22 +198,22 @@ class TestCanaryStage:
     def test_invalid_traffic_percent_negative(self):
         """음수 traffic_percent는 에러 발생."""
         with pytest.raises(ValueError, match="traffic_percent must be between"):
-            CanaryStage(traffic_percent=-10.0, duration_seconds=5, required_success_rate=95.0)
+            CanaryRecoveryStageConfig(traffic_percent=-10.0, duration_seconds=5, required_success_rate=95.0)
 
     def test_invalid_traffic_percent_over_100(self):
         """100 초과 traffic_percent는 에러 발생."""
         with pytest.raises(ValueError, match="traffic_percent must be between"):
-            CanaryStage(traffic_percent=150.0, duration_seconds=5, required_success_rate=95.0)
+            CanaryRecoveryStageConfig(traffic_percent=150.0, duration_seconds=5, required_success_rate=95.0)
 
     def test_invalid_duration_negative(self):
         """음수 duration_seconds는 에러 발생."""
         with pytest.raises(ValueError, match="duration_seconds must be non-negative"):
-            CanaryStage(traffic_percent=10.0, duration_seconds=-1, required_success_rate=95.0)
+            CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=-1, required_success_rate=95.0)
 
     def test_invalid_success_rate(self):
         """잘못된 required_success_rate는 에러 발생."""
         with pytest.raises(ValueError, match="required_success_rate must be between"):
-            CanaryStage(traffic_percent=10.0, duration_seconds=5, required_success_rate=101.0)
+            CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=5, required_success_rate=101.0)
 
 
 # =============================================================================

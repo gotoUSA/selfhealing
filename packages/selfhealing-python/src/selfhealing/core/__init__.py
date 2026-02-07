@@ -86,7 +86,7 @@ from selfhealing.core.pool_watchdog import (
     PoolRecoveryResult,
 )
 from selfhealing.core.request_context import (
-    RequestContext,
+    RequestLifecycleContext,
     track_request,
 )
 from selfhealing.core.shutdown_coordinator import (
@@ -175,7 +175,7 @@ __all__ = [
     "RequestTracker",
     "GracefulShutdownCoordinator",
     # Request Context (Stage 27)
-    "RequestContext",
+    "RequestLifecycleContext",
     "track_request",
     # Time Provider (Stage 23 - Clock Skew)
     "TimeProvider",

@@ -73,7 +73,7 @@ def _get_default_slack_channel() -> str:
 
 
 @dataclass
-class ConfigChange:
+class ClusterConfigChange:
     """
     설정 변경 정보.
 
@@ -108,7 +108,7 @@ class ConfigChange:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ConfigChange:
+    def from_dict(cls, data: dict[str, Any]) -> ClusterConfigChange:
         """딕셔너리에서 생성."""
         changed_at = data.get("changed_at")
         if isinstance(changed_at, str):
@@ -148,7 +148,7 @@ class PropagationRequest:
     request_id: str
     source_cluster: str
     target_cluster: str
-    config_change: ConfigChange
+    config_change: ClusterConfigChange
     status: PropagationRequestStatus = PropagationRequestStatus.PENDING_APPROVAL
     created_at: datetime = field(default_factory=utc_now)
     expires_at: datetime | None = None
@@ -182,7 +182,7 @@ class PropagationRequest:
             request_id=data["request_id"],
             source_cluster=data["source_cluster"],
             target_cluster=data["target_cluster"],
-            config_change=ConfigChange.from_dict(data["config_change"]),
+            config_change=ClusterConfigChange.from_dict(data["config_change"]),
             status=PropagationRequestStatus(data.get("status", "pending_approval")),
             created_at=datetime.fromisoformat(data["created_at"]),
             expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
@@ -402,7 +402,7 @@ class CrossClusterNotifier:
             other_clusters=["cluster-b", "cluster-c"],
         )
 
-        notifier.notify_config_change(ConfigChange(
+        notifier.notify_config_change(ClusterConfigChange(
             config_type="circuit_breaker",
             previous_value={"failure_threshold": 5},
             new_value={"failure_threshold": 3},
@@ -445,7 +445,7 @@ class CrossClusterNotifier:
 
     def notify_config_change(
         self,
-        change: ConfigChange,
+        change: ClusterConfigChange,
         result: str = "success",
         channel: str | None = None,
     ) -> dict[str, bool]:
@@ -498,7 +498,7 @@ class CrossClusterNotifier:
         self,
         source_cluster: str,
         target_cluster: str,
-        change: ConfigChange,
+        change: ClusterConfigChange,
         result: str,
     ) -> str:
         """알림 메시지 포맷팅."""
@@ -612,7 +612,7 @@ class CrossClusterPropagationRequest:
         self,
         source_cluster: str,
         target_clusters: list[str],
-        change: ConfigChange,
+        change: ClusterConfigChange,
         expiry_hours: int | None = None,
     ) -> str:
         """

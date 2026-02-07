@@ -131,15 +131,10 @@ class ChaosExperiment(abc.ABC):
         time.monotonic()는 시스템 시간 변경에 영향받지 않으므로,
         시간 조작 실험에서도 TTL이 정확하게 작동합니다.
         """
-        self._monotonic_ttl_helper = MonotonicTTLHelper(
-            ttl_seconds=float(self._effective_ttl)
-        )
+        self._monotonic_ttl_helper = MonotonicTTLHelper(ttl_seconds=float(self._effective_ttl))
         self._monotonic_ttl_helper.start()
 
-        logger.debug(
-            f"[ChaosExperiment] Monotonic timer started for {self.experiment_id}: "
-            f"ttl={self._effective_ttl}s"
-        )
+        logger.debug(f"[ChaosExperiment] Monotonic timer started for {self.experiment_id}: " f"ttl={self._effective_ttl}s")
 
     def _is_expired_monotonic(self) -> bool:
         """
@@ -210,8 +205,7 @@ class ChaosExperiment(abc.ABC):
         """
         if self.status != ExperimentStatus.RECOVERY_MONITORING:
             logger.warning(
-                f"[ChaosExperiment] {self.experiment_id} - "
-                f"Cannot complete recovery monitoring from status {self.status}"
+                f"[ChaosExperiment] {self.experiment_id} - " f"Cannot complete recovery monitoring from status {self.status}"
             )
             return
 
@@ -226,10 +220,7 @@ class ChaosExperiment(abc.ABC):
             },
         )
 
-        logger.info(
-            f"[ChaosExperiment] {self.experiment_id} - "
-            f"Recovery monitoring completed, status changed to COMPLETED"
-        )
+        logger.info(f"[ChaosExperiment] {self.experiment_id} - " f"Recovery monitoring completed, status changed to COMPLETED")
 
     def force_complete(self, reason: str = "hard_ttl_expired") -> None:
         """
@@ -247,20 +238,13 @@ class ChaosExperiment(abc.ABC):
         self._audit(
             "force_completed",
             {
-                "previous_status": (
-                    previous_status.value
-                    if hasattr(previous_status, "value")
-                    else str(previous_status)
-                ),
+                "previous_status": (previous_status.value if hasattr(previous_status, "value") else str(previous_status)),
                 "reason": reason,
                 "completed_at": self.completed_at.isoformat(),
             },
         )
 
-        logger.warning(
-            f"[ChaosExperiment] {self.experiment_id} - "
-            f"Force completed due to: {reason}"
-        )
+        logger.warning(f"[ChaosExperiment] {self.experiment_id} - " f"Force completed due to: {reason}")
 
     def transition_to_recovery_monitoring(self) -> None:
         """
@@ -304,7 +288,7 @@ class ChaosExperiment(abc.ABC):
         try:
             from selfhealing.services.circuit_breaker.canary_recovery import (
                 CanaryRecoveryManager,
-                CanaryState,
+                CanaryRecoveryStage,
             )
 
             manager = CanaryRecoveryManager()
@@ -314,7 +298,7 @@ class ChaosExperiment(abc.ABC):
             return {
                 "canary_state": state.value if hasattr(state, "value") else str(state),
                 "traffic_percent": traffic,
-                "in_canary": state != CanaryState.NOT_IN_CANARY,
+                "in_canary": state != CanaryRecoveryStage.NOT_IN_CANARY,
             }
         except ImportError:
             logger.debug("[ChaosExperiment] CanaryRecoveryManager not available")
@@ -343,9 +327,7 @@ class ChaosExperiment(abc.ABC):
 
             status, stats = monitor.check_health()
             return {
-                "health_status": (
-                    status.value if hasattr(status, "value") else str(status)
-                ),
+                "health_status": (status.value if hasattr(status, "value") else str(status)),
                 "active_connections": stats.active_connections,
                 "available_connections": stats.available_connections,
                 "usage_percent": stats.usage_percent,
@@ -469,11 +451,7 @@ class ChaosExperiment(abc.ABC):
             status=self.status.value,
             started_at=self.started_at.isoformat() if self.started_at else "",
             completed_at=self.completed_at.isoformat(),
-            duration_seconds=(
-                (self.completed_at - self.started_at).total_seconds()
-                if self.started_at
-                else 0
-            ),
+            duration_seconds=((self.completed_at - self.started_at).total_seconds() if self.started_at else 0),
             steady_state_before=steady_state_before,
             steady_state_after=steady_state_after,
             steady_state_hypothesis_passed=True,
@@ -483,12 +461,8 @@ class ChaosExperiment(abc.ABC):
             expires_at=self._expires_at.isoformat() if self._expires_at else "",
         )
 
-        self._audit(
-            "experiment_completed", {"result": self.result.to_dict(), "dry_run": True}
-        )
-        logger.info(
-            f"[DryRun] Completed dry run for {self.experiment_id} - no actual chaos injected"
-        )
+        self._audit("experiment_completed", {"result": self.result.to_dict(), "dry_run": True})
+        logger.info(f"[DryRun] Completed dry run for {self.experiment_id} - no actual chaos injected")
 
         return self.result
 
@@ -512,9 +486,7 @@ class ChaosExperiment(abc.ABC):
                 {
                     "config": self._config_to_dict(),
                     "ttl_seconds": self._effective_ttl,
-                    "expires_at": (
-                        self._expires_at.isoformat() if self._expires_at else ""
-                    ),
+                    "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                 },
             )
 
@@ -531,9 +503,7 @@ class ChaosExperiment(abc.ABC):
                 "chaos_injection_started",
                 {
                     "ttl_seconds": self._effective_ttl,
-                    "expires_at": (
-                        self._expires_at.isoformat() if self._expires_at else ""
-                    ),
+                    "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                 },
             )
             injection_result = self.inject_chaos()
@@ -547,9 +517,7 @@ class ChaosExperiment(abc.ABC):
                 self.rollback()
                 abort_reason = "Kill switch activated"
                 if self._stop_condition_violation:
-                    abort_reason = (
-                        f"Stop condition violated: {self._stop_condition_violation}"
-                    )
+                    abort_reason = f"Stop condition violated: {self._stop_condition_violation}"
                 return self._create_aborted_result(abort_reason)
 
             self._audit("rollback_started", {})
@@ -630,9 +598,7 @@ class ChaosExperiment(abc.ABC):
     def pre_flight_check(self) -> bool:
         """Validate preconditions before starting experiment."""
         if self._kill_requested:
-            logger.warning(
-                f"[ChaosExperiment] {self.experiment_id} - Kill requested before start"
-            )
+            logger.warning(f"[ChaosExperiment] {self.experiment_id} - Kill requested before start")
             return False
         return True
 
@@ -722,11 +688,7 @@ class ChaosExperiment(abc.ABC):
 
             service = get_dlq_service()
             return {
-                "pending_count": (
-                    service.get_pending_count()
-                    if hasattr(service, "get_pending_count")
-                    else 0
-                ),
+                "pending_count": (service.get_pending_count() if hasattr(service, "get_pending_count") else 0),
             }
         except ImportError:
             logger.debug("[Chaos] DLQ service not available (import failed)")
@@ -927,9 +889,7 @@ class ChaosExperiment(abc.ABC):
         """
         # failure_hypothesis가 없으면 스킵
         if not hasattr(self, "failure_hypothesis") or self.failure_hypothesis is None:
-            logger.debug(
-                f"[Chaos] No failure_hypothesis defined for {self.experiment_id}"
-            )
+            logger.debug(f"[Chaos] No failure_hypothesis defined for {self.experiment_id}")
             return
 
         # Validate hypothesis
@@ -947,11 +907,7 @@ class ChaosExperiment(abc.ABC):
             {
                 "passed": passed,
                 "violations": violations,
-                "expected": (
-                    self.failure_hypothesis.to_dict()
-                    if hasattr(self.failure_hypothesis, "to_dict")
-                    else {}
-                ),
+                "expected": (self.failure_hypothesis.to_dict() if hasattr(self.failure_hypothesis, "to_dict") else {}),
                 "actual": {
                     "recovery_time": actual_recovery_time,
                     "canary_stage": actual_canary_stage,
@@ -988,8 +944,7 @@ class ChaosExperiment(abc.ABC):
                     "violations": violations,
                     "expected_recovery_time": expected_recovery_time,
                     "actual_recovery_time": actual_recovery_time,
-                    "recovery_time_delta": actual_recovery_time
-                    - expected_recovery_time,
+                    "recovery_time_delta": actual_recovery_time - expected_recovery_time,
                     "expected_canary_stage": (
                         self.failure_hypothesis.expected_canary_stage
                         if hasattr(self.failure_hypothesis, "expected_canary_stage")
@@ -1002,9 +957,7 @@ class ChaosExperiment(abc.ABC):
 
             # 복구 시간 추세 분석 요청 (실패 시)
             if not passed and violations:
-                logger.warning(
-                    f"[Chaos] Hypothesis validation FAILED for {self.experiment_id}: {violations}"
-                )
+                logger.warning(f"[Chaos] Hypothesis validation FAILED for {self.experiment_id}: {violations}")
 
                 # LearningService에 추세 분석 트리거
                 if hasattr(learning, "analyze_trend"):
@@ -1014,9 +967,7 @@ class ChaosExperiment(abc.ABC):
                         window_days=30,
                     )
             else:
-                logger.info(
-                    f"[Chaos] Hypothesis validation PASSED for {self.experiment_id}"
-                )
+                logger.info(f"[Chaos] Hypothesis validation PASSED for {self.experiment_id}")
 
         except ImportError as e:
             logger.debug(f"[Chaos] LearningService not available: {e}")
@@ -1049,9 +1000,7 @@ class ChaosExperiment(abc.ABC):
         """Request experiment termination."""
         self._kill_requested = True
         self._audit("kill_requested", {"reason": reason})
-        logger.warning(
-            f"[ChaosExperiment] Kill requested for {self.experiment_id}: {reason}"
-        )
+        logger.warning(f"[ChaosExperiment] Kill requested for {self.experiment_id}: {reason}")
 
     def is_killed(self) -> bool:
         """Check if kill was requested."""
@@ -1066,9 +1015,7 @@ class ChaosExperiment(abc.ABC):
         if not self.is_expired():
             return False
 
-        logger.warning(
-            f"[ChaosExperiment] {self.experiment_id} - TTL expired, auto-stopping"
-        )
+        logger.warning(f"[ChaosExperiment] {self.experiment_id} - TTL expired, auto-stopping")
         self._kill_requested = True
         self._stop_condition_violation = "TTL expired"
         self._audit(
@@ -1090,9 +1037,7 @@ class ChaosExperiment(abc.ABC):
             return False
 
         violation_messages = [v.message for v in stop_result.violations]
-        logger.error(
-            f"[ChaosExperiment] {self.experiment_id} - Stop condition violated: {violation_messages}"
-        )
+        logger.error(f"[ChaosExperiment] {self.experiment_id} - Stop condition violated: {violation_messages}")
         self._kill_requested = True
         self._stop_condition_violation = "; ".join(violation_messages)
         self._audit(
@@ -1113,9 +1058,7 @@ class ChaosExperiment(abc.ABC):
 
         self._kill_requested = True
         self._stop_condition_violation = "SLA breach threshold exceeded"
-        self._audit(
-            "auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"}
-        )
+        self._audit("auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"})
         return True
 
     def _monitor_with_kill_switch(self) -> dict[str, int]:
@@ -1144,9 +1087,7 @@ class ChaosExperiment(abc.ABC):
                 metrics[key] += current_metrics.get(key, 0)
 
             should_stop = (
-                self._handle_stop_condition_check(stop_checker)
-                if stop_checker
-                else self._handle_sla_breach_fallback()
+                self._handle_stop_condition_check(stop_checker) if stop_checker else self._handle_sla_breach_fallback()
             )
             if should_stop:
                 break

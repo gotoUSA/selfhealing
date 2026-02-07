@@ -158,8 +158,8 @@ class TrafficDistribution:
 # =============================================================================
 
 
-class TokenBucket:
-    """토큰 버킷 알고리즘 기반 레이트 리미터."""
+class ChaosTokenBucket:
+    """토큰 버킷 알고리즘 기반 레이트 리미터 (Chaos 전용)."""
 
     def __init__(
         self,
@@ -249,7 +249,7 @@ class TrafficShaper:
 
         self._config: ShapingConfig | None = None
         self._stats = ShapingStats()
-        self._token_bucket: TokenBucket | None = None
+        self._token_bucket: ChaosTokenBucket | None = None
 
         # 동시성 추적
         self._concurrent_count = 0
@@ -276,7 +276,7 @@ class TrafficShaper:
             config: 형성 설정
         """
         self._config = config
-        self._token_bucket = TokenBucket(
+        self._token_bucket = ChaosTokenBucket(
             rate=config.target_rps,
             capacity=config.burst_size,
         )
@@ -375,9 +375,7 @@ class TrafficShaper:
             self._latency_samples = self._latency_samples[-100:]
 
         if self._latency_samples:
-            self._stats.avg_latency_ms = sum(self._latency_samples) / len(
-                self._latency_samples
-            )
+            self._stats.avg_latency_ms = sum(self._latency_samples) / len(self._latency_samples)
 
     def select_endpoint(self) -> str | None:
         """
@@ -464,10 +462,7 @@ class TrafficShaper:
 
         # 주기적으로 레이트 조정
         current_time = time.time()
-        if (
-            current_time - self._last_adaptation_time
-            > self._config.adjustment_interval_seconds
-        ):
+        if current_time - self._last_adaptation_time > self._config.adjustment_interval_seconds:
             self._adapt_rate()
             self._last_adaptation_time = current_time
 
@@ -486,9 +481,7 @@ class TrafficShaper:
             self._current_rate_multiplier *= 0.9
         elif avg_latency < target_latency * 0.8:
             # 레이턴시가 낮으면 레이트 증가
-            self._current_rate_multiplier = min(
-                2.0, self._current_rate_multiplier * 1.1
-            )
+            self._current_rate_multiplier = min(2.0, self._current_rate_multiplier * 1.1)
 
         # 새 레이트 적용
         new_rate = self._config.target_rps * self._current_rate_multiplier

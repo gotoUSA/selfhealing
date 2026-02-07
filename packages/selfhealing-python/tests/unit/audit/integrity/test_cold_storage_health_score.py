@@ -414,11 +414,11 @@ class TestIntegrityHealthScore:
 
     def test_events_trimmed_to_24h(self, health_score):
         """Old events should be trimmed (only last 24h kept)."""
-        from selfhealing.audit.integrity.health_score import RecoveryEvent
+        from selfhealing.audit.integrity.health_score import IntegrityRecoveryEvent
 
         # Add old event (manually, bypassing normal recording)
         old_time = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
-        old_event = RecoveryEvent(
+        old_event = IntegrityRecoveryEvent(
             event_type="old",
             sequences_affected=1,
             recovery_time_ms=100.0,

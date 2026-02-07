@@ -43,31 +43,11 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any
 
+from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusLevel
+
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Blast Radius Level
-# =============================================================================
-
-
-class BlastRadiusLevel(Enum):
-    """
-    Blast Radius 영향 레벨.
-
-    MINIMAL: 영향 서비스 0-1개
-    MODERATE: 영향 서비스 2-3개
-    EXTENSIVE: 영향 서비스 4-5개
-    CRITICAL: 영향 서비스 6개 이상 또는 critical 서비스 포함
-    """
-
-    MINIMAL = "minimal"  # 영향 범위 최소
-    MODERATE = "moderate"  # 중간 영향
-    EXTENSIVE = "extensive"  # 광범위한 영향
-    CRITICAL = "critical"  # 치명적 영향 (자동 OPEN 차단)
 
 
 # =============================================================================
@@ -102,9 +82,7 @@ class BlastRadiusAssessment:
     critical_services_affected: list[str] = field(default_factory=list)
     recommendation: str = ""
     details: dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def should_block_auto_open(self) -> bool:
         """자동 OPEN을 차단해야 하는지 여부."""
@@ -117,9 +95,9 @@ class BlastRadiusAssessment:
 
 
 @dataclass
-class ServiceDependency:
+class ServiceDependencyNode:
     """
-    서비스 의존성 정보.
+    서비스 의존성 노드 정보.
 
     Attributes:
         service_id: 서비스 ID
@@ -142,7 +120,7 @@ class ServiceDependencyGraph:
     """
 
     def __init__(self):
-        self._dependencies: dict[str, ServiceDependency] = {}
+        self._dependencies: dict[str, ServiceDependencyNode] = {}
 
     def register_service(
         self,
@@ -166,7 +144,7 @@ class ServiceDependencyGraph:
             dep.depends_on = depends_on
             dep.criticality = criticality
         else:
-            self._dependencies[service_id] = ServiceDependency(
+            self._dependencies[service_id] = ServiceDependencyNode(
                 service_id=service_id,
                 depends_on=depends_on,
                 criticality=criticality,
@@ -175,7 +153,7 @@ class ServiceDependencyGraph:
         # 역방향 의존성 업데이트 (dependents)
         for dep_service in depends_on:
             if dep_service not in self._dependencies:
-                self._dependencies[dep_service] = ServiceDependency(
+                self._dependencies[dep_service] = ServiceDependencyNode(
                     service_id=dep_service,
                 )
             self._dependencies[dep_service].dependents.append(service_id)
@@ -236,12 +214,7 @@ class ServiceDependencyGraph:
             List[str]: critical 서비스 목록
         """
         affected = self.get_cascading_affected(service_id)
-        return [
-            s
-            for s in affected
-            if s in self._dependencies
-            and self._dependencies[s].criticality == "critical"
-        ]
+        return [s for s in affected if s in self._dependencies and self._dependencies[s].criticality == "critical"]
 
     def clear(self) -> None:
         """모든 의존성 정보 초기화."""
@@ -337,9 +310,7 @@ class BlastRadiusIntegration:
             block_on_critical=block_on_critical,
             alert_on_extensive=alert_on_extensive,
         )
-        logger.info(
-            f"[BlastRadiusIntegration] Configured: critical_threshold={critical_threshold}"
-        )
+        logger.info(f"[BlastRadiusIntegration] Configured: critical_threshold={critical_threshold}")
 
     # =========================================================================
     # Dependency Management
@@ -424,18 +395,13 @@ class BlastRadiusIntegration:
         affected_count = len(affected_list)
 
         # 2. Critical 서비스 영향 확인
-        critical_affected = [
-            s for s in affected_list if self._service_criticality.get(s) == "critical"
-        ]
+        critical_affected = [s for s in affected_list if self._service_criticality.get(s) == "critical"]
 
         # 3. 레벨 결정
         level = self._determine_level(affected_count, critical_affected)
 
         # 4. 연쇄 장애 위험 판단
-        cascading_risk = (
-            affected_count >= self._config.moderate_threshold
-            or len(critical_affected) > 0
-        )
+        cascading_risk = affected_count >= self._config.moderate_threshold or len(critical_affected) > 0
 
         # 5. 권장 조치 결정
         recommendation = self._get_recommendation(level, critical_affected)
@@ -497,10 +463,7 @@ class BlastRadiusIntegration:
         """권장 조치 결정."""
         if level == BlastRadiusLevel.CRITICAL:
             if critical_affected:
-                return (
-                    f"CB OPEN 차단 권장: critical 서비스 영향 ({', '.join(critical_affected)}). "
-                    f"수동 승인 필요."
-                )
+                return f"CB OPEN 차단 권장: critical 서비스 영향 ({', '.join(critical_affected)}). " f"수동 승인 필요."
             return "CB OPEN 차단 권장: 영향 범위가 너무 넓음. 수동 승인 필요."
         elif level == BlastRadiusLevel.EXTENSIVE:
             return "CB OPEN 진행 가능, 단 운영팀 경고 알림 필요."
@@ -536,10 +499,7 @@ class BlastRadiusIntegration:
         )
 
         # 2. CRITICAL이고 block_on_critical이면 차단
-        if (
-            assessment.level == BlastRadiusLevel.CRITICAL
-            and self._config.block_on_critical
-        ):
+        if assessment.level == BlastRadiusLevel.CRITICAL and self._config.block_on_critical:
             reason = (
                 f"Blast Radius CRITICAL: {assessment.affected_count} services affected. "
                 f"Cascading risk: {assessment.cascading_risk}"
@@ -551,10 +511,7 @@ class BlastRadiusIntegration:
             return False, reason, assessment
 
         # 3. EXTENSIVE면 경고만
-        if (
-            assessment.level == BlastRadiusLevel.EXTENSIVE
-            and self._config.alert_on_extensive
-        ):
+        if assessment.level == BlastRadiusLevel.EXTENSIVE and self._config.alert_on_extensive:
             logger.warning(
                 f"[BlastRadiusIntegration] CB auto-open proceeding with caution: "
                 f"{service_id}, blast radius EXTENSIVE ({assessment.affected_count} services)"

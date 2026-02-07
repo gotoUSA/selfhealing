@@ -12,12 +12,12 @@ from dataclasses import dataclass, field
 from ipaddress import ip_address, ip_network
 from typing import Any
 
-from .enums import OverrideIdentifierType, PatternType
+from .enums import OverrideIdentifierType, TierMatchType
 from .models import TierDefinition, TierMapping, TierOverride
 
 
 @dataclass
-class ValidationResult:
+class TierValidationResult:
     """Validation result for tier configuration."""
 
     is_valid: bool
@@ -49,9 +49,7 @@ class TierConfigValidator:
         "min_critical_multiplier": 0.1,  # Critical tier minimum 10% access
     }
 
-    def validate_tiers(
-        self, tier_definitions: list[TierDefinition]
-    ) -> ValidationResult:
+    def validate_tiers(self, tier_definitions: list[TierDefinition]) -> TierValidationResult:
         """
         Validate tier definitions.
 
@@ -59,7 +57,7 @@ class TierConfigValidator:
             tier_definitions: List of tier definitions
 
         Returns:
-            ValidationResult with errors and warnings
+            TierValidationResult with errors and warnings
         """
         errors: list[str] = []
         warnings: list[str] = []
@@ -70,10 +68,7 @@ class TierConfigValidator:
 
         # Rule 2: Maximum tier count
         if len(tier_definitions) > self.RULES["max_tiers"]:
-            errors.append(
-                f"티어는 최대 {self.RULES['max_tiers']}개까지 허용됩니다. "
-                f"(현재: {len(tier_definitions)}개)"
-            )
+            errors.append(f"티어는 최대 {self.RULES['max_tiers']}개까지 허용됩니다. " f"(현재: {len(tier_definitions)}개)")
 
         # Check for duplicate IDs
         tier_ids = [t.id for t in tier_definitions]
@@ -83,10 +78,7 @@ class TierConfigValidator:
         for tier in tier_definitions:
             # Rule 3: Multiplier range
             if tier.multiplier < 0:
-                errors.append(
-                    f"티어 '{tier.id}': 배율은 0 이상이어야 합니다. "
-                    f"(현재: {tier.multiplier})"
-                )
+                errors.append(f"티어 '{tier.id}': 배율은 0 이상이어야 합니다. " f"(현재: {tier.multiplier})")
             if tier.multiplier > self.RULES["max_multiplier"]:
                 errors.append(
                     f"티어 '{tier.id}': 배율은 {self.RULES['max_multiplier']}를 "
@@ -97,10 +89,7 @@ class TierConfigValidator:
         if self.RULES["require_critical_tier"]:
             critical_tiers = [t for t in tier_definitions if t.id == "critical"]
             if not critical_tiers:
-                warnings.append(
-                    "'critical' 티어가 없습니다. "
-                    "비상 시 핵심 API 보호가 어려울 수 있습니다."
-                )
+                warnings.append("'critical' 티어가 없습니다. " "비상 시 핵심 API 보호가 어려울 수 있습니다.")
             elif critical_tiers[0].multiplier < self.RULES["min_critical_multiplier"]:
                 warnings.append(
                     f"'critical' 티어 배율이 너무 낮습니다. "
@@ -108,15 +97,13 @@ class TierConfigValidator:
                     f"(현재: {critical_tiers[0].multiplier})"
                 )
 
-        return ValidationResult(
+        return TierValidationResult(
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
         )
 
-    def validate_mappings(
-        self, mappings: list[TierMapping], tier_ids: list[str]
-    ) -> ValidationResult:
+    def validate_mappings(self, mappings: list[TierMapping], tier_ids: list[str]) -> TierValidationResult:
         """
         Validate tier mappings.
 
@@ -125,7 +112,7 @@ class TierConfigValidator:
             tier_ids: List of valid tier IDs
 
         Returns:
-            ValidationResult with errors and warnings
+            TierValidationResult with errors and warnings
         """
         errors: list[str] = []
         warnings: list[str] = []
@@ -133,13 +120,10 @@ class TierConfigValidator:
         for mapping in mappings:
             # Check tier exists
             if mapping.tier_id not in tier_ids:
-                errors.append(
-                    f"매핑 '{mapping.pattern}': 존재하지 않는 티어 ID "
-                    f"'{mapping.tier_id}'를 참조합니다."
-                )
+                errors.append(f"매핑 '{mapping.pattern}': 존재하지 않는 티어 ID " f"'{mapping.tier_id}'를 참조합니다.")
 
             # Validate regex patterns
-            if mapping.pattern_type == PatternType.REGEX:
+            if mapping.pattern_type == TierMatchType.REGEX:
                 try:
                     re.compile(mapping.pattern)
                 except re.error as e:
@@ -150,15 +134,13 @@ class TierConfigValidator:
         if len(patterns) != len(set(patterns)):
             warnings.append("중복된 패턴이 있습니다. 우선순위에 따라 처리됩니다.")
 
-        return ValidationResult(
+        return TierValidationResult(
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
         )
 
-    def validate_overrides(
-        self, overrides: list[TierOverride], tier_ids: list[str]
-    ) -> ValidationResult:
+    def validate_overrides(self, overrides: list[TierOverride], tier_ids: list[str]) -> TierValidationResult:
         """
         Validate tier overrides.
 
@@ -167,7 +149,7 @@ class TierConfigValidator:
             tier_ids: List of valid tier IDs
 
         Returns:
-            ValidationResult with errors and warnings
+            TierValidationResult with errors and warnings
         """
         errors: list[str] = []
         warnings: list[str] = []
@@ -176,8 +158,7 @@ class TierConfigValidator:
             # Check tier exists
             if override.tier_id not in tier_ids:
                 errors.append(
-                    f"오버라이드 '{override.identifier}': 존재하지 않는 티어 ID "
-                    f"'{override.tier_id}'를 참조합니다."
+                    f"오버라이드 '{override.identifier}': 존재하지 않는 티어 ID " f"'{override.tier_id}'를 참조합니다."
                 )
 
             # Validate IP format
@@ -188,15 +169,13 @@ class TierConfigValidator:
                     else:
                         ip_address(override.identifier)
                 except ValueError as e:
-                    errors.append(
-                        f"오버라이드 '{override.identifier}': 잘못된 IP 형식 - {e}"
-                    )
+                    errors.append(f"오버라이드 '{override.identifier}': 잘못된 IP 형식 - {e}")
 
             # Check for expired overrides
             if override.is_expired():
                 warnings.append(f"오버라이드 '{override.identifier}'가 만료되었습니다.")
 
-        return ValidationResult(
+        return TierValidationResult(
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
@@ -207,7 +186,7 @@ class TierConfigValidator:
         tiers: list[TierDefinition],
         mappings: list[TierMapping],
         overrides: list[TierOverride],
-    ) -> ValidationResult:
+    ) -> TierValidationResult:
         """
         Validate all tier configurations.
 
@@ -217,7 +196,7 @@ class TierConfigValidator:
             overrides: Tier overrides
 
         Returns:
-            Combined ValidationResult
+            Combined TierValidationResult
         """
         tier_result = self.validate_tiers(tiers)
         tier_ids = [t.id for t in tiers]
@@ -225,14 +204,8 @@ class TierConfigValidator:
         mapping_result = self.validate_mappings(mappings, tier_ids)
         override_result = self.validate_overrides(overrides, tier_ids)
 
-        return ValidationResult(
-            is_valid=(
-                tier_result.is_valid
-                and mapping_result.is_valid
-                and override_result.is_valid
-            ),
+        return TierValidationResult(
+            is_valid=(tier_result.is_valid and mapping_result.is_valid and override_result.is_valid),
             errors=tier_result.errors + mapping_result.errors + override_result.errors,
-            warnings=tier_result.warnings
-            + mapping_result.warnings
-            + override_result.warnings,
+            warnings=tier_result.warnings + mapping_result.warnings + override_result.warnings,
         )

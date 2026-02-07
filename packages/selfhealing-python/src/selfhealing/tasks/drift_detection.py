@@ -43,7 +43,7 @@ class FailedOperationQuerySet(Protocol):
     def __getitem__(self, key): ...
 
 
-class FailedOperationProtocol(Protocol):
+class DriftDetectionOperationProtocol(Protocol):
     """Protocol for FailedOperation-like objects."""
 
     id: Any
@@ -413,7 +413,7 @@ class DecisionRecorder:
 
     def __init__(
         self,
-        get_failed_operation: Callable[[int], FailedOperationProtocol],
+        get_failed_operation: Callable[[int], DriftDetectionOperationProtocol],
     ):
         """
         Initialize recorder with dependencies.

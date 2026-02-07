@@ -20,7 +20,7 @@ from .models import (
     BlastRadiusLevel,
     BlastRadiusPolicy,
     ImpactAssessment,
-    ServiceDependency,
+    ServiceDependencyEdge,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class BlastRadiusService:
             return
 
         self._policies: dict[str, BlastRadiusPolicy] = {}
-        self._dependencies: list[ServiceDependency] = []
+        self._dependencies: list[ServiceDependencyEdge] = []
         self._assessments: list[ImpactAssessment] = []
         self._isolated_services: set[str] = set()
         self._enabled = True
@@ -60,7 +60,7 @@ class BlastRadiusService:
     def set_policy(
         self,
         stage_name: str,
-        level: BlastRadiusLevel = BlastRadiusLevel.ISOLATED,
+        level: BlastRadiusLevel = BlastRadiusLevel.MINIMAL,
         affected_services: list[str] | None = None,
         max_affected_percentage: float = 10.0,
         auto_isolate: bool = True,
@@ -114,7 +114,7 @@ class BlastRadiusService:
         target_service: str,
         dependency_type: str = "sync",
         criticality: str = "medium",
-    ) -> ServiceDependency:
+    ) -> ServiceDependencyEdge:
         """
         서비스 의존성 추가
 
@@ -125,9 +125,9 @@ class BlastRadiusService:
             criticality: 중요도 (low, medium, high, critical)
 
         Returns:
-            ServiceDependency: 생성된 의존성
+            ServiceDependencyEdge: 생성된 의존성
         """
-        dependency = ServiceDependency(
+        dependency = ServiceDependencyEdge(
             source_service=source_service,
             target_service=target_service,
             dependency_type=dependency_type,
@@ -148,7 +148,7 @@ class BlastRadiusService:
 
         return dependency
 
-    def get_dependencies(self, service: str) -> dict[str, list[ServiceDependency]]:
+    def get_dependencies(self, service: str) -> dict[str, list[ServiceDependencyEdge]]:
         """
         서비스 의존성 조회
 
@@ -264,9 +264,9 @@ class BlastRadiusService:
             BlastRadiusLevel: 영향 수준
         """
         if affected_count <= 1:
-            return BlastRadiusLevel.ISOLATED
+            return BlastRadiusLevel.MINIMAL
         elif affected_count <= 3:
-            return BlastRadiusLevel.LIMITED
+            return BlastRadiusLevel.CONTAINED
         elif affected_count <= 5:
             return BlastRadiusLevel.MODERATE
         elif affected_count <= 10:

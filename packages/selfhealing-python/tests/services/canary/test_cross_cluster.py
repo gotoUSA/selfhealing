@@ -2,7 +2,7 @@
 CrossCluster 모듈 단위 테스트.
 
 테스트 대상:
-    - ConfigChange: 설정 변경 정보 데이터클래스
+    - ClusterConfigChange: 설정 변경 정보 데이터클래스
     - PropagationRequest: 설정 전파 요청 데이터클래스
     - GovernancePolicy: 거버넌스 정책 데이터클래스
     - CrossClusterNotifier: 크로스 클러스터 알림
@@ -20,7 +20,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from selfhealing.services.canary.cross_cluster import (
-    ConfigChange,
+    ClusterConfigChange,
     PropagationRequest,
     PropagationRequestStatus,
     GovernancePolicy,
@@ -48,9 +48,9 @@ def reset_singletons():
 
 
 @pytest.fixture
-def sample_config_change() -> ConfigChange:
+def sample_config_change() -> ClusterConfigChange:
     """샘플 설정 변경 정보."""
-    return ConfigChange(
+    return ClusterConfigChange(
         config_type="circuit_breaker",
         previous_value={"failure_threshold": 5},
         new_value={"failure_threshold": 3},
@@ -85,14 +85,14 @@ def sample_governance_policy() -> GovernancePolicy:
 
 
 # =============================================================================
-# ConfigChange Tests
+# ClusterConfigChange Tests
 # =============================================================================
 
 
-class TestConfigChange:
-    """ConfigChange 데이터클래스 테스트."""
+class TestClusterConfigChange:
+    """ClusterConfigChange 데이터클래스 테스트."""
 
-    def test_create_config_change(self, sample_config_change: ConfigChange):
+    def test_create_config_change(self, sample_config_change: ClusterConfigChange):
         """설정 변경 정보 생성 테스트."""
         assert sample_config_change.config_type == "circuit_breaker"
         assert sample_config_change.previous_value == {"failure_threshold": 5}
@@ -101,7 +101,7 @@ class TestConfigChange:
         assert sample_config_change.rollout_id == "abc123"
         assert sample_config_change.reason == "Reduce failure threshold for stability"
 
-    def test_to_dict(self, sample_config_change: ConfigChange):
+    def test_to_dict(self, sample_config_change: ClusterConfigChange):
         """딕셔너리 변환 테스트."""
         result = sample_config_change.to_dict()
 
@@ -124,7 +124,7 @@ class TestConfigChange:
             "reason": "Increase retry count",
         }
 
-        change = ConfigChange.from_dict(data)
+        change = ClusterConfigChange.from_dict(data)
 
         assert change.config_type == "dlq"
         assert change.previous_value == {"max_retries": 3}
@@ -140,7 +140,7 @@ class TestConfigChange:
 class TestPropagationRequest:
     """PropagationRequest 데이터클래스 테스트."""
 
-    def test_create_propagation_request(self, sample_config_change: ConfigChange):
+    def test_create_propagation_request(self, sample_config_change: ClusterConfigChange):
         """설정 전파 요청 생성 테스트."""
         request = PropagationRequest(
             request_id="req-001",
@@ -154,7 +154,7 @@ class TestPropagationRequest:
         assert request.target_cluster == "cluster-b"
         assert request.status == PropagationRequestStatus.PENDING_APPROVAL
 
-    def test_to_dict_and_from_dict(self, sample_config_change: ConfigChange):
+    def test_to_dict_and_from_dict(self, sample_config_change: ClusterConfigChange):
         """직렬화/역직렬화 테스트."""
         original = PropagationRequest(
             request_id="req-002",
@@ -326,7 +326,7 @@ class TestCrossClusterNotifier:
     def test_notify_config_change(
         self,
         mock_notification_backend: Mock,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """설정 변경 알림 테스트."""
         notifier = CrossClusterNotifier(
@@ -344,7 +344,7 @@ class TestCrossClusterNotifier:
 
     def test_notify_config_change_partial_failure(
         self,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """부분 실패 알림 테스트."""
         mock_backend = Mock(spec=NotificationBackend)
@@ -392,7 +392,7 @@ class TestCrossClusterPropagationRequest:
     def test_request_propagation(
         self,
         mock_notification_backend: Mock,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """설정 전파 요청 생성 테스트."""
         requester = CrossClusterPropagationRequest(
@@ -412,7 +412,7 @@ class TestCrossClusterPropagationRequest:
     def test_approve_request(
         self,
         mock_notification_backend: Mock,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """요청 승인 테스트."""
         applied_requests: list[PropagationRequest] = []
@@ -454,7 +454,7 @@ class TestCrossClusterPropagationRequest:
     def test_reject_request(
         self,
         mock_notification_backend: Mock,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """요청 거절 테스트."""
         requester = CrossClusterPropagationRequest(
@@ -500,7 +500,7 @@ class TestCrossClusterPropagationRequest:
     def test_approve_expired_request(
         self,
         mock_notification_backend: Mock,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """만료된 요청 승인 시도 테스트."""
         requester = CrossClusterPropagationRequest(
@@ -526,7 +526,7 @@ class TestCrossClusterPropagationRequest:
     def test_get_pending_requests(
         self,
         mock_notification_backend: Mock,
-        sample_config_change: ConfigChange,
+        sample_config_change: ClusterConfigChange,
     ):
         """대기 중인 요청 목록 조회 테스트."""
         requester = CrossClusterPropagationRequest(

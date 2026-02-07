@@ -151,7 +151,7 @@ class DLQPaginatedResult:
 
 
 @dataclass
-class RetryResult:
+class DlqReplayResult:
     """Result of a single entry retry operation."""
 
     success: bool

@@ -22,7 +22,7 @@ from .defaults import (
 )
 from .enums import OverrideIdentifierType, TierFallbackReason
 from .models import TierDefinition, TierMapping, TierOverride, TierResult
-from .validator import TierConfigValidator, ValidationResult
+from .validator import TierConfigValidator, TierValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class TierRegistry:
         with self._data_lock:
             return list(reversed(self._previous_configs))
 
-    def rollback_to_previous(self, index: int = 0) -> ValidationResult | None:
+    def rollback_to_previous(self, index: int = 0) -> TierValidationResult | None:
         """
         이전 설정으로 롤백.
 
@@ -116,7 +116,7 @@ class TierRegistry:
             index: 롤백할 스냅샷 인덱스 (0=가장 최근, 1=그 이전...)
 
         Returns:
-            ValidationResult (성공 시), 실패 시 None
+            TierValidationResult (성공 시), 실패 시 None
         """
         with self._data_lock:
             if not self._previous_configs:
@@ -137,24 +137,19 @@ class TierRegistry:
 
             # 설정 복원 (import_config 사용)
             logger.warning(
-                f"[TierRegistry] Rolling back to snapshot at {snapshot['timestamp']}, "
-                f"original action={snapshot['action']}"
+                f"[TierRegistry] Rolling back to snapshot at {snapshot['timestamp']}, " f"original action={snapshot['action']}"
             )
 
             # 직접 복원 (import_config 호출 시 무한 루프 방지)
             tiers = [TierDefinition.from_dict(t) for t in old_config.get("tiers", [])]
-            mappings = [
-                TierMapping.from_dict(m) for m in old_config.get("mappings", [])
-            ]
-            overrides = [
-                TierOverride.from_dict(o) for o in old_config.get("overrides", [])
-            ]
+            mappings = [TierMapping.from_dict(m) for m in old_config.get("mappings", [])]
+            overrides = [TierOverride.from_dict(o) for o in old_config.get("overrides", [])]
 
             self._tiers = {t.id: t for t in tiers}
             self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
             self._overrides = overrides
 
-            return ValidationResult(is_valid=True, errors=[], warnings=["Rolled back"])
+            return TierValidationResult(is_valid=True, errors=[], warnings=["Rolled back"])
 
     # -------------------------------------------------------------------------
     # Tier Definition Methods
@@ -170,7 +165,7 @@ class TierRegistry:
         with self._data_lock:
             return list(self._tiers.values())
 
-    def set_tiers(self, tiers: list[TierDefinition]) -> ValidationResult:
+    def set_tiers(self, tiers: list[TierDefinition]) -> TierValidationResult:
         """
         Replace all tier definitions.
 
@@ -178,7 +173,7 @@ class TierRegistry:
             tiers: New tier definitions
 
         Returns:
-            ValidationResult
+            TierValidationResult
         """
         result = self._validator.validate_tiers(tiers)
         if not result.is_valid:
@@ -202,7 +197,7 @@ class TierRegistry:
         with self._data_lock:
             return list(self._mappings)
 
-    def set_mappings(self, mappings: list[TierMapping]) -> ValidationResult:
+    def set_mappings(self, mappings: list[TierMapping]) -> TierValidationResult:
         """
         Replace all tier mappings.
 
@@ -210,7 +205,7 @@ class TierRegistry:
             mappings: New tier mappings
 
         Returns:
-            ValidationResult
+            TierValidationResult
         """
         with self._data_lock:
             tier_ids = list(self._tiers.keys())
@@ -253,7 +248,7 @@ class TierRegistry:
         with self._data_lock:
             return [o for o in self._overrides if not o.is_expired()]
 
-    def set_overrides(self, overrides: list[TierOverride]) -> ValidationResult:
+    def set_overrides(self, overrides: list[TierOverride]) -> TierValidationResult:
         """
         Replace all tier overrides.
 
@@ -261,7 +256,7 @@ class TierRegistry:
             overrides: New tier overrides
 
         Returns:
-            ValidationResult
+            TierValidationResult
         """
         with self._data_lock:
             tier_ids = list(self._tiers.keys())
@@ -304,14 +299,10 @@ class TierRegistry:
                 if client_ip and override.matches(client_ip, OverrideIdentifierType.IP):
                     return self._tiers.get(override.tier_id)
 
-                if user_id and override.matches(
-                    user_id, OverrideIdentifierType.USER_ID
-                ):
+                if user_id and override.matches(user_id, OverrideIdentifierType.USER_ID):
                     return self._tiers.get(override.tier_id)
 
-                if api_key and override.matches(
-                    api_key, OverrideIdentifierType.API_KEY
-                ):
+                if api_key and override.matches(api_key, OverrideIdentifierType.API_KEY):
                     return self._tiers.get(override.tier_id)
 
         return None
@@ -508,10 +499,7 @@ class TierRegistry:
             )
 
         except Exception as e:
-            logger.warning(
-                f"[TierRegistry] Fail-safe activated: {e}. "
-                f"Returning default tier for path={path}"
-            )
+            logger.warning(f"[TierRegistry] Fail-safe activated: {e}. " f"Returning default tier for path={path}")
             return TierDefinition(
                 id="_failsafe",
                 name="Fail-Safe",
@@ -630,12 +618,10 @@ class TierRegistry:
             return {
                 "tiers": [t.to_dict() for t in self._tiers.values()],
                 "mappings": [m.to_dict() for m in self._mappings],
-                "overrides": [
-                    o.to_dict() for o in self._overrides if not o.is_expired()
-                ],
+                "overrides": [o.to_dict() for o in self._overrides if not o.is_expired()],
             }
 
-    def import_config(self, config: dict[str, Any]) -> ValidationResult:
+    def import_config(self, config: dict[str, Any]) -> TierValidationResult:
         """
         Import configuration.
 
@@ -643,7 +629,7 @@ class TierRegistry:
             config: Configuration dictionary
 
         Returns:
-            ValidationResult
+            TierValidationResult
         """
         tiers = [TierDefinition.from_dict(t) for t in config.get("tiers", [])]
         mappings = [TierMapping.from_dict(m) for m in config.get("mappings", [])]

@@ -28,7 +28,7 @@ from selfhealing.audit.integrity.factory import (
 from selfhealing.audit.integrity.health_score import (
     IntegrityHealthMetrics,
     IntegrityHealthScore,
-    RecoveryEvent,
+    IntegrityRecoveryEvent,
     get_integrity_health_score,
     reset_integrity_health_score,
 )
@@ -104,7 +104,7 @@ __all__ = [
     # Health Score
     "IntegrityHealthScore",
     "IntegrityHealthMetrics",
-    "RecoveryEvent",
+    "IntegrityRecoveryEvent",
     "get_integrity_health_score",
     "reset_integrity_health_score",
 ]

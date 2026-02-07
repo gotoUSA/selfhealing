@@ -24,7 +24,7 @@ from selfhealing.core.shutdown_coordinator import (
     TrackedRequest,
 )
 from selfhealing.core.request_context import (
-    RequestContext,
+    RequestLifecycleContext,
     track_request,
 )
 
@@ -82,44 +82,41 @@ class TestRequestTracking:
     def test_request_with_metadata(self):
         """메타데이터와 함께 요청 추적"""
         tracker = RequestTracker()
-        
+
         request = tracker.start_request(
-            request_id="req_001",
-            endpoint="/api/payments",
-            method="POST",
-            metadata={"user_id": 123, "amount": 1000}
+            request_id="req_001", endpoint="/api/payments", method="POST", metadata={"user_id": 123, "amount": 1000}
         )
-        
+
         assert request.metadata["user_id"] == 123
         assert request.metadata["amount"] == 1000
 
     def test_end_nonexistent_request(self):
         """존재하지 않는 요청 종료"""
         tracker = RequestTracker()
-        
+
         result = tracker.end_request("nonexistent")
-        
+
         assert result is None
 
     def test_completed_count(self):
         """완료된 요청 카운트"""
         tracker = RequestTracker()
-        
+
         for i in range(3):
             tracker.start_request(f"req_{i}")
-        
+
         for i in range(3):
             tracker.end_request(f"req_{i}")
-        
+
         assert tracker.completed_count == 3
 
     def test_request_duration(self):
         """요청 지속 시간"""
         tracker = RequestTracker()
-        
+
         request = tracker.start_request("req_001")
         time.sleep(0.1)
-        
+
         assert request.duration_seconds >= 0.1
 
 
@@ -224,9 +221,9 @@ class TestGracefulShutdown:
 
         coordinator.initiate_shutdown()
         time.sleep(0.1)
-        
+
         stats = coordinator.get_stats()
-        
+
         assert stats.phase == ShutdownPhase.DRAINING
         assert stats.in_flight_count == 1
         assert stats.remaining_drain_time is not None
@@ -245,52 +242,52 @@ class TestGracefulShutdown:
         coordinator.initiate_shutdown()  # 두 번째 호출은 무시되어야 함
 
         coordinator.wait_for_shutdown(timeout=2.0)
-        
+
         assert coordinator.phase == ShutdownPhase.TERMINATED
 
     def test_shutdown_handler_callbacks(self):
         """셧다운 핸들러 콜백"""
         tracker = RequestTracker()
-        
+
         class TestHandler(ShutdownHandler):
             def __init__(self):
                 self.start_called = False
                 self.drain_called = False
                 self.force_called = False
-            
+
             def on_shutdown_start(self):
                 self.start_called = True
-            
+
             def on_drain_complete(self):
                 self.drain_called = True
-            
+
             def on_force_shutdown(self, pending):
                 self.force_called = True
-        
+
         handler = TestHandler()
-        
+
         coordinator = GracefulShutdownCoordinator(
             request_tracker=tracker,
             drain_timeout=5.0,
             shutdown_handler=handler,
         )
-        
+
         coordinator.initiate_shutdown()
         coordinator.wait_for_shutdown(timeout=2.0)
-        
+
         assert handler.start_called is True
         assert handler.drain_called is True
         assert handler.force_called is False  # 요청이 없으므로 강제 종료 아님
 
 
-class TestRequestContext:
+class TestRequestLifecycleContext:
     """Request context manager tests"""
 
     def test_context_manager_tracking(self):
         """컨텍스트 매니저로 요청 추적"""
         tracker = RequestTracker()
 
-        with RequestContext(tracker, endpoint="/api/test") as ctx:
+        with RequestLifecycleContext(tracker, endpoint="/api/test") as ctx:
             assert tracker.get_pending_count() == 1
             ctx.set_metadata("user_id", 123)
 
@@ -301,7 +298,7 @@ class TestRequestContext:
         tracker = RequestTracker()
 
         try:
-            with RequestContext(tracker, request_id="fail_req") as ctx:
+            with RequestLifecycleContext(tracker, request_id="fail_req") as ctx:
                 raise ValueError("Test error")
         except ValueError:
             pass
@@ -322,21 +319,21 @@ class TestRequestContext:
     def test_context_mark_failed(self):
         """실패 마킹"""
         tracker = RequestTracker()
-        
-        with RequestContext(tracker, request_id="req_001") as ctx:
+
+        with RequestLifecycleContext(tracker, request_id="req_001") as ctx:
             ctx.mark_failed()
-        
+
         # 요청이 종료됨
         assert tracker.get_pending_count() == 0
 
     def test_context_set_metadata(self):
         """메타데이터 설정"""
         tracker = RequestTracker()
-        
-        with RequestContext(tracker, request_id="req_001") as ctx:
+
+        with RequestLifecycleContext(tracker, request_id="req_001") as ctx:
             ctx.set_metadata("order_id", "ORD-123")
             ctx.set_metadata("amount", 5000)
-        
+
         # 정상 종료
         assert tracker.get_pending_count() == 0
 
@@ -396,51 +393,51 @@ class TestShutdownIntegration:
     def test_concurrent_request_handling(self):
         """동시 요청 처리"""
         tracker = RequestTracker()
-        
+
         def simulate_request(request_id, duration):
             tracker.start_request(request_id)
             time.sleep(duration)
             tracker.end_request(request_id)
-        
+
         threads = []
         for i in range(5):
             t = threading.Thread(target=simulate_request, args=(f"req_{i}", 0.1))
             threads.append(t)
             t.start()
-        
+
         time.sleep(0.05)
         assert tracker.get_pending_count() > 0  # 일부 요청이 진행 중
-        
+
         for t in threads:
             t.join()
-        
+
         assert tracker.get_pending_count() == 0  # 모든 요청 완료
 
     def test_shutdown_with_context_managers(self):
         """컨텍스트 매니저와 함께 셧다운"""
         tracker = RequestTracker()
-        
+
         coordinator = GracefulShutdownCoordinator(
             request_tracker=tracker,
             drain_timeout=5.0,
         )
-        
+
         # 컨텍스트 매니저로 요청 시작
         def make_request():
             with track_request(tracker, endpoint="/api/test"):
                 time.sleep(0.2)
-        
+
         request_thread = threading.Thread(target=make_request)
         request_thread.start()
-        
+
         time.sleep(0.05)
-        
+
         # 셧다운 시작
         coordinator.initiate_shutdown()
-        
+
         request_thread.join()
         coordinator.wait_for_shutdown(timeout=2.0)
-        
+
         assert coordinator.phase == ShutdownPhase.TERMINATED
         stats = coordinator.get_stats()
         assert stats.aborted_count == 0  # 요청이 정상 완료됨

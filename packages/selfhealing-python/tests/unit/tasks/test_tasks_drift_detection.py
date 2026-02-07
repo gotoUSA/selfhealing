@@ -133,10 +133,10 @@ class TestDriftDetectorProtocols:
         assert FailedOperationQuerySet is not None
 
     def test_failed_operation_protocol_defined(self):
-        """Should have FailedOperationProtocol defined."""
-        from selfhealing.tasks.drift_detection import FailedOperationProtocol
+        """Should have DriftDetectionOperationProtocol defined."""
+        from selfhealing.tasks.drift_detection import DriftDetectionOperationProtocol
 
-        assert FailedOperationProtocol is not None
+        assert DriftDetectionOperationProtocol is not None
 
     def test_sla_thresholds_protocol_defined(self):
         """Should have SLAThresholdsProtocol defined."""

@@ -37,25 +37,25 @@ class TestPriorityQueue:
     def test_critical_events_have_highest_priority(self):
         """CRITICAL 이벤트가 가장 높은 우선순위를 가진다."""
         from selfhealing.utils.async_logger import (
-            EventPriority,
+            LogFlushPriority,
             EventSeverity,
             SEVERITY_PRIORITY_MAP,
         )
 
         # CRITICAL이 가장 낮은 숫자 (높은 우선순위)
-        assert SEVERITY_PRIORITY_MAP[EventSeverity.CRITICAL] == EventPriority.CRITICAL
+        assert SEVERITY_PRIORITY_MAP[EventSeverity.CRITICAL] == LogFlushPriority.CRITICAL
         assert SEVERITY_PRIORITY_MAP[EventSeverity.CRITICAL] < SEVERITY_PRIORITY_MAP[EventSeverity.WARNING]
         assert SEVERITY_PRIORITY_MAP[EventSeverity.WARNING] < SEVERITY_PRIORITY_MAP[EventSeverity.INFO]
         assert SEVERITY_PRIORITY_MAP[EventSeverity.INFO] < SEVERITY_PRIORITY_MAP[EventSeverity.DEBUG]
 
     def test_prioritized_event_ordering(self):
         """PrioritizedEvent가 올바르게 정렬된다."""
-        from selfhealing.utils.async_logger import EventPriority, PrioritizedEvent
+        from selfhealing.utils.async_logger import LogFlushPriority, PrioritizedEvent
 
         events = [
-            PrioritizedEvent(priority=EventPriority.DEBUG, timestamp=1.0, event={"type": "debug"}),
-            PrioritizedEvent(priority=EventPriority.CRITICAL, timestamp=2.0, event={"type": "critical"}),
-            PrioritizedEvent(priority=EventPriority.INFO, timestamp=3.0, event={"type": "info"}),
+            PrioritizedEvent(priority=LogFlushPriority.DEBUG, timestamp=1.0, event={"type": "debug"}),
+            PrioritizedEvent(priority=LogFlushPriority.CRITICAL, timestamp=2.0, event={"type": "critical"}),
+            PrioritizedEvent(priority=LogFlushPriority.INFO, timestamp=3.0, event={"type": "info"}),
         ]
 
         sorted_events = sorted(events)
@@ -66,14 +66,14 @@ class TestPriorityQueue:
 
     def test_priority_queue_processes_critical_first(self):
         """Priority Queue가 CRITICAL 이벤트를 먼저 처리한다."""
-        from selfhealing.utils.async_logger import EventPriority, PrioritizedEvent
+        from selfhealing.utils.async_logger import LogFlushPriority, PrioritizedEvent
 
         pq = queue.PriorityQueue()
 
         # 순서대로 추가 (DEBUG, CRITICAL, INFO)
-        pq.put(PrioritizedEvent(priority=EventPriority.DEBUG, timestamp=1.0, event={"type": "debug"}))
-        pq.put(PrioritizedEvent(priority=EventPriority.CRITICAL, timestamp=2.0, event={"type": "critical"}))
-        pq.put(PrioritizedEvent(priority=EventPriority.INFO, timestamp=3.0, event={"type": "info"}))
+        pq.put(PrioritizedEvent(priority=LogFlushPriority.DEBUG, timestamp=1.0, event={"type": "debug"}))
+        pq.put(PrioritizedEvent(priority=LogFlushPriority.CRITICAL, timestamp=2.0, event={"type": "critical"}))
+        pq.put(PrioritizedEvent(priority=LogFlushPriority.INFO, timestamp=3.0, event={"type": "info"}))
 
         # 우선순위 순으로 꺼내기
         first = pq.get()

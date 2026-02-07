@@ -270,14 +270,14 @@ class TestEmergencyModeTracker:
         mock_backend_instance.get.return_value = None
         mock_backend.return_value = mock_backend_instance
 
-        from selfhealing.services.governance import EmergencyModeTracker, EmergencyState
+        from selfhealing.services.governance import EmergencyModeTracker, GovernanceEmergencyState
 
         tracker = EmergencyModeTracker()
 
         # Set state to 4.5 hours ago
         now = datetime.now(timezone.utc)
         activated_at = now - timedelta(hours=4.5)
-        tracker._state = EmergencyState(
+        tracker._state = GovernanceEmergencyState(
             is_active=True,
             mode="STRICT",
             activated_at=activated_at.isoformat(),
@@ -299,14 +299,14 @@ class TestEmergencyModeTracker:
         mock_backend_instance.get.return_value = None
         mock_backend.return_value = mock_backend_instance
 
-        from selfhealing.services.governance import EmergencyModeTracker, EmergencyState
+        from selfhealing.services.governance import EmergencyModeTracker, GovernanceEmergencyState
 
         tracker = EmergencyModeTracker()
 
         # Set state to 8.5 hours ago
         now = datetime.now(timezone.utc)
         activated_at = now - timedelta(hours=8.5)
-        tracker._state = EmergencyState(
+        tracker._state = GovernanceEmergencyState(
             is_active=True,
             mode="STRICT",
             activated_at=activated_at.isoformat(),
@@ -404,7 +404,7 @@ class TestGovernanceTask:
         mock_backend_instance.get.return_value = None
         mock_backend.return_value = mock_backend_instance
 
-        from selfhealing.services.governance import EmergencyModeTracker, EmergencyState
+        from selfhealing.services.governance import EmergencyModeTracker, GovernanceEmergencyState
         from selfhealing.tasks.governance import check_emergency_mode_expiry
 
         # Set up tracker with 4.5 hour old state

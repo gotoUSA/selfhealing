@@ -13,7 +13,7 @@ from typing import Protocol
 logger = logging.getLogger(__name__)
 
 
-class MetricsAdapterProtocol(Protocol):
+class ChaosAwareMetricsProtocol(Protocol):
     """메트릭 어댑터 프로토콜."""
 
     def collect_metrics(self, service: str, window_seconds: int) -> dict[str, float]:
@@ -38,7 +38,7 @@ class ChaosAwareMetricsAdapter:
 
     def __init__(
         self,
-        delegate: MetricsAdapterProtocol,
+        delegate: ChaosAwareMetricsProtocol,
         skip_during_chaos: bool = True,
     ):
         """
@@ -96,7 +96,7 @@ class ChaosAwareMetricsAdapter:
         """
         return self._is_chaos_experiment_running()
 
-    def get_delegate(self) -> MetricsAdapterProtocol:
+    def get_delegate(self) -> ChaosAwareMetricsProtocol:
         """
         원본 delegate 어댑터 반환.
 
@@ -118,7 +118,7 @@ class ChaosAwareMetricsAdapter:
 
 
 def wrap_with_chaos_awareness(
-    adapter: MetricsAdapterProtocol,
+    adapter: ChaosAwareMetricsProtocol,
     skip_during_chaos: bool = True,
 ) -> ChaosAwareMetricsAdapter:
     """

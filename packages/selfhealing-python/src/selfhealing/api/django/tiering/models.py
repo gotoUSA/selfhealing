@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
 from typing import Any
 
-from .enums import OverrideIdentifierType, PatternType, TierFallbackReason
+from .enums import OverrideIdentifierType, TierMatchType, TierFallbackReason
 
 
 @dataclass
@@ -96,7 +96,7 @@ class TierMapping:
 
     pattern: str
     tier_id: str
-    pattern_type: PatternType = PatternType.EXACT
+    pattern_type: TierMatchType = TierMatchType.EXACT
     priority: int = 0
     description: str = ""
 
@@ -107,7 +107,7 @@ class TierMapping:
 
     def __post_init__(self):
         """Compile regex pattern if needed."""
-        if self.pattern_type == PatternType.REGEX:
+        if self.pattern_type == TierMatchType.REGEX:
             try:
                 self._compiled_pattern = re.compile(self.pattern)
             except re.error as e:
@@ -123,11 +123,11 @@ class TierMapping:
         Returns:
             True if path matches
         """
-        if self.pattern_type == PatternType.EXACT:
+        if self.pattern_type == TierMatchType.EXACT:
             return path == self.pattern
-        elif self.pattern_type == PatternType.WILDCARD:
+        elif self.pattern_type == TierMatchType.WILDCARD:
             return fnmatch.fnmatch(path, self.pattern)
-        elif self.pattern_type == PatternType.REGEX:
+        elif self.pattern_type == TierMatchType.REGEX:
             if self._compiled_pattern is None:
                 self._compiled_pattern = re.compile(self.pattern)
             return bool(self._compiled_pattern.match(path))
@@ -149,7 +149,7 @@ class TierMapping:
         return cls(
             pattern=data["pattern"],
             tier_id=data["tier_id"],
-            pattern_type=PatternType(data.get("pattern_type", "exact")),
+            pattern_type=TierMatchType(data.get("pattern_type", "exact")),
             priority=data.get("priority", 0),
             description=data.get("description", ""),
         )

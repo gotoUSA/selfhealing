@@ -43,7 +43,7 @@ def _get_critical_threshold() -> float:
 
 
 @dataclass
-class RecoveryEvent:
+class IntegrityRecoveryEvent:
     """Single recovery event record."""
 
     event_type: str  # "reconcile", "startup_sync", "watchdog_cleanup"
@@ -165,7 +165,7 @@ class IntegrityHealthScore:
         )
 
         # In-memory event buffer (last 24h)
-        self._recovery_events: list[RecoveryEvent] = []
+        self._recovery_events: list[IntegrityRecoveryEvent] = []
         self._max_events = 1000
 
         # Cached metrics
@@ -236,7 +236,7 @@ class IntegrityHealthScore:
             recovery_time_ms: Time taken for recovery in milliseconds
             details: Additional event details
         """
-        event = RecoveryEvent(
+        event = IntegrityRecoveryEvent(
             event_type=event_type,
             sequences_affected=sequences_affected,
             recovery_time_ms=recovery_time_ms,
@@ -422,7 +422,7 @@ class IntegrityHealthScore:
         except Exception as e:
             logger.warning(f"[HealthScore] Failed to update Prometheus: {e}")
 
-    def _log_recovery_event(self, event: RecoveryEvent) -> None:
+    def _log_recovery_event(self, event: IntegrityRecoveryEvent) -> None:
         """Log recovery event to self-audit trail."""
         try:
             from selfhealing.audit.self_audit import SelfAuditEvent, self_audit
@@ -567,7 +567,7 @@ def reset_integrity_health_score() -> None:
 __all__ = [
     "IntegrityHealthScore",
     "IntegrityHealthMetrics",
-    "RecoveryEvent",
+    "IntegrityRecoveryEvent",
     "get_integrity_health_score",
     "reset_integrity_health_score",
 ]

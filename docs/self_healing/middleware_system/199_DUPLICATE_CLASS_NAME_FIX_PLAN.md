@@ -2691,25 +2691,25 @@ class AutoTuningHistoryView(View):
 | 19 | `HealthCheckResult` 이름 변경 (Item 12) | 중간 | 두 곳 모두 변경 | ✅ 완료 (2026-02-07) |
 | 20 | `WatchdogConfig` 이름 변경 (Item 16) | 중간 | 두 곳 모두 변경 | ✅ 완료 (2026-02-07) |
 | 21 | `PaginatedResult` 이름 변경 (Item 25) | 중간 | 필드·타입·구현 3중 불일치 | ✅ 완료 (2026-02-08) |
-| 22 | `RequestContext` 이름 변경 (Item 26) | 중간 | core/__init__.py export 변경 |
-| 23 | `EventPriority` 이름 변경 (Item 27) | 중간 | 값 방향 정반대 |
-| 24 | `PoolHealthStatus` 이름 변경 (Item 28) | 중간 | core/__init__.py export + pool_watchdog |
-| 25 | `CircuitBreakerState` 이름 변경 + 제거 (Item 29) | 중간 | Item 2 CircuitState 통합과 연동 |
-| 26 | `BlastRadiusLevel` 3곳 통합 (Item 30) | 중간 | 3곳 동시 변경, str,Enum 통일 |
-| 27 | `ValidationResult` 이름 변경 (Item 35) | 중간 | tiering 내부용 |
-| 28 | `TokenBucket` 이름 변경 (Item 36) | 중간 | chaos 내부용 |
-| 29 | `ServiceDependency` 이름 변경 (Item 39) | 중간 | blast_radius 2곳, 양쪽 변경 |
-| 30 | `RetryResult` 이름 변경 (Item 40) | 중간 | dlq_models 내부용 |
-| 31 | `RecoveryEvent` 이름 변경 (Item 41) | 중간 | audit 내부용 |
-| 32 | `PatternType` 이름 변경 (Item 42) | 중간 | tiering enums 내부용 |
-| 33 | `MetricsAdapterProtocol` 이름 변경 (Item 43) | 중간 | auto_tuning 패키지 내부 |
-| 34 | `FailedOperationProtocol` 이름 변경 (Item 44) | 중간 | tasks 내부용 |
-| 35 | `EmergencyState` 이름 변경 (Item 45) | 중간 | governance 내부용 |
-| 36 | `ConfigChange` 이름 변경 (Item 46) | 중간 | canary/cross_cluster 내부용 |
-| 37 | `CascadeEvent` 이름 변경 (Item 47) | 중간 | namespace_emergency 내부용 |
-| 38 | `CanaryState` + `CanaryStage` + `CanaryDecision` 이름 변경 (Item 48-50) | 중간 | circuit_breaker/canary_recovery 3개 동시 |
-| 39 | `BlockReason` 이름 변경 (Item 51) | 중간 | chaos/safety_guard 내부용 |
-| 40 | `BlastRadiusPolicy` 이름 변경 (Item 52) | 중간 | chaos/blast_radius 내부용 |
+| 22 | `RequestContext` 이름 변경 (Item 26) | 중간 | core/__init__.py export 변경 | ✅ 완료 (2026-02-08) |
+| 23 | `EventPriority` 이름 변경 (Item 27) | 중간 | 값 방향 정반대 | ✅ 완료 (2026-02-08) |
+| 24 | `PoolHealthStatus` 이름 변경 (Item 28) | 중간 | core/__init__.py export + pool_watchdog | ✅ 완료 (2026-02-08) |
+| 25 | `CircuitBreakerState` 이름 변경 + 제거 (Item 29) | 중간 | Item 2 CircuitState 통합과 연동 | ✅ 완료 (2026-02-08) |
+| 26 | `BlastRadiusLevel` 3곳 통합 (Item 30) | 중간 | 3곳 동시 변경, str,Enum 통일 | ✅ 완료 (2026-02-08) |
+| 27 | `ValidationResult` 이름 변경 (Item 35) | 중간 | tiering 내부용 | ✅ 완료 (2026-02-08) |
+| 28 | `TokenBucket` 이름 변경 (Item 36) | 중간 | chaos 내부용 | ✅ 완료 (2026-02-08) |
+| 29 | `ServiceDependency` 이름 변경 (Item 39) | 중간 | blast_radius 2곳, 양쪽 변경 | ✅ 완료 (2026-02-08) |
+| 30 | `RetryResult` 이름 변경 (Item 40) | 중간 | dlq_models 내부용 | ✅ 완료 (2026-02-08) |
+| 31 | `RecoveryEvent` 이름 변경 (Item 41) | 중간 | audit 내부용 | ✅ 완료 (2026-02-08) |
+| 32 | `PatternType` 이름 변경 (Item 42) | 중간 | tiering enums 내부용 | ✅ 완료 (2026-02-08) |
+| 33 | `MetricsAdapterProtocol` 이름 변경 (Item 43) | 중간 | auto_tuning 패키지 내부 | ✅ 완료 (2026-02-08) |
+| 34 | `FailedOperationProtocol` 이름 변경 (Item 44) | 중간 | tasks 내부용 | ✅ 완료 (2026-02-08) |
+| 35 | `EmergencyState` 이름 변경 (Item 45) | 중간 | governance 내부용 | ✅ 완료 (2026-02-08) |
+| 36 | `ConfigChange` 이름 변경 (Item 46) | 중간 | canary/cross_cluster 내부용 | ✅ 완료 (2026-02-08) |
+| 37 | `CascadeEvent` 이름 변경 (Item 47) | 중간 | namespace_emergency 내부용 | ✅ 완료 (2026-02-08) |
+| 38 | `CanaryState` + `CanaryStage` + `CanaryDecision` 이름 변경 (Item 48-50) | 중간 | circuit_breaker/canary_recovery 3개 동시 | ✅ 완료 (2026-02-08) |
+| 39 | `BlockReason` 이름 변경 (Item 51) | 중간 | chaos/safety_guard 내부용 | ✅ 완료 (2026-02-08) |
+| 40 | `BlastRadiusPolicy` 이름 변경 (Item 52) | 중간 | chaos/blast_radius 내부용 | ✅ 완료 (2026-02-08) |
 | 41 | `CBStateCache` 이름 변경 (Item 17) | 높음 | core/__init__.py export + IPC 서버 |
 | 42 | `ProviderRegistry` 이름 변경 (Item 23) | 높음 | services/factory + deprecated 연동 |
 | 43 | `ConfigChangeEvent` 이름 변경 (Item 18) | 높음 | audit/__init__.py export + deployment |

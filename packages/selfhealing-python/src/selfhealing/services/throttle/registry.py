@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from selfhealing.audit.graceful_degradation.enums import CircuitState
 from selfhealing.services.throttle.adaptive import AdaptiveThrottle
 from selfhealing.services.throttle.config import ThrottleConfig
 
@@ -32,21 +33,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class CircuitBreakerState(str, Enum):
-    """Circuit Breaker 상태 (Throttle 연동용)."""
-
-    CLOSED = "closed"
-    OPEN = "open"
-    HALF_OPEN = "half_open"
-
-
 @dataclass
 class ServiceThrottleState:
     """서비스별 Throttle 상태 정보."""
 
     service_name: str
     throttle: AdaptiveThrottle
-    cb_state: CircuitBreakerState = CircuitBreakerState.CLOSED
+    cb_state: CircuitState = CircuitState.CLOSED
     original_limit: int | None = None  # CB OPEN 전 원래 limit (복구용)
 
 
@@ -149,7 +142,7 @@ class ThrottleRegistry:
         self._throttles[service_name] = ServiceThrottleState(
             service_name=service_name,
             throttle=throttle,
-            cb_state=CircuitBreakerState.CLOSED,
+            cb_state=CircuitState.CLOSED,
         )
 
         logger.debug(f"[ThrottleRegistry] Created throttle for '{service_name}'")
@@ -180,17 +173,17 @@ class ThrottleRegistry:
             config = self._configs.get(service_name, self._default_config)
 
             try:
-                new_cb_state = CircuitBreakerState(new_state)
+                new_cb_state = CircuitState(new_state)
             except ValueError:
                 logger.warning(f"[ThrottleRegistry] Invalid CB state: {new_state}")
                 return
 
             previous_limit = throttle.current_limit
 
-            if new_cb_state == CircuitBreakerState.OPEN:
+            if new_cb_state == CircuitState.OPEN:
                 # CB OPEN: min_limit으로 즉시 강등
                 state.original_limit = previous_limit  # 복구용 저장
-                state.cb_state = CircuitBreakerState.OPEN
+                state.cb_state = CircuitState.OPEN
 
                 if config.cb_open_limit_ratio > 0:
                     new_limit = int(config.initial_limit * config.cb_open_limit_ratio)
@@ -202,9 +195,9 @@ class ThrottleRegistry:
                     f"[ThrottleRegistry] CB OPEN for '{service_name}', " f"limit: {previous_limit} → {throttle.current_limit}"
                 )
 
-            elif new_cb_state == CircuitBreakerState.HALF_OPEN:
+            elif new_cb_state == CircuitState.HALF_OPEN:
                 # CB HALF_OPEN: initial_limit의 50%로 제한적 허용
-                state.cb_state = CircuitBreakerState.HALF_OPEN
+                state.cb_state = CircuitState.HALF_OPEN
 
                 new_limit = int(config.initial_limit * config.cb_half_open_limit_ratio)
                 throttle.current_limit = new_limit
@@ -213,9 +206,9 @@ class ThrottleRegistry:
                     f"limit: {previous_limit} → {throttle.current_limit}"
                 )
 
-            elif new_cb_state == CircuitBreakerState.CLOSED:
+            elif new_cb_state == CircuitState.CLOSED:
                 # CB CLOSED: 원래 limit 또는 initial_limit으로 복구
-                state.cb_state = CircuitBreakerState.CLOSED
+                state.cb_state = CircuitState.CLOSED
 
                 if state.original_limit is not None:
                     new_limit = state.original_limit

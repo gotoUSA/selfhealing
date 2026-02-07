@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch, MagicMock
 from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
     RecoveryStrategy,
-    CanaryStage,
+    CanaryRecoveryStageConfig,
 )
 
 
@@ -55,14 +55,14 @@ class TestCanaryRecoveryManager:
         """기본 전략으로 Canary 복구 시작."""
         from selfhealing.services.circuit_breaker.canary_recovery import (
             get_canary_recovery_manager,
-            CanaryState,
+            CanaryRecoveryStage,
         )
         
         manager = get_canary_recovery_manager()
         state = manager.start_canary_recovery("payment-api")
         
         assert state.is_in_canary()
-        assert state.current_stage == CanaryState.CANARY_1
+        assert state.current_stage == CanaryRecoveryStage.CANARY_1
         assert state.stage_index == 0
         assert state.metrics is not None
     
@@ -77,9 +77,9 @@ class TestCanaryRecoveryManager:
             type="canary",
             strict_mode=True,
             canary_stages=[
-                CanaryStage(traffic_percent=5.0, duration_seconds=2, required_success_rate=99.0),
-                CanaryStage(traffic_percent=50.0, duration_seconds=2, required_success_rate=95.0),
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=5.0, duration_seconds=2, required_success_rate=99.0),
+                CanaryRecoveryStageConfig(traffic_percent=50.0, duration_seconds=2, required_success_rate=95.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
         
@@ -112,7 +112,7 @@ class TestCanaryRecoveryManager:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=50.0, duration_seconds=5, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=50.0, duration_seconds=5, required_success_rate=90.0),
             ],
         )
         
@@ -178,15 +178,15 @@ class TestCanaryRecoveryManager:
         """성공률 충족 시 다음 단계로 전이."""
         from selfhealing.services.circuit_breaker.canary_recovery import (
             get_canary_recovery_manager,
-            CanaryState,
+            CanaryRecoveryStage,
         )
         
         manager = get_canary_recovery_manager()
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
         
@@ -198,7 +198,7 @@ class TestCanaryRecoveryManager:
         
         state = manager.get_recovery_state("payment-api")
         # 다음 단계로 전이되어야 함
-        assert state.current_stage == CanaryState.CANARY_2 or result.completed
+        assert state.current_stage == CanaryRecoveryStage.CANARY_2 or result.completed
     
     def test_recovery_failure_on_low_success_rate(self):
         """성공률 미달 시 복구 실패."""
@@ -210,7 +210,7 @@ class TestCanaryRecoveryManager:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
         
@@ -262,10 +262,10 @@ class TestCanaryStageMetrics:
         """성공률 계산."""
         from selfhealing.services.circuit_breaker.canary_recovery import (
             CanaryStageMetrics,
-            CanaryState,
+            CanaryRecoveryStage,
         )
         
-        metrics = CanaryStageMetrics(stage=CanaryState.CANARY_1)
+        metrics = CanaryStageMetrics(stage=CanaryRecoveryStage.CANARY_1)
         
         for _ in range(8):
             metrics.record_success()
@@ -279,9 +279,9 @@ class TestCanaryStageMetrics:
         """빈 메트릭은 100% 반환."""
         from selfhealing.services.circuit_breaker.canary_recovery import (
             CanaryStageMetrics,
-            CanaryState,
+            CanaryRecoveryStage,
         )
         
-        metrics = CanaryStageMetrics(stage=CanaryState.CANARY_1)
+        metrics = CanaryStageMetrics(stage=CanaryRecoveryStage.CANARY_1)
         
         assert metrics.current_success_rate == 100.0

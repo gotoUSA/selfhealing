@@ -17,7 +17,7 @@ Usage:
     from selfhealing.services.chaos.safety_guard import (
         SafetyGuard,
         SafetyStatus,
-        BlockReason,
+        ChaosBlockReason,
         get_safety_guard,
     )
 
@@ -32,7 +32,7 @@ Usage:
 """
 
 # Enums
-from .enums import BlockReason, SafetyStatus
+from .enums import ChaosBlockReason, SafetyStatus
 
 # Main guard class
 from .guard import SafetyGuard
@@ -55,7 +55,7 @@ from .resource_guard import (
 __all__ = [
     # Enums
     "SafetyStatus",
-    "BlockReason",
+    "ChaosBlockReason",
     # Models
     "SafetyConfig",
     "SafetyCheckResult",

@@ -13,14 +13,14 @@ from typing import Any
 from .shutdown_coordinator import RequestTracker, TrackedRequest
 
 
-class RequestContext:
+class RequestLifecycleContext:
     """
-    Context for tracking a single request.
+    Context for tracking a single request lifecycle.
 
     Usage:
         tracker = RequestTracker()
 
-        with RequestContext(tracker, endpoint="/api/orders") as ctx:
+        with RequestLifecycleContext(tracker, endpoint="/api/orders") as ctx:
             # Process request
             result = process_order()
             ctx.set_metadata("order_id", result.id)
@@ -56,7 +56,7 @@ class RequestContext:
         """Mark the request as failed"""
         self._success = False
 
-    def __enter__(self) -> "RequestContext":
+    def __enter__(self) -> "RequestLifecycleContext":
         self._tracked = self._tracker.start_request(
             request_id=self._request_id,
             endpoint=self._endpoint,
@@ -81,7 +81,7 @@ def track_request(
     request_id: str | None = None,
     endpoint: str = "",
     method: str = "",
-) -> Generator[RequestContext, None, None]:
+) -> Generator[RequestLifecycleContext, None, None]:
     """
     Context manager for request tracking.
 
@@ -89,7 +89,7 @@ def track_request(
         with track_request(tracker, endpoint="/api/pay") as ctx:
             process_payment()
     """
-    ctx = RequestContext(
+    ctx = RequestLifecycleContext(
         tracker=tracker,
         request_id=request_id,
         endpoint=endpoint,

@@ -4,22 +4,13 @@ Blast Radius DNA Models - 장애 영향 범위 관련 데이터 모델
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 
-
-class BlastRadiusLevel(Enum):
-    """영향 범위 수준"""
-
-    ISOLATED = "isolated"  # 완전 격리 (단일 컴포넌트)
-    LIMITED = "limited"  # 제한적 (같은 서비스 내)
-    MODERATE = "moderate"  # 중간 (관련 서비스들)
-    EXTENSIVE = "extensive"  # 광범위 (여러 도메인)
-    CRITICAL = "critical"  # 치명적 (전체 시스템)
+from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusLevel
 
 
 @dataclass
-class ServiceDependency:
-    """서비스 의존성"""
+class ServiceDependencyEdge:
+    """서비스 의존성 엣지"""
 
     source_service: str
     target_service: str
@@ -43,7 +34,7 @@ class BlastRadiusPolicy:
 
     policy_id: str
     stage_name: str
-    level: BlastRadiusLevel = BlastRadiusLevel.ISOLATED
+    level: BlastRadiusLevel = BlastRadiusLevel.MINIMAL
     affected_services: list[str] = field(default_factory=list)
     max_affected_percentage: float = 10.0  # 최대 영향 비율 (%)
     auto_isolate: bool = True

@@ -66,7 +66,7 @@ from selfhealing.services.canary.chaos_guard import (
 
 # Cross-Cluster (Step 5)
 from selfhealing.services.canary.cross_cluster import (
-    ConfigChange,
+    ClusterConfigChange,
     CrossClusterNotifier,
     CrossClusterPropagationRequest,
     GovernancePolicy,
@@ -156,7 +156,7 @@ __all__ = [
     "log_canary_error",
     "log_canary_metrics_check",
     # Cross-Cluster (Step 5)
-    "ConfigChange",
+    "ClusterConfigChange",
     "PropagationRequest",
     "PropagationRequestStatus",
     "GovernancePolicy",

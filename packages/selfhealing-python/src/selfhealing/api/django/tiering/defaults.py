@@ -6,7 +6,7 @@ Best practice defaults for tier definitions, mappings, and overrides.
 
 from __future__ import annotations
 
-from .enums import OverrideIdentifierType, PatternType
+from .enums import OverrideIdentifierType, TierMatchType
 from .models import TierDefinition, TierMapping, TierOverride
 
 # =============================================================================
@@ -67,28 +67,28 @@ DEFAULT_TIER_MAPPINGS: list[TierMapping] = [
     TierMapping(
         pattern="/api/self-healing/control/",
         tier_id="critical",
-        pattern_type=PatternType.EXACT,
+        pattern_type=TierMatchType.EXACT,
         priority=100,
         description="자가치유 제어 액션",
     ),
     TierMapping(
         pattern="/api/self-healing/allow/*",
         tier_id="critical",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=100,
         description="자가치유 허용 액션",
     ),
     TierMapping(
         pattern="/api/self-healing/block/*",
         tier_id="critical",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=100,
         description="자가치유 차단 액션",
     ),
     TierMapping(
         pattern="/api/self-healing/system/*",
         tier_id="critical",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=95,
         description="킬 스위치 등 시스템 제어",
     ),
@@ -96,28 +96,28 @@ DEFAULT_TIER_MAPPINGS: list[TierMapping] = [
     TierMapping(
         pattern="/api/self-healing/config/*",
         tier_id="standard",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=50,
         description="설정 변경 API",
     ),
     TierMapping(
         pattern="/api/self-healing/dlq/*",
         tier_id="standard",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=50,
         description="DLQ 관련 API",
     ),
     TierMapping(
         pattern="/api/self-healing/audit/",
         tier_id="standard",
-        pattern_type=PatternType.EXACT,
+        pattern_type=TierMatchType.EXACT,
         priority=50,
         description="감사 로그 조회",
     ),
     TierMapping(
         pattern="/api/self-healing/status/*",
         tier_id="standard",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=50,
         description="상태 조회",
     ),
@@ -125,21 +125,21 @@ DEFAULT_TIER_MAPPINGS: list[TierMapping] = [
     TierMapping(
         pattern="/api/self-healing/dashboard/*",
         tier_id="non_essential",
-        pattern_type=PatternType.WILDCARD,
+        pattern_type=TierMatchType.WILDCARD,
         priority=10,
         description="대시보드 API",
     ),
     TierMapping(
         pattern="/api/self-healing/metrics/",
         tier_id="non_essential",
-        pattern_type=PatternType.EXACT,
+        pattern_type=TierMatchType.EXACT,
         priority=10,
         description="메트릭 조회 API",
     ),
     TierMapping(
         pattern=r"/api/self-healing/chaos/reports/.*",
         tier_id="non_essential",
-        pattern_type=PatternType.REGEX,
+        pattern_type=TierMatchType.REGEX,
         priority=10,
         description="카오스 리포트 API",
     ),

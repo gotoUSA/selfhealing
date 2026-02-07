@@ -139,6 +139,7 @@ class TestBaseDLQAdminUserLink:
         obj.user.id = 1
         obj.user.username = "testuser"
 
+        admin_instance.get_user_admin_url = MagicMock(return_value="/admin/auth/user/1/change/")
         result = admin_instance.user_link(obj)
         assert "testuser" in result
         assert "href" in result

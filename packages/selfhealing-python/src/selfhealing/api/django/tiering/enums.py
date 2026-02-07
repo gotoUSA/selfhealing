@@ -20,7 +20,7 @@ class TierFallbackReason(Enum):
     STATIC_PATH_MATCH = "static_path_match"
 
 
-class PatternType(str, Enum):
+class TierMatchType(str, Enum):
     """Pattern matching type for tier mappings."""
 
     EXACT = "exact"

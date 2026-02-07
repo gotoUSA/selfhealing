@@ -539,9 +539,9 @@ class TestBlastRadiusManagerIntegration:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.chaos.blast_radius import BlastRadiusManager, BlastRadiusPolicy
+            from selfhealing.services.chaos.blast_radius import BlastRadiusManager, ChaosBlastRadiusPolicy
             
-            policy = BlastRadiusPolicy(
+            policy = ChaosBlastRadiusPolicy(
                 instance_auto_approve=True,
                 allow_outside_window=True,
             )
@@ -564,9 +564,9 @@ class TestBlastRadiusManagerIntegration:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.chaos.blast_radius import BlastRadiusManager, BlastRadiusPolicy
+            from selfhealing.services.chaos.blast_radius import BlastRadiusManager, ChaosBlastRadiusPolicy
             
-            policy = BlastRadiusPolicy(
+            policy = ChaosBlastRadiusPolicy(
                 excluded_services=["blocked-service"],
                 allow_outside_window=True,
             )

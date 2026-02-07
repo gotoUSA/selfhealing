@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch, MagicMock
 from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
     RecoveryStrategy,
-    CanaryStage,
+    CanaryRecoveryStageConfig,
 )
 
 
@@ -219,7 +219,7 @@ class TestRecoveryStrategySelector:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=100.0, duration_seconds=5, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=5, required_success_rate=90.0),
             ],
         )
         selector.set_default_strategy(strategy)
@@ -241,8 +241,8 @@ class TestRecoveryStrategySelector:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
         selector.set_default_strategy(strategy)
@@ -265,7 +265,7 @@ class TestRecoveryStrategySelector:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=0, required_success_rate=90.0),
             ],
         )
         selector.set_default_strategy(strategy)
@@ -388,7 +388,7 @@ class TestRecoveryStrategyIntegration:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=100.0, duration_seconds=0, required_success_rate=80.0),
+                CanaryRecoveryStageConfig(traffic_percent=100.0, duration_seconds=0, required_success_rate=80.0),
             ],
         )
         selector.set_default_strategy(strategy)
@@ -424,7 +424,7 @@ class TestRecoveryStrategyIntegration:
         strategy = RecoveryStrategy(
             type="canary",
             canary_stages=[
-                CanaryStage(traffic_percent=0.0, duration_seconds=5, required_success_rate=90.0),
+                CanaryRecoveryStageConfig(traffic_percent=0.0, duration_seconds=5, required_success_rate=90.0),
             ],
         )
         selector.set_default_strategy(strategy)

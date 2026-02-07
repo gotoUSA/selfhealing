@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 __all__ = [
     "AsyncHealingLogger",
     "EventSeverity",
-    "EventPriority",
+    "LogFlushPriority",
     "PrioritizedEvent",
     "WALPolicy",
     "QueueOverflowPolicy",
@@ -60,8 +60,8 @@ class EventSeverity(Enum):
     CRITICAL = 3  # CB Open, 장애 감지 → 즉시 전송
 
 
-class EventPriority:
-    """이벤트 처리 우선순위 상수 (낮을수록 높은 우선순위)."""
+class LogFlushPriority:
+    """로그 플러시 우선순위 상수 (낮을수록 높은 우선순위, PriorityQueue용)."""
 
     CRITICAL = 0
     WARNING = 1
@@ -71,10 +71,10 @@ class EventPriority:
 
 # Severity → Priority 매핑
 SEVERITY_PRIORITY_MAP: dict[EventSeverity, int] = {
-    EventSeverity.CRITICAL: EventPriority.CRITICAL,
-    EventSeverity.WARNING: EventPriority.WARNING,
-    EventSeverity.INFO: EventPriority.INFO,
-    EventSeverity.DEBUG: EventPriority.DEBUG,
+    EventSeverity.CRITICAL: LogFlushPriority.CRITICAL,
+    EventSeverity.WARNING: LogFlushPriority.WARNING,
+    EventSeverity.INFO: LogFlushPriority.INFO,
+    EventSeverity.DEBUG: LogFlushPriority.DEBUG,
 }
 
 
@@ -406,7 +406,7 @@ class AsyncHealingLogger:
             cls._stats["events_logged"] += 1
 
         # Priority 결정
-        priority = SEVERITY_PRIORITY_MAP.get(severity, EventPriority.INFO)
+        priority = SEVERITY_PRIORITY_MAP.get(severity, LogFlushPriority.INFO)
         prioritized = PrioritizedEvent(
             priority=priority,
             timestamp=time.time(),
@@ -548,7 +548,7 @@ class AsyncHealingLogger:
                     with cls._queue_count_lock:
                         cls._queue_count = max(0, cls._queue_count - 1)
 
-                    if prioritized.priority == EventPriority.CRITICAL:
+                    if prioritized.priority == LogFlushPriority.CRITICAL:
                         # CRITICAL은 별도 배치로 즉시 처리
                         critical_batch.append(prioritized.event)
                     else:

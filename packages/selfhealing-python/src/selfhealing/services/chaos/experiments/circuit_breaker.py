@@ -62,10 +62,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
     def inject_chaos(self) -> bool:
         """Force CB to OPEN state."""
-        logger.info(
-            f"[CBOpenInjection] Forcing CB OPEN for {self.config.target_service} "
-            f"(TTL: {self._effective_ttl}s)"
-        )
+        logger.info(f"[CBOpenInjection] Forcing CB OPEN for {self.config.target_service} " f"(TTL: {self._effective_ttl}s)")
 
         try:
             from selfhealing.services.circuit_breaker import (
@@ -92,9 +89,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                         "target_service": self.config.target_service,
                         "trigger_canary": self.trigger_canary,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -108,9 +103,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         """Force CB back to CLOSED state."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info(
-                    f"[CBOpenInjection] Rollback already completed for {self.experiment_id}"
-                )
+                logger.info(f"[CBOpenInjection] Rollback already completed for {self.experiment_id}")
                 return
 
             logger.info(f"[CBOpenInjection] Rolling back {self.experiment_id}")
@@ -159,7 +152,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         """
         try:
             from selfhealing.services.circuit_breaker.canary_recovery import (
-                CanaryState,
+                CanaryRecoveryStage,
                 get_canary_recovery_manager,
             )
 
@@ -170,7 +163,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
             if state is None:
                 return {
-                    "canary_state": CanaryState.NOT_IN_CANARY.value,
+                    "canary_state": CanaryRecoveryStage.NOT_IN_CANARY.value,
                     "traffic_percent": 100.0,
                     "in_canary": False,
                     "success_rate": None,
@@ -182,11 +175,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 "traffic_percent": state.traffic_percent,
                 "in_canary": state.is_in_canary(),
                 "success_rate": state.success_rate,
-                "stage_started_at": (
-                    state.stage_started_at.isoformat()
-                    if state.stage_started_at
-                    else None
-                ),
+                "stage_started_at": (state.stage_started_at.isoformat() if state.stage_started_at else None),
             }
         except Exception as e:
             logger.warning(f"[CBOpenExperiment] Canary verification failed: {e}")
@@ -223,9 +212,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
             time.sleep(1.0)  # 1초마다 체크
 
-        logger.warning(
-            f"[CBOpenExperiment] Canary recovery did not start within {timeout_seconds}s"
-        )
+        logger.warning(f"[CBOpenExperiment] Canary recovery did not start within {timeout_seconds}s")
         return False
 
     def get_canary_verification_result(self) -> dict[str, Any]:
@@ -240,9 +227,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         # FailureHypothesis 검증
         if hasattr(self, "failure_hypothesis") and self.failure_hypothesis:
             actual_canary_stage = canary_status.get("canary_state")
-            hypothesis_canary_match = (
-                actual_canary_stage == self.failure_hypothesis.expected_canary_stage
-            )
+            hypothesis_canary_match = actual_canary_stage == self.failure_hypothesis.expected_canary_stage
         else:
             hypothesis_canary_match = None
 

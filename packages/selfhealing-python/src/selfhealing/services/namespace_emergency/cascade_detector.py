@@ -73,7 +73,7 @@ def _get_cascade_window_minutes() -> int:
 
 
 @dataclass
-class CascadeEvent:
+class CascadeDetectionEvent:
     """
     Cascade 이벤트 정보.
 
@@ -173,7 +173,7 @@ class RegionalCascadeDetector:
         self._lock = threading.Lock()
 
         # Cascade 이벤트 히스토리 (메모리 버퍼)
-        self._cascade_history: list[CascadeEvent] = []
+        self._cascade_history: list[CascadeDetectionEvent] = []
         self._max_history_size = 100
 
     def _get_tracker(self) -> Any:
@@ -314,7 +314,7 @@ class RegionalCascadeDetector:
         )
 
         # 이벤트 기록
-        event = CascadeEvent(
+        event = CascadeDetectionEvent(
             event_id=f"cascade-manual-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             affected_regions=regional_strict,
             total_strict_count=len(regional_strict),
@@ -346,9 +346,9 @@ class RegionalCascadeDetector:
     # Private Methods
     # =========================================================================
 
-    def _record_cascade_event(self, affected_regions: list[str]) -> CascadeEvent:
+    def _record_cascade_event(self, affected_regions: list[str]) -> CascadeDetectionEvent:
         """Cascade 이벤트 기록."""
-        event = CascadeEvent(
+        event = CascadeDetectionEvent(
             event_id=f"cascade-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             affected_regions=affected_regions,
             total_strict_count=len(affected_regions),
@@ -365,7 +365,7 @@ class RegionalCascadeDetector:
     def _escalate_to_global(
         self,
         affected_regions: list[str],
-        event: CascadeEvent,
+        event: CascadeDetectionEvent,
     ) -> None:
         """자동 GLOBAL 격상 (auto_escalate=True일 때만)."""
         tracker = self._get_tracker()

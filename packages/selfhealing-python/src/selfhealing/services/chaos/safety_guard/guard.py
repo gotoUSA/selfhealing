@@ -23,7 +23,7 @@ from typing import Any
 
 from selfhealing.core.timezone import now
 
-from .enums import BlockReason, SafetyStatus
+from .enums import ChaosBlockReason, SafetyStatus
 from .models import SafetyCheckResult, SafetyConfig
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class SafetyGuard:
         result = guard.check(experiment_id="chaos-abc123")
 
         if not result.allowed:
-            if result.block_reason == BlockReason.LOW_ERROR_BUDGET.value:
+            if result.block_reason == ChaosBlockReason.LOW_ERROR_BUDGET.value:
                 notify("ChaosSkippedDueToLowBudget", result)
             return
 
@@ -128,7 +128,7 @@ class SafetyGuard:
         if self._global_block:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.MANUAL_BLOCK.value
+            result.block_reason = ChaosBlockReason.MANUAL_BLOCK.value
             result.block_message = self._global_block_reason
             result.checks_failed.append("global_block")
             return True
@@ -143,7 +143,7 @@ class SafetyGuard:
             result.kill_switch_active = True
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.KILL_SWITCH_ACTIVE.value
+            result.block_reason = ChaosBlockReason.KILL_SWITCH_ACTIVE.value
             result.block_message = "Kill switch is active"
             result.checks_failed.append("kill_switch")
             return True
@@ -162,7 +162,7 @@ class SafetyGuard:
         if budget_result["remaining_percent"] < self._config.error_budget_min_percent:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.LOW_ERROR_BUDGET.value
+            result.block_reason = ChaosBlockReason.LOW_ERROR_BUDGET.value
             result.block_message = (
                 f"Error budget at {budget_result['remaining_percent']:.1f}% "
                 f"(minimum: {self._config.error_budget_min_percent}%)"
@@ -192,7 +192,7 @@ class SafetyGuard:
         if not health_result["healthy"]:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.UNHEALTHY_SYSTEM.value
+            result.block_reason = ChaosBlockReason.UNHEALTHY_SYSTEM.value
             result.block_message = health_result.get("message", "System unhealthy")
             result.checks_failed.append("system_health")
             return True
@@ -208,7 +208,7 @@ class SafetyGuard:
         if incident_result["count"] > 0:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.ACTIVE_INCIDENT.value
+            result.block_reason = ChaosBlockReason.ACTIVE_INCIDENT.value
             result.block_message = f"{incident_result['count']} active incident(s)"
             result.checks_failed.append("active_incidents")
             return True
@@ -224,7 +224,7 @@ class SafetyGuard:
         if freeze_result["active"]:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.DEPLOYMENT_FREEZE.value
+            result.block_reason = ChaosBlockReason.DEPLOYMENT_FREEZE.value
             result.block_message = "Deployment freeze is active"
             result.checks_failed.append("deployment_freeze")
             return True
@@ -254,7 +254,7 @@ class SafetyGuard:
                 state = manager.get_state()
                 result.status = SafetyStatus.BLOCKED.value
                 result.allowed = False
-                result.block_reason = BlockReason.CB_FREEZE_MODE_ACTIVE.value
+                result.block_reason = ChaosBlockReason.CB_FREEZE_MODE_ACTIVE.value
                 result.block_message = f"CB Freeze Mode active: {state.reason or 'System stability protection'}"
                 result.checks_failed.append("freeze_mode")
                 logger.warning(
@@ -278,7 +278,7 @@ class SafetyGuard:
                 result.freeze_mode_active = True
                 result.status = SafetyStatus.BLOCKED.value
                 result.allowed = False
-                result.block_reason = BlockReason.CB_FREEZE_MODE_ACTIVE.value
+                result.block_reason = ChaosBlockReason.CB_FREEZE_MODE_ACTIVE.value
                 result.block_message = f"Freeze mode check failed (fail-safe): {e}"
                 result.checks_failed.append("freeze_mode")
                 return True
@@ -546,7 +546,7 @@ class SafetyGuard:
         if emergency_result["active"]:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.EMERGENCY_MODE_ACTIVE.value
+            result.block_reason = ChaosBlockReason.EMERGENCY_MODE_ACTIVE.value
             result.block_message = (
                 f"Emergency mode {emergency_result['level']} is active: "
                 f"chaos experiments blocked"
@@ -648,7 +648,7 @@ class SafetyGuard:
         if panic_result["triggered"]:
             result.status = SafetyStatus.BLOCKED.value
             result.allowed = False
-            result.block_reason = BlockReason.PANIC_THRESHOLD_TRIGGERED.value
+            result.block_reason = ChaosBlockReason.PANIC_THRESHOLD_TRIGGERED.value
             result.block_message = (
                 f"PANIC: {panic_result['open_rate']:.1f}% CB OPEN "
                 f"({panic_result['open_count']}/{panic_result['total_count']}) - "
@@ -736,7 +736,7 @@ class SafetyGuard:
             if budget_status.get("is_over_budget", False):
                 result.status = SafetyStatus.BLOCKED.value
                 result.allowed = False
-                result.block_reason = BlockReason.CHAOS_BUDGET_EXCEEDED.value
+                result.block_reason = ChaosBlockReason.CHAOS_BUDGET_EXCEEDED.value
                 result.block_message = f"Chaos budget exhausted: {usage_percent:.1f}%"
                 result.checks_failed.append("chaos_budget")
 
