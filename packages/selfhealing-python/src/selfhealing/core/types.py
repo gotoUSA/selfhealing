@@ -45,51 +45,6 @@ class CircuitState(str, Enum):
     HALF_OPEN = "half_open"
 
 
-@dataclass
-class FailedOperationData:
-    """Data transfer object for failed operations."""
-
-    id: int
-    domain: str
-    failure_type: str
-    status: str
-    created_at: datetime
-    context: dict[str, Any] = field(default_factory=dict)
-    error_message: str = ""
-    retry_count: int = 0
-    max_retries: int = 3
-    last_retry_at: datetime | None = None
-    next_retry_at: datetime | None = None
-    resolved_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-@dataclass
-class CircuitBreakerStateData:
-    """Data transfer object for circuit breaker state."""
-
-    service_name: str
-    state: str  # 'closed', 'open', 'half_open'
-    failure_count: int = 0
-    success_count: int = 0
-    last_failure_at: datetime | None = None
-    last_success_at: datetime | None = None
-    opened_at: datetime | None = None
-    half_opened_at: datetime | None = None
-    failure_threshold: int = 5
-    recovery_timeout: int = 60
-    half_open_max_calls: int = 3
-    # Manual control fields
-    manually_controlled: bool = False
-    controlled_by_id: int | None = None
-    control_reason: str = ""
-    manual_override_expires_at: datetime | None = None
-    half_open_request_count: int = 0
-    id: int | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
 class RetryContext(TypedDict, total=False):
     """Context information for retry operations."""
 

@@ -124,13 +124,15 @@ from selfhealing.core.tls_handler import (
     TLSResilientClient,
 )
 from selfhealing.core.types import (
-    CircuitBreakerStateData,
     CircuitState,
-    FailedOperationData,
     FailureType,
     MetricsSnapshot,
     OperationStatus,
     RetryContext,
+)
+from selfhealing.interfaces.repositories import (
+    CircuitBreakerStateData,
+    FailedOperationData,
 )
 
 __all__ = [

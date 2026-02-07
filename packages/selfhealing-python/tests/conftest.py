@@ -364,7 +364,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture
 def sample_failed_operation_data():
     """Sample failed operation data for tests."""
-    from selfhealing.core.types import FailedOperationData
+    from selfhealing.interfaces.repositories import FailedOperationData
 
     return FailedOperationData(
         id=1,
@@ -372,7 +372,7 @@ def sample_failed_operation_data():
         failure_type="network",
         status="pending",
         created_at=datetime.now(),
-        context={"order_id": 123, "amount": 10000},
+        metadata={"order_id": 123, "amount": 10000},
         error_message="Connection timeout",
         retry_count=0,
         max_retries=3,
@@ -382,7 +382,7 @@ def sample_failed_operation_data():
 @pytest.fixture
 def sample_circuit_breaker_data():
     """Sample circuit breaker state data for tests."""
-    from selfhealing.core.types import CircuitBreakerStateData
+    from selfhealing.interfaces.repositories import CircuitBreakerStateData
 
     return CircuitBreakerStateData(
         service_name="external-gateway",

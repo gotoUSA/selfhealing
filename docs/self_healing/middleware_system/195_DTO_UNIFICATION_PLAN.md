@@ -1,15 +1,16 @@
 # 195. DTO 중복 정의 통합 계획
 
-> **문서 버전**: 1.0.0
+> **문서 버전**: 1.1.0
 > **최종 수정일**: 2026-02-07
+> **상태**: ✅ 구현 완료
 > **작성 근거**:
-> - `selfhealing/core/types.py` (Line 66-98: FailedOperationData, CircuitBreakerStateData)
-> - `selfhealing/interfaces/repositories.py` (Line 100-230: FailedOperationData, CircuitBreakerStateData)
-> - `selfhealing/core/__init__.py` (Line 133-140: re-export)
-> - `selfhealing/__init__.py` (Line 11-16: 공개 API)
-> - `tests/conftest.py` (Line 367-393: fixture)
-> - `tests/unit/utils/test_types.py` (Line 55-100: 단위 테스트)
-> - `tests/factories/data_factory.py` (Line 18-26, 130-165: import 혼용)
+> - `selfhealing/core/types.py` (Line 49-87: FailedOperationData, CircuitBreakerStateData — **삭제됨**)
+> - `selfhealing/interfaces/repositories.py` (Line 103-214: FailedOperationData, CircuitBreakerStateData — **정규 소스**)
+> - `selfhealing/core/__init__.py` (Line 126-136: re-export — **interfaces로 리다이렉트 완료**)
+> - `selfhealing/__init__.py` (Line 11-16: 공개 API — 변경 없음)
+> - `tests/conftest.py` (Line 367-393: fixture — **interfaces 버전으로 전환 완료**)
+> - `tests/unit/utils/test_types.py` (Line 55-100: 단위 테스트 — **interfaces 버전 기준으로 교체 완료**)
+> - `tests/factories/data_factory.py` (Line 18-26: import — **통합 완료**)
 > **선행 조건**: 194번 데드코드 제거 완료
 > **우선순위**: 🟡 P1
 
@@ -404,3 +405,43 @@ cd packages/selfhealing-python && python -m pytest tests/ -x --tb=short
 python -c "from selfhealing.core import FailedOperationData; print(FailedOperationData.__module__)"
 # 예상 출력: selfhealing.interfaces.repositories
 ```
+
+---
+
+## 9. 구현 결과 (2026-02-07)
+
+### 9.1 실행 요약
+
+| Phase | 작업 내용 | 상태 |
+|-------|----------|------|
+| Phase 1 | `core/types.py`에서 `FailedOperationData`(14필드), `CircuitBreakerStateData`(20필드) 삭제 | ✅ 완료 |
+| Phase 2 | `core/__init__.py` re-export를 `interfaces.repositories`로 리다이렉트 | ✅ 완료 |
+| Phase 3-1 | `tests/conftest.py` fixture: `context` → `metadata`, import 경로 전환 | ✅ 완료 |
+| Phase 3-2 | `tests/unit/utils/test_types.py`: interfaces 버전 기준 테스트로 교체, 프로퍼티 테스트 추가 | ✅ 완료 |
+| Phase 3-3 | `tests/factories/data_factory.py`: import 통합 (`CircuitBreakerStateData`도 interfaces에서 import) | ✅ 완료 |
+
+### 9.2 검증 결과
+
+```
+# 1. core/types.py에서 DTO 검색 → 결과 없음 (삭제 확인)
+$ grep -n "class FailedOperationData\|class CircuitBreakerStateData" src/selfhealing/core/types.py
+(exit code 1 - no matches)
+
+# 2. re-export 경로 확인
+$ from selfhealing.core import FailedOperationData → __module__ = "selfhealing.interfaces.repositories"
+$ from selfhealing.core import CircuitBreakerStateData → __module__ = "selfhealing.interfaces.repositories"
+
+# 3. 테스트 결과
+$ python -m pytest tests/unit/utils/test_types.py -v
+10 passed in 0.54s
+```
+
+### 9.3 수정 파일 목록
+
+| 파일 | 변경 유형 |
+|------|----------|
+| `packages/selfhealing-python/src/selfhealing/core/types.py` | DTO 2개 클래스 삭제 (45줄 제거) |
+| `packages/selfhealing-python/src/selfhealing/core/__init__.py` | re-export 경로 변경 (`core.types` → `interfaces.repositories`) |
+| `packages/selfhealing-python/tests/conftest.py` | import 경로 + `context` → `metadata` 필드명 변경 |
+| `packages/selfhealing-python/tests/unit/utils/test_types.py` | interfaces 버전 기준 테스트로 전면 교체 + 프로퍼티 테스트 추가 |
+| `packages/selfhealing-python/tests/factories/data_factory.py` | 하이브리드 import 제거, interfaces.repositories로 통합 |

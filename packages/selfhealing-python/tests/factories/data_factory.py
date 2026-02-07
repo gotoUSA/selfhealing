@@ -16,12 +16,14 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock
 
 from selfhealing.core.types import (
-    CircuitBreakerStateData,
     FailureType,
     OperationStatus,
     CircuitState,
 )
-from selfhealing.interfaces import FailedOperationData
+from selfhealing.interfaces.repositories import (
+    FailedOperationData,
+    CircuitBreakerStateData,
+)
 
 # 상수는 constants.py에서 관리
 from tests.factories.constants import DefaultValues
@@ -31,10 +33,11 @@ from tests.factories.constants import DefaultValues
 class MockCircuitBreakerStateData:
     """
     테스트용 Mock Circuit Breaker State Data.
-    
+
     실제 CircuitBreakerStateData와 동일한 인터페이스를 제공하되,
     간소화된 테스트용 구현입니다.
     """
+
     service_name: str
     state: str = DefaultValues.CB_STATE_CLOSED
     failure_count: int = 0
@@ -56,30 +59,30 @@ class MockCircuitBreakerStateData:
 class TestDataFactory:
     """
     테스트 데이터 생성 Factory.
-    
+
     모든 테스트 데이터 생성을 중앙화하여 일관성 유지.
-    
+
     Usage:
         # Circuit Breaker 상태 데이터
         state = TestDataFactory.circuit_breaker_state(
             service_name="payment-api",
             state="open"
         )
-        
+
         # Failed Operation 데이터
         entry = TestDataFactory.failed_operation(
             domain="order",
             failure_type="network"
         )
-        
+
         # Mock 객체로 생성
         mock_entry = TestDataFactory.mock_failed_operation(id=1)
     """
-    
+
     # =========================================================================
     # Circuit Breaker 관련
     # =========================================================================
-    
+
     @staticmethod
     def circuit_breaker_state(
         service_name: str = DefaultValues.SERVICE_TEST,
@@ -93,7 +96,7 @@ class TestDataFactory:
     ) -> MockCircuitBreakerStateData:
         """
         Circuit Breaker 상태 데이터 생성.
-        
+
         Args:
             service_name: 서비스 이름
             state: CB 상태 (closed, open, half_open)
@@ -103,7 +106,7 @@ class TestDataFactory:
             opened_by_id: open한 사용자 ID
             opened_reason: open 사유
             **kwargs: 추가 필드
-            
+
         Returns:
             MockCircuitBreakerStateData 인스턴스
         """
@@ -117,7 +120,7 @@ class TestDataFactory:
             opened_reason=opened_reason,
             **kwargs,
         )
-    
+
     @staticmethod
     def circuit_breaker_state_data(
         service_name: str = DefaultValues.SERVICE_TEST,
@@ -128,7 +131,7 @@ class TestDataFactory:
     ) -> CircuitBreakerStateData:
         """
         실제 CircuitBreakerStateData 객체 생성.
-        
+
         실제 타입이 필요한 경우 사용.
         """
         return CircuitBreakerStateData(
@@ -138,11 +141,11 @@ class TestDataFactory:
             success_count=success_count,
             **kwargs,
         )
-    
+
     # =========================================================================
     # Failed Operation (DLQ) 관련
     # =========================================================================
-    
+
     @staticmethod
     def failed_operation(
         id: int = 1,
@@ -161,9 +164,9 @@ class TestDataFactory:
     ) -> FailedOperationData:
         """
         Failed Operation 데이터 생성.
-        
+
         interfaces.FailedOperationData 스키마 사용.
-        
+
         Args:
             id: 엔트리 ID
             domain: 비즈니스 도메인
@@ -178,16 +181,16 @@ class TestDataFactory:
             entity_type: 엔티티 타입
             entity_id: 엔티티 ID
             **kwargs: 추가 필드
-            
+
         Returns:
             FailedOperationData 인스턴스
         """
         if created_at is None:
             created_at = datetime.now(timezone.utc)
-        
+
         if snapshot_data is None:
             snapshot_data = {"order_id": 123, "amount": 10000}
-        
+
         return FailedOperationData(
             id=id,
             domain=domain,
@@ -203,7 +206,7 @@ class TestDataFactory:
             max_retries=max_retries,
             **kwargs,
         )
-    
+
     @staticmethod
     def mock_failed_operation(
         id: int = 1,
@@ -216,10 +219,10 @@ class TestDataFactory:
     ) -> Mock:
         """
         Mock으로 FailedOperationData 생성.
-        
+
         spec을 사용하여 인터페이스 준수.
         DLQ 테스트에서 주로 사용.
-        
+
         Args:
             id: 엔트리 ID
             domain: 비즈니스 도메인
@@ -227,7 +230,7 @@ class TestDataFactory:
             status: 상태
             retry_count: 재시도 횟수
             max_retries: 최대 재시도 횟수
-            
+
         Returns:
             Mock 객체 (FailedOperationData spec)
         """
@@ -251,36 +254,36 @@ class TestDataFactory:
         entry.entity_type = "order"
         entry.entity_id = "order-123"
         entry.resolution_note = ""
-        
+
         # 추가 필드 설정
         for key, value in kwargs.items():
             setattr(entry, key, value)
-        
+
         return entry
-    
+
     # =========================================================================
     # 시간 관련 헬퍼
     # =========================================================================
-    
+
     @staticmethod
     def now() -> datetime:
         """현재 UTC 시간 반환."""
         return datetime.now(timezone.utc)
-    
+
     @staticmethod
     def past(seconds: int = 60) -> datetime:
         """과거 시간 반환."""
         return datetime.now(timezone.utc) - timedelta(seconds=seconds)
-    
+
     @staticmethod
     def future(seconds: int = 60) -> datetime:
         """미래 시간 반환."""
         return datetime.now(timezone.utc) + timedelta(seconds=seconds)
-    
+
     # =========================================================================
     # Audit 관련
     # =========================================================================
-    
+
     @staticmethod
     def audit_log_entry(
         event: str = "test_event",
@@ -290,22 +293,22 @@ class TestDataFactory:
     ) -> Dict[str, Any]:
         """
         감사 로그 엔트리 생성.
-        
+
         Args:
             event: 이벤트 이름
             timestamp: 타임스탬프
             data: 추가 데이터
             **kwargs: 추가 필드
-            
+
         Returns:
             감사 로그 딕셔너리
         """
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
-        
+
         if data is None:
             data = {"key": "value"}
-        
+
         entry = {
             "event": event,
             "timestamp": timestamp.isoformat(),

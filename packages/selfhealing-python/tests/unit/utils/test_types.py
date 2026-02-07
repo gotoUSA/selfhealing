@@ -49,27 +49,26 @@ class TestCircuitState:
 
 
 class TestFailedOperationData:
-    """Tests for FailedOperationData dataclass."""
+    """Tests for FailedOperationData dataclass (interfaces/repositories.py canonical source)."""
 
     def test_create_with_required_fields(self):
-        from selfhealing.core.types import FailedOperationData
+        from selfhealing.interfaces.repositories import FailedOperationData
 
         data = FailedOperationData(
             id=1,
             domain="payment",
             failure_type="network",
             status="pending",
-            created_at=datetime.now(),
         )
 
         assert data.id == 1
         assert data.domain == "payment"
         assert data.retry_count == 0  # default
-        assert data.max_retries == 3  # default
-        assert data.context == {}  # default
+        assert data.max_retries == 2  # default
+        assert data.metadata == {}  # default
 
     def test_create_with_all_fields(self):
-        from selfhealing.core.types import FailedOperationData
+        from selfhealing.interfaces.repositories import FailedOperationData
 
         now = datetime.now()
         data = FailedOperationData(
@@ -78,30 +77,67 @@ class TestFailedOperationData:
             failure_type="database",
             status="processing",
             created_at=now,
-            context={"order_id": 123},
+            metadata={"order_id": 123},
             error_message="DB connection failed",
             retry_count=2,
             max_retries=5,
         )
 
         assert data.id == 42
-        assert data.context["order_id"] == 123
+        assert data.metadata["order_id"] == 123
         assert data.retry_count == 2
+
+    def test_properties(self):
+        from selfhealing.interfaces.repositories import FailedOperationData
+
+        data = FailedOperationData(
+            id=1,
+            domain="order",
+            failure_type="network",
+            status="pending",
+            retry_count=0,
+            max_retries=3,
+        )
+        assert data.is_pending is True
+        assert data.is_resolved is False
+        assert data.can_retry is True
+
+    def test_can_retry_false_when_exhausted(self):
+        from selfhealing.interfaces.repositories import FailedOperationData
+
+        data = FailedOperationData(
+            id=1,
+            domain="order",
+            failure_type="network",
+            status="pending",
+            retry_count=3,
+            max_retries=3,
+        )
+        assert data.can_retry is False
 
 
 class TestCircuitBreakerStateData:
-    """Tests for CircuitBreakerStateData dataclass."""
+    """Tests for CircuitBreakerStateData dataclass (interfaces/repositories.py canonical source)."""
 
     def test_create_with_defaults(self):
-        from selfhealing.core.types import CircuitBreakerStateData
+        from selfhealing.interfaces.repositories import CircuitBreakerStateData
 
         data = CircuitBreakerStateData(
             service_name="test-service",
-            state="closed",
         )
 
         assert data.service_name == "test-service"
         assert data.state == "closed"
         assert data.failure_count == 0
-        assert data.failure_threshold == 5
-        assert data.recovery_timeout == 60
+
+    def test_properties(self):
+        from selfhealing.interfaces.repositories import CircuitBreakerStateData
+
+        closed = CircuitBreakerStateData(service_name="svc", state="closed")
+        assert closed.is_closed is True
+        assert closed.is_open is False
+        assert closed.is_half_open is False
+
+        opened = CircuitBreakerStateData(service_name="svc", state="open")
+        assert opened.is_open is True
+        assert opened.is_closed is False
