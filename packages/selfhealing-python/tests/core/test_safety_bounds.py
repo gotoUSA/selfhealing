@@ -120,6 +120,16 @@ class TestParameterBound:
 
         assert bound.validate() is False
 
+    def test_bound_validate_exact_one_is_valid(self):
+        """변경률이 정확히 1.0인 경우 유효함 (> 1.0이 아니므로)."""
+        bound = ParameterBound(
+            min_value=0,
+            max_value=100,
+            max_change_per_cycle=1.0,
+        )
+
+        assert bound.validate() is True
+
 
 # =============================================================================
 # SafetyBounds Initialization Tests

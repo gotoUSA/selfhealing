@@ -514,6 +514,16 @@ class TestEdgeCases:
         timeout_decisions = [d for d in decisions if d.parameter == "timeout_ms"]
         assert len(timeout_decisions) == 0
 
+    def test_config_provider_returns_invalid_type(self, config_provider):
+        """설정 값이 변환할 수 없는 타입인 경우에도 에러 없이 동작."""
+        config_provider.set("timeout_ms", "not_a_number")
+
+        engine = DecisionEngine(config_provider=config_provider)
+
+        metrics = {"p99_latency_ms": 900, "sample_count": 100}
+        decisions = engine.analyze(metrics)
+        assert isinstance(decisions, list)
+
     def test_condition_exception_handled(self, config_provider):
         """조건 함수 예외 처리."""
 
