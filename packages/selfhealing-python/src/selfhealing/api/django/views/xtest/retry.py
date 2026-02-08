@@ -549,9 +549,12 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
 # =============================================================================
 
 
-class RetryConfigView(XTestModeMixin, APIView):
+class XTestRetryConfigView(XTestModeMixin, APIView):
     """
-    현재 적용된 Retry 설정 조회 API.
+    현재 적용된 Retry 설정 조회 API (X-Test-Mode).
+
+    Renamed from RetryConfigView to XTestRetryConfigView to avoid
+    name collision with views.config.RetryConfigView.
 
     GET /api/self-healing/xtest/retry/config/
 

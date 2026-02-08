@@ -11,7 +11,7 @@ import pytest
 
 from selfhealing.core import (
     BackoffCalculator,
-    BackoffConfig,
+    LegacyBackoffConfig,
     calculate_backoff,
 )
 from selfhealing.services import (
@@ -31,15 +31,15 @@ from selfhealing.services import (
 # =============================================================================
 
 
-class TestBackoffConfig:
-    """Tests for BackoffConfig dataclass."""
+class TestLegacyBackoffConfig:
+    """Tests for LegacyBackoffConfig dataclass."""
 
     def test_default_values(self):
         """
         Purpose:
             Verify default configuration values.
         """
-        config = BackoffConfig()
+        config = LegacyBackoffConfig()
 
         assert config.base == 4
         assert config.max_delay == 180
@@ -51,7 +51,7 @@ class TestBackoffConfig:
         Purpose:
             Verify custom configuration is applied.
         """
-        config = BackoffConfig(
+        config = LegacyBackoffConfig(
             base=2,
             max_delay=60,
             jitter_percent=10,
@@ -72,7 +72,7 @@ class TestBackoffCalculatorUnit:
         Purpose:
             Verify attempt 0 or negative returns minimum delay.
         """
-        config = BackoffConfig(base=4, min_delay=1)
+        config = LegacyBackoffConfig(base=4, min_delay=1)
         calc = BackoffCalculator(config)
 
         assert calc.calculate(0, with_jitter=False) == 1
@@ -83,7 +83,7 @@ class TestBackoffCalculatorUnit:
         Purpose:
             Verify calculation without jitter is deterministic.
         """
-        config = BackoffConfig(base=4, max_delay=180, jitter_percent=25)
+        config = LegacyBackoffConfig(base=4, max_delay=180, jitter_percent=25)
         calc = BackoffCalculator(config)
 
         # Same attempt should give same result without jitter
@@ -96,7 +96,7 @@ class TestBackoffCalculatorUnit:
         Purpose:
             Verify full delay sequence matches expectation.
         """
-        config = BackoffConfig(base=2, max_delay=100, jitter_percent=0)
+        config = LegacyBackoffConfig(base=2, max_delay=100, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         sequence = calc.get_delays_sequence(5, with_jitter=False)
@@ -109,7 +109,7 @@ class TestBackoffCalculatorUnit:
         Purpose:
             Verify max_delay is applied correctly in sequence.
         """
-        config = BackoffConfig(base=4, max_delay=50, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, max_delay=50, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         # 4^1=4, 4^2=16, 4^3=64->50 (capped), 4^4=256->50 (capped)
@@ -419,12 +419,8 @@ class TestIdempotencyKey:
         Purpose:
             Verify same inputs produce same hash.
         """
-        key1 = IdempotencyKey.for_operation(
-            entity_type="order", entity_id=123, operation="process"
-        )
-        key2 = IdempotencyKey.for_operation(
-            entity_type="order", entity_id=123, operation="process"
-        )
+        key1 = IdempotencyKey.for_operation(entity_type="order", entity_id=123, operation="process")
+        key2 = IdempotencyKey.for_operation(entity_type="order", entity_id=123, operation="process")
 
         assert key1.hash == key2.hash
 
@@ -433,12 +429,8 @@ class TestIdempotencyKey:
         Purpose:
             Verify different inputs produce different hash.
         """
-        key1 = IdempotencyKey.for_operation(
-            entity_type="order", entity_id=123, operation="process"
-        )
-        key2 = IdempotencyKey.for_operation(
-            entity_type="order", entity_id=124, operation="process"
-        )
+        key1 = IdempotencyKey.for_operation(entity_type="order", entity_id=123, operation="process")
+        key2 = IdempotencyKey.for_operation(entity_type="order", entity_id=124, operation="process")
 
         assert key1.hash != key2.hash
 

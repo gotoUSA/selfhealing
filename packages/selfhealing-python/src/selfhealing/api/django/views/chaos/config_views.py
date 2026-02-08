@@ -74,9 +74,12 @@ class SafetyGuardConfigView(APIView):
         )
 
 
-class BlastRadiusPolicyView(APIView):
+class ChaosBlastRadiusPolicyView(APIView):
     """
-    API for BlastRadius policy configuration.
+    API for BlastRadius policy configuration (Chaos module).
+
+    Renamed from BlastRadiusPolicyView to ChaosBlastRadiusPolicyView to avoid
+    name collision with views.blast_radius.BlastRadiusDNAPolicyView.
 
     GET: Retrieve current policy (Viewer)
     PATCH: Update policy (Admin)

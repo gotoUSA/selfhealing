@@ -40,7 +40,7 @@ from shopping.models.order import Order
 from shopping.models.payment import Payment
 from selfhealing.core import (
     BackoffCalculator,
-    BackoffConfig,
+    LegacyBackoffConfig,
     calculate_backoff,
 )
 from selfhealing.services.backoff_calculator import get_calculator_for_domain
@@ -108,7 +108,7 @@ class TestBackoffCalculator:
         Expected:
             Delays follow base^n pattern: 4, 16, 64 for base=4
         """
-        config = BackoffConfig(base=4, max_delay=180, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, max_delay=180, jitter_percent=0)
         calculator = BackoffCalculator(config)
 
         delays = calculator.get_delays_sequence(3, with_jitter=False)
@@ -122,7 +122,7 @@ class TestBackoffCalculator:
         Expected:
             Delay never exceeds max_delay even for high attempt numbers.
         """
-        config = BackoffConfig(base=4, max_delay=100, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, max_delay=100, jitter_percent=0)
         calculator = BackoffCalculator(config)
 
         # 4^5 = 1024, but should be capped at 100
@@ -137,7 +137,7 @@ class TestBackoffCalculator:
         Expected:
             Multiple calculations produce different values within range.
         """
-        config = BackoffConfig(base=4, max_delay=180, jitter_percent=25)
+        config = LegacyBackoffConfig(base=4, max_delay=180, jitter_percent=25)
         calculator = BackoffCalculator(config)
 
         # Calculate 100 times for attempt 2 (base delay = 16)
@@ -160,7 +160,7 @@ class TestBackoffCalculator:
         Expected:
             Delays are spread across the jitter range.
         """
-        config = BackoffConfig(base=4, max_delay=180, jitter_percent=25)
+        config = LegacyBackoffConfig(base=4, max_delay=180, jitter_percent=25)
         calculator = BackoffCalculator(config)
 
         # Simulate 1000 clients retrying at same time

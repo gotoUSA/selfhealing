@@ -26,9 +26,12 @@ def get_blast_radius_service():
         return None
 
 
-class BlastRadiusPolicyView(APIView):
+class BlastRadiusDNAPolicyView(APIView):
     """
-    영향 범위 정책 관리 API
+    영향 범위 정책 관리 API (Blast Radius DNA)
+
+    Renamed from BlastRadiusPolicyView to BlastRadiusDNAPolicyView to avoid
+    name collision with views.chaos.config_views.ChaosBlastRadiusPolicyView.
 
     GET  /api/self-healing/blast-radius/policy/<stage_name>/ - 정책 조회 (Viewer)
     POST /api/self-healing/blast-radius/policy/<stage_name>/ - 정책 설정 (Admin)

@@ -75,7 +75,7 @@ from selfhealing.api.django.views.cascade import (
 # Chaos Engineering API Views
 from selfhealing.api.django.views.chaos import (  # Safety Mechanism Views; Impact Prediction Views
     BlastRadiusCheckView,
-    BlastRadiusPolicyView,
+    ChaosBlastRadiusPolicyView,
     DryRunAnalysisView,
     DryRunConfigView,
     GradeHistoryView,
@@ -708,7 +708,7 @@ urlpatterns = [
     ),
     path(
         "chaos/config/blast-radius/",
-        BlastRadiusPolicyView.as_view(),
+        ChaosBlastRadiusPolicyView.as_view(),
         name="chaos-config-blast-radius",
     ),
     path(
@@ -870,11 +870,9 @@ try:
     from selfhealing.api.django.views.blast_radius import (
         BlastRadiusAssessmentView,
         BlastRadiusDependencyView,
+        BlastRadiusDNAPolicyView,
         BlastRadiusGraphView,
         BlastRadiusIsolationView,
-    )
-    from selfhealing.api.django.views.blast_radius import (
-        BlastRadiusPolicyView as DNABlastRadiusPolicyView,
     )
     from selfhealing.api.django.views.compliance_dna import (
         ComplianceCheckView,
@@ -996,7 +994,7 @@ try:
         # =====================================================================
         path(
             "dna/blast-radius/policy/<str:stage_name>/",
-            DNABlastRadiusPolicyView.as_view(),
+            BlastRadiusDNAPolicyView.as_view(),
             name="dna-blast-radius-policy",
         ),
         path(
@@ -1168,7 +1166,7 @@ from selfhealing.api.django.views.xtest import (  # Stage 51: Observability & Bl
     ResetCBView,
     ResetDLQXTestView,
     ResetView,
-    RetryConfigView,
+    XTestRetryConfigView,
     RetryRateLimitStatusView,
     RetrySimulateView,
     RunScenarioView,
@@ -1271,7 +1269,7 @@ urlpatterns += [
         RetryRateLimitStatusView.as_view(),
         name="xtest-retry-rate-limit-status",
     ),
-    path("xtest/retry/config/", RetryConfigView.as_view(), name="xtest-retry-config"),
+    path("xtest/retry/config/", XTestRetryConfigView.as_view(), name="xtest-retry-config"),
     # Rate Limit X-Test Endpoints
     path(
         "xtest/rate-limit/status/",

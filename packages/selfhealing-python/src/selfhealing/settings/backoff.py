@@ -127,7 +127,7 @@ class BackoffSettings(BaseSettings):
     )
 
     # ==========================================================================
-    # Legacy Backoff (from core/backoff.py BackoffConfig lines 193-197)
+    # Legacy Backoff (from core/backoff.py LegacyBackoffConfig)
     # ==========================================================================
     legacy_base: int = Field(
         default=4,
@@ -159,10 +159,7 @@ class BackoffSettings(BaseSettings):
     def validate_exponential_max_delay(cls, v: float) -> float:
         """max_delay가 너무 크면 경고."""
         if v > 600:
-            logger.warning(
-                f"[BackoffSettings] High exponential_max_delay={v}s, "
-                "consider using <= 600s for responsiveness"
-            )
+            logger.warning(f"[BackoffSettings] High exponential_max_delay={v}s, " "consider using <= 600s for responsiveness")
         return v
 
 

@@ -259,9 +259,9 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
         "selfhealing.api.django.views.chaos",
         "SafetyGuardConfigView",
     ),
-    "BlastRadiusPolicyView": (
+    "ChaosBlastRadiusPolicyView": (
         "selfhealing.api.django.views.chaos",
-        "BlastRadiusPolicyView",
+        "ChaosBlastRadiusPolicyView",
     ),
     "SchedulerConfigView": (
         "selfhealing.api.django.views.chaos",
@@ -451,7 +451,7 @@ if TYPE_CHECKING:
     # Chaos Engineering Views
     from selfhealing.api.django.views.chaos import (
         BlastRadiusCheckView,
-        BlastRadiusPolicyView,
+        ChaosBlastRadiusPolicyView,
         GradeHistoryView,
         KillSwitchView,
         PendingApprovalsView,
@@ -667,7 +667,7 @@ __all__ = [
     "ActiveOverrideView",
     # Chaos Engineering Views
     "SafetyGuardConfigView",
-    "BlastRadiusPolicyView",
+    "ChaosBlastRadiusPolicyView",
     "SchedulerConfigView",
     "ReportConfigView",
     "ScheduleListView",

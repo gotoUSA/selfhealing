@@ -13,7 +13,7 @@ import pytest
 
 from selfhealing.core import (
     BackoffCalculator,
-    BackoffConfig,
+    LegacyBackoffConfig,
     calculate_backoff,
 )
 
@@ -41,7 +41,7 @@ class TestBackoffPolicyDefaults:
         Risk Covered:
             R-015: Retry storm prevention
         """
-        config = BackoffConfig()
+        config = LegacyBackoffConfig()
         assert config.base == 4, "Policy Violation: Default backoff base must be 4. " "Check RETRY_BACKOFF_BASE configuration."
 
     def test_default_max_delay_is_180(self):
@@ -52,7 +52,7 @@ class TestBackoffPolicyDefaults:
         Expected:
             - max_delay = 180 seconds (3 minutes)
         """
-        config = BackoffConfig()
+        config = LegacyBackoffConfig()
         assert config.max_delay == 180, (
             "Policy Violation: Default max delay must be 180 seconds. " "Check RETRY_BACKOFF_MAX configuration."
         )
@@ -65,7 +65,7 @@ class TestBackoffPolicyDefaults:
         Expected:
             - jitter_percent = 25 (±25%)
         """
-        config = BackoffConfig()
+        config = LegacyBackoffConfig()
         assert config.jitter_percent == 25, (
             "Policy Violation: Default jitter must be 25%. " "Jitter prevents thundering herd problem."
         )
@@ -78,7 +78,7 @@ class TestBackoffPolicyDefaults:
         Expected:
             - min_delay = 1 second
         """
-        config = BackoffConfig()
+        config = LegacyBackoffConfig()
         assert config.min_delay == 1, (
             "Policy Violation: Minimum delay must be at least 1 second. " "Zero or negative delays risk retry loops."
         )
@@ -108,7 +108,7 @@ class TestBackoffPolicyCalculation:
             - Attempt 2: 16 seconds
             - Attempt 3: 64 seconds
         """
-        config = BackoffConfig(base=4, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(i, with_jitter=False) for i in range(1, 4)]
@@ -130,7 +130,7 @@ class TestBackoffPolicyCalculation:
         Expected:
             - Delay is capped at max_delay, not actual 64
         """
-        config = BackoffConfig(base=4, max_delay=50, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, max_delay=50, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         delay = calc.calculate(3, with_jitter=False)
@@ -152,7 +152,7 @@ class TestBackoffPolicyCalculation:
         Expected:
             - Returns min_delay (1 second by default)
         """
-        config = BackoffConfig(min_delay=1)
+        config = LegacyBackoffConfig(min_delay=1)
         calc = BackoffCalculator(config)
 
         delay = calc.calculate(0, with_jitter=False)
@@ -169,7 +169,7 @@ class TestBackoffPolicyCalculation:
         Expected:
             - Returns min_delay for negative attempts
         """
-        config = BackoffConfig(min_delay=2)
+        config = LegacyBackoffConfig(min_delay=2)
         calc = BackoffCalculator(config)
 
         delay = calc.calculate(-1, with_jitter=False)
@@ -198,7 +198,7 @@ class TestBackoffPolicyJitter:
         Expected:
             - At least 2 distinct values in 100 calculations
         """
-        config = BackoffConfig(base=4, jitter_percent=25)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25)
         calc = BackoffCalculator(config)
 
         delays = {calc.calculate(2, with_jitter=True) for _ in range(100)}
@@ -221,7 +221,7 @@ class TestBackoffPolicyJitter:
         Expected:
             - All values between 12 and 20 (inclusive, allowing rounding)
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         base_delay = 16  # 4^2
@@ -243,7 +243,7 @@ class TestBackoffPolicyJitter:
         Expected:
             - All 100 calculations produce same value
         """
-        config = BackoffConfig(base=4, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(2, with_jitter=True) for _ in range(100)]
@@ -267,7 +267,7 @@ class TestBackoffPolicySequence:
         Purpose:
             Verify sequence returns correct number of delays.
         """
-        config = BackoffConfig(base=4, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         sequence = calc.get_delays_sequence(5, with_jitter=False)
@@ -279,7 +279,7 @@ class TestBackoffPolicySequence:
         Purpose:
             Verify sequence values match individual calculations.
         """
-        config = BackoffConfig(base=2, max_delay=100, jitter_percent=0)
+        config = LegacyBackoffConfig(base=2, max_delay=100, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         sequence = calc.get_delays_sequence(5, with_jitter=False)
@@ -292,7 +292,7 @@ class TestBackoffPolicySequence:
         Purpose:
             Verify max_delay cap applies to sequence.
         """
-        config = BackoffConfig(base=4, max_delay=50, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, max_delay=50, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         # 4^1=4, 4^2=16, 4^3=64->50, 4^4=256->50
@@ -354,7 +354,7 @@ class TestBackoffPolicyEdgeCases:
         Purpose:
             Verify large attempt numbers are handled safely.
         """
-        config = BackoffConfig(base=4, max_delay=180, jitter_percent=0)
+        config = LegacyBackoffConfig(base=4, max_delay=180, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         # Attempt 100 would be 4^100 without capping
@@ -367,7 +367,7 @@ class TestBackoffPolicyEdgeCases:
         Purpose:
             Verify base=1 produces constant delays (no exponential growth).
         """
-        config = BackoffConfig(base=1, max_delay=180, jitter_percent=0)
+        config = LegacyBackoffConfig(base=1, max_delay=180, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         # 1^n = 1 for all n
@@ -380,7 +380,7 @@ class TestBackoffPolicyEdgeCases:
         Purpose:
             Verify custom min_delay is respected.
         """
-        config = BackoffConfig(base=1, min_delay=5, jitter_percent=0)
+        config = LegacyBackoffConfig(base=1, min_delay=5, jitter_percent=0)
         calc = BackoffCalculator(config)
 
         # 1^1 = 1, but min_delay=5 should override

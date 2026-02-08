@@ -272,11 +272,13 @@ def get_backoff_calculator(strategy: str = "exponential", **kwargs) -> BackoffSt
 
 
 @dataclass
-class BackoffConfig:
+class LegacyBackoffConfig:
     """
     Configuration for exponential backoff calculation.
 
     Compatible with older project BackoffConfig for migration.
+    Renamed from BackoffConfig to LegacyBackoffConfig to avoid
+    name collision with services.backoff_calculator.BackoffConfig.
     """
 
     base: int = 4  # Base for exponential (4^n seconds)
@@ -285,7 +287,7 @@ class BackoffConfig:
     min_delay: int = 1  # Minimum delay in seconds
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "BackoffConfig":
+    def from_settings(cls, settings=None, **overrides) -> "LegacyBackoffConfig":
         """
         Settings 기반 인스턴스 생성.
 
@@ -294,7 +296,7 @@ class BackoffConfig:
             **overrides: 개별 필드 오버라이드
 
         Returns:
-            BackoffConfig: Settings 기반 인스턴스
+            LegacyBackoffConfig: Settings 기반 인스턴스
         """
         from selfhealing.settings.backoff import get_backoff_settings
 
@@ -311,17 +313,17 @@ class LegacyBackoffCalculator:
     """
     Legacy backoff calculator for migration compatibility.
 
-    Uses BackoffConfig for configuration.
+    Uses LegacyBackoffConfig for configuration.
     """
 
-    def __init__(self, config: BackoffConfig | None = None):
+    def __init__(self, config: LegacyBackoffConfig | None = None):
         """
         Initialize the calculator.
 
         Args:
-            config: BackoffConfig instance
+            config: LegacyBackoffConfig instance
         """
-        self.config = config or BackoffConfig()
+        self.config = config or LegacyBackoffConfig()
 
     def calculate(self, attempt: int, with_jitter: bool = True) -> int:
         """
@@ -385,7 +387,7 @@ def calculate_backoff(
     Returns:
         Delay in seconds
     """
-    config = BackoffConfig(
+    config = LegacyBackoffConfig(
         base=base,
         max_delay=max_delay,
         jitter_percent=jitter_percent,

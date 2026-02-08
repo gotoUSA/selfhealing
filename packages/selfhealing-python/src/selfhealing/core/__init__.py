@@ -5,7 +5,7 @@ This module contains pure Python implementations without any framework dependenc
 
 Backoff API:
     - BackoffCalculator: Simple config-based calculator (legacy interface)
-      Usage: calc = BackoffCalculator(BackoffConfig()); calc.calculate(attempt)
+      Usage: calc = BackoffCalculator(LegacyBackoffConfig()); calc.calculate(attempt)
 
     - ExponentialBackoff, LinearBackoff, etc.: Strategy pattern implementations
       Usage: strategy = ExponentialBackoff(base=2); strategy.calculate(attempt)
@@ -20,7 +20,7 @@ from selfhealing.core.action_executor import (
 )
 from selfhealing.core.adaptive_jitter import AdaptiveJitter
 from selfhealing.core.backoff import (
-    BackoffConfig,
+    LegacyBackoffConfig,
     BackoffStrategy,
     ConstantBackoff,
     DecorrelatedJitterBackoff,
@@ -153,7 +153,7 @@ __all__ = [
     "DecorrelatedJitterBackoff",
     "get_backoff_calculator",
     # Backoff - Simple config-based interface
-    "BackoffConfig",
+    "LegacyBackoffConfig",
     "BackoffCalculator",  # = LegacyBackoffCalculator, config-based
     "calculate_backoff",
     # Pool Monitor (Stage 26)

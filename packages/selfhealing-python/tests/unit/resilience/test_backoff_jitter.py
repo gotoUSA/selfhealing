@@ -13,7 +13,7 @@ from collections import Counter
 import pytest
 
 from selfhealing.core.backoff import (
-    BackoffConfig,
+    LegacyBackoffConfig,
     LegacyBackoffCalculator as BackoffCalculator,
 )
 
@@ -41,7 +41,7 @@ class TestJitterDistribution:
             - Values fall within expected jitter range (±25%)
             - No obvious patterns
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         # Calculate 100 delays for attempt 2 (base delay = 16)
@@ -81,7 +81,7 @@ class TestJitterDistribution:
             - No bucket should be empty
             - Distribution should be roughly uniform
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         # Calculate 1000 delays
@@ -121,7 +121,7 @@ class TestJitterDistribution:
         Expected:
             - All 100 calculations return the same value
         """
-        config = BackoffConfig(base=4, jitter_percent=0, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=0, max_delay=180)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(2, with_jitter=False) for _ in range(100)]
@@ -139,7 +139,7 @@ class TestJitterDistribution:
             - Approximately 50% of values above base
             - Approximately 50% of values below base
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(2, with_jitter=True) for _ in range(1000)]

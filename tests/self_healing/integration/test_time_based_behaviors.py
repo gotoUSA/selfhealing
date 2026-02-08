@@ -380,11 +380,11 @@ class TestRetryBackoffTimeBased:
         """
         from selfhealing.core import (
             BackoffCalculator,
-            BackoffConfig,
+            LegacyBackoffConfig,
         )
 
         # Create config with no jitter for predictable testing
-        config = BackoffConfig(
+        config = LegacyBackoffConfig(
             base=4,
             max_delay=300,
             jitter_percent=0,  # Disable jitter for predictable testing
@@ -416,10 +416,10 @@ class TestRetryBackoffTimeBased:
         """
         from selfhealing.core import (
             BackoffCalculator,
-            BackoffConfig,
+            LegacyBackoffConfig,
         )
 
-        config = BackoffConfig(
+        config = LegacyBackoffConfig(
             base=4,
             max_delay=180,
             jitter_percent=0,
@@ -445,10 +445,10 @@ class TestRetryBackoffTimeBased:
         """
         from selfhealing.core import (
             BackoffCalculator,
-            BackoffConfig,
+            LegacyBackoffConfig,
         )
 
-        config = BackoffConfig(
+        config = LegacyBackoffConfig(
             base=4,
             max_delay=300,
             jitter_percent=25,  # 25% jitter

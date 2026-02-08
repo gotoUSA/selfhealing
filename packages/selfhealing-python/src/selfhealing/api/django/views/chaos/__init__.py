@@ -36,9 +36,9 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
         "selfhealing.api.django.views.chaos.config_views",
         "SafetyGuardConfigView",
     ),
-    "BlastRadiusPolicyView": (
+    "ChaosBlastRadiusPolicyView": (
         "selfhealing.api.django.views.chaos.config_views",
-        "BlastRadiusPolicyView",
+        "ChaosBlastRadiusPolicyView",
     ),
     "SchedulerConfigView": (
         "selfhealing.api.django.views.chaos.config_views",
@@ -142,9 +142,7 @@ def __getattr__(name: str) -> object:
         _loaded_symbols[name] = symbol
         return symbol
 
-    raise AttributeError(
-        f"module 'selfhealing.api.django.views.chaos' has no attribute '{name}'"
-    )
+    raise AttributeError(f"module 'selfhealing.api.django.views.chaos' has no attribute '{name}'")
 
 
 def __dir__() -> list[str]:
@@ -155,7 +153,7 @@ def __dir__() -> list[str]:
 # TYPE_CHECKING block for IDE support without runtime import
 if TYPE_CHECKING:
     from selfhealing.api.django.views.chaos.config_views import (
-        BlastRadiusPolicyView,
+        ChaosBlastRadiusPolicyView,
         ReportConfigView,
         SafetyGuardConfigView,
         SchedulerConfigView,
@@ -191,7 +189,7 @@ if TYPE_CHECKING:
 __all__ = [
     # Config Views
     "SafetyGuardConfigView",
-    "BlastRadiusPolicyView",
+    "ChaosBlastRadiusPolicyView",
     "SchedulerConfigView",
     "ReportConfigView",
     # Schedule Views

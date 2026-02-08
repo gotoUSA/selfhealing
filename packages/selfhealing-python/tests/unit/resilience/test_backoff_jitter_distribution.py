@@ -14,7 +14,7 @@ import pytest
 
 from selfhealing.core import (
     BackoffCalculator,
-    BackoffConfig,
+    LegacyBackoffConfig,
 )
 
 
@@ -45,7 +45,7 @@ class TestJitterDistribution:
         Risk Covered:
             - R-015: Thundering herd from identical retry times
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         # Calculate 100 delays for attempt 2 (base delay = 16)
@@ -85,7 +85,7 @@ class TestJitterDistribution:
             - No bucket should be empty
             - Distribution should be roughly uniform
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         # Calculate 1000 delays
@@ -131,7 +131,7 @@ class TestJitterDistribution:
             - Mean ≈ base_delay (within 5%)
             - Standard deviation reflects jitter range
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(2, with_jitter=True) for _ in range(1000)]
@@ -163,7 +163,7 @@ class TestJitterDistribution:
             - No alternating high/low pattern
             - No ascending/descending pattern
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(2, with_jitter=True) for _ in range(50)]
@@ -198,7 +198,7 @@ class TestJitterDistribution:
             - Attempt 2: base=16, range ≈ 12-20
             - Attempt 3: base=64, range ≈ 48-80
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=180)
         calc = BackoffCalculator(config)
 
         attempt_ranges = {
@@ -238,7 +238,7 @@ class TestJitterDistribution:
             - Standard deviation = 0
             - All values equal base delay
         """
-        config = BackoffConfig(base=4, jitter_percent=0, max_delay=180)
+        config = LegacyBackoffConfig(base=4, jitter_percent=0, max_delay=180)
         calc = BackoffCalculator(config)
 
         delays = [calc.calculate(2, with_jitter=True) for _ in range(100)]
@@ -268,7 +268,7 @@ class TestJitterDistribution:
         jitter_std_devs = {}
 
         for jitter_pct in [10, 25, 50]:
-            config = BackoffConfig(base=base, jitter_percent=jitter_pct, max_delay=180)
+            config = LegacyBackoffConfig(base=base, jitter_percent=jitter_pct, max_delay=180)
             calc = BackoffCalculator(config)
 
             delays = [calc.calculate(attempt, with_jitter=True) for _ in range(500)]
@@ -291,7 +291,7 @@ class TestJitterDistribution:
         Expected:
             - Delays should be around max_delay ± jitter
         """
-        config = BackoffConfig(base=4, jitter_percent=25, max_delay=50)
+        config = LegacyBackoffConfig(base=4, jitter_percent=25, max_delay=50)
         calc = BackoffCalculator(config)
 
         # Attempt 3: 4^3 = 64, but capped at 50

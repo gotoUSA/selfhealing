@@ -7,7 +7,7 @@ Tests:
 - BackoffPreviewView: Backoff 시퀀스 미리보기
 - RetrySimulateView: 재시도 시나리오 시뮬레이션
 - RetryRateLimitStatusView: Rate Limit 인식 상태
-- RetryConfigView: Retry 설정 조회
+- XTestRetryConfigView: Retry 설정 조회
 """
 
 import os
@@ -25,7 +25,7 @@ from selfhealing.api.django.views.xtest.retry import (
     BackoffPreviewView,
     RetrySimulateView,
     RetryRateLimitStatusView,
-    RetryConfigView,
+    XTestRetryConfigView,
 )
 
 
@@ -441,14 +441,14 @@ class TestRetryRateLimitStatusView:
 # =============================================================================
 
 
-class TestRetryConfigView:
-    """RetryConfigView 테스트."""
+class TestXTestRetryConfigView:
+    """XTestRetryConfigView 테스트."""
 
     def test_config_view_default(
         self, request_factory, chaos_headers, mock_chaos_allowed, mock_retry_config, mock_system_snapshot
     ):
         """기본 도메인 설정 조회."""
-        view = RetryConfigView.as_view()
+        view = XTestRetryConfigView.as_view()
         request = request_factory.get("/xtest/retry/config/", **chaos_headers)
         response = view(request)
 
@@ -464,7 +464,7 @@ class TestRetryConfigView:
         self, request_factory, chaos_headers, mock_chaos_allowed, mock_retry_config, mock_system_snapshot
     ):
         """특정 도메인 설정 조회."""
-        view = RetryConfigView.as_view()
+        view = XTestRetryConfigView.as_view()
         request = request_factory.get(
             "/xtest/retry/config/",
             {"domain": "payment"},
@@ -479,7 +479,7 @@ class TestRetryConfigView:
         self, request_factory, chaos_headers, mock_chaos_allowed, mock_retry_config, mock_system_snapshot
     ):
         """설정 소스 감지 확인."""
-        view = RetryConfigView.as_view()
+        view = XTestRetryConfigView.as_view()
         request = request_factory.get("/xtest/retry/config/", **chaos_headers)
         response = view(request)
 
@@ -490,7 +490,7 @@ class TestRetryConfigView:
         self, request_factory, chaos_headers, mock_chaos_allowed, mock_retry_config, mock_system_snapshot
     ):
         """Rate limit 관련 설정 포함 확인."""
-        view = RetryConfigView.as_view()
+        view = XTestRetryConfigView.as_view()
         request = request_factory.get("/xtest/retry/config/", **chaos_headers)
         response = view(request)
 
@@ -547,7 +547,7 @@ class TestRetryViewsIntegration:
     ):
         """config에서 조회한 설정이 simulate에 반영되는지 확인."""
         # Config view
-        config_view = RetryConfigView.as_view()
+        config_view = XTestRetryConfigView.as_view()
         config_request = request_factory.get("/xtest/retry/config/", **chaos_headers)
         config_response = config_view(config_request)
 

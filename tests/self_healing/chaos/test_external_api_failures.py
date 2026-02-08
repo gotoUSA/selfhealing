@@ -71,10 +71,10 @@ class TestPaymentTimeoutRecovery:
         # Use in-memory repository for testing
         from unittest.mock import Mock
         from selfhealing.services.dlq_models import DLQEntryResult
-        
+
         mock_repo = Mock()
         mock_repo.create.return_value = Mock(id=1)
-        
+
         dlq_service = DLQService(
             config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
             repository=mock_repo,
@@ -128,7 +128,7 @@ class TestPaymentTimeoutRecovery:
 
         mock_repo = Mock()
         mock_repo.create.return_value = Mock(id=2)
-        
+
         dlq_service = DLQService(
             config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
             repository=mock_repo,
@@ -170,7 +170,7 @@ class TestConnectionFailureRecovery:
 
     These failures are generally safe to retry (the request never reached
     the server), but may indicate larger outage scenarios.
-    
+
     Uses Redis-based repositories for integration testing with Docker services.
     """
 
@@ -237,7 +237,7 @@ class TestConnectionFailureRecovery:
 
         assert result.success is True
         assert result.dlq_id is not None
-        
+
         # Verify entry exists in Redis repository
         entries = redis_dlq_repository.find_by_failure_type("CONNECTION_ERROR_TEST")
         assert len(entries) >= 1
@@ -318,7 +318,7 @@ class TestRateLimitingRecovery:
 
         mock_repo = Mock()
         mock_repo.create.return_value = Mock(id=100)
-        
+
         dlq_service = DLQService(
             config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
             repository=mock_repo,
@@ -372,10 +372,10 @@ class TestExponentialBackoffRetry:
         """
         from selfhealing.core import (
             BackoffCalculator,
-            BackoffConfig,
+            LegacyBackoffConfig,
         )
 
-        config = BackoffConfig(
+        config = LegacyBackoffConfig(
             base=4,
             max_delay=180,
             jitter_percent=0,  # Disable jitter for predictable test
@@ -410,7 +410,7 @@ class TestExponentialBackoffRetry:
 
         mock_repo = Mock()
         mock_repo.create.return_value = Mock(id=200)
-        
+
         dlq_service = DLQService(
             config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
             repository=mock_repo,
@@ -446,7 +446,7 @@ class TestCircuitBreakerExternalAPI:
     - CLOSED: Normal operation, requests pass through
     - OPEN: Too many failures, requests blocked immediately
     - HALF_OPEN: Testing if service recovered, limited requests allowed
-    
+
     Uses Redis-based repository for integration testing with Docker services.
     """
 
@@ -664,7 +664,7 @@ class TestServiceUnavailableRecovery:
 
         mock_repo = Mock()
         mock_repo.create.return_value = Mock(id=300)
-        
+
         dlq_service = DLQService(
             config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
             repository=mock_repo,
