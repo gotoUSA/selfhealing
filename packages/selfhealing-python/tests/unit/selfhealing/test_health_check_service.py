@@ -178,8 +178,9 @@ class TestHealthCheckService:
     # get_readiness Tests
     # =========================================================================
 
+    @patch("selfhealing.adapters.postgres.repository.PostgresRepository")
     @patch("django.db.connections")
-    def test_get_readiness_ready(self, mock_connections):
+    def test_get_readiness_ready(self, mock_connections, mock_repo_class):
         """모든 DB 정상일 때 ready."""
         mock_connections.__iter__ = MagicMock(return_value=iter(["default"]))
 

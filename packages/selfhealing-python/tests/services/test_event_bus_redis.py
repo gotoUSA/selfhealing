@@ -112,7 +112,7 @@ class TestRedisEventBusMultiChannel:
         """RedisEventBus 인스턴스 (class-scoped로 재사용)."""
         from selfhealing.services.event_bus_redis import RedisEventBus
 
-        with patch.dict("os.environ", {"REDIS_URL": ""}, clear=False):
+        with patch.dict("os.environ", {"REDIS_URL": "", "CELERY_BROKER_URL": ""}, clear=False):
             return RedisEventBus(redis_url=None)
 
     def test_init_with_default_channels(self, redis_bus):
@@ -157,7 +157,7 @@ class TestRedisEventBusPublish:
 
         mock_redis = MagicMock()
 
-        with patch.dict("os.environ", {"REDIS_URL": ""}, clear=False):
+        with patch.dict("os.environ", {"REDIS_URL": "", "CELERY_BROKER_URL": ""}, clear=False):
             bus = RedisEventBus(redis_url=None)
             bus._redis_client = mock_redis
 

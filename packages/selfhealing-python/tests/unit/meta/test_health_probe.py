@@ -5,6 +5,7 @@ HealthProbeManager 및 각종 Probe 테스트.
 """
 
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -72,8 +73,10 @@ class TestCircuitBreakerProbe:
         probe = CircuitBreakerProbe()
         assert probe.component_name == "circuit_breaker"
 
-    def test_probe_returns_result(self):
+    @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
+    def test_probe_returns_result(self, mock_cb_service):
         """프로브가 결과 반환."""
+        mock_cb_service.return_value.get_all_states.return_value = []
         probe = CircuitBreakerProbe()
         result = probe.probe()
 
@@ -107,7 +110,8 @@ class TestRecoveryPipelineProbe:
         probe = RecoveryPipelineProbe()
         assert probe.component_name == "recovery_pipeline"
 
-    def test_probe_returns_result(self):
+    @patch("selfhealing.services.coordination.recovery_coordinator.get_recovery_coordinator")
+    def test_probe_returns_result(self, mock_coordinator):
         """프로브가 결과 반환."""
         probe = RecoveryPipelineProbe()
         result = probe.probe()
@@ -124,14 +128,26 @@ class TestRedisProbe:
         probe = RedisProbe()
         assert probe.component_name == "redis"
 
-    def test_probe_returns_result(self):
+    @pytest.fixture
+    def mock_redis_adapter(self):
+        """레디스 어댑터를 mock하여 실제 Redis 연결 방지."""
+        mock_adapter = MagicMock()
+        mock_adapter._redis = MagicMock()
+        mock_adapter._redis.ping.return_value = True
+        mock_adapter._redis.info.return_value = {"used_memory": 1024}
+        with patch(
+            "selfhealing.adapters.cache.redis_adapter.RedisCacheAdapter",
+            return_value=mock_adapter,
+        ) as m:
+            yield m
+
+    def test_probe_returns_result(self, mock_redis_adapter):
         """프로브가 결과 반환 (Redis 없어도)."""
         probe = RedisProbe()
         result = probe.probe()
 
         assert isinstance(result, ProbeResult)
         assert result.component == "redis"
-        # Redis 연결 없으면 UNKNOWN 또는 UNHEALTHY
 
 
 class DummyHealthyProbe(HealthProbe):
@@ -186,8 +202,17 @@ class DummyDegradedProbe(HealthProbe):
 class TestHealthProbeManager:
     """HealthProbeManager 테스트."""
 
-    def test_default_probes(self):
+    @patch("selfhealing.services.coordination.recovery_coordinator.get_recovery_coordinator")
+    @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
+    @patch("selfhealing.adapters.cache.redis_adapter.RedisCacheAdapter")
+    def test_default_probes(self, mock_redis_adapter, mock_cb_service, mock_coord):
         """기본 프로브 생성 테스트."""
+        mock_cb_service.return_value.get_all_states.return_value = []
+        mock_adapter = MagicMock()
+        mock_adapter._redis.ping.return_value = True
+        mock_adapter._redis.info.return_value = {"used_memory": 1024}
+        mock_redis_adapter.return_value = mock_adapter
+
         manager = HealthProbeManager()
 
         # 기본 프로브가 있어야 함

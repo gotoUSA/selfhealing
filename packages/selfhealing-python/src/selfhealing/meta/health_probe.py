@@ -394,7 +394,7 @@ class HealthProbeManager:
             probes: 사용할 프로브 목록 (None이면 기본 프로브)
         """
         self._settings = settings or get_meta_watchdog_settings()
-        self._probes = probes or self._create_default_probes()
+        self._probes = probes if probes is not None else self._create_default_probes()
         self._lock = threading.RLock()
         self._last_results: dict[str, ProbeResult] = {}
         self._running = False

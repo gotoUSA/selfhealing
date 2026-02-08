@@ -258,8 +258,7 @@ class TestValidateAsyncTriggersPersistence:
                 },
             )
 
-            # 백그라운드 스레드 완료 대기
-            time.sleep(0.5)
+            # shutdown(wait=True)가 모든 백그라운드 작업 완료를 보장
             validator.shutdown()
 
             # 값 불일치는 구조적 불일치가 아니므로 영속화 미호출

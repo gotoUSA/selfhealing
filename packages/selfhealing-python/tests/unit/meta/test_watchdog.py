@@ -8,6 +8,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from unittest import mock
+from unittest.mock import patch
 
 import pytest
 
@@ -17,6 +18,13 @@ from selfhealing.meta.watchdog import (
     WatchdogState,
     get_selfhealer_watchdog,
     reset_selfhealer_watchdog,
+)
+
+# check_health() 내부의 _update_state_store()가 Redis 연결을 시도하여 ~4초 타임아웃 발생.
+# 모든 check_health/force_check 테스트에서 이를 mock하여 즉시 반환.
+_MOCK_STATE_STORE = patch(
+    "selfhealing.meta.watchdog.SelfHealerWatchdog._update_state_store",
+    return_value=None,
 )
 
 
@@ -129,14 +137,16 @@ class TestSelfHealerWatchdog:
         """헬스 체크 테스트."""
         from selfhealing.meta.health_probe import HealthStatus
 
-        result = watchdog.check_health()
+        with _MOCK_STATE_STORE:
+            result = watchdog.check_health()
 
         assert isinstance(result, WatchdogState)
         mock_probe_manager.probe_all.assert_called()
 
     def test_force_check(self, watchdog, mock_probe_manager):
         """강제 점검 테스트."""
-        result = watchdog.force_check()
+        with _MOCK_STATE_STORE:
+            result = watchdog.force_check()
 
         assert isinstance(result, WatchdogState)
         mock_probe_manager.probe_all.assert_called()
@@ -188,7 +198,8 @@ class TestHealthCheck:
             probe_manager=mock_probe_manager_unhealthy,
         )
 
-        result = watchdog.check_health()
+        with _MOCK_STATE_STORE:
+            result = watchdog.check_health()
 
         assert result.overall_status == HealthStatus.UNHEALTHY
         assert result.component_statuses.get("redis") == HealthStatus.UNHEALTHY
@@ -232,7 +243,8 @@ class TestDryRunMode:
             probe_manager=mock_probe_manager,
         )
 
-        result = watchdog.check_health()
+        with _MOCK_STATE_STORE:
+            result = watchdog.check_health()
 
         # Dry-run 모드에서도 상태는 반환됨
         assert isinstance(result, WatchdogState)
@@ -263,8 +275,21 @@ class TestDisabledWatchdog:
 class TestSingleton:
     """싱글톤 테스트."""
 
-    def test_singleton_returns_same_instance(self):
+    @patch("selfhealing.meta.health_probe.RedisProbe.probe")
+    @patch("selfhealing.meta.health_probe.CircuitBreakerProbe.probe")
+    def test_singleton_returns_same_instance(self, mock_cb_probe, mock_redis_probe):
         """싱글톤 인스턴스 반환."""
+        from selfhealing.meta.health_probe import HealthStatus, ProbeResult
+
+        _dummy = ProbeResult(
+            component="dummy",
+            status=HealthStatus.UNKNOWN,
+            latency_ms=0.0,
+            timestamp=datetime.now(timezone.utc),
+        )
+        mock_cb_probe.return_value = _dummy
+        mock_redis_probe.return_value = _dummy
+
         reset_selfhealer_watchdog()
 
         wd1 = get_selfhealer_watchdog()
@@ -281,11 +306,15 @@ class TestSingleton:
         """싱글톤 리셋."""
         reset_selfhealer_watchdog()
 
-        wd1 = get_selfhealer_watchdog()
-        if wd1 is not None:
-            wd1.stop()
-        reset_selfhealer_watchdog()
-        wd2 = get_selfhealer_watchdog()
+        with (
+            patch("selfhealing.meta.health_probe.RedisProbe.probe"),
+            patch("selfhealing.meta.health_probe.CircuitBreakerProbe.probe"),
+        ):
+            wd1 = get_selfhealer_watchdog()
+            if wd1 is not None:
+                wd1.stop()
+            reset_selfhealer_watchdog()
+            wd2 = get_selfhealer_watchdog()
 
         # 리셋 후 다른 인스턴스 (또는 둘 다 None일 수 있음)
         if wd1 is not None and wd2 is not None:
@@ -391,9 +420,10 @@ class TestConsecutiveFailures:
         )
 
         # 여러 번 체크
-        watchdog.check_health()
-        watchdog.check_health()
-        watchdog.check_health()
+        with _MOCK_STATE_STORE:
+            watchdog.check_health()
+            watchdog.check_health()
+            watchdog.check_health()
 
         # 연속 실패 카운트 확인
         assert watchdog._consecutive_failures.get("redis", 0) == 3
