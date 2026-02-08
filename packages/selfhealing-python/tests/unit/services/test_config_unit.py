@@ -77,7 +77,7 @@ def _reset_singletons():
 
 
 class TestNotificationLimits:
-    """NotificationLimits frozen 데이터클래스 테스트."""
+    """NotificationLimits BaseSettings 테스트."""
 
     def test_default_values(self):
         """Default values
@@ -90,10 +90,10 @@ class TestNotificationLimits:
 
     def test_frozen(self):
         """Frozen
-        frozen 데이터클래스이므로 값 변경이 불가한지 확인.
+        frozen BaseSettings이므로 값 변경이 불가한지 확인.
         """
         limits = NotificationLimits()
-        with pytest.raises(AttributeError):
+        with pytest.raises(Exception):
             limits.slack_block_text_limit = 5000
 
     def test_get_notification_limits_from_env(self):
@@ -113,7 +113,7 @@ class TestNotificationLimits:
 
 
 class TestForensicContextConfig:
-    """ForensicContextConfig frozen 데이터클래스 테스트."""
+    """ForensicContextConfig BaseSettings 테스트."""
 
     def test_default_values(self):
         """Default values
@@ -244,7 +244,7 @@ class TestEventLoggingConfig:
 
 
 class TestMetricCollectionSettings:
-    """MetricCollectionSettings frozen 데이터클래스 테스트."""
+    """MetricCollectionSettings BaseSettings 테스트."""
 
     def test_default_values(self):
         """Default values
@@ -272,7 +272,7 @@ class TestMetricCollectionSettings:
 
 
 class TestL2StorageConfig:
-    """L2StorageConfig frozen 데이터클래스 테스트."""
+    """L2StorageConfig BaseSettings 테스트."""
 
     def test_default_values(self):
         """Default values

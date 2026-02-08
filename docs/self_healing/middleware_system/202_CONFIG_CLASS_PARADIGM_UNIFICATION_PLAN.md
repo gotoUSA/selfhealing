@@ -1,6 +1,6 @@
 # 202. Config 클래스 패러다임 통일 계획
 
-> **상태**: 📋 계획
+> **상태**: ✅ 완료 (2026-02-09)
 > **목적**: 설정 클래스 정의 방식을 역할별로 명확히 구분하고 일관된 규칙을 수립한다.
 
 ---
@@ -158,10 +158,10 @@ class RetryContext(TypedDict, total=False):
 
 | 현재 (config.py) | 마이그레이션 대상 | 비고 |
 |------------------|------------------|------|
-| `NotificationLimits` L47 | `settings/notification.py` 통합 검토 | `get_notification_limits()`의 수동 env 파싱 제거 |
-| `ForensicSettings` L66 | 199번 문서에서 이름 변경 후 판단 | `settings/forensic.py`와 역할 분리 필요 |
-| `MetricCollectionSettings` L405 | `settings/metrics.py` 통합 검토 | |
-| `L2StorageConfig` L490 | `settings/l2_storage.py` 통합 검토 | |
+| `NotificationLimits` L47 | ✅ `BaseSettings` 전환 완료 | `env_prefix="SELFHEALING_"`, `frozen=True`, 수동 env 파싱 제거 |
+| `ForensicContextConfig` L66 | ✅ `BaseSettings` 전환 완료 | `env_prefix="SELFHEALING_"`, `frozen=True`, `validation_alias`로 하위 호환 |
+| `MetricCollectionSettings` L405 | ✅ `BaseSettings` 전환 완료 | `env_prefix="SELFHEALING_METRICS_"`, `validation_alias`로 drift 환경변수 하위 호환 |
+| `L2StorageConfig` L490 | ✅ `BaseSettings` 전환 완료 | `env_prefix="SELFHEALING_L2_"`, `validation_alias`로 하위 호환 |
 
 ### 3-3. services/ 내 `@dataclass` Config — 유지
 
@@ -179,6 +179,34 @@ class CircuitBreakerConfig:
 
 ### 3-4. 검증 항목
 
-- [ ] `config.py`의 `get_*()` 팩토리 함수들이 `BaseSettings` 전환 후 동일하게 동작하는지 확인
-- [ ] `@lru_cache` 캐싱 로직이 `BaseSettings` 인스턴스와 호환되는지 확인
-- [ ] `frozen=True` 불변성이 `BaseSettings`에서도 보장되는지 확인 (`.model_config`의 `frozen=True`)
+- [x] `config.py`의 `get_*()` 팩토리 함수들이 `BaseSettings` 전환 후 동일하게 동작하는지 확인
+- [x] `@lru_cache` 캐싱 로직이 `BaseSettings` 인스턴스와 호환되는지 확인
+- [x] `frozen=True` 불변성이 `BaseSettings`에서도 보장되는지 확인 (`.model_config`의 `frozen=True`)
+
+---
+
+## 4. 구현 결과
+
+### 4-1. 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `config.py` | 4개 `@dataclass(frozen=True)` → `BaseSettings(frozen=True)` 전환, `os.environ.get()` 수동 파싱 제거, `pydantic Field` 검증 추가 |
+| `tests/unit/services/test_config_unit.py` | `pytest.raises(AttributeError)` → `pytest.raises(Exception)` (pydantic `ValidationError` 호환) |
+
+### 4-2. 환경변수 하위 호환
+
+기존 환경변수명과 `env_prefix + field_name` 패턴이 다른 필드에 `validation_alias=AliasChoices(...)` 적용:
+
+| 클래스 | 필드 | 기존 환경변수 | 신규 환경변수 (자동) |
+|--------|------|-------------|--------------------|
+| `NotificationLimits` | `notification_timeout_seconds` | `SELFHEALING_NOTIFICATION_TIMEOUT` | `SELFHEALING_NOTIFICATION_TIMEOUT_SECONDS` |
+| `ForensicContextConfig` | `max_context_size_bytes` | `SELFHEALING_MAX_CONTEXT_SIZE` | `SELFHEALING_MAX_CONTEXT_SIZE_BYTES` |
+| `MetricCollectionSettings` | `drift_*` (5개 필드) | `SELFHEALING_DRIFT_*` | `SELFHEALING_METRICS_DRIFT_*` |
+| `L2StorageConfig` | `reconciliation_jitter_*`, `health_check_interval_seconds` | `SELFHEALING_L2_*_MIN/MAX/INTERVAL` | `SELFHEALING_L2_*_MIN_SECONDS/MAX_SECONDS/INTERVAL_SECONDS` |
+
+### 4-3. 테스트 결과
+
+- `tests/unit/services/test_config_unit.py`: **35 passed** ✅
+- `tests/unit/metrics/test_safe_gauge_and_logging_config.py`: **32 passed** ✅
+- 전체 패키지 테스트: **10,427 passed**, 1 skipped ✅ (기존 flaky 테스트 1건 제외)

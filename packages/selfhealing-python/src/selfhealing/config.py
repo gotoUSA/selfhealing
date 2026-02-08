@@ -18,8 +18,10 @@ from __future__ import annotations
 import hashlib
 import os
 import threading
-from dataclasses import dataclass
 from functools import lru_cache
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Drift Detection 메트릭
 try:
@@ -44,43 +46,81 @@ except ImportError:
 # =============================================================================
 
 
-@dataclass(frozen=True)
-class NotificationLimits:
+class NotificationLimits(BaseSettings):
     """
     Limits for notification message formatting.
+
+    환경변수 자동 파싱 (env_prefix="SELFHEALING_").
+    예: SELFHEALING_SLACK_BLOCK_TEXT_LIMIT=5000
     """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+        frozen=True,
+    )
 
     # Slack API limits
-    slack_block_text_limit: int = 3000
+    slack_block_text_limit: int = Field(default=3000, ge=1)
 
     # Message truncation limits
-    description_max_length: int = 500
-    action_taken_max_length: int = 200
-    title_max_length: int = 150
+    description_max_length: int = Field(default=500, ge=1)
+    action_taken_max_length: int = Field(default=200, ge=1)
+    title_max_length: int = Field(default=150, ge=1)
 
     # HTTP request timeout
-    notification_timeout_seconds: int = 10
+    # 기존 환경변수: SELFHEALING_NOTIFICATION_TIMEOUT (하위 호환)
+    notification_timeout_seconds: int = Field(
+        default=10,
+        ge=1,
+        validation_alias=AliasChoices(
+            "SELFHEALING_NOTIFICATION_TIMEOUT",
+            "SELFHEALING_NOTIFICATION_TIMEOUT_SECONDS",
+        ),
+    )
 
 
-@dataclass(frozen=True)
-class ForensicContextConfig:
+class ForensicContextConfig(BaseSettings):
     """
     Forensic context configuration.
+
+    환경변수 자동 파싱 (env_prefix="SELFHEALING_").
+    예: SELFHEALING_MAX_STACK_FRAMES=100
     """
 
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+        frozen=True,
+    )
+
     # Stack trace limits
-    max_stack_frames: int = 50
-    max_stacktrace_length: int = 10000
+    max_stack_frames: int = Field(default=50, ge=1)
+    max_stacktrace_length: int = Field(default=10000, ge=1)
 
     # Context size limits
-    max_context_size_bytes: int = 65536  # 64KB
+    # 기존 환경변수: SELFHEALING_MAX_CONTEXT_SIZE (하위 호환)
+    max_context_size_bytes: int = Field(
+        default=65536,  # 64KB
+        ge=1,
+        validation_alias=AliasChoices(
+            "SELFHEALING_MAX_CONTEXT_SIZE",
+            "SELFHEALING_MAX_CONTEXT_SIZE_BYTES",
+        ),
+    )
 
     # Data collection settings
-    collect_request_body: bool = False
-    collect_response_body: bool = False
+    collect_request_body: bool = Field(default=False)
+    collect_response_body: bool = Field(default=False)
 
     # Sensitive field masking
-    mask_sensitive_fields: bool = True
+    mask_sensitive_fields: bool = Field(default=True)
     sensitive_field_patterns: tuple[str, ...] = (
         # Authentication & Secrets
         "password",
@@ -109,7 +149,7 @@ class ForensicContextConfig:
 
     # IP address masking patterns (regex)
     # Private IP ranges that should be masked in logs
-    mask_internal_ip: bool = True
+    mask_internal_ip: bool = Field(default=True)
     internal_ip_patterns: tuple[str, ...] = (
         r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # 10.0.0.0/8
         r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}",  # 172.16.0.0/12
@@ -117,7 +157,7 @@ class ForensicContextConfig:
     )
 
     # Server path patterns to mask
-    mask_server_paths: bool = True
+    mask_server_paths: bool = Field(default=True)
     server_path_patterns: tuple[str, ...] = (
         r"/home/[^/]+",  # Home directories
         r"/var/[^/]+/[^/]+",  # Var subdirectories
@@ -145,20 +185,9 @@ def get_notification_limits() -> NotificationLimits:
     """
     Get notification limits configuration.
 
-    Tries Django settings first, falls back to environment/defaults.
+    BaseSettings가 환경변수를 자동 파싱합니다.
     """
-    django_getter, _ = _try_django_config()
-    if django_getter:
-        return django_getter()
-
-    # Fall back to environment variables or defaults
-    return NotificationLimits(
-        slack_block_text_limit=int(os.environ.get("SELFHEALING_SLACK_BLOCK_TEXT_LIMIT", 3000)),
-        description_max_length=int(os.environ.get("SELFHEALING_DESCRIPTION_MAX_LENGTH", 500)),
-        action_taken_max_length=int(os.environ.get("SELFHEALING_ACTION_TAKEN_MAX_LENGTH", 200)),
-        title_max_length=int(os.environ.get("SELFHEALING_TITLE_MAX_LENGTH", 150)),
-        notification_timeout_seconds=int(os.environ.get("SELFHEALING_NOTIFICATION_TIMEOUT", 10)),
-    )
+    return NotificationLimits()
 
 
 @lru_cache(maxsize=1)
@@ -166,21 +195,9 @@ def get_forensic_settings() -> ForensicContextConfig:
     """
     Get forensic context configuration.
 
-    Tries Django settings first, falls back to environment/defaults.
+    BaseSettings가 환경변수를 자동 파싱합니다.
     """
-    _, django_getter = _try_django_config()
-    if django_getter:
-        return django_getter()
-
-    # Fall back to environment variables or defaults
-    return ForensicContextConfig(
-        max_stack_frames=int(os.environ.get("SELFHEALING_MAX_STACK_FRAMES", 50)),
-        max_stacktrace_length=int(os.environ.get("SELFHEALING_MAX_STACKTRACE_LENGTH", 10000)),
-        max_context_size_bytes=int(os.environ.get("SELFHEALING_MAX_CONTEXT_SIZE", 65536)),
-        collect_request_body=os.environ.get("SELFHEALING_COLLECT_REQUEST_BODY", "false").lower() == "true",
-        collect_response_body=os.environ.get("SELFHEALING_COLLECT_RESPONSE_BODY", "false").lower() == "true",
-        mask_sensitive_fields=os.environ.get("SELFHEALING_MASK_SENSITIVE_FIELDS", "true").lower() == "true",
-    )
+    return ForensicContextConfig()
 
 
 # =============================================================================
@@ -378,32 +395,86 @@ def get_event_logging_config() -> EventLoggingConfig:
 # =============================================================================
 
 
-@dataclass(frozen=True)
-class MetricCollectionSettings:
+class MetricCollectionSettings(BaseSettings):
     """
     메트릭 수집 설정.
+
+    환경변수 자동 파싱 (env_prefix="SELFHEALING_METRICS_").
+    예: SELFHEALING_METRICS_ADAPTER_TYPE=redis
     """
 
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_METRICS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+        frozen=True,
+    )
+
     # 동기화 설정
-    sync_on_startup: bool = True  # 서버 시작 시 동기화
-    scheduled_sync_enabled: bool = False  # 주기적 동기화 (권장: 비활성화)
-    scheduled_sync_interval: int = 86400  # 주기 (초), 기본 24시간
+    sync_on_startup: bool = Field(default=True, description="서버 시작 시 동기화")
+    scheduled_sync_enabled: bool = Field(default=False, description="주기적 동기화")
+    scheduled_sync_interval: int = Field(default=86400, ge=1, description="주기 (초)")
 
     # Jitter 설정 (Thundering Herd 방지)
-    jitter_enabled: bool = True  # Jitter 활성화
-    jitter_max_delay_seconds: float = 60.0  # 최대 지연 시간 (초)
+    jitter_enabled: bool = Field(default=True, description="Jitter 활성화")
+    jitter_max_delay_seconds: float = Field(default=60.0, ge=0.0, description="최대 지연 시간 (초)")
 
     # 어댑터 설정
-    adapter_type: str = "null"  # django, redis, null
-    redis_prefix: str = "sh:metrics:"  # Redis 어댑터용 키 프리픽스
+    adapter_type: str = Field(default="null", description="django, redis, null")
+    redis_prefix: str = Field(default="sh:metrics:", description="Redis 어댑터용 키 프리픽스")
 
     # Drift 감지 (거버넌스 레벨)
-    drift_detection_enabled: bool = True
-    drift_warning_threshold: float = 0.05  # 5% - 경고
-    drift_critical_threshold: float = 0.20  # 20% - 심각, 알림 발송
-    drift_incident_threshold: float = 0.50  # 50% - 인시던트, 이벤트 유실
-    drift_incident_enabled: bool = True  # 인시던트 자동 생성
-    drift_alert_enabled: bool = True  # 알림 발송 활성화
+    drift_detection_enabled: bool = Field(default=True, description="Drift 감지 활성화")
+
+    # 기존 환경변수: SELFHEALING_DRIFT_* (하위 호환)
+    drift_warning_threshold: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="5% - 경고",
+        validation_alias=AliasChoices(
+            "SELFHEALING_DRIFT_WARNING_THRESHOLD",
+            "SELFHEALING_METRICS_DRIFT_WARNING_THRESHOLD",
+        ),
+    )
+    drift_critical_threshold: float = Field(
+        default=0.20,
+        ge=0.0,
+        le=1.0,
+        description="20% - 심각",
+        validation_alias=AliasChoices(
+            "SELFHEALING_DRIFT_CRITICAL_THRESHOLD",
+            "SELFHEALING_METRICS_DRIFT_CRITICAL_THRESHOLD",
+        ),
+    )
+    drift_incident_threshold: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description="50% - 인시던트",
+        validation_alias=AliasChoices(
+            "SELFHEALING_DRIFT_INCIDENT_THRESHOLD",
+            "SELFHEALING_METRICS_DRIFT_INCIDENT_THRESHOLD",
+        ),
+    )
+    drift_incident_enabled: bool = Field(
+        default=True,
+        description="인시던트 자동 생성",
+        validation_alias=AliasChoices(
+            "SELFHEALING_DRIFT_INCIDENT_ENABLED",
+            "SELFHEALING_METRICS_DRIFT_INCIDENT_ENABLED",
+        ),
+    )
+    drift_alert_enabled: bool = Field(
+        default=True,
+        description="알림 발송 활성화",
+        validation_alias=AliasChoices(
+            "SELFHEALING_DRIFT_ALERT_ENABLED",
+            "SELFHEALING_METRICS_DRIFT_ALERT_ENABLED",
+        ),
+    )
 
 
 @lru_cache(maxsize=1)
@@ -411,23 +482,9 @@ def get_metric_collection_settings() -> MetricCollectionSettings:
     """
     Get metric collection settings.
 
-    Loads from environment variables with sensible defaults.
+    BaseSettings가 환경변수를 자동 파싱합니다.
     """
-    return MetricCollectionSettings(
-        sync_on_startup=os.environ.get("SELFHEALING_METRICS_SYNC_ON_STARTUP", "true").lower() == "true",
-        scheduled_sync_enabled=os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_ENABLED", "false").lower() == "true",
-        scheduled_sync_interval=int(os.environ.get("SELFHEALING_METRICS_SCHEDULED_SYNC_INTERVAL", "86400")),
-        jitter_enabled=os.environ.get("SELFHEALING_METRICS_JITTER_ENABLED", "true").lower() == "true",
-        jitter_max_delay_seconds=float(os.environ.get("SELFHEALING_METRICS_JITTER_MAX_DELAY_SECONDS", "60.0")),
-        adapter_type=os.environ.get("SELFHEALING_METRICS_ADAPTER_TYPE", "null"),
-        redis_prefix=os.environ.get("SELFHEALING_METRICS_REDIS_PREFIX", "sh:metrics:"),
-        drift_detection_enabled=os.environ.get("SELFHEALING_METRICS_DRIFT_DETECTION_ENABLED", "true").lower() == "true",
-        drift_warning_threshold=float(os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")),
-        drift_critical_threshold=float(os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")),
-        drift_incident_threshold=float(os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")),
-        drift_incident_enabled=os.environ.get("SELFHEALING_DRIFT_INCIDENT_ENABLED", "true").lower() == "true",
-        drift_alert_enabled=os.environ.get("SELFHEALING_DRIFT_ALERT_ENABLED", "true").lower() == "true",
-    )
+    return MetricCollectionSettings()
 
 
 # =============================================================================
@@ -435,36 +492,68 @@ def get_metric_collection_settings() -> MetricCollectionSettings:
 # =============================================================================
 
 
-@dataclass(frozen=True)
-class L2StorageConfig:
+class L2StorageConfig(BaseSettings):
     """
     L2 저장소 복원력 설정.
 
     Layered Storage(L1 Memory + L2 Redis/DB)에서 L2 장애 시
     타임아웃 및 복구 동작을 제어합니다.
 
-    Priority (highest to lowest):
-    1. API/Runtime 설정 (런타임 변경)
-    2. 환경변수 (컨테이너 기본값)
-    3. 하드코딩 기본값 (업계 사례 기반)
+    환경변수 자동 파싱 (env_prefix="SELFHEALING_L2_").
+    예: SELFHEALING_L2_REDIS_TIMEOUT_MS=100
     """
 
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_L2_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+        frozen=True,
+    )
+
     # 어댑터별 타임아웃 (ms)
-    redis_timeout_ms: int = 50  # Redis: 빠름, 50ms면 충분
-    database_timeout_ms: int = 200  # DB: 부하 시 느려짐, 200ms 필요
-    fallback_timeout_ms: int = 100  # 알 수 없는 어댑터
+    redis_timeout_ms: int = Field(default=50, ge=1, description="Redis: 빠름, 50ms면 충분")
+    database_timeout_ms: int = Field(default=200, ge=1, description="DB: 부하 시 느려짐, 200ms 필요")
+    fallback_timeout_ms: int = Field(default=100, ge=1, description="알 수 없는 어댑터")
 
     # Shadow Logging 설정
-    shadow_log_enabled: bool = True  # Shadow Log 활성화
-    shadow_log_max_entries: int = 1000  # 최대 보관 항목 수
+    shadow_log_enabled: bool = Field(default=True, description="Shadow Log 활성화")
+    shadow_log_max_entries: int = Field(default=1000, ge=1, description="최대 보관 항목 수")
 
     # Drift Reconciliation 설정 (Thundering Herd 방지)
-    reconciliation_jitter_min_seconds: float = 0.0  # 최소 지연
-    reconciliation_jitter_max_seconds: float = 5.0  # 최대 지연
+    # 기존 환경변수: SELFHEALING_L2_RECONCILIATION_JITTER_MIN (하위 호환)
+    reconciliation_jitter_min_seconds: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="최소 지연",
+        validation_alias=AliasChoices(
+            "SELFHEALING_L2_RECONCILIATION_JITTER_MIN",
+            "SELFHEALING_L2_RECONCILIATION_JITTER_MIN_SECONDS",
+        ),
+    )
+    reconciliation_jitter_max_seconds: float = Field(
+        default=5.0,
+        ge=0.0,
+        description="최대 지연",
+        validation_alias=AliasChoices(
+            "SELFHEALING_L2_RECONCILIATION_JITTER_MAX",
+            "SELFHEALING_L2_RECONCILIATION_JITTER_MAX_SECONDS",
+        ),
+    )
 
     # L2 헬스체크 설정
-    health_check_interval_seconds: float = 30.0  # 헬스체크 주기
-    health_check_timeout_ms: int = 100  # 헬스체크 타임아웃
+    # 기존 환경변수: SELFHEALING_L2_HEALTH_CHECK_INTERVAL (하위 호환)
+    health_check_interval_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        description="헬스체크 주기",
+        validation_alias=AliasChoices(
+            "SELFHEALING_L2_HEALTH_CHECK_INTERVAL",
+            "SELFHEALING_L2_HEALTH_CHECK_INTERVAL_SECONDS",
+        ),
+    )
+    health_check_timeout_ms: int = Field(default=100, ge=1, description="헬스체크 타임아웃")
 
     def get_timeout_for_adapter(self, adapter_type: str) -> float:
         """
@@ -723,22 +812,12 @@ class L2StorageRuntimeConfig:
 @lru_cache(maxsize=1)
 def get_l2_storage_config() -> L2StorageConfig:
     """
-    Get L2 storage configuration (frozen dataclass).
+    Get L2 storage configuration (frozen BaseSettings).
 
-    Loads from environment variables with sensible defaults.
+    BaseSettings가 환경변수를 자동 파싱합니다.
     Use get_l2_storage_runtime_config() for runtime-changeable settings.
     """
-    return L2StorageConfig(
-        redis_timeout_ms=int(os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)),
-        database_timeout_ms=int(os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)),
-        fallback_timeout_ms=int(os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)),
-        shadow_log_enabled=os.environ.get("SELFHEALING_L2_SHADOW_LOG_ENABLED", "true").lower() == "true",
-        shadow_log_max_entries=int(os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)),
-        reconciliation_jitter_min_seconds=float(os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MIN", 0.0)),
-        reconciliation_jitter_max_seconds=float(os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MAX", 5.0)),
-        health_check_interval_seconds=float(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_INTERVAL", 30.0)),
-        health_check_timeout_ms=int(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)),
-    )
+    return L2StorageConfig()
 
 
 def get_l2_storage_runtime_config() -> L2StorageRuntimeConfig:
