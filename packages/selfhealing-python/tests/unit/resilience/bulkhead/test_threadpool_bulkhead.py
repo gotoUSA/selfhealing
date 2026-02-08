@@ -18,8 +18,8 @@ import pytest
 
 from selfhealing.resilience.bulkhead.base import BulkheadState, BulkheadType
 from selfhealing.resilience.bulkhead.exceptions import (
-    BulkheadFullException,
-    BulkheadTimeoutException,
+    BulkheadFullError,
+    BulkheadTimeoutError,
 )
 from selfhealing.resilience.bulkhead.threadpool import ThreadPoolBulkhead
 
@@ -143,7 +143,7 @@ class TestThreadPoolBulkheadQueueLimit:
         future2 = bulkhead.submit(slow_work)
 
         # 세 번째: 큐가 가득 차서 거부
-        with pytest.raises(BulkheadFullException) as exc_info:
+        with pytest.raises(BulkheadFullError) as exc_info:
             bulkhead.submit(slow_work)
 
         assert exc_info.value.bulkhead_name == "test"
@@ -165,7 +165,7 @@ class TestThreadPoolBulkheadTimeout:
             time.sleep(0.5)
             return "done"
 
-        with pytest.raises(BulkheadTimeoutException) as exc_info:
+        with pytest.raises(BulkheadTimeoutError) as exc_info:
             bulkhead.execute(slow_work, timeout=0.1)
 
         assert exc_info.value.bulkhead_name == "test"
@@ -237,7 +237,7 @@ class TestThreadPoolBulkheadAcquire:
 
         with bulkhead.acquire():
             # 이미 1개 사용 중, queue_size=0이므로 즉시 거부
-            with pytest.raises(BulkheadFullException):
+            with pytest.raises(BulkheadFullError):
                 with bulkhead.acquire():
                     pass
 

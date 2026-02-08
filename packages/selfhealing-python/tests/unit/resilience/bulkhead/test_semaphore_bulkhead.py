@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from selfhealing.resilience.bulkhead.base import BulkheadState, BulkheadType
-from selfhealing.resilience.bulkhead.exceptions import BulkheadFullException
+from selfhealing.resilience.bulkhead.exceptions import BulkheadFullError
 from selfhealing.resilience.bulkhead.semaphore import SemaphoreBulkhead
 
 
@@ -77,7 +77,7 @@ class TestSemaphoreBulkheadConcurrency:
 
         with bulkhead.acquire():
             # 이미 1개 사용 중, timeout=None이면 즉시 실패
-            with pytest.raises(BulkheadFullException) as exc_info:
+            with pytest.raises(BulkheadFullError) as exc_info:
                 with bulkhead.acquire():
                     pass
 
@@ -90,7 +90,7 @@ class TestSemaphoreBulkheadConcurrency:
 
         with bulkhead.acquire():
             for _ in range(3):
-                with pytest.raises(BulkheadFullException):
+                with pytest.raises(BulkheadFullError):
                     with bulkhead.acquire():
                         pass
 
@@ -113,7 +113,7 @@ class TestSemaphoreBulkheadConcurrency:
                         if current > max_concurrent_observed:
                             max_concurrent_observed = current
                     time.sleep(0.1)
-            except BulkheadFullException:
+            except BulkheadFullError:
                 pass
 
         with ThreadPoolExecutor(max_workers=10) as executor:
@@ -160,7 +160,7 @@ class TestSemaphoreBulkheadTimeout:
 
         with bulkhead.acquire():
             start = time.time()
-            with pytest.raises(BulkheadFullException):
+            with pytest.raises(BulkheadFullError):
                 with bulkhead.acquire(timeout=0.1):
                     pass
             elapsed = time.time() - start
@@ -263,5 +263,5 @@ class TestSemaphoreBulkheadWrap:
 
         with bulkhead.acquire():
             # 이미 1개 사용 중이므로 wrap된 함수도 실패해야 함
-            with pytest.raises(BulkheadFullException):
+            with pytest.raises(BulkheadFullError):
                 slow_function()

@@ -50,11 +50,15 @@ from selfhealing.core.hedging.config import (
 )
 from selfhealing.core.hedging.result import HedgingResult
 from selfhealing.core.hedging.exceptions import (
-    HedgingAllFailedException,
+    HedgingAllFailedError,
     HedgingDisabledError,
-    HedgingException,
-    HedgingTimeoutException,
+    HedgingError,
+    HedgingTimeoutError,
     NonRetryableHedgingError,
+    # Deprecated aliases
+    HedgingException,
+    HedgingAllFailedException,
+    HedgingTimeoutException,
 )
 from selfhealing.core.hedging.executor import HedgingExecutor
 from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
@@ -88,11 +92,15 @@ __all__ = [
     # Result
     "HedgingResult",
     # Exceptions
+    "HedgingError",
+    "HedgingAllFailedError",
+    "HedgingTimeoutError",
+    "NonRetryableHedgingError",
+    "HedgingDisabledError",
+    # Deprecated aliases
     "HedgingException",
     "HedgingAllFailedException",
     "HedgingTimeoutException",
-    "NonRetryableHedgingError",
-    "HedgingDisabledError",
     # Executors
     "HedgingExecutor",
     "AsyncHedgingExecutor",

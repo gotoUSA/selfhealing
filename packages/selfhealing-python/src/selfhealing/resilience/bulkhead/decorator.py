@@ -84,7 +84,7 @@ def bulkhead(
             @wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any) -> T:
                 from selfhealing.resilience.bulkhead.exceptions import (
-                    BulkheadFullException,
+                    BulkheadFullError,
                 )
                 from selfhealing.resilience.bulkhead.registry import (
                     get_bulkhead_registry,
@@ -99,7 +99,7 @@ def bulkhead(
                 try:
                     async with bh.acquire(timeout=timeout):
                         return await fn(*args, **kwargs)
-                except BulkheadFullException:
+                except BulkheadFullError:
                     if fallback is not None:
                         # fallback도 async일 수 있음
                         if asyncio.iscoroutinefunction(fallback):
@@ -113,7 +113,7 @@ def bulkhead(
         @wraps(fn)
         def sync_wrapper(*args: Any, **kwargs: Any) -> T:
             from selfhealing.resilience.bulkhead.exceptions import (
-                BulkheadFullException,
+                BulkheadFullError,
             )
             from selfhealing.resilience.bulkhead.registry import (
                 get_bulkhead_registry,
@@ -126,7 +126,7 @@ def bulkhead(
             try:
                 with bh.acquire(timeout=timeout):
                     return fn(*args, **kwargs)
-            except BulkheadFullException:
+            except BulkheadFullError:
                 if fallback is not None:
                     return fallback(*args, **kwargs)
                 raise
@@ -165,7 +165,7 @@ def bulkhead_for_database(
             @wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any) -> T:
                 from selfhealing.resilience.bulkhead.exceptions import (
-                    BulkheadFullException,
+                    BulkheadFullError,
                 )
                 from selfhealing.resilience.bulkhead.registry import (
                     get_bulkhead_registry,
@@ -178,7 +178,7 @@ def bulkhead_for_database(
                 try:
                     async with async_bh.acquire(timeout=timeout):
                         return await fn(*args, **kwargs)
-                except BulkheadFullException:
+                except BulkheadFullError:
                     if fallback is not None:
                         if asyncio.iscoroutinefunction(fallback):
                             return await fallback(*args, **kwargs)
@@ -190,7 +190,7 @@ def bulkhead_for_database(
         @wraps(fn)
         def sync_wrapper(*args: Any, **kwargs: Any) -> T:
             from selfhealing.resilience.bulkhead.exceptions import (
-                BulkheadFullException,
+                BulkheadFullError,
             )
             from selfhealing.resilience.bulkhead.registry import (
                 get_bulkhead_registry,
@@ -202,7 +202,7 @@ def bulkhead_for_database(
             try:
                 with bh.acquire(timeout=timeout):
                     return fn(*args, **kwargs)
-            except BulkheadFullException:
+            except BulkheadFullError:
                 if fallback is not None:
                     return fallback(*args, **kwargs)
                 raise
@@ -241,7 +241,7 @@ def bulkhead_for_cache(
             @wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any) -> T:
                 from selfhealing.resilience.bulkhead.exceptions import (
-                    BulkheadFullException,
+                    BulkheadFullError,
                 )
                 from selfhealing.resilience.bulkhead.registry import (
                     get_bulkhead_registry,
@@ -254,7 +254,7 @@ def bulkhead_for_cache(
                 try:
                     async with async_bh.acquire(timeout=timeout):
                         return await fn(*args, **kwargs)
-                except BulkheadFullException:
+                except BulkheadFullError:
                     if fallback is not None:
                         if asyncio.iscoroutinefunction(fallback):
                             return await fallback(*args, **kwargs)
@@ -266,7 +266,7 @@ def bulkhead_for_cache(
         @wraps(fn)
         def sync_wrapper(*args: Any, **kwargs: Any) -> T:
             from selfhealing.resilience.bulkhead.exceptions import (
-                BulkheadFullException,
+                BulkheadFullError,
             )
             from selfhealing.resilience.bulkhead.registry import (
                 get_bulkhead_registry,
@@ -278,7 +278,7 @@ def bulkhead_for_cache(
             try:
                 with bh.acquire(timeout=timeout):
                     return fn(*args, **kwargs)
-            except BulkheadFullException:
+            except BulkheadFullError:
                 if fallback is not None:
                     return fallback(*args, **kwargs)
                 raise

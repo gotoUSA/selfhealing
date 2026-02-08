@@ -8,13 +8,13 @@ Hedging Exceptions - 헷징 전략 관련 예외 클래스.
 from __future__ import annotations
 
 
-class HedgingException(Exception):
+class HedgingError(Exception):
     """헷징 기본 예외 클래스."""
 
     pass
 
 
-class HedgingAllFailedException(HedgingException):
+class HedgingAllFailedError(HedgingError):
     """
     모든 헷징 후보가 실패한 경우 발생하는 예외.
 
@@ -32,7 +32,7 @@ class HedgingAllFailedException(HedgingException):
         super().__init__(f"All {candidates_tried} candidates failed: {errors}")
 
 
-class HedgingTimeoutException(HedgingException):
+class HedgingTimeoutError(HedgingError):
     """
     헷징 실행이 타임아웃된 경우 발생하는 예외.
 
@@ -48,7 +48,7 @@ class HedgingTimeoutException(HedgingException):
         super().__init__(f"Hedging timed out after {timeout}s")
 
 
-class NonRetryableHedgingError(HedgingException):
+class NonRetryableHedgingError(HedgingError):
     """
     재시도 불가 에러 - 즉시 실패 처리.
 
@@ -72,7 +72,7 @@ class NonRetryableHedgingError(HedgingException):
         super().__init__(message)
 
 
-class HedgingDisabledError(HedgingException):
+class HedgingDisabledError(HedgingError):
     """
     헷징이 비활성화된 경우 발생하는 예외.
 
@@ -87,3 +87,9 @@ class HedgingDisabledError(HedgingException):
         """
         self.load_level = load_level
         super().__init__(f"Hedging disabled due to high load: {load_level}")
+
+
+# ── Deprecated aliases (하위 호환성) ──────────────────────────
+HedgingException = HedgingError
+HedgingAllFailedException = HedgingAllFailedError
+HedgingTimeoutException = HedgingTimeoutError

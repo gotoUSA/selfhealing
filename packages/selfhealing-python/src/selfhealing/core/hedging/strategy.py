@@ -20,7 +20,7 @@ from selfhealing.core.hedging.config import (
     HedgingConfig,
 )
 from selfhealing.core.hedging.exceptions import (
-    HedgingException,
+    HedgingError,
 )
 from selfhealing.core.hedging.executor import HedgingExecutor
 from selfhealing.core.hedging.metrics import (
@@ -292,7 +292,7 @@ class HedgingStrategy(FallbackStrategy):
                     original_error=None,
                 )
 
-        except HedgingException as e:
+        except HedgingError as e:
             logger.warning(f"[HedgingStrategy] All candidates failed: {e}")
             record_hedging_failure()
 

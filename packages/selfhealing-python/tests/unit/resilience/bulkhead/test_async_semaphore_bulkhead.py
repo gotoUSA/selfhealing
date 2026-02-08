@@ -15,7 +15,7 @@ import pytest
 
 from selfhealing.resilience.bulkhead.async_semaphore import AsyncSemaphoreBulkhead
 from selfhealing.resilience.bulkhead.base import BulkheadState, BulkheadType
-from selfhealing.resilience.bulkhead.exceptions import BulkheadFullException
+from selfhealing.resilience.bulkhead.exceptions import BulkheadFullError
 
 
 class TestAsyncSemaphoreBulkheadBasic:
@@ -70,7 +70,7 @@ class TestAsyncSemaphoreBulkheadConcurrency:
         bulkhead = AsyncSemaphoreBulkhead("test", max_concurrent=1)
 
         async with bulkhead.acquire():
-            with pytest.raises(BulkheadFullException) as exc_info:
+            with pytest.raises(BulkheadFullError) as exc_info:
                 async with bulkhead.acquire():
                     pass
 
@@ -84,7 +84,7 @@ class TestAsyncSemaphoreBulkheadConcurrency:
 
         async with bulkhead.acquire():
             for _ in range(3):
-                with pytest.raises(BulkheadFullException):
+                with pytest.raises(BulkheadFullError):
                     async with bulkhead.acquire():
                         pass
 
@@ -108,7 +108,7 @@ class TestAsyncSemaphoreBulkheadConcurrency:
                         if current > max_concurrent_observed:
                             max_concurrent_observed = current
                     await asyncio.sleep(0.05)
-            except BulkheadFullException:
+            except BulkheadFullError:
                 pass
 
         # 10개 태스크 동시 실행
@@ -151,7 +151,7 @@ class TestAsyncSemaphoreBulkheadTimeout:
         bulkhead = AsyncSemaphoreBulkhead("test", max_concurrent=1)
 
         async with bulkhead.acquire():
-            with pytest.raises(BulkheadFullException):
+            with pytest.raises(BulkheadFullError):
                 async with bulkhead.acquire(timeout=0.05):
                     pass
 

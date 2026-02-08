@@ -107,7 +107,7 @@ class Bulkhead(ABC):
             None
 
         Raises:
-            BulkheadFullException: 리소스 획득 실패 시
+            BulkheadFullError: 리소스 획득 실패 시
         """
         pass
 

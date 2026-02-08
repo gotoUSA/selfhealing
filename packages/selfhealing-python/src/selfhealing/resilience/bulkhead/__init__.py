@@ -52,6 +52,10 @@ from selfhealing.resilience.bulkhead.decorator import (
     bulkhead_for_database,
 )
 from selfhealing.resilience.bulkhead.exceptions import (
+    BulkheadError,
+    BulkheadFullError,
+    BulkheadTimeoutError,
+    # Deprecated aliases
     BulkheadException,
     BulkheadFullException,
     BulkheadTimeoutException,
@@ -90,6 +94,10 @@ __all__ = [
     "get_bulkhead_registry",
     "reset_bulkhead_registry",
     # Exceptions
+    "BulkheadError",
+    "BulkheadFullError",
+    "BulkheadTimeoutError",
+    # Deprecated aliases
     "BulkheadException",
     "BulkheadFullException",
     "BulkheadTimeoutException",

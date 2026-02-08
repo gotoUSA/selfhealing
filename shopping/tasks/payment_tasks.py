@@ -26,13 +26,13 @@ from ..chaos.decorators import (
     inject_async_task_failure,
     inject_rollback_failure,
     inject_partial_failure_after_pg,
-    AsyncTaskChaosException,
-    PartialFailureException,
+    AsyncTaskChaosError,
+    PartialFailureError,
     # Phase 2 injections
     inject_phase2_rollback_failure,
     inject_phase2_silent_task_failure,
-    Phase2RollbackFailureException,
-    Phase2SilentTaskException,
+    Phase2RollbackFailureError,
+    Phase2SilentTaskError,
 )
 
 logger = get_task_logger(__name__)
@@ -184,11 +184,8 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
 
     # [CHAOS] Async task failure injection - simulates task failure
     try:
-        inject_async_task_failure(
-            task_name="finalize_payment_confirm",
-            task_id=self.request.id if self.request else None
-        )
-    except AsyncTaskChaosException as e:
+        inject_async_task_failure(task_name="finalize_payment_confirm", task_id=self.request.id if self.request else None)
+    except AsyncTaskChaosError as e:
         logger.error(f"[CHAOS] Async task failure injected: payment_id={payment_id}")
         # Re-raise to trigger retry mechanism
         raise self.retry(exc=e, countdown=5)
@@ -197,10 +194,9 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
     # This exception will exhaust retries WITHOUT proper DLQ routing
     try:
         inject_phase2_silent_task_failure(
-            task_name="finalize_payment_confirm",
-            task_id=self.request.id if self.request else None
+            task_name="finalize_payment_confirm", task_id=self.request.id if self.request else None
         )
-    except Phase2SilentTaskException as e:
+    except Phase2SilentTaskError as e:
         logger.error(f"[CHAOS BP-23] Silent task failure: payment_id={payment_id}")
         # INTENTIONAL: This re-raise does NOT route to DLQ
         # Self-healing should detect orphaned tasks via forensic scans
@@ -209,12 +205,11 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
     # [CHAOS] Partial failure after PG success - simulate internal failure
     try:
         inject_partial_failure_after_pg(payment_id=payment_id, pg_response=toss_response)
-    except PartialFailureException as e:
+    except PartialFailureError as e:
         logger.error(f"[CHAOS] Partial failure injected in finalize: payment_id={payment_id}")
         # Trigger rollback
         rollback_payment_failure.delay(
-            order_id=Payment.objects.get(pk=payment_id).order_id,
-            fail_reason="[CHAOS] Partial failure after PG success"
+            order_id=Payment.objects.get(pk=payment_id).order_id, fail_reason="[CHAOS] Partial failure after PG success"
         )
         raise
 
@@ -344,7 +339,7 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
     # Rollback itself fails, leaving order in stuck state
     try:
         inject_phase2_rollback_failure(order_id=order_id, rollback_type="stock_restore")
-    except Phase2RollbackFailureException as e:
+    except Phase2RollbackFailureError as e:
         logger.error(f"[CHAOS BP-22] Secondary rollback failure: order_id={order_id}")
         # This should trigger escalation to DLQ with ROLLBACK_FAILURE type
         raise self.retry(exc=e, countdown=5)

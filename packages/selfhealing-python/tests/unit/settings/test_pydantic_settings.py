@@ -38,9 +38,9 @@ class TestCircuitBreakerSettings:
         assert settings.success_threshold == 2
         assert settings.half_open_max_calls == 3
         assert settings.half_open_request_limit == 10
-        # BulkheadFullException은 리소스 부족이지 서비스 장애가 아니므로 기본 제외
+        # BulkheadFullError는 리소스 부족이지 서비스 장애가 아니므로 기본 제외
         assert settings.excluded_exceptions == [
-            "selfhealing.resilience.bulkhead.exceptions.BulkheadFullException",
+            "selfhealing.resilience.bulkhead.exceptions.BulkheadFullError",
         ]
 
         # Rate limit cascade (lines 25-27)

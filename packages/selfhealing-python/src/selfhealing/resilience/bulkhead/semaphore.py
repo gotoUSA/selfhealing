@@ -29,7 +29,7 @@ from selfhealing.resilience.bulkhead.base import (
     BulkheadState,
     BulkheadType,
 )
-from selfhealing.resilience.bulkhead.exceptions import BulkheadFullException
+from selfhealing.resilience.bulkhead.exceptions import BulkheadFullError
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class SemaphoreBulkhead(Bulkhead):
             None
 
         Raises:
-            BulkheadFullException: 리소스 획득 실패 시
+            BulkheadFullError: 리소스 획득 실패 시
         """
         acquired = False
         try:
@@ -109,7 +109,7 @@ class SemaphoreBulkhead(Bulkhead):
                     self._last_rejection_time = datetime.now(timezone.utc)
 
             if not acquired:
-                raise BulkheadFullException(
+                raise BulkheadFullError(
                     bulkhead_name=self._name,
                     max_concurrent=self._max_concurrent,
                     active_count=self._active_count,

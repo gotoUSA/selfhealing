@@ -83,7 +83,7 @@ class CircuitBreakerSettings(BaseSettings):
         default_factory=lambda: [
             # Bulkhead 거부는 리소스 부족이지 서비스 장애가 아님
             # CB 실패 카운트에서 제외하여 불필요한 서킷 오픈 방지
-            "selfhealing.resilience.bulkhead.exceptions.BulkheadFullException",
+            "selfhealing.resilience.bulkhead.exceptions.BulkheadFullError",
         ],
         description="Exception types to exclude from failure count",
     )

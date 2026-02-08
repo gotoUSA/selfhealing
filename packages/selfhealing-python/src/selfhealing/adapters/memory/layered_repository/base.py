@@ -155,11 +155,11 @@ class LayeredRepositoryBase:
             return func(*args, **kwargs)
 
         try:
-            from selfhealing.resilience.bulkhead.exceptions import BulkheadFullException
+            from selfhealing.resilience.bulkhead.exceptions import BulkheadFullError
 
             with self._bulkhead.acquire(timeout=self._get_timeout_seconds()):
                 return func(*args, **kwargs)
-        except BulkheadFullException:
+        except BulkheadFullError:
             self._metrics["bulkhead_rejected_count"] += 1
             logger.warning(f"[LayeredRepositoryBase] Bulkhead rejected {operation_name}, " f"bulkhead={self._bulkhead.name}")
             return None

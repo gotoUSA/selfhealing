@@ -19,7 +19,7 @@ from selfhealing.resilience.bulkhead.decorator import (
     bulkhead_for_cache,
     bulkhead_for_database,
 )
-from selfhealing.resilience.bulkhead.exceptions import BulkheadFullException
+from selfhealing.resilience.bulkhead.exceptions import BulkheadFullError
 from selfhealing.resilience.bulkhead.registry import (
     get_bulkhead_registry,
     reset_bulkhead_registry,
@@ -88,7 +88,7 @@ class TestBulkheadDecoratorSync:
         def will_fail():
             return "never"
 
-        with pytest.raises(BulkheadFullException):
+        with pytest.raises(BulkheadFullError):
             will_fail()
 
         # 정리

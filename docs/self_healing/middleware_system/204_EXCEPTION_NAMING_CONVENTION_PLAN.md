@@ -1,15 +1,15 @@
-# 204. 예외 클래스 접미사 통일 계획 (Error vs Exception)
+# 204. 예외 클래스 접미사 통일 (Error vs Exception)
 
-> **상태**: 📋 계획
-> **목적**: 커스텀 예외 클래스의 접미사를 `~Error` 또는 `~Exception` 중 하나로 통일한다.
+> **상태**: ✅ 완료 (2026-02-09)
+> **목적**: 커스텀 예외 클래스의 접미사를 `~Error`로 통일한다.
 
 ---
 
-## 1. 현황
+## 1. 현황 (변경 전)
 
-### 1-1. 주류 패턴: `~Error` (46건)
+### 1-1. 주류 패턴: `~Error` (47건)
 
-프로젝트 내 커스텀 예외 클래스의 **88.5%**가 `~Error` 접미사:
+프로젝트 내 커스텀 예외 클래스의 **78.3%**가 `~Error` 접미사:
 
 ```python
 # services/retry_handler.py L58
@@ -54,6 +54,9 @@ class PermissionDeniedError(WebFrameworkError):
 # interfaces/rate_limit_storage.py L181
 class RateLimitStorageError(Exception):
 
+# interfaces/rate_limit_storage.py L187
+class RateLimitStorageUnavailableError(RateLimitStorageError):
+
 # interfaces/cache_provider.py L124
 class LockAcquisitionError(Exception):
 
@@ -69,14 +72,13 @@ class CascadeAuditError(Exception):
 # audit/cascade_exceptions.py L124
 class CascadeIntegrityError(CascadeAuditError):
 
-# audit/checkpoint_manager.py L98
-class CheckpointError(Exception):
-
 # audit/checkpoint_strategy.py L123
 class CheckpointError(Exception):
 
 # audit/checkpoint_strategy.py L129
 class CheckpointCorruptedError(CheckpointError):
+
+# audit/checkpoint_manager.py L100 (checkpoint_strategy.py에서 re-export)
 
 # audit/kafka_checkpoint.py L99
 class KafkaCheckpointError(Exception):
@@ -122,50 +124,41 @@ class SchemaCompatibilityError(Exception):
 class JSONRPCParseError(Exception):
 ```
 
-### 1-2. 소수 패턴: `~Exception` (6건)
+### 1-2. 소수 패턴: `~Exception` (13건)
 
-**2개 모듈**에서만 `~Exception` 접미사 사용:
+**3개 모듈**에서 `~Exception` 접미사 사용:
 
 ```python
-# resilience/bulkhead/exceptions.py L12
+# resilience/bulkhead/exceptions.py (3건)
 class BulkheadException(Exception):
-    """Base exception for bulkhead operations."""
-
-# resilience/bulkhead/exceptions.py L18
 class BulkheadFullException(BulkheadException):
-    """Raised when bulkhead is at capacity."""
-
-# resilience/bulkhead/exceptions.py L43
 class BulkheadTimeoutException(BulkheadException):
-    """Raised when waiting for bulkhead slot times out."""
 
-
-# core/hedging/exceptions.py L11
+# core/hedging/exceptions.py (3건)
 class HedgingException(Exception):
-    """Base exception for hedging operations."""
-
-# core/hedging/exceptions.py L17
 class HedgingAllFailedException(HedgingException):
-    """Raised when all hedging attempts fail."""
-
-# core/hedging/exceptions.py L35
 class HedgingTimeoutException(HedgingException):
-    """Raised when hedging operation times out."""
+
+# shopping/chaos/decorators.py (7건)
+class ChaosException(Exception):
+class PartialFailureException(ChaosException):
+class AsyncTaskChaosException(ChaosException):
+class Phase2OrphanPGException(ChaosException):
+class Phase2RollbackFailureException(ChaosException):
+class Phase2SilentTaskException(ChaosException):
+class Phase2PointOrphanException(ChaosException):
 ```
 
-### 1-3. 혼합 사례 (hedging 내부)
+### 1-3. 혼합 사례 (hedging 내부 — 변경 전)
 
 ```python
 # core/hedging/exceptions.py L51
 class NonRetryableHedgingError(HedgingException):   # ← Error 접미사
-    """..."""
-
 # core/hedging/exceptions.py L75
 class HedgingDisabledError(HedgingException):        # ← Error 접미사
-    """..."""
 ```
 
-`core/hedging/exceptions.py` 파일 내에서조차 **같은 계층에 `~Exception`과 `~Error`가 공존**.
+`core/hedging/exceptions.py` 파일 내에서조차 **같은 계층에 `~Exception`과 `~Error`가 공존**했음.
 
 ---
 
@@ -173,47 +166,97 @@ class HedgingDisabledError(HedgingException):        # ← Error 접미사
 
 | 항목 | 설명 |
 |------|------|
-| **일관성 부족** | 프로젝트의 88.5%는 `~Error`, 11.5%는 `~Exception` |
+| **일관성 부족** | 프로젝트의 78.3%는 `~Error`, 21.7%는 `~Exception` (3개 모듈 13건) |
 | **except 절 혼란** | `except BulkheadException`과 `except IPCError`를 동시에 처리 |
 | **같은 파일 내 불일치** | `HedgingException` 베이스에 `NonRetryableHedgingError` 자식 |
 | **Python PEP 8 관례** | Python 표준 라이브러리는 `~Error` 접미사가 주류 (`ValueError`, `TypeError`, `ConnectionError`) |
 
 ---
 
-## 3. 수정 계획
+## 3. 수정 결과
 
 ### 3-1. 방향: `~Exception` → `~Error` 통일
 
-Python PEP 8 및 프로젝트 관례 (88.5%) 에 맞춰 `~Error`로 통일.
+Python PEP 8 및 프로젝트 관례에 맞춰 `~Error`로 통일.
 
-### 3-2. 변경 대상
+### 3-2. 변경 대상 (13건)
 
-| 현재 이름 | 변경 후 | 파일 |
-|-----------|---------|------|
-| `BulkheadException` | `BulkheadError` | `resilience/bulkhead/exceptions.py:12` |
-| `BulkheadFullException` | `BulkheadFullError` | `resilience/bulkhead/exceptions.py:18` |
-| `BulkheadTimeoutException` | `BulkheadTimeoutError` | `resilience/bulkhead/exceptions.py:43` |
-| `HedgingException` | `HedgingError` | `core/hedging/exceptions.py:11` |
-| `HedgingAllFailedException` | `HedgingAllFailedError` | `core/hedging/exceptions.py:17` |
-| `HedgingTimeoutException` | `HedgingTimeoutError` | `core/hedging/exceptions.py:35` |
+| 변경 전 | 변경 후 | 파일 |
+|---------|---------|------|
+| `BulkheadException` | `BulkheadError` | `resilience/bulkhead/exceptions.py` |
+| `BulkheadFullException` | `BulkheadFullError` | `resilience/bulkhead/exceptions.py` |
+| `BulkheadTimeoutException` | `BulkheadTimeoutError` | `resilience/bulkhead/exceptions.py` |
+| `HedgingException` | `HedgingError` | `core/hedging/exceptions.py` |
+| `HedgingAllFailedException` | `HedgingAllFailedError` | `core/hedging/exceptions.py` |
+| `HedgingTimeoutException` | `HedgingTimeoutError` | `core/hedging/exceptions.py` |
+| `ChaosException` | `ChaosError` | `shopping/chaos/decorators.py` |
+| `PartialFailureException` | `PartialFailureError` | `shopping/chaos/decorators.py` |
+| `AsyncTaskChaosException` | `AsyncTaskChaosError` | `shopping/chaos/decorators.py` |
+| `Phase2OrphanPGException` | `Phase2OrphanPGError` | `shopping/chaos/decorators.py` |
+| `Phase2RollbackFailureException` | `Phase2RollbackFailureError` | `shopping/chaos/decorators.py` |
+| `Phase2SilentTaskException` | `Phase2SilentTaskError` | `shopping/chaos/decorators.py` |
+| `Phase2PointOrphanException` | `Phase2PointOrphanError` | `shopping/chaos/decorators.py` |
 
 ### 3-3. 하위 호환성 처리
 
+각 모듈 하단에 deprecated alias 추가:
+
 ```python
-# resilience/bulkhead/exceptions.py — 추가
-BulkheadException = BulkheadError  # deprecated alias
+# resilience/bulkhead/exceptions.py
+BulkheadException = BulkheadError
 BulkheadFullException = BulkheadFullError
 BulkheadTimeoutException = BulkheadTimeoutError
 
-# core/hedging/exceptions.py — 추가
-HedgingException = HedgingError  # deprecated alias
+# core/hedging/exceptions.py
+HedgingException = HedgingError
 HedgingAllFailedException = HedgingAllFailedError
 HedgingTimeoutException = HedgingTimeoutError
+
+# shopping/chaos/decorators.py
+ChaosException = ChaosError
+PartialFailureException = PartialFailureError
+AsyncTaskChaosException = AsyncTaskChaosError
+Phase2OrphanPGException = Phase2OrphanPGError
+Phase2RollbackFailureException = Phase2RollbackFailureError
+Phase2SilentTaskException = Phase2SilentTaskError
+Phase2PointOrphanException = Phase2PointOrphanError
 ```
 
-### 3-4. 검증 항목
+### 3-4. 참조 업데이트 완료
 
-- [ ] 전체 `except BulkheadException` / `except HedgingException` 참조 업데이트
-- [ ] `__all__` 목록에 새 이름 반영
-- [ ] deprecated alias에 `warnings.warn()` 추가 검토
-- [ ] 테스트 코드 내 참조 업데이트
+- [x] 전체 `except ~Exception` 참조 → `except ~Error`로 업데이트
+- [x] `__all__` 목록에 새 이름 + deprecated alias 반영
+- [x] deprecated alias 추가 (3개 모듈)
+- [x] 테스트 코드 내 참조 업데이트
+- [x] settings `excluded_exceptions` FQN 문자열 업데이트
+- [x] docstring 내 Raises 참조 업데이트
+
+### 3-5. 영향 받은 파일 목록
+
+**예외 정의 (3개 파일)**
+- `packages/selfhealing-python/src/selfhealing/resilience/bulkhead/exceptions.py`
+- `packages/selfhealing-python/src/selfhealing/core/hedging/exceptions.py`
+- `shopping/chaos/decorators.py`
+
+**소스 코드 (13개 파일)**
+- `resilience/bulkhead/__init__.py`, `semaphore.py`, `async_semaphore.py`, `threadpool.py`, `base.py`, `decorator.py`
+- `core/hedging/__init__.py`, `strategy.py`, `async_strategy.py`, `executor.py`, `async_executor.py`
+- `adapters/memory/layered_repository/base.py`
+- `settings/circuit_breaker.py`
+
+**프로덕션 참조 (3개 파일)**
+- `shopping/tasks/payment_tasks.py`
+- `shopping/services/payment_service.py`
+- `shopping/tasks/point_tasks.py`
+
+**테스트 코드 (6개 파일)**
+- `tests/unit/resilience/bulkhead/test_semaphore_bulkhead.py`
+- `tests/unit/resilience/bulkhead/test_async_semaphore_bulkhead.py`
+- `tests/unit/resilience/bulkhead/test_threadpool_bulkhead.py`
+- `tests/unit/resilience/bulkhead/test_decorator.py`
+- `tests/unit/core/test_hedging.py`
+- `tests/unit/settings/test_circuit_breaker_bulkhead_excluded.py`, `test_pydantic_settings.py`
+
+### 3-6. 테스트 결과
+
+- bulkhead + hedging + settings 관련 **183개 테스트 전부 통과**

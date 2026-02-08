@@ -18,8 +18,8 @@ from selfhealing.core.hedging.config import (
     HedgingMode,
 )
 from selfhealing.core.hedging.exceptions import (
-    HedgingAllFailedException,
-    HedgingTimeoutException,
+    HedgingAllFailedError,
+    HedgingTimeoutError,
     NonRetryableHedgingError,
 )
 from selfhealing.core.hedging.latency_tracker import HedgingLatencyTracker
@@ -86,8 +86,8 @@ class AsyncHedgingExecutor:
             HedgingResult: 첫 성공 응답
 
         Raises:
-            HedgingAllFailedException: 모든 후보 실패
-            HedgingTimeoutException: 타임아웃
+            HedgingAllFailedError: 모든 후보 실패
+            HedgingTimeoutError: 타임아웃
             ValueError: 후보 없음
         """
         if not candidates:
@@ -335,9 +335,9 @@ class AsyncHedgingExecutor:
             p.cancel()
 
         if remaining_timeout <= 0 and pending:
-            raise HedgingTimeoutException(self._config.timeout)
+            raise HedgingTimeoutError(self._config.timeout)
 
-        raise HedgingAllFailedException(
+        raise HedgingAllFailedError(
             candidates_tried=len(tasks),
             errors=errors,
         )

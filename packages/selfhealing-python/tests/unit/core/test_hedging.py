@@ -28,8 +28,8 @@ from selfhealing.core.hedging.config import (
 from selfhealing.core.hedging.executor import HedgingExecutor
 from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
 from selfhealing.core.hedging.exceptions import (
-    HedgingAllFailedException,
-    HedgingTimeoutException,
+    HedgingAllFailedError,
+    HedgingTimeoutError,
     NonRetryableHedgingError,
 )
 from selfhealing.core.hedging.result import HedgingResult
@@ -333,7 +333,7 @@ class TestHedgingExecutorFailures:
             HedgingCandidate("c2", failing_fn),
         ]
 
-        with pytest.raises(HedgingAllFailedException) as exc_info:
+        with pytest.raises(HedgingAllFailedError) as exc_info:
             executor.execute(candidates)
 
         assert exc_info.value.candidates_tried == 2
@@ -355,7 +355,7 @@ class TestHedgingExecutorFailures:
             HedgingCandidate("slow", slow_fn),
         ]
 
-        with pytest.raises(HedgingTimeoutException) as exc_info:
+        with pytest.raises(HedgingTimeoutError) as exc_info:
             executor.execute(candidates)
 
         assert exc_info.value.timeout == 0.1
@@ -585,7 +585,7 @@ class TestAsyncHedgingExecutor:
             HedgingCandidate("c2", failing_fn),
         ]
 
-        with pytest.raises(HedgingAllFailedException):
+        with pytest.raises(HedgingAllFailedError):
             await executor.execute(candidates)
 
     @pytest.mark.asyncio

@@ -35,8 +35,8 @@ from selfhealing.resilience.bulkhead.base import (
     BulkheadType,
 )
 from selfhealing.resilience.bulkhead.exceptions import (
-    BulkheadFullException,
-    BulkheadTimeoutException,
+    BulkheadFullError,
+    BulkheadTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,13 +104,13 @@ class ThreadPoolBulkhead(Bulkhead):
             timeout: 미사용 (인터페이스 호환성)
 
         Raises:
-            BulkheadFullException: 큐가 가득 찬 경우
+            BulkheadFullError: 큐가 가득 찬 경우
         """
         with self._lock:
             if self._active_count >= self._max_workers + self._queue_size:
                 self._rejected_count += 1
                 self._last_rejection_time = datetime.now(timezone.utc)
-                raise BulkheadFullException(
+                raise BulkheadFullError(
                     bulkhead_name=self._name,
                     max_concurrent=self._max_workers,
                     active_count=self._active_count,
@@ -153,13 +153,13 @@ class ThreadPoolBulkhead(Bulkhead):
             Future 객체
 
         Raises:
-            BulkheadFullException: 대기 큐가 가득 찬 경우
+            BulkheadFullError: 대기 큐가 가득 찬 경우
         """
         with self._lock:
             if self._waiting_count >= self._queue_size:
                 self._rejected_count += 1
                 self._last_rejection_time = datetime.now(timezone.utc)
-                raise BulkheadFullException(
+                raise BulkheadFullError(
                     bulkhead_name=self._name,
                     max_concurrent=self._max_workers,
                     active_count=self._active_count,
@@ -204,15 +204,15 @@ class ThreadPoolBulkhead(Bulkhead):
             함수 실행 결과
 
         Raises:
-            BulkheadFullException: 대기 큐가 가득 찬 경우
-            BulkheadTimeoutException: 타임아웃 발생 시
+            BulkheadFullError: 대기 큐가 가득 찬 경우
+            BulkheadTimeoutError: 타임아웃 발생 시
         """
         future = self.submit(fn, *args, **kwargs)
         try:
             return future.result(timeout=timeout)
         except TimeoutError:
             future.cancel()
-            raise BulkheadTimeoutException(
+            raise BulkheadTimeoutError(
                 bulkhead_name=self._name,
                 timeout=timeout,
             )

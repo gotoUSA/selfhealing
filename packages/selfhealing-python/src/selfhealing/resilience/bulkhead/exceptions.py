@@ -2,20 +2,20 @@
 Bulkhead Exceptions - 리소스 격리 관련 예외 클래스.
 
 격벽 패턴에서 발생할 수 있는 예외들을 정의합니다:
-- BulkheadFullException: 동시 실행 제한 초과
-- BulkheadTimeoutException: 작업 실행 타임아웃
+- BulkheadFullError: 동시 실행 제한 초과
+- BulkheadTimeoutError: 작업 실행 타임아웃
 """
 
 from __future__ import annotations
 
 
-class BulkheadException(Exception):
+class BulkheadError(Exception):
     """Bulkhead 기본 예외 클래스."""
 
     pass
 
 
-class BulkheadFullException(BulkheadException):
+class BulkheadFullError(BulkheadError):
     """
     격벽이 가득 차서 요청이 거부됨.
 
@@ -40,7 +40,7 @@ class BulkheadFullException(BulkheadException):
         super().__init__(f"Bulkhead '{bulkhead_name}' is full: " f"{active_count}/{max_concurrent} active")
 
 
-class BulkheadTimeoutException(BulkheadException):
+class BulkheadTimeoutError(BulkheadError):
     """
     격벽 작업 타임아웃.
 
@@ -56,3 +56,9 @@ class BulkheadTimeoutException(BulkheadException):
         self.bulkhead_name = bulkhead_name
         self.timeout = timeout
         super().__init__(f"Bulkhead '{bulkhead_name}' timed out after {timeout}s")
+
+
+# ── Deprecated aliases (하위 호환성) ──────────────────────────
+BulkheadException = BulkheadError
+BulkheadFullException = BulkheadFullError
+BulkheadTimeoutException = BulkheadTimeoutError
