@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AuditEventType(Enum):
+class AuditEventType(str, Enum):
     """
     Audit 이벤트 유형.
 

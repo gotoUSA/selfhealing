@@ -16,7 +16,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class BackpressureLevel(Enum):
+class BackpressureLevel(str, Enum):
     """
     Backpressure 레벨.
 
@@ -30,7 +30,7 @@ class BackpressureLevel(Enum):
     CRITICAL = "critical"  # 위험 (긴급 조치 필요)
 
 
-class BackpressureStrategy(Enum):
+class BackpressureStrategy(str, Enum):
     """
     Backpressure 전략.
 

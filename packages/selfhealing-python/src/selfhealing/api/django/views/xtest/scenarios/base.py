@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class ScenarioStatus(Enum):
+class ScenarioStatus(str, Enum):
     """시나리오 실행 상태."""
 
     PENDING = "pending"

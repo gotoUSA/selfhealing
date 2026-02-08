@@ -50,7 +50,7 @@ except ImportError:
         WALConfig = None
 
 
-class OutputFormat(Enum):
+class OutputFormat(str, Enum):
     """출력 형식."""
 
     TEXT = "text"
@@ -67,9 +67,7 @@ class VerificationResult:
     total_entries: int
     issues: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
-    verified_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    verified_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -326,17 +324,9 @@ class AuditIntegrityVerifier:
                 files = list(directory.glob(pattern))
         else:
             if recursive:
-                files = [
-                    f
-                    for f in directory.rglob("*")
-                    if f.suffix in self.AUDIT_FILE_EXTENSIONS
-                ]
+                files = [f for f in directory.rglob("*") if f.suffix in self.AUDIT_FILE_EXTENSIONS]
             else:
-                files = [
-                    f
-                    for f in directory.glob("*")
-                    if f.suffix in self.AUDIT_FILE_EXTENSIONS
-                ]
+                files = [f for f in directory.glob("*") if f.suffix in self.AUDIT_FILE_EXTENSIONS]
 
         for file_path in sorted(files):
             result = self.verify_file(file_path)
@@ -429,9 +419,7 @@ def format_text_output(summary: VerificationSummary, verbose: bool = False) -> s
     if summary.invalid_files == 0 and summary.error_files == 0:
         lines.append("Result: ✓ All audit logs are VALID")
     else:
-        lines.append(
-            f"Result: ✗ Found {summary.invalid_files} invalid, {summary.error_files} errors"
-        )
+        lines.append(f"Result: ✗ Found {summary.invalid_files} invalid, {summary.error_files} errors")
     lines.append("=" * 60)
 
     return "\n".join(lines)
@@ -467,9 +455,7 @@ def format_json_output(summary: VerificationSummary) -> str:
 
 def format_summary_output(summary: VerificationSummary) -> str:
     """간단한 요약 출력."""
-    status = (
-        "PASS" if summary.invalid_files == 0 and summary.error_files == 0 else "FAIL"
-    )
+    status = "PASS" if summary.invalid_files == 0 and summary.error_files == 0 else "FAIL"
     return (
         f"{status}: {summary.valid_files}/{summary.total_files} valid, "
         f"{summary.total_entries} entries, {summary.total_issues} issues"
@@ -587,9 +573,7 @@ def _verify_path(
     return None
 
 
-def _format_output(
-    summary: VerificationSummary, format_type: str, verbose: bool
-) -> str:
+def _format_output(summary: VerificationSummary, format_type: str, verbose: bool) -> str:
     """출력 형식에 따른 포맷팅."""
     if format_type == "json":
         return format_json_output(summary)

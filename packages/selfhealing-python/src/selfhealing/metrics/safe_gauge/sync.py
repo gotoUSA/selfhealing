@@ -14,7 +14,7 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 
-class SyncStatus(Enum):
+class SyncStatus(str, Enum):
     """메트릭 동기화 상태."""
 
     SYNCED = "synced"  # 정상 동기화됨
@@ -77,9 +77,7 @@ class SyncInfo:
             # Stale에서 복구 → 안정화 기간 시작
             self.status = SyncStatus.RECOVERING
             self.stabilization_start = now
-            logger.info(
-                f"[SyncInfo] Starting stabilization period ({self.stabilization_duration}s)"
-            )
+            logger.info(f"[SyncInfo] Starting stabilization period ({self.stabilization_duration}s)")
         elif self.status == SyncStatus.RECOVERING:
             # 복구 중 계속 동기화 → 안정화 기간 유지
             if not self.is_recovering:
@@ -110,9 +108,7 @@ class SyncInfo:
         if self.status == SyncStatus.SYNCED:
             age = self.age_seconds
             if age is not None and age > self.staleness_threshold:
-                self.mark_stale(
-                    f"age {age:.1f}s > threshold {self.staleness_threshold}s"
-                )
+                self.mark_stale(f"age {age:.1f}s > threshold {self.staleness_threshold}s")
                 return True
         return False
 

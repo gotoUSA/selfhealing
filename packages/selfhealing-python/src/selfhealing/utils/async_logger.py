@@ -24,7 +24,7 @@ from collections import deque
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.settings.batch import get_batch_settings
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class EventSeverity(Enum):
+class EventSeverity(IntEnum):
     """이벤트 심각도 (Batch Flush Policy)"""
 
     DEBUG = 0
@@ -87,7 +87,7 @@ class PrioritizedEvent:
     event: dict[str, Any] = field(compare=False)
 
 
-class WALPolicy(Enum):
+class WALPolicy(str, Enum):
     """WAL 기록 정책."""
 
     ALL = "all"  # 모든 이벤트 WAL 기록
@@ -95,7 +95,7 @@ class WALPolicy(Enum):
     NONE = "none"  # WAL 미사용 (기존 동작)
 
 
-class QueueOverflowPolicy(Enum):
+class QueueOverflowPolicy(str, Enum):
     """큐 오버플로우 정책."""
 
     DROP_NEWEST = "drop_newest"  # 새 이벤트 드랍 (기본, 간단)

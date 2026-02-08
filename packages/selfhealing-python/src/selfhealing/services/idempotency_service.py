@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-class IdempotencyDomain(Enum):
+class IdempotencyDomain(str, Enum):
     """Domains that support idempotency checking (domain-neutral)."""
 
     # ═══════════════════════════════════════════════════════════════════════════

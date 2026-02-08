@@ -35,7 +35,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class SelfAuditEvent(Enum):
+class SelfAuditEvent(str, Enum):
     """감사 시스템 자체 이벤트 유형."""
 
     # Lifecycle

@@ -34,7 +34,7 @@ from selfhealing.multiregion.health_monitor import (
 logger = logging.getLogger(__name__)
 
 
-class FailoverState(Enum):
+class FailoverState(str, Enum):
     """
     페일오버 상태.
 

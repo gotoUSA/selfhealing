@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any
 
 
-class BackendStatus(Enum):
+class BackendStatus(str, Enum):
     """Status of an audit backend."""
 
     ACTIVE = "active"
@@ -341,9 +341,7 @@ class CompositeBackend(AuditBackend):
             self._record_metrics(backend_name, success=result, duration_ms=duration_ms)
             self._update_circuit_state(backend_name, result, cb)
             if not result:
-                self._record_metrics(
-                    backend_name, success=False, failure_type="write_failed"
-                )
+                self._record_metrics(backend_name, success=False, failure_type="write_failed")
             return result
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
@@ -420,18 +418,14 @@ class CompositeBackend(AuditBackend):
                 )
 
         if active_count == len(healths):
-            return BackendHealth(
-                status=BackendStatus.ACTIVE, message="All backends healthy"
-            )
+            return BackendHealth(status=BackendStatus.ACTIVE, message="All backends healthy")
         elif active_count > 0:
             return BackendHealth(
                 status=BackendStatus.DEGRADED,
                 message=f"{active_count}/{len(healths)} backends healthy",
             )
         else:
-            return BackendHealth(
-                status=BackendStatus.UNAVAILABLE, message="All backends unavailable"
-            )
+            return BackendHealth(status=BackendStatus.UNAVAILABLE, message="All backends unavailable")
 
     def flush(self) -> bool:
         """Flush all backends."""

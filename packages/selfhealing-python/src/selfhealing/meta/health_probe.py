@@ -22,7 +22,7 @@ from selfhealing.meta.audit_probe import AuditSystemProbe
 logger = logging.getLogger(__name__)
 
 
-class HealthStatus(Enum):
+class HealthStatus(str, Enum):
     """서브시스템 건강 상태."""
 
     HEALTHY = "healthy"

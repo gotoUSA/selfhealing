@@ -43,7 +43,7 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class EventType(Enum):
+class EventType(str, Enum):
     """Self-Healing 시스템 이벤트 타입."""
 
     # Emergency Mode Events
@@ -140,7 +140,7 @@ class EventType(Enum):
     """Throttle Recovery DLQ Replay 실패 (error 포함)."""
 
 
-class EventPriority(Enum):
+class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""
 
     LOW = 1

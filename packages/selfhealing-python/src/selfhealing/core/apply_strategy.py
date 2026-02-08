@@ -20,7 +20,7 @@ from enum import Enum
 from selfhealing.settings.apply_strategy import get_apply_strategy_settings
 
 
-class ApplyStrategy(Enum):
+class ApplyStrategy(str, Enum):
     """Configuration apply strategy."""
 
     IMMEDIATE = "immediate"  # Apply right now
@@ -186,9 +186,7 @@ def get_effective_apply_options(
 
     # Determine effective delay
     if effective_strategy == ApplyStrategy.DELAYED:
-        effective_delay = (
-            delay_seconds if delay_seconds is not None else default.delay_seconds
-        )
+        effective_delay = delay_seconds if delay_seconds is not None else default.delay_seconds
         # Ensure at least 1 second for delayed
         if effective_delay <= 0:
             effective_delay = default.delay_seconds or 10
@@ -196,11 +194,7 @@ def get_effective_apply_options(
         effective_delay = 0
 
     # Determine effective grace timeout
-    effective_grace = (
-        grace_timeout_seconds
-        if grace_timeout_seconds is not None
-        else default.grace_timeout_seconds
-    )
+    effective_grace = grace_timeout_seconds if grace_timeout_seconds is not None else default.grace_timeout_seconds
 
     return ApplyOptions(
         strategy=effective_strategy,

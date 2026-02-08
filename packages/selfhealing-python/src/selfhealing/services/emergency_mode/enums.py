@@ -6,10 +6,10 @@ Defines emergency levels and their traffic rules.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import IntEnum
 
 
-class EmergencyLevel(Enum):
+class EmergencyLevel(IntEnum):
     """
     비상 모드 레벨 정의.
 

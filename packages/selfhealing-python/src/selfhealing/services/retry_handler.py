@@ -46,7 +46,7 @@ def _is_system_enabled() -> bool:
         return True
 
 
-class RetryAction(Enum):
+class RetryAction(str, Enum):
     """Actions that can be taken after a failure."""
 
     RETRY = "retry"

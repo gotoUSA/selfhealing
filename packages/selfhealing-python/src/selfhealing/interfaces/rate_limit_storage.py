@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class RateLimitStorageType(Enum):
+class RateLimitStorageType(str, Enum):
     """Type of rate limit storage backend."""
 
     REDIS = "redis"

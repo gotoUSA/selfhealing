@@ -56,7 +56,7 @@ except ImportError:
     HAS_DRIFT_METRICS = False
 
 
-class WALState(Enum):
+class WALState(str, Enum):
     """WAL 상태."""
 
     ACTIVE = "active"

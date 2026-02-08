@@ -23,7 +23,7 @@ from enum import Enum
 # =============================================================================
 
 
-class MaskingLevel(Enum):
+class MaskingLevel(str, Enum):
     """
     마스킹 수준.
 

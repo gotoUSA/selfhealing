@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import IntEnum
 from typing import Callable
 
 from selfhealing.scaling.config import (
@@ -21,7 +21,7 @@ from selfhealing.scaling.config import (
 logger = logging.getLogger(__name__)
 
 
-class FeaturePriority(Enum):
+class FeaturePriority(IntEnum):
     """
     기능 우선순위.
 

@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 EMERGENCY_STATE_STORAGE_KEY = "governance:emergency_state"
 
 
-class OperationMode(Enum):
+class OperationMode(str, Enum):
     """운영 모드 정의."""
 
     NORMAL = "NORMAL"
@@ -224,10 +224,7 @@ class EmergencyModeTracker:
 
             self._save_state(state)
 
-            logger.warning(
-                f"[Governance] Emergency mode activated: "
-                f"mode={mode}, by={activated_by}, reason={reason}"
-            )
+            logger.warning(f"[Governance] Emergency mode activated: " f"mode={mode}, by={activated_by}, reason={reason}")
 
             # Send notification
             config = self._get_governance_config()
@@ -353,13 +350,8 @@ class EmergencyModeTracker:
             # Calculate expiry time
             expires_at = activated_at + timedelta(hours=expiry_hours)
 
-            should_warn = (
-                hours_elapsed >= warning_hours and state.warning_sent_at is None
-            )
-            should_final_warn = (
-                hours_elapsed >= final_warning_hours
-                and state.final_warning_sent_at is None
-            )
+            should_warn = hours_elapsed >= warning_hours and state.warning_sent_at is None
+            should_final_warn = hours_elapsed >= final_warning_hours and state.final_warning_sent_at is None
             should_auto_restore = hours_elapsed >= expiry_hours
 
             return {
@@ -415,9 +407,7 @@ class EmergencyModeTracker:
             state.acknowledged_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
 
-            logger.info(
-                f"[Governance] Emergency warning acknowledged: " f"by={acknowledged_by}"
-            )
+            logger.info(f"[Governance] Emergency warning acknowledged: " f"by={acknowledged_by}")
 
             return {
                 "status": "acknowledged",
@@ -437,9 +427,7 @@ class EmergencyModeTracker:
             reason="Emergency mode auto-expired after configured duration",
         )
 
-        logger.warning(
-            "[Governance] Emergency mode auto-expired and restored to NORMAL"
-        )
+        logger.warning("[Governance] Emergency mode auto-expired and restored to NORMAL")
 
         return result
 
@@ -463,10 +451,7 @@ class EmergencyModeTracker:
             channels = config.get("notify_channels", ["slack", "email"])
             message = self._build_notification_message(event_type, state, extra)
 
-            logger.info(
-                f"[Governance] Notification: event={event_type}, "
-                f"channels={channels}, message={message[:100]}..."
-            )
+            logger.info(f"[Governance] Notification: event={event_type}, " f"channels={channels}, message={message[:100]}...")
 
             # Call registered notification handlers
             for handler in self._notification_handlers:

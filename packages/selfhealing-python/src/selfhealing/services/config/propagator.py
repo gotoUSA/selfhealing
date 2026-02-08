@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ConfigScope(Enum):
+class ConfigScope(str, Enum):
     """설정 적용 범위."""
 
     LOCAL = "local"  # 현재 클러스터만
@@ -39,7 +39,7 @@ class ConfigScope(Enum):
     GLOBAL = "global"  # 모든 클러스터
 
 
-class PropagationTier(Enum):
+class PropagationTier(str, Enum):
     """전파 일관성 등급 (SLA 기반)."""
 
     TIER_1_IMMEDIATE = "tier_1"  # 1초 내 전파 보장 (Audit/Governance)

@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import Enum
 
 
-class CostTier(Enum):
+class CostTier(str, Enum):
     """비용 계층"""
 
     FREE = "free"  # 무료 (기본 재시도)

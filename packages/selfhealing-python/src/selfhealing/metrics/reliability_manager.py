@@ -29,7 +29,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class ReliabilityLevel(Enum):
+class ReliabilityLevel(str, Enum):
     """메트릭 신뢰도 레벨."""
 
     HIGH = "high"  # 실시간 Push 또는 최근 동기화
@@ -39,7 +39,7 @@ class ReliabilityLevel(Enum):
     RECOVERING = "recovering"  # 복구 중 (점진적 완화)
 
 
-class OperatingMode(Enum):
+class OperatingMode(str, Enum):
     """시스템 운영 모드."""
 
     NORMAL = "normal"  # 정상 모드
@@ -231,9 +231,7 @@ class MetricReliabilityManager:
             state = self._states[domain]
             state.consecutive_successful_syncs = 0
 
-            logger.warning(
-                f"[Reliability] Sync failed for {domain} from {source}: {reason}"
-            )
+            logger.warning(f"[Reliability] Sync failed for {domain} from {source}: {reason}")
 
             self._update_reliability_level(state)
             self._update_operating_mode(state)
@@ -287,25 +285,19 @@ class MetricReliabilityManager:
                 state.operating_mode = OperatingMode.CAUTIOUS
                 state.stabilization_start = time.time()
                 logger.info(
-                    f"[Reliability] {state.domain}: Starting stabilization "
-                    f"({self._thresholds.stabilization_duration}s)"
+                    f"[Reliability] {state.domain}: Starting stabilization " f"({self._thresholds.stabilization_duration}s)"
                 )
             elif old_mode == OperatingMode.CAUTIOUS:
                 # 안정화 기간 확인
                 if (
                     state.stabilization_start is not None
-                    and time.time() - state.stabilization_start
-                    >= self._thresholds.stabilization_duration
-                    and state.consecutive_successful_syncs
-                    >= self._thresholds.consecutive_syncs_for_normal
+                    and time.time() - state.stabilization_start >= self._thresholds.stabilization_duration
+                    and state.consecutive_successful_syncs >= self._thresholds.consecutive_syncs_for_normal
                 ):
                     # 안정화 완료 → 정상 모드
                     state.operating_mode = OperatingMode.NORMAL
                     state.stabilization_start = None
-                    logger.info(
-                        f"[Reliability] {state.domain}: Stabilization complete, "
-                        f"entering NORMAL mode"
-                    )
+                    logger.info(f"[Reliability] {state.domain}: Stabilization complete, " f"entering NORMAL mode")
             # NORMAL 유지
 
         # 모드 변경 알림
@@ -410,19 +402,9 @@ class MetricReliabilityManager:
                 "unhealthy": 0,
             }
 
-        healthy = sum(
-            1
-            for s in states.values()
-            if s.reliability_level in (ReliabilityLevel.HIGH, ReliabilityLevel.MEDIUM)
-        )
-        degraded = sum(
-            1 for s in states.values() if s.reliability_level == ReliabilityLevel.LOW
-        )
-        unhealthy = sum(
-            1
-            for s in states.values()
-            if s.reliability_level == ReliabilityLevel.UNKNOWN
-        )
+        healthy = sum(1 for s in states.values() if s.reliability_level in (ReliabilityLevel.HIGH, ReliabilityLevel.MEDIUM))
+        degraded = sum(1 for s in states.values() if s.reliability_level == ReliabilityLevel.LOW)
+        unhealthy = sum(1 for s in states.values() if s.reliability_level == ReliabilityLevel.UNKNOWN)
 
         if unhealthy > 0:
             status = "unhealthy"
@@ -490,17 +472,13 @@ class MetricReliabilityManager:
             old_mode = self._global_mode
             self._global_mode = mode
 
-            logger.warning(
-                f"[Reliability] Global mode changed: {old_mode.value} → {mode.value} ({reason})"
-            )
+            logger.warning(f"[Reliability] Global mode changed: {old_mode.value} → {mode.value} ({reason})")
 
             # 모든 도메인에 동일 모드 적용
             for domain, state in self._states.items():
                 if state.operating_mode != mode:
                     state.operating_mode = mode
-                    state.stabilization_start = (
-                        None if mode == OperatingMode.STRICT else time.time()
-                    )
+                    state.stabilization_start = None if mode == OperatingMode.STRICT else time.time()
                     self._notify_mode_change(domain, mode)
 
     def reset(self) -> None:

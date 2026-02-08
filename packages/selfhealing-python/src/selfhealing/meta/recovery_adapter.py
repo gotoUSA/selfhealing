@@ -20,7 +20,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class RecoveryAction(Enum):
+class RecoveryAction(str, Enum):
     """복구 액션 유형."""
 
     RESTART_WORKER = "restart_worker"

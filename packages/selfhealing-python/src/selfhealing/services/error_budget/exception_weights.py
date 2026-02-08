@@ -46,7 +46,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class WeightCombinePolicy(Enum):
+class WeightCombinePolicy(str, Enum):
     """
     가중치 중첩 정책.
 

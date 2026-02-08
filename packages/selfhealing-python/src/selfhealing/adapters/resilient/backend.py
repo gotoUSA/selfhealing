@@ -24,7 +24,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class ResilientStorageMode(Enum):
+class ResilientStorageMode(str, Enum):
     """Storage operation mode."""
 
     REDIS = "redis"  # Normal mode - Redis only

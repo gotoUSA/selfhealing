@@ -24,7 +24,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class RedisScope(Enum):
+class RedisScope(str, Enum):
     """Redis 접근 범위."""
 
     LOCAL = "local"  # 클러스터 내부 (고속, 실시간)
@@ -59,20 +59,13 @@ class TieredRedisProvider:
             local_url: 로컬 Redis URL (기본: REDIS_URL 환경변수)
             global_url: 글로벌 Redis URL (기본: REDIS_GLOBAL_URL 또는 local_url)
         """
-        self._local_url = local_url or os.environ.get(
-            "REDIS_URL", "redis://localhost:6379/0"
-        )
-        self._global_url = global_url or os.environ.get(
-            "REDIS_GLOBAL_URL", self._local_url
-        )
+        self._local_url = local_url or os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        self._global_url = global_url or os.environ.get("REDIS_GLOBAL_URL", self._local_url)
 
         self._local_client: Any | None = None
         self._global_client: Any | None = None
 
-        logger.debug(
-            f"[TieredRedisProvider] Initialized with "
-            f"local={self._local_url}, global={self._global_url}"
-        )
+        logger.debug(f"[TieredRedisProvider] Initialized with " f"local={self._local_url}, global={self._global_url}")
 
     def get_redis(self, scope: RedisScope = RedisScope.LOCAL) -> Any:
         """
@@ -95,9 +88,7 @@ class TieredRedisProvider:
             import redis
 
             self._local_client = redis.from_url(self._local_url)
-            logger.info(
-                f"[TieredRedisProvider] Local Redis connected: {self._local_url}"
-            )
+            logger.info(f"[TieredRedisProvider] Local Redis connected: {self._local_url}")
         return self._local_client
 
     def _get_global_client(self) -> Any:
@@ -111,9 +102,7 @@ class TieredRedisProvider:
                 import redis
 
                 self._global_client = redis.from_url(self._global_url)
-                logger.info(
-                    f"[TieredRedisProvider] Global Redis connected: {self._global_url}"
-                )
+                logger.info(f"[TieredRedisProvider] Global Redis connected: {self._global_url}")
         return self._global_client
 
     @property
@@ -144,9 +133,7 @@ class TieredRedisProvider:
             try:
                 self._global_client.close()
             except Exception as e:
-                logger.warning(
-                    f"[TieredRedisProvider] Error closing global client: {e}"
-                )
+                logger.warning(f"[TieredRedisProvider] Error closing global client: {e}")
             self._global_client = None
 
     def health_check(self, scope: RedisScope | None = None) -> dict:

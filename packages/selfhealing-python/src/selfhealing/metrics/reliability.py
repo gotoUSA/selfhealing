@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 
 
-class MetricReliability(Enum):
+class MetricReliability(str, Enum):
     """
     메트릭 신뢰도 레벨.
 

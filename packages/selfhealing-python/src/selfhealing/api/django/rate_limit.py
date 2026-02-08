@@ -306,7 +306,7 @@ class LocalMemoryRateLimiter:
 # =============================================================================
 
 
-class RedisHealthState(Enum):
+class RedisHealthState(str, Enum):
     """Redis health states."""
 
     HEALTHY = "healthy"

@@ -31,7 +31,7 @@ from selfhealing.settings.audit_settings import get_audit_settings
 logger = logging.getLogger(__name__)
 
 
-class PendingStatus(Enum):
+class PendingStatus(str, Enum):
     """Status of a pending configuration change."""
 
     PENDING = "pending"  # Waiting to be applied

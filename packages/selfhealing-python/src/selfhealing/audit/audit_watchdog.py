@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AuditWatchdogStatus(Enum):
+class AuditWatchdogStatus(str, Enum):
     """Watchdog 상태."""
 
     STOPPED = "stopped"
@@ -135,14 +135,10 @@ class AuditWatchdogConfig:
             )
 
         return cls(
-            heartbeat_interval_seconds=overrides.get(
-                "heartbeat_interval_seconds", s.heartbeat_interval_seconds
-            ),
+            heartbeat_interval_seconds=overrides.get("heartbeat_interval_seconds", s.heartbeat_interval_seconds),
             missed_threshold=overrides.get("missed_threshold", s.missed_threshold),
             targets=targets,
-            local_heartbeat_file=overrides.get(
-                "local_heartbeat_file", s.local_heartbeat_file
-            ),
+            local_heartbeat_file=overrides.get("local_heartbeat_file", s.local_heartbeat_file),
             on_heartbeat_success=overrides.get("on_heartbeat_success"),
             on_heartbeat_failure=overrides.get("on_heartbeat_failure"),
             on_threshold_exceeded=overrides.get("on_threshold_exceeded"),
@@ -256,9 +252,7 @@ class AuditWatchdog:
                     "targets": len(self._config.targets),
                 },
             )
-            logger.info(
-                f"Audit Watchdog started (interval={self._config.heartbeat_interval_seconds}s)"
-            )
+            logger.info(f"Audit Watchdog started (interval={self._config.heartbeat_interval_seconds}s)")
 
     def stop(self, timeout: float = 5.0) -> None:
         """Watchdog 중지."""
@@ -295,9 +289,7 @@ class AuditWatchdog:
         """통계 조회."""
         with self._lock:
             if self._start_time:
-                self._stats.uptime_seconds = (
-                    datetime.now(timezone.utc) - self._start_time
-                ).total_seconds()
+                self._stats.uptime_seconds = (datetime.now(timezone.utc) - self._start_time).total_seconds()
             return WatchdogStats(
                 total_heartbeats=self._stats.total_heartbeats,
                 successful_heartbeats=self._stats.successful_heartbeats,
@@ -390,9 +382,7 @@ class AuditWatchdog:
 
                     if self._config.on_threshold_exceeded:
                         try:
-                            self._config.on_threshold_exceeded(
-                                self._stats.consecutive_failures
-                            )
+                            self._config.on_threshold_exceeded(self._stats.consecutive_failures)
                         except Exception:
                             pass
 
@@ -424,9 +414,7 @@ class AuditWatchdog:
                 method="GET",
             )
 
-        with urllib.request.urlopen(
-            request, timeout=target.timeout_seconds
-        ) as response:
+        with urllib.request.urlopen(request, timeout=target.timeout_seconds) as response:
             _ = response.read()  # 응답 소비
 
     def _write_local_heartbeat(self) -> None:

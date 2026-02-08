@@ -121,7 +121,7 @@ class AutoRollbackGuard:
     3. System Defaults: 하드코딩된 안전한 기본값 (최후 수단)
     """
 
-    class RecoveryStrategy(Enum):
+    class RecoveryStrategy(str, Enum):
         """복구 전략"""
 
         LAST_KNOWN_GOOD = "last_known_good"  # 바꾸기 전 상태로 롤백
@@ -277,9 +277,7 @@ class AutoRollbackGuard:
         # 상태 업데이트 및 조치
         self._handle_health_result(result)
 
-    def _assess_degradation(
-        self, error_rate: float, latency_p99: float
-    ) -> RollbackSeverity:
+    def _assess_degradation(self, error_rate: float, latency_p99: float) -> RollbackSeverity:
         """저하 수준 평가"""
         # 에러율 기반 판단
         if error_rate >= self.ERROR_RATE_CRITICAL:
@@ -325,8 +323,7 @@ class AutoRollbackGuard:
             self._state = GuardState.ALERT
             self._send_alert(
                 "minor_degradation",
-                f"시스템 경미한 저하 감지 (에러율: {result.error_rate:.1%}, "
-                f"레이턴시: {result.latency_p99_ms:.0f}ms)",
+                f"시스템 경미한 저하 감지 (에러율: {result.error_rate:.1%}, " f"레이턴시: {result.latency_p99_ms:.0f}ms)",
             )
 
     def _handle_major_degradation(self, result: RollbackHealthAssessment):
@@ -381,13 +378,9 @@ class AutoRollbackGuard:
                 last_good = snapshots[-1]
                 try:
                     self.config_applier.rollback(param, last_good["value"])
-                    logger.info(
-                        f"[AutoRollbackGuard] Rolled back {param} to {last_good['value']}"
-                    )
+                    logger.info(f"[AutoRollbackGuard] Rolled back {param} to {last_good['value']}")
                 except Exception as e:
-                    logger.error(
-                        f"[AutoRollbackGuard] Rollback failed for {param}: {e}"
-                    )
+                    logger.error(f"[AutoRollbackGuard] Rollback failed for {param}: {e}")
 
         self._last_rollback_time = datetime.now(timezone.utc)
 
@@ -406,13 +399,9 @@ class AutoRollbackGuard:
         - 시스템 기본값: 어떤 서비스에도 적용 가능한 보수적 값
         """
         self._state = GuardState.EMERGENCY
-        logger.critical(
-            "[AutoRollbackGuard] EMERGENCY RECOVERY - Starting tiered recovery"
-        )
+        logger.critical("[AutoRollbackGuard] EMERGENCY RECOVERY - Starting tiered recovery")
 
-        self._send_alert(
-            "emergency_recovery", "🆘 긴급 복구 모드 활성화! 단계별 복구를 시작합니다."
-        )
+        self._send_alert("emergency_recovery", "🆘 긴급 복구 모드 활성화! 단계별 복구를 시작합니다.")
 
         # 각 파라미터별로 복구 시도
         recovery_results: dict[str, str] = {}
@@ -450,43 +439,28 @@ class AutoRollbackGuard:
 
             try:
                 self.config_applier.apply(parameter, last_good_value)
-                logger.info(
-                    f"[AutoRollbackGuard] Recovered {parameter} to "
-                    f"last known good: {last_good_value}"
-                )
+                logger.info(f"[AutoRollbackGuard] Recovered {parameter} to " f"last known good: {last_good_value}")
                 return f"last_known_good:{last_good_value}"
             except Exception as e:
-                logger.warning(
-                    f"[AutoRollbackGuard] Last known good failed for {parameter}: {e}"
-                )
+                logger.warning(f"[AutoRollbackGuard] Last known good failed for {parameter}: {e}")
 
         # 2단계: DNA Declared (DNA 선언값)
         dna_value = self._get_dna_declared_value(parameter)
         if dna_value is not None:
             try:
                 self.config_applier.apply(parameter, dna_value)
-                logger.info(
-                    f"[AutoRollbackGuard] Recovered {parameter} to "
-                    f"DNA declared: {dna_value}"
-                )
+                logger.info(f"[AutoRollbackGuard] Recovered {parameter} to " f"DNA declared: {dna_value}")
                 return f"dna_declared:{dna_value}"
             except Exception as e:
-                logger.warning(
-                    f"[AutoRollbackGuard] DNA declared failed for {parameter}: {e}"
-                )
+                logger.warning(f"[AutoRollbackGuard] DNA declared failed for {parameter}: {e}")
 
         # 3단계: System Defaults (최후 수단)
         try:
             self.config_applier.apply(parameter, system_default)
-            logger.info(
-                f"[AutoRollbackGuard] Recovered {parameter} to "
-                f"system default: {system_default}"
-            )
+            logger.info(f"[AutoRollbackGuard] Recovered {parameter} to " f"system default: {system_default}")
             return f"system_default:{system_default}"
         except Exception as e:
-            logger.error(
-                f"[AutoRollbackGuard] ALL RECOVERY FAILED for {parameter}: {e}"
-            )
+            logger.error(f"[AutoRollbackGuard] ALL RECOVERY FAILED for {parameter}: {e}")
             return "FAILED"
 
     def _get_dna_declared_value(self, parameter: str) -> float | None:
@@ -522,9 +496,7 @@ class AutoRollbackGuard:
 
             # 최근 10개만 유지
             if len(self._config_snapshots[parameter]) > 10:
-                self._config_snapshots[parameter] = self._config_snapshots[parameter][
-                    -10:
-                ]
+                self._config_snapshots[parameter] = self._config_snapshots[parameter][-10:]
 
     def trigger_manual_emergency(self, reason: str = "manual") -> bool:
         """수동 긴급 복구 트리거"""
@@ -550,11 +522,7 @@ class AutoRollbackGuard:
                 "state": self._state.value,
                 "enabled": self.enabled,
                 "consecutive_failures": self._consecutive_failures,
-                "last_rollback": (
-                    self._last_rollback_time.isoformat()
-                    if self._last_rollback_time
-                    else None
-                ),
+                "last_rollback": (self._last_rollback_time.isoformat() if self._last_rollback_time else None),
                 "health_history_count": len(self._health_history),
                 "recent_health": [
                     {
@@ -579,18 +547,14 @@ class AutoRollbackGuard:
             for sd in self.SYSTEM_DEFAULTS
         ]
 
-    def update_safe_default(
-        self, parameter: str, safe_value: float, description: str | None = None
-    ) -> bool:
+    def update_safe_default(self, parameter: str, safe_value: float, description: str | None = None) -> bool:
         """안전한 기본값 업데이트"""
         for sd in self.SYSTEM_DEFAULTS:
             if sd.parameter == parameter:
                 sd.safe_value = safe_value
                 if description:
                     sd.description = description
-                logger.info(
-                    f"[AutoRollbackGuard] Updated safe default: {parameter}={safe_value}"
-                )
+                logger.info(f"[AutoRollbackGuard] Updated safe default: {parameter}={safe_value}")
                 return True
 
         # 새로운 파라미터 추가

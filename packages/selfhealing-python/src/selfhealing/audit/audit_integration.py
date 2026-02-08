@@ -425,7 +425,7 @@ class AsyncLoggerAdapter:
 # =============================================================================
 
 
-class AuditObserverEventType(Enum):
+class AuditObserverEventType(str, Enum):
     """감사 이벤트 유형."""
 
     # Record events

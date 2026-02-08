@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any
 
 
-class PatternType(Enum):
+class PatternType(str, Enum):
     """패턴 유형"""
 
     FAILURE = "failure"  # 장애 패턴
@@ -39,7 +39,7 @@ class BlacklistReason(str, Enum):
     """관리자에 의한 수동 차단."""
 
 
-class SuggestionPriority(Enum):
+class SuggestionPriority(str, Enum):
     """제안 우선순위"""
 
     LOW = "low"
@@ -218,9 +218,5 @@ class BlacklistedParameter:
             registered_at=datetime.fromisoformat(data["registered_at"]),
             registered_by=data.get("registered_by", "system"),
             incident_id=data.get("incident_id"),
-            expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
         )

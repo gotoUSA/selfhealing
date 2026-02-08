@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class EventChannel(Enum):
+class EventChannel(str, Enum):
     """Redis Pub/Sub 채널 정의."""
 
     CHAOS = "chaos"

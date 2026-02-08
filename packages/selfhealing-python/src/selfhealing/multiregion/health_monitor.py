@@ -38,7 +38,7 @@ from selfhealing.multiregion.config import (
 logger = logging.getLogger(__name__)
 
 
-class RegionHealthStatus(Enum):
+class RegionHealthStatus(str, Enum):
     """
     리전 건강 상태.
 

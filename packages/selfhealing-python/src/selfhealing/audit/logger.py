@@ -28,7 +28,7 @@ from selfhealing.audit.trace import get_trace_id, get_trace_id_full
 logger = logging.getLogger(__name__)
 
 
-class ConfigAuditAction(Enum):
+class ConfigAuditAction(str, Enum):
     """Types of audit actions."""
 
     CREATE = "create"

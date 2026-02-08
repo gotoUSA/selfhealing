@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any
 
 
-class RollbackStrategy(Enum):
+class RollbackStrategy(str, Enum):
     """롤백 전략"""
 
     AUTOMATIC = "automatic"  # 자동 롤백
@@ -18,7 +18,7 @@ class RollbackStrategy(Enum):
     INSTANT = "instant"  # 즉시 롤백
 
 
-class RollbackState(Enum):
+class RollbackState(str, Enum):
     """롤백 상태"""
 
     PENDING = "pending"  # 대기 중
@@ -108,9 +108,7 @@ class RollbackResult:
             "is_success": self.is_success,
             "message": self.message,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
+            "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
             "duration_seconds": self.duration_seconds,
             "affected_components": self.affected_components,
             "errors": self.errors,

@@ -21,7 +21,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class DriftReconciliationResult(Enum):
+class DriftReconciliationResult(str, Enum):
     """드리프트 복구 결과."""
 
     L1_WINS = "l1_wins"  # L1 상태가 더 제한적 → L2에 전파
@@ -148,9 +148,7 @@ class DriftReconciler:
             )
         else:
             # 같은 레벨: 타임스탬프 비교
-            winner_state, result, winner = self._resolve_by_timestamp(
-                l1_state, l2_state, l1_updated_at, l2_updated_at
-            )
+            winner_state, result, winner = self._resolve_by_timestamp(l1_state, l2_state, l1_updated_at, l2_updated_at)
 
         # 기록 저장
         record = DriftReconciliationRecord(
@@ -166,9 +164,7 @@ class DriftReconciler:
         with self._lock:
             self._reconciliation_history.append(record)
             if len(self._reconciliation_history) > self._max_history:
-                self._reconciliation_history = self._reconciliation_history[
-                    -self._max_history :
-                ]
+                self._reconciliation_history = self._reconciliation_history[-self._max_history :]
 
         # 콜백 실행
         if self._on_reconciled:
@@ -219,8 +215,7 @@ class DriftReconciler:
 
         if jitter > 0:
             logger.debug(
-                f"[DriftReconciler] Scheduling reconciliation for {service_name} "
-                f"in {jitter:.2f}s (jitter applied)"
+                f"[DriftReconciler] Scheduling reconciliation for {service_name} " f"in {jitter:.2f}s (jitter applied)"
             )
             time.sleep(jitter)
 
@@ -246,8 +241,7 @@ class DriftReconciler:
 
         if jitter > 0:
             logger.info(
-                f"[DriftReconciler] Scheduling reconciliation for {service_name} "
-                f"in {jitter:.2f}s (jitter applied)"
+                f"[DriftReconciler] Scheduling reconciliation for {service_name} " f"in {jitter:.2f}s (jitter applied)"
             )
             await asyncio.sleep(jitter)
 
@@ -287,9 +281,7 @@ class DriftReconciler:
             "by_result": by_result,
             "by_winner": by_winner,
             "affected_services": list(services),
-            "last_reconciliation": (
-                history[-1].reconciled_at.isoformat() if history else None
-            ),
+            "last_reconciliation": (history[-1].reconciled_at.isoformat() if history else None),
         }
 
     def clear_history(self) -> None:

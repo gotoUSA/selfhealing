@@ -28,7 +28,7 @@ from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_sett
 logger = logging.getLogger(__name__)
 
 
-class EscalationLevel(Enum):
+class EscalationLevel(str, Enum):
     """에스컬레이션 심각도 레벨."""
 
     INFO = "info"

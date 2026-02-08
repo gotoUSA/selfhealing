@@ -34,7 +34,7 @@ from selfhealing.multiregion.config import (
 logger = logging.getLogger(__name__)
 
 
-class ReplicationEventType(Enum):
+class ReplicationEventType(str, Enum):
     """
     복제 이벤트 타입.
 

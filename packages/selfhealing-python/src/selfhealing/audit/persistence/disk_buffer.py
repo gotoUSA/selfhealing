@@ -29,7 +29,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
+from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
@@ -73,7 +73,7 @@ class DiskBufferError(Exception):
     pass
 
 
-class BufferState(Enum):
+class BufferState(IntEnum):
     """버퍼 상태."""
 
     UNINITIALIZED = 0

@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 
 
-class ComplianceStandard(Enum):
+class ComplianceStandard(str, Enum):
     """규정 표준"""
 
     DORA_2025 = "DORA_2025"  # 디지털 운영 복원력 법
@@ -19,7 +19,7 @@ class ComplianceStandard(Enum):
     CUSTOM = "CUSTOM"  # 사용자 정의
 
 
-class ViolationSeverity(Enum):
+class ViolationSeverity(str, Enum):
     """위반 심각도"""
 
     INFO = "info"

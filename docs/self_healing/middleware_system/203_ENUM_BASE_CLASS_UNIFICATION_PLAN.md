@@ -1,217 +1,106 @@
-# 203. Enum 베이스 클래스 통일 계획
+# 203. Enum 베이스 클래스 통일
 
-> **상태**: 📋 계획
+> **상태**: ✅ 완료 (2026-02-09)
 > **목적**: Enum 정의 시 `str, Enum` vs plain `Enum` vs `IntEnum` 사용 기준을 수립하고 불일치를 수정한다.
 
 ---
 
-## 1. 현황
-
-### 1-1. 세 가지 Enum 패턴 공존
-
-코드베이스 내 60+ Enum 정의가 세 가지 패턴으로 혼재:
-
-#### A. `class X(str, Enum)` — 다수 (주류 패턴)
-
-```python
-# core/types.py L13
-class FailureType(str, Enum):
-    CIRCUIT_BREAKER = "circuit_breaker"
-    ...
-
-# core/types.py L29
-class OperationStatus(str, Enum):
-    PENDING = "pending"
-    ...
-
-# services/throttle/registry.py L35
-class CircuitBreakerState(str, Enum):
-    CLOSED = "closed"
-    ...
-
-# services/coordination/enums.py L15
-class EmergencyScope(str, Enum):
-    REGIONAL = "regional"
-    ...
-```
-
-#### B. `class X(Enum)` — 일부
-
-```python
-# services/event_bus.py L57
-class EventType(Enum):
-    EMERGENCY_LEVEL_CHANGED = "emergency_level_changed"
-    ...
-
-# utils/async_logger.py L54
-class EventSeverity(Enum):
-    CRITICAL = "critical"
-    ...
-
-# utils/async_logger.py L90
-class WALPolicy(Enum):
-    SYNC = "sync"
-    ...
-
-# utils/async_logger.py L98
-class QueueOverflowPolicy(Enum):
-    DROP_OLDEST = "drop_oldest"
-    ...
-
-# services/governance.py L56
-class OperationMode(Enum):
-    STRICT = "strict"
-    ...
-
-# services/rollback/models.py L11
-class RollbackStrategy(Enum):
-    ...
-
-# services/rollback/models.py L21
-class RollbackState(Enum):
-    ...
-
-# services/learning/models.py L11
-class PatternType(Enum):
-    ...
-
-# services/learning/models.py L42
-class SuggestionPriority(Enum):
-    ...
-
-# services/pending_config.py L34
-class PendingStatus(Enum):
-    ...
-
-# services/event_bus_redis.py L41
-class EventChannel(Enum):
-    ...
-
-# services/finops/models.py L11
-class CostTier(Enum):
-    ...
-
-# services/emergency_mode/enums.py L12
-class EmergencyLevel(Enum):
-    ...
-
-# services/idempotency_service.py L41
-class IdempotencyDomain(Enum):
-    ...
-
-# services/retry_handler.py L49
-class RetryAction(Enum):
-    ...
-
-# services/error_budget/exception_weights.py L49
-class WeightCombinePolicy(Enum):
-    ...
-```
-
-#### C. `class X(IntEnum)` — 3건
-
-```python
-# services/coordination/redis_key_guard.py L44
-class RedisKeyPriority(IntEnum):
-    ...
-
-# services/coordination/enums.py L59
-class CommandPrecedence(IntEnum):
-    ...
-
-# services/coordination/critical_worker.py L41
-class CriticalTaskPriority(IntEnum):
-    ...
-```
-
----
-
-## 2. 문제점
-
-### 2-1. JSON 직렬화 동작 차이
-
-```python
-import json
-
-class A(str, Enum):
-    X = "value"
-
-class B(Enum):
-    X = "value"
-
-json.dumps(A.X)   # → '"value"'  ✅ 자동 직렬화
-json.dumps(B.X)   # → TypeError  ❌ .value 필요
-json.dumps(B.X.value)  # → '"value"'
-```
-
-`str, Enum`은 JSON 직렬화가 자동이지만, plain `Enum`은 `.value` 접근 필요. 같은 프로젝트 내에서 혼재하면 직렬화 코드 일관성이 깨짐.
-
-### 2-2. 문자열 비교 동작 차이
-
-```python
-A.X == "value"  # True  (str, Enum)
-B.X == "value"  # False (Enum)
-```
-
-`str, Enum`은 문자열 비교가 자연스럽지만, plain `Enum`은 `B.X.value == "value"` 필수.
-
-### 2-3. 동일 레이어의 불일치 예시
-
-| 모듈 | Enum | 베이스 |
-|------|------|--------|
-| `services/coordination/enums.py` | `EmergencyScope` | `str, Enum` |
-| `services/emergency_mode/enums.py` | `EmergencyLevel` | `Enum` |
-| `services/governance.py` | `OperationMode` | `Enum` |
-| `services/governance_checks.py` | `BlockReason` | `str, Enum` |
-
-같은 `services/` 레이어에서 `str, Enum`과 `Enum`이 무작위로 혼재.
-
----
-
-## 3. 수정 계획
-
-### 3-1. 확정 규칙
+## 1. 확정 규칙
 
 | 조건 | 사용할 베이스 | 사유 |
 |------|-------------|------|
-| 값이 **문자열**이고 **직렬화/API** 필요 | `str, Enum` | JSON 자동 직렬화, 문자열 비교 |
+| 값이 **문자열** | `str, Enum` | JSON 자동 직렬화, 문자열 비교 |
 | 값이 **정수**이고 **순서 비교** 필요 | `IntEnum` | `<`, `>` 비교 지원 |
 | 내부 전용, 직렬화 불필요 | `str, Enum` (통일) | 일관성 우선 |
 
-**결론**: 문자열 값을 가진 모든 Enum은 `str, Enum`으로 통일.
+**결론**: 문자열 값 → `str, Enum`, 정수 값 + 순서 비교 → `IntEnum`.
 
-### 3-2. 수정 대상 (plain `Enum` → `str, Enum`)
+---
 
-| 파일 | 클래스 | 줄번호 |
-|------|--------|--------|
-| `services/event_bus.py` | `EventType` | L57 |
-| `services/event_bus.py` | `EventPriority` | L143 |
-| `utils/async_logger.py` | `EventSeverity` | L54 |
-| `utils/async_logger.py` | `WALPolicy` | L90 |
-| `utils/async_logger.py` | `QueueOverflowPolicy` | L98 |
-| `adapters/resilient/backend.py` | `StorageMode` | L27 |
-| `services/governance.py` | `OperationMode` | L56 |
-| `services/rollback/models.py` | `RollbackStrategy` | L11 |
-| `services/rollback/models.py` | `RollbackState` | L21 |
-| `services/learning/models.py` | `PatternType` | L11 |
-| `services/learning/models.py` | `SuggestionPriority` | L42 |
-| `services/pending_config.py` | `PendingStatus` | L34 |
-| `services/event_bus_redis.py` | `EventChannel` | L41 |
-| `services/finops/models.py` | `CostTier` | L11 |
-| `services/emergency_mode/enums.py` | `EmergencyLevel` | L12 |
-| `services/idempotency_service.py` | `IdempotencyDomain` | L41 |
-| `services/retry_handler.py` | `RetryAction` | L49 |
-| `services/error_budget/exception_weights.py` | `WeightCombinePolicy` | L49 |
+## 2. 수정 완료 내역
 
-### 3-3. IntEnum — 유지
+### 2-1. plain `Enum` → `str, Enum` (문자열 값, 48건)
 
-`IntEnum` 3건은 정수 값 + 순서 비교가 필요한 우선순위 체계이므로 현재 상태 유지:
-- `RedisKeyPriority(IntEnum)` — 키 우선순위 숫자 비교
-- `CommandPrecedence(IntEnum)` — 명령 우선순위 숫자 비교
-- `CriticalTaskPriority(IntEnum)` — 태스크 우선순위 숫자 비교
+| 파일 | 클래스 |
+|------|--------|
+| `services/event_bus.py` | `EventType` |
+| `utils/async_logger.py` | `WALPolicy` |
+| `utils/async_logger.py` | `QueueOverflowPolicy` |
+| `adapters/resilient/backend.py` | `ResilientStorageMode` |
+| `services/governance.py` | `OperationMode` |
+| `services/rollback/models.py` | `RollbackStrategy` |
+| `services/rollback/models.py` | `RollbackState` |
+| `services/learning/models.py` | `PatternType` |
+| `services/learning/models.py` | `SuggestionPriority` |
+| `services/pending_config.py` | `PendingStatus` |
+| `services/event_bus_redis.py` | `EventChannel` |
+| `services/finops/models.py` | `CostTier` |
+| `services/idempotency_service.py` | `IdempotencyDomain` |
+| `services/retry_handler.py` | `RetryAction` |
+| `services/error_budget/exception_weights.py` | `WeightCombinePolicy` |
+| `meta/health_probe.py` | `HealthStatus` |
+| `audit/verify_audit_integrity.py` | `OutputFormat` |
+| `audit/wal.py` | `WALState` |
+| `audit/self_audit.py` | `SelfAuditEvent` |
+| `scaling/config.py` | `BackpressureLevel` |
+| `scaling/config.py` | `BackpressureStrategy` |
+| `services/config/propagator.py` | `ConfigScope` |
+| `services/config/propagator.py` | `PropagationTier` |
+| `services/compliance/models.py` | `ComplianceStandard` |
+| `services/compliance/models.py` | `ViolationSeverity` |
+| `multiregion/replicator.py` | `ReplicationEventType` |
+| `multiregion/health_monitor.py` | `RegionHealthStatus` |
+| `multiregion/failover.py` | `FailoverState` |
+| `metrics/safe_gauge/sync.py` | `SyncStatus` |
+| `metrics/reliability_manager.py` | `ReliabilityLevel` |
+| `metrics/reliability_manager.py` | `OperatingMode` |
+| `meta/recovery_adapter.py` | `RecoveryAction` |
+| `metrics/reliability.py` | `MetricReliability` |
+| `interfaces/rate_limit_storage.py` | `RateLimitStorageType` |
+| `meta/escalation.py` | `EscalationLevel` |
+| `core/apply_strategy.py` | `ApplyStrategy` |
+| `coordination/base.py` | `LeadershipState` |
+| `core/auto_rollback_guard.py` | `RecoveryStrategy` (내부 클래스) |
+| `audit/masking.py` | `MaskingLevel` |
+| `core/tiered_redis.py` | `RedisScope` |
+| `audit/logger.py` | `ConfigAuditAction` |
+| `audit/event_buffer.py` | `AuditEventType` |
+| `audit/audit_watchdog.py` | `AuditWatchdogStatus` |
+| `audit/audit_integration.py` | `AuditObserverEventType` |
+| `audit/backends/base.py` | `BackendStatus` |
+| `api/django/tiering/enums.py` | `TierFallbackReason` |
+| `api/django/views/xtest/scenarios/base.py` | `ScenarioStatus` |
+| `api/django/rate_limit.py` | `RedisHealthState` |
+| `adapters/memory/drift_reconciliation.py` | `DriftReconciliationResult` |
 
-### 3-4. 검증 항목
+### 2-2. plain `Enum` → `IntEnum` (정수 값 + 순서 비교, 5건)
 
-- [ ] 기존 `.value` 접근 패턴이 `str, Enum` 전환 후에도 호환되는지 확인
-- [ ] `json.dumps` 호출부에서 커스텀 인코더 불필요 확인
-- [ ] `==` 비교에서 문자열 직접 비교로 전환 가능 여부 확인
+`.value` 기반 순서 비교가 코드에서 확인된 정수 값 Enum:
+
+| 파일 | 클래스 | 근거 |
+|------|--------|------|
+| `services/event_bus.py` | `EventPriority` | `.value` 비교: `LOW.value < NORMAL.value` |
+| `utils/async_logger.py` | `EventSeverity` | `.value` 비교: `DEBUG.value < INFO.value` |
+| `services/emergency_mode/enums.py` | `EmergencyLevel` | `.value` 비교: `level.value >= LEVEL_2.value` |
+| `scaling/graceful_degradation.py` | `FeaturePriority` | `.value` 비교: `CRITICAL.value == 0` |
+| `audit/persistence/disk_buffer.py` | `BufferState` | 상태 머신 (정수 값 0-4) |
+
+### 2-3. IntEnum — 기존 유지 (7건)
+
+| 파일 | 클래스 | 사유 |
+|------|--------|------|
+| `services/coordination/redis_key_guard.py` | `RedisKeyPriority` | 키 우선순위 숫자 비교 |
+| `services/coordination/enums.py` | `CommandPrecedence` | 명령 우선순위 숫자 비교 |
+| `services/coordination/critical_worker.py` | `CriticalTaskPriority` | 태스크 우선순위 숫자 비교 |
+| `services/canary/models.py` | `PauseTriggerPriority` | Pause 트리거 우선순위 비교 |
+| `adapters/ipc/cb_state_snapshot.py` | `CBState` | CB 상태 정수 매핑 |
+| `adapters/ipc/protocol/json_rpc.py` | `JSONRPCErrorCode` | JSON-RPC 에러 코드 |
+| `audit/cascade_event.py` | `CascadeEventPriority` | 이벤트 우선순위 비교 |
+
+---
+
+## 3. 검증 결과
+
+- [x] 기존 `.value` 접근 패턴이 전환 후에도 호환됨 (10426 테스트 통과)
+- [x] `json.dumps` 호출부에서 커스텀 인코더 불필요 확인
+- [x] `str, Enum` 전환으로 문자열 직접 비교 가능

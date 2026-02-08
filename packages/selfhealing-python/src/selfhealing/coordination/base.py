@@ -17,7 +17,7 @@ from typing import Callable, Protocol
 logger = logging.getLogger(__name__)
 
 
-class LeadershipState(Enum):
+class LeadershipState(str, Enum):
     """리더십 상태."""
 
     NOT_STARTED = "not_started"
