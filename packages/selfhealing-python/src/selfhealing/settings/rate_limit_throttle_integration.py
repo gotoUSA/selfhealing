@@ -11,9 +11,9 @@ Features:
     - 에스컬레이션 설정
 
 Environment Variables:
-    SELFHEALING_RATELIMIT_THROTTLE_ENABLED=true
-    SELFHEALING_RATELIMIT_THROTTLE_DEBOUNCE_WINDOW_SECONDS=5.0
-    SELFHEALING_RATELIMIT_THROTTLE_ESCALATION_ENABLED=true
+    SELFHEALING_RATE_LIMIT_THROTTLE_ENABLED=true
+    SELFHEALING_RATE_LIMIT_THROTTLE_DEBOUNCE_WINDOW_SECONDS=5.0
+    SELFHEALING_RATE_LIMIT_THROTTLE_ESCALATION_ENABLED=true
     ... etc
 """
 
@@ -38,7 +38,7 @@ class RateLimitThrottleIntegrationSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_RATELIMIT_THROTTLE_",
+        env_prefix="SELFHEALING_RATE_LIMIT_THROTTLE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

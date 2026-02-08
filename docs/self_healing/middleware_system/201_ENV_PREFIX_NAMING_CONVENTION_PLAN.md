@@ -53,6 +53,7 @@ class NamespaceSettings(BaseSettings):
 | `settings/anti_flapping.py:42` | `SELFHEALING_ANTIFLAPPING_` | 붙여쓰기 | `SELFHEALING_ANTI_FLAPPING_` |
 | `settings/steady_state.py:39` | `SELFHEALING_STEADYSTATE_` | 붙여쓰기 | `SELFHEALING_STEADY_STATE_` |
 | `settings/rate_limit.py:40` | `SELFHEALING_RATELIMIT_` | 붙여쓰기 | `SELFHEALING_RATE_LIMIT_` |
+| `settings/rate_limit_throttle_integration.py:41` | `SELFHEALING_RATELIMIT_THROTTLE_` | 붙여쓰기 | `SELFHEALING_RATE_LIMIT_THROTTLE_` |
 
 ### 2-2. 언더스코어 구분을 준수하는 파일 (대조군)
 
@@ -89,6 +90,7 @@ class NamespaceSettings(BaseSettings):
 | `settings/steady_state.py:39` | `SELFHEALING_STEADYSTATE_` | `SELFHEALING_STEADY_STATE_` |
 | `settings/rate_limit.py:40` | `SELFHEALING_RATELIMIT_` | `SELFHEALING_RATE_LIMIT_` |
 | `settings/error_budget_propagation.py:45` | `SELFHEALING_ERRORBUDGET_PROPAGATION_` | `SELFHEALING_ERROR_BUDGET_PROPAGATION_` |
+| `settings/rate_limit_throttle_integration.py:41` | `SELFHEALING_RATELIMIT_THROTTLE_` | `SELFHEALING_RATE_LIMIT_THROTTLE_` |
 
 ### 3-3. 파생 변경
 
