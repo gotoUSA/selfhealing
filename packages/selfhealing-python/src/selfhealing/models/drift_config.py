@@ -55,13 +55,7 @@ class DriftThresholdConfig:
 
     def _validate(self) -> None:
         """임계값 유효성 검사."""
-        if not (
-            0
-            < self.warning_threshold
-            < self.critical_threshold
-            < self.incident_threshold
-            <= 1.0
-        ):
+        if not (0 < self.warning_threshold < self.critical_threshold < self.incident_threshold <= 1.0):
             raise ValueError(
                 "Thresholds must be: 0 < warning < critical < incident <= 1.0. "
                 f"Got: warning={self.warning_threshold}, critical={self.critical_threshold}, "
@@ -89,27 +83,20 @@ class DriftThresholdConfig:
 
     @classmethod
     def from_env(cls) -> DriftThresholdConfig:
-        """환경 변수에서 생성."""
-        import os
+        """환경 변수에서 생성 (BaseSettings 위임).
 
+        환경변수 파싱을 DriftThresholdSettings(BaseSettings)에 위임하여
+        os.environ.get() 수동 파싱 제거 (202 패러다임 통일).
+        """
+        from selfhealing.settings.drift_threshold import DriftThresholdSettings
+
+        settings = DriftThresholdSettings()
         return cls(
-            warning_threshold=float(
-                os.environ.get("SELFHEALING_DRIFT_WARNING_THRESHOLD", "0.05")
-            ),
-            critical_threshold=float(
-                os.environ.get("SELFHEALING_DRIFT_CRITICAL_THRESHOLD", "0.20")
-            ),
-            incident_threshold=float(
-                os.environ.get("SELFHEALING_DRIFT_INCIDENT_THRESHOLD", "0.50")
-            ),
-            alert_enabled=os.environ.get(
-                "SELFHEALING_DRIFT_ALERT_ENABLED", "true"
-            ).lower()
-            == "true",
-            incident_auto_create=os.environ.get(
-                "SELFHEALING_DRIFT_INCIDENT_ENABLED", "true"
-            ).lower()
-            == "true",
+            warning_threshold=settings.warning_threshold,
+            critical_threshold=settings.critical_threshold,
+            incident_threshold=settings.incident_threshold,
+            alert_enabled=settings.alert_enabled,
+            incident_auto_create=settings.incident_auto_create,
         )
 
     def update(

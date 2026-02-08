@@ -22,15 +22,18 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ClusterIdentity:
+class ClusterIdentity(BaseSettings):
     """
-    클러스터 식별 정보 (Immutable).
+    클러스터 식별 정보 (Immutable BaseSettings).
+
+    환경변수 자동 파싱으로 os.environ.get() 수동 파싱 제거 (202 패러다임 통일).
 
     Attributes:
         cluster_id: 클러스터 고유 ID (필수)
@@ -40,11 +43,48 @@ class ClusterIdentity:
         pod_id: 현재 Pod ID
     """
 
-    cluster_id: str
-    region: str | None = None
-    environment: str = "production"
-    tenant: str | None = None
-    pod_id: str = field(default_factory=lambda: os.environ.get("HOSTNAME", "unknown"))
+    model_config = SettingsConfigDict(
+        frozen=True,
+        extra="ignore",
+        validate_default=True,
+        populate_by_name=True,
+    )
+
+    cluster_id: str = Field(
+        default="default",
+        validation_alias=AliasChoices(
+            "SELFHEALING_CLUSTER_ID",
+            "cluster_id",
+        ),
+    )
+    region: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "SELFHEALING_NAMESPACE_REGION",
+            "region",
+        ),
+    )
+    environment: str = Field(
+        default="production",
+        validation_alias=AliasChoices(
+            "SELFHEALING_NAMESPACE_ENV",
+            "environment",
+        ),
+    )
+    tenant: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "SELFHEALING_NAMESPACE_TENANT",
+            "tenant",
+        ),
+    )
+    pod_id: str = Field(
+        default="unknown",
+        validation_alias=AliasChoices(
+            "HOSTNAME",
+            "pod_id",
+        ),
+    )
 
     @property
     def namespace(self) -> str:
@@ -147,12 +187,8 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
     """
     global _identity, _quarantine_mode
     if _identity is None:
-        _identity = ClusterIdentity(
-            cluster_id=os.environ.get("SELFHEALING_CLUSTER_ID", "default"),
-            region=os.environ.get("SELFHEALING_NAMESPACE_REGION"),
-            environment=os.environ.get("SELFHEALING_NAMESPACE_ENV", "production"),
-            tenant=os.environ.get("SELFHEALING_NAMESPACE_TENANT"),
-        )
+        # BaseSettings가 환경변수 자동 파싱 (202 패러다임 통일)
+        _identity = ClusterIdentity()
 
         # 테스트 환경에서는 validation 스킵
         is_test_mode = os.environ.get("SELFHEALING_TEST_MODE", "").lower() == "true"
@@ -166,7 +202,6 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
                 logger.warning(
                     "⚠️ [QuarantineMode] System running in Quarantine Mode. " "Cross-cluster operations will be disabled."
                 )
-    return _identity
     return _identity
 
 

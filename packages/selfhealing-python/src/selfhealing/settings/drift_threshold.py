@@ -18,7 +18,7 @@ Reference:
 
 import logging
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -79,6 +79,10 @@ class DriftThresholdSettings(BaseSettings):
     incident_auto_create: bool = Field(
         default=True,
         description="Auto-create incident on threshold breach",
+        validation_alias=AliasChoices(
+            "SELFHEALING_DRIFT_INCIDENT_ENABLED",
+            "SELFHEALING_DRIFT_INCIDENT_AUTO_CREATE",
+        ),
     )
 
     # ==========================================================================

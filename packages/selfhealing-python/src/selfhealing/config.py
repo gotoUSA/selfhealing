@@ -205,6 +205,23 @@ def get_forensic_settings() -> ForensicContextConfig:
 # =============================================================================
 
 
+class _EventLoggingDefaults(BaseSettings):
+    """EventLoggingConfig 환경변수 기본값 (BaseSettings 위임).
+
+    os.environ.get() 수동 파싱 → BaseSettings 자동 파싱 (202 패러다임 통일).
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_",
+        extra="ignore",
+    )
+
+    dlq_log_level: str = "INFO"
+    cb_log_level: str = "WARNING"
+    replay_log_level: str = "INFO"
+    sla_log_level: str = "WARNING"
+
+
 class EventLoggingConfig:
     """
     런타임에 변경 가능한 이벤트 로깅 설정.
@@ -252,12 +269,13 @@ class EventLoggingConfig:
         # Runtime-configurable values (API level)
         self._runtime_config: dict = {}
 
-        # Environment-based defaults
+        # BaseSettings가 환경변수 자동 파싱 (202 패러다임 통일)
+        _defaults = _EventLoggingDefaults()
         self._env_defaults = {
-            "dlq_log_level": os.environ.get("SELFHEALING_DLQ_LOG_LEVEL", "INFO"),
-            "cb_log_level": os.environ.get("SELFHEALING_CB_LOG_LEVEL", "WARNING"),
-            "replay_log_level": os.environ.get("SELFHEALING_REPLAY_LOG_LEVEL", "INFO"),
-            "sla_log_level": os.environ.get("SELFHEALING_SLA_LOG_LEVEL", "WARNING"),
+            "dlq_log_level": _defaults.dlq_log_level,
+            "cb_log_level": _defaults.cb_log_level,
+            "replay_log_level": _defaults.replay_log_level,
+            "sla_log_level": _defaults.sla_log_level,
         }
 
         # Hardcoded defaults (fallback)
@@ -607,17 +625,18 @@ class L2StorageRuntimeConfig:
         self._runtime_config: dict = {}
         self._last_updated: dict = {}
 
-        # 환경변수 기본값
+        # L2StorageConfig(BaseSettings)가 환경변수 자동 파싱 (202 패러다임 통일)
+        _base = L2StorageConfig()
         self._env_defaults = {
-            "redis_timeout_ms": int(os.environ.get("SELFHEALING_L2_REDIS_TIMEOUT_MS", 50)),
-            "database_timeout_ms": int(os.environ.get("SELFHEALING_L2_DATABASE_TIMEOUT_MS", 200)),
-            "fallback_timeout_ms": int(os.environ.get("SELFHEALING_L2_FALLBACK_TIMEOUT_MS", 100)),
-            "shadow_log_enabled": os.environ.get("SELFHEALING_L2_SHADOW_LOG_ENABLED", "true").lower() == "true",
-            "shadow_log_max_entries": int(os.environ.get("SELFHEALING_L2_SHADOW_LOG_MAX_ENTRIES", 1000)),
-            "reconciliation_jitter_min_seconds": float(os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MIN", 0.0)),
-            "reconciliation_jitter_max_seconds": float(os.environ.get("SELFHEALING_L2_RECONCILIATION_JITTER_MAX", 5.0)),
-            "health_check_interval_seconds": float(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_INTERVAL", 30.0)),
-            "health_check_timeout_ms": int(os.environ.get("SELFHEALING_L2_HEALTH_CHECK_TIMEOUT_MS", 100)),
+            "redis_timeout_ms": _base.redis_timeout_ms,
+            "database_timeout_ms": _base.database_timeout_ms,
+            "fallback_timeout_ms": _base.fallback_timeout_ms,
+            "shadow_log_enabled": _base.shadow_log_enabled,
+            "shadow_log_max_entries": _base.shadow_log_max_entries,
+            "reconciliation_jitter_min_seconds": _base.reconciliation_jitter_min_seconds,
+            "reconciliation_jitter_max_seconds": _base.reconciliation_jitter_max_seconds,
+            "health_check_interval_seconds": _base.health_check_interval_seconds,
+            "health_check_timeout_ms": _base.health_check_timeout_ms,
         }
 
         # 하드코딩 기본값 (업계 사례 기반)
