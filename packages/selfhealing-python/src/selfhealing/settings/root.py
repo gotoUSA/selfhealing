@@ -10,8 +10,8 @@ import logging
 import os
 from typing import Any
 
-from pydantic import ConfigDict, Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from selfhealing.settings.chaos import ChaosSettings
 from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
@@ -47,7 +47,9 @@ class SelfHealingSettings(BaseSettings):
         print(config.circuit_breaker.failure_threshold)
     """
 
-    model_config = ConfigDict(
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
         extra="ignore",
         validate_default=True,
     )
@@ -197,9 +199,7 @@ class SelfHealingSettings(BaseSettings):
     # ==========================================================================
     # Convenience methods for backward compatibility
     # ==========================================================================
-    def get_circuit_breaker_config(
-        self, domain: str | None = None
-    ) -> CircuitBreakerSettings:
+    def get_circuit_breaker_config(self, domain: str | None = None) -> CircuitBreakerSettings:
         """Get circuit breaker config, with optional domain overrides."""
         if domain and domain in self.domain_configs:
             domain_cb = self.domain_configs[domain].get("circuit_breaker", {})

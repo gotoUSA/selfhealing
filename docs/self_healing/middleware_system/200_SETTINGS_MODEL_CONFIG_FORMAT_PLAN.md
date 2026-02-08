@@ -62,11 +62,14 @@ SELFHEALING_KAFKA_AUDIT_BOOSTRAP_SERVERS=kafka:9092  # 오타: BOOSTRAP
 
 ### 3-1. 대상 파일
 
-| 파일 | 현재 | 변경 |
-|------|------|------|
-| `settings/kafka.py:50` | `model_config = {"env_prefix": "SELFHEALING_KAFKA_AUDIT_"}` | `model_config = SettingsConfigDict(...)` |
+| 파일 | 현재 | 변경 | 상태 |
+|------|------|------|------|
+| `settings/kafka.py:50` | `model_config = {"env_prefix": "SELFHEALING_KAFKA_AUDIT_"}` | `model_config = SettingsConfigDict(...)` | ✅ 완료 |
+| `settings/root.py:50` | `model_config = ConfigDict(extra, validate_default)` | `model_config = SettingsConfigDict(...)` | ✅ 완료 |
 
 ### 3-2. 변경 내용
+
+#### 3-2-1. `settings/kafka.py`
 
 ```python
 # Before (settings/kafka.py L50)
@@ -82,9 +85,32 @@ model_config = SettingsConfigDict(
 )
 ```
 
+#### 3-2-2. `settings/root.py`
+
+```python
+# Before (settings/root.py L13, L50-53)
+from pydantic import ConfigDict, Field, model_validator
+model_config = ConfigDict(
+    extra="ignore",
+    validate_default=True,
+)
+
+# After
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+model_config = SettingsConfigDict(
+    env_file=".env",
+    env_file_encoding="utf-8",
+    extra="ignore",
+    validate_default=True,
+)
+```
+
 ### 3-3. 검증 항목
 
 - [x] `KafkaAuditSettings()` 인스턴스 생성 정상 확인
 - [x] `.env` 파일에서 `SELFHEALING_KAFKA_AUDIT_*` 읽기 확인
 - [x] 미정의 환경변수가 `ValidationError`를 발생시키지 않는지 확인
-- [x] 기존 테스트 통과 확인 (55 passed)
+- [x] kafka 테스트 통과 확인 (55 passed)
+- [x] `SelfHealingSettings` (root) `ConfigDict` → `SettingsConfigDict` 변경
+- [x] settings 전체 단위 테스트 통과 확인 (639 passed)
