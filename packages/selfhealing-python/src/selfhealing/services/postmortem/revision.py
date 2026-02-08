@@ -846,9 +846,9 @@ def migrate_existing_postmortems(
     result = {"total": 0, "migrated": 0, "skipped": 0, "failed": 0}
 
     try:
-        from selfhealing.services.postmortem_store import get_healing_incidents
+        from selfhealing.services.postmortem.store import get_healing_incidents
     except ImportError:
-        logger.warning("[Migration] postmortem_store not available")
+        logger.warning("[Migration] postmortem.store not available")
         return result
 
     offset = 0

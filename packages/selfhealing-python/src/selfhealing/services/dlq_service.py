@@ -4,6 +4,10 @@ Dead Letter Queue (DLQ) Service - Backward Compatibility Wrapper
 이 모듈은 하위 호환성을 위한 re-export wrapper입니다.
 실제 구현은 selfhealing.services.dlq 패키지에 있습니다.
 
+.. deprecated:: 2.0.0
+    Import from ``selfhealing.services.dlq`` instead.
+    This shim will be removed in v3.0.0.
+
 Usage (기존 코드 그대로 동작):
     from selfhealing.services.dlq_service import DLQService, DLQConfig
     from selfhealing.services.dlq_service import store_to_dlq, get_dlq_service
@@ -17,6 +21,16 @@ Note: Admin/Dashboard operations (cleanup, archive, purge, list, entry managemen
 """
 
 from __future__ import annotations
+
+import warnings
+
+warnings.warn(
+    "Importing from 'selfhealing.services.dlq_service' is deprecated. "
+    "Use 'selfhealing.services.dlq' instead. "
+    "This module will be removed in v3.0.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from selfhealing.services.dlq import (  # Main service class; Models; Module-level convenience functions; Base and mixins (for extension)
     DLQBatchReplayStats,

@@ -74,7 +74,7 @@ class StoreOperationsMixin:
         Returns:
             DLQEntryResult with creation status
         """
-        from selfhealing.services.dlq_models import DLQEntryResult
+        from selfhealing.services.dlq.models import DLQEntryResult
 
         if not self.is_enabled:
             logger.debug("[DLQService] DLQ is disabled, skipping storage")

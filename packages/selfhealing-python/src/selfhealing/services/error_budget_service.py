@@ -3,6 +3,10 @@ Error Budget Service (Re-export Module)
 
 SRE Error Budget 계산기 및 배포 정책 어드바이저.
 
+.. deprecated:: 2.0.0
+    Import from ``selfhealing.services.error_budget`` instead.
+    This shim will be removed in v3.0.0.
+
 ⚠️ BACKWARD COMPATIBILITY:
 이 파일은 기존 import 경로와의 호환성을 위해 유지됩니다.
 새로운 코드에서는 다음과 같이 import하세요:
@@ -30,6 +34,16 @@ Reference:
 """
 
 from __future__ import annotations
+
+import warnings
+
+warnings.warn(
+    "Importing from 'selfhealing.services.error_budget_service' is deprecated. "
+    "Use 'selfhealing.services.error_budget' instead. "
+    "This module will be removed in v3.0.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # Re-export all from error_budget package for backward compatibility
 from selfhealing.services.error_budget import (  # Enums; Thresholds; Fail-safe; Models; Classes; Factory

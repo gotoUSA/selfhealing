@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
-# Import models from separate module
-from selfhealing.services.dlq_models import (
+# Import models from package-internal module (canonical location)
+from selfhealing.services.dlq.models import (
     DLQBatchReplayStats,
     DLQConfig,
     DLQEntryResult,

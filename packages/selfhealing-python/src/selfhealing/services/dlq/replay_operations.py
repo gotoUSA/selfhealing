@@ -66,7 +66,7 @@ class ReplayOperationsMixin:
         Returns:
             DLQBatchReplayStats with operation statistics
         """
-        from selfhealing.services.dlq_models import DLQBatchReplayStats
+        from selfhealing.services.dlq.models import DLQBatchReplayStats
 
         result = DLQBatchReplayStats()
 
@@ -156,7 +156,7 @@ class ReplayOperationsMixin:
         Returns:
             DLQThrottleReplayResult
         """
-        from selfhealing.services.dlq_models import DLQThrottleReplayResult
+        from selfhealing.services.dlq.models import DLQThrottleReplayResult
 
         entry = self.repository.get_by_id(entry_id)
         if entry is None:
@@ -259,7 +259,7 @@ class ReplayOperationsMixin:
         Returns:
             DLQThrottleBatchReplayResult
         """
-        from selfhealing.services.dlq_models import DLQThrottleBatchReplayResult
+        from selfhealing.services.dlq.models import DLQThrottleBatchReplayResult
 
         entries = self.get_replayable_entries(
             domain=domain,

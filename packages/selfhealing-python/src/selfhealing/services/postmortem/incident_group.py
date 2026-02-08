@@ -581,7 +581,7 @@ class IncidentGroupManager:
             DistributedLock 인스턴스 또는 None
         """
         try:
-            from selfhealing.services.postmortem_store import acquire_group_close_lock
+            from selfhealing.services.postmortem.store import acquire_group_close_lock
 
             return acquire_group_close_lock(group_id)
         except ImportError:

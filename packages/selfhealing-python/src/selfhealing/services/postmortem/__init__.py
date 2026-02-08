@@ -4,6 +4,7 @@ Postmortem Services Package.
 연쇄 CB 이벤트 병합, 알림 집계, 무결성 봉인, 타임라인 스냅샷 등 Postmortem 관련 서비스를 제공합니다.
 
 Components:
+- store: 인시던트 저장/조회/분산 락 (postmortem_store.py에서 이전)
 - IncidentGroupManager: 연쇄 CB 이벤트를 IncidentGroup으로 병합
 - NotificationAggregator: 알림 집계하여 Alert Storm 방지
 - IntegritySealer: HashChain 기반 Postmortem 무결성 봉인
@@ -16,6 +17,25 @@ Components:
 """
 
 from __future__ import annotations
+
+from .store import (
+    LOCK_KEY_POSTMORTEM_GENERATE,
+    LOCK_KEY_POSTMORTEM_GROUP,
+    LOCK_TTL_POSTMORTEM_GENERATE,
+    LOCK_TTL_POSTMORTEM_GROUP,
+    acquire_group_close_lock,
+    add_healing_incident,
+    add_healing_incident_with_lock,
+    build_timeline,
+    clear_healing_incidents,
+    collect_service_states,
+    generate_postmortem_data,
+    get_db_persistence_enabled,
+    get_healing_incidents,
+    get_healing_incidents_count,
+    get_incident_by_id,
+    set_db_persistence_enabled,
+)
 
 from .deployment_correlator import (
     CorrelationType,
@@ -86,6 +106,23 @@ from .notifier import (
 )
 
 __all__ = [
+    # Store (from postmortem_store.py → postmortem/store.py)
+    "add_healing_incident",
+    "add_healing_incident_with_lock",
+    "get_healing_incidents",
+    "get_healing_incidents_count",
+    "get_incident_by_id",
+    "clear_healing_incidents",
+    "set_db_persistence_enabled",
+    "get_db_persistence_enabled",
+    "acquire_group_close_lock",
+    "LOCK_KEY_POSTMORTEM_GENERATE",
+    "LOCK_KEY_POSTMORTEM_GROUP",
+    "LOCK_TTL_POSTMORTEM_GENERATE",
+    "LOCK_TTL_POSTMORTEM_GROUP",
+    "collect_service_states",
+    "build_timeline",
+    "generate_postmortem_data",
     # Deployment Correlator
     "DeploymentCorrelator",
     "DeploymentCorrelationResult",
