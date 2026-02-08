@@ -1,6 +1,6 @@
 # 206. services/ 디렉토리 구조 통일 계획
 
-> **상태**: 🔧 1차 정리 완료 (2026-02-09)
+> **상태**: 🔧 2차 정리 완료 (2026-02-09)
 > **목적**: `services/` 하위의 플랫 파일(단일 `.py`)과 패키지(디렉토리) 공존 문제를 정리한다.
 
 ---
@@ -11,7 +11,7 @@
 
 `services/` 디렉토리에는 **패키지(디렉토리)**와 **플랫 .py 파일**이 혼재:
 
-#### 패키지 (디렉토리) — 28개
+#### 패키지 (디렉토리) — 30개
 
 ```
 services/
@@ -30,8 +30,10 @@ services/
 ├── emergency_mode/
 ├── error_budget/
 ├── error_budget_gate/
+├── event_bus/             ← 2차 신규 (event_bus.py + event_bus_redis.py 통합)
 ├── factory/
 ├── finops/
+├── governance/           ← 2차 신규 (governance*.py 4파일 통합)
 ├── isolation/
 ├── learning/
 ├── metrics/
@@ -61,14 +63,14 @@ services/
 ├── dlq_models.py                   ← backward compat shim (dlq/models.py로 이전 완료)
 ├── dlq_service.py                  ← backward compat shim (deprecation warning 추가 완료)
 ├── error_budget_service.py         ← backward compat shim (deprecation warning 추가 완료)
-├── event_bus.py                    (1,875줄) ← 500줄+ 패키지 전환 1순위
-├── event_bus_redis.py              (377줄) ← event_bus.py와 동일 도메인
+├── event_bus.py                    ← 삭제됨 (event_bus/ 패키지가 네임스페이스 대체)
+├── event_bus_redis.py              ← backward compat shim (event_bus/redis_bus.py로 이전 완료)
 ├── execution_services.py           (730줄) ← 500줄+ 패키지 전환 대상
 ├── forensic_audit_bridge.py        (476줄)
-├── governance.py                   (547줄) ← governance 도메인 4파일 중 1
-├── governance_api_service.py       (526줄) ← governance 도메인 4파일 중 2
-├── governance_checks.py            (863줄) ← governance 도메인 4파일 중 3
-├── governance_service.py           (435줄) ← governance 도메인 4파일 중 4
+├── governance.py                   ← 삭제됨 (governance/ 패키지가 네임스페이스 대체)
+├── governance_api_service.py       ← backward compat shim (governance/api_service.py로 이전 완료)
+├── governance_checks.py            ← backward compat shim (governance/checks.py로 이전 완료)
+├── governance_service.py           ← backward compat shim (governance/service.py로 이전 완료)
 ├── healing_events_store.py         (285줄)
 ├── health_check.py                 (378줄)
 ├── http_client.py                  (335줄)
@@ -210,10 +212,10 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 | **Shim 파일 유지 비용** | 4개 shim 파일이 패키지와 동일 이름으로 존재하여 모듈 해석 혼란 가능 | ✅ v3.0.0 삭제 예약 |
 | **postmortem_store.py 이중 역할** | 866줄의 실제 구현 + backward compat을 겸하여 역할이 불명확 | ✅ postmortem/store.py로 이전 |
 | **dlq_models.py 고아 파일** | 패키지 내 모델과 플랫 파일 모델이 이중 존재 | ✅ dlq/models.py로 이전 |
-| **500줄+ 플랫 파일 16개 미정리** | 패키지 전환 기준 충족하나 아직 패키지로 전환되지 않음 | 🔜 2차 계획 |
-| **event_bus 도메인 분산** | event_bus.py (1,875줄) + event_bus_redis.py (377줄) 동일 도메인 | 🔜 2차 계획 |
-| **governance 도메인 분산** | 4개 파일 합계 2,371줄이 동일 도메인에서 플랫 파일로 존재 | 🔜 2차 계획 |
-| **replay_service.py / dlq 기능 분산** | replay_service.py (940줄)와 dlq/replay_operations.py (296줄) 양쪽에 replay 로직 분산 | 🔜 2차 계획 |
+| **500줄+ 플랫 파일 16개 미정리** | 패키지 전환 기준 충족하나 아직 패키지로 전환되지 않음 | ✅ event_bus, governance 완료 / 나머지 12개 3차 계획 |
+| **event_bus 도메인 분산** | event_bus.py (1,875줄) + event_bus_redis.py (377줄) 동일 도메인 | ✅ event_bus/ 패키지로 통합 완료 |
+| **governance 도메인 분산** | 4개 파일 합계 2,371줄이 동일 도메인에서 플랫 파일로 존재 | ✅ governance/ 패키지로 통합 완료 |
+| **replay_service.py / dlq 기능 분산** | replay_service.py (940줄)와 dlq/replay_operations.py (296줄) 양쪽에 replay 로직 분산 | 🔜 3차 계획 |
 
 ---
 
@@ -242,29 +244,29 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 2. 내부에 3개 이상의 독립 클래스 정의
 3. 설정/모델/서비스 로직이 한 파일에 혼재
 
-### 3-4. 500줄+ 플랫 파일 패키지 전환 대상 (2차 계획)
+### 3-4. 500줄+ 플랫 파일 패키지 전환 대상
 
 코드에서 확인된 500줄 이상 플랫 파일 16개:
 
-| 우선순위 | 파일 | 줄 수 | 비고 |
-|---------|------|-------|------|
-| **1** | `event_bus.py` | 1,875 | + event_bus_redis.py (377줄) → `event_bus/` 패키지 통합 |
-| **2** | `idempotency_service.py` | 1,160 | 단독 대형 파일 |
-| **3** | `unified_notification.py` | 945 | 단독 대형 파일 |
-| **4** | `replay_service.py` | 940 | `dlq/replay_operations.py`와 기능 분산 정리 필요 |
-| **5** | `control_api_service.py` | 871 | 단독 대형 파일 |
-| **6** | `governance_checks.py` | 863 | governance 4파일 → `governance/` 패키지 통합 |
-| **6** | `governance.py` | 547 | 위와 동일 도메인 |
-| **6** | `governance_api_service.py` | 526 | 위와 동일 도메인 |
-| **6** | `governance_service.py` | 435 | 위와 동일 도메인 (합계 2,371줄) |
-| **7** | `stress_test_service.py` | 842 | 단독 대형 파일 |
-| **8** | `retry_handler.py` | 827 | 단독 대형 파일 |
-| **9** | `backoff_calculator.py` | 822 | 단독 대형 파일 |
-| **10** | `execution_services.py` | 730 | 단독 대형 파일 |
-| **11** | `precomputed_cache.py` | 690 | 단독 대형 파일 |
-| **12** | `rate_limit_coordinator.py` | 576 | 단독 대형 파일 |
-| **13** | `dashboard_service.py` | 538 | 단독 대형 파일 |
-| **14** | `config_history.py` | 512 | 단독 대형 파일 |
+| 우선순위 | 파일 | 줄 수 | 비고 | 상태 |
+|---------|------|-------|------|------|
+| **1** | `event_bus.py` | 1,875 | + event_bus_redis.py (377줄) → `event_bus/` 패키지 통합 | ✅ 2차 완료 |
+| **6** | `governance_checks.py` | 863 | governance 4파일 → `governance/` 패키지 통합 | ✅ 2차 완료 |
+| **6** | `governance.py` | 547 | 위와 동일 도메인 | ✅ 2차 완료 |
+| **6** | `governance_api_service.py` | 526 | 위와 동일 도메인 | ✅ 2차 완료 |
+| **6** | `governance_service.py` | 435 | 위와 동일 도메인 (합계 2,371줄) | ✅ 2차 완료 |
+| **2** | `idempotency_service.py` | 1,160 | 단독 대형 파일 | 🔜 3차 계획 |
+| **3** | `unified_notification.py` | 945 | 단독 대형 파일 | 🔜 3차 계획 |
+| **4** | `replay_service.py` | 940 | `dlq/replay_operations.py`와 기능 분산 정리 필요 | 🔜 3차 계획 |
+| **5** | `control_api_service.py` | 871 | 단독 대형 파일 | 🔜 3차 계획 |
+| **7** | `stress_test_service.py` | 842 | 단독 대형 파일 | 🔜 3차 계획 |
+| **8** | `retry_handler.py` | 827 | 단독 대형 파일 | 🔜 3차 계획 |
+| **9** | `backoff_calculator.py` | 822 | 단독 대형 파일 | 🔜 3차 계획 |
+| **10** | `execution_services.py` | 730 | 단독 대형 파일 | 🔜 3차 계획 |
+| **11** | `precomputed_cache.py` | 690 | 단독 대형 파일 | 🔜 3차 계획 |
+| **12** | `rate_limit_coordinator.py` | 576 | 단독 대형 파일 | 🔜 3차 계획 |
+| **13** | `dashboard_service.py` | 538 | 단독 대형 파일 | 🔜 3차 계획 |
+| **14** | `config_history.py` | 512 | 단독 대형 파일 | 🔜 3차 계획 |
 
 ### 3-5. 검증 항목 — ✅ 1차 완료
 
@@ -314,3 +316,64 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 
 대상: `tests/unit/dlq/`, `tests/unit/replay/test_dlq_service.py`,
 `tests/services/test_postmortem_store.py`, `tests/services/test_error_budget_service.py`
+
+### 4-2. 2차 정리 (2026-02-09) — event_bus/, governance/ 패키지 전환
+
+#### 변경 요약
+
+- `event_bus.py` (1,875줄) + `event_bus_redis.py` (377줄) → `event_bus/` 패키지 통합
+- `governance.py` (547줄) + `governance_checks.py` (863줄) + `governance_service.py` (435줄) + `governance_api_service.py` (526줄) → `governance/` 패키지 통합
+- 총 6개 플랫 파일 → 2개 패키지 + 4개 shim + 2개 삭제
+
+#### 변경 파일 목록
+
+**신규 생성 (event_bus/ 패키지):**
+- `services/event_bus/__init__.py` — 공개 API 재export + bus.py 전체 속성 동적 노출
+- `services/event_bus/bus.py` — event_bus.py 전체 구현 이전 (1,875줄)
+- `services/event_bus/redis_bus.py` — event_bus_redis.py 구현 이전 (377줄)
+
+**신규 생성 (governance/ 패키지):**
+- `services/governance/__init__.py` — 4개 모듈 공개 API 재export
+- `services/governance/emergency.py` — governance.py 이전 (EmergencyModeTracker, 547줄)
+- `services/governance/checks.py` — governance_checks.py 이전 (GovernanceCheckMixin, 데코레이터, 863줄)
+- `services/governance/service.py` — governance_service.py 이전 (GovernanceService, 435줄)
+- `services/governance/api_service.py` — governance_api_service.py 이전 (GovernanceApiService, 526줄)
+
+**삭제 (패키지가 네임스페이스 대체):**
+- `services/event_bus.py` — `event_bus/` 패키지가 동일 네임스페이스 차지
+- `services/governance.py` — `governance/` 패키지가 동일 네임스페이스 차지
+
+**수정 (sys.modules shim 전환):**
+- `services/event_bus_redis.py` — `sys.modules[__name__] = event_bus.redis_bus` + DeprecationWarning
+- `services/governance_checks.py` — `sys.modules[__name__] = governance.checks` + DeprecationWarning
+- `services/governance_service.py` — `sys.modules[__name__] = governance.service` + DeprecationWarning
+- `services/governance_api_service.py` — `sys.modules[__name__] = governance.api_service` + DeprecationWarning
+
+**수정 (내부 import 경로 변경):**
+- `services/event_bus/redis_bus.py` — `event_bus` → `event_bus.bus` (EventType 등 4개 import)
+- `services/governance/service.py` L26 — `governance_checks` → `governance.checks` (GovernanceCheckMixin)
+- `services/governance/service.py` L132 — lazy import `governance` → 패키지 __init__ 경유 (테스트 patch 호환)
+- `services/governance/api_service.py` L223 — lazy import `governance` → 패키지 __init__ 경유
+
+#### Shim 전략 비교
+
+| 패턴 | 적용 대상 | 이유 |
+|------|----------|------|
+| **re-export shim** | `dlq_models.py`, `postmortem_store.py` 등 | 파일명과 패키지명이 다름 → 정상 동작 |
+| **sys.modules 교체 shim** | `governance_checks.py`, `governance_service.py` 등 | 테스트에서 `patch("...governance_checks._private_fn")` 사용 → 모듈 객체 일치 필요 |
+| **삭제** | `event_bus.py`, `governance.py` | 패키지와 동일 이름 → Python이 패키지 우선 → 파일 접근 불가 |
+
+#### 테스트 결과
+
+```
+event_bus + governance + throttle: 172 passed in 6.92s
+dlq + replay + postmortem + error_budget: 155 passed in 1.45s
+합계: 327 passed, 0 failed
+```
+
+대상: `tests/unit/services/test_event_bus_unit.py`, `tests/unit/governance/`,
+`tests/services/test_event_bus_redis.py`, `tests/services/test_event_bus_throttle_events.py`,
+`tests/unit/resilience/test_event_bus_error_budget_gate.py`,
+`tests/unit/throttle/test_throttle_*_integration.py`, `tests/unit/throttle/test_throttle_eventbus_handlers.py`,
+`tests/unit/adapters/test_beat_schedule_governance_integration.py`,
+`tests/unit/config/test_auto_tuning_governance.py`, `tests/unit/tasks/test_tasks_governance.py`
