@@ -9,8 +9,8 @@ Replaces:
 - core/safe_defaults.py:VALIDATION_RULES["error_budget"]
 
 Environment Variables:
-    SELFHEALING_ERRORBUDGET_THRESHOLD_HEALTHY=75.0
-    SELFHEALING_ERRORBUDGET_BURN_RATE_FAST_CRITICAL=14.4
+    SELFHEALING_ERROR_BUDGET_THRESHOLD_HEALTHY=75.0
+    SELFHEALING_ERROR_BUDGET_BURN_RATE_FAST_CRITICAL=14.4
 
 Reference:
 - docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
@@ -35,7 +35,7 @@ class ErrorBudgetSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_ERRORBUDGET_",
+        env_prefix="SELFHEALING_ERROR_BUDGET_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

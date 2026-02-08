@@ -32,8 +32,8 @@ class TestGenerateTraceId:
         
         with patch.dict(os.environ, {
             "SELFHEALING_CLUSTER_ID": "seoul-prod-01",
-            "SELFHEALING_REGION": "seoul",
-            "SELFHEALING_ENV": "production",
+            "SELFHEALING_NAMESPACE_REGION": "seoul",
+            "SELFHEALING_NAMESPACE_ENV": "production",
             "SELFHEALING_FAIL_FAST": "false",
         }):
             from selfhealing.core.cluster_identity import reset_cluster_identity

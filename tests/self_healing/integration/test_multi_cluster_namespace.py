@@ -58,11 +58,11 @@ def reset_all_singletons():
     
     # 환경변수 정리
     env_keys = [
-        "SELFHEALING_NAMESPACE_ENABLED",
-        "SELFHEALING_NAMESPACE",
-        "SELFHEALING_REGION",
-        "SELFHEALING_TENANT",
-        "SELFHEALING_ENV",
+        "SELFHEALING_NAMESPACE_NAMESPACE_ENABLED",
+        "SELFHEALING_NAMESPACE_NAMESPACE",
+        "SELFHEALING_NAMESPACE_REGION",
+        "SELFHEALING_NAMESPACE_TENANT",
+        "SELFHEALING_NAMESPACE_ENV",
         "SELFHEALING_CLUSTER_ID",
         "SELFHEALING_FAIL_FAST",
     ]
@@ -131,8 +131,8 @@ class TestNamespaceIsolation:
         service_name = "payment-api"
         
         # === Seoul Cluster ===
-        os.environ["SELFHEALING_NAMESPACE_ENABLED"] = "true"
-        os.environ["SELFHEALING_REGION"] = "seoul"
+        os.environ["SELFHEALING_NAMESPACE_NAMESPACE_ENABLED"] = "true"
+        os.environ["SELFHEALING_NAMESPACE_REGION"] = "seoul"
         reset_namespace_settings()
         reset_storage_backend()
         
@@ -154,7 +154,7 @@ class TestNamespaceIsolation:
         assert seoul_state_after.failure_count == 3, "Seoul should have 3 failures"
         
         # === Tokyo Cluster ===
-        os.environ["SELFHEALING_REGION"] = "tokyo"
+        os.environ["SELFHEALING_NAMESPACE_REGION"] = "tokyo"
         reset_namespace_settings()
         reset_storage_backend()
         
@@ -185,7 +185,7 @@ class TestNamespaceIsolation:
         assert tokyo_state_after.failure_count == 1, "Tokyo should have 1 failure"
         
         # Seoul 재확인 - 여전히 3개
-        os.environ["SELFHEALING_REGION"] = "seoul"
+        os.environ["SELFHEALING_NAMESPACE_REGION"] = "seoul"
         reset_namespace_settings()
         reset_storage_backend()
         
@@ -216,8 +216,8 @@ class TestNamespaceIsolation:
         from selfhealing.adapters.redis.dlq import RedisDLQRepository
         
         # === Seoul Cluster ===
-        os.environ["SELFHEALING_NAMESPACE_ENABLED"] = "true"
-        os.environ["SELFHEALING_REGION"] = "seoul"
+        os.environ["SELFHEALING_NAMESPACE_NAMESPACE_ENABLED"] = "true"
+        os.environ["SELFHEALING_NAMESPACE_REGION"] = "seoul"
         reset_namespace_settings()
         reset_storage_backend()
         
@@ -237,7 +237,7 @@ class TestNamespaceIsolation:
         )
         
         # === Tokyo Cluster ===
-        os.environ["SELFHEALING_REGION"] = "tokyo"
+        os.environ["SELFHEALING_NAMESPACE_REGION"] = "tokyo"
         reset_namespace_settings()
         reset_storage_backend()
         
@@ -293,7 +293,7 @@ class TestLegacyCompatibility:
         )
         
         # Legacy mode (namespace disabled)
-        os.environ.pop("SELFHEALING_NAMESPACE_ENABLED", None)
+        os.environ.pop("SELFHEALING_NAMESPACE_NAMESPACE_ENABLED", None)
         reset_namespace_settings()
         reset_storage_backend()
         
@@ -383,8 +383,8 @@ class TestClusterIdentity:
         환경변수에서 ClusterIdentity 로드.
         """
         os.environ["SELFHEALING_CLUSTER_ID"] = "integration-test-cluster"
-        os.environ["SELFHEALING_REGION"] = "ap-northeast-2"
-        os.environ["SELFHEALING_ENV"] = "testing"
+        os.environ["SELFHEALING_NAMESPACE_REGION"] = "ap-northeast-2"
+        os.environ["SELFHEALING_NAMESPACE_ENV"] = "testing"
         os.environ["SELFHEALING_FAIL_FAST"] = "false"
         
         from selfhealing.core.cluster_identity import (

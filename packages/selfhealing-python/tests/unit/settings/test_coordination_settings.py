@@ -366,7 +366,7 @@ class TestCriticalWorkerSettingsWorkerPool:
             DeploymentEnvironment,
         )
         
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_DEPLOYMENT_ENV", "ENTERPRISE")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_DEPLOYMENT_ENV", "ENTERPRISE")
         
         settings = CriticalWorkerSettings()
         
@@ -376,8 +376,8 @@ class TestCriticalWorkerSettingsWorkerPool:
         """환경변수로 Pool 설정을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.critical_worker import CriticalWorkerSettings
         
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_POOL_MINIMAL_WORKER_COUNT", "3")
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_POOL_ENTERPRISE_CONCURRENCY", "16")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_POOL_MINIMAL_WORKER_COUNT", "3")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_POOL_ENTERPRISE_CONCURRENCY", "16")
         
         settings = CriticalWorkerSettings()
         

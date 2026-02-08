@@ -338,8 +338,8 @@ class HealthCheckService:
 
             return (
                 os.environ.get("SELFHEALING_CLUSTER_ID", "unknown"),
-                os.environ.get("SELFHEALING_REGION"),
-                os.environ.get("SELFHEALING_ENV", "production"),
+                os.environ.get("SELFHEALING_NAMESPACE_REGION"),
+                os.environ.get("SELFHEALING_NAMESPACE_ENV", "production"),
             )
 
     def is_alive(self) -> bool:

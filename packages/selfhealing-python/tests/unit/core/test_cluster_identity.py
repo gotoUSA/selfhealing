@@ -270,8 +270,8 @@ class TestClusterIdentitySingleton:
     
     @patch.dict(os.environ, {
         "SELFHEALING_CLUSTER_ID": "env-cluster",
-        "SELFHEALING_REGION": "busan",
-        "SELFHEALING_ENV": "staging",
+        "SELFHEALING_NAMESPACE_REGION": "busan",
+        "SELFHEALING_NAMESPACE_ENV": "staging",
     }, clear=False)
     def test_env_var_loading(self):
         """환경변수에서 설정 로드."""

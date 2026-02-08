@@ -87,7 +87,7 @@ class TestQuarantineMode:
             os.environ,
             {
                 "SELFHEALING_CLUSTER_ID": "seoul-prod-01",
-                "SELFHEALING_REGION": "seoul",
+                "SELFHEALING_NAMESPACE_REGION": "seoul",
                 "SELFHEALING_FAIL_FAST": "false",
             },
             clear=False,

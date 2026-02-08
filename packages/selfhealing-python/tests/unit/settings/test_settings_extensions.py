@@ -68,9 +68,9 @@ class TestErrorBudgetPropagationSettingsExtension:
         )
         
         with mock.patch.dict(os.environ, {
-            "SELFHEALING_ERRORBUDGET_PROPAGATION_MAX_CRISIS_MULTIPLIER_CAP": "15.0",
-            "SELFHEALING_ERRORBUDGET_PROPAGATION_REFUND_RATIO": "0.7",
-            "SELFHEALING_ERRORBUDGET_PROPAGATION_DEFAULT_COMBINE_STRATEGY": "sum",
+            "SELFHEALING_ERROR_BUDGET_PROPAGATION_MAX_CRISIS_MULTIPLIER_CAP": "15.0",
+            "SELFHEALING_ERROR_BUDGET_PROPAGATION_REFUND_RATIO": "0.7",
+            "SELFHEALING_ERROR_BUDGET_PROPAGATION_DEFAULT_COMBINE_STRATEGY": "sum",
         }):
             reset_error_budget_propagation_settings()
             settings = get_error_budget_propagation_settings()
@@ -181,9 +181,9 @@ class TestAntiFlappingSettingsExtension:
         )
 
         with mock.patch.dict(os.environ, {
-            "SELFHEALING_ANTIFLAPPING_WINDOW_SECONDS": "120",
-            "SELFHEALING_ANTIFLAPPING_SIMILARITY_THRESHOLD": "0.02",
-            "SELFHEALING_ANTIFLAPPING_MAX_SIMILAR_CHANGES": "5",
+            "SELFHEALING_ANTI_FLAPPING_WINDOW_SECONDS": "120",
+            "SELFHEALING_ANTI_FLAPPING_SIMILARITY_THRESHOLD": "0.02",
+            "SELFHEALING_ANTI_FLAPPING_MAX_SIMILAR_CHANGES": "5",
         }):
             reset_anti_flapping_settings()
             settings = get_anti_flapping_settings()
@@ -346,10 +346,10 @@ class TestSteadyStateSettings:
         )
 
         with mock.patch.dict(os.environ, {
-            "SELFHEALING_STEADYSTATE_P50_LATENCY_MAX_MS": "150.0",
-            "SELFHEALING_STEADYSTATE_P99_LATENCY_MAX_MS": "750.0",
-            "SELFHEALING_STEADYSTATE_ERROR_RATE_MAX_PERCENT": "0.5",
-            "SELFHEALING_STEADYSTATE_THROUGHPUT_MIN_RPS": "200.0",
+            "SELFHEALING_STEADY_STATE_P50_LATENCY_MAX_MS": "150.0",
+            "SELFHEALING_STEADY_STATE_P99_LATENCY_MAX_MS": "750.0",
+            "SELFHEALING_STEADY_STATE_ERROR_RATE_MAX_PERCENT": "0.5",
+            "SELFHEALING_STEADY_STATE_THROUGHPUT_MIN_RPS": "200.0",
         }):
             reset_steady_state_settings()
             settings = get_steady_state_settings()

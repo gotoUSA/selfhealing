@@ -9,8 +9,8 @@ Replaces:
 - core/safe_defaults.py:VALIDATION_RULES["l2_storage"]
 
 Environment Variables:
-    SELFHEALING_L2STORAGE_REDIS_TIMEOUT_MS=1000
-    SELFHEALING_L2STORAGE_RECONCILIATION_INTERVAL_SECONDS=300
+    SELFHEALING_L2_STORAGE_REDIS_TIMEOUT_MS=1000
+    SELFHEALING_L2_STORAGE_RECONCILIATION_INTERVAL_SECONDS=300
 
 Reference:
 - docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
@@ -35,7 +35,7 @@ class L2StorageSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_L2STORAGE_",
+        env_prefix="SELFHEALING_L2_STORAGE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

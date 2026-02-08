@@ -109,7 +109,7 @@ class TestXTestRegionalBoundary:
     # get_current_region 테스트
     # =========================================================================
 
-    @patch.dict(os.environ, {"SELFHEALING_REGION": "seoul"}, clear=False)
+    @patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "seoul"}, clear=False)
     def test_get_current_region_from_env(self, mixin):
         """환경변수에서 리전 조회."""
         result = mixin.get_current_region()
@@ -143,7 +143,7 @@ class TestXTestRegionalBoundary:
         assert is_allowed is True
         assert response is None
 
-    @patch.dict(os.environ, {"SELFHEALING_REGION": "seoul"}, clear=False)
+    @patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "seoul"}, clear=False)
     def test_global_scope_header_required(self, mixin, mock_global_request):
         """GLOBAL scope API는 X-Region 헤더 필수."""
         # X-Region 헤더 없음
@@ -155,7 +155,7 @@ class TestXTestRegionalBoundary:
         assert response.data["error"] == "missing_region_header"
         assert response.data["current_region"] == "seoul"
 
-    @patch.dict(os.environ, {"SELFHEALING_REGION": "seoul"}, clear=False)
+    @patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "seoul"}, clear=False)
     def test_region_mismatch_denied(self, mixin, mock_global_request):
         """리전 불일치 시 403 거부."""
         mock_global_request.headers["X-Region"] = "tokyo"
@@ -169,7 +169,7 @@ class TestXTestRegionalBoundary:
         assert response.data["current_region"] == "seoul"
         assert response.data["target_region"] == "tokyo"
 
-    @patch.dict(os.environ, {"SELFHEALING_REGION": "seoul"}, clear=False)
+    @patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "seoul"}, clear=False)
     def test_region_match_allowed(self, mixin, mock_global_request):
         """리전 일치 시 허용."""
         mock_global_request.headers["X-Region"] = "seoul"
@@ -179,7 +179,7 @@ class TestXTestRegionalBoundary:
         assert is_allowed is True
         assert response is None
 
-    @patch.dict(os.environ, {"SELFHEALING_REGION": "SEOUL"}, clear=False)
+    @patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "SEOUL"}, clear=False)
     def test_region_match_case_insensitive(self, mixin, mock_global_request):
         """리전 비교는 대소문자 무시."""
         mock_global_request.headers["X-Region"] = "seoul"
@@ -216,7 +216,7 @@ class TestXTestRegionalBoundary:
     @patch.dict(
         os.environ,
         {
-            "SELFHEALING_REGION": "seoul",
+            "SELFHEALING_NAMESPACE_REGION": "seoul",
             "CHAOS_ENABLED": "true",
             "ENVIRONMENT": "staging",
         },
@@ -244,7 +244,7 @@ class TestXTestRegionalBoundary:
     @patch.dict(
         os.environ,
         {
-            "SELFHEALING_REGION": "seoul",
+            "SELFHEALING_NAMESPACE_REGION": "seoul",
             "CHAOS_ENABLED": "true",
             "ENVIRONMENT": "staging",
         },
@@ -272,7 +272,7 @@ class TestXTestRegionalBoundary:
     @patch.dict(
         os.environ,
         {
-            "SELFHEALING_REGION": "seoul",
+            "SELFHEALING_NAMESPACE_REGION": "seoul",
             "CHAOS_ENABLED": "true",
             "ENVIRONMENT": "staging",
         },
@@ -298,7 +298,7 @@ class TestXTestRegionalBoundary:
     @patch.dict(
         os.environ,
         {
-            "SELFHEALING_REGION": "seoul",
+            "SELFHEALING_NAMESPACE_REGION": "seoul",
             "CHAOS_ENABLED": "true",
             "ENVIRONMENT": "staging",
         },

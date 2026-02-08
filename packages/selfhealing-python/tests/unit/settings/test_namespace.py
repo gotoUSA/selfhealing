@@ -157,8 +157,8 @@ class TestNamespaceSettings:
         assert s1 is not s2
     
     @patch.dict(os.environ, {
-        "SELFHEALING_NAMESPACE_ENABLED": "true",
-        "SELFHEALING_REGION": "osaka",
+        "SELFHEALING_NAMESPACE_NAMESPACE_ENABLED": "true",
+        "SELFHEALING_NAMESPACE_REGION": "osaka",
     }, clear=False)
     def test_env_var_loading(self):
         """환경변수에서 설정 로드."""

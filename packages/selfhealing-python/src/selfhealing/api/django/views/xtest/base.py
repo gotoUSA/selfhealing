@@ -120,13 +120,13 @@ class XTestModeMixin:
         """
         현재 클러스터의 리전 조회.
 
-        환경변수 SELFHEALING_REGION 또는 ClusterIdentity에서 리전 정보를 가져옵니다.
+        환경변수 SELFHEALING_NAMESPACE_REGION 또는 ClusterIdentity에서 리전 정보를 가져옵니다.
 
         Returns:
             리전 식별자 (예: 'seoul', 'tokyo') 또는 None
         """
         # 1. 환경변수에서 직접 조회 (가장 빠름)
-        region = os.getenv("SELFHEALING_REGION")
+        region = os.getenv("SELFHEALING_NAMESPACE_REGION")
         if region:
             return region
 
@@ -252,17 +252,17 @@ class XTestModeMixin:
             if environment == "development":
                 # 개발 환경에서는 경고만 출력
                 logger.warning(
-                    "[X-Test-Mode] SELFHEALING_REGION not set in development. " "GLOBAL scope API allowed with warning."
+                    "[X-Test-Mode] SELFHEALING_NAMESPACE_REGION not set in development. " "GLOBAL scope API allowed with warning."
                 )
                 return True, None
 
-            logger.warning("[X-Test-Mode] SELFHEALING_REGION not set. " "GLOBAL scope API denied for safety.")
+            logger.warning("[X-Test-Mode] SELFHEALING_NAMESPACE_REGION not set. " "GLOBAL scope API denied for safety.")
             return False, Response(
                 {
                     "status": "error",
                     "error": "region_not_configured",
-                    "message": "SELFHEALING_REGION not configured. GLOBAL scope API denied.",
-                    "hint": "Set SELFHEALING_REGION environment variable",
+                    "message": "SELFHEALING_NAMESPACE_REGION not configured. GLOBAL scope API denied.",
+                    "hint": "Set SELFHEALING_NAMESPACE_REGION environment variable",
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )

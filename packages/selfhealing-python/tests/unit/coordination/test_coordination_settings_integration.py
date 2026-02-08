@@ -120,9 +120,9 @@ class TestCriticalWorkerSettingsIntegration:
         from selfhealing.settings.critical_worker import reset_critical_worker_settings
         
         # 환경변수로 커스텀 값 설정
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_CRITICAL_QUEUE_NAME", "custom.critical")
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_CRITICAL_WORKER_COUNT", "5")
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_CRITICAL_CONCURRENCY", "3")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_CRITICAL_QUEUE_NAME", "custom.critical")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_CRITICAL_WORKER_COUNT", "5")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_CRITICAL_CONCURRENCY", "3")
         
         reset_critical_worker_settings()
         

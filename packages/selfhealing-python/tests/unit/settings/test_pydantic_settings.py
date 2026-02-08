@@ -322,8 +322,8 @@ class TestRateLimitSettings:
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.rate_limit import RateLimitSettings
 
-        monkeypatch.setenv("SELFHEALING_RATELIMIT_CONTROL_API_RATE_LIMIT", "200")
-        monkeypatch.setenv("SELFHEALING_RATELIMIT_EMERGENCY_RATE_LIMIT", "20")
+        monkeypatch.setenv("SELFHEALING_RATE_LIMIT_CONTROL_API_RATE_LIMIT", "200")
+        monkeypatch.setenv("SELFHEALING_RATE_LIMIT_EMERGENCY_RATE_LIMIT", "20")
 
         settings = RateLimitSettings()
 

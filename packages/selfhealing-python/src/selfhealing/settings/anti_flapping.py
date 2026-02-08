@@ -8,8 +8,8 @@ Replaces:
 - services/coordination/anti_flapping.py:AntiFlappingGuard 기본값들
 
 Environment Variables:
-    SELFHEALING_ANTIFLAPPING_LEVEL_COOLDOWN_SECONDS=300
-    SELFHEALING_ANTIFLAPPING_RECOVERY_HYSTERESIS_FACTOR=1.15
+    SELFHEALING_ANTI_FLAPPING_LEVEL_COOLDOWN_SECONDS=300
+    SELFHEALING_ANTI_FLAPPING_RECOVERY_HYSTERESIS_FACTOR=1.15
 
 Reference:
 - docs/self_healing/middleware_system/92_CONFIG_IMPLEMENTATION_GUIDE.md (Week 2 [8])
@@ -39,7 +39,7 @@ class AntiFlappingSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_ANTIFLAPPING_",
+        env_prefix="SELFHEALING_ANTI_FLAPPING_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

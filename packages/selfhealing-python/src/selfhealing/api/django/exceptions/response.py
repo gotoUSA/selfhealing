@@ -49,9 +49,9 @@ def _get_current_region() -> str | None:
         return identity.region
     except ImportError:
         # ClusterIdentity 모듈 없음 - 환경변수 직접 조회
-        return os.environ.get("SELFHEALING_REGION")
+        return os.environ.get("SELFHEALING_NAMESPACE_REGION")
     except Exception:
-        return os.environ.get("SELFHEALING_REGION")
+        return os.environ.get("SELFHEALING_NAMESPACE_REGION")
 
 
 @dataclass
@@ -120,7 +120,7 @@ class ResponseMeta:
     """인과관계 추적용 Cascade ID (API-Celery 인과관계 연결)."""
 
     region: str | None = None
-    """에러 발생 리전 (멀티 리전 환경에서 SELFHEALING_REGION 값)."""
+    """에러 발생 리전 (멀티 리전 환경에서 SELFHEALING_NAMESPACE_REGION 값)."""
 
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화용)."""
@@ -211,7 +211,7 @@ class StandardErrorResponse:
             path: 요청 경로
             method: HTTP 메서드
             causation_id: 인과관계 추적용 Cascade ID
-            region: 에러 발생 리전 (None이면 SELFHEALING_REGION 환경변수 사용)
+            region: 에러 발생 리전 (None이면 SELFHEALING_NAMESPACE_REGION 환경변수 사용)
 
         Returns:
             StandardErrorResponse 인스턴스
@@ -301,7 +301,7 @@ def create_error_response(
         path: 요청 경로
         method: HTTP 메서드
         extra: 추가 정보
-        region: 에러 발생 리전 (None이면 SELFHEALING_REGION 환경변수 사용)
+        region: 에러 발생 리전 (None이면 SELFHEALING_NAMESPACE_REGION 환경변수 사용)
 
     Returns:
         StandardErrorResponse 인스턴스

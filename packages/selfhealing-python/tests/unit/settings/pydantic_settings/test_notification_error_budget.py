@@ -89,7 +89,7 @@ class TestErrorBudgetSettings:
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.error_budget import ErrorBudgetSettings
         
-        monkeypatch.setenv("SELFHEALING_ERRORBUDGET_BURN_RATE_FAST_CRITICAL", "20.0")
+        monkeypatch.setenv("SELFHEALING_ERROR_BUDGET_BURN_RATE_FAST_CRITICAL", "20.0")
         
         settings = ErrorBudgetSettings()
         

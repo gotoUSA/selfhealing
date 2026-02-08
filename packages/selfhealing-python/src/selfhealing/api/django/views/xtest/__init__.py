@@ -10,7 +10,7 @@ Security:
 
 Regional Scope (리전 경계 강제):
 - GLOBAL scope API는 X-Region 헤더 필수
-- X-Region 값이 현재 클러스터 리전(SELFHEALING_REGION)과 일치해야 허용
+- X-Region 값이 현재 클러스터 리전(SELFHEALING_NAMESPACE_REGION)과 일치해야 허용
 - 리전 불일치 시 403 Forbidden (cross_region_xtest_denied)
 
 GLOBAL Scope API (X-Region 헤더 필수):

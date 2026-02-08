@@ -178,7 +178,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
             headers = dict(get_causation_for_kafka())
             action_value = entry.action.value if hasattr(entry.action, "value") else str(entry.action)
             headers["x-audit-action"] = action_value.encode("utf-8")
-            headers["x-region"] = os.environ.get("SELFHEALING_REGION", "unknown").encode("utf-8")
+            headers["x-region"] = os.environ.get("SELFHEALING_NAMESPACE_REGION", "unknown").encode("utf-8")
 
             with self._lock:
                 self._pending_count += 1

@@ -40,7 +40,7 @@ class TestErrorBudgetPropagationSettings:
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.error_budget_propagation import ErrorBudgetPropagationSettings
         
-        monkeypatch.setenv("SELFHEALING_ERRORBUDGET_PROPAGATION_MAX_HOPS", "5")
+        monkeypatch.setenv("SELFHEALING_ERROR_BUDGET_PROPAGATION_MAX_HOPS", "5")
         
         settings = ErrorBudgetPropagationSettings()
         
@@ -92,7 +92,7 @@ class TestAntiFlappingSettings:
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.anti_flapping import AntiFlappingSettings
         
-        monkeypatch.setenv("SELFHEALING_ANTIFLAPPING_LEVEL_COOLDOWN_SECONDS", "600")
+        monkeypatch.setenv("SELFHEALING_ANTI_FLAPPING_LEVEL_COOLDOWN_SECONDS", "600")
         
         settings = AntiFlappingSettings()
         
@@ -197,7 +197,7 @@ class TestCriticalWorkerSettings:
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.critical_worker import CriticalWorkerSettings
         
-        monkeypatch.setenv("SELFHEALING_CRITICALWORKER_CRITICAL_QUEUE_NAME", "custom.critical")
+        monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_CRITICAL_QUEUE_NAME", "custom.critical")
         
         settings = CriticalWorkerSettings()
         

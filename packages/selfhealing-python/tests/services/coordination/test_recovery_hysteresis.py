@@ -113,7 +113,7 @@ class TestEnvironmentVariableSupport:
         import selfhealing.settings.anti_flapping as anti_flapping_settings
         anti_flapping_settings._settings = None
         
-        monkeypatch.setenv("SELFHEALING_ANTIFLAPPING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
+        monkeypatch.setenv("SELFHEALING_ANTI_FLAPPING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
         
         # AntiFlappingGuard 생성 시 환경변수 값 사용
         guard = AntiFlappingGuard()
@@ -128,7 +128,7 @@ class TestEnvironmentVariableSupport:
         import selfhealing.settings.anti_flapping as anti_flapping_settings
         anti_flapping_settings._settings = None
         
-        monkeypatch.setenv("SELFHEALING_ANTIFLAPPING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
+        monkeypatch.setenv("SELFHEALING_ANTI_FLAPPING_RECOVERY_HYSTERESIS_FACTOR", "1.30")
         
         guard = AntiFlappingGuard(recovery_hysteresis_factor=1.50)
         assert guard.recovery_hysteresis_factor == 1.50

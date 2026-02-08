@@ -5,10 +5,10 @@ X-Test 요청 시 시스템 CPU/메모리 과부하 상태를 체크하여
 운영 시스템에 추가 부담을 방지하기 위한 설정.
 
 Environment Variables:
-    XTEST_CPU_THRESHOLD=80           # CPU 임계값 (%)
-    XTEST_MEMORY_THRESHOLD=85        # 메모리 임계값 (%)
-    XTEST_RESOURCE_CHECK_ENABLED=true  # 리소스 체크 활성화 여부
-    XTEST_RETRY_AFTER_SECONDS=30     # 429 응답 시 권장 대기 시간
+    SELFHEALING_RESOURCE_GUARD_CPU_THRESHOLD=80           # CPU 임계값 (%)
+    SELFHEALING_RESOURCE_GUARD_MEMORY_THRESHOLD=85        # 메모리 임계값 (%)
+    SELFHEALING_RESOURCE_GUARD_RESOURCE_CHECK_ENABLED=true  # 리소스 체크 활성화 여부
+    SELFHEALING_RESOURCE_GUARD_RETRY_AFTER_SECONDS=30     # 429 응답 시 권장 대기 시간
 """
 
 import logging
@@ -30,7 +30,7 @@ class ResourceGuardSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="XTEST_",
+        env_prefix="SELFHEALING_RESOURCE_GUARD_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

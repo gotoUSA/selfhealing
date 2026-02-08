@@ -237,8 +237,8 @@ class TestGetCurrentRegion:
     def test_get_current_region_from_env_when_cluster_identity_fails(self):
         """ClusterIdentity import 실패 시 환경변수에서 region 읽기."""
         # ClusterIdentity에서 예외 발생하도록 mock
-        # 실제 구현은 get_cluster_identity가 예외를 발생시키면 os.environ.get("SELFHEALING_REGION")을 반환
-        with patch.dict(os.environ, {"SELFHEALING_REGION": "test-region"}):
+        # 실제 구현은 get_cluster_identity가 예외를 발생시키면 os.environ.get("SELFHEALING_NAMESPACE_REGION")을 반환
+        with patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "test-region"}):
             with patch.object(response_module, "_get_current_region") as mock_get_region:
                 # 환경변수에서 읽는 동작 시뮬레이션
                 mock_get_region.return_value = "test-region"
@@ -248,7 +248,7 @@ class TestGetCurrentRegion:
 
         # 직접 로드된 모듈에서 _get_current_region 테스트 (ClusterIdentity 사용 가능한 환경)
         # 환경변수 설정 후 호출 결과가 None이 아닌 것만 확인
-        with patch.dict(os.environ, {"SELFHEALING_REGION": "fallback-region"}):
+        with patch.dict(os.environ, {"SELFHEALING_NAMESPACE_REGION": "fallback-region"}):
             actual_region = _get_current_region()
             # ClusterIdentity가 있으면 그 값을, 없으면 환경변수 사용
             # 어느 경우든 환경변수가 설정되어 있으므로 None이 아니어야 함

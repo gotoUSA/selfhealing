@@ -57,10 +57,10 @@ class TestResourceGuardSettings:
         with patch.dict(
             "os.environ",
             {
-                "XTEST_CPU_THRESHOLD": "90",
-                "XTEST_MEMORY_THRESHOLD": "95",
-                "XTEST_RESOURCE_CHECK_ENABLED": "false",
-                "XTEST_RETRY_AFTER_SECONDS": "60",
+                "SELFHEALING_RESOURCE_GUARD_CPU_THRESHOLD": "90",
+                "SELFHEALING_RESOURCE_GUARD_MEMORY_THRESHOLD": "95",
+                "SELFHEALING_RESOURCE_GUARD_RESOURCE_CHECK_ENABLED": "false",
+                "SELFHEALING_RESOURCE_GUARD_RETRY_AFTER_SECONDS": "60",
             },
         ):
             settings = ResourceGuardSettings()

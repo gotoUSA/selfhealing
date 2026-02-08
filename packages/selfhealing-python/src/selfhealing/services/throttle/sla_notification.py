@@ -18,7 +18,7 @@ def _get_region_safe() -> str | None:
     """
     현재 클러스터의 리전 정보를 안전하게 가져옵니다.
 
-    환경변수 SELFHEALING_REGION에서 읽으며,
+    환경변수 SELFHEALING_NAMESPACE_REGION에서 읽으며,
     region이 None이면 단일 리전 배포입니다.
     """
     try:

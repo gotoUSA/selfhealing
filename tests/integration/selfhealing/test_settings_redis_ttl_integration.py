@@ -222,13 +222,13 @@ class TestSettingsEnvVarTtlIntegration:
 
     def test_rate_limit_env_ttl_applied_to_redis(self, redis_client, monkeypatch):
         """
-        SELFHEALING_RATELIMIT_REDIS_TTL 환경 변수가 실제 Redis에 적용되는지 확인.
+        SELFHEALING_RATE_LIMIT_REDIS_TTL 환경 변수가 실제 Redis에 적용되는지 확인.
         """
         from selfhealing.settings.rate_limit import reset_rate_limit_settings
         from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
 
         # 환경 변수 설정
-        monkeypatch.setenv("SELFHEALING_RATELIMIT_REDIS_TTL", "600")
+        monkeypatch.setenv("SELFHEALING_RATE_LIMIT_REDIS_TTL", "600")
         reset_rate_limit_settings()
 
         storage = RedisRateLimitStorage(redis_client=redis_client)

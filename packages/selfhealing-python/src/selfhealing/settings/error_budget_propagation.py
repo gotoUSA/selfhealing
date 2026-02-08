@@ -9,9 +9,9 @@ Replaces:
 - services/error_budget/propagation.py:PropagationConfig
 
 Environment Variables:
-    SELFHEALING_ERRORBUDGET_PROPAGATION_DECAY_PER_HOP=0.5
-    SELFHEALING_ERRORBUDGET_PROPAGATION_MAX_HOPS=3
-    SELFHEALING_ERRORBUDGET_PROPAGATION_BASE_MULTIPLIER=5.0
+    SELFHEALING_ERROR_BUDGET_PROPAGATION_DECAY_PER_HOP=0.5
+    SELFHEALING_ERROR_BUDGET_PROPAGATION_MAX_HOPS=3
+    SELFHEALING_ERROR_BUDGET_PROPAGATION_BASE_MULTIPLIER=5.0
 
 Reference:
 - docs/self_healing/middleware_system/92_CONFIG_IMPLEMENTATION_GUIDE.md (Week 2 [7])
@@ -42,7 +42,7 @@ class ErrorBudgetPropagationSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_ERRORBUDGET_PROPAGATION_",
+        env_prefix="SELFHEALING_ERROR_BUDGET_PROPAGATION_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

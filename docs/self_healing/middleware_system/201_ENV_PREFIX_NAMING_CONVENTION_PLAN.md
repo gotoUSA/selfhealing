@@ -1,6 +1,6 @@
 # 201. env_prefix 네이밍 규칙 통일 계획
 
-> **상태**: 📋 계획
+> **상태**: ✅ 완료 (2026-02-09)
 > **목적**: `settings/` 디렉토리의 `env_prefix`를 `SELFHEALING_<FEATURE>_` 패턴으로 통일한다.
 
 ---

@@ -7,10 +7,10 @@ Replaces:
 - services/chaos/base/models.py:SteadyStateHypothesis 기본값
 
 Environment Variables:
-    SELFHEALING_STEADYSTATE_P50_LATENCY_MAX_MS=100.0
-    SELFHEALING_STEADYSTATE_P99_LATENCY_MAX_MS=500.0
-    SELFHEALING_STEADYSTATE_ERROR_RATE_MAX_PERCENT=0.1
-    SELFHEALING_STEADYSTATE_THROUGHPUT_MIN_RPS=100.0
+    SELFHEALING_STEADY_STATE_P50_LATENCY_MAX_MS=100.0
+    SELFHEALING_STEADY_STATE_P99_LATENCY_MAX_MS=500.0
+    SELFHEALING_STEADY_STATE_ERROR_RATE_MAX_PERCENT=0.1
+    SELFHEALING_STEADY_STATE_THROUGHPUT_MIN_RPS=100.0
 """
 
 import logging
@@ -36,7 +36,7 @@ class SteadyStateSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_STEADYSTATE_",
+        env_prefix="SELFHEALING_STEADY_STATE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

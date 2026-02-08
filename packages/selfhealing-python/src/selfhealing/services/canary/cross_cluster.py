@@ -431,7 +431,7 @@ class CrossClusterNotifier:
             notification_backend: 알림 전송 백엔드 (기본: 로깅)
             default_channel: 기본 알림 채널
         """
-        self.current_cluster = current_cluster or os.environ.get("SELFHEALING_NAMESPACE", "default")
+        self.current_cluster = current_cluster or os.environ.get("SELFHEALING_NAMESPACE_NAMESPACE", "default")
         self.other_clusters = other_clusters or []
         self.notification_backend = notification_backend or self._create_default_backend()
         self.default_channel = default_channel or _get_default_slack_channel()

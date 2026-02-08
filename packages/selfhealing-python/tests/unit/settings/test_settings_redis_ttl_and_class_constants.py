@@ -56,7 +56,7 @@ class TestRateLimitSettingsRedisTtl:
         )
 
         reset_rate_limit_settings()
-        with mock.patch.dict(os.environ, {"SELFHEALING_RATELIMIT_REDIS_TTL": "7200"}):
+        with mock.patch.dict(os.environ, {"SELFHEALING_RATE_LIMIT_REDIS_TTL": "7200"}):
             settings = RateLimitSettings()
             assert settings.redis_ttl == 7200  # 2시간
 
@@ -172,8 +172,8 @@ class TestErrorBudgetSettingsMultiplier:
         with mock.patch.dict(
             os.environ,
             {
-                "SELFHEALING_ERRORBUDGET_MULTIPLIER_CACHE_TTL": "60.0",
-                "SELFHEALING_ERRORBUDGET_MULTIPLIER_MAX": "20.0",
+                "SELFHEALING_ERROR_BUDGET_MULTIPLIER_CACHE_TTL": "60.0",
+                "SELFHEALING_ERROR_BUDGET_MULTIPLIER_MAX": "20.0",
             },
         ):
             settings = ErrorBudgetSettings()
@@ -536,7 +536,7 @@ class TestRedisTtlAppliedToMock:
 
         reset_rate_limit_settings()
 
-        with mock.patch.dict(os.environ, {"SELFHEALING_RATELIMIT_REDIS_TTL": "1800"}):
+        with mock.patch.dict(os.environ, {"SELFHEALING_RATE_LIMIT_REDIS_TTL": "1800"}):
             reset_rate_limit_settings()
             mock_redis = MagicMock()
             storage = RedisRateLimitStorage(redis_client=mock_redis)

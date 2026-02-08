@@ -71,7 +71,7 @@ class ClusterIdentity:
 
         Fail-Fast 강화:
         - SELFHEALING_CLUSTER_ID 누락 시 프로세스 즉시 중단 옵션
-        - SELFHEALING_REGION 누락 시 프로세스 즉시 중단 (Phase 1 추가)
+        - SELFHEALING_NAMESPACE_REGION 누락 시 프로세스 즉시 중단 (Phase 1 추가)
         - 잘못된 네임스페이스 건드리는 것을 원천 방지
 
         코드 근거:
@@ -102,7 +102,7 @@ class ClusterIdentity:
 
         # 2. region 검증 (Phase 1 추가 - 필수!)
         if not self.region:
-            errors.append("SELFHEALING_REGION not set. " "Cannot determine namespace - refusing to start.")
+            errors.append("SELFHEALING_NAMESPACE_REGION not set. " "Cannot determine namespace - refusing to start.")
 
         # 검증 실패 처리
         if errors:
@@ -149,9 +149,9 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
     if _identity is None:
         _identity = ClusterIdentity(
             cluster_id=os.environ.get("SELFHEALING_CLUSTER_ID", "default"),
-            region=os.environ.get("SELFHEALING_REGION"),
-            environment=os.environ.get("SELFHEALING_ENV", "production"),
-            tenant=os.environ.get("SELFHEALING_TENANT"),
+            region=os.environ.get("SELFHEALING_NAMESPACE_REGION"),
+            environment=os.environ.get("SELFHEALING_NAMESPACE_ENV", "production"),
+            tenant=os.environ.get("SELFHEALING_NAMESPACE_TENANT"),
         )
 
         # 테스트 환경에서는 validation 스킵

@@ -86,7 +86,7 @@ class TestL2StorageSettings:
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.l2_storage import L2StorageSettings
         
-        monkeypatch.setenv("SELFHEALING_L2STORAGE_REDIS_TIMEOUT_MS", "2000")
+        monkeypatch.setenv("SELFHEALING_L2_STORAGE_REDIS_TIMEOUT_MS", "2000")
         
         settings = L2StorageSettings()
         

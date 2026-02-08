@@ -9,9 +9,9 @@ Replaces:
 - core/safe_defaults.py:VALIDATION_RULES["rate_limit"]
 
 Environment Variables:
-    SELFHEALING_RATELIMIT_BASE_DELAY=1.0
-    SELFHEALING_RATELIMIT_MAX_DELAY=60.0
-    SELFHEALING_RATELIMIT_CONTROL_API_RATE_LIMIT=100
+    SELFHEALING_RATE_LIMIT_BASE_DELAY=1.0
+    SELFHEALING_RATE_LIMIT_MAX_DELAY=60.0
+    SELFHEALING_RATE_LIMIT_CONTROL_API_RATE_LIMIT=100
     ... etc
 
 Reference:
@@ -37,7 +37,7 @@ class RateLimitSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_RATELIMIT_",
+        env_prefix="SELFHEALING_RATE_LIMIT_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",

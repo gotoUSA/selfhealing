@@ -5,12 +5,12 @@ Namespace Settings - Multi-Cluster Support.
 
 Usage:
     # 방법 1: 통합 네임스페이스
-    SELFHEALING_NAMESPACE=seoul
+    SELFHEALING_NAMESPACE_NAMESPACE=seoul
 
     # 방법 2: 개별 설정 (우선순위: NAMESPACE > REGION > TENANT > ENV)
-    SELFHEALING_REGION=seoul
-    SELFHEALING_TENANT=customer123
-    SELFHEALING_ENV=production
+    SELFHEALING_NAMESPACE_REGION=seoul
+    SELFHEALING_NAMESPACE_TENANT=customer123
+    SELFHEALING_NAMESPACE_ENV=production
 
 동적 Namespace (X-Test-Mode 지원):
     - 운영 요청: selfhealing:*
@@ -31,7 +31,7 @@ class NamespaceSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="SELFHEALING_",
+        env_prefix="SELFHEALING_NAMESPACE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
