@@ -113,12 +113,14 @@ class TestSlidingWindowThrottle:
         for i in range(5):
             throttle.check("user")
 
-        # Wait for window to slide
-        time.sleep(1.1)
+        # time.time()을 1.1초 전진시켜 윈도우 슬라이딩을 시뮬레이션
+        import selfhealing.services.throttle.base as _tb_mod
 
-        # Should be allowed again
-        result = throttle.check("user")
-        assert result.allowed is True
+        original_time = time.time()
+        with patch.object(_tb_mod.time, "time", return_value=original_time + 1.1):
+            # Should be allowed again
+            result = throttle.check("user")
+            assert result.allowed is True
 
     def test_current_limit_property(self):
         """Test current_limit property."""

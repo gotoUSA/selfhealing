@@ -399,6 +399,7 @@ class HealthProbeManager:
         self._last_results: dict[str, ProbeResult] = {}
         self._running = False
         self._worker: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
     def _create_default_probes(self) -> list[HealthProbe]:
         """기본 프로브 목록 생성."""
@@ -524,13 +525,16 @@ class HealthProbeManager:
             except Exception as e:
                 logger.error(f"[HealthProbeManager] Loop error: {e}")
 
-            time.sleep(self._settings.probe_interval_seconds)
+            self._stop_event.wait(self._settings.probe_interval_seconds)
+            if self._stop_event.is_set():
+                break
 
     def start(self) -> None:
         """백그라운드 프로브 시작."""
         if self._running:
             return
 
+        self._stop_event.clear()
         self._running = True
         self._worker = threading.Thread(
             target=self._run_loop,
@@ -543,8 +547,9 @@ class HealthProbeManager:
     def stop(self) -> None:
         """프로브 중지."""
         self._running = False
+        self._stop_event.set()
         if self._worker:
-            self._worker.join(timeout=5.0)
+            self._worker.join(timeout=2.0)
             self._worker = None
         logger.info("[HealthProbeManager] Stopped")
 

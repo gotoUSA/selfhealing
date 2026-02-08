@@ -11,7 +11,7 @@ Redis 기반 Cooldown 저장소 단위 테스트.
 from __future__ import annotations
 
 import time
-from unittest.mock import ANY, MagicMock
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -180,8 +180,12 @@ class TestRedisCooldownStoreMemoryOnly:
         store.mark_sent("key1")
         assert store.is_cooled_down("key1")
 
-        time.sleep(1.1)
-        assert not store.is_cooled_down("key1")
+        # time.time()을 1.1초 전진시켜 쿨다운 만료를 시뮬레이션
+        import selfhealing.services.throttle.redis_cooldown_store as _cd_mod
+
+        original_time = time.time()
+        with patch.object(_cd_mod.time, "time", return_value=original_time + 1.1):
+            assert not store.is_cooled_down("key1")
 
     def test_clear_removes_from_memory(self):
         """clear가 메모리에서 제거."""

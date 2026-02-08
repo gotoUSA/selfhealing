@@ -104,6 +104,7 @@ class SelfHealerWatchdog:
         self._lock = threading.RLock()
         self._running = False
         self._worker: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
         # 상태
         self._last_check: datetime | None = None
@@ -598,7 +599,9 @@ class SelfHealerWatchdog:
             except Exception as e:
                 logger.error(f"[SelfHealerWatchdog] Loop error: {e}")
 
-            time.sleep(self._settings.probe_interval_seconds)
+            self._stop_event.wait(self._settings.probe_interval_seconds)
+            if self._stop_event.is_set():
+                break
 
     def start(self) -> None:
         """Watchdog 시작."""
@@ -609,6 +612,7 @@ class SelfHealerWatchdog:
         if self._running:
             return
 
+        self._stop_event.clear()
         self._running = True
         self._worker = threading.Thread(
             target=self._run_loop,
@@ -621,8 +625,9 @@ class SelfHealerWatchdog:
     def stop(self) -> None:
         """Watchdog 중지."""
         self._running = False
+        self._stop_event.set()
         if self._worker:
-            self._worker.join(timeout=10.0)
+            self._worker.join(timeout=2.0)
             self._worker = None
         logger.info("[SelfHealerWatchdog] Stopped")
 

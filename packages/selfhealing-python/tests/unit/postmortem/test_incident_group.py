@@ -369,9 +369,12 @@ class TestIncidentGroupManagerMemory:
         # 즉시는 종료 조건 미충족
         assert manager.should_close_group(group_id, "test3") is False
 
-        # 1초 대기 후 종료 조건 충족
-        time.sleep(1.1)
-        assert manager.should_close_group(group_id, "test3") is True
+        # time.time()을 1.1초 전진시켜 윈도우 만료를 시뮬레이션
+        import selfhealing.services.postmortem.incident_group as _ig_mod
+
+        original_time = time.time()
+        with patch.object(_ig_mod.time, "time", return_value=original_time + 1.1):
+            assert manager.should_close_group(group_id, "test3") is True
 
     def test_close_group_changes_status(self):
         """그룹 종료 시 상태 변경."""

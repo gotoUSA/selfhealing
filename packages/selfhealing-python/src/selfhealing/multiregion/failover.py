@@ -156,6 +156,7 @@ class RegionFailover:
         self._current_primary: str = self._settings.current_region
         self._running = False
         self._worker: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
         # 페일오버 히스토리
         self._history: list[FailoverEvent] = []
@@ -387,7 +388,9 @@ class RegionFailover:
             except Exception as e:
                 logger.error(f"[Failover] Loop error: {e}")
 
-            time.sleep(self._settings.health_check_interval_seconds)
+            self._stop_event.wait(self._settings.health_check_interval_seconds)
+            if self._stop_event.is_set():
+                break
 
     def start(self) -> None:
         """페일오버 모니터링 시작."""
@@ -401,6 +404,7 @@ class RegionFailover:
         # Health Monitor 시작
         self._health_monitor.start()
 
+        self._stop_event.clear()
         self._running = True
         self._worker = threading.Thread(
             target=self._run_loop,
@@ -413,8 +417,9 @@ class RegionFailover:
     def stop(self) -> None:
         """페일오버 모니터링 중지."""
         self._running = False
+        self._stop_event.set()
         if self._worker:
-            self._worker.join(timeout=5.0)
+            self._worker.join(timeout=2.0)
         self._health_monitor.stop()
         logger.info("[Failover] Stopped")
 

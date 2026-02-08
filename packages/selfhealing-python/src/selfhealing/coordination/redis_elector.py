@@ -143,6 +143,7 @@ class RedisLeaderElector(LeaderElector):
         self._state = LeadershipState.NOT_STARTED
         self._running = False
         self._worker: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
         # Fencing Token
         self._fencing_token: int = 0
@@ -448,7 +449,9 @@ class RedisLeaderElector(LeaderElector):
                             self._lose_leader(reason="max_retry_exceeded")
                             consecutive_failures = 0
 
-                    time.sleep(self._settings.get_effective_renew_interval())
+                    self._stop_event.wait(self._settings.get_effective_renew_interval())
+                    if self._stop_event.is_set():
+                        break
 
                 else:
                     # 팔로워: 리더 획득 시도
@@ -468,11 +471,15 @@ class RedisLeaderElector(LeaderElector):
                         max_delay_seconds=self._settings.retry_interval_seconds * self._settings.retry_jitter_factor,
                         min_delay_seconds=0,
                     )
-                    time.sleep(self._settings.retry_interval_seconds + jitter)
+                    self._stop_event.wait(self._settings.retry_interval_seconds + jitter)
+                    if self._stop_event.is_set():
+                        break
 
             except Exception as e:
                 logger.error(f"[LeaderElector] 선출 루프 오류: {e}")
-                time.sleep(self._settings.retry_interval_seconds)
+                self._stop_event.wait(self._settings.retry_interval_seconds)
+                if self._stop_event.is_set():
+                    break
 
     def start(self) -> None:
         """리더 선출 프로세스 시작."""
@@ -483,6 +490,7 @@ class RedisLeaderElector(LeaderElector):
         if self._running:
             return
 
+        self._stop_event.clear()
         self._running = True
         with self._lock:
             self._state = LeadershipState.FOLLOWER
@@ -503,6 +511,7 @@ class RedisLeaderElector(LeaderElector):
             self._state = LeadershipState.STOPPING
 
         self._running = False
+        self._stop_event.set()
 
         # 리더십 반납 (이전 상태가 LEADER였던 경우)
         if was_leader:
@@ -526,7 +535,7 @@ class RedisLeaderElector(LeaderElector):
 
         # 워커 스레드 종료 대기
         if self._worker:
-            self._worker.join(timeout=5.0)
+            self._worker.join(timeout=2.0)
 
         # 콜백 스레드 풀 종료 (콜백이 완료될 때까지 대기)
         if self._callback_executor:

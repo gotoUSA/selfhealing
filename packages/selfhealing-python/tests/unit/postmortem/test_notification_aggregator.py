@@ -157,9 +157,12 @@ class TestNotificationAggregatorMemory:
             namespace="test4",
         )
 
-        time.sleep(1.1)
+        # time.time()을 1.1초 전진시켜 윈도우 만료를 시뮬레이션
+        import selfhealing.services.postmortem.notification_aggregator as _agg_mod
 
-        assert aggregator.should_flush("test4") is True
+        original_time = time.time()
+        with patch.object(_agg_mod.time, "time", return_value=original_time + 1.1):
+            assert aggregator.should_flush("test4") is True
 
     def test_flush_and_create_summary_returns_summary(self):
         """Flush 시 요약 알림 생성."""

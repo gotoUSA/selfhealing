@@ -144,6 +144,7 @@ class RegionHealthMonitor:
         self._health_states: dict[str, RegionHealth] = {}
         self._running = False
         self._worker: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
         # 초기 상태 설정
         for endpoint in self._settings.get_peer_endpoints():
@@ -456,7 +457,9 @@ class RegionHealthMonitor:
             except Exception as e:
                 logger.error(f"[RegionHealth] Loop error: {e}")
 
-            time.sleep(self._settings.health_check_interval_seconds)
+            self._stop_event.wait(self._settings.health_check_interval_seconds)
+            if self._stop_event.is_set():
+                break
 
     def start(self) -> None:
         """
@@ -467,6 +470,7 @@ class RegionHealthMonitor:
         if self._running:
             return
 
+        self._stop_event.clear()
         self._running = True
         self._worker = threading.Thread(
             target=self._run_loop,
@@ -483,8 +487,9 @@ class RegionHealthMonitor:
         백그라운드 스레드를 종료합니다.
         """
         self._running = False
+        self._stop_event.set()
         if self._worker:
-            self._worker.join(timeout=5.0)
+            self._worker.join(timeout=2.0)
         logger.info("[RegionHealth] Stopped")
 
     def is_running(self) -> bool:

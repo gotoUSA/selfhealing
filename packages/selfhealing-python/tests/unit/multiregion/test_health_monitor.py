@@ -152,8 +152,14 @@ class TestRegionHealthMonitor:
         )
         monitor = RegionHealthMonitor(settings=settings)
 
-        # API 호출 실패
-        health = monitor.check_region(endpoint)
+        # urllib.request.urlopen을 mock하여 즉시 URLError 발생
+        import urllib.error
+
+        with mock.patch(
+            "selfhealing.multiregion.health_monitor.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("mocked connection refused"),
+        ):
+            health = monitor.check_region(endpoint)
 
         # 첫 번째 실패는 UNHEALTHY
         assert health.status in (RegionHealthStatus.UNHEALTHY, RegionHealthStatus.DEGRADED)
@@ -202,10 +208,17 @@ class TestRegionHealthMonitor:
         )
         monitor = RegionHealthMonitor(settings=settings)
 
-        # 여러 번 실패 시뮬레이션
-        for i in range(3):
-            health = monitor.check_region(endpoint)
-            monitor._health_states["test-region"] = health
+        # urllib.request.urlopen을 mock하여 즉시 URLError 발생
+        import urllib.error
+
+        with mock.patch(
+            "selfhealing.multiregion.health_monitor.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("mocked connection refused"),
+        ):
+            # 여러 번 실패 시뮬레이션
+            for i in range(3):
+                health = monitor.check_region(endpoint)
+                monitor._health_states["test-region"] = health
 
         final_health = monitor.get_region_health("test-region")
 

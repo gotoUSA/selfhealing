@@ -91,6 +91,7 @@ class HPAMetricsExporter:
         self._running = False
         self._worker: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
 
     def _update_metrics(self) -> None:
         """Prometheus 메트릭 업데이트."""
@@ -121,7 +122,9 @@ class HPAMetricsExporter:
         """메트릭 업데이트 루프."""
         while self._running:
             self._update_metrics()
-            time.sleep(self._update_interval)
+            self._stop_event.wait(self._update_interval)
+            if self._stop_event.is_set():
+                break
 
     def start(self) -> None:
         """Exporter 시작."""
@@ -137,6 +140,7 @@ class HPAMetricsExporter:
             if self._running:
                 return
 
+            self._stop_event.clear()
             self._running = True
             self._worker = threading.Thread(
                 target=self._run_loop,
@@ -150,9 +154,10 @@ class HPAMetricsExporter:
         """Exporter 중지."""
         with self._lock:
             self._running = False
+            self._stop_event.set()
 
         if self._worker:
-            self._worker.join(timeout=5.0)
+            self._worker.join(timeout=2.0)
             self._worker = None
 
         logger.info("[HPAMetricsExporter] Stopped")

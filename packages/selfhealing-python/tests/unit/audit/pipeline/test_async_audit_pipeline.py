@@ -175,8 +175,11 @@ class TestAsyncHealingLoggerBatchFlush:
         for i in range(110):
             AsyncHealingLogger.log({"idx": i}, EventSeverity.INFO)
 
-        # 워커가 처리할 시간 대기
-        time.sleep(2.0)
+        # 명시적 flush 후 워커가 처리할 때까지 폴링 대기 (최대 2초)
+        AsyncHealingLogger.flush()
+        deadline = time.time() + 2.0
+        while len(events_received) < 100 and time.time() < deadline:
+            time.sleep(0.05)
 
         # 최소 배치 크기만큼은 플러시됨
         assert len(events_received) >= 100

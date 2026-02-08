@@ -315,12 +315,14 @@ class TestAntiFlappingWindowMemory:
         short_window.check_and_record(key, 1.0)
         short_window.check_and_record(key, 1.0)
 
-        # 윈도우 만료 대기
-        time.sleep(1.1)
+        # time.time()을 1.1초 전진시켜 윈도우 만료를 시뮬레이션
+        import selfhealing.services.idempotency_service as _idem_mod
 
-        # 이전 기록은 만료, 다시 시작
-        is_flapping, _ = short_window.check_and_record(key, 1.0)
-        assert is_flapping is False
+        original_time = time.time()
+        with patch.object(_idem_mod.time, "time", return_value=original_time + 1.1):
+            # 이전 기록은 만료, 다시 시작
+            is_flapping, _ = short_window.check_and_record(key, 1.0)
+            assert is_flapping is False
 
     def test_clear_window(self, window):
         """

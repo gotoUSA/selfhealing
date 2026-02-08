@@ -99,6 +99,7 @@ class EtcdLeaderElector(LeaderElector):
 
         # 스레드
         self._worker: threading.Thread | None = None
+        self._stop_event = threading.Event()
         self._lease: Any = None
         self._lease_id: int = 0
 
@@ -367,7 +368,9 @@ class EtcdLeaderElector(LeaderElector):
                             consecutive_failures = 0
 
                     # 갱신 주기
-                    time.sleep(self._settings.get_effective_renew_interval())
+                    self._stop_event.wait(self._settings.get_effective_renew_interval())
+                    if self._stop_event.is_set():
+                        break
 
                 else:
                     # 팔로워: 리더 획득 시도
@@ -383,11 +386,15 @@ class EtcdLeaderElector(LeaderElector):
                         max_delay_seconds=self._settings.retry_interval_seconds * self._settings.retry_jitter_factor,
                         min_delay_seconds=0,
                     )
-                    time.sleep(self._settings.retry_interval_seconds + jitter)
+                    self._stop_event.wait(self._settings.retry_interval_seconds + jitter)
+                    if self._stop_event.is_set():
+                        break
 
             except Exception as e:
                 logger.error(f"[EtcdLeaderElector] Loop error: {e}")
-                time.sleep(self._settings.retry_interval_seconds)
+                self._stop_event.wait(self._settings.retry_interval_seconds)
+                if self._stop_event.is_set():
+                    break
 
     def start(self) -> None:
         """리더 선출 시작."""
@@ -398,6 +405,7 @@ class EtcdLeaderElector(LeaderElector):
         if self._running:
             return
 
+        self._stop_event.clear()
         self._running = True
         with self._lock:
             self._state = LeadershipState.FOLLOWER
@@ -418,6 +426,7 @@ class EtcdLeaderElector(LeaderElector):
             self._state = LeadershipState.STOPPING
 
         self._running = False
+        self._stop_event.set()
 
         # 리더십 반납
         if was_leader:
@@ -432,7 +441,7 @@ class EtcdLeaderElector(LeaderElector):
 
         # 워커 스레드 종료 대기
         if self._worker:
-            self._worker.join(timeout=5.0)
+            self._worker.join(timeout=2.0)
 
         # 콜백 스레드 풀 종료
         if self._callback_executor:
