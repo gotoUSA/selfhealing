@@ -134,7 +134,7 @@ class TestThreadPoolBulkheadQueueLimit:
 
         # 긴 작업 제출
         def slow_work():
-            time.sleep(1.0)
+            time.sleep(0.2)
 
         # 첫 번째: 워커에서 실행
         future1 = bulkhead.submit(slow_work)
@@ -162,7 +162,7 @@ class TestThreadPoolBulkheadTimeout:
         bulkhead = ThreadPoolBulkhead("test", max_workers=2)
 
         def slow_work():
-            time.sleep(5.0)
+            time.sleep(0.5)
             return "done"
 
         with pytest.raises(BulkheadTimeoutException) as exc_info:
@@ -268,7 +268,7 @@ class TestThreadPoolBulkheadShutdown:
         bulkhead = ThreadPoolBulkhead("test", max_workers=2)
 
         def slow_work():
-            time.sleep(10.0)
+            time.sleep(0.5)
 
         bulkhead.submit(slow_work)
 

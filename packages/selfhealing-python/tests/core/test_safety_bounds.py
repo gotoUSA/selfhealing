@@ -70,65 +70,26 @@ class TestParameterBound:
         assert bound.max_value == 10000
         assert bound.max_change_per_cycle == 0.3
 
-    def test_bound_validate_valid(self):
-        """유효한 한계 설정."""
+    @pytest.mark.parametrize(
+        "min_val, max_val, change_rate, expected",
+        [
+            (100, 10000, 0.3, True),  # 유효한 설정
+            (0, 100, 1.0, True),  # 변경률 정확히 1.0 유효
+            (10000, 100, 0.3, False),  # min > max
+            (100, 10000, 0, False),  # 변경률 0
+            (100, 10000, -0.1, False),  # 변경률 음수
+            (100, 10000, 1.5, False),  # 변경률 1 초과
+        ],
+        ids=["valid", "exact_one", "min_gt_max", "zero_rate", "negative_rate", "over_one_rate"],
+    )
+    def test_bound_validate(self, min_val, max_val, change_rate, expected):
+        """ParameterBound.validate() 각 조건별 검증."""
         bound = ParameterBound(
-            min_value=100,
-            max_value=10000,
-            max_change_per_cycle=0.3,
+            min_value=min_val,
+            max_value=max_val,
+            max_change_per_cycle=change_rate,
         )
-
-        assert bound.validate() is True
-
-    def test_bound_validate_invalid_min_max(self):
-        """min > max인 경우 유효하지 않음."""
-        bound = ParameterBound(
-            min_value=10000,  # min > max
-            max_value=100,
-            max_change_per_cycle=0.3,
-        )
-
-        assert bound.validate() is False
-
-    def test_bound_validate_invalid_change_rate_zero(self):
-        """변경률이 0인 경우 유효하지 않음."""
-        bound = ParameterBound(
-            min_value=100,
-            max_value=10000,
-            max_change_per_cycle=0,  # Invalid
-        )
-
-        assert bound.validate() is False
-
-    def test_bound_validate_invalid_change_rate_negative(self):
-        """변경률이 음수인 경우 유효하지 않음."""
-        bound = ParameterBound(
-            min_value=100,
-            max_value=10000,
-            max_change_per_cycle=-0.1,  # Invalid
-        )
-
-        assert bound.validate() is False
-
-    def test_bound_validate_invalid_change_rate_over_one(self):
-        """변경률이 1 초과인 경우 유효하지 않음."""
-        bound = ParameterBound(
-            min_value=100,
-            max_value=10000,
-            max_change_per_cycle=1.5,  # Invalid
-        )
-
-        assert bound.validate() is False
-
-    def test_bound_validate_exact_one_is_valid(self):
-        """변경률이 정확히 1.0인 경우 유효함 (> 1.0이 아니므로)."""
-        bound = ParameterBound(
-            min_value=0,
-            max_value=100,
-            max_change_per_cycle=1.0,
-        )
-
-        assert bound.validate() is True
+        assert bound.validate() is expected
 
 
 # =============================================================================

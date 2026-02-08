@@ -28,7 +28,7 @@ class TestTrackerSettingsIntegration:
         """테스트 전후 싱글톤 초기화."""
         from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
         from selfhealing.services.namespace_emergency.tracker import reset_namespaced_emergency_tracker
-        
+
         reset_namespace_emergency_settings()
         reset_namespaced_emergency_tracker()
         yield
@@ -145,7 +145,7 @@ class TestCascadeDetectorSettingsIntegration:
         """테스트 전후 싱글톤 초기화."""
         from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
         from selfhealing.services.namespace_emergency.cascade_detector import reset_cascade_detector
-        
+
         reset_namespace_emergency_settings()
         reset_cascade_detector()
         yield

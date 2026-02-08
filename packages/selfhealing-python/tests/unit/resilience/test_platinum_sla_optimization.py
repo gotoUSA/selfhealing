@@ -448,7 +448,7 @@ class TestAsyncHealingLogger:
             AsyncHealingLogger.log({"type": "test", "index": i})
 
         # 배치 처리 대기
-        time.sleep(2)
+        time.sleep(0.5)
 
         # 배치로 플러시됨
         assert len(flushed_events) >= batch_size
@@ -472,7 +472,7 @@ class TestAsyncHealingLogger:
         # 워커가 처리할 시간 대기
         import time
 
-        time.sleep(1.0)
+        time.sleep(0.3)
 
         assert len(flushed_events) >= 1
 

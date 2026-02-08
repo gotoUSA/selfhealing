@@ -53,25 +53,26 @@ class TestServiceConfig:
             config = ServiceConfig(service_id=f"test-{level}", criticality=level)
             assert config.criticality == level
 
-    def test_invalid_criticality_raises_error(self):
-        """잘못된 criticality 값은 에러 발생."""
-        with pytest.raises(ValueError, match="Invalid criticality"):
-            ServiceConfig(service_id="test", criticality="invalid")
-
-    def test_invalid_min_traffic_percentage_negative(self):
-        """음수 min_traffic_percentage는 에러 발생."""
-        with pytest.raises(ValueError, match="min_traffic_percentage must be between"):
-            ServiceConfig(service_id="test", criticality="low", min_traffic_percentage=-1.0)
-
-    def test_invalid_min_traffic_percentage_over_100(self):
-        """100 초과 min_traffic_percentage는 에러 발생."""
-        with pytest.raises(ValueError, match="min_traffic_percentage must be between"):
-            ServiceConfig(service_id="test", criticality="low", min_traffic_percentage=101.0)
-
-    def test_negative_shed_priority_raises_error(self):
-        """음수 shed_priority는 에러 발생."""
-        with pytest.raises(ValueError, match="shed_priority must be non-negative"):
-            ServiceConfig(service_id="test", criticality="low", shed_priority=-1)
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"service_id": "test", "criticality": "invalid"}, "Invalid criticality"),
+            (
+                {"service_id": "test", "criticality": "low", "min_traffic_percentage": -1.0},
+                "min_traffic_percentage must be between",
+            ),
+            (
+                {"service_id": "test", "criticality": "low", "min_traffic_percentage": 101.0},
+                "min_traffic_percentage must be between",
+            ),
+            ({"service_id": "test", "criticality": "low", "shed_priority": -1}, "shed_priority must be non-negative"),
+        ],
+        ids=["invalid_criticality", "negative_min_traffic", "over100_min_traffic", "negative_shed_priority"],
+    )
+    def test_invalid_service_config_raises_error(self, kwargs, match):
+        """잘못된 설정값은 에러 발생."""
+        with pytest.raises(ValueError, match=match):
+            ServiceConfig(**kwargs)
 
     def test_service_config_with_recovery_strategy(self):
         """서비스별 RecoveryStrategy 오버라이드."""
@@ -120,20 +121,19 @@ class TestSheddingLevel:
                 traffic_limit=0.0,
             )
 
-    def test_invalid_error_rate_negative(self):
-        """음수 error_rate는 에러 발생."""
-        with pytest.raises(ValueError, match="error_rate must be between"):
-            SheddingLevel(error_rate=-10.0, shed_criticality=["low"], traffic_limit=50.0)
-
-    def test_invalid_error_rate_over_100(self):
-        """100 초과 error_rate는 에러 발생."""
-        with pytest.raises(ValueError, match="error_rate must be between"):
-            SheddingLevel(error_rate=150.0, shed_criticality=["low"], traffic_limit=50.0)
-
-    def test_invalid_traffic_limit_negative(self):
-        """음수 traffic_limit는 에러 발생."""
-        with pytest.raises(ValueError, match="traffic_limit must be between"):
-            SheddingLevel(error_rate=30.0, shed_criticality=["low"], traffic_limit=-1.0)
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"error_rate": -10.0, "shed_criticality": ["low"], "traffic_limit": 50.0}, "error_rate must be between"),
+            ({"error_rate": 150.0, "shed_criticality": ["low"], "traffic_limit": 50.0}, "error_rate must be between"),
+            ({"error_rate": 30.0, "shed_criticality": ["low"], "traffic_limit": -1.0}, "traffic_limit must be between"),
+        ],
+        ids=["negative_error_rate", "over100_error_rate", "negative_traffic_limit"],
+    )
+    def test_invalid_shedding_level_raises_error(self, kwargs, match):
+        """잘못된 값은 에러 발생."""
+        with pytest.raises(ValueError, match=match):
+            SheddingLevel(**kwargs)
 
 
 # =============================================================================
@@ -190,30 +190,39 @@ class TestCanaryRecoveryStageConfig:
 
     def test_valid_canary_stage(self):
         """정상적인 Canary 단계 생성."""
-        stage = CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=5, required_success_rate=95.0, description="Stage 1")
+        stage = CanaryRecoveryStageConfig(
+            traffic_percent=10.0, duration_seconds=5, required_success_rate=95.0, description="Stage 1"
+        )
         assert stage.traffic_percent == 10.0
         assert stage.duration_seconds == 5
         assert stage.required_success_rate == 95.0
 
-    def test_invalid_traffic_percent_negative(self):
-        """음수 traffic_percent는 에러 발생."""
-        with pytest.raises(ValueError, match="traffic_percent must be between"):
-            CanaryRecoveryStageConfig(traffic_percent=-10.0, duration_seconds=5, required_success_rate=95.0)
-
-    def test_invalid_traffic_percent_over_100(self):
-        """100 초과 traffic_percent는 에러 발생."""
-        with pytest.raises(ValueError, match="traffic_percent must be between"):
-            CanaryRecoveryStageConfig(traffic_percent=150.0, duration_seconds=5, required_success_rate=95.0)
-
-    def test_invalid_duration_negative(self):
-        """음수 duration_seconds는 에러 발생."""
-        with pytest.raises(ValueError, match="duration_seconds must be non-negative"):
-            CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=-1, required_success_rate=95.0)
-
-    def test_invalid_success_rate(self):
-        """잘못된 required_success_rate는 에러 발생."""
-        with pytest.raises(ValueError, match="required_success_rate must be between"):
-            CanaryRecoveryStageConfig(traffic_percent=10.0, duration_seconds=5, required_success_rate=101.0)
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            (
+                {"traffic_percent": -10.0, "duration_seconds": 5, "required_success_rate": 95.0},
+                "traffic_percent must be between",
+            ),
+            (
+                {"traffic_percent": 150.0, "duration_seconds": 5, "required_success_rate": 95.0},
+                "traffic_percent must be between",
+            ),
+            (
+                {"traffic_percent": 10.0, "duration_seconds": -1, "required_success_rate": 95.0},
+                "duration_seconds must be non-negative",
+            ),
+            (
+                {"traffic_percent": 10.0, "duration_seconds": 5, "required_success_rate": 101.0},
+                "required_success_rate must be between",
+            ),
+        ],
+        ids=["negative_traffic", "over100_traffic", "negative_duration", "invalid_success_rate"],
+    )
+    def test_invalid_canary_stage_raises_error(self, kwargs, match):
+        """잘못된 값은 에러 발생."""
+        with pytest.raises(ValueError, match=match):
+            CanaryRecoveryStageConfig(**kwargs)
 
 
 # =============================================================================
@@ -280,15 +289,18 @@ class TestThresholdMultiplier:
         assert multiplier.failure == float("inf")
         assert multiplier.window == float("inf")
 
-    def test_negative_failure_raises_error(self):
-        """음수 failure 배율은 에러 발생."""
-        with pytest.raises(ValueError, match="failure multiplier must be non-negative"):
-            ThresholdMultiplier(failure=-1.0, window=1.0)
-
-    def test_negative_window_raises_error(self):
-        """음수 window 배율은 에러 발생."""
-        with pytest.raises(ValueError, match="window multiplier must be non-negative"):
-            ThresholdMultiplier(failure=1.0, window=-1.0)
+    @pytest.mark.parametrize(
+        "failure, window, match",
+        [
+            (-1.0, 1.0, "failure multiplier must be non-negative"),
+            (1.0, -1.0, "window multiplier must be non-negative"),
+        ],
+        ids=["negative_failure", "negative_window"],
+    )
+    def test_invalid_multiplier_raises_error(self, failure, window, match):
+        """음수 배율은 에러 발생."""
+        with pytest.raises(ValueError, match=match):
+            ThresholdMultiplier(failure=failure, window=window)
 
 
 # =============================================================================
@@ -314,33 +326,22 @@ class TestAdaptiveThresholdPolicy:
         for level in expected_levels:
             assert level in policy.level_multipliers
 
-    def test_get_adjusted_threshold_normal(self):
-        """NORMAL 레벨 조정된 임계값."""
+    @pytest.mark.parametrize(
+        "level, expected_failure, expected_window",
+        [
+            ("NORMAL", 5.0, 60.0),
+            ("CRITICAL", 15.0, 180.0),
+            ("LOCKDOWN", float("inf"), float("inf")),
+            ("UNKNOWN", 5.0, 60.0),  # NORMAL으로 폴백
+        ],
+        ids=["normal", "critical", "lockdown", "unknown_fallback"],
+    )
+    def test_get_adjusted_threshold(self, level, expected_failure, expected_window):
+        """각 레벨별 조정된 임계값."""
         policy = AdaptiveThresholdPolicy()
-        failure, window = policy.get_adjusted_threshold("NORMAL")
-        assert failure == 5.0  # 5 * 1.0
-        assert window == 60.0  # 60 * 1.0
-
-    def test_get_adjusted_threshold_critical(self):
-        """CRITICAL 레벨 조정된 임계값 (더 보수적)."""
-        policy = AdaptiveThresholdPolicy()
-        failure, window = policy.get_adjusted_threshold("CRITICAL")
-        assert failure == 15.0  # 5 * 3.0
-        assert window == 180.0  # 60 * 3.0
-
-    def test_get_adjusted_threshold_lockdown(self):
-        """LOCKDOWN 레벨 조정된 임계값 (무한대)."""
-        policy = AdaptiveThresholdPolicy()
-        failure, window = policy.get_adjusted_threshold("LOCKDOWN")
-        assert failure == float("inf")
-        assert window == float("inf")
-
-    def test_get_adjusted_threshold_unknown_level(self):
-        """알 수 없는 레벨은 NORMAL로 폴백."""
-        policy = AdaptiveThresholdPolicy()
-        failure, window = policy.get_adjusted_threshold("UNKNOWN")
-        assert failure == 5.0  # NORMAL 기본값
-        assert window == 60.0
+        failure, window = policy.get_adjusted_threshold(level)
+        assert failure == expected_failure
+        assert window == expected_window
 
     def test_progressive_multipliers(self):
         """Emergency Level이 높아질수록 더 보수적 (배율 증가)."""
@@ -375,15 +376,18 @@ class TestOpenStrategy:
         assert strategy.type == "graceful"
         assert strategy.drain_timeout_seconds == 60
 
-    def test_invalid_type_raises_error(self):
-        """잘못된 type은 에러 발생. Delayed는 안티패턴."""
-        with pytest.raises(ValueError, match="Invalid type"):
-            OpenStrategy(type="delayed")
-
-    def test_negative_drain_timeout_raises_error(self):
-        """음수 drain_timeout은 에러 발생."""
-        with pytest.raises(ValueError, match="drain_timeout_seconds must be non-negative"):
-            OpenStrategy(drain_timeout_seconds=-1)
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"type": "delayed"}, "Invalid type"),
+            ({"drain_timeout_seconds": -1}, "drain_timeout_seconds must be non-negative"),
+        ],
+        ids=["invalid_type", "negative_drain_timeout"],
+    )
+    def test_invalid_open_strategy_raises_error(self, kwargs, match):
+        """잘못된 설정은 에러 발생."""
+        with pytest.raises(ValueError, match=match):
+            OpenStrategy(**kwargs)
 
 
 # =============================================================================
@@ -486,15 +490,18 @@ class TestPanicThresholdConfig:
         config = PanicThresholdConfig(action="alert_only")
         assert config.action == "alert_only"
 
-    def test_invalid_threshold_percent(self):
-        """잘못된 threshold_percent는 에러 발생."""
-        with pytest.raises(ValueError, match="threshold_percent must be between"):
-            PanicThresholdConfig(threshold_percent=150.0)
-
-    def test_invalid_action(self):
-        """잘못된 action은 에러 발생."""
-        with pytest.raises(ValueError, match="Invalid action"):
-            PanicThresholdConfig(action="shutdown")
+    @pytest.mark.parametrize(
+        "kwargs, match",
+        [
+            ({"threshold_percent": 150.0}, "threshold_percent must be between"),
+            ({"action": "shutdown"}, "Invalid action"),
+        ],
+        ids=["invalid_threshold", "invalid_action"],
+    )
+    def test_invalid_panic_config_raises_error(self, kwargs, match):
+        """잘못된 설정은 에러 발생."""
+        with pytest.raises(ValueError, match=match):
+            PanicThresholdConfig(**kwargs)
 
 
 # =============================================================================

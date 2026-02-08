@@ -186,45 +186,33 @@ class TestStartStop:
 class TestDegradationAssessment:
     """Test degradation level assessment."""
 
-    def test_assess_none_degradation(self, guard):
-        """저하 없음."""
-        level = guard._assess_degradation(error_rate=0.01, latency_p99=100)
-        assert level == RollbackSeverity.NONE
-
-    def test_assess_minor_degradation_by_error_rate(self, guard):
-        """경미한 저하 - 에러율 5% 이상."""
-        level = guard._assess_degradation(error_rate=0.06, latency_p99=100)
-        assert level == RollbackSeverity.MINOR
-
-    def test_assess_minor_degradation_by_latency(self, guard):
-        """경미한 저하 - 레이턴시 3초 이상."""
-        level = guard._assess_degradation(error_rate=0.01, latency_p99=3500)
-        assert level == RollbackSeverity.MINOR
-
-    def test_assess_major_degradation_by_error_rate(self, guard):
-        """심각한 저하 - 에러율 10% 이상."""
-        level = guard._assess_degradation(error_rate=0.12, latency_p99=100)
-        assert level == RollbackSeverity.MAJOR
-
-    def test_assess_major_degradation_by_latency(self, guard):
-        """심각한 저하 - 레이턴시 5초 이상."""
-        level = guard._assess_degradation(error_rate=0.01, latency_p99=5500)
-        assert level == RollbackSeverity.MAJOR
-
-    def test_assess_critical_degradation_by_error_rate(self, guard):
-        """긴급 저하 - 에러율 30% 이상."""
-        level = guard._assess_degradation(error_rate=0.35, latency_p99=100)
-        assert level == RollbackSeverity.CRITICAL
-
-    def test_assess_critical_degradation_by_latency(self, guard):
-        """긴급 저하 - 레이턴시 10초 이상."""
-        level = guard._assess_degradation(error_rate=0.01, latency_p99=12000)
-        assert level == RollbackSeverity.CRITICAL
-
-    def test_assess_critical_takes_precedence(self, guard):
-        """CRITICAL이 MAJOR보다 우선."""
-        level = guard._assess_degradation(error_rate=0.35, latency_p99=5500)
-        assert level == RollbackSeverity.CRITICAL
+    @pytest.mark.parametrize(
+        "error_rate, latency_p99, expected_severity",
+        [
+            (0.01, 100, RollbackSeverity.NONE),  # 정상
+            (0.06, 100, RollbackSeverity.MINOR),  # 에러율 5%+
+            (0.01, 3500, RollbackSeverity.MINOR),  # 레이턴시 3초+
+            (0.12, 100, RollbackSeverity.MAJOR),  # 에러율 10%+
+            (0.01, 5500, RollbackSeverity.MAJOR),  # 레이턴시 5초+
+            (0.35, 100, RollbackSeverity.CRITICAL),  # 에러율 30%+
+            (0.01, 12000, RollbackSeverity.CRITICAL),  # 레이턴시 10초+
+            (0.35, 5500, RollbackSeverity.CRITICAL),  # CRITICAL이 MAJOR보다 우선
+        ],
+        ids=[
+            "none",
+            "minor_error_rate",
+            "minor_latency",
+            "major_error_rate",
+            "major_latency",
+            "critical_error_rate",
+            "critical_latency",
+            "critical_precedence",
+        ],
+    )
+    def test_assess_degradation_levels(self, guard, error_rate, latency_p99, expected_severity):
+        """각 에러율/레이턴시 조합에 대한 저하 수준 평가."""
+        level = guard._assess_degradation(error_rate=error_rate, latency_p99=latency_p99)
+        assert level == expected_severity
 
 
 # =============================================================================

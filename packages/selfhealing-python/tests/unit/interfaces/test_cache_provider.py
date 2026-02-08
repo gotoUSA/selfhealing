@@ -114,9 +114,9 @@ class TestInMemoryCacheAdapter:
 
     def test_set_with_ttl(self, cache: InMemoryCacheAdapter):
         """Test setting value with TTL."""
-        cache.set("key", "value", ttl=timedelta(seconds=1))
+        cache.set("key", "value", ttl=timedelta(seconds=0.1))
         assert cache.get("key") == "value"
-        time.sleep(1.1)
+        time.sleep(0.15)
         assert cache.get("key") is None
 
     def test_ttl_returns_remaining_seconds(self, cache: InMemoryCacheAdapter):
@@ -310,9 +310,9 @@ class TestInMemoryCacheAdapter:
 
     def test_mset_with_ttl(self, cache: InMemoryCacheAdapter):
         """Test mset with TTL."""
-        cache.mset({"key1": "value1", "key2": "value2"}, ttl=timedelta(seconds=1))
+        cache.mset({"key1": "value1", "key2": "value2"}, ttl=timedelta(seconds=0.1))
         assert cache.get("key1") == "value1"
-        time.sleep(1.1)
+        time.sleep(0.15)
         assert cache.get("key1") is None
         assert cache.get("key2") is None
 

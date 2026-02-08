@@ -348,7 +348,7 @@ class TestHedgingExecutorFailures:
         executor = HedgingExecutor(config)
 
         def slow_fn():
-            time.sleep(1.0)  # 1초 - 타임아웃보다 느림
+            time.sleep(0.3)  # 300ms - 타임아웃보다 느림
             return "slow"
 
         candidates = [
