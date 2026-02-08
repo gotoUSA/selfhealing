@@ -1,6 +1,6 @@
 # 200. Settings model_config 포맷 통일 계획
 
-> **상태**: 📋 계획
+> **상태**: ✅ 완료 (2026-02-09)
 > **목적**: `settings/` 디렉토리 내 `model_config` 정의 방식을 `SettingsConfigDict`로 통일한다.
 
 ---
@@ -84,7 +84,7 @@ model_config = SettingsConfigDict(
 
 ### 3-3. 검증 항목
 
-- [ ] `KafkaAuditSettings()` 인스턴스 생성 정상 확인
-- [ ] `.env` 파일에서 `SELFHEALING_KAFKA_AUDIT_*` 읽기 확인
-- [ ] 미정의 환경변수가 `ValidationError`를 발생시키지 않는지 확인
-- [ ] 기존 테스트 통과 확인
+- [x] `KafkaAuditSettings()` 인스턴스 생성 정상 확인
+- [x] `.env` 파일에서 `SELFHEALING_KAFKA_AUDIT_*` 읽기 확인
+- [x] 미정의 환경변수가 `ValidationError`를 발생시키지 않는지 확인
+- [x] 기존 테스트 통과 확인 (55 passed)

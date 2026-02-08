@@ -26,7 +26,7 @@ from __future__ import annotations
 from enum import Enum
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class SerializationFormat(str, Enum):
@@ -47,7 +47,13 @@ class KafkaAuditSettings(BaseSettings):
         SELFHEALING_KAFKA_AUDIT_ENABLE_IDEMPOTENCE=true
     """
 
-    model_config = {"env_prefix": "SELFHEALING_KAFKA_AUDIT_"}
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_KAFKA_AUDIT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+    )
 
     # ==========================================================================
     # Connection
