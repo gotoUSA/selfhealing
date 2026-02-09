@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
-from typing import Deque
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ class HedgingLatencyTracker:
             window_size: 슬라이딩 윈도우 크기 (기본 100)
             base_delay: 기본 delay (초), 데이터 부족 시 사용
         """
-        self._window: Deque[float] = deque(maxlen=window_size)
+        self._window: deque[float] = deque(maxlen=window_size)
         self._base_delay = base_delay
         self._lock = threading.Lock()
         self._min_samples = 10  # 최소 샘플 수

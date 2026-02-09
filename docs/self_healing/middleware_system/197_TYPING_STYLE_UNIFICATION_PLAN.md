@@ -1,7 +1,7 @@
 # 197. 타이핑 스타일 통합 계획
 
-> **문서 버전**: 1.1.0
-> **최종 수정일**: 2026-02-07
+> **문서 버전**: 1.2.0
+> **최종 수정일**: 2026-02-10
 > **작성 근거**:
 > - `grep_search("from typing import.*Optional")` → 소스 18건, 테스트 20+건
 > - `grep_search("from typing import.*Dict|List")` → 소스 2건, 테스트 20+건
@@ -143,6 +143,7 @@ Python ≥3.10에서 적용 가능한 PEP 표준:
 | `List[T]` | `list[T]` | PEP 585 | Python 3.9+ |
 | `Tuple[T, ...]` | `tuple[T, ...]` | PEP 585 | Python 3.9+ |
 | `Set[T]` | `set[T]` | PEP 585 | Python 3.9+ |
+| `Deque[T]` | `collections.deque[T]` | PEP 585 | Python 3.9+ |
 
 ### 4.1 변환 시 주의사항
 
@@ -379,24 +380,38 @@ error: str | None = None
 **활성 사용 변환 (15개 파일):**
 `data_factory`, `repositories`, `redis`, `time_helpers`, `test_wal`, `test_hash_chain_verifier`, `test_event_bus_error_budget_gate`, `test_wal_batch_write`, `test_audit_watchdog`, `test_sampling`, `conftest(forensic_bridge)`, `test_crash_recovery`, `test_redis_failure`, `test_reconciler`, `test_startup_sync`
 
-### 10.5 검증 결과
+### 10.5 Phase 5 — PEP 585 추가 누락 (`Deque`) 변환 (1개 파일)
+
+> **실행일**: 2026-02-10
+> **발견 경위**: 197 구현 검증 시 `grep_search("from typing import")` 전수 조사에서 발견
+> **원인**: 원래 검색에서 `Optional|Dict|List`만 탐색, `Deque` 누락
+
+| 파일 | 변환 내용 |
+|------|----------|
+| `core/hedging/latency_tracker.py` | `from typing import Deque` 삭제, `Deque[float]` → `deque[float]` (`from collections import deque` 및 `from __future__ import annotations` 기존 존재) |
+
+**검증:**
+- `py_compile` 통과 ✅
+- `pytest tests/unit/core/test_hedging.py -k LatencyTracker` — 5/5 PASSED ✅
+
+### 10.6 검증 결과
 
 ```
-# 소스 코드 레거시 typing 잔여 확인
-$ grep -rn "from typing import" src/selfhealing/ | grep -E "Optional|Dict|List|Tuple"
+# 소스 코드 레거시 typing 잔여 확인 (Deque 포함)
+$ grep -rn "from typing import" src/selfhealing/ | grep -E "Optional|Dict|List|Tuple|Deque"
 → 결과 없음 ✅
 
 # 테스트 코드 레거시 typing 잔여 확인
-$ grep -rn "from typing import" tests/ | grep -E "Optional|Dict|List|Tuple"
+$ grep -rn "from typing import" tests/ | grep -E "Optional|Dict|List|Tuple|Deque"
 → 결과 없음 ✅
 
 # py_compile 전체 통과 ✅
 ```
 
-### 10.6 총 변경 요약
+### 10.7 총 변경 요약
 
 | 카테고리 | 파일 수 | 비고 |
 |---------|---------|------|
-| 소스 코드 | **18개** | Phase 1~3 |
+| 소스 코드 | **19개** | Phase 1~3, 5 |
 | 테스트 코드 | **33개** | Phase 4 |
-| **합계** | **51개** | 모든 레거시 typing 스타일 제거 완료 |
+| **합계** | **52개** | 모든 레거시 typing 스타일 제거 완료 |
