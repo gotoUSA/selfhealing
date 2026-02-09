@@ -139,6 +139,12 @@ class EventType(str, Enum):
     THROTTLE_REJECTION_REPLAY_FAILED = "throttle_rejection_replay_failed"
     """Throttle Recovery DLQ Replay 실패 (error 포함)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Load Shedding Events
+    # ═══════════════════════════════════════════════════════════════════════════
+    LOAD_SHEDDING_LEVEL_CHANGED = "load_shedding_level_changed"
+    """Load Shedding 레벨 변경 (new_level, previous_level, traffic_limit, affected_services 포함)."""
+
 
 class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""

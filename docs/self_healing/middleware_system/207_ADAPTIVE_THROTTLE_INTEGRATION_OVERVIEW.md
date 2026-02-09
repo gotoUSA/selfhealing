@@ -1,8 +1,9 @@
 # 207. AdaptiveThrottle 연동 대상 시스템 총괄 분석
 
-> **상태**: 📋 분석 완료
+> **상태**: ✅ Section 5 (Load Shedding ↔ AdaptiveThrottle) 구현 완료
 > **목적**: 5개 P3 시스템과 `AdaptiveThrottle` 연동 여부를 코드 근거로 결정한다.
 > **기준일**: 2026-02-09
+> **구현일**: 2026-02-10
 
 ---
 
@@ -568,3 +569,33 @@ def conservative_limit(self) -> int:
 ├── 211_ADAPTIVE_REPLAY_GRADIENT_ANALYSIS.md           ← ❌ 비추천 근거
 └── 212_CANARY_ROLLOUT_THROTTLE_ANALYSIS.md            ← ❌ 비추천 근거
 ```
+
+---
+
+## 7. 구현 이력
+
+### 7-1. Section 5 (Load Shedding ↔ AdaptiveThrottle) — 2026-02-10
+
+**구현 범위**: 5-1 ~ 5-8 전체 (라인 1-571)
+
+| 순서 | 작업 | 대상 파일 | 상태 |
+|------|------|-----------|------|
+| 1 | `EventType.LOAD_SHEDDING_LEVEL_CHANGED` 추가 | `services/event_bus/bus.py` | ✅ |
+| 2 | `tier_mapping.py` 신설 (criticality ↔ tier_id 양방향 매핑) | `services/throttle/tier_mapping.py` | ✅ |
+| 3 | `ThrottleSettings.shedding_compensation_factor` 추가 | `settings/throttle.py` | ✅ |
+| 4 | `__init__`, `reset_all`, `conservative_limit` 수정 | `services/throttle/adaptive.py` | ✅ |
+| 5 | `_subscribe_load_shedding_events` 신규 | `services/throttle/adaptive.py` | ✅ |
+| 6 | `_handle_shedding_changed` 신규 | `services/throttle/adaptive.py` | ✅ |
+| 7 | `check()` 내 `service_id` 분기 추가 | `services/throttle/adaptive.py` | ✅ |
+| 8 | `update_shedding_state()` EventBus 발행 추가 | `load_shedding/manager.py` | ✅ |
+
+**테스트 파일** (63 tests, all passed):
+
+| 파일 | 테스트 수 | 커버리지 대상 |
+|------|-----------|--------------|
+| `tests/unit/throttle/test_tier_mapping.py` | 25 | tier_mapping.py |
+| `tests/unit/throttle/test_throttle_load_shedding_integration.py` | 20 | adaptive.py shedding 통합 |
+| `tests/unit/throttle/test_load_shedding_manager_eventbus.py` | 7 | manager.py EventBus 발행 |
+| `tests/unit/throttle/test_load_shedding_event_type_and_settings.py` | 9+2 | EventType + ThrottleSettings |
+
+**회귀 테스트**: 기존 throttle 207 tests + load shedding 110 tests 전체 통과 확인

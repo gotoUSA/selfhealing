@@ -127,10 +127,7 @@ class LoadSheddingManager:
             bool: 등록 성공 여부
         """
         self._service_configs[config.service_id] = config
-        logger.debug(
-            f"[LoadSheddingManager] Service registered: {config.service_id} "
-            f"(criticality={config.criticality})"
-        )
+        logger.debug(f"[LoadSheddingManager] Service registered: {config.service_id} " f"(criticality={config.criticality})")
         return True
 
     def register_services(self, configs: list[ServiceConfig]) -> int:
@@ -182,11 +179,7 @@ class LoadSheddingManager:
 
     def _get_critical_services(self) -> list[ServiceConfig]:
         """critical 서비스 목록 조회."""
-        return [
-            config
-            for config in self._service_configs.values()
-            if config.criticality == "critical"
-        ]
+        return [config for config in self._service_configs.values() if config.criticality == "critical"]
 
     def get_critical_services_error_rate(self) -> float:
         """critical 서비스들의 평균 에러율 계산."""
@@ -194,10 +187,7 @@ class LoadSheddingManager:
         if not critical_services:
             return 0.0
 
-        total_error_rate = sum(
-            self._error_rate_provider.get_error_rate(s.service_id)
-            for s in critical_services
-        )
+        total_error_rate = sum(self._error_rate_provider.get_error_rate(s.service_id) for s in critical_services)
         return total_error_rate / len(critical_services)
 
     # =========================================================================
@@ -234,9 +224,7 @@ class LoadSheddingManager:
         if applicable_level is None:
             return 100.0
 
-        return max(
-            applicable_level.traffic_limit, service_config.min_traffic_percentage
-        )
+        return max(applicable_level.traffic_limit, service_config.min_traffic_percentage)
 
     def _find_applicable_level(
         self,
@@ -244,9 +232,7 @@ class LoadSheddingManager:
         service_criticality: str,
     ) -> SheddingLevel | None:
         """현재 에러율과 서비스 criticality에 맞는 Shedding 레벨 찾기."""
-        for level in sorted(
-            self._policy.levels, key=lambda l: l.error_rate, reverse=True
-        ):
+        for level in sorted(self._policy.levels, key=lambda l: l.error_rate, reverse=True):
             if critical_error_rate >= level.error_rate:
                 if service_criticality in level.shed_criticality:
                     return level
@@ -267,9 +253,7 @@ class LoadSheddingManager:
                 allowed_traffic_percent=100.0,
                 is_shed=False,
                 reason="No shedding applied",
-                service_criticality=(
-                    service_config.criticality if service_config else None
-                ),
+                service_criticality=(service_config.criticality if service_config else None),
             )
 
         if allowed_percent <= 0.0:
@@ -280,9 +264,7 @@ class LoadSheddingManager:
                 is_shed=True,
                 reason=f"Fully shed - {current_level}",
                 current_level=current_level,
-                service_criticality=(
-                    service_config.criticality if service_config else None
-                ),
+                service_criticality=(service_config.criticality if service_config else None),
             )
 
         allow = random.random() * 100 < allowed_percent
@@ -292,11 +274,7 @@ class LoadSheddingManager:
             allow_request=allow,
             allowed_traffic_percent=allowed_percent,
             is_shed=True,
-            reason=(
-                f"Probabilistic shedding - {current_level}"
-                if not allow
-                else "Request allowed"
-            ),
+            reason=(f"Probabilistic shedding - {current_level}" if not allow else "Request allowed"),
             current_level=current_level,
             service_criticality=service_config.criticality if service_config else None,
         )
@@ -305,9 +283,7 @@ class LoadSheddingManager:
         """현재 Shedding 레벨 설명 조회."""
         critical_error_rate = self.get_critical_services_error_rate()
 
-        for i, level in enumerate(
-            sorted(self._policy.levels, key=lambda l: l.error_rate, reverse=True)
-        ):
+        for i, level in enumerate(sorted(self._policy.levels, key=lambda l: l.error_rate, reverse=True)):
             if critical_error_rate >= level.error_rate:
                 return level.description or f"Level {len(self._policy.levels) - i}"
 
@@ -369,6 +345,13 @@ class LoadSheddingManager:
             except Exception as e:
                 logger.error(f"[LoadSheddingManager] Audit callback failed: {e}")
 
+        # EventBus로 Shedding 상태 변경 이벤트 발행 (Fail-Open)
+        self._publish_shedding_event(
+            new_level_index=new_level_index,
+            previous_level_index=previous_level_index,
+            affected_service_ids=audit_entry.affected_services,
+        )
+
         logger.info(
             f"[LoadSheddingManager] {event_type}: "
             f"level {previous_level_index} → {new_level_index}, "
@@ -376,6 +359,48 @@ class LoadSheddingManager:
         )
 
         return audit_entry
+
+    def _publish_shedding_event(
+        self,
+        new_level_index: int,
+        previous_level_index: int,
+        affected_service_ids: list[str],
+    ) -> None:
+        """EventBus로 Load Shedding 상태 변경 이벤트 발행 (Fail-Open)."""
+        try:
+            from selfhealing.services.event_bus import (
+                EventPriority,
+                EventType,
+                SelfHealingEvent,
+                get_event_bus,
+            )
+
+            bus = get_event_bus()
+
+            # traffic_limit 산출: 비활성화 시 100.0, 활성화 시 해당 레벨의 traffic_limit
+            if new_level_index < 0 or new_level_index >= len(self._policy.levels):
+                traffic_limit = 100.0
+            else:
+                traffic_limit = self._policy.levels[new_level_index].traffic_limit
+
+            bus.publish(
+                SelfHealingEvent(
+                    event_type=EventType.LOAD_SHEDDING_LEVEL_CHANGED,
+                    data={
+                        "new_level": new_level_index,
+                        "previous_level": previous_level_index,
+                        "traffic_limit": traffic_limit,
+                        "affected_services": affected_service_ids,
+                        "critical_error_rate": self.get_critical_services_error_rate(),
+                    },
+                    source="load_shedding_manager",
+                    priority=EventPriority.HIGH,
+                )
+            )
+        except ImportError:
+            logger.debug("[LoadSheddingManager] EventBus not available for shedding event")
+        except Exception as e:
+            logger.warning(f"[LoadSheddingManager] Failed to publish shedding event: {e}")
 
     def _get_affected_services(self, level_index: int) -> list[ServiceConfig]:
         """현재 레벨에서 영향받는 서비스 목록."""
@@ -463,9 +488,7 @@ class LoadSheddingManager:
 
         self.update_shedding_state()
 
-        logger.info(
-            f"[LoadSheddingManager] Force activated at level {level_index}: {reason}"
-        )
+        logger.info(f"[LoadSheddingManager] Force activated at level {level_index}: {reason}")
         return True
 
     def force_deactivate(self, reason: str = "manual_deactivation") -> bool:

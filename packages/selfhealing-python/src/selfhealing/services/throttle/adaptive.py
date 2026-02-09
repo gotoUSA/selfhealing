@@ -577,6 +577,12 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         self._conservative_enabled: bool = True
 
         # =====================================================================
+        # Load Shedding 연동 상태
+        # =====================================================================
+        self._shedding_suggested_limit: int = self.config.max_limit
+        self._shedding_affected_services: set[str] = set()
+
+        # =====================================================================
         # Error Budget 연동 상태
         # =====================================================================
         self._error_budget_limit_reduction_active: bool = False
@@ -592,6 +598,7 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         # EventBus 구독 등록
         self._subscribe_rate_limit_events()
         self._subscribe_error_budget_events()
+        self._subscribe_load_shedding_events()
 
         # DLQ Replay 연동 초기화 (Fail-Open)
         try:
@@ -746,6 +753,70 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         """특정 외부 API가 현재 cooldown 상태인지 확인."""
         cooldown_until = self._rate_limit_keys.get(key, 0)
         return time.time() < cooldown_until
+
+    # =========================================================================
+    # Load Shedding EventBus 연동
+    # =========================================================================
+
+    def _subscribe_load_shedding_events(self) -> None:
+        """Load Shedding 이벤트 구독 등록 (Fail-Open)."""
+        try:
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            bus = get_event_bus()
+            bus.subscribe(
+                EventType.LOAD_SHEDDING_LEVEL_CHANGED,
+                self._handle_shedding_changed,
+            )
+            logger.info("[AdaptiveThrottle] Subscribed to load shedding events")
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] EventBus not available for load shedding subscription")
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to subscribe to load shedding events: {e}")
+
+    def _handle_shedding_changed(self, event) -> None:
+        """Load Shedding 상태 변경 이벤트 처리 — 최소 연산 보장."""
+        event_data = event.data if hasattr(event, "data") else event
+        new_level = event_data.get("new_level", -1)
+        traffic_limit = event_data.get("traffic_limit", 100.0)
+        affected = event_data.get("affected_services", [])
+
+        if new_level < 0:
+            # Shedding 해제
+            self._shedding_affected_services = set()
+            self._shedding_suggested_limit = self.config.max_limit
+
+            # 다른 제한이 활성화 상태가 아닐 때만 Dampening 시작
+            if not self._emergency_mode_active and not self._429_reduction_active:
+                self.start_recovery_dampening(apply_jitter=True)
+
+            logger.info(
+                "[AdaptiveThrottle] Load Shedding deactivated, "
+                f"shedding_suggested_limit restored to {self.config.max_limit}"
+            )
+        else:
+            # Shedding 활성화: 보상 계수 적용하여 이중 차단 완화
+            self._shedding_affected_services = set(affected)
+            raw_limit = int(self.config.max_limit * (traffic_limit / 100.0))
+            compensated = min(
+                self.config.max_limit,
+                int(raw_limit * self.config.shedding_compensation_factor),
+            )
+            self._shedding_suggested_limit = max(compensated, self.config.min_limit)
+
+            logger.warning(
+                f"[AdaptiveThrottle] Load Shedding level={new_level}, "
+                f"traffic_limit={traffic_limit}%, "
+                f"shedding_suggested_limit={self._shedding_suggested_limit}, "
+                f"affected_services={affected}"
+            )
+
+        # 메트릭 기록
+        _record_throttle_metrics(
+            service=self._service_name,
+            limit=self._shedding_suggested_limit,
+            limit_change_trigger="load_shedding",
+        )
 
     # =========================================================================
     # Error Budget EventBus 연동
@@ -1098,6 +1169,7 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
             self._rtt_suggested_limit,
             self._429_suggested_limit,
             error_budget_limit,
+            self._shedding_suggested_limit,
         )
 
     def record_response(self, rtt_ms: float) -> None:
@@ -1469,7 +1541,15 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
             result = super().check(key)
             self._current_limit = original_limit
         else:
-            result = super().check(key)
+            # Load Shedding 대상 서비스의 요청에만 제한적 limit 적용
+            service_id = context.get("service_id") if context else None
+            if service_id and self._shedding_affected_services and service_id in self._shedding_affected_services:
+                original_limit = self._current_limit
+                self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
+                result = super().check(key)
+                self._current_limit = original_limit
+            else:
+                result = super().check(key)
 
         # Add adaptive info to result
         result.current_rtt_ms = self._gradient_calculator.get_current_rtt()
@@ -1755,6 +1835,9 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         self._recovery_dampening_active = False
         self._recovery_dampening_step = 0
         self._recovery_dampening_last_time = 0.0
+        # Load Shedding 연동 상태 초기화
+        self._shedding_suggested_limit = self.config.max_limit
+        self._shedding_affected_services = set()
         # 상태 동기화 초기화
         self._last_emergency_check_time = 0.0
 
