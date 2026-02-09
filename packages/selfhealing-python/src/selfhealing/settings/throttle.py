@@ -305,6 +305,53 @@ class ThrottleSettings(BaseSettings):
         description="Prometheus 메트릭의 service 라벨 값. " "환경변수 SELFHEALING_THROTTLE_SERVICE_NAME으로 주입.",
     )
 
+    # ==========================================================================
+    # DLQ 연동 설정 (Throttle 거부 요청 DLQ 저장 및 Recovery 시 자동 Replay)
+    # 기존 ThrottleConfig(dataclass)에서 통합됨
+    # ==========================================================================
+    dlq_on_rejection: bool = Field(
+        default=True,
+        description="Throttle 거부 시 DLQ에 저장 여부",
+    )
+
+    auto_replay_on_recovery: bool = Field(
+        default=True,
+        description="Recovery 시 DLQ 자동 Replay 여부",
+    )
+
+    replay_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
+        description="Replay 배치 크기",
+    )
+
+    replay_interval_ms: int = Field(
+        default=100,
+        ge=10,
+        le=10000,
+        description="Replay 배치 간격 (ms)",
+    )
+
+    replay_min_recovery_percent: float = Field(
+        default=50.0,
+        ge=0.0,
+        le=100.0,
+        description="Replay 시작을 위한 최소 Recovery 비율 (%)",
+    )
+
+    dlq_store_sampling_rate: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="DLQ 저장 샘플링 비율 (1.0 = 전수 저장)",
+    )
+
+    dlq_store_non_essential: bool = Field(
+        default=False,
+        description="비필수 요청도 DLQ에 저장 여부",
+    )
+
     @field_validator("max_limit")
     @classmethod
     def validate_max_limit(cls, v: int, info) -> int:
@@ -339,6 +386,19 @@ class ThrottleSettings(BaseSettings):
             self.recovery_step_2_percent,
             self.recovery_step_3_percent,
         )
+
+    # =========================================================================
+    # 하위 호환 메서드 (기존 ThrottleConfig 인터페이스)
+    # =========================================================================
+    @classmethod
+    def from_dict(cls, data: dict) -> "ThrottleSettings":
+        """Create settings from dictionary (backward compat with ThrottleConfig)."""
+        return cls(**{k: v for k, v in data.items() if k in cls.model_fields})
+
+    @classmethod
+    def from_settings(cls) -> "ThrottleSettings":
+        """Create from current settings (backward compat with ThrottleConfig)."""
+        return get_throttle_settings()
 
 
 # =============================================================================

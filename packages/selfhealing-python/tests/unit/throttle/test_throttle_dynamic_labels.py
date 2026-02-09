@@ -63,7 +63,7 @@ class TestAdaptiveThrottleDynamicLabels:
         # from_settings가 존재하면 테스트 (classmethod이므로 인자 없이 호출)
         if hasattr(ThrottleConfig, "from_settings"):
             # settings 모듈 패치로 테스트
-            with patch("selfhealing.services.throttle.config.get_throttle_settings") as mock_fn:
+            with patch("selfhealing.settings.throttle.get_throttle_settings") as mock_fn:
                 mock_settings = MagicMock()
                 mock_settings.service_name = "my-custom-service"
                 mock_settings.initial_limit = 100

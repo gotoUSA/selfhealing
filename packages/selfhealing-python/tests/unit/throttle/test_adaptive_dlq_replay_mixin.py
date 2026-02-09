@@ -27,7 +27,7 @@ def _make_throttle(**overrides):
 
     defaults = {
         "initial_limit": 100,
-        "sample_interval_ms": 0,
+        "sample_interval_ms": 50,
     }
     defaults.update(overrides)
     config = ThrottleConfig(**defaults)

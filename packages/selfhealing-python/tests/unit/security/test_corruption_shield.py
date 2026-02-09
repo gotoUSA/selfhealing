@@ -134,12 +134,12 @@ class TestL1SchemaValidator:
         from selfhealing.services.corruption_shield.validators import L1SchemaValidator
         from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
         
-        config = CorruptionShieldConfig(max_string_length=50)
+        config = CorruptionShieldConfig(max_string_length=100)
         validator = L1SchemaValidator(config)
         
         data = {
             "amount": 50000,
-            "order_id": "a" * 100,  # 100 chars
+            "order_id": "a" * 200,  # 200 chars > 100
         }
         
         violations = validator.validate(data)

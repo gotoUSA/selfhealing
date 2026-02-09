@@ -59,6 +59,14 @@ from selfhealing.settings.auto_rollback import (
     get_auto_rollback_settings,
     reset_auto_rollback_settings,
 )
+from selfhealing.settings.backpressure import (
+    LEVEL_RATE_MULTIPLIERS,
+    BackpressureLevel,
+    BackpressureSettings,
+    BackpressureStrategy,
+    get_backpressure_settings,
+    reset_backpressure_settings,
+)
 from selfhealing.settings.batch import (
     BatchSettings,
     get_batch_settings,
@@ -165,6 +173,11 @@ from selfhealing.settings.error_budget import (
     get_error_budget_settings,
     reset_error_budget_settings,
 )
+from selfhealing.settings.error_budget_gate import (
+    ErrorBudgetGateSettings,
+    get_error_budget_gate_settings,
+    reset_error_budget_gate_settings,
+)
 
 # Event Buffer Settings (169_SETTINGS_SCALE_LIMITS.md)
 from selfhealing.settings.event_buffer import (
@@ -206,6 +219,11 @@ from selfhealing.settings.l2_storage import (
     get_l2_storage_settings,
     reset_l2_storage_settings,
 )
+from selfhealing.settings.leader_election import (
+    LeaderElectionSettings,
+    get_leader_election_settings,
+    reset_leader_election_settings,
+)
 
 # 고급 기능
 from selfhealing.settings.layered_provider import (
@@ -226,6 +244,11 @@ from selfhealing.settings.logging_config import (
     LoggingSettings,
     get_logging_settings,
     reset_logging_settings,
+)
+from selfhealing.settings.meta_watchdog import (
+    MetaWatchdogSettings,
+    get_meta_watchdog_settings,
+    reset_meta_watchdog_settings,
 )
 from selfhealing.settings.metrics import (
     MetricsSettings,
@@ -660,4 +683,23 @@ __all__ = [
     "PROFILE_DEFAULTS",
     "get_scale_settings",
     "reset_scale_settings",
+    # 207 위치통일: Backpressure (scaling/config.py → settings/backpressure.py)
+    "BackpressureLevel",
+    "BackpressureStrategy",
+    "LEVEL_RATE_MULTIPLIERS",
+    "BackpressureSettings",
+    "get_backpressure_settings",
+    "reset_backpressure_settings",
+    # 207 위치통일: Leader Election (coordination/config.py → settings/leader_election.py)
+    "LeaderElectionSettings",
+    "get_leader_election_settings",
+    "reset_leader_election_settings",
+    # 207 위치통일: Meta Watchdog (meta/config.py → settings/meta_watchdog.py)
+    "MetaWatchdogSettings",
+    "get_meta_watchdog_settings",
+    "reset_meta_watchdog_settings",
+    # 207 위치통일: Error Budget Gate (services/error_budget_gate/config.py → settings/error_budget_gate.py)
+    "ErrorBudgetGateSettings",
+    "get_error_budget_gate_settings",
+    "reset_error_budget_gate_settings",
 ]

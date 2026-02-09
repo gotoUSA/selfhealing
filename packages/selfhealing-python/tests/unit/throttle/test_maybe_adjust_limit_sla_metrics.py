@@ -32,7 +32,7 @@ class TestMaybeAdjustLimitSLACriticalMetrics:
             max_limit=1000,
             sla_critical_ms=sla_critical_ms,
             sla_warning_ms=sla_warning_ms,
-            sample_interval_ms=0,  # 조정 간격 제거 (즉시 반응)
+            sample_interval_ms=50,  # 최소 유효값 (즉시 반응)
         )
         return AdaptiveThrottle(config=config)
 
@@ -116,7 +116,7 @@ class TestMaybeAdjustLimitSLAWarningMetrics:
             max_limit=1000,
             sla_critical_ms=sla_critical_ms,
             sla_warning_ms=sla_warning_ms,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         return AdaptiveThrottle(config=config)
 
@@ -186,7 +186,7 @@ class TestMaybeAdjustLimitSLABranchRouting:
             max_limit=1000,
             sla_critical_ms=500,
             sla_warning_ms=200,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         return AdaptiveThrottle(config=config)
 

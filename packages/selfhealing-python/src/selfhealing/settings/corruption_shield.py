@@ -167,6 +167,30 @@ class CorruptionShieldSettings(BaseSettings):
             )
         return v
 
+    # =========================================================================
+    # 하위 호환 메서드 (기존 CorruptionShieldConfig 인터페이스)
+    # =========================================================================
+    @classmethod
+    def from_dict(cls, data: dict) -> "CorruptionShieldSettings":
+        """Create settings from dictionary (backward compat with CorruptionShieldConfig)."""
+        return cls(
+            l1_enabled=data.get("l1_enabled", True),
+            l2_enabled=data.get("l2_enabled", True),
+            l3_enabled=data.get("l3_enabled", True),
+            required_fields=data.get("required_fields", ["amount", "order_id"]),
+            max_string_length=data.get("max_string_length", 1000),
+            min_amount=data.get("min_amount", 100),
+            max_amount=data.get("max_amount", 100_000_000),
+            allowed_statuses=list(
+                data.get("allowed_statuses", ["DONE", "CANCELED", "PENDING"])
+            ),
+            z_score_threshold=data.get("z_score_threshold", 3.0),
+            iqr_multiplier=data.get("iqr_multiplier", 1.5),
+            min_samples_for_anomaly=data.get("min_samples_for_anomaly", 10),
+            log_violations=data.get("log_violations", True),
+            log_to_security_incident=data.get("log_to_security_incident", True),
+        )
+
 
 # Singleton instance (cached)
 _settings: CorruptionShieldSettings | None = None

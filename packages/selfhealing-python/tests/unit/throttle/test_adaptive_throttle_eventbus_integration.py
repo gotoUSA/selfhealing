@@ -36,7 +36,7 @@ class TestAdaptiveThrottleEventPublishing:
             initial_limit=100,
             sla_critical_ms=500,
             sla_warning_ms=200,
-            sample_interval_ms=0,  # 즉시 조정
+            sample_interval_ms=50,  # 즉시 조정
         )
         throttle = AdaptiveThrottle(config)
 
@@ -74,7 +74,7 @@ class TestAdaptiveThrottleEventPublishing:
             initial_limit=100,
             sla_critical_ms=500,
             sla_warning_ms=200,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
 
@@ -112,7 +112,7 @@ class TestAdaptiveThrottleEventPublishing:
             initial_limit=100,
             sla_critical_ms=500,
             sla_warning_ms=200,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
 
@@ -149,7 +149,7 @@ class TestAdaptiveThrottleEventPublishing:
         config = ThrottleConfig(
             initial_limit=100,
             sla_critical_ms=500,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
 
@@ -192,7 +192,7 @@ class TestAdaptiveThrottleLimitRecoveryEvent:
             initial_limit=10,  # min_limit과 같게 설정
             min_limit=10,
             max_limit=500,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
 
@@ -254,7 +254,7 @@ class TestEventBusFailOpen:
         config = ThrottleConfig(
             initial_limit=100,
             sla_critical_ms=500,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
         initial_limit = throttle.current_limit
@@ -275,7 +275,7 @@ class TestEventBusFailOpen:
         config = ThrottleConfig(
             initial_limit=100,
             sla_critical_ms=500,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
         initial_limit = throttle.current_limit

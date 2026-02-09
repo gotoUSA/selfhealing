@@ -63,7 +63,7 @@ class TestEventBusThrottleIntegration:
             initial_limit=100,
             sla_critical_ms=500,
             sla_warning_ms=200,
-            sample_interval_ms=0,
+            sample_interval_ms=50,
         )
         throttle = AdaptiveThrottle(config)
 

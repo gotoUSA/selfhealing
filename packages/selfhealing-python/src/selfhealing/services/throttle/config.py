@@ -1,107 +1,29 @@
 """
-Throttle Configuration.
+Throttle Configuration (하위 호환 re-export).
 
-Provides dataclass-based configuration for throttle services.
+실제 정의: selfhealing.settings.throttle
+
+기존 ThrottleConfig(dataclass) → ThrottleSettings(BaseSettings) 으로 통합.
+ThrottleConfig 이름은 하위 호환을 위해 alias 로 유지.
+ThrottleResult 는 순수 데이터 객체이므로 이 파일에 그대로 유지.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from selfhealing.settings import get_throttle_settings
+from selfhealing.settings.throttle import (  # noqa: F401
+    ThrottleSettings as ThrottleConfig,
+    get_throttle_settings,
+    reset_throttle_settings,
+)
 
-
-@dataclass
-class ThrottleConfig:
-    """Configuration for throttle services."""
-
-    # Basic rate limiting
-    initial_limit: int = field(default_factory=lambda: get_throttle_settings().initial_limit)
-    window_seconds: int = field(default_factory=lambda: get_throttle_settings().window_seconds)
-
-    # Adaptive throttling (Netflix Gradient)
-    min_limit: int = field(default_factory=lambda: get_throttle_settings().min_limit)
-    max_limit: int = field(default_factory=lambda: get_throttle_settings().max_limit)
-
-    # Gradient calculation
-    sample_interval_ms: int = field(default_factory=lambda: get_throttle_settings().sample_interval_ms)
-    smoothing_factor: float = field(default_factory=lambda: get_throttle_settings().smoothing_factor)
-
-    # Adjustment rates
-    decrease_ratio: float = field(default_factory=lambda: get_throttle_settings().decrease_ratio)
-    increase_step: int = field(default_factory=lambda: get_throttle_settings().increase_step)
-
-    # SLA thresholds (ms) - trigger aggressive throttling
-    sla_warning_ms: int = field(default_factory=lambda: get_throttle_settings().sla_warning_ms)
-    sla_critical_ms: int = field(default_factory=lambda: get_throttle_settings().sla_critical_ms)
-
-    # Emergency mode
-    emergency_limit: int = field(default_factory=lambda: get_throttle_settings().emergency_limit)
-
-    # Redis key prefix
-    key_prefix: str = field(default_factory=lambda: get_throttle_settings().key_prefix)
-
-    # Prometheus metrics service label
-    service_name: str = field(default_factory=lambda: get_throttle_settings().service_name)
-
-    # =========================================================================
-    # DLQ 연동 설정 (Throttle 거부 요청 DLQ 저장 및 Recovery 시 자동 Replay)
-    # =========================================================================
-    dlq_on_rejection: bool = True
-    auto_replay_on_recovery: bool = True
-    replay_batch_size: int = 10
-    replay_interval_ms: int = 100
-    replay_min_recovery_percent: float = 50.0
-    dlq_store_sampling_rate: float = 1.0
-    dlq_store_non_essential: bool = False
-
-    @classmethod
-    def from_settings(cls) -> ThrottleConfig:
-        """Create config from settings."""
-        settings = get_throttle_settings()
-        return cls(
-            initial_limit=settings.initial_limit,
-            window_seconds=settings.window_seconds,
-            min_limit=settings.min_limit,
-            max_limit=settings.max_limit,
-            sample_interval_ms=settings.sample_interval_ms,
-            smoothing_factor=settings.smoothing_factor,
-            decrease_ratio=settings.decrease_ratio,
-            increase_step=settings.increase_step,
-            sla_warning_ms=settings.sla_warning_ms,
-            sla_critical_ms=settings.sla_critical_ms,
-            emergency_limit=settings.emergency_limit,
-            key_prefix=settings.key_prefix,
-            service_name=settings.service_name,
-            # DLQ 연동은 기본값 사용 (Settings에서 관리하지 않음)
-        )
-
-    @classmethod
-    def from_dict(cls, data: dict) -> ThrottleConfig:
-        """Create config from dictionary."""
-        settings = get_throttle_settings()
-        return cls(
-            initial_limit=data.get("initial_limit", settings.initial_limit),
-            window_seconds=data.get("window_seconds", settings.window_seconds),
-            min_limit=data.get("min_limit", settings.min_limit),
-            max_limit=data.get("max_limit", settings.max_limit),
-            sample_interval_ms=data.get("sample_interval_ms", settings.sample_interval_ms),
-            smoothing_factor=data.get("smoothing_factor", settings.smoothing_factor),
-            decrease_ratio=data.get("decrease_ratio", settings.decrease_ratio),
-            increase_step=data.get("increase_step", settings.increase_step),
-            sla_warning_ms=data.get("sla_warning_ms", settings.sla_warning_ms),
-            sla_critical_ms=data.get("sla_critical_ms", settings.sla_critical_ms),
-            emergency_limit=data.get("emergency_limit", settings.emergency_limit),
-            key_prefix=data.get("key_prefix", settings.key_prefix),
-            service_name=data.get("service_name", settings.service_name),
-            dlq_on_rejection=data.get("dlq_on_rejection", True),
-            auto_replay_on_recovery=data.get("auto_replay_on_recovery", True),
-            replay_batch_size=data.get("replay_batch_size", 10),
-            replay_interval_ms=data.get("replay_interval_ms", 100),
-            replay_min_recovery_percent=data.get("replay_min_recovery_percent", 50.0),
-            dlq_store_sampling_rate=data.get("dlq_store_sampling_rate", 1.0),
-            dlq_store_non_essential=data.get("dlq_store_non_essential", False),
-        )
+__all__ = [
+    "ThrottleConfig",
+    "ThrottleResult",
+    "get_throttle_settings",
+    "reset_throttle_settings",
+]
 
 
 @dataclass
