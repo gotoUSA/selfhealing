@@ -362,6 +362,149 @@ class TestCheckSafeForExhaustion:
 # =============================================================================
 
 
+class TestGetMemoryCurrentBytesEdgeCases:
+    """get_memory_current_bytes 추가 엣지 케이스 테스트."""
+
+    def test_exception_returns_none(self):
+        """Exception returns None
+        예외 발생 시 None을 반환하는지 확인.
+        """
+        mock_path = MagicMock()
+        mock_path.exists.side_effect = Exception("Permission denied")
+        with patch.object(
+            CgroupResourceMonitor,
+            "CGROUP_V2_MEMORY_CURRENT",
+            mock_path,
+        ):
+            result = CgroupResourceMonitor.get_memory_current_bytes()
+            assert result is None
+
+    def test_read_text_exception(self):
+        """Read text exception
+        read_text() 예외 시 None을 반환하는지 확인.
+        """
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.side_effect = IOError("Failed to read")
+        with patch.object(
+            CgroupResourceMonitor,
+            "CGROUP_V2_MEMORY_CURRENT",
+            mock_path,
+        ):
+            result = CgroupResourceMonitor.get_memory_current_bytes()
+            assert result is None
+
+
+class TestCheckSafeForExhaustionEdgeCases:
+    """check_safe_for_exhaustion 추가 엣지 케이스 테스트."""
+
+    @patch.object(CgroupResourceMonitor, "get_available_memory_bytes", return_value=100_000_000)
+    def test_exact_boundary(self, mock_available):
+        """Exact boundary request
+        요청량이 정확히 가용량과 같을 때 safe=True인지 확인.
+        """
+        is_safe, actual = CgroupResourceMonitor.check_safe_for_exhaustion(100_000_000)
+        assert is_safe is True
+        assert actual == 100_000_000
+
+    @patch.object(CgroupResourceMonitor, "get_available_memory_bytes", return_value=0)
+    def test_zero_available(self, mock_available):
+        """Zero available memory
+        가용 메모리가 0일 때 모든 요청이 캡핑되는지 확인.
+        """
+        is_safe, actual = CgroupResourceMonitor.check_safe_for_exhaustion(1000)
+        assert is_safe is False
+        assert actual == 0
+
+    @patch.object(CgroupResourceMonitor, "get_available_memory_bytes", return_value=500_000_000)
+    def test_custom_safety_margin(self, mock_available):
+        """Custom safety margin in check_safe
+        커스텀 safety_margin이 get_available_memory_bytes에 전달되는지 확인.
+        """
+        is_safe, actual = CgroupResourceMonitor.check_safe_for_exhaustion(100_000_000, safety_margin=0.3)
+        assert is_safe is True
+        mock_available.assert_called_once_with(0.3)
+
+    @patch.object(CgroupResourceMonitor, "get_available_memory_bytes", return_value=0)
+    def test_zero_request(self, mock_available):
+        """Zero request
+        요청량이 0일 때 safe=True인지 확인.
+        """
+        is_safe, actual = CgroupResourceMonitor.check_safe_for_exhaustion(0)
+        assert is_safe is True
+        assert actual == 0
+
+
+class TestGetDefaultSafetyMargin:
+    """_get_default_safety_margin() 테스트."""
+
+    @patch("selfhealing.core.resource_monitor.get_resource_monitor_settings")
+    def test_returns_settings_value(self, mock_settings):
+        """Returns value from settings
+        ResourceMonitorSettings에서 safety_margin 값을 올바르게 가져오는지 확인.
+        """
+        mock_s = MagicMock()
+        mock_s.safety_margin = 0.20
+        mock_settings.return_value = mock_s
+
+        result = CgroupResourceMonitor._get_default_safety_margin()
+        assert result == 0.20
+        mock_settings.assert_called_once()
+
+
+class TestGetMemoryUsagePercentEdgeCases:
+    """get_memory_usage_percent 추가 엣지 케이스 테스트."""
+
+    @patch.object(CgroupResourceMonitor, "get_memory_max_bytes", return_value=1000)
+    @patch.object(CgroupResourceMonitor, "get_memory_current_bytes", return_value=None)
+    def test_no_current(self, mock_current, mock_max):
+        """No current memory returns None
+        현재 사용량이 None이면 None을 반환하는지 확인.
+        """
+        result = CgroupResourceMonitor.get_memory_usage_percent()
+        assert result is None
+
+    @patch.object(CgroupResourceMonitor, "get_memory_max_bytes", return_value=1000)
+    @patch.object(CgroupResourceMonitor, "get_memory_current_bytes", return_value=1000)
+    def test_full_usage(self, mock_current, mock_max):
+        """Full memory usage (100%)
+        메모리가 100% 사용 중일 때 100.0을 반환하는지 확인.
+        """
+        result = CgroupResourceMonitor.get_memory_usage_percent()
+        assert result == 100.0
+
+    @patch.object(CgroupResourceMonitor, "get_memory_max_bytes", return_value=1000)
+    @patch.object(CgroupResourceMonitor, "get_memory_current_bytes", return_value=0)
+    def test_zero_usage(self, mock_current, mock_max):
+        """Zero memory usage
+        메모리가 0% 사용 중일 때 0.0을 반환하는지 확인.
+        """
+        result = CgroupResourceMonitor.get_memory_usage_percent()
+        assert result == 0.0
+
+
+class TestAvailableMemoryEdgeCases:
+    """get_available_memory_bytes 추가 엣지 케이스 테스트."""
+
+    @patch.object(CgroupResourceMonitor, "get_memory_max_bytes", return_value=1000)
+    @patch.object(CgroupResourceMonitor, "get_memory_current_bytes", return_value=1000)
+    def test_zero_available(self, mock_current, mock_max):
+        """Zero available memory
+        max == current일 때 0을 반환하는지 확인.
+        """
+        result = CgroupResourceMonitor.get_available_memory_bytes(safety_margin=0.0)
+        assert result == 0
+
+    @patch.object(CgroupResourceMonitor, "get_memory_max_bytes", return_value=1000)
+    @patch.object(CgroupResourceMonitor, "get_memory_current_bytes", return_value=0)
+    def test_full_available_no_margin(self, mock_current, mock_max):
+        """Full available no margin
+        margin=0일 때 max 전체가 가용한지 확인.
+        """
+        result = CgroupResourceMonitor.get_available_memory_bytes(safety_margin=0.0)
+        assert result == 1000
+
+
 class TestBackwardCompatibility:
     """이름 호환성 테스트."""
 
