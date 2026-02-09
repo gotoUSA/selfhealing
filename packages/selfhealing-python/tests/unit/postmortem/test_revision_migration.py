@@ -37,7 +37,7 @@ class TestMigrateExistingPostmortems:
             state_file = Path(tmpdir) / "chain.json"
             manager = PostmortemRevisionManager(hash_chain_state_file=state_file)
 
-            with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+            with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
                 # 첫 호출에서 인시던트 반환, 두번째에서 빈 리스트 반환
                 mock_get.side_effect = [mock_incidents, []]
 
@@ -81,7 +81,7 @@ class TestMigrateExistingPostmortems:
                 {"incident_id": "NEW-001", "summary": "New incident"},
             ]
 
-            with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+            with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
                 mock_get.side_effect = [mock_incidents, []]
 
                 result = migrate_existing_postmortems(manager=manager)
@@ -107,7 +107,7 @@ class TestMigrateExistingPostmortems:
             state_file = Path(tmpdir) / "chain.json"
             manager = PostmortemRevisionManager(hash_chain_state_file=state_file)
 
-            with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+            with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
                 mock_get.side_effect = [mock_incidents, []]
 
                 result = migrate_existing_postmortems(manager=manager)
@@ -127,7 +127,7 @@ class TestMigrateExistingPostmortems:
             state_file = Path(tmpdir) / "chain.json"
             manager = PostmortemRevisionManager(hash_chain_state_file=state_file)
 
-            with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+            with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
                 mock_get.return_value = []
 
                 result = migrate_existing_postmortems(manager=manager)
@@ -167,7 +167,7 @@ class TestMigrateExistingPostmortems:
             state_file = Path(tmpdir) / "chain.json"
             manager = PostmortemRevisionManager(hash_chain_state_file=state_file)
 
-            with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+            with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
                 # 첫번째 배치, 두번째 배치, 종료
                 mock_get.side_effect = [batch1, batch2, []]
 
@@ -186,7 +186,7 @@ class TestMigrateExistingPostmortems:
 
         reset_postmortem_revision_manager()
 
-        with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+        with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
             mock_get.return_value = []
 
             # manager=None으로 호출하면 싱글턴 사용
@@ -209,7 +209,7 @@ class TestMigrateExistingPostmortems:
             state_file = Path(tmpdir) / "chain.json"
             manager = PostmortemRevisionManager(hash_chain_state_file=state_file)
 
-            with patch("selfhealing.services.postmortem_store.get_healing_incidents") as mock_get:
+            with patch("selfhealing.services.postmortem.store.get_healing_incidents") as mock_get:
                 mock_get.side_effect = [mock_incidents, []]
 
                 migrate_existing_postmortems(manager=manager)

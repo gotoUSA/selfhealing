@@ -85,7 +85,7 @@ class TestAddHealingIncidentWithLock:
         mock_lock.acquire.return_value = True
 
         with patch(
-            "selfhealing.services.postmortem_store._acquire_postmortem_lock",
+            "selfhealing.services.postmortem.store._acquire_postmortem_lock",
             return_value=mock_lock,
         ):
             incident = {
@@ -120,7 +120,7 @@ class TestAddHealingIncidentWithLock:
         mock_lock.acquire.return_value = False
 
         with patch(
-            "selfhealing.services.postmortem_store._acquire_postmortem_lock",
+            "selfhealing.services.postmortem.store._acquire_postmortem_lock",
             return_value=mock_lock,
         ):
             incident = {
@@ -151,7 +151,7 @@ class TestAddHealingIncidentWithLock:
 
         # Redis 클라이언트 없음
         with patch(
-            "selfhealing.services.postmortem_store._acquire_postmortem_lock",
+            "selfhealing.services.postmortem.store._acquire_postmortem_lock",
             return_value=None,
         ):
             incident = {
@@ -200,11 +200,11 @@ class TestAddHealingIncidentWithLock:
         mock_lock.acquire.return_value = True
 
         with patch(
-            "selfhealing.services.postmortem_store._acquire_postmortem_lock",
+            "selfhealing.services.postmortem.store._acquire_postmortem_lock",
             return_value=mock_lock,
         ):
             with patch(
-                "selfhealing.services.postmortem_store.add_healing_incident",
+                "selfhealing.services.postmortem.store.add_healing_incident",
                 side_effect=Exception("DB Error"),
             ):
                 try:
@@ -226,7 +226,7 @@ class TestAcquireGroupCloseLock:
         mock_redis = MagicMock()
 
         with patch(
-            "selfhealing.services.postmortem_store._get_redis_client",
+            "selfhealing.services.postmortem.store._get_redis_client",
             return_value=mock_redis,
         ):
             lock = acquire_group_close_lock("INCGRP-123")
@@ -239,7 +239,7 @@ class TestAcquireGroupCloseLock:
         from selfhealing.services.postmortem_store import acquire_group_close_lock
 
         with patch(
-            "selfhealing.services.postmortem_store._get_redis_client",
+            "selfhealing.services.postmortem.store._get_redis_client",
             return_value=None,
         ):
             lock = acquire_group_close_lock("INCGRP-123")
@@ -339,7 +339,7 @@ class TestGetRedisClient:
 
     def test_get_redis_client_from_provider_registry(self):
         """ProviderRegistry에서 Redis 클라이언트를 가져와야 함."""
-        from selfhealing.services.postmortem_store import _get_redis_client
+        from selfhealing.services.postmortem.store import _get_redis_client
 
         mock_redis = MagicMock()
 
@@ -351,7 +351,7 @@ class TestGetRedisClient:
 
     def test_get_redis_client_returns_none_when_unavailable(self):
         """ProviderRegistry에서 None 반환 시 None 반환."""
-        from selfhealing.services.postmortem_store import _get_redis_client
+        from selfhealing.services.postmortem.store import _get_redis_client
 
         with patch("selfhealing.factory.ProviderRegistry") as mock_registry:
             mock_registry.get_cache_provider.return_value = None
@@ -388,14 +388,14 @@ class TestIntegrationScenario:
 
         # 첫 번째 저장
         with patch(
-            "selfhealing.services.postmortem_store._acquire_postmortem_lock",
+            "selfhealing.services.postmortem.store._acquire_postmortem_lock",
             return_value=mock_lock_1,
         ):
             result1 = add_healing_incident_with_lock(incident.copy())
 
         # 두 번째 저장 (동일 ID)
         with patch(
-            "selfhealing.services.postmortem_store._acquire_postmortem_lock",
+            "selfhealing.services.postmortem.store._acquire_postmortem_lock",
             return_value=mock_lock_2,
         ):
             result2 = add_healing_incident_with_lock(incident.copy())

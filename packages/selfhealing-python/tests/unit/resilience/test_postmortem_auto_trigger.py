@@ -85,7 +85,7 @@ class TestCircuitBreakerClosedPostmortemHandler:
         # 따라서 logger.debug 메시지로 확인 (ImportError 발생 안 함)
         import logging
 
-        with patch("selfhealing.services.event_bus.logger") as mock_logger:
+        with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
             _on_circuit_breaker_closed_postmortem(event)
             # DEBUG 로그가 호출되었는지 확인
             debug_calls = [call for call in mock_logger.debug.call_args_list]

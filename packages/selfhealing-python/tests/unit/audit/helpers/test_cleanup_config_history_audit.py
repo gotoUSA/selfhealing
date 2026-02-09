@@ -13,16 +13,12 @@ class TestCleanupServiceAudit:
 
     def test_archive_old_dlq_entries_calls_log_system_control_audit(self):
         """archive_old_dlq_entries가 log_system_control_audit를 호출."""
-        with patch(
-            "selfhealing.services.dlq_service.get_dlq_service"
-        ) as mock_dlq:
+        with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_dlq:
             dlq_svc = MagicMock()
             dlq_svc.archive_old_entries.return_value = 5
             mock_dlq.return_value = dlq_svc
 
-            with patch(
-                "selfhealing.services.cleanup_service.log_system_control_audit"
-            ) as mock_audit:
+            with patch("selfhealing.services.cleanup_service.log_system_control_audit") as mock_audit:
                 from selfhealing.services.cleanup_service import CleanupService
 
                 service = CleanupService()
@@ -36,16 +32,12 @@ class TestCleanupServiceAudit:
 
     def test_cleanup_expired_config_calls_log_system_control_audit(self):
         """cleanup_expired_config가 log_system_control_audit를 호출."""
-        with patch(
-            "selfhealing.services.pending_config.get_pending_config_service"
-        ) as mock_pending:
+        with patch("selfhealing.services.pending_config.get_pending_config_service") as mock_pending:
             pending_svc = MagicMock()
             pending_svc.cleanup_expired.return_value = 7
             mock_pending.return_value = pending_svc
 
-            with patch(
-                "selfhealing.services.cleanup_service.log_system_control_audit"
-            ) as mock_audit:
+            with patch("selfhealing.services.cleanup_service.log_system_control_audit") as mock_audit:
                 from selfhealing.services.cleanup_service import CleanupService
 
                 service = CleanupService()
@@ -58,16 +50,12 @@ class TestCleanupServiceAudit:
 
     def test_purge_archived_dlq_dry_run_calls_log_system_control_audit(self):
         """purge_archived_dlq_entries dry_run이 log_system_control_audit를 호출."""
-        with patch(
-            "selfhealing.services.dlq_service.get_dlq_service"
-        ) as mock_dlq:
+        with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_dlq:
             dlq_svc = MagicMock()
             dlq_svc.count_archived_older_than.return_value = 10
             mock_dlq.return_value = dlq_svc
 
-            with patch(
-                "selfhealing.services.cleanup_service.log_system_control_audit"
-            ) as mock_audit:
+            with patch("selfhealing.services.cleanup_service.log_system_control_audit") as mock_audit:
                 from selfhealing.services.cleanup_service import CleanupService
 
                 service = CleanupService()
@@ -80,16 +68,12 @@ class TestCleanupServiceAudit:
 
     def test_purge_archived_dlq_permanent_calls_log_system_control_audit(self):
         """purge_archived_dlq_entries 영구삭제가 log_system_control_audit를 호출."""
-        with patch(
-            "selfhealing.services.dlq_service.get_dlq_service"
-        ) as mock_dlq:
+        with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_dlq:
             dlq_svc = MagicMock()
             dlq_svc.purge_archived.return_value = 3
             mock_dlq.return_value = dlq_svc
 
-            with patch(
-                "selfhealing.services.cleanup_service.log_system_control_audit"
-            ) as mock_audit:
+            with patch("selfhealing.services.cleanup_service.log_system_control_audit") as mock_audit:
                 from selfhealing.services.cleanup_service import CleanupService
 
                 service = CleanupService()
@@ -107,9 +91,7 @@ class TestPendingConfigServiceAudit:
 
     def test_cancel_pending_change_calls_log_config_apply_audit(self):
         """cancel_pending_change가 log_config_apply_audit를 호출."""
-        with patch(
-            "selfhealing.services.pending_config.get_state_backend"
-        ) as mock_backend:
+        with patch("selfhealing.services.pending_config.get_state_backend") as mock_backend:
             backend = MagicMock()
             backend.get.return_value = None
             mock_backend.return_value = backend
@@ -126,9 +108,7 @@ class TestPendingConfigServiceAudit:
                 previous_values={"threshold": 5},
             )
 
-            with patch(
-                "selfhealing.services.pending_config.log_config_apply_audit"
-            ) as mock_audit:
+            with patch("selfhealing.services.pending_config.log_config_apply_audit") as mock_audit:
                 result = service.cancel_pending_change(change.id, cancelled_by="admin")
 
                 assert result is not None
@@ -153,9 +133,7 @@ class TestConfigHistoryServiceAudit:
 
     def test_save_version_calls_log_config_apply_audit(self, mock_redis_client):
         """save_version이 log_config_apply_audit를 호출."""
-        with patch(
-            "selfhealing.services.config_history.log_config_apply_audit"
-        ) as mock_audit:
+        with patch("selfhealing.services.config_history.service.log_config_apply_audit") as mock_audit:
             from selfhealing.services.config_history import ConfigHistoryService
 
             service = ConfigHistoryService()
@@ -190,10 +168,8 @@ class TestConfigHistoryServiceAudit:
         mock_redis_client.lrange.return_value = [json.dumps(version_data).encode()]
         mock_redis_client.incr.return_value = 2
 
-        with patch("selfhealing.services.config_history.log_config_apply_audit"):
-            with patch(
-                "selfhealing.services.config_history.log_rollback_audit"
-            ) as mock_rollback_audit:
+        with patch("selfhealing.services.config_history.service.log_config_apply_audit"):
+            with patch("selfhealing.services.config_history.service.log_rollback_audit") as mock_rollback_audit:
                 from selfhealing.services.config_history import ConfigHistoryService
 
                 service = ConfigHistoryService()

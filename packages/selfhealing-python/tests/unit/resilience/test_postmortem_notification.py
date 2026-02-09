@@ -63,7 +63,7 @@ class TestSendPostmortemNotification:
             "recommendations": ["권장 조치 1"],
         }
 
-        with patch("selfhealing.services.event_bus.logger") as mock_logger:
+        with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
             _send_postmortem_notification(
                 settings=mock_settings,
                 postmortem=postmortem,
@@ -93,7 +93,7 @@ class TestSendPostmortemNotification:
             "recommendations": [],
         }
 
-        with patch("selfhealing.services.event_bus.logger") as mock_logger:
+        with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
             _send_postmortem_notification(
                 settings=mock_settings,
                 postmortem=postmortem,
@@ -402,7 +402,7 @@ class TestSendPostmortemNotification:
             "selfhealing.services.unified_notification.UnifiedNotificationManager",
             side_effect=Exception("Notification system error"),
         ):
-            with patch("selfhealing.services.event_bus.logger") as mock_logger:
+            with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
                 # 예외가 발생해도 함수가 정상 종료되어야 함
                 _send_postmortem_notification(
                     settings=mock_settings,
@@ -443,7 +443,7 @@ class TestSendPostmortemNotification:
             "selfhealing.services.unified_notification.UnifiedNotificationManager",
             return_value=mock_manager,
         ):
-            with patch("selfhealing.services.event_bus.logger") as mock_logger:
+            with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
                 _send_postmortem_notification(
                     settings=mock_settings,
                     postmortem=postmortem,

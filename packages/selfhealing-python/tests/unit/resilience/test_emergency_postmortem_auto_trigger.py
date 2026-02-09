@@ -219,7 +219,7 @@ class TestEmergencyPostmortemHandler:
             source="recovery_coordinator",
         )
 
-        with patch("selfhealing.services.event_bus.logger") as mock_logger:
+        with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
             _on_emergency_recovery_completed_postmortem(event)
             debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
             assert any("Auto postmortem disabled" in call for call in debug_calls)
@@ -248,7 +248,7 @@ class TestEmergencyPostmortemHandler:
             source="recovery_coordinator",
         )
 
-        with patch("selfhealing.services.event_bus.logger") as mock_logger:
+        with patch("selfhealing.services.event_bus.bus.logger") as mock_logger:
             _on_emergency_recovery_completed_postmortem(event)
             debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
             assert any("skipped" in call.lower() for call in debug_calls)
