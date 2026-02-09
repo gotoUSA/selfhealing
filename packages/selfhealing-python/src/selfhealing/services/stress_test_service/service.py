@@ -84,78 +84,22 @@ class StressTestService:
     # =========================================================================
 
     def get_pool_info(self) -> dict:
-        """SQLAlchemy Pool 정보 조회."""
+        """SQLAlchemy Pool 정보 조회.
+
+        공통 어댑터(selfhealing.adapters.sqlalchemy_pool)에 위임합니다.
+        """
         try:
-            conn = connections["default"]
+            from selfhealing.adapters.sqlalchemy_pool import (
+                get_pool_info as _get_pool_info,
+            )
 
-            # 연결이 없으면 생성
-            conn.ensure_connection()
-
-            # 방법 1: conn.connection._pool (dj_db_conn_pool 1.2.x)
-            if hasattr(conn, "connection") and conn.connection is not None:
-                raw_conn = conn.connection
-                if hasattr(raw_conn, "_pool"):
-                    pool = raw_conn._pool
-                    pool_size = pool.size()
-                    checkedout = pool.checkedout()
-                    checkedin = pool.checkedin()
-                    overflow = pool.overflow()
-                    max_overflow = getattr(pool, "_max_overflow", 0)
-
-                    return {
-                        "pool_type": type(pool).__name__,
-                        "pool_size": pool_size,
-                        "max_overflow": max_overflow,
-                        "checkedin": checkedin,
-                        "checkedout": checkedout,
-                        "overflow": overflow,
-                        "total_capacity": pool_size + max_overflow,
-                        "available": checkedin,
-                        "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
-                    }
-
-            # 방법 2: pool_container 사용 (일부 버전)
-            try:
-                from dj_db_conn_pool.core.mixins.core import pool_container
-
-                if pool_container.has("default"):
-                    pool = pool_container.get("default")
-                    pool_size = pool.size()
-                    checkedout = pool.checkedout()
-                    checkedin = pool.checkedin()
-                    overflow = pool.overflow()
-                    max_overflow = getattr(pool, "_max_overflow", 0)
-
-                    return {
-                        "pool_type": type(pool).__name__,
-                        "pool_size": pool_size,
-                        "max_overflow": max_overflow,
-                        "checkedin": checkedin,
-                        "checkedout": checkedout,
-                        "overflow": overflow,
-                        "total_capacity": pool_size + max_overflow,
-                        "available": checkedin,
-                        "pool_exhausted": checkedin == 0 and checkedout >= pool_size,
-                    }
-            except ImportError:
-                pass
-
-            # 방법 3: conn.pool.pool (구버전)
-            if hasattr(conn, "pool") and conn.pool is not None and hasattr(conn.pool, "pool"):
-                pool = conn.pool.pool
+            result = _get_pool_info()
+            if not result:
                 return {
-                    "pool_type": type(pool).__name__,
-                    "pool_size": pool.size(),
-                    "checkedin": pool.checkedin(),
-                    "checkedout": pool.checkedout(),
-                    "overflow": pool.overflow(),
-                    "pool_exhausted": pool.checkedout() >= pool.size() + pool._max_overflow,
+                    "pool_type": "django_default",
+                    "note": "No SQLAlchemy pool detected",
                 }
-
-            return {
-                "pool_type": "django_default",
-                "note": "No SQLAlchemy pool detected",
-            }
+            return result
         except Exception as e:
             return {"pool_type": "unknown", "error": str(e)}
 
