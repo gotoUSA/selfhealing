@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any, TypeVar
 
 F = TypeVar("F", bound=Callable)
@@ -39,7 +39,7 @@ class TaskStatus(str, Enum):
     REVOKED = "revoked"  # Task was cancelled
 
 
-class TaskPriority(int, Enum):
+class TaskPriority(IntEnum):
     """Task priority levels (higher = processed sooner)"""
 
     LOW = 0

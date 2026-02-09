@@ -73,17 +73,18 @@
 | `api/django/rate_limit.py` | `RedisHealthState` |
 | `adapters/memory/drift_reconciliation.py` | `DriftReconciliationResult` |
 
-### 2-2. plain `Enum` → `IntEnum` (정수 값 + 순서 비교, 5건)
+### 2-2. plain `Enum` / `int, Enum` → `IntEnum` (정수 값 + 순서/산술, 6건)
 
-`.value` 기반 순서 비교가 코드에서 확인된 정수 값 Enum:
+`.value` 기반 순서 비교 또는 산술 연산이 코드에서 확인된 정수 값 Enum:
 
-| 파일 | 클래스 | 근거 |
-|------|--------|------|
-| `services/event_bus.py` | `EventPriority` | `.value` 비교: `LOW.value < NORMAL.value` |
-| `utils/async_logger.py` | `EventSeverity` | `.value` 비교: `DEBUG.value < INFO.value` |
-| `services/emergency_mode/enums.py` | `EmergencyLevel` | `.value` 비교: `level.value >= LEVEL_2.value` |
-| `scaling/graceful_degradation.py` | `FeaturePriority` | `.value` 비교: `CRITICAL.value == 0` |
-| `audit/persistence/disk_buffer.py` | `BufferState` | 상태 머신 (정수 값 0-4) |
+| 파일 | 클래스 | 원본 | 근거 |
+|------|--------|------|------|
+| `services/event_bus.py` | `EventPriority` | plain `Enum` | `.value` 비교: `LOW.value < NORMAL.value` |
+| `utils/async_logger.py` | `EventSeverity` | plain `Enum` | `.value` 비교: `DEBUG.value < INFO.value` |
+| `services/emergency_mode/enums.py` | `EmergencyLevel` | plain `Enum` | `.value` 비교: `level.value >= LEVEL_2.value` |
+| `scaling/graceful_degradation.py` | `FeaturePriority` | plain `Enum` | `.value` 비교: `CRITICAL.value == 0` |
+| `audit/persistence/disk_buffer.py` | `BufferState` | plain `Enum` | 상태 머신 (정수 값 0-4) |
+| `interfaces/task_queue.py` | `TaskPriority` | `int, Enum` | `.value` 산술 연산: `10 - priority.value` (celery_adapter) |
 
 ### 2-3. IntEnum — 기존 유지 (7건)
 
