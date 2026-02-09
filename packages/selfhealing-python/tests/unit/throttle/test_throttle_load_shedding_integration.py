@@ -9,6 +9,9 @@ AdaptiveThrottle Load Shedding 연동 단위 테스트.
 5. _handle_shedding_changed: Shedding 활성화/비활성화 이벤트 처리
 6. check(): context.service_id 기반 Load Shedding limit 적용
 7. shedding_compensation_factor 보상 계수 적용
+8. check(): self._service_name fallback 기반 Shedding 매칭
+9. critical tier 요청의 Shedding 보호
+10. Emergency Mode + Shedding 동시 활성 시 Conservative Limit (Min-Winner)
 """
 
 import pytest
@@ -384,3 +387,284 @@ class TestSubscribeLoadSheddingEvents:
             # 예외가 발생하지 않아야 함 (Fail-Open)
             throttle = AdaptiveThrottle(ThrottleConfig())
             assert throttle._shedding_suggested_limit == throttle.config.max_limit
+
+
+class TestCheckWithServiceNameSheddingFallback:
+    """check()에서 self._service_name fallback 기반 Load Shedding 매칭 검증.
+
+    ThrottleRegistry 경로에서 context 없이 self._service_name으로
+    affected_services 매칭 여부를 확인한다.
+    """
+
+    def setup_method(self):
+        reset_adaptive_throttle()
+
+    def teardown_method(self):
+        reset_adaptive_throttle()
+
+    def test_service_name_in_affected_applies_shedding_limit(self):
+        """self._service_name이 affected_services에 포함되면 shedding limit 적용."""
+        from selfhealing.services.metrics.registry import sanitize_label_value
+
+        config = ThrottleConfig(
+            initial_limit=100,
+            max_limit=500,
+            window_seconds=60,
+            service_name="order-api",
+        )
+        throttle = AdaptiveThrottle(config)
+
+        # affected_services에 sanitized name 사용 (self._service_name과 일치)
+        sanitized_name = sanitize_label_value("order-api")
+        throttle._shedding_affected_services = {sanitized_name}
+        throttle._shedding_suggested_limit = 5
+
+        # context 미전달 → self._service_name fallback 사용
+        results = [throttle.check("same_key") for _ in range(10)]
+        allowed = sum(1 for r in results if r.allowed)
+        assert allowed == 5
+
+    def test_service_name_not_in_affected_uses_full_limit(self):
+        """self._service_name이 affected_services에 없으면 기본 limit 적용."""
+        from selfhealing.services.metrics.registry import sanitize_label_value
+
+        config = ThrottleConfig(
+            initial_limit=100,
+            max_limit=500,
+            window_seconds=60,
+            service_name="payment-api",
+        )
+        throttle = AdaptiveThrottle(config)
+
+        sanitized_other = sanitize_label_value("order-api")
+        throttle._shedding_affected_services = {sanitized_other}
+        throttle._shedding_suggested_limit = 5
+
+        # payment-api는 affected가 아님
+        results = [throttle.check(f"key_{i}") for i in range(10)]
+        allowed = sum(1 for r in results if r.allowed)
+        assert allowed == 10
+
+    def test_context_service_id_takes_precedence_over_service_name(self):
+        """context의 service_id가 self._service_name보다 우선."""
+        config = ThrottleConfig(
+            initial_limit=100,
+            max_limit=500,
+            window_seconds=60,
+            service_name="payment-api",
+        )
+        throttle = AdaptiveThrottle(config)
+
+        # self._service_name = "payment_api" (sanitized) → affected 아님
+        # context service_id = "order-api" → affected
+        throttle._shedding_affected_services = {"order-api"}
+        throttle._shedding_suggested_limit = 5
+
+        context = {"service_id": "order-api"}
+        results = [throttle.check("same_key", context=context) for _ in range(10)]
+        allowed = sum(1 for r in results if r.allowed)
+        assert allowed == 5
+
+    def test_service_name_fallback_restores_original_limit(self):
+        """self._service_name fallback 후 _current_limit 복구."""
+        from selfhealing.services.metrics.registry import sanitize_label_value
+
+        config = ThrottleConfig(
+            initial_limit=100,
+            max_limit=500,
+            window_seconds=60,
+            service_name="order-api",
+        )
+        throttle = AdaptiveThrottle(config)
+        original_limit = throttle._current_limit
+
+        sanitized_name = sanitize_label_value("order-api")
+        throttle._shedding_affected_services = {sanitized_name}
+        throttle._shedding_suggested_limit = 5
+
+        throttle.check("key_1")
+        assert throttle._current_limit == original_limit
+
+
+class TestCriticalTierProtectionDuringShedding:
+    """critical tier 요청이 Shedding 활성 시에도 보호되는지 검증.
+
+    Load Shedding은 critical 서비스를 affected_services에 포함하지 않으므로
+    (manager.py evaluate_shedding: critical → 100%), critical 서비스의
+    요청은 shedding limit의 영향을 받지 않아야 한다.
+    """
+
+    def setup_method(self):
+        reset_adaptive_throttle()
+
+    def teardown_method(self):
+        reset_adaptive_throttle()
+
+    def test_critical_service_not_in_affected_gets_full_limit(self):
+        """critical 서비스(affected 미포함)는 shedding limit 미적용."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500, window_seconds=60)
+        throttle = AdaptiveThrottle(config)
+
+        # low/medium만 affected, critical 서비스는 제외
+        throttle._shedding_affected_services = {"review-api", "search-api"}
+        throttle._shedding_suggested_limit = 5
+
+        # critical 서비스(payment-api)는 affected가 아님
+        context = {"service_id": "payment-api"}
+        results = [throttle.check(f"key_{i}", tier_id="critical", context=context) for i in range(10)]
+        allowed = sum(1 for r in results if r.allowed)
+        assert allowed == 10
+
+    def test_critical_tier_with_429_takes_precedence_over_shedding(self):
+        """429 감소 + Shedding 동시 활성 시 critical tier는 429 보호 경로 진입."""
+        from selfhealing.services.throttle.adaptive import PROTECTED_TIERS_ON_429
+
+        config = ThrottleConfig(initial_limit=100, max_limit=500, window_seconds=60)
+        throttle = AdaptiveThrottle(config)
+
+        # 429 감소 활성화 + Shedding 활성화
+        throttle._429_reduction_active = True
+        throttle._limit_before_429 = 100  # 429 감소 전 limit
+        throttle._shedding_affected_services = {"order-api"}
+        throttle._shedding_suggested_limit = 5
+
+        # critical tier → 429 보호 경로 (shedding 분기 미진입)
+        assert "critical" in PROTECTED_TIERS_ON_429
+
+        context = {"service_id": "order-api"}
+        results = [throttle.check(f"key_{i}", tier_id="critical", context=context) for i in range(10)]
+        allowed = sum(1 for r in results if r.allowed)
+        # 429 보호로 pre-429 limit (100) 적용 → 10개 모두 허용
+        assert allowed == 10
+
+    def test_non_critical_affected_service_gets_shedding_limit(self):
+        """non-critical 서비스(affected 포함)는 shedding limit 적용."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500, window_seconds=60)
+        throttle = AdaptiveThrottle(config)
+
+        throttle._shedding_affected_services = {"review-api"}
+        throttle._shedding_suggested_limit = 5
+
+        # non-critical 서비스: shedding limit 적용
+        context = {"service_id": "review-api"}
+        results = [throttle.check("same_key", tier_id="standard", context=context) for _ in range(10)]
+        allowed = sum(1 for r in results if r.allowed)
+        assert allowed == 5
+
+
+class TestEmergencyAndSheddingMinWinner:
+    """Emergency Mode + Shedding 동시 활성 시 Conservative Limit 검증.
+
+    conservative_limit은 min(rtt, 429, error_budget, shedding)으로 계산되며,
+    Emergency 상태와 Shedding 상태가 동시에 활성화될 때도 Min-Winner 정상 동작해야 한다.
+    """
+
+    def setup_method(self):
+        reset_adaptive_throttle()
+
+    def teardown_method(self):
+        reset_adaptive_throttle()
+
+    def test_shedding_wins_when_lowest(self):
+        """Shedding limit이 가장 낮을 때 conservative_limit 반환."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500)
+        throttle = AdaptiveThrottle(config)
+        throttle._conservative_enabled = True
+
+        # Emergency 상태 시뮬레이션
+        throttle._emergency_mode_active = True
+        throttle._emergency_level = 1
+
+        throttle._rtt_suggested_limit = 200
+        throttle._429_suggested_limit = 500
+        throttle._shedding_suggested_limit = 50  # 가장 낮음
+
+        assert throttle.conservative_limit == 50
+
+    def test_emergency_rtt_wins_when_lowest(self):
+        """Emergency 시 RTT limit이 가장 낮으면 RTT가 conservative_limit."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500)
+        throttle = AdaptiveThrottle(config)
+        throttle._conservative_enabled = True
+
+        throttle._emergency_mode_active = True
+        throttle._emergency_level = 2
+
+        throttle._rtt_suggested_limit = 30  # 가장 낮음
+        throttle._429_suggested_limit = 500
+        throttle._shedding_suggested_limit = 100
+
+        assert throttle.conservative_limit == 30
+
+    def test_error_budget_wins_with_shedding_active(self):
+        """Error Budget limit이 Shedding limit보다 낮으면 Error Budget 우선."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500)
+        throttle = AdaptiveThrottle(config)
+        throttle._conservative_enabled = True
+
+        # Error Budget 감소 활성화
+        throttle._error_budget_limit_reduction_active = True
+        throttle._error_budget_multiplier = 0.3
+        throttle._limit_before_error_budget_reduction = 100
+
+        throttle._rtt_suggested_limit = 200
+        throttle._429_suggested_limit = 500
+        throttle._shedding_suggested_limit = 80
+
+        # error_budget_limit = int(100 * 0.3) = 30 < shedding 80
+        error_budget_limit = int(throttle._limit_before_error_budget_reduction * throttle._error_budget_multiplier)
+        assert throttle.conservative_limit == error_budget_limit
+
+    def test_all_factors_active_returns_minimum(self):
+        """RTT + 429 + Error Budget + Shedding 모두 활성 시 최소값 반환."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500)
+        throttle = AdaptiveThrottle(config)
+        throttle._conservative_enabled = True
+
+        # Emergency 상태
+        throttle._emergency_mode_active = True
+        throttle._emergency_level = 1
+
+        # 429 감소
+        throttle._429_reduction_active = True
+        throttle._429_suggested_limit = 150
+
+        # Error Budget 감소
+        throttle._error_budget_limit_reduction_active = True
+        throttle._error_budget_multiplier = 0.8
+        throttle._limit_before_error_budget_reduction = 200
+
+        # Shedding
+        throttle._shedding_suggested_limit = 120
+
+        # RTT
+        throttle._rtt_suggested_limit = 180
+
+        # min(180, 150, int(200*0.8)=160, 120) = 120 → Shedding wins
+        assert throttle.conservative_limit == 120
+
+    def test_shedding_deactivation_removes_from_min_winner(self):
+        """Shedding 해제 후 shedding_suggested_limit = max_limit으로 Min-Winner 불참."""
+        config = ThrottleConfig(initial_limit=100, max_limit=500)
+        throttle = AdaptiveThrottle(config)
+        throttle._conservative_enabled = True
+
+        throttle._emergency_mode_active = True
+        throttle._rtt_suggested_limit = 200
+        throttle._429_suggested_limit = 500
+        throttle._shedding_suggested_limit = 50
+
+        assert throttle.conservative_limit == 50
+
+        # Shedding 해제 시뮬레이션
+        event = SelfHealingEvent(
+            event_type=EventType.LOAD_SHEDDING_LEVEL_CHANGED,
+            data={"new_level": -1, "traffic_limit": 100.0, "affected_services": []},
+            source="load_shedding_manager",
+            priority=EventPriority.HIGH,
+        )
+        throttle._handle_shedding_changed(event)
+
+        # shedding_suggested_limit = max_limit (500) → min(200, 500, 500, 500) = 200
+        assert throttle._shedding_suggested_limit == config.max_limit
+        assert throttle.conservative_limit == throttle._rtt_suggested_limit

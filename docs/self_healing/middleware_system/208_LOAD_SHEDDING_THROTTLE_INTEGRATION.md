@@ -115,14 +115,19 @@ def check(
 
 ## 3. 연동 설계
 
-### 3-1. 우선순위 매핑 테이블
+### 3-1. 우선순위 매핑 테이블 ✅ 구현 완료
+
+> **상태**: 구현 완료 — `services/throttle/tier_mapping.py`
+> **208 원안 명칭**: `priority_mapping.py` → **`tier_mapping.py`로 확정** (207 문서 근거)
+
+**파일**: `services/throttle/tier_mapping.py`
 
 ```python
-# 제안: services/throttle/priority_mapping.py
+# tier_mapping.py (실제 구현 코드)
 
 CRITICALITY_TO_TIER: dict[str, str] = {
     "critical": "critical",
-    "high": "critical",        # 확장 대비
+    "high": "critical",     # models.py valid_levels에 포함
     "medium": "standard",
     "low": "non_essential",
 }
@@ -132,7 +137,22 @@ TIER_TO_CRITICALITY: dict[str, str] = {
     "standard": "medium",
     "non_essential": "low",
 }
+
+VALID_TIER_IDS: set[str] = {"critical", "standard", "non_essential"}
+
+def get_tier_from_criticality(criticality: str) -> str:
+    """criticality → tier_id 변환 (대소문자 무시, 미지 입력 시 'standard' 폴백 + 경고 로그)"""
+
+def get_criticality_from_tier(tier_id: str) -> str:
+    """tier_id → criticality 변환 (대소문자 무시, 미지 입력 시 'medium' 폴백 + 경고 로그)"""
 ```
+
+**명칭 변경 근거** (207 문서 L424):
+- `priority_mapping.py`는 `TierDefinition.priority`, `TierMapping.priority` 등 기존 priority 속성과 혼동 우려
+- `services/throttle/registry.py`가 이미 존재하여 "priority" + "registry" 명칭 충돌 가능
+- `tier_mapping`이 "tier ↔ criticality 변환"이라는 역할을 정확히 반영
+
+**현재 호출부 상태**: 테스트 코드(`test_tier_mapping.py`)에서만 import. **프로덕션 코드에서의 호출부 연결은 3-6에서 다룸.**
 
 **근거**: Load Shedding은 `critical`을 항상 100% 허용 (manager.py L218), Throttle은 `critical`을 429 보호 (adaptive.py L1496) → 양쪽에서 `critical`은 최우선 보호 대상으로 동일.
 
@@ -230,23 +250,230 @@ def _handle_shedding_changed(self, event) -> None:
 
 **근거**: 기존 `_subscribe_rate_limit_events()` (adaptive.py L603)와 동일 패턴.
 
+### 3-6. Service ID 식별 — ThrottleRegistry 활용
+
+> **리뷰 지적**: `AdaptiveThrottle.check(context={"service_id": ...})`의 `service_id`를 "누가 넣어주는가?"가 비어 있다.
+
+#### 3-6-1. 현재 코드의 두 가지 사용 경로
+
+| 경로 | 코드 | `service_id` 식별 방식 |
+|------|------|------------------------|
+| **ThrottleRegistry** (서비스별 인스턴스) | `registry.get_throttle("order-api").check(key)` | **인스턴스 자체가 서비스에 바인딩** — `context` 불필요 |
+| **글로벌 싱글톤** | `get_adaptive_throttle().check(key, context={...})` | **caller가 `context={"service_id": ...}` 주입 필수** |
+
+**코드 근거 — ThrottleRegistry 경로**:
+
+```python
+# registry.py L121-137
+def get_throttle(self, service_name: str) -> AdaptiveThrottle:
+    """서비스별 Throttle 인스턴스 가져오기 (없으면 생성)."""
+    with self._throttle_lock:
+        if service_name not in self._throttles:
+            self._create_throttle(service_name)
+        return self._throttles[service_name].throttle
+
+# registry.py 사용 예시 (docstring L7-14)
+# registry = get_throttle_registry()
+# throttle = registry.get_throttle("payment_api")
+# result = throttle.check("user_123")
+```
+
+각 인스턴스는 생성 시 `self._service_name`이 설정됨 (adaptive.py L526):
+
+```python
+self._service_name: str = sanitize_label_value(self.config.service_name)
+```
+
+**코드 근거 — 현재 Shedding check 로직** (adaptive.py L1543-1550):
+
+```python
+service_id = context.get("service_id") if context else None
+if service_id and self._shedding_affected_services and service_id in self._shedding_affected_services:
+    original_limit = self._current_limit
+    self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
+    result = super().check(key)
+    self._current_limit = original_limit
+```
+
+이 코드는 **글로벌 싱글톤 사용 시** `context`에 의존한다. ThrottleRegistry 경로에서는 `self._service_name`을 사용하도록 확장해야 한다.
+
+#### 3-6-2. 구현 방안 — `self._service_name` 기반 Shedding 매칭 확장
+
+```python
+# adaptive.py check()의 shedding 분기 수정안
+
+# ThrottleRegistry 경로: self._service_name으로 식별
+effective_service_id = (
+    (context.get("service_id") if context else None)
+    or self._service_name
+)
+if (
+    effective_service_id
+    and self._shedding_affected_services
+    and effective_service_id in self._shedding_affected_services
+):
+    original_limit = self._current_limit
+    self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
+    result = super().check(key)
+    self._current_limit = original_limit
+```
+
+**변경 포인트**: `context.get("service_id")` fallback으로 `self._service_name` 사용.
+
+#### 3-6-3. 호출부 가이드
+
+**ThrottleRegistry 경로 (권장)**:
+
+```python
+# 서비스별 인스턴스 사용 — context 주입 불필요
+from selfhealing.services.throttle.registry import get_throttle_registry
+
+registry = get_throttle_registry()
+throttle = registry.get_throttle("order-api")  # 이미 서비스에 바인딩됨
+result = throttle.check(key=client_ip, tier_id="standard")
+```
+
+**글로벌 싱글톤 경로 (기존 호환)**:
+
+```python
+# 글로벌 싱글톤 사용 — context에 service_id 명시
+from selfhealing.services.throttle.adaptive import get_adaptive_throttle
+
+throttle = get_adaptive_throttle()
+result = throttle.check(
+    key=client_ip,
+    tier_id="standard",
+    context={"service_id": "order-api"},  # [필수] 누락 시 shedding 연동 안 됨
+)
+```
+
+#### 3-6-4. HybridRateLimitMiddleware와의 관계
+
+`HybridRateLimitMiddleware`는 **Self-Healing Control API 전용** (rate_limit.py L575)이며, `AdaptiveThrottle`을 호출하지 않는다:
+
+```python
+# rate_limit.py L575
+if not request.path.startswith(control_api_prefix):
+    return self.get_response(request)
+```
+
+따라서 이 미들웨어에 `service_id` 주입 로직을 추가할 필요는 없다. 서비스별 Throttle 연동은 `ThrottleRegistry` 경로를 통해 이루어진다.
+
+### 3-7. Tier ID 일관성 보장 — Cross-Layer Validation
+
+> **문제**: `VALID_TIER_IDS` (tier_mapping.py)와 `DEFAULT_TIER_DEFINITIONS` (tiering/defaults.py)가 동일한 ID 집합(`"critical"`, `"standard"`, `"non_essential"`)을 사용하지만, 이 일관성을 코드로 보장하는 메커니즘이 없다.
+
+#### 3-7-1. 방안 비교
+
+| 방안 | 구현 방식 | 레이어 의존성 | 기존 코드 변경 | 확장성 |
+|------|----------|--------------|--------------|--------|
+| **(A) 동적 추출** | `tier_mapping.py`에서 `DEFAULT_TIER_DEFINITIONS` import → ID 추출 | **services → api 역방향 의존 발생** | tier_mapping.py 수정 | tier 추가 시 자동 반영 |
+| **(B) 공유 상수 통합** | 중립 위치에 ID 상수 모듈 신설 → 양쪽 import | 중립 모듈 필요 | 양쪽 import 변경 | tier 추가 시 1곳 수정 |
+| **(C) Cross-Layer Validation Test** | 테스트에서 양쪽 값 비교 → 불일치 시 실패 | **없음** (테스트만) | **없음** (테스트 추가만) | tier 추가 시 테스트 실패로 감지 |
+
+#### 3-7-2. 선택: **(C) Cross-Layer Validation Test**
+
+**선택 이유**:
+
+1. **레이어 분리 유지**: `tier_mapping.py`(서비스 레이어)가 `api.django.tiering`(Django API 레이어)에 의존하지 않음. 방안 A는 서비스→API 역방향 의존을 생성하여 레이어 아키텍처를 위반.
+2. **기존 코드 변경 없음**: 프로덕션 코드(`tier_mapping.py`, `defaults.py`) 수정 불필요. 방안 B는 중립 모듈 신설 + 양쪽 import 경로 변경 필요.
+3. **기존 테스트 패턴과 일관**: `test_tier_mapping.py`에 이미 동일 구조의 cross-reference 검증이 존재:
+   - `TestCriticalityToTierMapping.test_covers_all_service_config_valid_levels()` — `ServiceConfig.valid_levels`와 `CRITICALITY_TO_TIER` 키 비교
+   - `TestValidTierIds.test_matches_tier_to_criticality_keys()` — `VALID_TIER_IDS`와 `TIER_TO_CRITICALITY` 키 비교
+4. **확장성**: 새로운 tier가 한쪽에만 추가되면 테스트가 즉시 실패하여 불일치를 CI에서 감지.
+
+#### 3-7-3. 구현 — Cross-Layer Validation Test
+
+**파일**: `tests/unit/throttle/test_tier_mapping.py` (기존 파일에 추가)
+
+```python
+class TestCrossLayerTierConsistency:
+    """
+    tier_mapping.VALID_TIER_IDS ↔ tiering.DEFAULT_TIER_DEFINITIONS 일관성 검증.
+
+    서비스 레이어(tier_mapping.py)와 Django API 레이어(tiering/defaults.py)가
+    동일한 tier ID 집합을 사용하는지 보장한다.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        """Django API 레이어 import를 위한 최소 Django 설정."""
+        import os
+
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings.test")
+
+        import django
+
+        django.setup()
+
+        # pytest-django _dj_autoclear_mailbox fixture가 mail.outbox를 참조
+        from django.core import mail
+
+        if not hasattr(mail, "outbox"):
+            mail.outbox = []
+
+    def test_valid_tier_ids_matches_default_tier_definitions(self):
+        """
+        VALID_TIER_IDS == {td.id for td in DEFAULT_TIER_DEFINITIONS}.
+
+        한쪽에 tier가 추가/삭제되면 이 테스트가 실패하여 불일치를 감지.
+        """
+        from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_DEFINITIONS
+
+        definition_ids = {td.id for td in DEFAULT_TIER_DEFINITIONS}
+        assert VALID_TIER_IDS == definition_ids, (
+            f"tier_mapping.VALID_TIER_IDS {VALID_TIER_IDS} != "
+            f"DEFAULT_TIER_DEFINITIONS IDs {definition_ids}. "
+            f"Missing in tier_mapping: {definition_ids - VALID_TIER_IDS}, "
+            f"Extra in tier_mapping: {VALID_TIER_IDS - definition_ids}"
+        )
+
+    def test_criticality_to_tier_values_match_definitions(self):
+        """
+        CRITICALITY_TO_TIER의 모든 target tier_id가 DEFAULT_TIER_DEFINITIONS에 정의됨.
+        """
+        from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_DEFINITIONS
+        from selfhealing.services.throttle.tier_mapping import CRITICALITY_TO_TIER
+
+        definition_ids = {td.id for td in DEFAULT_TIER_DEFINITIONS}
+        for criticality, tier_id in CRITICALITY_TO_TIER.items():
+            assert tier_id in definition_ids, (
+                f"CRITICALITY_TO_TIER['{criticality}'] = '{tier_id}' "
+                f"is not defined in DEFAULT_TIER_DEFINITIONS"
+            )
+```
+
+**기존 테스트와의 관계**:
+
+| 기존 테스트 | 검증 대상 | 범위 |
+|------------|----------|------|
+| `test_covers_all_service_config_valid_levels` | `CRITICALITY_TO_TIER` keys ↔ `ServiceConfig.valid_levels` | models 레이어 |
+| `test_matches_tier_to_criticality_keys` | `VALID_TIER_IDS` ↔ `TIER_TO_CRITICALITY` keys | 서비스 레이어 내부 |
+| **`test_valid_tier_ids_matches_default_tier_definitions`** (신규) | `VALID_TIER_IDS` ↔ `DEFAULT_TIER_DEFINITIONS` IDs | **서비스 ↔ Django API 레이어 간** |
+
 ---
 
 ## 4. 영향 범위
 
-| 파일 | 변경 내용 |
-|------|-----------|
-| `services/throttle/adaptive.py` | `_subscribe_load_shedding_events()`, `_handle_shedding_changed()` 추가 |
-| `services/circuit_breaker/load_shedding/manager.py` | `update_shedding_state()`에 EventBus 발행 추가 |
-| `services/event_bus.py` | `LOAD_SHEDDING_LEVEL_CHANGED` EventType 추가 |
-| (신규) `services/throttle/priority_mapping.py` | tier ↔ criticality 매핑 테이블 |
+| 파일 | 변경 내용 | 상태 |
+|------|-----------|------|
+| `services/throttle/adaptive.py` | `_subscribe_load_shedding_events()`, `_handle_shedding_changed()` 추가 | ✅ 구현됨 |
+| `services/throttle/adaptive.py` | `check()` shedding 분기에 `self._service_name` fallback 추가 (3-6-2) | ✅ 구현됨 |
+| `services/circuit_breaker/load_shedding/manager.py` | `update_shedding_state()`에 EventBus 발행 (`_publish_shedding_event`) 추가 | ✅ 구현됨 |
+| `services/event_bus/bus.py` | `EventType.LOAD_SHEDDING_LEVEL_CHANGED` 추가 | ✅ 구현됨 |
+| ~~(신규) `services/throttle/priority_mapping.py`~~ | ~~tier ↔ criticality 매핑 테이블~~ | ❌ 명칭 변경 |
+| `services/throttle/tier_mapping.py` | tier ↔ criticality 매핑 유틸리티 | ✅ 구현됨 |
+| `tests/unit/throttle/test_tier_mapping.py` | `TestCrossLayerTierConsistency` 클래스 추가 (3-7-3) | ✅ 구현됨 |
 
 ---
 
 ## 5. 검증 항목
 
-- [ ] Load Shedding LEVEL_2 활성화 시 Throttle limit이 자동 감소하는지
-- [ ] Shedding 해제 시 Recovery Dampening으로 점진 복구하는지
-- [ ] `critical` tier 요청이 Shedding 시에도 보호되는지
-- [ ] EventBus 미가용 시 Fail-Open으로 기존 동작 유지하는지
-- [ ] Emergency Mode + Shedding 동시 활성 시 Conservative Limit (Min-Winner) 정상 동작
+- [x] Load Shedding LEVEL_2 활성화 시 Throttle limit이 자동 감소하는지
+- [x] Shedding 해제 시 Recovery Dampening으로 점진 복구하는지
+- [x] `critical` tier 요청이 Shedding 시에도 보호되는지
+- [x] EventBus 미가용 시 Fail-Open으로 기존 동작 유지하는지
+- [x] Emergency Mode + Shedding 동시 활성 시 Conservative Limit (Min-Winner) 정상 동작
+- [x] `ThrottleRegistry.get_throttle(service).check()` 시 `self._service_name` 기반 shedding 매칭 동작
+- [x] 글로벌 싱글톤 `get_adaptive_throttle().check(context={"service_id": ...})` 시 기존 context 기반 매칭 유지
+- [x] `VALID_TIER_IDS` ↔ `DEFAULT_TIER_DEFINITIONS` ID 집합 일치 (Cross-Layer Validation Test)

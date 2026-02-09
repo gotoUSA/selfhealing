@@ -1542,8 +1542,13 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
             self._current_limit = original_limit
         else:
             # Load Shedding 대상 서비스의 요청에만 제한적 limit 적용
-            service_id = context.get("service_id") if context else None
-            if service_id and self._shedding_affected_services and service_id in self._shedding_affected_services:
+            # ThrottleRegistry 경로: self._service_name fallback (208 섹션 3-6-2)
+            effective_service_id = (context.get("service_id") if context else None) or self._service_name
+            if (
+                effective_service_id
+                and self._shedding_affected_services
+                and effective_service_id in self._shedding_affected_services
+            ):
                 original_limit = self._current_limit
                 self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
                 result = super().check(key)

@@ -160,3 +160,57 @@ class TestValidTierIds:
     def test_matches_tier_to_criticality_keys(self):
         """TIER_TO_CRITICALITY 키와 동일."""
         assert VALID_TIER_IDS == set(TIER_TO_CRITICALITY.keys())
+
+
+class TestCrossLayerTierConsistency:
+    """
+    tier_mapping.VALID_TIER_IDS ↔ tiering.DEFAULT_TIER_DEFINITIONS 일관성 검증.
+
+    서비스 레이어(tier_mapping.py)와 Django API 레이어(tiering/defaults.py)가
+    동일한 tier ID 집합을 사용하는지 보장한다.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        """Django API 레이어 import를 위한 최소 Django 설정."""
+        import os
+
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings.test")
+
+        import django
+
+        django.setup()
+
+        # pytest-django _dj_autoclear_mailbox fixture가 mail.outbox를 참조
+        from django.core import mail
+
+        if not hasattr(mail, "outbox"):
+            mail.outbox = []
+
+    def test_valid_tier_ids_matches_default_tier_definitions(self):
+        """
+        VALID_TIER_IDS == {td.id for td in DEFAULT_TIER_DEFINITIONS}.
+
+        한쪽에 tier가 추가/삭제되면 이 테스트가 실패하여 불일치를 감지.
+        """
+        from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_DEFINITIONS
+
+        definition_ids = {td.id for td in DEFAULT_TIER_DEFINITIONS}
+        assert VALID_TIER_IDS == definition_ids, (
+            f"tier_mapping.VALID_TIER_IDS {VALID_TIER_IDS} != "
+            f"DEFAULT_TIER_DEFINITIONS IDs {definition_ids}. "
+            f"Missing in tier_mapping: {definition_ids - VALID_TIER_IDS}, "
+            f"Extra in tier_mapping: {VALID_TIER_IDS - definition_ids}"
+        )
+
+    def test_criticality_to_tier_values_match_definitions(self):
+        """
+        CRITICALITY_TO_TIER의 모든 target tier_id가 DEFAULT_TIER_DEFINITIONS에 정의됨.
+        """
+        from selfhealing.api.django.tiering.defaults import DEFAULT_TIER_DEFINITIONS
+
+        definition_ids = {td.id for td in DEFAULT_TIER_DEFINITIONS}
+        for criticality, tier_id in CRITICALITY_TO_TIER.items():
+            assert tier_id in definition_ids, (
+                f"CRITICALITY_TO_TIER['{criticality}'] = '{tier_id}' " f"is not defined in DEFAULT_TIER_DEFINITIONS"
+            )
