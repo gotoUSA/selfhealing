@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationRepository
-    from selfhealing.services.dlq_models import DLQConfig
+    from selfhealing.services.dlq.models import DLQConfig
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class DLQServiceBase:
             config: Optional configuration, loads from settings if None
             repository: Optional repository for DI, uses Django adapter if None
         """
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
 
         self.config = config or DLQConfig.from_settings()
         self._repository = repository

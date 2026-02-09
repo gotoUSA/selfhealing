@@ -1,0 +1,127 @@
+"""
+Pre-computed Cache Service - Compute Functions for L3 Endpoints.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from .constants import CACHE_KEY_ERROR_BUDGET, CACHE_KEY_HEALTH, CACHE_KEY_POOL_STATUS
+from .multi_tier import get_cached_response
+from .worker import _worker
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Compute Functions for L3 Endpoints
+# =============================================================================
+
+
+def compute_health_status() -> dict[str, Any]:
+    """Compute health status for caching."""
+    try:
+        from selfhealing.services.health_check import get_health_check_service
+
+        service = get_health_check_service()
+        health = service.get_overall_health()
+        return health.to_dict()
+    except Exception as e:
+        logger.error(f"[PrecomputedCache] Health compute failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+def compute_error_budget_status() -> dict[str, Any]:
+    """Compute error budget status for caching."""
+    try:
+        from django.utils import timezone
+
+        from selfhealing.services.error_budget_service import (
+            get_error_budget_service,
+        )
+
+        service = get_error_budget_service()
+        budget_status = service.get_budget_status("availability")
+
+        return {
+            "status": "success",
+            "data": budget_status.to_dict(),
+            "timestamp": timezone.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"[PrecomputedCache] Error budget compute failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+def compute_pool_status() -> dict[str, Any]:
+    """Compute connection pool status for caching."""
+    try:
+        import os
+
+        # 테스트 환경에서는 실제 DB 연결 시도 방지
+        if os.getenv("SELFHEALING_TEST_MODE", "").lower() == "true":
+            return {"status": "test_mode", "message": "Skipped in test mode"}
+
+        from django.db import connections
+
+        try:
+            from selfhealing.adapters.sqlalchemy_pool import get_pool_info
+        except ImportError:
+            get_pool_info = lambda: {}
+
+        pool_info = get_pool_info()
+
+        conn = connections["default"]
+
+        # Repository를 통해 연결 통계 조회
+        from selfhealing.adapters.postgres.repository import get_postgres_repository
+
+        repo = get_postgres_repository()
+        stats = repo.get_connection_stats()
+
+        is_exhausted = pool_info.get("pool_exhausted", False)
+
+        return {
+            "status": "exhausted" if is_exhausted else "healthy",
+            "sqlalchemy_pool": pool_info,
+            "pg_stats": {
+                "total_connections": stats.total_connections,
+                "active": stats.active,
+                "idle": stats.idle,
+                "idle_in_transaction": stats.idle_in_transaction,
+            },
+            "connection_usable": conn.is_usable(),
+            "use_connection_pool": os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
+        }
+    except Exception as e:
+        logger.error(f"[PrecomputedCache] Pool status compute failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+def register_default_compute_functions() -> None:
+    """Register default compute functions for L3 endpoints."""
+    _worker.register(CACHE_KEY_HEALTH, compute_health_status)
+    _worker.register(CACHE_KEY_ERROR_BUDGET, compute_error_budget_status)
+    _worker.register(CACHE_KEY_POOL_STATUS, compute_pool_status)
+    logger.info("[PrecomputedCache] Registered default compute functions")
+
+
+# =============================================================================
+# Public API for Views
+# =============================================================================
+
+
+def get_cached_health() -> dict[str, Any]:
+    """Get cached health status."""
+    return get_cached_response(CACHE_KEY_HEALTH, compute_health_status)
+
+
+def get_cached_error_budget() -> dict[str, Any]:
+    """Get cached error budget status."""
+    return get_cached_response(CACHE_KEY_ERROR_BUDGET, compute_error_budget_status)
+
+
+def get_cached_pool_status() -> dict[str, Any]:
+    """Get cached pool status."""
+    return get_cached_response(CACHE_KEY_POOL_STATUS, compute_pool_status)

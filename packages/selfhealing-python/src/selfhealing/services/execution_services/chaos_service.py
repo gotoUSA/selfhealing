@@ -1,0 +1,366 @@
+"""
+Chaos Execution Service
+
+Chaos 실험 스케줄링 및 실행을 위한 서비스 레이어.
+
+Thin Task, Fat Service 원칙:
+    - Celery Task (chaos_scheduler.py)는 단순히 이 서비스를 호출
+    - 모든 비즈니스 로직, 안전 체크, 상태 관리는 이 서비스에서 수행
+
+Features:
+    - 스케줄된 실험 실행
+    - 사전 비행 안전 체크 (SafetyGuard 통합)
+    - 일일 복원력 보고서 생성
+    - 승인 대기 알림
+
+Reference:
+- docs/self_healing/CHAOS_ENGINEERING.md
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from selfhealing.services.governance_checks import (
+    GovernanceCheckMixin,
+    check_all_governance,
+)
+
+from .models import (
+    ApprovalCleanupResult,
+    DailyReportResult,
+    ExperimentExecutionResult,
+    PendingApprovalCheckResult,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Chaos Execution Service
+# =============================================================================
+
+
+class ChaosExecutionService(GovernanceCheckMixin):
+    """
+    Chaos 실험 실행 서비스.
+
+    SafetyGuard와 통합하여 모든 안전 체크를 수행하고,
+    스케줄된 Chaos 실험을 실행합니다.
+
+    Usage:
+        service = get_chaos_execution_service()
+
+        # 스케줄된 실험 실행
+        result = service.run_scheduled_experiments()
+
+        # 일일 보고서 생성
+        report = service.generate_daily_report()
+    """
+
+    _instance: ChaosExecutionService | None = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+
+    # =========================================================================
+    # Main Entry Points
+    # =========================================================================
+
+    def run_scheduled_experiments(self) -> ExperimentExecutionResult:
+        """
+        스케줄된 chaos 실험 실행.
+
+        Celery Beat에서 5분마다 호출됩니다.
+
+        Workflow:
+        1. 거버넌스 체크 (Kill Switch, ErrorBudget)
+        2. 스케줄러에서 실행 예정 실험 조회
+        3. 각 실험에 대해 SafetyGuard 사전 비행 체크
+        4. 승인된 실험 실행
+        5. 결과 기록
+
+        Returns:
+            ExperimentExecutionResult
+        """
+        result = ExperimentExecutionResult()
+
+        # 1. 거버넌스 체크 - Kill Switch는 체크하지만 Emergency는 체크 안 함
+        #    (Chaos는 ErrorBudget 체크만 하면 됨)
+        governance_result = check_all_governance(
+            check_kill_switch=True,
+            check_emergency=False,  # Chaos 실험은 Emergency 체크 불필요
+            check_error_budget=True,
+            operation_name="run_scheduled_experiments",
+            service_name="ChaosExecutionService",
+            domain="chaos",
+        )
+
+        if not governance_result.allowed:
+            result.governance_blocked = True
+            result.governance_block_reason = governance_result.block_message
+            logger.warning(f"[ChaosExecutionService] Experiments blocked by governance: " f"{governance_result.block_message}")
+            return result
+
+        try:
+            from selfhealing.services.chaos.safety_guard import get_safety_guard
+            from selfhealing.services.chaos.scheduler import get_chaos_scheduler
+
+            scheduler = get_chaos_scheduler()
+            safety_guard = get_safety_guard()
+
+            # 2. 실행 예정 실험 조회
+            due_experiments = scheduler.get_due_experiments()
+            result.checked = len(due_experiments)
+
+            if not due_experiments:
+                logger.debug("[ChaosExecutionService] No experiments due for execution")
+                return result
+
+            logger.info(f"[ChaosExecutionService] Found {len(due_experiments)} due experiments")
+
+            # 3. 각 실험 처리
+            for experiment in due_experiments:
+                exp_result = self._process_single_experiment(
+                    experiment=experiment,
+                    scheduler=scheduler,
+                    safety_guard=safety_guard,
+                )
+
+                if exp_result["status"] == "executed":
+                    result.executed += 1
+                elif exp_result["status"] == "skipped":
+                    result.skipped += 1
+                elif exp_result["status"] in ("blocked", "pending_approval"):
+                    result.blocked += 1
+                elif exp_result["status"] == "error":
+                    result.errors.append(exp_result)
+
+                result.experiments.append(exp_result)
+
+            logger.info(
+                f"[ChaosExecutionService] Completed: {result.executed} executed, "
+                f"{result.skipped} skipped, {result.blocked} blocked"
+            )
+
+        except Exception as e:
+            logger.exception("[ChaosExecutionService] Error in run_scheduled_experiments")
+            result.errors.append({"error": str(e)})
+
+        return result
+
+    def _process_single_experiment(
+        self,
+        experiment,
+        scheduler,
+        safety_guard,
+    ) -> dict[str, Any]:
+        """단일 실험 처리."""
+        try:
+            exp_id = experiment.id
+
+            # Kill Switch 체크
+            if scheduler.is_kill_switch_active():
+                logger.warning(f"[ChaosExecutionService] Kill switch active, skipping {exp_id}")
+                return {
+                    "id": exp_id,
+                    "status": "blocked",
+                    "reason": "kill_switch_active",
+                }
+
+            # SafetyGuard 사전 비행 체크
+            safety_result = safety_guard.pre_flight_check(
+                experiment_type=experiment.experiment_type,
+                blast_radius=experiment.blast_radius,
+                target_service=experiment.target_service,
+            )
+
+            if not safety_result.is_safe:
+                logger.warning(f"[ChaosExecutionService] Safety check failed for {exp_id}: " f"{safety_result.block_reasons}")
+                scheduler.skip_experiment(
+                    exp_id,
+                    reason=f"Safety check failed: {safety_result.block_reasons}",
+                )
+                return {
+                    "id": exp_id,
+                    "status": "skipped",
+                    "reason": str(safety_result.block_reasons),
+                }
+
+            # 승인 필요 여부 체크
+            if experiment.requires_approval and not experiment.is_approved:
+                logger.info(f"[ChaosExecutionService] Experiment {exp_id} awaiting approval")
+                return {
+                    "id": exp_id,
+                    "status": "pending_approval",
+                }
+
+            # 실험 실행
+            exec_result = scheduler.execute_experiment(exp_id)
+
+            if exec_result.success:
+                logger.info(f"[ChaosExecutionService] Executed experiment {exp_id}")
+                return {
+                    "id": exp_id,
+                    "status": "executed",
+                    "result": (exec_result.to_dict() if hasattr(exec_result, "to_dict") else str(exec_result)),
+                }
+            else:
+                error_msg = str(exec_result.error) if hasattr(exec_result, "error") else "Unknown error"
+                logger.error(f"[ChaosExecutionService] Failed to execute {exp_id}")
+                return {
+                    "id": exp_id,
+                    "status": "error",
+                    "error": error_msg,
+                }
+
+        except Exception as e:
+            logger.exception(f"[ChaosExecutionService] Error executing {experiment.id}")
+            return {
+                "id": experiment.id,
+                "status": "error",
+                "error": str(e),
+            }
+
+    def generate_daily_report(self) -> DailyReportResult:
+        """
+        일일 복원력 보고서 생성.
+
+        매일 6 AM UTC에 호출됩니다.
+
+        Returns:
+            DailyReportResult
+        """
+        try:
+            from selfhealing.services.chaos.reports import get_report_generator
+
+            generator = get_report_generator()
+            report = generator.generate_daily_report()
+
+            logger.info(f"[ChaosExecutionService] Daily report generated: {report.report_id}, " f"grade={report.grade}")
+
+            return DailyReportResult(
+                success=True,
+                report_id=report.report_id,
+                grade=report.grade,
+                summary={
+                    "total_experiments": report.total_experiments,
+                    "passed": report.passed_count,
+                    "failed": report.failed_count,
+                    "sla_compliance": report.sla_compliance_percent,
+                },
+            )
+
+        except Exception as e:
+            logger.exception("[ChaosExecutionService] Error generating daily report")
+            return DailyReportResult(success=False, error=str(e))
+
+    def cleanup_expired_approvals(self) -> ApprovalCleanupResult:
+        """
+        만료된 승인 요청 정리.
+
+        매시간 호출됩니다.
+
+        Returns:
+            ApprovalCleanupResult
+        """
+        result = ApprovalCleanupResult()
+
+        try:
+            from selfhealing.services.chaos.blast_radius import get_blast_radius_manager
+            from selfhealing.services.chaos.scheduler import get_chaos_scheduler
+
+            scheduler = get_chaos_scheduler()
+            manager = get_blast_radius_manager()
+
+            # 스케줄 승인 만료 처리
+            result.schedule_expired = scheduler.expire_pending_approvals()
+
+            # 폭발 반경 승인 만료 처리
+            result.blast_radius_expired = manager.expire_pending_approvals()
+
+            total = result.schedule_expired + result.blast_radius_expired
+            if total > 0:
+                logger.info(f"[ChaosExecutionService] Expired {total} pending approvals")
+
+        except Exception as e:
+            logger.exception("[ChaosExecutionService] Error cleaning up approvals")
+            result.errors.append(str(e))
+
+        return result
+
+    def check_pending_approvals(self) -> PendingApprovalCheckResult:
+        """
+        대기 중인 승인 확인 및 알림.
+
+        30분마다 호출됩니다.
+
+        Returns:
+            PendingApprovalCheckResult
+        """
+        result = PendingApprovalCheckResult()
+
+        try:
+            from selfhealing.services.chaos.blast_radius import get_blast_radius_manager
+            from selfhealing.services.chaos.scheduler import get_chaos_scheduler
+
+            scheduler = get_chaos_scheduler()
+            manager = get_blast_radius_manager()
+
+            pending_schedules = scheduler.list_schedules(pending_approval_only=True)
+            pending_blast = manager.get_pending_approvals()
+
+            result.pending_schedules = len(pending_schedules)
+            result.pending_blast_radius = len(pending_blast)
+
+            total_pending = result.pending_schedules + result.pending_blast_radius
+
+            if total_pending > 0:
+                logger.info(f"[ChaosExecutionService] {total_pending} experiments pending approval")
+
+                # 알림 발송 시도
+                try:
+                    from selfhealing.services.notification import (
+                        send_pending_approval_alert,
+                    )
+
+                    send_pending_approval_alert(
+                        pending_count=total_pending,
+                        schedules=pending_schedules,
+                        blast_radius=pending_blast,
+                    )
+                    result.alerts_sent = 1
+                except ImportError:
+                    result.alerts_sent = 0
+                    result.notification_status = "not_configured"
+
+        except Exception as e:
+            logger.exception("[ChaosExecutionService] Error checking pending approvals")
+            result.error = str(e)
+
+        return result
+
+
+# =============================================================================
+# Factory Functions
+# =============================================================================
+
+
+_chaos_execution_service_instance: ChaosExecutionService | None = None
+
+
+def get_chaos_execution_service() -> ChaosExecutionService:
+    """ChaosExecutionService 싱글톤 인스턴스 반환."""
+    global _chaos_execution_service_instance
+    if _chaos_execution_service_instance is None:
+        _chaos_execution_service_instance = ChaosExecutionService()
+    return _chaos_execution_service_instance

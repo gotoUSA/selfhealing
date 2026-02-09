@@ -1,37 +1,25 @@
 """
-Retry Handler with Exponential Backoff
+Retry Handler
 
-Provides a reusable retry mechanism with:
-- Configurable max attempts
-- Exponential backoff with jitter
-- Idempotency checking
-- DLQ routing on exhaustion
-- Forensic context capture
-- Rate limit awareness (Self-DDoS prevention)
-
-Idempotency 체크, DLQ 라우팅, Rate Limit 인식 기능을 제공합니다.
+Core retry handler with exponential backoff, rate limit awareness,
+and throttle-aware backoff.
 """
 
 from __future__ import annotations
 
-import functools
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
-from selfhealing.settings import get_config
 
-from .backoff_calculator import BackoffCalculator, BackoffConfig
+from ..backoff_calculator import BackoffCalculator, BackoffConfig
+from .models import RetryAction, RetryConfig, RetryResult, T
 
 if TYPE_CHECKING:
-    from .rate_limit_coordinator import RateLimitCoordinator
+    from ..rate_limit_coordinator import RateLimitCoordinator
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 
 def _is_system_enabled() -> bool:
@@ -44,130 +32,6 @@ def _is_system_enabled() -> bool:
     except Exception:
         # If SystemControlManager not available, assume enabled
         return True
-
-
-class RetryAction(str, Enum):
-    """Actions that can be taken after a failure."""
-
-    RETRY = "retry"
-    DLQ = "dlq"
-    ABORT = "abort"
-    SUCCESS = "success"
-
-
-class MaxRetriesExceededError(Exception):
-    """Raised when maximum retry attempts have been exhausted."""
-
-    def __init__(
-        self,
-        message: str,
-        retry_count: int,
-        max_retries: int,
-        last_error: Exception | None = None,
-    ):
-        super().__init__(message)
-        self.retry_count = retry_count
-        self.max_retries = max_retries
-        self.last_error = last_error
-
-
-@dataclass
-class RetryConfig:
-    """Configuration for retry behavior."""
-
-    max_attempts: int = 3
-    backoff_base: int = 4
-    backoff_max: int = 180
-    jitter_percent: int = 25
-    retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=lambda: (Exception,))
-    non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
-    enable_dlq: bool = True
-    domain: str = "default"
-
-    # Rate limit awareness settings
-    rate_limit_aware: bool = True  # Enable Self-DDoS prevention
-    rate_limit_key: str | None = None  # Custom key, defaults to domain
-
-    # Throttle awareness settings (v2.0)
-    throttle_aware: bool = True  # Enable Throttle-aware backoff
-    throttle_backoff_multiplier_cap: float = 4.0  # Maximum multiplier cap
-
-    # Critical tier settings (v2.0)
-    critical_tier_full_stop_grace_retries: int = 1
-    """CRITICAL 티어 요청은 FULL_STOP에서도 추가 재시도 허용 횟수"""
-
-    critical_tier_full_stop_max_delay: int = 720
-    """CRITICAL 티어 FULL_STOP 시 최대 대기 시간 (12분)"""
-
-    @classmethod
-    def from_settings(cls, domain: str = "default") -> RetryConfig:
-        """
-        Load configuration from RuntimeConfigManager (preferred) or core config.
-
-        Args:
-            domain: Domain name for per-domain overrides
-
-        Returns:
-            RetryConfig instance
-        """
-        # Try RuntimeConfigManager first (runtime-configurable)
-        try:
-            from selfhealing.services.runtime_config import get_runtime_config_manager
-
-            manager = get_runtime_config_manager()
-            retry_config = manager.get_retry_config()
-            dlq_config = manager.get_dlq_config()
-
-            return cls(
-                max_attempts=retry_config.get("max_attempts", 3),
-                backoff_base=retry_config.get("backoff_base", 4),
-                backoff_max=int(retry_config.get("max_delay", 180)),
-                jitter_percent=retry_config.get("jitter_percent", 25),
-                enable_dlq=dlq_config.get("enabled", True),
-                domain=domain,
-            )
-        except Exception:
-            pass  # Fall through to static config
-
-        # Fallback to static core config
-        config = get_config()
-        retry_settings = config.retry
-        dlq_settings = config.dlq
-
-        # Per-domain overrides from domain_configs
-        domain_config = config.domain_configs.get(domain, {}).get("retry", {})
-
-        return cls(
-            max_attempts=domain_config.get("max_attempts", retry_settings.max_attempts),
-            backoff_base=domain_config.get("backoff_base", retry_settings.backoff_base),
-            backoff_max=domain_config.get("max_delay", retry_settings.max_delay),
-            jitter_percent=retry_settings.jitter_percent,
-            enable_dlq=dlq_settings.enabled,
-            domain=domain,
-        )
-
-
-@dataclass
-class RetryResult:
-    """Result of a retry operation."""
-
-    success: bool
-    action: RetryAction
-    attempt: int
-    value: Any = None
-    error: Exception | None = None
-    dlq_id: int | None = None
-    next_delay: int | None = None
-
-    @property
-    def should_retry(self) -> bool:
-        """Whether another retry should be attempted."""
-        return self.action == RetryAction.RETRY
-
-    @property
-    def was_retried(self) -> bool:
-        """Whether this result came from a retry (not first attempt)."""
-        return self.attempt > 1
 
 
 class RetryHandler:
@@ -222,7 +86,7 @@ class RetryHandler:
 
         # Backoff 계산기 선택
         if self._throttle_aware:
-            from .backoff_calculator import ThrottleAwareBackoffCalculator
+            from ..backoff_calculator import ThrottleAwareBackoffCalculator
 
             self.backoff = ThrottleAwareBackoffCalculator(
                 BackoffConfig(
@@ -246,7 +110,7 @@ class RetryHandler:
         self._rate_limit_key = self.config.rate_limit_key or self.config.domain
 
         # Adaptive Retry Budget (v2.0)
-        from .backoff_calculator import AdaptiveRetryBudget
+        from ..backoff_calculator import AdaptiveRetryBudget
 
         self._retry_budget = AdaptiveRetryBudget()
 
@@ -258,7 +122,7 @@ class RetryHandler:
         """Get rate limit coordinator, lazily initialized."""
         if self._rate_limit_coordinator is None and self.config.rate_limit_aware:
             try:
-                from .rate_limit_coordinator import get_rate_limit_coordinator
+                from ..rate_limit_coordinator import get_rate_limit_coordinator
 
                 self._rate_limit_coordinator = get_rate_limit_coordinator()
             except Exception as e:
@@ -281,7 +145,7 @@ class RetryHandler:
         Fail-Open 원칙: Audit 실패가 비즈니스 로직을 중단시키지 않음.
         """
         try:
-            from .audit_helpers import log_retry_audit
+            from ..audit_helpers import log_retry_audit
 
             log_retry_audit(
                 domain=self.config.domain,
@@ -466,7 +330,7 @@ class RetryHandler:
     def _record_critical_tier_grace_metric(self) -> None:
         """CRITICAL 티어 grace retry 메트릭 기록."""
         try:
-            from .metrics.definitions import retry_critical_tier_grace_retries_total
+            from ..metrics.definitions import retry_critical_tier_grace_retries_total
 
             retry_critical_tier_grace_retries_total.labels(domain=self.config.domain).inc()
         except ImportError:
@@ -724,7 +588,7 @@ class RetryHandler:
         Returns:
             DLQ record ID or None if DLQ is disabled
         """
-        from .dlq_service import store_to_dlq
+        from ..dlq_service import store_to_dlq
 
         try:
             context = context or {}
@@ -775,52 +639,3 @@ class RetryHandler:
         except Exception as dlq_error:
             logger.error(f"[RetryHandler] Failed to create DLQ entry: {dlq_error}")
             return None
-
-
-def with_retry(
-    domain: str = "default",
-    max_attempts: int | None = None,
-    retryable_exceptions: tuple[type[Exception], ...] | None = None,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """
-    Decorator to add retry logic to a function.
-
-    Args:
-        domain: Domain for configuration
-        max_attempts: Override max attempts
-        retryable_exceptions: Exceptions that should trigger retry
-
-    Returns:
-        Decorated function
-
-    Example:
-        @with_retry(domain="payment", max_attempts=3)
-        def call_external_api():
-            return requests.post(...)
-    """
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
-            config = RetryConfig.from_settings(domain)
-            if max_attempts is not None:
-                config.max_attempts = max_attempts
-            if retryable_exceptions is not None:
-                config.retryable_exceptions = retryable_exceptions
-
-            handler = RetryHandler(config=config, domain=domain)
-            result = handler.execute(func, *args, **kwargs)
-
-            if result.success:
-                return result.value
-            else:
-                raise MaxRetriesExceededError(
-                    f"Max retries exceeded for {func.__name__}",
-                    retry_count=result.attempt,
-                    max_retries=config.max_attempts,
-                    last_error=result.error,
-                )
-
-        return wrapper
-
-    return decorator

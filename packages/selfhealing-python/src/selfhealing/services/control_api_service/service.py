@@ -1,215 +1,24 @@
 """
-Self-Healing Control API Service
+Control API Service - Service
 
-Provides the core business logic for the Self-Healing Control API.
-
-서비스 차단/허용, 장애 주입, 위험 평가 및 제어 요청 처리 로직을 제공합니다.
+ControlAPIService 클래스, 싱글톤 인스턴스, get_control_api_service() 함수 정의.
 """
 
 from __future__ import annotations
 
 import logging
-import uuid
-from dataclasses import dataclass, field
 from datetime import timedelta
-from enum import Enum
 
 from selfhealing.core.constants import (
     ControlAPIActions,
     ControlAPIEnvironments,
-    RiskLevels,
 )
 from selfhealing.core.timezone import now
 
+from .models import ControlRequest, ControlResponse
+from .risk import assess_risk_level, classify_reason
+
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Reason Classification
-# =============================================================================
-
-
-class ReasonClassification(str, Enum):
-    """AI/system assigned reason classifications."""
-
-    EXTERNAL_DEPENDENCY_FAILURE = "external-dependency-failure"
-    INTERNAL_SERVICE_ERROR = "internal-service-error"
-    MAINTENANCE_WINDOW = "maintenance-window"
-    SLA_BREACH_MITIGATION = "sla-breach-mitigation"
-    CHAOS_EXPERIMENT = "chaos-experiment"
-    MANUAL_INTERVENTION = "manual-intervention"
-    RECOVERY_PROCEDURE = "recovery-procedure"
-    SECURITY_INCIDENT = "security-incident"
-    UNKNOWN = "unknown"
-
-
-def classify_reason(reason: str) -> str:
-    """
-    Classify the provided reason string.
-
-    Args:
-        reason: Human-provided reason text
-
-    Returns:
-        Classification string
-    """
-    reason_lower = reason.lower()
-
-    # Pattern matching for classification (order matters - more specific first)
-    patterns = [
-        (
-            ReasonClassification.MAINTENANCE_WINDOW,
-            ["maintenance", "scheduled", "upgrade", "deploy"],
-        ),
-        (
-            ReasonClassification.SLA_BREACH_MITIGATION,
-            ["sla", "breach", "violation", "threshold"],
-        ),
-        (ReasonClassification.CHAOS_EXPERIMENT, ["chaos", "experiment", "resilience"]),
-        (
-            ReasonClassification.RECOVERY_PROCEDURE,
-            ["recovery", "recovered", "restored", "fixed"],
-        ),
-        (
-            ReasonClassification.SECURITY_INCIDENT,
-            ["security", "attack", "ddos", "vulnerability"],
-        ),
-        (
-            ReasonClassification.EXTERNAL_DEPENDENCY_FAILURE,
-            ["external", "pg", "payment gateway", "api down", "timeout", "latency"],
-        ),
-        (
-            ReasonClassification.INTERNAL_SERVICE_ERROR,
-            ["internal", "service", "error", "bug"],
-        ),
-    ]
-
-    for classification, keywords in patterns:
-        if any(kw in reason_lower for kw in keywords):
-            return classification.value
-
-    return ReasonClassification.MANUAL_INTERVENTION.value
-
-
-# =============================================================================
-# Risk Assessment
-# =============================================================================
-
-
-def assess_risk_level(action: str, environment: str) -> str:
-    """
-    Assess the risk level for an action in an environment.
-
-    환경과 작업 유형에 따른 위험 수준을 평가합니다.
-
-    Args:
-        action: Action type
-        environment: Environment type
-
-    Returns:
-        Risk level string
-    """
-    risk_matrix = {
-        (ControlAPIActions.ALLOW, ControlAPIEnvironments.TEST): RiskLevels.INFO,
-        (ControlAPIActions.ALLOW, ControlAPIEnvironments.CHAOS): RiskLevels.INFO,
-        (ControlAPIActions.ALLOW, ControlAPIEnvironments.OPS): RiskLevels.WARNING,
-        (ControlAPIActions.BLOCK, ControlAPIEnvironments.TEST): RiskLevels.INFO,
-        (ControlAPIActions.BLOCK, ControlAPIEnvironments.CHAOS): RiskLevels.WARNING,
-        (ControlAPIActions.BLOCK, ControlAPIEnvironments.OPS): RiskLevels.HIGH,
-        (ControlAPIActions.OVERRIDE, ControlAPIEnvironments.TEST): RiskLevels.WARNING,
-        (ControlAPIActions.OVERRIDE, ControlAPIEnvironments.CHAOS): RiskLevels.HIGH,
-        (ControlAPIActions.OVERRIDE, ControlAPIEnvironments.OPS): RiskLevels.CRITICAL,
-        (ControlAPIActions.RESET, ControlAPIEnvironments.TEST): RiskLevels.INFO,
-        (ControlAPIActions.RESET, ControlAPIEnvironments.CHAOS): RiskLevels.WARNING,
-        (ControlAPIActions.RESET, ControlAPIEnvironments.OPS): RiskLevels.WARNING,
-        (
-            ControlAPIActions.INJECT_FAILURE,
-            ControlAPIEnvironments.TEST,
-        ): RiskLevels.INFO,
-        (
-            ControlAPIActions.INJECT_FAILURE,
-            ControlAPIEnvironments.CHAOS,
-        ): RiskLevels.HIGH,
-        (
-            ControlAPIActions.INJECT_FAILURE,
-            ControlAPIEnvironments.OPS,
-        ): RiskLevels.FORBIDDEN,
-        (
-            ControlAPIActions.INJECT_SUCCESS,
-            ControlAPIEnvironments.TEST,
-        ): RiskLevels.INFO,
-        (
-            ControlAPIActions.INJECT_SUCCESS,
-            ControlAPIEnvironments.CHAOS,
-        ): RiskLevels.INFO,
-        (
-            ControlAPIActions.INJECT_SUCCESS,
-            ControlAPIEnvironments.OPS,
-        ): RiskLevels.FORBIDDEN,
-    }
-
-    return risk_matrix.get((action, environment), RiskLevels.WARNING)
-
-
-# =============================================================================
-# Data Classes
-# =============================================================================
-
-
-@dataclass
-class ControlRequest:
-    """Internal representation of a control API request."""
-
-    service_name: str
-    action: str
-    reason: str
-    environment: str
-    ttl_minutes: int | None = None
-    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    metadata: dict = field(default_factory=dict)
-    actor: str = "system"
-    actor_role: str = "automation"
-
-
-@dataclass
-class ControlResponse:
-    """Internal representation of a control API response."""
-
-    status: str
-    action_applied: str
-    system_state: str = ""
-    effective_until: str | None = None
-    reason_classification: str = ""
-    evidence: dict = field(default_factory=dict)
-    correlation_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    error_code: str = ""
-    error_message: str = ""
-    risk_level: str = ""
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        result = {
-            "status": self.status,
-            "action_applied": self.action_applied,
-            "correlation_id": self.correlation_id,
-        }
-
-        if self.system_state:
-            result["system_state"] = self.system_state
-        if self.effective_until:
-            result["effective_until"] = self.effective_until
-        if self.reason_classification:
-            result["reason_classification"] = self.reason_classification
-        if self.evidence:
-            result["evidence"] = self.evidence
-        if self.error_code:
-            result["error_code"] = self.error_code
-        if self.error_message:
-            result["error_message"] = self.error_message
-        if self.risk_level:
-            result["risk_level"] = self.risk_level
-
-        return result
 
 
 # =============================================================================
@@ -356,16 +165,12 @@ class ControlAPIService:
 
         Maps to: Circuit Breaker → OPEN state
         """
-        result = self.circuit_breaker.force_open(
-            service_name=request.service_name, reason=request.reason, controlled_by=None
-        )
+        result = self.circuit_breaker.force_open(service_name=request.service_name, reason=request.reason, controlled_by=None)
 
         # Calculate effective_until
         effective_until = None
         if request.ttl_minutes:
-            effective_until = (
-                now() + timedelta(minutes=request.ttl_minutes)
-            ).isoformat()
+            effective_until = (now() + timedelta(minutes=request.ttl_minutes)).isoformat()
         elif request.environment == ControlAPIEnvironments.OPS:
             # Default 90 minutes in ops
             effective_until = (now() + timedelta(minutes=90)).isoformat()
@@ -401,9 +206,7 @@ class ControlAPIService:
 
         effective_until = None
         if request.ttl_minutes:
-            effective_until = (
-                now() + timedelta(minutes=request.ttl_minutes)
-            ).isoformat()
+            effective_until = (now() + timedelta(minutes=request.ttl_minutes)).isoformat()
 
         if result.success:
             return ControlResponse(
@@ -501,9 +304,7 @@ class ControlAPIService:
         }
 
         if request.ttl_minutes:
-            failure_config["expires_at"] = now() + timedelta(
-                minutes=request.ttl_minutes
-            )
+            failure_config["expires_at"] = now() + timedelta(minutes=request.ttl_minutes)
 
         self._failure_injections[request.service_name] = failure_config
 
@@ -624,9 +425,7 @@ class ControlAPIService:
             return {
                 "failure_count": state.failure_count,
                 "success_count": state.success_count,
-                "last_failure_at": (
-                    state.last_failure_at.isoformat() if state.last_failure_at else None
-                ),
+                "last_failure_at": (state.last_failure_at.isoformat() if state.last_failure_at else None),
             }
         except Exception as e:
             logger.warning(f"[ControlAPI] Failed to gather evidence: {e}")
@@ -782,17 +581,9 @@ class ControlAPIService:
             pass
 
         # Calculate aggregate service counts
-        total_services = len(
-            set(
-                list(dlq_pending.keys())
-                + list(cb_states.keys())
-                + get_registered_domains()
-            )
-        )
+        total_services = len(set(list(dlq_pending.keys()) + list(cb_states.keys()) + get_registered_domains()))
         healthy_services = sum(1 for s in cb_states.values() if s == "closed")
-        degraded_services = sum(
-            1 for s in cb_states.values() if s in ("open", "half_open")
-        )
+        degraded_services = sum(1 for s in cb_states.values() if s in ("open", "half_open"))
 
         # Calculate 5-minute failure rate from repository
         last_5m_failure_rate = 0.0
@@ -805,9 +596,7 @@ class ControlAPIService:
                 stats = failed_op_repo.get_statistics()
                 # Use statistics if available
                 if stats:
-                    last_5m_failure_rate = stats.get("pending_count", 0) / max(
-                        stats.get("total_count", 1), 1
-                    )
+                    last_5m_failure_rate = stats.get("pending_count", 0) / max(stats.get("total_count", 1), 1)
                     last_5m_request_count = stats.get("total_count", 0)
                     avg_time_to_recovery = stats.get("avg_resolution_time_seconds")
         except Exception:

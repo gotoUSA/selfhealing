@@ -1,0 +1,61 @@
+"""
+Dashboard Service Package
+
+Provides centralized dashboard statistics and monitoring operations.
+
+.. versionadded:: 2.1.0
+    ``dashboard_service.py`` 플랫 파일에서 ``dashboard_service/`` 패키지로 전환.
+
+Usage:
+    from selfhealing.services.dashboard_service import (
+        get_dashboard_service,
+        DashboardService,
+        DashboardSummary,
+        Distribution,
+        AlertInfo,
+        invalidate_dashboard_cache,
+    )
+"""
+
+from selfhealing.services.dashboard_service.models import (
+    AlertInfo,
+    DashboardSummary,
+    Distribution,
+)
+from selfhealing.services.dashboard_service.service import (
+    DashboardService,
+    _dashboard_service,
+    _get_statistics_repo,
+    _has_statistics_adapter,
+    get_dashboard_service,
+    invalidate_dashboard_cache,
+    logger,
+)
+
+# Dynamic forwarding (event_bus pattern)
+# service.py의 모든 속성을 패키지 레벨에 노출.
+# 기존 `from selfhealing.services.dashboard_service import ...` 패턴 호환 유지.
+import sys as _sys
+from selfhealing.services.dashboard_service import service as _service_module
+
+_pkg = _sys.modules[__name__]
+for _name in dir(_service_module):
+    if not _name.startswith("__") and not hasattr(_pkg, _name):
+        setattr(_pkg, _name, getattr(_service_module, _name))
+del _name, _pkg
+
+__all__ = [
+    # Models
+    "Distribution",
+    "AlertInfo",
+    "DashboardSummary",
+    # Service
+    "DashboardService",
+    # Singleton & Helpers
+    "get_dashboard_service",
+    "invalidate_dashboard_cache",
+    "_get_statistics_repo",
+    "_has_statistics_adapter",
+    "logger",
+    "_dashboard_service",
+]

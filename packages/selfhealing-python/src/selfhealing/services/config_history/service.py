@@ -44,84 +44,19 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import asdict, dataclass
 from typing import Any
 
 from selfhealing.services.audit import log_config_apply_audit, log_rollback_audit
-from selfhealing.settings.audit_settings import get_audit_settings
+
+from .keys import (
+    _get_config_current_key,
+    _get_config_history_key,
+    _get_config_version_key,
+    _get_max_history_entries,
+)
+from .models import ConfigVersion
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Redis Key Helpers (Multi-Cluster Support)
-# Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
-# =============================================================================
-
-
-def _get_key_prefix() -> str:
-    """
-    Get namespace-aware key prefix.
-
-    Returns:
-        Key prefix like "selfhealing:seoul:" or "selfhealing:"
-    """
-    from selfhealing.settings.namespace import get_namespace_settings
-
-    return get_namespace_settings().get_key_prefix()
-
-
-def _get_config_history_key(config_type: str) -> str:
-    """Get config history key with namespace support."""
-    return f"{_get_key_prefix()}config:history:{config_type}"
-
-
-def _get_config_version_key(config_type: str) -> str:
-    """Get config version counter key with namespace support."""
-    return f"{_get_key_prefix()}config:version:{config_type}"
-
-
-def _get_config_current_key(config_type: str) -> str:
-    """Get current config key with namespace support."""
-    return f"{_get_key_prefix()}config:current:{config_type}"
-
-
-# Legacy constants (for backward compatibility with imports)
-# These still work but use the dynamic functions internally
-CONFIG_HISTORY_KEY = "selfhealing:config:history:{config_type}"
-CONFIG_VERSION_COUNTER_KEY = "selfhealing:config:version:{config_type}"
-CONFIG_CURRENT_KEY = "selfhealing:config:current:{config_type}"
-
-
-def _get_max_history_entries() -> int:
-    """Get max history entries from AuditSettings."""
-    return get_audit_settings().config_history_entries
-
-
-# Legacy constant for backward compatibility
-MAX_HISTORY_ENTRIES = 50  # Deprecated: use _get_max_history_entries() instead
-
-
-@dataclass
-class ConfigVersion:
-    """설정 버전 정보."""
-
-    version: int
-    timestamp: float
-    config_type: str
-    values: dict[str, Any]
-    changed_by: str
-    reason: str
-    hash: str
-
-    def to_dict(self) -> dict[str, Any]:
-        """딕셔너리로 변환."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ConfigVersion":
-        """딕셔너리에서 생성."""
-        return cls(**data)
 
 
 class ConfigHistoryService:
@@ -183,9 +118,7 @@ class ConfigHistoryService:
                 return client
 
             # 다른 캐시 백엔드 사용 시
-            logger.warning(
-                "[ConfigHistory] Cache backend does not support Redis client"
-            )
+            logger.warning("[ConfigHistory] Cache backend does not support Redis client")
             return None
 
         except Exception as e:
@@ -253,8 +186,7 @@ class ConfigHistoryService:
             pipe.execute()
 
             logger.info(
-                f"[ConfigHistory] Saved: type={config_type}, "
-                f"version={version_num}, by={changed_by}, reason={reason}"
+                f"[ConfigHistory] Saved: type={config_type}, " f"version={version_num}, by={changed_by}, reason={reason}"
             )
 
             # === Audit 기록: 설정 버전 저장 ===
@@ -294,17 +226,13 @@ class ConfigHistoryService:
             return []
 
         if not self.redis_client:
-            logger.warning(
-                "[ConfigHistory] Redis unavailable - returning empty history"
-            )
+            logger.warning("[ConfigHistory] Redis unavailable - returning empty history")
             return []
 
         try:
             history_key = _get_config_history_key(config_type)
             max_entries = _get_max_history_entries()
-            entries = self.redis_client.lrange(
-                history_key, 0, min(limit - 1, max_entries - 1)
-            )
+            entries = self.redis_client.lrange(history_key, 0, min(limit - 1, max_entries - 1))
 
             versions = []
             for entry in entries:
@@ -357,9 +285,7 @@ class ConfigHistoryService:
 
         return None
 
-    def rollback(
-        self, config_type: str, target_version: int, rolled_back_by: str
-    ) -> ConfigVersion | None:
+    def rollback(self, config_type: str, target_version: int, rolled_back_by: str) -> ConfigVersion | None:
         """
         특정 버전으로 롤백.
 
@@ -377,10 +303,7 @@ class ConfigHistoryService:
         target = self.get_version(config_type, target_version)
 
         if not target:
-            logger.error(
-                f"[ConfigHistory] Rollback failed: "
-                f"version {target_version} not found for {config_type}"
-            )
+            logger.error(f"[ConfigHistory] Rollback failed: " f"version {target_version} not found for {config_type}")
             return None
 
         # 롤백도 새 버전으로 저장
@@ -404,18 +327,14 @@ class ConfigHistoryService:
                 state="completed",
                 triggered_by=rolled_back_by,
                 reason=f"Rollback to version {target_version}",
-                source_version=(
-                    str(new_version.version - 1) if new_version.version > 1 else None
-                ),
+                source_version=(str(new_version.version - 1) if new_version.version > 1 else None),
                 target_version=str(target_version),
                 affected_components=[config_type],
             )
 
         return new_version
 
-    def compare_versions(
-        self, config_type: str, version_a: int, version_b: int
-    ) -> dict[str, Any] | None:
+    def compare_versions(self, config_type: str, version_a: int, version_b: int) -> dict[str, Any] | None:
         """
         두 버전 간 차이점 비교.
 

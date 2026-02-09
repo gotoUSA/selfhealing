@@ -1,5 +1,5 @@
 """
-Rate Limit Coordinator
+Rate Limit Coordinator - Core Coordinator
 
 Central coordinator for distributed rate limit management.
 Prevents Self-DDoS by coordinating retry behavior across all workers.
@@ -24,7 +24,6 @@ import random
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from selfhealing.adapters.rate_limit import get_rate_limit_storage
@@ -32,131 +31,18 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
     RateLimitStorageInterface,
 )
-from selfhealing.settings import get_config
+
+from .helpers import (
+    _default_get_retry_after,
+    _default_is_429,
+    _emit_rate_limit_event,
+    _record_rate_limit_metrics,
+)
+from .models import RateLimitCoordinatorConfig, RateLimitResult
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
-
-
-@dataclass
-class RateLimitCoordinatorConfig:
-    """Configuration for rate limit coordination."""
-
-    # Backoff settings
-    base_delay: float = 1.0  # Base delay in seconds
-    max_delay: float = 60.0  # Maximum delay cap
-    jitter_percent: float = 30.0  # ±30% random jitter
-
-    # 429 response settings
-    default_retry_after: float = 5.0  # Default if no Retry-After header
-
-    # Cooldown multiplier for consecutive 429s
-    # delay = min(base_delay * (2 ^ consecutive_429s), max_delay)
-    backoff_multiplier: float = 2.0
-
-    # EventBus debouncing settings
-    debounce_window_seconds: float = 5.0  # Prevent duplicate events within this window
-
-    @classmethod
-    def from_settings(cls) -> RateLimitCoordinatorConfig:
-        """Load configuration from core config."""
-        rate_limit = get_config().rate_limit
-
-        return cls(
-            base_delay=rate_limit.base_delay,
-            max_delay=rate_limit.max_delay,
-            jitter_percent=rate_limit.jitter_percent,
-            default_retry_after=rate_limit.default_retry_after,
-            backoff_multiplier=rate_limit.backoff_multiplier,
-        )
-
-
-@dataclass
-class RateLimitResult:
-    """Result of a rate limit check or wait operation."""
-
-    waited: bool = False
-    wait_time: float = 0.0
-    was_rate_limited: bool = False
-    consecutive_429s: int = 0
-    is_canary: bool = False
-    """Cooldown 직후 첫 요청 - 복구 정찰 요청 모드."""
-
-
-# =============================================================================
-# EventBus Integration Helper (Fail-Open)
-# =============================================================================
-
-
-def _emit_rate_limit_event(
-    event_type_name: str,
-    data: dict,
-    priority_name: str = "HIGH",
-) -> None:
-    """
-    Rate Limit 관련 이벤트를 EventBus에 발행.
-
-    EventBus import 실패 또는 발행 실패 시에도 주요 기능에 영향 없음 (Fail-Open).
-
-    Args:
-        event_type_name: EventType 이름 (예: "RATE_LIMIT_429")
-        data: 이벤트 데이터
-        priority_name: 우선순위 이름 (예: "HIGH", "CRITICAL")
-    """
-    try:
-        from selfhealing.services.event_bus import EventType, EventPriority, get_event_bus
-
-        bus = get_event_bus()
-        event_type = getattr(EventType, event_type_name, None)
-        if event_type is None:
-            logger.warning(f"[RateLimitCoordinator] Unknown event type: {event_type_name}")
-            return
-
-        priority = getattr(EventPriority, priority_name, EventPriority.HIGH)
-        bus.emit(
-            event_type=event_type,
-            data=data,
-            source="rate_limit_coordinator",
-            priority=priority,
-        )
-        logger.debug(f"[RateLimitCoordinator] Emitted {event_type_name}")
-    except ImportError:
-        logger.debug("[RateLimitCoordinator] EventBus not available")
-    except Exception as e:
-        logger.warning(f"[RateLimitCoordinator] Failed to emit event: {e}")
-
-
-def _record_rate_limit_metrics(
-    key: str,
-    status_code: int = 429,
-    cooldown_seconds: float | None = None,
-    consecutive_429s: int | None = None,
-) -> None:
-    """
-    Rate Limit 관련 Prometheus 메트릭 기록.
-
-    메트릭 정의가 없거나 import 실패 시 무시 (Fail-Open).
-    """
-    try:
-        from selfhealing.services.metrics.definitions import (
-            rate_limit_429_total,
-            rate_limit_cooldown_seconds,
-            rate_limit_consecutive_429s,
-        )
-
-        rate_limit_429_total.labels(key=key, status_code=str(status_code)).inc()
-
-        if cooldown_seconds is not None:
-            rate_limit_cooldown_seconds.labels(key=key).observe(cooldown_seconds)
-
-        if consecutive_429s is not None:
-            rate_limit_consecutive_429s.labels(key=key).set(consecutive_429s)
-
-    except ImportError:
-        logger.debug("[RateLimitCoordinator] Metrics module not available")
-    except Exception as e:
-        logger.debug(f"[RateLimitCoordinator] Failed to record metrics: {e}")
 
 
 class RateLimitCoordinator:
@@ -548,25 +434,6 @@ class RateLimitCoordinator:
             return wrapper
 
         return decorator
-
-
-def _default_is_429(response: Any) -> bool:
-    """Default 429 detection."""
-    if hasattr(response, "status_code"):
-        return response.status_code == 429
-    return False
-
-
-def _default_get_retry_after(response: Any) -> float | None:
-    """Default Retry-After extraction."""
-    if hasattr(response, "headers"):
-        retry_after = response.headers.get("Retry-After")
-        if retry_after:
-            try:
-                return float(retry_after)
-            except ValueError:
-                pass
-    return None
 
 
 # Convenience function

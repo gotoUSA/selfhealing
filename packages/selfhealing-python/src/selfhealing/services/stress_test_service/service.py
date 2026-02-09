@@ -17,11 +17,17 @@ import logging
 import os
 import threading
 import time
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import connections
+
+from .models import (
+    BurstFailureResult,
+    LockContentionResult,
+    PoolStatusResult,
+    StressTestResult,
+)
 
 if TYPE_CHECKING:
     from selfhealing.adapters.postgres.repository import PostgresRepository
@@ -37,140 +43,6 @@ try:
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
     SATimeoutError = Exception
-
-
-# =============================================================================
-# Data Classes for Stress Test Results
-# =============================================================================
-
-
-@dataclass
-class StressTestResult:
-    """스트레스 테스트 결과 데이터 클래스."""
-
-    status: str
-    elapsed_seconds: float = 0.0
-    message: str = ""
-    error: str | None = None
-    error_type: str | None = None
-    extra: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        """결과를 딕셔너리로 변환."""
-        result = {
-            "status": self.status,
-            "elapsed_seconds": round(self.elapsed_seconds, 2),
-        }
-        if self.message:
-            result["message"] = self.message
-        if self.error:
-            result["error"] = self.error
-        if self.error_type:
-            result["error_type"] = self.error_type
-        result.update(self.extra)
-        return result
-
-
-@dataclass
-class PoolStatusResult:
-    """커넥션 풀 상태 결과."""
-
-    status: str
-    sqlalchemy_pool: dict = field(default_factory=dict)
-    pg_stats: dict = field(default_factory=dict)
-    connection_usable: bool = True
-    use_connection_pool: bool = False
-    error: str | None = None
-    error_type: str | None = None
-
-    def to_dict(self) -> dict:
-        """결과를 딕셔너리로 변환."""
-        result = {
-            "status": self.status,
-            "sqlalchemy_pool": self.sqlalchemy_pool,
-            "pg_stats": self.pg_stats,
-            "connection_usable": self.connection_usable,
-            "use_connection_pool": self.use_connection_pool,
-        }
-        if self.error:
-            result["error"] = self.error
-        if self.error_type:
-            result["error_type"] = self.error_type
-        return result
-
-
-@dataclass
-class LockContentionResult:
-    """락 경합 테스트 결과."""
-
-    status: str
-    lock_id: int
-    duration_seconds: float
-    total_attempts: int = 0
-    success_count: int = 0
-    fail_count: int = 0
-    success_rate_percent: float = 0.0
-    avg_wait_ms: float = 0.0
-    lock_hold_ms: int = 0
-    error: str | None = None
-
-    def to_dict(self) -> dict:
-        """결과를 딕셔너리로 변환."""
-        result = {
-            "status": self.status,
-            "lock_id": self.lock_id,
-            "duration_seconds": round(self.duration_seconds, 2),
-        }
-        if self.status == "completed":
-            result.update(
-                {
-                    "total_attempts": self.total_attempts,
-                    "success_count": self.success_count,
-                    "fail_count": self.fail_count,
-                    "success_rate_percent": self.success_rate_percent,
-                    "avg_wait_ms": self.avg_wait_ms,
-                    "lock_hold_ms": self.lock_hold_ms,
-                }
-            )
-        if self.error:
-            result["error"] = self.error
-        return result
-
-
-@dataclass
-class BurstFailureResult:
-    """Burst 장애 테스트 결과."""
-
-    status: str
-    lock_id: int
-    lock_timeout_ms: int
-    burst_duration_seconds: float
-    total_attempts: int = 0
-    timeout_count: int = 0
-    success_count: int = 0
-    deadlock_count: int = 0
-    failure_rate_percent: float = 0.0
-    message: str = ""
-    error: str | None = None
-
-    def to_dict(self) -> dict:
-        """결과를 딕셔너리로 변환."""
-        result = {
-            "status": self.status,
-            "lock_id": self.lock_id,
-            "lock_timeout_ms": self.lock_timeout_ms,
-            "burst_duration_seconds": round(self.burst_duration_seconds, 2),
-            "total_attempts": self.total_attempts,
-            "timeout_count": self.timeout_count,
-            "success_count": self.success_count,
-            "deadlock_count": self.deadlock_count,
-            "failure_rate_percent": self.failure_rate_percent,
-        }
-        if self.message:
-            result["message"] = self.message
-        if self.error:
-            result["error"] = self.error
-        return result
 
 
 # =============================================================================
@@ -269,11 +141,7 @@ class StressTestService:
                 pass
 
             # 방법 3: conn.pool.pool (구버전)
-            if (
-                hasattr(conn, "pool")
-                and conn.pool is not None
-                and hasattr(conn.pool, "pool")
-            ):
+            if hasattr(conn, "pool") and conn.pool is not None and hasattr(conn.pool, "pool"):
                 pool = conn.pool.pool
                 return {
                     "pool_type": type(pool).__name__,
@@ -281,8 +149,7 @@ class StressTestService:
                     "checkedin": pool.checkedin(),
                     "checkedout": pool.checkedout(),
                     "overflow": pool.overflow(),
-                    "pool_exhausted": pool.checkedout()
-                    >= pool.size() + pool._max_overflow,
+                    "pool_exhausted": pool.checkedout() >= pool.size() + pool._max_overflow,
                 }
 
             return {
@@ -350,9 +217,7 @@ class StressTestService:
             )
         except SATimeoutError as e:
             elapsed = time.time() - start
-            logger.error(
-                f"[StressTestService] POOL EXHAUSTED! slow_query timeout after {elapsed:.2f}s: {e}"
-            )
+            logger.error(f"[StressTestService] POOL EXHAUSTED! slow_query timeout after {elapsed:.2f}s: {e}")
             return StressTestResult(
                 status="pool_exhausted",
                 elapsed_seconds=elapsed,
@@ -361,9 +226,7 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
-                f"[StressTestService] slow_query failed after {elapsed:.2f}s: {e}"
-            )
+            logger.error(f"[StressTestService] slow_query failed after {elapsed:.2f}s: {e}")
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -400,9 +263,7 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
-                f"[StressTestService] leak simulation failed after {elapsed:.2f}s: {e}"
-            )
+            logger.error(f"[StressTestService] leak simulation failed after {elapsed:.2f}s: {e}")
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -414,14 +275,10 @@ class StressTestService:
         start = time.time()
         try:
             # STRESS TEST ONLY: This query uses a configurable table for testing.
-            stress_table = getattr(
-                settings, "SELFHEALING_STRESS_TEST_TABLE", "selfhealing_failedoperation"
-            )
+            stress_table = getattr(settings, "SELFHEALING_STRESS_TEST_TABLE", "selfhealing_failedoperation")
 
             # Repository를 통해 집계 쿼리 실행
-            total, avg_price, max_price, min_price = self._repo.execute_aggregate_query(
-                stress_table
-            )
+            total, avg_price, max_price, min_price = self._repo.execute_aggregate_query(stress_table)
 
             # 추가 지연 (1초)
             self._repo.pg_sleep(1)
@@ -441,9 +298,7 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
-                f"[StressTestService] heavy_query failed after {elapsed:.2f}s: {e}"
-            )
+            logger.error(f"[StressTestService] heavy_query failed after {elapsed:.2f}s: {e}")
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -467,14 +322,10 @@ class StressTestService:
 
         try:
             # Repository의 컨텍스트 매니저 사용
-            with self._repo.advisory_lock_context(
-                lock_id, exclusive, wait
-            ) as lock_acquired:
+            with self._repo.advisory_lock_context(lock_id, exclusive, wait) as lock_acquired:
                 if not lock_acquired:
                     elapsed = time.time() - start
-                    logger.info(
-                        f"[StressTestService] Lock {lock_id} not acquired (conflict)"
-                    )
+                    logger.info(f"[StressTestService] Lock {lock_id} not acquired (conflict)")
                     return StressTestResult(
                         status="conflict",
                         elapsed_seconds=elapsed,
@@ -482,16 +333,12 @@ class StressTestService:
                         extra={"lock_id": lock_id},
                     )
 
-                logger.info(
-                    f"[StressTestService] Lock {lock_id} acquired, holding for {hold_seconds}s"
-                )
+                logger.info(f"[StressTestService] Lock {lock_id} acquired, holding for {hold_seconds}s")
                 time.sleep(hold_seconds)
 
             # 컨텍스트 매니저가 자동으로 락 해제
             elapsed = time.time() - start
-            logger.info(
-                f"[StressTestService] Lock {lock_id} released after {elapsed:.2f}s"
-            )
+            logger.info(f"[StressTestService] Lock {lock_id} released after {elapsed:.2f}s")
 
             return StressTestResult(
                 status="success",
@@ -574,16 +421,8 @@ class StressTestService:
                 total_attempts=total_attempts,
                 success_count=success_count,
                 fail_count=fail_count,
-                success_rate_percent=(
-                    round(success_count / total_attempts * 100, 2)
-                    if total_attempts > 0
-                    else 0
-                ),
-                avg_wait_ms=(
-                    round(total_wait_ms / total_attempts, 2)
-                    if total_attempts > 0
-                    else 0
-                ),
+                success_rate_percent=(round(success_count / total_attempts * 100, 2) if total_attempts > 0 else 0),
+                avg_wait_ms=(round(total_wait_ms / total_attempts, 2) if total_attempts > 0 else 0),
                 lock_hold_ms=lock_hold_ms,
             )
 
@@ -663,10 +502,7 @@ class StressTestService:
             elapsed = time.time() - start
             total_attempts = timeout_count + success_count + deadlock_count
 
-            logger.warning(
-                f"[StressTestService] 🔥 BURST COMPLETED: timeouts={timeout_count}, "
-                f"deadlocks={deadlock_count}"
-            )
+            logger.warning(f"[StressTestService] 🔥 BURST COMPLETED: timeouts={timeout_count}, " f"deadlocks={deadlock_count}")
 
             return BurstFailureResult(
                 status="burst_completed",
@@ -677,9 +513,7 @@ class StressTestService:
                 timeout_count=timeout_count,
                 success_count=success_count,
                 deadlock_count=deadlock_count,
-                failure_rate_percent=round(
-                    (timeout_count + deadlock_count) / max(1, total_attempts) * 100, 2
-                ),
+                failure_rate_percent=round((timeout_count + deadlock_count) / max(1, total_attempts) * 100, 2),
                 message="Controlled burst failure completed - check DLQ for captured failures",
             )
 
@@ -713,8 +547,7 @@ class StressTestService:
 
         try:
             logger.warning(
-                f"[StressTestService] 🔥 Starting pool exhaustion: "
-                f"{connections_to_hold} connections for {hold_seconds}s"
+                f"[StressTestService] 🔥 Starting pool exhaustion: " f"{connections_to_hold} connections for {hold_seconds}s"
             )
 
             # 기존 점유 커넥션 정리
@@ -733,31 +566,21 @@ class StressTestService:
                     cursor = self._repo.create_cursor()
 
                     # 커넥션을 busy 상태로 유지
-                    self._repo.execute_with_cursor(
-                        cursor, "SELECT pg_backend_pid(), pg_sleep(0.01)"
-                    )
+                    self._repo.execute_with_cursor(cursor, "SELECT pg_backend_pid(), pg_sleep(0.01)")
 
                     if StressTestService._held_connections_lock:
                         with StressTestService._held_connections_lock:
-                            StressTestService._held_connections.append(
-                                {"cursor": cursor, "created_at": time.time()}
-                            )
+                            StressTestService._held_connections.append({"cursor": cursor, "created_at": time.time()})
 
                     held_count += 1
-                    logger.info(
-                        f"[StressTestService] Held connection {i+1}/{connections_to_hold}"
-                    )
+                    logger.info(f"[StressTestService] Held connection {i+1}/{connections_to_hold}")
 
                 except Exception as e:
-                    logger.warning(
-                        f"[StressTestService] Failed to acquire connection {i+1}: {e}"
-                    )
+                    logger.warning(f"[StressTestService] Failed to acquire connection {i+1}: {e}")
                     break
 
             # 커넥션 유지하면서 대기
-            logger.warning(
-                f"[StressTestService] 🔥 Holding {held_count} connections for {hold_seconds}s"
-            )
+            logger.warning(f"[StressTestService] 🔥 Holding {held_count} connections for {hold_seconds}s")
             time.sleep(hold_seconds)
 
             # 커넥션 반환
@@ -771,9 +594,7 @@ class StressTestService:
                     StressTestService._held_connections.clear()
 
             elapsed = time.time() - start
-            logger.warning(
-                f"[StressTestService] 🔥 Pool exhaustion completed after {elapsed:.2f}s"
-            )
+            logger.warning(f"[StressTestService] 🔥 Pool exhaustion completed after {elapsed:.2f}s")
 
             return StressTestResult(
                 status="exhaustion_completed",

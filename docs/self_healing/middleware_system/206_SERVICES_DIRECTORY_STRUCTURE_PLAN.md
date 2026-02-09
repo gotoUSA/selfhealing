@@ -1,6 +1,6 @@
 # 206. services/ 디렉토리 구조 통일 계획
 
-> **상태**: 🔧 3차 정리 완료 (2026-02-09)
+> **상태**: 🔧 4차 정리 완료 (2026-02-09)
 > **목적**: `services/` 하위의 플랫 파일(단일 `.py`)과 패키지(디렉토리) 공존 문제를 정리한다.
 
 ---
@@ -11,40 +11,52 @@
 
 `services/` 디렉토리에는 **패키지(디렉토리)**와 **플랫 .py 파일**이 혼재:
 
-#### 패키지 (디렉토리) — 30개
+#### 패키지 (디렉토리) — 42개
 
 ```
 services/
 ├── audit/
 ├── auto_tuning/
+├── backoff_calculator/    ← 4차 신규 (backoff_calculator.py 전환)
 ├── blast_radius/
 ├── canary/
 ├── chaos/
 ├── circuit_breaker/
 ├── compliance/
 ├── config/
+├── config_history/        ← 4차 신규 (config_history.py 전환)
+├── control_api_service/   ← 4차 신규 (control_api_service.py 전환)
 ├── coordination/
 ├── corruption_shield/
 ├── daily_report/
+├── dashboard_service/     ← 4차 신규 (dashboard_service.py 전환)
 ├── dlq/
 ├── emergency_mode/
 ├── error_budget/
 ├── error_budget_gate/
 ├── event_bus/             ← 2차 신규 (event_bus.py + event_bus_redis.py 통합)
+├── execution_services/    ← 4차 신규 (execution_services.py 전환)
 ├── factory/
 ├── finops/
 ├── governance/           ← 2차 신규 (governance*.py 4파일 통합)
+├── idempotency/          ← 4차 기존 패키지, _ForwardingModule 추가
 ├── isolation/
 ├── learning/
 ├── metrics/
 ├── namespace_emergency/
 ├── postmortem/
+├── precomputed_cache/     ← 4차 신규 (precomputed_cache.py 전환)
 ├── rate_limit/
+├── rate_limit_coordinator/ ← 4차 신규 (rate_limit_coordinator.py 전환)
+├── replay_service/        ← 4차 신규 (replay_service.py 전환)
+├── retry_handler/         ← 4차 신규 (retry_handler.py 전환)
 ├── rollback/
 ├── runtime_config/
 ├── security/
 ├── security_notification/
-└── throttle/
+├── stress_test_service/   ← 4차 신규 (stress_test_service.py 전환)
+├── throttle/
+└── unified_notification/  ← 4차 신규 (unified_notification.py 전환)
 ```
 
 #### 플랫 파일 — 약 30개
@@ -53,38 +65,25 @@ services/
 services/
 ├── adaptive_replay.py              (317줄)
 ├── audit_helpers.py                ← backward compat shim (audit/ 패키지로 re-export, deprecation warning 추가 완료)
-├── backoff_calculator.py           (822줄) ← 500줄+ 패키지 전환 대상
 ├── chaos_context.py                (415줄)
 ├── circuit_breaker_service.py      ← backward compat shim (deprecation warning 추가 완료)
 ├── cleanup_service.py              (345줄)
-├── config_history.py               (512줄) ← 500줄+ 패키지 전환 대상
-├── control_api_service.py          (871줄) ← 500줄+ 패키지 전환 대상
-├── dashboard_service.py            (538줄) ← 500줄+ 패키지 전환 대상
 ├── dlq_models.py                   ← backward compat shim (dlq/models.py로 이전 완료)
 ├── dlq_service.py                  ← backward compat shim (deprecation warning 추가 완료)
 ├── error_budget_service.py         ← backward compat shim (deprecation warning 추가 완료)
-├── event_bus.py                    ← 삭제됨 (event_bus/ 패키지가 네임스페이스 대체)
 ├── event_bus_redis.py              ← backward compat shim (event_bus/redis_bus.py로 이전 완료)
-├── execution_services.py           (730줄) ← 500줄+ 패키지 전환 대상
 ├── forensic_audit_bridge.py        (476줄)
-├── governance.py                   ← 삭제됨 (governance/ 패키지가 네임스페이스 대체)
 ├── governance_api_service.py       ← backward compat shim (governance/api_service.py로 이전 완료)
 ├── governance_checks.py            ← backward compat shim (governance/checks.py로 이전 완료)
 ├── governance_service.py           ← backward compat shim (governance/service.py로 이전 완료)
 ├── healing_events_store.py         (285줄)
 ├── health_check.py                 (378줄)
 ├── http_client.py                  (335줄)
-├── idempotency_service.py          (1,160줄) ← 500줄+ 패키지 전환 대상
+├── idempotency_service.py          ← backward compat shim (idempotency/ 패키지로 sys.modules 전환, 4차)
 ├── metric_sync_service.py          (402줄)
 ├── pending_config.py               (361줄)
 ├── postmortem_store.py             ← backward compat shim (postmortem/store.py로 이전 완료)
-├── precomputed_cache.py            (690줄) ← 500줄+ 패키지 전환 대상
-├── rate_limit_coordinator.py       (576줄) ← 500줄+ 패키지 전환 대상
-├── replay_service.py               (940줄) ← 500줄+ 패키지 전환 대상, dlq/replay_operations.py와 기능 분산
-├── retry_handler.py                (827줄) ← 500줄+ 패키지 전환 대상
-├── stress_test_service.py          (842줄) ← 500줄+ 패키지 전환 대상
 ├── system_control.py               (421줄)
-├── unified_notification.py         (945줄) ← 500줄+ 패키지 전환 대상
 ├── xtest_cleanup_service.py        (445줄)
 └── xtest_session_manager.py        (397줄)
 ```
@@ -246,11 +245,11 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 | **Shim 파일 유지 비용** | 4개 shim 파일이 패키지와 동일 이름으로 존재하여 모듈 해석 혼란 가능 | ✅ v3.0.0 삭제 예약 |
 | **postmortem_store.py 이중 역할** | 866줄의 실제 구현 + backward compat을 겸하여 역할이 불명확 | ✅ postmortem/store.py로 이전 |
 | **dlq_models.py 고아 파일** | 패키지 내 모델과 플랫 파일 모델이 이중 존재 | ✅ dlq/models.py로 이전 |
-| **500줄+ 플랫 파일 16개 미정리** | 패키지 전환 기준 충족하나 아직 패키지로 전환되지 않음 | ✅ event_bus, governance 완료 / 나머지 12개 3차 계획 |
+| **500줄+ 플랫 파일 16개 미정리** | 패키지 전환 기준 충족하나 아직 패키지로 전환되지 않음 | ✅ 전체 16개 완료 (2차 4개 + 4차 12개) |
 | **event_bus 도메인 분산** | event_bus.py (1,875줄) + event_bus_redis.py (377줄) 동일 도메인 | ✅ event_bus/ 패키지로 통합 완료 |
 | **governance 도메인 분산** | 4개 파일 합계 2,371줄이 동일 도메인에서 플랫 파일로 존재 | ✅ governance/ 패키지로 통합 완료 |
 | **audit_helpers.py shim 미비** | audit/ 패키지로의 re-export shim이나 DeprecationWarning 없음 + 심볼 2개 누락 | ✅ 3차에서 DeprecationWarning 추가 + 누락 심볼 보충 |
-| **replay_service.py / dlq 기능 분산** | replay_service.py (940줄)와 dlq/replay_operations.py (296줄) 양쪽에 replay 로직 분산 | 🔜 4차 계획 |
+| **replay_service.py / dlq 기능 분산** | replay_service.py (940줄)와 dlq/replay_operations.py (296줄) 양쪽에 replay 로직 분산 | ✅ replay_service/ 패키지로 전환 완료 (4차) |
 
 ---
 
@@ -291,18 +290,18 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 | **6** | `governance.py` | 547 | 위와 동일 도메인 | ✅ 2차 완료 |
 | **6** | `governance_api_service.py` | 526 | 위와 동일 도메인 | ✅ 2차 완료 |
 | **6** | `governance_service.py` | 435 | 위와 동일 도메인 (합계 2,371줄) | ✅ 2차 완료 |
-| **2** | `idempotency_service.py` | 1,160 | 단독 대형 파일 | 🔜 3차 계획 |
-| **3** | `unified_notification.py` | 945 | 단독 대형 파일 | 🔜 3차 계획 |
-| **4** | `replay_service.py` | 940 | `dlq/replay_operations.py`와 기능 분산 정리 필요 | 🔜 3차 계획 |
-| **5** | `control_api_service.py` | 871 | 단독 대형 파일 | 🔜 3차 계획 |
-| **7** | `stress_test_service.py` | 842 | 단독 대형 파일 | 🔜 3차 계획 |
-| **8** | `retry_handler.py` | 827 | 단독 대형 파일 | 🔜 3차 계획 |
-| **9** | `backoff_calculator.py` | 822 | 단독 대형 파일 | 🔜 3차 계획 |
-| **10** | `execution_services.py` | 730 | 단독 대형 파일 | 🔜 3차 계획 |
-| **11** | `precomputed_cache.py` | 690 | 단독 대형 파일 | 🔜 3차 계획 |
-| **12** | `rate_limit_coordinator.py` | 576 | 단독 대형 파일 | 🔜 3차 계획 |
-| **13** | `dashboard_service.py` | 538 | 단독 대형 파일 | 🔜 3차 계획 |
-| **14** | `config_history.py` | 512 | 단독 대형 파일 | 🔜 3차 계획 |
+| **2** | `idempotency_service.py` | 1,160 | sys.modules shim → `idempotency/` 패키지 | ✅ 4차 완료 |
+| **3** | `unified_notification.py` | 945 | `unified_notification/` 패키지 (6 서브모듈) | ✅ 4차 완료 |
+| **4** | `replay_service.py` | 940 | `replay_service/` 패키지 (4 서브모듈) | ✅ 4차 완료 |
+| **5** | `control_api_service.py` | 871 | `control_api_service/` 패키지 (4 서브모듈) | ✅ 4차 완료 |
+| **7** | `stress_test_service.py` | 842 | `stress_test_service/` 패키지 (3 서브모듈) | ✅ 4차 완료 |
+| **8** | `retry_handler.py` | 827 | `retry_handler/` 패키지 (4 서브모듈) | ✅ 4차 완료 |
+| **9** | `backoff_calculator.py` | 822 | `backoff_calculator/` 패키지 (5 서브모듈) | ✅ 4차 완료 |
+| **10** | `execution_services.py` | 730 | `execution_services/` 패키지 (4 서브모듈) | ✅ 4차 완료 |
+| **11** | `precomputed_cache.py` | 690 | `precomputed_cache/` 패키지 (7 서브모듈) | ✅ 4차 완료 |
+| **12** | `rate_limit_coordinator.py` | 576 | `rate_limit_coordinator/` 패키지 (4 서브모듈) | ✅ 4차 완료 |
+| **13** | `dashboard_service.py` | 538 | `dashboard_service/` 패키지 (3 서브모듈) | ✅ 4차 완료 |
+| **14** | `config_history.py` | 512 | `config_history/` 패키지 (4 서브모듈) | ✅ 4차 완료 |
 
 ### 3-5. 검증 항목 — ✅ 3차 완료
 
@@ -445,3 +444,70 @@ governance + event_bus: 96 passed in 1.83s
 ```
 
 (1건 실패 = `test_sampling_verification_performance` — 타이밍 기반 성능 테스트로 변경과 무관)
+
+### 4-4. 4차 정리 (2026-02-09) — 12개 플랫 파일 패키지 전환
+
+#### 변경 요약
+
+500줄+ 플랫 파일 12개를 패키지로 전환. 총 52개 서브모듈 신규 생성, 11개 플랫 파일 삭제, 1개 sys.modules shim 전환.
+`mock.patch` 호환을 위해 `_ForwardingModule` 패턴 적용 (replay_service, control_api_service, idempotency, retry_handler).
+
+#### 변경 파일 목록
+
+**신규 생성 (12개 패키지, 52개 서브모듈):**
+
+| 패키지 | 서브모듈 | 원본 줄 수 |
+|--------|---------|-----------|
+| `stress_test_service/` | `__init__.py`, `models.py`, `service.py` | 842 |
+| `backoff_calculator/` | `__init__.py`, `models.py`, `budget.py`, `global_state.py`, `calculator.py` | 822 |
+| `precomputed_cache/` | `__init__.py`, `constants.py`, `l1_cache.py`, `l2_cache.py`, `multi_tier.py`, `worker.py`, `compute_functions.py` | 690 |
+| `rate_limit_coordinator/` | `__init__.py`, `models.py`, `helpers.py`, `coordinator.py` | 576 |
+| `dashboard_service/` | `__init__.py`, `models.py`, `service.py` | 538 |
+| `config_history/` | `__init__.py`, `keys.py`, `models.py`, `service.py` | 512 |
+| `unified_notification/` | `__init__.py`, `models.py`, `routing.py`, `service.py`, `convenience.py`, `formatters.py` | 945 |
+| `replay_service/` | `__init__.py`, `models.py`, `handlers.py`, `service.py` | 940 |
+| `control_api_service/` | `__init__.py`, `models.py`, `risk.py`, `service.py` | 871 |
+| `retry_handler/` | `__init__.py`, `models.py`, `handler.py`, `decorators.py` | 827 |
+| `execution_services/` | `__init__.py`, `models.py`, `chaos_service.py`, `config_apply_service.py` | 730 |
+
+**sys.modules shim 전환:**
+- `idempotency_service.py` (1,160줄 → 25줄) — `idempotency/` 패키지로 sys.modules 교체 + DeprecationWarning
+
+**삭제 (패키지가 네임스페이스 대체):**
+- `stress_test_service.py`, `backoff_calculator.py`, `precomputed_cache.py`, `rate_limit_coordinator.py`
+- `dashboard_service.py`, `config_history.py`, `unified_notification.py`, `replay_service.py`
+- `control_api_service.py`, `retry_handler.py`, `execution_services.py`
+
+**수정 (mock.patch 호환 _ForwardingModule 추가):**
+- `idempotency/__init__.py` — setattr 동적 전달 + `_ForwardingModule` 추가
+- `replay_service/__init__.py` — `_ForwardingModule` 추가
+- `control_api_service/__init__.py` — eager setattr + `_ForwardingModule` 추가
+
+**수정 (import 경로):**
+- `dlq/base.py` — `selfhealing.services.dlq_models` → `selfhealing.services.dlq.models` (2건)
+
+#### Shim 전략 적용 결과
+
+| 패턴 | 적용 대상 | 이유 |
+|------|----------|------|
+| **파일 삭제** | 11개 플랫 파일 | 패키지와 동일 이름 → Python이 패키지 우선 로드 |
+| **sys.modules shim** | `idempotency_service.py` | 패키지명(`idempotency`)과 파일명(`idempotency_service`)이 다름 + 테스트 patch 존재 |
+| **_ForwardingModule** | `replay_service`, `control_api_service`, `idempotency`, `retry_handler` | `mock.patch` 가 패키지 레벨에서 서브모듈 속성을 교체해야 하는 경우 |
+| **setattr 동적 전달** | 전체 12개 패키지 | 서브모듈의 모든 속성을 패키지 레벨로 노출 (import 호환) |
+
+#### 테스트 결과
+
+```
+변환 관련 영역 (services + dlq + replay + rate_limit + notification + idempotency):
+568 passed, 0 failed in 3.90s
+
+전체 테스트 스위트:
+10,621 passed, 28 failed (기존 postmortem/resilience 실패 — 변환과 무관)
+```
+
+변환 관련 5개 초기 실패 (`_ForwardingModule` 미적용 시):
+- `test_control_api_service::test_injection_expired` — `now` 패치 미전파 → `_ForwardingModule` 추가로 해결
+- `test_control_api_service::test_returns_existing_singleton` — `_control_api_service` 변수 미전파 → `_ForwardingModule` 추가로 해결
+- `test_replay_service_unit::test_governance_blocked` — `check_all_governance` 패치 미전파 → `_ForwardingModule` 추가로 해결
+- `test_replay_service_unit::test_governance_blocked_batch` — 동일 원인 → 해결
+- `test_idempotency_extension::test_sliding_window_expiry` — `time` 모듈 미노출 → setattr 동적 전달 추가로 해결
