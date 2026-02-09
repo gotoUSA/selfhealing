@@ -185,7 +185,380 @@ AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle)
 
 ---
 
-## 5. 문서 맵
+## 5. Load Shedding ↔ Throttle 연동 시 구현 필수 보완사항
+
+> **목적**: 208 문서 구현 전, 코드 분석으로 확인된 6가지 구조적 문제와 해결 방안을 정의한다.
+
+### 5-1. 식별자 Granularity 불일치 해결 — `context`를 통한 `service_id` 전달
+
+**문제**: `AdaptiveThrottle`은 전역 싱글톤 `get_adaptive_throttle()` (adaptive.py L2265)이며, `check(key, ...)` 호출 시 `key`는 IP/User 등 요청 식별자이다. Shedding 이벤트가 `affected_services=["order-api"]`로 도달해도, Throttle 내부에서 어떤 key가 어느 서비스 소속인지 식별할 수 없다. 이 상태에서 `_current_limit`을 전역으로 깎으면 **무관한 서비스까지 일괄 제한**된다.
+
+**코드 근거**:
+- `get_adaptive_throttle()` (adaptive.py L2265): 전역 싱글톤, 서비스별 인스턴스 아님
+- `check(key, tier_id, context, ...)` (adaptive.py L1395-L1401): `context`는 현재 DLQ 저장용으로만 사용 (`_auto_store_rejection_to_dlq(context, ...)` L1458)
+- `SlidingWindowThrottle.check(key)` (base.py L207): `self._current_limit`을 직접 참조하여 permit 판단
+
+**해결 방안**: `check()` 시그니처를 변경하지 않고, 기존 `context` 파라미터에 `service_id`를 주입한다.
+
+```python
+# 호출부 (미들웨어/라우터)
+throttle.check(
+    key="192.168.1.10",
+    tier_id="standard",
+    context={"service_id": "order-api", "domain": "shopping"}
+)
+```
+
+```python
+# adaptive.py — check() 내부 (429 CRITICAL 보호 패턴과 동일한 임시 swap 적용)
+def check(self, key, tier_id="standard", context=None, store_rejection=True):
+    service_id = context.get("service_id") if context else None
+
+    # Shedding 대상 서비스의 요청에만 제한적 limit 적용
+    if service_id and service_id in self._shedding_affected_services:
+        # 429 CRITICAL 보호 패턴 (adaptive.py L1464-L1470)과 동일한 임시 swap
+        original_limit = self._current_limit
+        self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
+        result = super().check(key)
+        self._current_limit = original_limit
+    else:
+        result = super().check(key)
+```
+
+**임시 swap이 필요한 이유**: `SlidingWindowThrottle.check(key)`가 `self._current_limit`을 직접 참조하므로 (base.py L213: `if current_count >= self._current_limit`), 외부에서 limit을 분기해도 `super().check()`에 전달되지 않는다. 기존 429 보호에서도 동일한 패턴을 사용한다:
+
+```python
+# 기존 429 CRITICAL 보호 코드 (adaptive.py L1464-L1470)
+if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
+    original_limit = self._current_limit
+    self._current_limit = self._limit_before_429  # 임시 swap
+    result = super().check(key)
+    self._current_limit = original_limit           # 복원
+```
+
+**신규 변수**:
+- `_shedding_affected_services: set[str]` — Shedding 이벤트의 `affected_services` 저장
+- 기존 네이밍 패턴: `_rate_limit_keys: dict[str, float]` (adaptive.py L570), `_error_budget_limit_reduction_active: bool` (adaptive.py L582)
+
+---
+
+### 5-2. 이중 차단(Double Shedding) 보정 — Limit 보상 로직
+
+**문제**: 방안 B 유지 시, `LoadSheddingMiddleware.process()`가 확률적으로 50% 차단 (manager.py L291: `allow = random.random() * 100 < allowed_percent`) + Throttle이 limit을 50%로 감소 → 실질 생존율 ≈ 25%. 목표 대비 과도한 트래픽 드랍.
+
+**코드 근거**:
+- `LoadSheddingManager.should_allow_request()` (manager.py L255-L301): `allowed_percent`를 기반으로 `random.random() * 100 < allowed_percent`로 확률적 차단
+- Middleware는 차단 후 남은 요청만 Throttle로 전달
+- Throttle이 `_shedding_suggested_limit = max_limit * (traffic_limit / 100.0)`으로 설정하면 이미 절반된 트래픽에 또 절반 limit 적용
+
+**해결 방안**: Throttle 측 Shedding Limit 계산 시 **보상 계수(compensation factor)**를 적용하여 이중 차단을 완화한다. 하드코딩이 아닌 `ThrottleSettings`에 설정화한다.
+
+```python
+# settings/throttle.py — ThrottleSettings에 추가
+shedding_compensation_factor: float = Field(
+    default=1.5,
+    ge=1.0,
+    le=3.0,
+    description="Load Shedding 이중 차단 방지 보상 계수. "
+                "Middleware가 이미 차단한 비율을 감안하여 Throttle limit 감소를 완화.",
+)
+```
+
+```python
+# adaptive.py — 이벤트 핸들러 내부
+def _handle_shedding_changed(self, event):
+    event_data = event.data if hasattr(event, "data") else event
+    traffic_limit = event_data.get("traffic_limit", 100.0)
+
+    raw_limit = int(self.config.max_limit * (traffic_limit / 100.0))
+    compensated = min(
+        self.config.max_limit,
+        int(raw_limit * self.config.shedding_compensation_factor),
+    )
+    self._shedding_suggested_limit = max(compensated, self.config.min_limit)
+```
+
+**기존 패턴과의 일관성**: `ThrottleSettings`에는 이미 유사한 설정 패턴이 존재한다:
+- `static_safe_limit_percent: float = 0.5` (settings/throttle.py L273) — Safe-Open 시 정적 limit 비율
+- `recovery_jitter_max_seconds` 등 계수형 설정
+
+**보상 계수 1.5의 의미**:
+- Shedding `traffic_limit=50%` → `raw_limit = max_limit * 0.5`
+- 보상 적용: `raw_limit * 1.5 = max_limit * 0.75`
+- 실질 생존율: 0.5(Middleware) × (0.75/1.0)(Throttle 여유) ≈ 실제 트래픽 제한이 목표 50%에 근접
+
+---
+
+### 5-3. Shedding 해제 시 Recovery Dampening 연동
+
+**문제**: Recovery Dampening의 호출 지점 4곳 중 Shedding 해제에 대한 연동은 없다.
+
+| 호출 지점 | 코드 위치 | 조건 |
+|-----------|-----------|------|
+| Emergency 해제 (Level→0) | adaptive.py L1571 | `level == 0` |
+| Full Stop 해제 | adaptive.py L1934 | `deactivate_full_stop()` |
+| 429 Cooldown 종료 | adaptive.py L741 | `_handle_cooldown_end()` |
+| Error Budget 회복 | adaptive.py L978 | `_handle_error_budget_recovered()` |
+| **(미구현) Shedding 해제** | — | — |
+
+**코드 근거**:
+- Emergency 활성화 시 Recovery Dampening 중단: `self._recovery_dampening_active = False` (adaptive.py L1584)
+- Error Budget 회복 시 Jitter 적용: `self.start_recovery_dampening(apply_jitter=True)` (adaptive.py L978)
+- `start_recovery_dampening(apply_jitter=False)` 호출 시 동기 실행 (`_do_start_recovery_dampening()` 직접 호출)
+- `start_recovery_dampening(apply_jitter=True)` 호출 시 daemon 스레드로 지연: `_schedule_dampening_start()` (adaptive.py L2047-L2053)
+
+**해결 방안**:
+
+```python
+def _handle_shedding_changed(self, event):
+    event_data = event.data if hasattr(event, "data") else event
+    new_level = event_data.get("new_level", -1)
+
+    if new_level < 0:  # Shedding 해제 (SHEDDING_DEACTIVATED)
+        self._shedding_affected_services.clear()
+        self._shedding_suggested_limit = self.config.max_limit
+
+        # 다른 제한이 활성화 상태가 아닐 때만 Dampening 시작
+        if not self._emergency_mode_active and not self._429_reduction_active:
+            # Jitter 적용 (Thundering Herd 방지) — Error Budget 회복과 동일 패턴
+            self.start_recovery_dampening(apply_jitter=True)
+    else:
+        # Shedding 활성화 처리 (Limit 감소)
+        ...
+```
+
+**조건부 가드의 근거**: Emergency 활성화 시 `self._recovery_dampening_active = False`로 Dampening을 중단하는 패턴 (adaptive.py L1584)이 이미 존재한다. Shedding 해제 시에도 Emergency가 활성 중이면 Dampening 시작이 무의미하다.
+
+**`apply_jitter=True` 적용 이유**:
+1. Error Budget 회복에서 동일하게 jitter 적용 (adaptive.py L978)
+2. `SelfHealingEventBus.publish()`가 동기식 (bus.py L376: `subscription.handler(event)`) → `apply_jitter=True`일 때 daemon 스레드로 지연 실행되므로 핸들러가 즉시 반환됨 (5-5절 참조)
+
+---
+
+### 5-4. tier ↔ criticality 매핑 유틸리티 신설 — `tier_mapping.py`
+
+**문제**: `criticality`와 `tier_id`를 호출자가 매번 하드코딩으로 전달하며, 오타/누락 방어가 없다.
+
+**코드 근거**:
+- `ServiceConfig.criticality` (models.py L44): `"critical" | "high" | "medium" | "low"` — `__post_init__`에서 검증 (models.py L60: `valid_levels = {"critical", "high", "medium", "low"}`)
+- `AdaptiveThrottle.check(tier_id)` (adaptive.py L1398): `"critical" | "standard" | "non_essential"` — 검증 없이 문자열 비교만 수행
+
+**해결 방안**: `services/throttle/tier_mapping.py` 신설 (기존 `services/throttle/` 디렉토리 내 파일과 동일 레벨).
+
+```python
+# services/throttle/tier_mapping.py
+
+"""
+tier_id ↔ criticality 매핑 유틸리티.
+
+Load Shedding의 ServiceConfig.criticality 값과
+AdaptiveThrottle.check()의 tier_id 파라미터 간 변환을 제공한다.
+"""
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# ServiceConfig.criticality → AdaptiveThrottle tier_id
+# 근거: models.py L60 valid_levels = {"critical", "high", "medium", "low"}
+CRITICALITY_TO_TIER: dict[str, str] = {
+    "critical": "critical",
+    "high": "critical",       # high도 critical tier로 보호
+    "medium": "standard",
+    "low": "non_essential",
+}
+
+# AdaptiveThrottle tier_id → ServiceConfig.criticality
+TIER_TO_CRITICALITY: dict[str, str] = {
+    "critical": "critical",
+    "standard": "medium",
+    "non_essential": "low",
+}
+
+# tier_id 유효값 (adaptive.py L1398, L1430, L498에서 사용되는 값)
+VALID_TIER_IDS: set[str] = {"critical", "standard", "non_essential"}
+
+_DEFAULT_TIER: str = "standard"
+_DEFAULT_CRITICALITY: str = "medium"
+
+
+def get_tier_from_criticality(criticality: str) -> str:
+    """
+    ServiceConfig.criticality를 AdaptiveThrottle tier_id로 변환.
+
+    Args:
+        criticality: "critical" | "high" | "medium" | "low"
+
+    Returns:
+        tier_id: "critical" | "standard" | "non_essential"
+    """
+    tier = CRITICALITY_TO_TIER.get(criticality.lower(), _DEFAULT_TIER)
+    if criticality.lower() not in CRITICALITY_TO_TIER:
+        logger.warning(
+            f"[TierMapping] Unknown criticality '{criticality}', "
+            f"falling back to '{_DEFAULT_TIER}'"
+        )
+    return tier
+
+
+def get_criticality_from_tier(tier_id: str) -> str:
+    """
+    AdaptiveThrottle tier_id를 ServiceConfig.criticality로 변환.
+
+    Args:
+        tier_id: "critical" | "standard" | "non_essential"
+
+    Returns:
+        criticality: "critical" | "medium" | "low"
+    """
+    criticality = TIER_TO_CRITICALITY.get(tier_id.lower(), _DEFAULT_CRITICALITY)
+    if tier_id.lower() not in TIER_TO_CRITICALITY:
+        logger.warning(
+            f"[TierMapping] Unknown tier_id '{tier_id}', "
+            f"falling back to '{_DEFAULT_CRITICALITY}'"
+        )
+    return criticality
+```
+
+**파일명 `tier_mapping.py` 선택 이유**: `priority_mapping.py`는 208 문서에서 제안되었으나, `services/throttle/registry.py`가 이미 존재하여 "priority" + "registry"가 혼동될 수 있다. `tier_mapping`이 역할을 더 정확하게 반영한다.
+
+**`"high"` criticality 포함 근거**: `ServiceConfig.__post_init__()` (models.py L60)에서 `valid_levels = {"critical", "high", "medium", "low"}`로 `"high"`를 유효 값으로 허용한다. Load Shedding Manager에서는 `"high"`를 직접 사용하지 않지만, `ServiceConfig`의 유효 값이므로 매핑에 포함해야 누락이 발생하지 않는다.
+
+---
+
+### 5-5. EventBus 동기식 핸들러 최소 연산 보장
+
+**문제**: `SelfHealingEventBus.publish()`는 동기식이다 (bus.py L376: `subscription.handler(event)` — 같은 스레드에서 순차 실행). Throttle 이벤트 핸들러에서 Lock 획득이나 I/O 작업을 수행하면, 이벤트 발행자(`LoadSheddingManager`)의 스레드까지 Blocking된다.
+
+**코드 근거** — 기존 핸들러의 패턴 분석:
+
+| 핸들러 | Lock 사용 | I/O | 패턴 |
+|--------|-----------|-----|------|
+| `_handle_rate_limit_429` (L625) | ❌ | ❌ | 변수 할당 + 로깅 + 메트릭 |
+| `_handle_cooldown_end` (L722) | ❌ | ❌ | 변수 할당 + `start_recovery_dampening()` |
+| `_handle_error_budget_warning` (L794) | ❌ | ❌ | 변수 할당 + 메트릭 + 감사 로깅 |
+| `_handle_error_budget_critical` (L855) | ❌ | ❌ | 변수 할당 + uuid 생성 + 메트릭 |
+| `_handle_error_budget_recovered` (L939) | ❌ | ⚠️ | `start_recovery_dampening(apply_jitter=True)` → daemon 스레드 |
+
+모든 기존 핸들러는 **변수 할당 + 메트릭/감사 로깅**만 수행하고 즉시 반환한다. `_handle_error_budget_recovered`에서 `start_recovery_dampening(apply_jitter=True)` 호출 시에도 `_schedule_dampening_start()` (adaptive.py L2047)가 daemon 스레드를 생성하여 즉시 반환한다.
+
+**구현 규칙**: `_handle_shedding_changed` 핸들러는 다음만 수행한다:
+1. `event.data`에서 값 추출
+2. `_shedding_affected_services`, `_shedding_suggested_limit` 변수 할당
+3. Shedding 해제 시 `start_recovery_dampening(apply_jitter=True)` — daemon 스레드로 비동기 실행
+
+```python
+def _handle_shedding_changed(self, event):
+    """Load Shedding 상태 변경 이벤트 처리 — 최소 연산 보장."""
+    # 변수 할당만 수행 (동기식 EventBus 보호)
+    event_data = event.data if hasattr(event, "data") else event
+    new_level = event_data.get("new_level", -1)
+    traffic_limit = event_data.get("traffic_limit", 100.0)
+    affected = event_data.get("affected_services", [])
+
+    if new_level < 0:
+        self._shedding_affected_services = set()
+        self._shedding_suggested_limit = self.config.max_limit
+        if not self._emergency_mode_active and not self._429_reduction_active:
+            self.start_recovery_dampening(apply_jitter=True)  # daemon 스레드
+    else:
+        self._shedding_affected_services = set(affected)
+        raw = int(self.config.max_limit * (traffic_limit / 100.0))
+        self._shedding_suggested_limit = min(
+            self.config.max_limit,
+            max(int(raw * self.config.shedding_compensation_factor), self.config.min_limit),
+        )
+```
+
+**Lock 미사용 근거**: `_shedding_affected_services`는 Python `set` 객체 참조의 교체(`=`)이며, GIL 하에서 원자적이다. 기존 핸들러(`_handle_rate_limit_429` 등)에서도 `_rate_limit_keys`, `_429_reduction_active` 등을 Lock 없이 할당한다.
+
+---
+
+### 5-6. `_shedding_suggested_limit` 초기값 — `max_limit`
+
+**문제**: `conservative_limit` 속성 (adaptive.py L1082-L1101)이 `min(rtt, 429, error_budget, shedding)` 연산을 수행하므로, `_shedding_suggested_limit`의 초기값이 0이면 시작 즉시 모든 트래픽이 차단된다.
+
+**코드 근거** — 기존 유사 변수 초기화 패턴:
+
+| 변수 | 초기값 | 코드 위치 | 이유 |
+|------|--------|-----------|------|
+| `_rtt_suggested_limit` | `self.config.initial_limit` | adaptive.py L576 | RTT 데이터 수집 전까지 기본 limit |
+| `_429_suggested_limit` | `self.config.max_limit` | adaptive.py L577 | **429 미발생 시 min()에 영향 없도록** |
+| `_error_budget_multiplier` | `1.0` | adaptive.py L585 | 감소 미적용 상태 |
+
+`_shedding_suggested_limit`은 `_429_suggested_limit`과 동일한 역할("이벤트 미발생 시 min()에 영향 없음")이므로 `self.config.max_limit`이 정확한 초기값이다.
+
+**구현 위치**: `__init__()` (adaptive.py L502 이후 초기화 블록) 및 `reset_all()` (adaptive.py L1737)
+
+```python
+# __init__() 내 (Conservative Limit 상태 블록 L575-L577 이후)
+self._shedding_suggested_limit: int = self.config.max_limit
+self._shedding_affected_services: set[str] = set()
+```
+
+```python
+# reset_all() 내 (L1737-L1760, 기존 초기화 코드 뒤에 추가)
+self._shedding_suggested_limit = self.config.max_limit
+self._shedding_affected_services = set()
+```
+
+```python
+# conservative_limit 속성 (adaptive.py L1082-L1101) 수정
+@property
+def conservative_limit(self) -> int:
+    if not self._conservative_enabled:
+        return self._current_limit
+
+    error_budget_limit = self.config.max_limit
+    if self._error_budget_limit_reduction_active:
+        error_budget_limit = int(
+            self._limit_before_error_budget_reduction * self._error_budget_multiplier
+        )
+
+    return min(
+        self._rtt_suggested_limit,
+        self._429_suggested_limit,
+        error_budget_limit,
+        self._shedding_suggested_limit,  # 평상시 max_limit → min()에 영향 없음
+    )
+```
+
+---
+
+### 5-7. 보완사항 영향 범위 요약
+
+| 파일 | 변경 내용 | 영향도 |
+|------|-----------|--------|
+| `services/throttle/adaptive.py` | `__init__` — `_shedding_suggested_limit`, `_shedding_affected_services` 초기화 | 낮음 |
+| `services/throttle/adaptive.py` | `check()` — `context.service_id` 기반 임시 swap 분기 | 중간 |
+| `services/throttle/adaptive.py` | `conservative_limit` — `_shedding_suggested_limit` 참여 | 낮음 |
+| `services/throttle/adaptive.py` | `_subscribe_load_shedding_events()`, `_handle_shedding_changed()` 신규 | 중간 |
+| `services/throttle/adaptive.py` | `reset_all()` — Shedding 상태 초기화 추가 | 낮음 |
+| `settings/throttle.py` | `shedding_compensation_factor` 설정 추가 | 낮음 |
+| (신규) `services/throttle/tier_mapping.py` | `get_tier_from_criticality()`, `get_criticality_from_tier()` | 낮음 |
+| `services/circuit_breaker/load_shedding/manager.py` | `update_shedding_state()` — EventBus 발행 추가 | 중간 |
+| `services/event_bus/bus.py` | `EventType.LOAD_SHEDDING_LEVEL_CHANGED` 추가 | 낮음 |
+
+---
+
+### 5-8. 구현 순서 제약
+
+```
+1. EventType.LOAD_SHEDDING_LEVEL_CHANGED 추가        (event_bus/bus.py)
+2. tier_mapping.py 신설                               (throttle/tier_mapping.py)
+3. ThrottleSettings.shedding_compensation_factor 추가  (settings/throttle.py)
+4. __init__, reset_all, conservative_limit 수정        (throttle/adaptive.py)
+5. _subscribe_load_shedding_events 신규                (throttle/adaptive.py)
+6. _handle_shedding_changed 신규                       (throttle/adaptive.py)
+7. check() 내 service_id 분기 추가                     (throttle/adaptive.py)
+8. update_shedding_state() EventBus 발행 추가          (load_shedding/manager.py)
+```
+
+1~3은 독립 작업. 4~7은 adaptive.py 내부 순차 의존. 8은 4 이후 언제든 가능.
+
+---
+
+## 6. 문서 맵
 
 ```
 207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md          ← 본 문서 (총괄)
