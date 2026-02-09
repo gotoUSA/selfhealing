@@ -6,37 +6,6 @@ import pytest
 from datetime import datetime
 
 
-class TestFailureType:
-    """Tests for FailureType enum."""
-
-    def test_failure_types_exist(self):
-        from selfhealing.core.types import FailureType
-
-        # Domain-neutral failure types (no PAYMENT - that's application-specific)
-        assert FailureType.NETWORK == "network"
-        assert FailureType.DATABASE == "database"
-        assert FailureType.TIMEOUT == "timeout"
-        assert FailureType.EXTERNAL_SERVICE == "external_service"
-
-    def test_failure_type_is_string(self):
-        from selfhealing.core.types import FailureType
-
-        assert isinstance(FailureType.NETWORK.value, str)
-        assert str(FailureType.NETWORK) == "FailureType.NETWORK"
-
-
-class TestOperationStatus:
-    """Tests for OperationStatus enum."""
-
-    def test_statuses_exist(self):
-        from selfhealing.core.types import OperationStatus
-
-        assert OperationStatus.PENDING == "pending"
-        assert OperationStatus.PROCESSING == "processing"
-        assert OperationStatus.COMPLETED == "completed"
-        assert OperationStatus.FAILED == "failed"
-
-
 class TestCircuitState:
     """Tests for CircuitState enum."""
 

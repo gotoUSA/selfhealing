@@ -17,10 +17,6 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 from unittest.mock import Mock
 
-from selfhealing.core.types import (
-    FailureType,
-    OperationStatus,
-)
 from selfhealing.interfaces.repositories import (
     CircuitBreakerStateEnum as CircuitState,
     FailedOperationData,

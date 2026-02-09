@@ -1,13 +1,17 @@
 # 194. 데드코드 제거 계획
 
-> **문서 버전**: 1.1.0
-> **최종 수정일**: 2026-02-07
-> **구현 완료일**: 2026-02-07
+> **문서 버전**: 1.2.0
+> **최종 수정일**: 2026-02-10
+> **구현 완료일**: 2026-02-07 (Phase 1), 2026-02-10 (Phase 2)
 > **상태**: ✅ 완료
 > **작성 근거**:
 > - `selfhealing/core/constants.py` (Line 67-100)
 > - `selfhealing/core/types.py` (Line 100-120: SecurityIncidentData)
 > - `selfhealing/core/types.py` (Line 54-63: DomainType)
+> - `selfhealing/core/types.py` (Line 12-27: FailureType — 프로덕션 0건)
+> - `selfhealing/core/types.py` (Line 28-36: OperationStatus — 프로덕션 0건)
+> - `selfhealing/core/types.py` (Line 39-49: RetryContext — 프로덕션 0건, 테스트 0건)
+> - `selfhealing/core/types.py` (Line 51-62: MetricsSnapshot — 프로덕션 0건, 테스트 0건)
 > - `selfhealing/interfaces/repositories.py` (Line 49-57: FailedOperationStatus 106 usages)
 > - `selfhealing/interfaces/repositories.py` (Line 60-63: CircuitBreakerStateEnum 74 usages)
 > **우선순위**: 🔴 P0 (제로 리스크, 즉시 실행 가능)
@@ -244,3 +248,125 @@ cd packages/selfhealing-python && python -m pytest tests/ -x --tb=short
 | grep 잔여 참조 확인 | ✅ src 내 잔여 import 0건 |
 | core 단위 테스트 (257건) | ✅ 전체 통과 |
 | 전체 테스트 (4,009건) | ✅ 4,008 passed, 1 skipped (1 failed는 기존 실패, 변경과 무관) |
+
+---
+
+## 8. Phase 2: `core/types.py` 잔존 데드코드 제거
+
+> **발견일**: 2026-02-10
+> **구현일**: 2026-02-10
+
+Phase 1에서 `DomainType`, `SecurityIncidentData`를 제거했으나, 같은 파일의 나머지 4개 심볼도 동일한 패턴(프로덕션 사용처 0건, re-export만 존재)임이 확인되었습니다.
+
+### 8.1 `core/types.py` — `FailureType` (프로덕션 사용처: 0)
+
+**파일 위치**: `selfhealing/core/types.py` Line 12-27
+
+```python
+class FailureType(str, Enum):
+    NETWORK = "network"
+    DATABASE = "database"
+    TIMEOUT = "timeout"
+    VALIDATION = "validation"
+    EXTERNAL_SERVICE = "external_service"
+    INTERNAL_PROCESS = "internal_process"
+    DATA_INTEGRITY = "data_integrity"
+    AUTHENTICATION = "authentication"
+    AUTHORIZATION = "authorization"
+    RATE_LIMIT = "rate_limit"
+    UNKNOWN = "unknown"
+```
+
+**근거**: `list_code_usages("FailureType")` → 프로덕션 src/ 내 실제 사용 **0건** (re-export만)
+
+**연결 불가 사유**: 프로덕션 코드에서 `failure_type: str`로 자유형 값 사용 (`"PG_TIMEOUT"`, `"throttle_rejected"`, `"AMOUNT_MISMATCH"` 등). Enum 값과 불일치하며, `interfaces/repositories.py`에도 대응 Enum 없음 — 의도적으로 `str`로 설계됨.
+
+### 8.2 `core/types.py` — `OperationStatus` (프로덕션 사용처: 0)
+
+**파일 위치**: `selfhealing/core/types.py` Line 28-36
+
+```python
+class OperationStatus(str, Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+    MANUAL_REVIEW = "manual_review"
+```
+
+**근거**: `list_code_usages("OperationStatus")` → 프로덕션 src/ 내 실제 사용 **0건** (re-export만)
+
+**대조**: `interfaces/repositories.py`의 `FailedOperationStatus(str, Enum)` → **106건** 사용 중
+
+| 비교 항목 | `core/types.py` (데드) | `interfaces/repositories.py` (활성) |
+|-----------|----------------------|--------------------------------------|
+| 상태값 | `PENDING, PROCESSING, COMPLETED, FAILED, EXPIRED, MANUAL_REVIEW` | `PENDING, REVIEWING, REPLAYED, REQUIRES_REVIEW, RESOLVED, REJECTED, ARCHIVED, EXPIRED` |
+| 프로덕션 사용처 | **0건** | **106건** |
+
+**연결 불가 사유**: 상태값이 완전히 다른 상태 모델. `FailedOperationStatus`로 대체 완료.
+
+### 8.3 `core/types.py` — `RetryContext` (프로덕션 사용처: 0, 테스트 0건)
+
+**파일 위치**: `selfhealing/core/types.py` Line 39-49
+
+```python
+class RetryContext(TypedDict, total=False):
+    attempt: int
+    max_attempts: int
+    delay: float
+    last_error: str
+    operation_id: str
+    domain: str
+```
+
+**근거**: `list_code_usages("RetryContext")` → re-export 2건 + 정의 1건 = **프로덕션 사용 0건, 테스트 0건**
+
+**연결 불가 사유**: `services/retry_handler/models.py`의 `RetryConfig` + `RetryResult`가 동일 역할을 이미 수행. `handler.py`의 `context: dict | None`은 자유형 dict이며 TypedDict 미사용.
+
+### 8.4 `core/types.py` — `MetricsSnapshot` (프로덕션 사용처: 0, 테스트 0건)
+
+**파일 위치**: `selfhealing/core/types.py` Line 51-62
+
+```python
+@dataclass
+class MetricsSnapshot:
+    timestamp: datetime
+    circuit_breakers_open: int = 0
+    circuit_breakers_half_open: int = 0
+    dlq_pending_count: int = 0
+    dlq_processing_count: int = 0
+    dlq_failed_count: int = 0
+    replay_success_rate: float = 0.0
+    total_retries: int = 0
+    successful_retries: int = 0
+```
+
+**근거**: `list_code_usages("MetricsSnapshot")` → re-export 2건 + 정의 1건 = **프로덕션 사용 0건, 테스트 0건**
+
+**연결 불가 사유**: 실제 메트릭 시스템은 Prometheus label 기반으로 **도메인별 분리** 수집 (`dlq_pending_gauge.labels(domain=domain).set(count)`). `MetricsSnapshot`은 도메인 구분 없는 전역 카운트 설계로 아키텍처 불일치. 활성 대체: `interfaces/statistics.py`의 `StatusCounts`, `CircuitBreakerSummary`, `DashboardSummary`.
+
+### 8.5 수행된 변경
+
+| 순서 | 대상 | 파일 | 결과 |
+|------|------|------|------|
+| 1 | `FailureType` | `core/types.py` | ✅ 클래스 삭제 |
+| 2 | `OperationStatus` | `core/types.py` | ✅ 클래스 삭제 |
+| 3 | `RetryContext` | `core/types.py` | ✅ 클래스 삭제 |
+| 4 | `MetricsSnapshot` | `core/types.py` | ✅ 클래스 삭제 |
+| 5 | re-export 정리 | `core/__init__.py` | ✅ 4개 심볼 import 및 `__all__` 제거 |
+| 6 | re-export 정리 | `selfhealing/__init__.py` | ✅ `FailureType`, `OperationStatus` import 및 `__all__` 제거 |
+| 7 | 미사용 import | `tests/factories/data_factory.py` | ✅ `FailureType`, `OperationStatus` import 삭제 |
+| 8 | 데드 테스트 | `tests/unit/utils/test_types.py` | ✅ `TestFailureType`, `TestOperationStatus` 클래스 삭제 |
+
+### 8.6 검증 결과
+
+| 검증 항목 | 결과 |
+|-----------|------|
+| `list_code_usages` 사전 확인 | ✅ 4개 심볼 모두 프로덕션 사용처 0건 |
+| grep 잔여 참조 확인 | ✅ src 내 잔여 import 0건 |
+| import 검증 (활성 심볼) | ✅ `CircuitBreakerStateEnum`, `FailedOperationStatus`, `FailedOperationData` 정상 |
+| import 검증 (`core/__init__`) | ✅ `CircuitState`, `FailedOperationData`, `CircuitBreakerStateData` 정상 |
+| import 검증 (`selfhealing/__init__`) | ✅ `CircuitState` 정상 |
+| import 검증 (`data_factory`) | ✅ `TestDataFactory` 정상 |
+| test_types.py (7건) | ✅ 전체 통과 |

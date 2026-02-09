@@ -124,12 +124,6 @@ from selfhealing.core.tls_handler import (
     TLSErrorType,
     TLSResilientClient,
 )
-from selfhealing.core.types import (
-    FailureType,
-    MetricsSnapshot,
-    OperationStatus,
-    RetryContext,
-)
 from selfhealing.interfaces.repositories import (
     CircuitBreakerStateEnum as CircuitState,
     CircuitBreakerStateData,
@@ -138,13 +132,9 @@ from selfhealing.interfaces.repositories import (
 
 __all__ = [
     # Types
-    "FailureType",
-    "OperationStatus",
     "CircuitState",
     "FailedOperationData",
     "CircuitBreakerStateData",
-    "RetryContext",
-    "MetricsSnapshot",
     # Backoff - Strategy implementations
     "BackoffStrategy",  # ABC for all backoff strategies
     "ExponentialBackoff",
