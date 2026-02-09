@@ -19,32 +19,20 @@ import logging
 from dataclasses import dataclass, field
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
+from selfhealing.services.error_budget.constants import (
+    DEFAULT_LEVEL_MULTIPLIERS,
+    get_domain_sensitivity,
+    MAX_CRISIS_MULTIPLIER_CAP,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# 기본 위기 가중치 (레벨별)
-DEFAULT_LEVEL_MULTIPLIERS = {
-    EmergencyLevel.NORMAL: 1.0,
-    EmergencyLevel.LEVEL_1: 1.5,
-    EmergencyLevel.LEVEL_2: 3.0,
-    EmergencyLevel.LEVEL_3: 5.0,
-}
+# SSOT: error_budget.constants 에서 가져옴 (backward compat re-export)
+DEFAULT_DOMAIN_SENSITIVITY = get_domain_sensitivity()
 
-# 최대 위기 가중치 (Cap)
-# Code reference: shadow_calculator.py#L42 (MAX_WEIGHT_MULTIPLIER)
-MAX_CRISIS_MULTIPLIER = 10.0
-
-
-# 기본 도메인 민감도 가중치
-# Code reference: shadow_calculator.py#L245 (domain SLA 기반 역수 가중치)
-DEFAULT_DOMAIN_SENSITIVITY = {
-    "payment": 10.0,  # 결제 도메인: 최고 민감도 (SLA 1h)
-    "order": 5.0,  # 주문 도메인: 높은 민감도 (SLA 4h)
-    "inventory": 3.0,  # 재고 도메인: 중간 민감도 (SLA 8h)
-    "notification": 1.5,  # 알림 도메인: 낮은 민감도 (SLA 16h)
-    "analytics": 1.0,  # 분석 도메인: 기본 민감도 (SLA 24h)
-}
+# 최대 위기 가중치 (Cap) - SSOT에서 가져옴
+MAX_CRISIS_MULTIPLIER = MAX_CRISIS_MULTIPLIER_CAP
 
 
 @dataclass
@@ -77,15 +65,11 @@ class DomainAwareCrisisMultiplier:
     """False면 도메인 무관하게 레벨 기반 일괄 적용."""
 
     # 도메인별 민감도 가중치
-    domain_sensitivity: dict[str, float] = field(
-        default_factory=lambda: dict(DEFAULT_DOMAIN_SENSITIVITY)
-    )
-    """도메인별 민감도 (높을수록 중요)."""
+    domain_sensitivity: dict[str, float] = field(default_factory=lambda: dict(get_domain_sensitivity()))
+    """도메인별 민감도 (높을수록 중요). SSOT: DomainSensitivitySettings."""
 
     # 레벨별 기본 가중치
-    level_multipliers: dict[EmergencyLevel, float] = field(
-        default_factory=lambda: dict(DEFAULT_LEVEL_MULTIPLIERS)
-    )
+    level_multipliers: dict[EmergencyLevel, float] = field(default_factory=lambda: dict(DEFAULT_LEVEL_MULTIPLIERS))
     """Emergency 레벨별 기본 가중치."""
 
     # 최대 가중치 Cap
@@ -194,8 +178,7 @@ class DomainAwareCrisisMultiplier:
         """
         if sensitivity < 1.0:
             logger.warning(
-                f"[CrisisMultiplier] Sensitivity < 1.0 not recommended: "
-                f"domain={domain}, sensitivity={sensitivity}"
+                f"[CrisisMultiplier] Sensitivity < 1.0 not recommended: " f"domain={domain}, sensitivity={sensitivity}"
             )
         self.domain_sensitivity[domain.lower()] = sensitivity
 

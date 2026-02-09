@@ -490,14 +490,15 @@ class TestGetAllDomains:
 
     def test_fallback_domains(self, service):
         """Fallback domains when prometheus unavailable
-        Prometheus 모듈이 없을 때 기본 도메인 목록을 반환하는지 확인.
+        Prometheus 모듈이 없을 때 registry의 도메인 목록을 반환하는지 확인.
         """
         with patch.dict("sys.modules", {"selfhealing.metrics.prometheus": None}):
-            # ImportError 발생 시 기본 도메인 반환
+            # ImportError 발생 시 registry 기반 도메인 반환
             domains = service._get_all_domains()
             assert isinstance(domains, list)
             assert len(domains) > 0
-            assert "payment" in domains
+            # registry DEFAULT_DOMAINS에 포함된 도메인이 반환됨
+            assert "notification" in domains
 
 
 # =============================================================================

@@ -53,12 +53,16 @@ class DomainSensitivitySettings(BaseSettings):
 
     # ==========================================================================
     # Domain Sensitivity Weights - from error_budget/constants.py
+    # json_schema_extra={"is_domain_weight": True} 로 도메인 필드를 마킹.
+    # 새 도메인 추가 시 같은 마커를 붙이면 get_domain_weight/as_domain_dict에
+    # 자동 반영됩니다.  런타임 추가는 extra_domains 필드를 사용하세요.
     # ==========================================================================
     payment: float = Field(
         default=10.0,
         ge=1.0,
         le=100.0,
         description="결제 도메인 민감도 (가장 중요)",
+        json_schema_extra={"is_domain_weight": True},
     )
 
     order: float = Field(
@@ -66,6 +70,7 @@ class DomainSensitivitySettings(BaseSettings):
         ge=1.0,
         le=50.0,
         description="주문 도메인 민감도",
+        json_schema_extra={"is_domain_weight": True},
     )
 
     inventory: float = Field(
@@ -73,6 +78,7 @@ class DomainSensitivitySettings(BaseSettings):
         ge=1.0,
         le=30.0,
         description="재고 도메인 민감도",
+        json_schema_extra={"is_domain_weight": True},
     )
 
     notification: float = Field(
@@ -80,6 +86,7 @@ class DomainSensitivitySettings(BaseSettings):
         ge=0.5,
         le=10.0,
         description="알림 도메인 민감도",
+        json_schema_extra={"is_domain_weight": True},
     )
 
     analytics: float = Field(
@@ -87,6 +94,12 @@ class DomainSensitivitySettings(BaseSettings):
         ge=0.1,
         le=5.0,
         description="분석 도메인 민감도 (가장 낮음)",
+        json_schema_extra={"is_domain_weight": True},
+    )
+
+    extra_domains: dict[str, float] = Field(
+        default_factory=dict,
+        description="런타임 추가 도메인 가중치 (예: SELFHEALING_DOMAIN_SENSITIVITY_EXTRA_DOMAINS='{\"logistics\": 2.0}')",
     )
 
     default_sensitivity: float = Field(
@@ -128,16 +141,17 @@ class DomainSensitivitySettings(BaseSettings):
     )
 
     def get_domain_weight(self, domain: str) -> float:
-        """도메인명으로 가중치 조회."""
+        """도메인명으로 가중치 조회 (메타데이터 기반 동적 해석)."""
         domain_lower = domain.lower()
-        weights = {
-            "payment": self.payment,
-            "order": self.order,
-            "inventory": self.inventory,
-            "notification": self.notification,
-            "analytics": self.analytics,
-        }
-        return weights.get(domain_lower, self.default_sensitivity)
+        # extra_domains 우선
+        if domain_lower in self.extra_domains:
+            return self.extra_domains[domain_lower]
+        # is_domain_weight 마커가 붙은 필드에서 조회
+        for name, field_info in self.model_fields.items():
+            extra = field_info.json_schema_extra or {}
+            if extra.get("is_domain_weight") and name == domain_lower:
+                return getattr(self, name)
+        return self.default_sensitivity
 
     def get_level_multiplier(self, level: str) -> float:
         """비상 레벨로 승수 조회."""
@@ -151,14 +165,15 @@ class DomainSensitivitySettings(BaseSettings):
         return multipliers.get(level_upper, self.level_multiplier_normal)
 
     def as_domain_dict(self) -> dict[str, float]:
-        """도메인 민감도 딕셔너리 반환."""
-        return {
-            "payment": self.payment,
-            "order": self.order,
-            "inventory": self.inventory,
-            "notification": self.notification,
-            "analytics": self.analytics,
-        }
+        """도메인 민감도 딕셔너리 반환 (메타데이터 기반 동적 수집)."""
+        result: dict[str, float] = {}
+        for name, field_info in self.model_fields.items():
+            extra = field_info.json_schema_extra or {}
+            if extra.get("is_domain_weight"):
+                result[name] = getattr(self, name)
+        # 런타임 추가 도메인 병합 (extra_domains가 우선)
+        result.update(self.extra_domains)
+        return result
 
     def as_level_dict(self) -> dict[str, float]:
         """레벨 승수 딕셔너리 반환."""

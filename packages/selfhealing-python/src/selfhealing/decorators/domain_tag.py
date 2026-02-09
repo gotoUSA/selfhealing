@@ -95,10 +95,7 @@ class DomainContext:
         self._previous_domain = _current_domain.get()
         self._token = _current_domain.set(self.domain)
 
-        logger.debug(
-            f"[DomainContext] Entered: domain={self.domain}, "
-            f"previous={self._previous_domain}"
-        )
+        logger.debug(f"[DomainContext] Entered: domain={self.domain}, " f"previous={self._previous_domain}")
 
         return self
 
@@ -108,10 +105,7 @@ class DomainContext:
             _current_domain.reset(self._token)
             self._token = None
 
-        logger.debug(
-            f"[DomainContext] Exited: domain={self.domain}, "
-            f"restored={_current_domain.get()}"
-        )
+        logger.debug(f"[DomainContext] Exited: domain={self.domain}, " f"restored={_current_domain.get()}")
 
         # 예외 전파 (False 반환)
         return False
@@ -255,14 +249,13 @@ class DomainMiddlewareMixin:
     DOMAIN_HEADER = "X-Domain"
     """도메인 식별 헤더."""
 
-    URL_DOMAIN_MAPPING = {
-        "/api/payments/": "payment",
-        "/api/orders/": "order",
-        "/api/inventory/": "inventory",
-        "/api/notifications/": "notification",
-        "/api/analytics/": "analytics",
-    }
-    """URL 패턴 → 도메인 매핑."""
+    URL_DOMAIN_MAPPING: dict[str, str] = {}
+    """
+    URL 패턴 → 도메인 매핑 (프로젝트별 설정).
+
+    서브클래스에서 오버라이드하거나, Django settings SELF_HEALING_DOMAIN_MAPPING 을 사용하세요.
+    예: {"/api/payments/": "payment", "/api/orders/": "order"}
+    """
 
     def extract_domain_from_request(self, request) -> str | None:
         """
@@ -280,9 +273,7 @@ class DomainMiddlewareMixin:
                 return domain.lower()
         elif hasattr(request, "META"):
             # Django 스타일
-            domain = request.META.get(
-                f'HTTP_{self.DOMAIN_HEADER.replace("-", "_").upper()}'
-            )
+            domain = request.META.get(f'HTTP_{self.DOMAIN_HEADER.replace("-", "_").upper()}')
             if domain:
                 return domain.lower()
 

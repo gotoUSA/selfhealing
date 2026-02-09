@@ -31,7 +31,7 @@ from typing import Any
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.constants import (
-    DEFAULT_DOMAIN_SENSITIVITY,
+    get_domain_sensitivity,
     DEFAULT_LEVEL_MULTIPLIERS,
     MAX_COMBINED_MULTIPLIER,
 )
@@ -134,9 +134,7 @@ class CheckOnUseMultiplierProvider:
             max_multiplier: 최대 가중치 Cap
         """
         self._multipliers = level_multipliers or dict(DEFAULT_LEVEL_MULTIPLIERS)
-        self._domain_sensitivity = domain_sensitivity or dict(
-            DEFAULT_DOMAIN_SENSITIVITY
-        )
+        self._domain_sensitivity = domain_sensitivity or dict(get_domain_sensitivity())
         self._emergency_tracker = emergency_tracker
         self._precedence_resolver = precedence_resolver
         self._max_multiplier = max_multiplier
@@ -164,9 +162,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._precedence_resolver = MultiplierPrecedenceResolver()
             except ImportError:
-                logger.debug(
-                    "[Provider] MultiplierPrecedenceResolver not available, using max"
-                )
+                logger.debug("[Provider] MultiplierPrecedenceResolver not available, using max")
         return self._precedence_resolver
 
     def get_current_multiplier(
@@ -196,9 +192,7 @@ class CheckOnUseMultiplierProvider:
             domain_multiplier = self._get_domain_multiplier(domain)
 
         # 가중치 결합
-        final_multiplier = self._combine_multipliers(
-            level_multiplier, domain_multiplier
-        )
+        final_multiplier = self._combine_multipliers(level_multiplier, domain_multiplier)
 
         # Emergency ID 조회
         emergency_id = self._get_current_emergency_id(namespace)
@@ -290,9 +284,7 @@ class CheckOnUseMultiplierProvider:
             sensitivity: 민감도 가중치 (1.0 이상 권장)
         """
         if sensitivity < 1.0:
-            logger.warning(
-                f"[Provider] Sensitivity < 1.0 not recommended: {domain}={sensitivity}"
-            )
+            logger.warning(f"[Provider] Sensitivity < 1.0 not recommended: {domain}={sensitivity}")
         self._domain_sensitivity[domain.lower()] = sensitivity
 
     def get_all_multipliers(self) -> dict[str, float]:

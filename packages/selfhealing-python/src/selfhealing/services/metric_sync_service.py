@@ -213,7 +213,9 @@ class MetricSyncService:
 
             return get_domains()
         except ImportError:
-            return ["payment", "point", "inventory"]
+            from selfhealing.services.metrics.registry import get_registered_domains
+
+            return get_registered_domains()
 
     def _build_results(
         self,

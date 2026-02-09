@@ -21,7 +21,6 @@ Reference:
     92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [23] DomainSensitivitySettings 참조.
 """
 
-
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.settings.domain_sensitivity import get_domain_sensitivity_settings
 
@@ -70,7 +69,7 @@ CrisisMultiplierProvider 기본 캐시 TTL (30초).
 # =============================================================================
 
 
-def _get_level_multipliers() -> dict[EmergencyLevel, float]:
+def get_level_multipliers() -> dict[EmergencyLevel, float]:
     """DomainSensitivitySettings에서 레벨 승수 가져오기."""
     settings = get_domain_sensitivity_settings()
     return {
@@ -81,16 +80,11 @@ def _get_level_multipliers() -> dict[EmergencyLevel, float]:
     }
 
 
-# Legacy constant for backward compatibility
-DEFAULT_LEVEL_MULTIPLIERS: dict[EmergencyLevel, float] = {
-    EmergencyLevel.NORMAL: 1.0,  # 기본 소진율
-    EmergencyLevel.LEVEL_1: 1.5,  # 경미한 위기: 1.5배
-    EmergencyLevel.LEVEL_2: 3.0,  # 중간 위기: 3배
-    EmergencyLevel.LEVEL_3: 5.0,  # 심각한 위기: 5배
-}
+# Backward compatibility: settings 기반 동적 평가
+DEFAULT_LEVEL_MULTIPLIERS: dict[EmergencyLevel, float] = get_level_multipliers()
 """
 Emergency Level별 Error Budget 소진 가중치.
-Deprecated: Use _get_level_multipliers() for dynamic settings.
+Note: 설정 기반 동적 값. 런타임 설정은 get_level_multipliers() 사용.
 """
 
 
@@ -99,23 +93,17 @@ Deprecated: Use _get_level_multipliers() for dynamic settings.
 # =============================================================================
 
 
-def _get_domain_sensitivity() -> dict[str, float]:
+def get_domain_sensitivity() -> dict[str, float]:
     """DomainSensitivitySettings에서 도메인 민감도 가져오기."""
     settings = get_domain_sensitivity_settings()
     return settings.as_domain_dict()
 
 
-# Legacy constant for backward compatibility
-DEFAULT_DOMAIN_SENSITIVITY: dict[str, float] = {
-    "payment": 10.0,  # 결제 도메인: 최고 민감도 (SLA 1h)
-    "order": 5.0,  # 주문 도메인: 높은 민감도 (SLA 4h)
-    "inventory": 3.0,  # 재고 도메인: 중간 민감도 (SLA 8h)
-    "notification": 1.5,  # 알림 도메인: 낮은 민감도 (SLA 16h)
-    "analytics": 1.0,  # 분석 도메인: 기본 민감도 (SLA 24h)
-}
+# Backward compatibility: settings 기반 동적 평가
+DEFAULT_DOMAIN_SENSITIVITY: dict[str, float] = get_domain_sensitivity()
 """
 도메인별 민감도 가중치.
-Deprecated: Use _get_domain_sensitivity() for dynamic settings.
+Note: 설정 기반 동적 값. 런타임 설정은 get_domain_sensitivity() 사용.
 """
 
 
