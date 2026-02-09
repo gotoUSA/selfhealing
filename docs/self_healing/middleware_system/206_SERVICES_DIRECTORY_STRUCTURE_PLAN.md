@@ -511,3 +511,15 @@ governance + event_bus: 96 passed in 1.83s
 - `test_replay_service_unit::test_governance_blocked` — `check_all_governance` 패치 미전파 → `_ForwardingModule` 추가로 해결
 - `test_replay_service_unit::test_governance_blocked_batch` — 동일 원인 → 해결
 - `test_idempotency_extension::test_sliding_window_expiry` — `time` 모듈 미노출 → setattr 동적 전달 추가로 해결
+
+### 4-5. 4차 보완 (2026-02-09) — execution_services.py 삭제 누락 수정
+
+#### 발견 경위
+
+206 문서 검증 과정에서 `execution_services.py` (691줄)가 삭제 목록에 포함되어 있음에도 실제 파일이 남아 있음을 확인.
+`execution_services/` 패키지가 동일 네임스페이스를 점유하여 Python 실행 시에는 영향 없으나 (패키지 우선 로드), dead code로 잔존.
+
+#### 변경 파일 목록
+
+**삭제:**
+- `services/execution_services.py` (691줄) — 4차 삭제 목록에서 누락되었던 파일
