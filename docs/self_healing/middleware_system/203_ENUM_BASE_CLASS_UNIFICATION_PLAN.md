@@ -19,7 +19,7 @@
 
 ## 2. 수정 완료 내역
 
-### 2-1. plain `Enum` → `str, Enum` (문자열 값, 48건)
+### 2-1. plain `Enum` / `IntEnum` → `str, Enum` (문자열 값, 50건)
 
 | 파일 | 클래스 |
 |------|--------|
@@ -72,8 +72,9 @@
 | `api/django/views/xtest/scenarios/base.py` | `ScenarioStatus` |
 | `api/django/rate_limit.py` | `RedisHealthState` |
 | `adapters/memory/drift_reconciliation.py` | `DriftReconciliationResult` |
+| `audit/persistence/disk_buffer.py` | `BufferState` ← `IntEnum`에서 전환 (순서 비교 미사용, `==` 동등 비교만 10건) |
 
-### 2-2. plain `Enum` / `int, Enum` → `IntEnum` (정수 값 + 순서/산술, 6건)
+### 2-2. plain `Enum` / `int, Enum` → `IntEnum` (정수 값 + 순서/산술, 5건)
 
 `.value` 기반 순서 비교 또는 산술 연산이 코드에서 확인된 정수 값 Enum:
 
@@ -83,7 +84,6 @@
 | `utils/async_logger.py` | `EventSeverity` | plain `Enum` | `.value` 비교: `DEBUG.value < INFO.value` |
 | `services/emergency_mode/enums.py` | `EmergencyLevel` | plain `Enum` | `.value` 비교: `level.value >= LEVEL_2.value` |
 | `scaling/graceful_degradation.py` | `FeaturePriority` | plain `Enum` | `.value` 비교: `CRITICAL.value == 0` |
-| `audit/persistence/disk_buffer.py` | `BufferState` | plain `Enum` | 상태 머신 (정수 값 0-4) |
 | `interfaces/task_queue.py` | `TaskPriority` | `int, Enum` | `.value` 산술 연산: `10 - priority.value` (celery_adapter) |
 
 ### 2-3. IntEnum — 기존 유지 (7건)

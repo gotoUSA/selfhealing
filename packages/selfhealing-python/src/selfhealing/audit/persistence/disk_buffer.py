@@ -29,7 +29,7 @@ import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import IntEnum
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -73,14 +73,14 @@ class DiskBufferError(Exception):
     pass
 
 
-class BufferState(IntEnum):
+class BufferState(str, Enum):
     """버퍼 상태."""
 
-    UNINITIALIZED = 0
-    ACTIVE = 1
-    DISK_FULL_FAILOPEN = 2
-    CORRUPTED = 3
-    CLOSED = 4
+    UNINITIALIZED = "uninitialized"
+    ACTIVE = "active"
+    DISK_FULL_FAILOPEN = "disk_full_failopen"
+    CORRUPTED = "corrupted"
+    CLOSED = "closed"
 
 
 class DiskPersistentBuffer:
