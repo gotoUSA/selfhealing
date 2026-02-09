@@ -1,6 +1,6 @@
 # 206. services/ 디렉토리 구조 통일 계획
 
-> **상태**: 🔧 2차 정리 완료 (2026-02-09)
+> **상태**: 🔧 3차 정리 완료 (2026-02-09)
 > **목적**: `services/` 하위의 플랫 파일(단일 `.py`)과 패키지(디렉토리) 공존 문제를 정리한다.
 
 ---
@@ -52,7 +52,7 @@ services/
 ```
 services/
 ├── adaptive_replay.py              (317줄)
-├── audit_helpers.py                (121줄)
+├── audit_helpers.py                ← backward compat shim (audit/ 패키지로 re-export, deprecation warning 추가 완료)
 ├── backoff_calculator.py           (822줄) ← 500줄+ 패키지 전환 대상
 ├── chaos_context.py                (415줄)
 ├── circuit_breaker_service.py      ← backward compat shim (deprecation warning 추가 완료)
@@ -89,9 +89,43 @@ services/
 └── xtest_session_manager.py        (397줄)
 ```
 
-### 1-2. Backward Compatibility Shim 파일 (5건 → 4건 실존)
+### 1-2. Backward Compatibility Shim 파일 (6건 → 5건 실존)
 
 이미 패키지로 분리되었지만, 이전 import 경로 호환을 위해 남겨진 파일:
+
+#### (0) `services/audit_helpers.py` → `services/audit/` — ✅ deprecation warning 추가 완료 (3차)
+
+```python
+# services/audit_helpers.py (139줄 → shim + DeprecationWarning)
+"""
+Audit Helpers - Backward Compatibility Wrapper
+
+.. deprecated:: 2.0.0
+    Import from ``selfhealing.services.audit`` instead.
+    This shim will be removed in v3.0.0.
+"""
+import warnings
+warnings.warn(
+    "Importing from 'selfhealing.services.audit_helpers' is deprecated. "
+    "Use 'selfhealing.services.audit' instead. "
+    "This module will be removed in v3.0.0.",
+    DeprecationWarning, stacklevel=2,
+)
+# → services/audit/ 패키지로 재export
+```
+
+**참조 현황** (50건+):
+- `services/circuit_breaker/service.py`, `services/circuit_breaker/tracing.py`, `services/circuit_breaker/manual_control.py`, `services/circuit_breaker/freeze_mode.py`, `services/circuit_breaker/panic_threshold.py`, `services/circuit_breaker/blast_radius_integration.py`
+- `services/dlq/base.py`, `services/replay_service.py`, `services/system_control.py`
+- `services/rollback/service.py`, `services/finops/service.py`, `services/compliance/service.py`
+- `services/emergency_mode/manager.py`, `services/error_budget_gate/gate.py`
+- `services/chaos/blast_radius.py`, `services/chaos/base/experiment.py`, `services/chaos/safety_guard/guard.py`
+- `tasks/chaos_scheduler.py`, `tasks/config_apply.py`, `tasks/governance.py`, `tasks/traffic_aware_replay.py`
+- 테스트 50건+
+
+**누락 심볼 보충** (3차): `audit/__init__.py`에는 있으나 `audit_helpers.py`에 누락되었던 2개 심볼 추가:
+- `log_region_isolation_audit`
+- `log_security_violation_audit`
 
 #### (1) `services/circuit_breaker_service.py` → `services/circuit_breaker/` — ✅ deprecation warning 추가 완료
 
@@ -215,21 +249,23 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 | **500줄+ 플랫 파일 16개 미정리** | 패키지 전환 기준 충족하나 아직 패키지로 전환되지 않음 | ✅ event_bus, governance 완료 / 나머지 12개 3차 계획 |
 | **event_bus 도메인 분산** | event_bus.py (1,875줄) + event_bus_redis.py (377줄) 동일 도메인 | ✅ event_bus/ 패키지로 통합 완료 |
 | **governance 도메인 분산** | 4개 파일 합계 2,371줄이 동일 도메인에서 플랫 파일로 존재 | ✅ governance/ 패키지로 통합 완료 |
-| **replay_service.py / dlq 기능 분산** | replay_service.py (940줄)와 dlq/replay_operations.py (296줄) 양쪽에 replay 로직 분산 | 🔜 3차 계획 |
+| **audit_helpers.py shim 미비** | audit/ 패키지로의 re-export shim이나 DeprecationWarning 없음 + 심볼 2개 누락 | ✅ 3차에서 DeprecationWarning 추가 + 누락 심볼 보충 |
+| **replay_service.py / dlq 기능 분산** | replay_service.py (940줄)와 dlq/replay_operations.py (296줄) 양쪽에 replay 로직 분산 | 🔜 4차 계획 |
 
 ---
 
 ## 3. 수정 계획
 
-### 3-1. Shim 파일 정리 — ✅ 1차 완료
+### 3-1. Shim 파일 정리 — ✅ 3차 완료
 
 | 파일 | 현재 상태 | 조치 | 상태 |
 |------|----------|------|------|
-| `circuit_breaker_service.py` | re-export shim | DeprecationWarning 추가, v3.0.0 삭제 예약 | ✅ 완료 |
-| `dlq_service.py` | re-export shim | DeprecationWarning 추가, v3.0.0 삭제 예약 | ✅ 완료 |
-| `error_budget_service.py` | re-export shim | DeprecationWarning 추가, v3.0.0 삭제 예약 | ✅ 완료 |
+| `audit_helpers.py` | re-export shim (DeprecationWarning 없었음) | DeprecationWarning 추가 + 누락 심볼 2개 보충, v3.0.0 삭제 예약 | ✅ 3차 완료 |
+| `circuit_breaker_service.py` | re-export shim | DeprecationWarning 추가, v3.0.0 삭제 예약 | ✅ 1차 완료 |
+| `dlq_service.py` | re-export shim | DeprecationWarning 추가, v3.0.0 삭제 예약 | ✅ 1차 완료 |
+| `error_budget_service.py` | re-export shim | DeprecationWarning 추가, v3.0.0 삭제 예약 | ✅ 1차 완료 |
 | `factory.py` | ~~deprecated shim~~ | **파일 존재하지 않음** — 조치 불필요 | ✅ 확인 |
-| `postmortem_store.py` | 866줄 실구현 | 구현을 `postmortem/store.py`로 이전, shim으로 전환 | ✅ 완료 |
+| `postmortem_store.py` | 866줄 실구현 | 구현을 `postmortem/store.py`로 이전, shim으로 전환 | ✅ 1차 완료 |
 
 ### 3-2. Legacy 파일 정리 — ✅ 1차 완료
 
@@ -268,7 +304,7 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 | **13** | `dashboard_service.py` | 538 | 단독 대형 파일 | 🔜 3차 계획 |
 | **14** | `config_history.py` | 512 | 단독 대형 파일 | 🔜 3차 계획 |
 
-### 3-5. 검증 항목 — ✅ 1차 완료
+### 3-5. 검증 항목 — ✅ 3차 완료
 
 - [x] `factory.py` 실제 존재 여부 확인 → **존재하지 않음** (factory/ 디렉토리만 존재)
 - [x] 전체 코드베이스에서 `from selfhealing.services.circuit_breaker_service import` 참조 검색 → **20건+ 확인**, shim 유지 필요
@@ -278,6 +314,10 @@ DLQ Models and Data Classes - Backward Compatibility Shim
 - [x] 전체 코드베이스에서 `from selfhealing.services.dlq_models import` 참조 검색 → **20건+ 확인**, shim 유지 필요
 - [x] `postmortem_store.py` → `postmortem/store.py` 이전 후 public API 변경 없음 확인 → **테스트 90건 전체 통과**
 - [x] `dlq_models.py` → `dlq/models.py` 이전 후 호환성 확인 → **테스트 90건 전체 통과**
+- [x] `audit_helpers.py`가 `audit/` 패키지의 re-export shim임을 확인 → **DeprecationWarning 누락** (3차 추가)
+- [x] `audit_helpers.py` ↔ `audit/__init__.py` 심볼 대조 → **`log_region_isolation_audit`, `log_security_violation_audit` 누락** (3차 보충)
+- [x] 전체 코드베이스에서 `from selfhealing.services.audit_helpers import` 참조 검색 → **소스 50건+, 테스트 50건+**, shim 유지 필요
+- [x] `audit_helpers.py` DeprecationWarning 추가 + 누락 심볼 보충 후 호환성 확인 → **테스트 1634건 통과**
 
 ---
 
@@ -377,3 +417,31 @@ dlq + replay + postmortem + error_budget: 155 passed in 1.45s
 `tests/unit/throttle/test_throttle_*_integration.py`, `tests/unit/throttle/test_throttle_eventbus_handlers.py`,
 `tests/unit/adapters/test_beat_schedule_governance_integration.py`,
 `tests/unit/config/test_auto_tuning_governance.py`, `tests/unit/tasks/test_tasks_governance.py`
+
+### 4-3. 3차 정리 (2026-02-09) — audit_helpers.py shim 보완
+
+#### 발견 경위
+
+206 문서 검증 과정에서 `audit_helpers.py`가 `audit/` 패키지로의 re-export shim임에도 불구하고:
+1. 문서 1-2절 Backward Compatibility Shim 목록에 누락되어 있었음
+2. 다른 shim 파일(`circuit_breaker_service.py`, `dlq_service.py` 등)에는 모두 `DeprecationWarning`이 있으나, `audit_helpers.py`에만 없었음
+3. `audit/__init__.py`에서 export하는 `log_region_isolation_audit`, `log_security_violation_audit` 2개 심볼이 `audit_helpers.py`의 re-export 목록에 누락
+
+#### 변경 파일 목록
+
+**수정:**
+- `services/audit_helpers.py` — DeprecationWarning 추가 + 누락 심볼 2개(`log_region_isolation_audit`, `log_security_violation_audit`) import 및 `__all__` 보충 (121줄 → 139줄)
+
+#### 테스트 결과
+
+```
+audit helpers (helpers + pipeline + wal + trace): 1371 passed in 63.72s
+dlq: 33 passed in 0.56s
+postmortem_store: 11 passed in 0.14s
+error_budget + event_bus_redis: 46 passed in 0.61s
+replay: 77 passed in 1.14s
+governance + event_bus: 96 passed in 1.83s
+합계: 1634 passed, 0 관련 실패
+```
+
+(1건 실패 = `test_sampling_verification_performance` — 타이밍 기반 성능 테스트로 변경과 무관)

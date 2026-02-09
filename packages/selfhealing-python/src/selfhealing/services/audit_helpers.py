@@ -1,6 +1,10 @@
 """
 Audit Helpers - Backward Compatibility Wrapper
 
+.. deprecated:: 2.0.0
+    Import from ``selfhealing.services.audit`` instead.
+    This shim will be removed in v3.0.0.
+
 이 모듈은 하위 호환성을 위한 re-export wrapper입니다.
 실제 구현은 selfhealing.services.audit 패키지에 있습니다.
 
@@ -14,7 +18,17 @@ Usage (기존 코드 그대로 동작):
 
 from __future__ import annotations
 
-from selfhealing.services.audit import (  # Base utilities; DLQ; Circuit Breaker; Retry & Rollback; Chaos & Emergency; X-Test-Mode; Compliance & FinOps; Storage & Tasks
+import warnings
+
+warnings.warn(
+    "Importing from 'selfhealing.services.audit_helpers' is deprecated. "
+    "Use 'selfhealing.services.audit' instead. "
+    "This module will be removed in v3.0.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from selfhealing.services.audit import (  # Base utilities; DLQ; Circuit Breaker; Retry & Rollback; Chaos & Emergency; X-Test-Mode; Compliance, Security & FinOps; Storage & Tasks
     _get_audit_adapter,
     _get_wal,
     _try_add_to_buffer,
@@ -46,8 +60,10 @@ from selfhealing.services.audit import (  # Base utilities; DLQ; Circuit Breaker
     log_panic_threshold_audit,
     log_pool_cb_rejection_audit,
     log_rate_limited_audit,
+    log_region_isolation_audit,
     log_retry_audit,
     log_rollback_audit,
+    log_security_violation_audit,
     log_storage_failure_audit,
     log_storage_recovery_audit,
     log_system_control_audit,
@@ -103,8 +119,10 @@ __all__ = [
     "log_xtest_session_end_audit",
     "log_xtest_injection_audit",
     "log_xtest_cleanup_audit",
-    # Compliance & FinOps
+    # Compliance, Security & FinOps
     "log_compliance_audit",
+    "log_security_violation_audit",
+    "log_region_isolation_audit",
     "log_blast_radius_audit",
     "log_finops_audit",
     "log_data_access_audit",
