@@ -307,32 +307,35 @@ class TestDomainSensitivitySettings:
 
         settings = DomainSensitivitySettings()
 
-        assert settings.payment == 10.0
-        assert settings.order == 5.0
-        assert settings.inventory == 3.0
-        assert settings.notification == 1.5
-        assert settings.analytics == 1.0
+        assert settings.domains["payment"] == 10.0
+        assert settings.domains["order"] == 5.0
+        assert settings.domains["inventory"] == 3.0
+        assert settings.domains["notification"] == 1.5
+        assert settings.domains["analytics"] == 1.0
         assert settings.default_sensitivity == 1.0
 
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.domain_sensitivity import DomainSensitivitySettings
 
-        monkeypatch.setenv("SELFHEALING_DOMAIN_SENSITIVITY_PAYMENT", "15.0")
+        monkeypatch.setenv(
+            "SELFHEALING_DOMAIN_SENSITIVITY_DOMAINS",
+            '{"payment": 15.0, "order": 5.0}',
+        )
 
         settings = DomainSensitivitySettings()
 
-        assert settings.payment == 15.0
+        assert settings.domains["payment"] == 15.0
 
     def test_validation_sensitivity_range(self):
         """sensitivity 범위 검증."""
         from selfhealing.settings.domain_sensitivity import DomainSensitivitySettings
 
         with pytest.raises(ValidationError):
-            DomainSensitivitySettings(payment=0.5)  # < 1.0
+            DomainSensitivitySettings(domains={"bad": 0.05})  # < 0.1
 
         with pytest.raises(ValidationError):
-            DomainSensitivitySettings(payment=150.0)  # > 100.0
+            DomainSensitivitySettings(domains={"bad": 150.0})  # > 100.0
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
