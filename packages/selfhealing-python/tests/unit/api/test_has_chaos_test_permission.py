@@ -205,13 +205,17 @@ class TestHasChaosTestPermission:
     # =========================================================================
 
     @patch.dict(os.environ, {"ENVIRONMENT": "production", "DISABLE_SELFHEALING_AUTH": "true"})
-    def test_auth_disabled_bypass_in_production(self, permission_class, mock_request, mock_view, mock_anonymous_user):
-        """DISABLE_SELFHEALING_AUTH=true 시 프로덕션에서도 바이패스된다."""
+    def test_auth_disabled_blocked_in_production(self, permission_class, mock_request, mock_view, mock_anonymous_user):
+        """프로덕션에서는 DISABLE_SELFHEALING_AUTH=true여도 바이패스가 차단된다 (Fail-Secure).
+
+        _is_auth_disabled()가 프로덕션에서 무조건 False를 반환하므로,
+        HasChaosTestPermission은 프로덕션 차단 로직으로 진입하여 False를 반환해야 한다.
+        """
         mock_request.user = mock_anonymous_user
 
         result = permission_class.has_permission(mock_request, mock_view)
 
-        assert result is True
+        assert result is False  # Fail-Secure: 프로덕션에서는 무조건 차단
 
     @patch.dict(os.environ, {"ENVIRONMENT": "development", "DISABLE_SELFHEALING_AUTH": "1"})
     def test_auth_disabled_bypass_with_1(self, permission_class, mock_request, mock_view, mock_anonymous_user):
