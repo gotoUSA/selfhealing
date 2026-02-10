@@ -527,6 +527,7 @@ class TestKillSwitchCheckBehavior:
         throttle = self._create_throttle()
         throttle._kill_switch_active = True
         throttle._gradient_frozen = True
+        throttle._last_emergency_check_time = time.time()  # TTL 내로 설정 (sync 스킵)
         original_limit = throttle._current_limit
 
         result = throttle.check("test_key")
@@ -542,6 +543,7 @@ class TestKillSwitchCheckBehavior:
         # Kill Switch 활성화
         mock_event = MagicMock()
         throttle._handle_kill_switch_activated(mock_event)
+        throttle._last_emergency_check_time = time.time()  # TTL 내로 설정 (sync 스킵)
 
         # check()는 정상 동작
         result = throttle.check("test_key")

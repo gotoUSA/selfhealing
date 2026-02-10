@@ -274,12 +274,12 @@ class TestPreemptiveProtectionIntegration:
 
     @patch.object(AdaptiveThrottle, "_subscribe_error_budget_events")
     @patch.object(AdaptiveThrottle, "_subscribe_rate_limit_events")
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
     @patch.object(AdaptiveThrottle, "_check_preemptive_protection")
     def test_calls_preemptive_protection_in_emergency_sync(
-        self, mock_preemptive, mock_manager_class, mock_sub_rate, mock_sub_budget
+        self, mock_preemptive, mock_get_manager, mock_sub_rate, mock_sub_budget
     ):
-        """check_and_sync_emergency_state에서 선제적 보호 호출."""
+        """_sync_governance_state에서 선제적 보호 호출."""
         config = ThrottleConfig(initial_limit=1000, max_limit=2000)
         throttle = AdaptiveThrottle(config)
 
@@ -290,9 +290,9 @@ class TestPreemptiveProtectionIntegration:
         # Mock: Emergency level 정상
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value.value = 0
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
-        # check_and_sync 호출
+        # _sync_governance_state 호출 (check_and_sync_emergency_state는 래퍼)
         throttle.check_and_sync_emergency_state()
 
         # 검증: 선제적 보호 호출됨

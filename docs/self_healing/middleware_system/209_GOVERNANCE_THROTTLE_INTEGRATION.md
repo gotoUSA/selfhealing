@@ -1,6 +1,6 @@
 # 209. Governance Checks ↔ AdaptiveThrottle 연동 계획
 
-> **상태**: ✅ 구현 완료 (1단계)
+> **상태**: ✅ 구현 완료 (1-3단계)
 > **목적**: AdaptiveThrottle에 Governance 3단계 안전 체크(Kill Switch → Emergency → Error Budget)를 공식 통합한다.
 > **근거 문서**: [207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md](207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md)
 
@@ -55,26 +55,35 @@ if settings.break_glass_enabled:
 ### 1-2. AdaptiveThrottle 측 — 현재 안전 체크
 
 ```python
-# adaptive.py L1877-1936
-def check_and_sync_emergency_state(self) -> bool:
-    """Check on Use 패턴: TTL 만료 시 Emergency 상태 재확인."""
+# adaptive.py L2176
+def _sync_governance_state(self) -> bool:
+    """Governance 통합 상태 동기화 (Check on Use, 30초 TTL)."""
     # TTL 확인
     if now - self._last_emergency_check_time < self._emergency_cache_ttl_seconds:
         return False
 
-    manager = GracefulDegradationManager()
+    # Kill Switch 상태 동기화 (is_system_enabled() Drift 교정)
+    self._sync_kill_switch_state()
+    # Break Glass 상태 동기화 (Settings 기반)
+    self._sync_break_glass_state()
+    # Emergency Level 동기화 (get_emergency_manager())
+    manager = get_emergency_manager()
     current_level = manager.get_current_level().value
-
     if current_level != self._emergency_level:
         self.adjust_for_emergency(current_level)
+
+# adaptive.py L2264 — 하위호환 래퍼
+def check_and_sync_emergency_state(self) -> bool:
+    """하위호환 래퍼: _sync_governance_state()로 위임."""
+    return self._sync_governance_state()
 ```
 
-**체크하는 것**:
-- ✅ Emergency Level (Check-on-Use, 30초 TTL)
+**체크하는 것** (1-3단계 구현 완료):
+- ✅ Emergency Level (Check-on-Use, 30초 TTL, `get_emergency_manager()`)
 - ✅ Error Budget (EventBus `ERROR_BUDGET_*` 구독, L735)
-- ❌ Kill Switch — **미체크**
-- ❌ Break Glass — **미지원**
-- ❌ `check_all_governance()` — **미호출**
+- ✅ Kill Switch (`_sync_kill_switch_state()` → `is_system_enabled()` Drift 교정)
+- ✅ Break Glass (`_sync_break_glass_state()` → `get_governance_settings()`)
+- ✅ `check_all_governance()` (`GovernanceCheckMixin.is_automation_allowed()` → `_maybe_adjust_limit()` Safety Net)
 
 ### 1-3. AutoTuningService — 참조 패턴
 
@@ -131,15 +140,15 @@ if settings.break_glass_enabled:
   - AdaptiveThrottle: Full Stop 상태면 **모든 요청 차단 유지** ⚠️
   - 운영자가 Throttle만 별도로 해제해야 함
 
-### 2-3. 안전 체크 일관성 불일치
+### 2-3. 안전 체크 일관성 ~~불일치~~ (1-3단계 완료 후 해소)
 
 | 체크 항목 | AutoTuningService | AdaptiveThrottle |
 |-----------|-------------------|------------------|
-| Kill Switch | ✅ `check_all_governance()` | ❌ 없음 |
-| Emergency Level | ✅ `check_all_governance()` | △ 자체 sync (`check_and_sync_emergency_state()`) |
-| Error Budget | ✅ `check_all_governance()` | △ EventBus 구독 (별도 로직) |
-| Break Glass | ✅ `check_all_governance()` | ❌ 없음 |
-| Audit on Block | ✅ `audit_on_block=True` | △ 자체 감사 로깅 (`_record_audit_safe()`) |
+| Kill Switch | ✅ `check_all_governance()` | ✅ EventBus 즉시 반영 + `_sync_kill_switch_state()` Drift 교정 |
+| Emergency Level | ✅ `check_all_governance()` | ✅ `_sync_governance_state()` → `get_emergency_manager()` |
+| Error Budget | ✅ `check_all_governance()` | ✅ EventBus 구독 + `is_automation_allowed()` Safety Net |
+| Break Glass | ✅ `check_all_governance()` | ✅ `_sync_break_glass_state()` → Full Stop 해제 |
+| Audit on Block | ✅ `audit_on_block=True` | ✅ `is_automation_allowed()` + `_record_audit_safe()` |
 
 ---
 
@@ -239,31 +248,41 @@ def _handle_kill_switch_deactivated(self, event) -> None:
 
 ## 4. 기존 Emergency 자체 sync와의 관계
 
-### 4-1. 정리 대상
+### 4-1. 정리 완료
 
-현재 `check_and_sync_emergency_state()` (adaptive.py L1877)는 `GracefulDegradationManager`를 직접 참조:
+기존 `check_and_sync_emergency_state()` (adaptive.py L2264)는 이제 `_sync_governance_state()`의 하위호환 래퍼:
 
 ```python
-# adaptive.py L1898
-from selfhealing.services.emergency_mode.manager import GracefulDegradationManager
-manager = GracefulDegradationManager()
+# adaptive.py L2264
+def check_and_sync_emergency_state(self) -> bool:
+    """하위호환 래퍼: _sync_governance_state()로 위임."""
+    return self._sync_governance_state()
+```
+
+`_sync_governance_state()` (adaptive.py L2176)는 `get_emergency_manager()`를 사용:
+
+```python
+# adaptive.py L2207
+from selfhealing.services.emergency_mode import get_emergency_manager
+manager = get_emergency_manager()
 current_level = manager.get_current_level().value
 ```
 
-Governance 연동 후에는 `is_emergency_blocking()` (checks.py L370)이 동일 체크를 수행:
+`sync_emergency_state_on_init()` (adaptive.py L2153)도 동일하게 `get_emergency_manager()` 사용:
 
 ```python
-# checks.py L394
+# adaptive.py L2158
 from selfhealing.services.emergency_mode import get_emergency_manager
 manager = get_emergency_manager()
-level = manager.get_current_level()
 ```
 
-### 4-2. 마이그레이션 방안
+→ `GracefulDegradationManager` 직접 import 완전히 제거됨.
 
-1. **1단계**: `GovernanceCheckMixin` 추가 + 기존 자체 sync 유지 (병렬 동작)
-2. **2단계**: 기존 `check_and_sync_emergency_state()` 내부에서 `self.check_governance()` 호출로 대체
-3. **3단계**: Emergency 전용 sync 코드 제거, Governance 통합 체크에 일원화
+### 4-2. 마이그레이션 완료 (3단계 모두 완료)
+
+1. **1단계** ✅: `GovernanceCheckMixin` 추가 + 기존 자체 sync 유지 (병렬 동작)
+2. **2단계** ✅: `_sync_governance_state()`에서 Kill Switch/Break Glass 상태도 함께 동기화. `_sync_kill_switch_state()` → `is_system_enabled()` Drift 교정, `_sync_break_glass_state()` → Settings 기반 동기화.
+3. **3단계** ✅: `check_and_sync_emergency_state()` → `_sync_governance_state()` 리네임 (이전 메서드는 하위호환 래퍼로 유지). `GracefulDegradationManager` 직접 참조 제거, `get_emergency_manager()` 공개 API로 교체. Emergency + Kill Switch + Break Glass 동기화가 통합 메서드에 일원화.
 
 ---
 
@@ -689,40 +708,41 @@ def reset_state(self) -> None:
 
 ## 11. 설계 리뷰 반영 — 기존 Emergency sync와의 중복 제거
 
-### 11-1. 현재 check()에서의 중복
+### 11-1. check()에서의 통합 (3단계 완료)
 
-`check()` 첫 줄 (adaptive.py L1496):
+`check()` (adaptive.py L1598):
 ```python
-self.check_and_sync_emergency_state()
+# Governance 통합 상태 동기화 (Emergency + Kill Switch + Break Glass, 30초 TTL)
+self._sync_governance_state()
 ```
 
-이 메서드는 `GracefulDegradationManager`를 직접 참조 (adaptive.py L2087):
+`_sync_governance_state()` (adaptive.py L2176)는 세 가지 동기화를 통합:
+1. `_sync_kill_switch_state()` → `is_system_enabled()` Drift 교정
+2. `_sync_break_glass_state()` → Settings 기반 Break Glass 동기화
+3. `get_emergency_manager()` → Emergency Level Drift 교정
+
 ```python
-from selfhealing.services.emergency_mode.manager import GracefulDegradationManager
-manager = GracefulDegradationManager()
+# adaptive.py L2207
+from selfhealing.services.emergency_mode import get_emergency_manager
+manager = get_emergency_manager()
 current_level = manager.get_current_level().value
 ```
 
-Governance의 `is_emergency_blocking()` (checks.py L394)도 동일한 매니저를 참조:
-```python
-from selfhealing.services.emergency_mode import get_emergency_manager
-manager = get_emergency_manager()
-level = manager.get_current_level()
-```
+→ `GracefulDegradationManager` 직접 참조 완전 제거됨. 모든 Emergency 접근은 `get_emergency_manager()` 공개 API 사용.
 
 ### 11-2. check()에서 check_all_governance(check_emergency=True)를 추가 호출하지 않는 이유
 
-1. `check_and_sync_emergency_state()`가 이미 Emergency 동기화를 수행 → 중복 호출 불필요
+1. `_sync_governance_state()`가 이미 Emergency + Kill Switch + Break Glass 동기화를 수행 → 중복 호출 불필요
 2. `check()`는 Data Plane → Governance 함수를 직접 호출하면 Control/Data Plane 분리 원칙 위반
 3. Emergency 결과는 이미 로컬 플래그 (`self._emergency_level`, `self._emergency_mode_active`, `self._full_stop_active`)에 반영되어 `check()` 내부 분기에서 사용됨
 
-### 11-3. 마이그레이션 방안 (수정)
+### 11-3. 마이그레이션 완료 결과
 
-기존 §4-2의 3단계 마이그레이션을 구체화:
+§4-2의 3단계 마이그레이션 **모두 완료**:
 
-1. **1단계** (즉시): `GovernanceCheckMixin` 상속 추가 + `_subscribe_kill_switch_events()` + Break Glass 플래그. 기존 `check_and_sync_emergency_state()` 유지.
-2. **2단계** (안정화 후): `check_and_sync_emergency_state()` 내부에서 Kill Switch/Break Glass 상태도 함께 동기화하도록 확장. Governance 캐시와 동일한 30초 TTL 통합.
-3. **3단계** (검증 완료 후): `check_and_sync_emergency_state()` → `_sync_governance_state()`로 리네임. `GracefulDegradationManager` 직접 참조 제거, `is_emergency_blocking()` (checks.py L370)으로 대체. Emergency 전용 sync 코드 일원화.
+1. **1단계** ✅: `GovernanceCheckMixin` 상속 추가 + `_subscribe_kill_switch_events()` + Break Glass 플래그. 기존 `check_and_sync_emergency_state()` 유지.
+2. **2단계** ✅: `_sync_governance_state()`에서 Kill Switch (`_sync_kill_switch_state()` → `is_system_enabled()`) + Break Glass (`_sync_break_glass_state()` → `get_governance_settings()`) + Emergency (`get_emergency_manager()`)를 통합 동기화. 동일 30초 TTL.
+3. **3단계** ✅: `check_and_sync_emergency_state()` → 하위호환 래퍼 (1줄, `_sync_governance_state()` 위임). `GracefulDegradationManager` 직접 참조 제거. `check()` 호출 사이트도 `_sync_governance_state()` 직접 호출로 변경. Emergency 전용 sync 코드 일원화 완료.
 
 ---
 
@@ -783,18 +803,18 @@ except ImportError:
 
 ---
 
-## 13. 최종 영향 범위 (수정)
+## 13. 최종 영향 범위 (1-3단계 구현 완료)
 
 | 파일 | 변경 내용 |
 |------|-----------|
-| `services/throttle/adaptive.py` | `GovernanceCheckMixin` 상속 추가, `_kill_switch_active`/`_break_glass_active` 플래그 추가, `_subscribe_kill_switch_events()` 추가, `_sync_break_glass_state()` 추가, `_maybe_adjust_limit()` Governance Safety Net 추가, `check()` Break Glass 체크 추가, `reset_state()` 확장 |
+| `services/throttle/adaptive.py` | `GovernanceCheckMixin` 상속 추가, `_kill_switch_active`/`_break_glass_active` 플래그 추가, `_subscribe_kill_switch_events()` 추가, `_sync_break_glass_state()` 추가, `_maybe_adjust_limit()` Governance Safety Net 추가, `check()` Break Glass 체크 추가, `reset_state()` 확장, `_sync_governance_state()` 통합 동기화 메서드 (Kill Switch + Break Glass + Emergency), `_sync_kill_switch_state()` 추가 (`is_system_enabled()` Drift 교정), `check_and_sync_emergency_state()` → 하위호환 래퍼, `GracefulDegradationManager` 직접 import 완전 제거, `get_emergency_manager()` 공개 API로 교체 |
 | `services/governance/checks.py` | **변경 없음** (기존 Mixin/함수/캐시 재사용) |
 | `services/event_bus/bus.py` | **변경 없음** (`KILL_SWITCH_ACTIVATED`, `KILL_SWITCH_DEACTIVATED` 이미 존재, L80-81) |
 | `settings/governance.py` | **변경 없음** (`break_glass_enabled` 이미 존재, L173) |
 
 ---
 
-## 14. 최종 검증 항목 (수정)
+## 14. 최종 검증 항목 (1-3단계 모두 구현 완료)
 
 ### 14-1. Kill Switch 연동
 
@@ -826,6 +846,25 @@ except ImportError:
 ### 14-5. 일관성
 
 - [x] AutoTuningService와 동일한 governance 체크 수준 달성 (Kill Switch + Emergency + Error Budget + Break Glass)
-- [x] 기존 `check_and_sync_emergency_state()` 유지 (1단계), 향후 Governance 통합 체크로 일원화 (3단계)
+- [x] 기존 `check_and_sync_emergency_state()` → 하위호환 래퍼 (1줄, `_sync_governance_state()` 위임)
+- [x] `_sync_governance_state()`에서 Kill Switch + Break Glass + Emergency 통합 동기화 (30초 TTL)
+- [x] `GracefulDegradationManager` 직접 import 완전 제거, `get_emergency_manager()` 공개 API 사용
+- [x] `_sync_kill_switch_state()`: `is_system_enabled()` → Kill Switch 활성화/비활성화 Drift 교정
+- [x] Kill Switch 비활성화 Drift 교정 시 LEVEL_3 가드 유지 (`self._emergency_level < 3`)
+- [x] Kill Switch 비활성화 Drift 교정 시 Recovery Dampening 시작
 - [x] `_kill_switch_active` / `_break_glass_active` 네이밍이 기존 `_full_stop_active` / `_429_reduction_active` 패턴과 일치
 - [x] Governance 차단 시 Audit Log에 `operation_name="adaptive_throttle:limit_adjustment"` 기록
+
+### 14-6. 테스트 (2-3단계)
+
+- [x] 통합 동기화 19개 테스트 통과 (`test_adaptive_throttle_governance_sync.py`)
+  - `_sync_governance_state()` → `_sync_kill_switch_state()` + `_sync_break_glass_state()` + Emergency 동기화 호출 확인
+  - Kill Switch Drift 교정 (활성화/비활성화) 8개 테스트
+  - 하위호환 래퍼 `check_and_sync_emergency_state()` → `_sync_governance_state()` 위임 확인
+  - `sync_emergency_state_on_init()` → `get_emergency_manager()` 사용 확인
+  - `check()` → `_sync_governance_state()` 호출 확인
+  - `GracefulDegradationManager` 직접 import 미존재 소스코드 검증
+- [x] 기존 상태 동기화 16개 테스트 통과 (`test_throttle_state_sync.py`, mock 패치 업데이트)
+- [x] 기존 선제적 보호 8개 테스트 통과 (`test_throttle_preemptive_protection.py`, mock 패치 업데이트)
+- [x] Governance 통합 47개 테스트 통과 (`test_adaptive_throttle_governance_integration.py`, TTL 가드 추가)
+- [x] **전체 90개 테스트 통과 (6.39s)**

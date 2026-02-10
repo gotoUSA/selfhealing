@@ -3,7 +3,7 @@ AdaptiveThrottle 상태 동기화 테스트.
 
 테스트 대상:
 1. sync_emergency_state_on_init() - 초기화 시 Emergency 상태 동기화
-2. check_and_sync_emergency_state() - Check on Use 패턴
+2. _sync_governance_state() - Governance 통합 상태 동기화 (Emergency + Kill Switch + Break Glass)
 3. Drift 감지 및 자동 동기화
 4. TTL 캐싱 동작
 """
@@ -36,12 +36,12 @@ class TestSyncEmergencyStateOnInit:
     def teardown_method(self):
         reset_adaptive_throttle()
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_syncs_active_emergency_state(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_syncs_active_emergency_state(self, mock_get_manager):
         """활성화된 Emergency 상태 동기화."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(2)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         throttle.current_limit = 100
@@ -52,12 +52,12 @@ class TestSyncEmergencyStateOnInit:
         assert throttle.get_emergency_level() == 2
         assert throttle.current_limit == 50  # 100 × 0.5
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_does_not_change_state_when_normal(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_does_not_change_state_when_normal(self, mock_get_manager):
         """NORMAL 상태에서는 변경 없음."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(0)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         throttle.current_limit = 100
@@ -78,12 +78,12 @@ class TestSyncEmergencyStateOnInit:
         # 기존 상태 유지 (예외 발생해도 변경 없음)
         assert throttle.current_limit == initial_limit
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_updates_last_check_time(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_updates_last_check_time(self, mock_get_manager):
         """동기화 후 last_check_time 업데이트."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(0)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         initial_time = throttle._last_emergency_check_time
@@ -93,8 +93,8 @@ class TestSyncEmergencyStateOnInit:
         assert throttle._last_emergency_check_time > initial_time
 
 
-class TestCheckAndSyncEmergencyState:
-    """check_and_sync_emergency_state() 메서드 테스트."""
+class TestSyncGovernanceState:
+    """_sync_governance_state() 메서드 테스트."""
 
     def setup_method(self):
         reset_adaptive_throttle()
@@ -111,27 +111,27 @@ class TestCheckAndSyncEmergencyState:
 
         assert result is False  # 동기화 발생 안함
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_checks_after_ttl_expires(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_checks_after_ttl_expires(self, mock_get_manager):
         """TTL 만료 후 상태 재확인."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(0)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         throttle._emergency_cache_ttl_seconds = 1
         throttle._last_emergency_check_time = time.time() - 2  # TTL 만료
 
-        throttle.check_and_sync_emergency_state()
+        throttle._sync_governance_state()
 
         mock_manager.get_current_level.assert_called_once()
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_detects_and_syncs_drift(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_detects_and_syncs_drift(self, mock_get_manager):
         """Drift 감지 시 자동 동기화."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(2)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         throttle._emergency_cache_ttl_seconds = 0  # 즉시 만료
@@ -140,24 +140,24 @@ class TestCheckAndSyncEmergencyState:
         throttle._base_limit_before_emergency = 100
         throttle.current_limit = 80
 
-        result = throttle.check_and_sync_emergency_state()
+        result = throttle._sync_governance_state()
 
         assert result is True  # Drift 감지됨
         assert throttle.get_emergency_level() == 2
         # adjust_for_emergency(2) 호출됨
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_no_drift_when_levels_match(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_no_drift_when_levels_match(self, mock_get_manager):
         """레벨 일치 시 Drift 없음."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(1)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         throttle._emergency_cache_ttl_seconds = 0
         throttle._emergency_level = 1  # 캐시된 레벨과 동일
 
-        result = throttle.check_and_sync_emergency_state()
+        result = throttle._sync_governance_state()
 
         assert result is False  # Drift 없음
 
@@ -168,17 +168,17 @@ class TestCheckAndSyncEmergencyState:
         throttle.current_limit = 100
 
         with patch(
-            "selfhealing.services.emergency_mode.manager.GracefulDegradationManager",
+            "selfhealing.services.emergency_mode.get_emergency_manager",
             side_effect=Exception("Manager error"),
         ):
-            result = throttle.check_and_sync_emergency_state()
+            result = throttle._sync_governance_state()
 
         assert result is False
         assert throttle.current_limit == 100  # 상태 유지
 
 
 class TestCheckOnUsePatternIntegration:
-    """check() 메서드에서 Check on Use 패턴 통합 테스트."""
+    """check() 메서드에서 Governance 통합 동기화 호출 테스트."""
 
     def setup_method(self):
         reset_adaptive_throttle()
@@ -186,7 +186,7 @@ class TestCheckOnUsePatternIntegration:
     def teardown_method(self):
         reset_adaptive_throttle()
 
-    @patch.object(AdaptiveThrottle, "check_and_sync_emergency_state")
+    @patch.object(AdaptiveThrottle, "_sync_governance_state")
     def test_check_calls_sync_on_each_request(self, mock_sync):
         """check() 호출 시 상태 동기화 호출."""
         throttle = get_adaptive_throttle()
@@ -195,7 +195,7 @@ class TestCheckOnUsePatternIntegration:
 
         mock_sync.assert_called_once()
 
-    @patch.object(AdaptiveThrottle, "check_and_sync_emergency_state")
+    @patch.object(AdaptiveThrottle, "_sync_governance_state")
     @patch.object(AdaptiveThrottle, "advance_recovery_dampening")
     def test_check_advances_recovery_dampening(self, mock_advance, mock_sync):
         """check() 호출 시 Recovery Dampening 진행 확인."""
@@ -224,22 +224,22 @@ class TestTtlCachingBehavior:
 
         assert throttle._emergency_cache_ttl_seconds == 30
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
-    def test_respects_ttl_between_checks(self, mock_manager_class):
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
+    def test_respects_ttl_between_checks(self, mock_get_manager):
         """TTL 동안 재확인 스킵."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(0)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         throttle = get_adaptive_throttle()
         throttle._emergency_cache_ttl_seconds = 30
 
         # 첫 번째 체크 (TTL 만료 상태)
         throttle._last_emergency_check_time = 0
-        throttle.check_and_sync_emergency_state()
+        throttle._sync_governance_state()
 
         # 두 번째 체크 (TTL 내)
-        throttle.check_and_sync_emergency_state()
+        throttle._sync_governance_state()
 
         # Manager는 한 번만 호출됨
         assert mock_manager.get_current_level.call_count == 1
@@ -254,13 +254,13 @@ class TestDriftDetectionWithFullStop:
     def teardown_method(self):
         reset_adaptive_throttle()
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
     @patch.object(AdaptiveThrottle, "check_full_stop_conditions")
-    def test_rechecks_full_stop_at_level_3(self, mock_full_stop, mock_manager_class):
+    def test_rechecks_full_stop_at_level_3(self, mock_full_stop, mock_get_manager):
         """LEVEL_3에서 Full Stop 조건 재확인."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(3)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         mock_full_stop.return_value = (True, "LEVEL_3 + DB_CB_OPEN + BUDGET_EXHAUSTED")
 
@@ -269,18 +269,18 @@ class TestDriftDetectionWithFullStop:
         throttle._emergency_level = 3  # 이미 LEVEL_3
         throttle._base_limit_before_emergency = 100
 
-        throttle.check_and_sync_emergency_state()
+        throttle._sync_governance_state()
 
         mock_full_stop.assert_called_once()
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
     @patch.object(AdaptiveThrottle, "check_full_stop_conditions")
     @patch.object(AdaptiveThrottle, "activate_full_stop")
-    def test_activates_full_stop_when_conditions_become_true(self, mock_activate, mock_full_stop, mock_manager_class):
+    def test_activates_full_stop_when_conditions_become_true(self, mock_activate, mock_full_stop, mock_get_manager):
         """조건 충족 시 Full Stop 활성화."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(3)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         mock_full_stop.return_value = (True, "test_reason")
 
@@ -289,18 +289,18 @@ class TestDriftDetectionWithFullStop:
         throttle._emergency_level = 3
         throttle._full_stop_active = False
 
-        throttle.check_and_sync_emergency_state()
+        throttle._sync_governance_state()
 
         mock_activate.assert_called_once_with("test_reason")
 
-    @patch("selfhealing.services.emergency_mode.manager.GracefulDegradationManager")
+    @patch("selfhealing.services.emergency_mode.get_emergency_manager")
     @patch.object(AdaptiveThrottle, "check_full_stop_conditions")
     @patch.object(AdaptiveThrottle, "deactivate_full_stop")
-    def test_deactivates_full_stop_when_conditions_become_false(self, mock_deactivate, mock_full_stop, mock_manager_class):
+    def test_deactivates_full_stop_when_conditions_become_false(self, mock_deactivate, mock_full_stop, mock_get_manager):
         """조건 해제 시 Full Stop 비활성화."""
         mock_manager = MagicMock()
         mock_manager.get_current_level.return_value = MockEmergencyLevel(3)
-        mock_manager_class.return_value = mock_manager
+        mock_get_manager.return_value = mock_manager
 
         mock_full_stop.return_value = (False, "NORMAL")
 
@@ -309,6 +309,6 @@ class TestDriftDetectionWithFullStop:
         throttle._emergency_level = 3
         throttle._full_stop_active = True
 
-        throttle.check_and_sync_emergency_state()
+        throttle._sync_governance_state()
 
         mock_deactivate.assert_called_once()

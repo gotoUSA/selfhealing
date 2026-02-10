@@ -1594,8 +1594,8 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
             logger.warning("[AdaptiveThrottle] Break Glass: overriding Full Stop")
             self.deactivate_full_stop()
 
-        # Check on Use 패턴: TTL 만료 시 Emergency 상태 동기화
-        self.check_and_sync_emergency_state()
+        # Governance 통합 상태 동기화 (Emergency + Kill Switch + Break Glass, 30초 TTL)
+        self._sync_governance_state()
 
         # Recovery Dampening 진행 확인
         if self._recovery_dampening_active:
@@ -2147,7 +2147,7 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
         return self._full_stop_active
 
     # =========================================================================
-    # Phase 5: 상태 동기화 (Check on Use 패턴, TTL 캐싱, Drift 감지)
+    # Governance 통합 상태 동기화 (Emergency + Kill Switch + Break Glass, 30초 TTL)
     # =========================================================================
 
     def sync_emergency_state_on_init(self) -> None:
@@ -2157,11 +2157,9 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
         애플리케이션 시작 시 또는 리셋 후 호출됩니다.
         """
         try:
-            from selfhealing.services.emergency_mode.manager import (
-                GracefulDegradationManager,
-            )
+            from selfhealing.services.emergency_mode import get_emergency_manager
 
-            manager = GracefulDegradationManager()
+            manager = get_emergency_manager()
             level = manager.get_current_level()
 
             if level.value > 0:
@@ -2175,12 +2173,15 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
         except Exception as e:
             logger.warning(f"[AdaptiveThrottle] Failed to sync emergency state: {e}")
 
-    def check_and_sync_emergency_state(self) -> bool:
+    def _sync_governance_state(self) -> bool:
         """
-        Check on Use 패턴: TTL 만료 시 Emergency 상태 재확인 및 동기화.
+        Governance 통합 상태 동기화 (Check on Use, 30초 TTL).
+
+        Emergency Level, Kill Switch, Break Glass 상태를 일관되게 동기화.
+        EventBus 이벤트 유실 시 Drift 교정 역할.
 
         Returns:
-            True if state was synced (drift detected), False otherwise
+            True if emergency state drift detected and synced, False otherwise
         """
         now = time.time()
 
@@ -2190,12 +2191,17 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
 
         self._last_emergency_check_time = now
 
-        try:
-            from selfhealing.services.emergency_mode.manager import (
-                GracefulDegradationManager,
-            )
+        # Kill Switch 상태 동기화 (EventBus 이벤트 유실 대비 Drift 교정)
+        self._sync_kill_switch_state()
 
-            manager = GracefulDegradationManager()
+        # Break Glass 상태 동기화 (Settings 기반)
+        self._sync_break_glass_state()
+
+        # Emergency Level 동기화
+        try:
+            from selfhealing.services.emergency_mode import get_emergency_manager
+
+            manager = get_emergency_manager()
             current_level = manager.get_current_level().value
 
             # Drift 감지: 캐시된 레벨과 실제 레벨이 다른 경우
@@ -2223,8 +2229,36 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
         except ImportError:
             return False
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Emergency sync check failed: {e}")
+            logger.warning(f"[AdaptiveThrottle] Governance state sync failed: {e}")
             return False
+
+    def _sync_kill_switch_state(self) -> None:
+        """Kill Switch 상태를 Governance 체크로 동기화 (Drift 교정, Fail-Open)."""
+        try:
+            from selfhealing.services.governance.checks import is_system_enabled
+
+            system_enabled = is_system_enabled()
+
+            if not system_enabled and not self._kill_switch_active:
+                # Kill Switch 활성화 Drift 교정 (EventBus 이벤트 유실 대비)
+                self._kill_switch_active = True
+                self._gradient_frozen = True
+                logger.warning("[AdaptiveThrottle] Kill Switch drift detected: " "activating gradient freeze")
+            elif system_enabled and self._kill_switch_active:
+                # Kill Switch 비활성화 Drift 교정 (EventBus 이벤트 유실 대비)
+                self._kill_switch_active = False
+                if self._emergency_level < 3:
+                    self._gradient_frozen = False
+                self.start_recovery_dampening()
+                logger.info("[AdaptiveThrottle] Kill Switch drift corrected: deactivated")
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] Governance checks not available for kill switch sync")
+        except Exception as e:
+            logger.debug(f"[AdaptiveThrottle] Kill switch sync failed: {e}")
+
+    def check_and_sync_emergency_state(self) -> bool:
+        """하위호환 래퍼: _sync_governance_state()로 위임."""
+        return self._sync_governance_state()
 
     # =========================================================================
     # Phase 6: Recovery Dampening (80% → 90% → 100% 점진적 복구)
