@@ -193,19 +193,20 @@ def _reset_all_audit_settings():
 # =============================================================================
 
 
-@pytest.fixture(autouse=True, scope="function")
-def _isolate_logging_state():
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_logging_state_session():
     """
-    모든 테스트 전후에 루트 로거와 selfhealing 로거의 상태를 복원하는 fixture.
+    세션 시작 시 selfhealing 로거의 propagate=True, 핸들러 제거를 1회 수행.
 
     근본 원인: django.setup()이 호출되면 Django LOGGING 설정이 적용되어
     selfhealing 로거에 propagate=False + 전용 StreamHandler가 설정된다.
     이로 인해 selfhealing.* 로거의 레코드가 루트 로거(caplog 핸들러 위치)까지
     전파되지 않아 caplog가 빈 결과를 반환하는 문제가 발생한다.
 
-    해결: 각 테스트 시작 시 selfhealing 네임스페이스 로거의 propagate를 True로
-    강제하고 Django가 추가한 핸들러를 제거하여 caplog가 정상 동작하도록 한다.
-    테스트 종료 후 원래 상태로 복원한다.
+    성능: function scope → session scope로 변경.
+    Python 3.12의 Logger.setLevel()은 _clear_cache()를 호출하여 전체 로거를
+    순회한다. selfhealing 로거 165개 × 10,900 테스트 = 수억 회 연산이
+    테스트 스위트를 3~4분에서 9분 이상으로 느리게 만든 근본 원인이었다.
     """
     import logging as _logging
 
@@ -213,28 +214,43 @@ def _isolate_logging_state():
     root_level = root.level
     root_handlers = list(root.handlers)
 
-    # selfhealing 네임스페이스 로거 상태 저장 + propagate 강제 활성화
+    # selfhealing 네임스페이스 로거 상태 저장 + propagate 강제 활성화 (1회만)
     _saved: dict[str, tuple[int, bool, list]] = {}
     for name, logger_obj in _logging.Logger.manager.loggerDict.items():
         if isinstance(logger_obj, _logging.Logger) and name.startswith("selfhealing"):
             _saved[name] = (logger_obj.level, logger_obj.propagate, list(logger_obj.handlers))
-            # Django LOGGING 설정에 의해 추가된 propagate=False 해제
             logger_obj.propagate = True
-            # Django가 추가한 핸들러 제거 (caplog과 충돌 방지)
             logger_obj.handlers = []
 
     yield
 
-    # 루트 로거 복원
+    # 세션 종료 시 복원
     root.setLevel(root_level)
     root.handlers = root_handlers
-
-    # selfhealing 로거 복원
     for name, (level, propagate, handlers) in _saved.items():
         logger_obj = _logging.getLogger(name)
         logger_obj.setLevel(level)
         logger_obj.propagate = propagate
         logger_obj.handlers = handlers
+
+
+@pytest.fixture(autouse=True, scope="function")
+def _ensure_selfhealing_propagates():
+    """
+    매 테스트마다 selfhealing 루트 로거의 propagate=True를 보장.
+
+    django.setup() → dictConfig()가 selfhealing 로거에 propagate=False +
+    console 핸들러를 재설정할 수 있다. 이를 매 테스트 전에 리셋한다.
+
+    성능: 로거 1개의 속성 2개만 설정 → setLevel() 미호출,
+    _clear_cache() 미발생, 오버헤드 무시 가능.
+    """
+    import logging as _logging
+
+    sh = _logging.getLogger("selfhealing")
+    sh.propagate = True
+    sh.handlers = []
+    yield
 
 
 # =============================================================================
