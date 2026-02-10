@@ -538,3 +538,360 @@ def check_stale_incident_groups(
             "success": False,
             "error": str(e),
         }
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.adapters.celery.tasks.process_individual_postmortem",
+    queue="selfhealing",
+    max_retries=2,
+    time_limit=120,
+    soft_time_limit=110,
+    acks_late=True,
+)
+def process_individual_postmortem(
+    self,
+    service_name: str,
+    event_data: dict,
+    event_type: str,
+    event_bus_history: list[dict] | None = None,
+) -> dict[str, Any]:
+    """
+    개별 Postmortem을 비동기로 생성.
+
+    스냅샷 수집, Timeline 빌드, DB INSERT, WAL 기록, 알림 발송을
+    모두 Celery Worker에서 수행하여 EventBus 발행자 스레드를 해방한다.
+
+    Args:
+        service_name: 대상 서비스 이름
+        event_data: SelfHealingEvent.to_dict()로 직렬화된 이벤트 데이터.
+                    Celery JSON serializer 호환을 위해 반드시 dict 타입이어야 한다.
+        event_type: 분기용 이벤트 타입
+                    - "circuit_breaker_closed": CB 복구 시 개별 Postmortem 생성
+                    - "emergency_recovery_completed": Emergency 복구 시 Postmortem 생성
+        event_bus_history: 발행자(Web Server) 프로세스에서 미리 수집한 EventBus 히스토리.
+                          bus.get_history()는 프로세스 로컬 인메모리이므로
+                          Celery Worker에서는 빈 리스트가 반환된다.
+                          핸들러에서 .delay() 전에 반드시 수집하여 전달해야 한다.
+
+    Worker 실행 환경 주의:
+    - collect_system_snapshot()의 CPU/Memory는 Worker 노드 값
+    - get_healing_events(use_redis=True)로 Redis에서 힐링 이벤트 조회 (Worker에서도 가능)
+    - CB 상태 조회 — Redis 기반이므로 Worker에서도 정상 조회 가능
+
+    Returns:
+        Postmortem 생성 결과 딕셔너리
+    """
+    logger.info(
+        f"[ProcessIndividualPostmortem] Starting for '{service_name}' "
+        f"(type={event_type}, attempt {self.request.retries + 1})"
+    )
+
+    if event_bus_history is None:
+        event_bus_history = []
+
+    try:
+        if event_type == "circuit_breaker_closed":
+            return _process_cb_closed_postmortem(
+                service_name=service_name,
+                event_data=event_data,
+                event_bus_history=event_bus_history,
+            )
+        elif event_type == "emergency_recovery_completed":
+            return _process_emergency_postmortem(
+                service_name=service_name,
+                event_data=event_data,
+                event_bus_history=event_bus_history,
+            )
+        else:
+            logger.warning(f"[ProcessIndividualPostmortem] Unknown event_type: {event_type}")
+            return {
+                "success": False,
+                "service_name": service_name,
+                "error": f"Unknown event_type: {event_type}",
+            }
+
+    except Exception as e:
+        logger.error(
+            f"[ProcessIndividualPostmortem] Failed for '{service_name}': {e}",
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "service_name": service_name,
+            "error": str(e),
+        }
+
+
+def _process_cb_closed_postmortem(
+    service_name: str,
+    event_data: dict,
+    event_bus_history: list[dict],
+) -> dict[str, Any]:
+    """CB 복구 시 개별 Postmortem 생성 (Celery Worker에서 실행)."""
+    from selfhealing.api.django.views.xtest.base import (
+        collect_system_snapshot,
+        get_healing_events,
+    )
+    from selfhealing.services.circuit_breaker_service import (
+        get_circuit_breaker_service,
+    )
+    from selfhealing.services.postmortem_store import (
+        add_healing_incident,
+        build_timeline as _build_timeline,
+        collect_service_states as _collect_service_states,
+        generate_postmortem_data as _generate_postmortem_data,
+    )
+    from selfhealing.settings.postmortem import get_postmortem_settings
+
+    settings = get_postmortem_settings()
+    min_duration = settings.auto_min_duration
+
+    # 상태 수집 (event_bus_history는 발행자에서 전달받은 것 사용)
+    cb_service = get_circuit_breaker_service()
+    affected, unaffected = _collect_service_states(cb_service)
+    local_events = get_healing_events(20, use_redis=True)
+    timeline = _build_timeline(event_bus_history, local_events)
+    snapshot = collect_system_snapshot()
+    snapshot["snapshot_source"] = "celery_worker"
+
+    # Fast fail 카운트
+    fast_fail_count = len([e for e in event_bus_history if e.get("data", {}).get("fast_fail")])
+
+    # 인시던트 ID 생성
+    from django.utils import timezone
+
+    incident_id = f"AUTO-{service_name}-{timezone.now().strftime('%Y%m%d-%H%M%S')}"
+
+    # Postmortem 생성
+    postmortem = _generate_postmortem_data(incident_id, timeline, affected, unaffected, fast_fail_count, snapshot)
+
+    # 최소 duration 확인
+    duration = postmortem.get("duration_seconds")
+    if duration is not None and duration < min_duration:
+        logger.debug(
+            f"[ProcessIndividualPostmortem] Skipped for '{service_name}': " f"duration {duration:.0f}s < min {min_duration}s"
+        )
+        return {
+            "success": True,
+            "service_name": service_name,
+            "skipped": True,
+            "reason": "duration_below_minimum",
+        }
+
+    # 무결성 봉인
+    try:
+        from selfhealing.services.postmortem.integrity_sealer import get_integrity_sealer
+
+        sealer = get_integrity_sealer()
+        postmortem = sealer.seal(postmortem)
+    except Exception as seal_error:
+        logger.warning(f"[ProcessIndividualPostmortem] Integrity seal failed: {seal_error}")
+
+    # 저장
+    add_healing_incident(postmortem)
+
+    logger.info(f"[ProcessIndividualPostmortem] CB postmortem generated: {incident_id} " f"(duration={duration}s)")
+
+    # 알림 발송
+    _send_postmortem_notification_from_task(
+        settings=settings,
+        postmortem=postmortem,
+        incident_id=incident_id,
+        service_name=service_name,
+        duration=duration,
+        affected_services=affected,
+    )
+
+    # WAL Audit 기록
+    try:
+        from selfhealing.services.audit.base import _write_to_wal
+
+        _write_to_wal(
+            event_type="POSTMORTEM_AUTO_GENERATED",
+            source="CeleryTask.ProcessIndividualPostmortem",
+            details={
+                "incident_id": incident_id,
+                "service_name": service_name,
+                "duration_seconds": duration,
+                "affected_services": affected,
+                "trigger_event": event_data.get("event_type", "circuit_breaker_closed"),
+            },
+            success=True,
+            domain="selfhealing",
+            target_id=incident_id,
+        )
+    except Exception as audit_error:
+        logger.warning(f"[ProcessIndividualPostmortem] Failed to log audit: {audit_error}")
+
+    return {
+        "success": True,
+        "service_name": service_name,
+        "incident_id": incident_id,
+        "duration_seconds": duration,
+    }
+
+
+def _process_emergency_postmortem(
+    service_name: str,
+    event_data: dict,
+    event_bus_history: list[dict],
+) -> dict[str, Any]:
+    """Emergency 복구 완료 시 Postmortem 생성 (Celery Worker에서 실행)."""
+    from selfhealing.api.django.views.xtest.base import collect_system_snapshot
+    from selfhealing.services.event_bus.bus import (
+        _generate_emergency_postmortem_data,
+    )
+    from selfhealing.services.postmortem_store import add_healing_incident
+    from selfhealing.settings.postmortem import get_postmortem_settings
+
+    settings = get_postmortem_settings()
+    session_id = event_data.get("data", {}).get("session_id", "unknown")
+    namespace = event_data.get("data", {}).get("namespace", "global")
+    trigger_level = event_data.get("data", {}).get("trigger_level", "UNKNOWN")
+    duration = event_data.get("data", {}).get("duration_seconds")
+
+    # 스냅샷 수집
+    snapshot = collect_system_snapshot()
+    snapshot["snapshot_source"] = "celery_worker"
+
+    # Emergency Postmortem 데이터 생성
+    postmortem = _generate_emergency_postmortem_data(
+        session_data=event_data.get("data", {}),
+        event_bus_history=event_bus_history,
+        snapshot=snapshot,
+    )
+
+    # 저장
+    add_healing_incident(postmortem)
+
+    incident_id = postmortem.get("incident_id")
+    logger.info(
+        f"[ProcessIndividualPostmortem] Emergency postmortem generated: {incident_id} "
+        f"(session={session_id}, level={trigger_level}, duration={duration}s)"
+    )
+
+    # WAL Audit 기록
+    try:
+        from selfhealing.services.audit.base import _write_to_wal
+
+        _write_to_wal(
+            event_type="EMERGENCY_POSTMORTEM_AUTO_GENERATED",
+            source="CeleryTask.ProcessIndividualPostmortem",
+            details={
+                "incident_id": incident_id,
+                "session_id": session_id,
+                "namespace": namespace,
+                "trigger_level": trigger_level,
+                "duration_seconds": duration,
+                "requires_approval": event_data.get("data", {}).get("requires_approval", False),
+                "approved_by": event_data.get("data", {}).get("approved_by"),
+            },
+            success=True,
+            domain="selfhealing",
+            target_id=incident_id,
+        )
+    except Exception as audit_error:
+        logger.warning(f"[ProcessIndividualPostmortem] Failed to log emergency audit: {audit_error}")
+
+    # 알림 발송
+    try:
+        _send_postmortem_notification_from_task(
+            settings=settings,
+            postmortem=postmortem,
+            incident_id=incident_id,
+            service_name=service_name,
+            duration=duration,
+            affected_services=[],
+        )
+    except Exception as notify_error:
+        logger.warning(f"[ProcessIndividualPostmortem] Failed to send emergency notification: {notify_error}")
+
+    return {
+        "success": True,
+        "service_name": service_name,
+        "incident_id": incident_id,
+        "duration_seconds": duration,
+        "trigger_level": trigger_level,
+    }
+
+
+def _send_postmortem_notification_from_task(
+    settings,
+    postmortem: dict,
+    incident_id: str,
+    service_name: str,
+    duration: int | None,
+    affected_services: list[str],
+) -> None:
+    """Celery Task 내에서 Postmortem 알림 발송."""
+    try:
+        if not settings.notification_enabled:
+            logger.debug(f"[ProcessIndividualPostmortem] Notification disabled for {incident_id}")
+            return
+
+        notification_min_duration = settings.notification_min_duration
+        if duration is not None and duration < notification_min_duration:
+            logger.debug(
+                f"[ProcessIndividualPostmortem] Notification skipped for {incident_id}: "
+                f"duration {duration}s < min {notification_min_duration}s"
+            )
+            return
+
+        from selfhealing.services.unified_notification import (
+            NotificationCategory,
+            NotificationPayload,
+            NotificationPriority,
+            UnifiedNotificationManager,
+        )
+
+        # 우선순위 결정: 5분 이상 또는 3개 이상 서비스 영향 → HIGH
+        affected_count = len(affected_services) if affected_services else 0
+        if (duration is not None and duration >= 300) or affected_count >= 3:
+            priority = NotificationPriority.HIGH
+        else:
+            priority = NotificationPriority.MEDIUM
+
+        # 알림 본문 생성
+        resolved_at = postmortem.get("resolved_at", "N/A")
+        started_at = postmortem.get("started_at", "N/A")
+        recommendations = postmortem.get("recommendations", [])
+        recommendations_summary = ", ".join(recommendations[:3]) if recommendations else "없음"
+
+        message = (
+            f"인시던트 시작: {started_at}\n"
+            f"인시던트 종료: {resolved_at}\n"
+            f"지속 시간: {duration}초\n"
+            f"영향 서비스: {', '.join(affected_services) if affected_services else '없음'}\n"
+            f"권장 조치: {recommendations_summary}"
+        )
+
+        payload = NotificationPayload(
+            title=f"📋 Post-mortem 생성: {incident_id}",
+            message=message,
+            priority=priority,
+            category=NotificationCategory.OPERATIONS,
+            source="CeleryTask.ProcessIndividualPostmortem",
+            metadata={
+                "incident_id": incident_id,
+                "service_name": service_name,
+                "duration_seconds": duration,
+                "affected_services": affected_services,
+                "resolved_at": resolved_at,
+                "postmortem_url": f"/api/xtest/incidents/{incident_id}/",
+            },
+            dedup_key=f"postmortem:{incident_id}",
+        )
+
+        manager = UnifiedNotificationManager()
+        result = manager.notify(payload)
+
+        if result.success and not result.suppressed:
+            logger.info(f"[ProcessIndividualPostmortem] Notification sent for {incident_id}")
+        elif result.suppressed:
+            logger.debug(
+                f"[ProcessIndividualPostmortem] Notification suppressed for {incident_id}: " f"{result.suppression_reason}"
+            )
+
+    except Exception as e:
+        logger.warning(f"[ProcessIndividualPostmortem] Failed to send notification: {e}")

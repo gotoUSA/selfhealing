@@ -92,7 +92,7 @@ class TestCircuitBreakerClosedPostmortemHandler:
             assert any("Auto postmortem disabled" in str(call) for call in debug_calls)
 
     def test_handler_generates_postmortem_when_enabled_with_full_mocking(self, monkeypatch):
-        """auto_postmortem_enabled=True일 때 Post-mortem 자동 생성 확인 (전체 모킹)."""
+        """auto_postmortem_enabled=True일 때 Celery task으로 Postmortem 생성이 위임되는지 확인."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_closed_postmortem,
             SelfHealingEvent,
@@ -101,7 +101,6 @@ class TestCircuitBreakerClosedPostmortemHandler:
         from selfhealing.settings.postmortem import reset_postmortem_settings
 
         # 핸들러는 PostmortemSettings (SELFHEALING_POSTMORTEM_ prefix) 사용
-        # 환경변수 먼저 설정한 후 reset 호출해야 새 인스턴스에서 반영됨
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
@@ -113,69 +112,20 @@ class TestCircuitBreakerClosedPostmortemHandler:
             source="test",
         )
 
-        # Mock 생성: add_healing_incident가 호출되는지 추적
-        add_incident_called = []
-
-        def mock_add_healing_incident(incident):
-            add_incident_called.append(incident)
-
-        mock_cb_service = MagicMock()
-        mock_cb_service.repository.get_all_states.return_value = []
-
-        mock_timeline = [
-            {
-                "timestamp": datetime.now(tz.utc).isoformat(),
-                "event_type": "circuit_breaker_opened",
-                "details": {"service_name": "test_service"},
-            }
-        ]
-
-        # Mock modules for dynamic import in handler
-        import sys
-        from types import ModuleType
-
-        # Create mock module for selfhealing.api.django.views.xtest.base
-        mock_base_module = ModuleType("selfhealing.api.django.views.xtest.base")
-        mock_base_module.collect_system_snapshot = lambda: {"cpu": 50}
-        mock_base_module.get_healing_events = lambda limit: []
-
-        # Create mock module for selfhealing.services.postmortem_store (핸들러가 실제 import하는 경로)
-        mock_store_module = ModuleType("selfhealing.services.postmortem_store")
-        mock_store_module.add_healing_incident = mock_add_healing_incident
-        mock_store_module.build_timeline = lambda h, l: mock_timeline
-        mock_store_module.collect_service_states = lambda cb: ([], [])
-        mock_store_module.generate_postmortem_data = lambda *args, **kwargs: {
-            "incident_id": "AUTO-test-123",
-            "duration_seconds": 120,
-            "timeline": mock_timeline,
-        }
-
-        # Mock django.utils.timezone
-        mock_timezone_module = MagicMock()
-        mock_timezone_module.now.return_value = MagicMock(strftime=lambda fmt: "20260127-120000")
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "selfhealing.api.django.views.xtest.base": mock_base_module,
-                    "selfhealing.services.postmortem_store": mock_store_module,
-                    "django.utils.timezone": mock_timezone_module,
-                },
-            ),
-            patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
-                return_value=mock_cb_service,
-            ),
-        ):
+        # Celery task .delay() mock
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
             _on_circuit_breaker_closed_postmortem(event)
 
-            # add_healing_incident가 호출되었는지 확인
-            assert len(add_incident_called) == 1
-            assert "AUTO" in add_incident_called[0]["incident_id"]
+            # Celery task가 위임되었는지 확인
+            mock_delay.assert_called_once()
+            call_kwargs = mock_delay.call_args[1]
+            assert call_kwargs["service_name"] == "test_service"
+            assert call_kwargs["event_type"] == "circuit_breaker_closed"
+            assert isinstance(call_kwargs["event_data"], dict)
+            assert isinstance(call_kwargs["event_bus_history"], list)
 
-    def test_handler_skips_when_duration_below_minimum_with_mocking(self, monkeypatch):
-        """duration이 min_duration 미만일 때 생성 스킵 확인 (전체 모킹)."""
+    def test_handler_delegates_to_celery_when_duration_below_minimum(self, monkeypatch):
+        """duration이 min_duration 미만일 때도 Celery task로 위임되는지 확인 (duration 체크는 task 내부에서 수행)."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_closed_postmortem,
             SelfHealingEvent,
@@ -195,49 +145,12 @@ class TestCircuitBreakerClosedPostmortemHandler:
             source="test",
         )
 
-        add_incident_called = []
-
-        def mock_add_healing_incident(incident):
-            add_incident_called.append(incident)
-
-        mock_cb_service = MagicMock()
-        mock_cb_service.repository.get_all_states.return_value = []
-
-        import sys
-        from types import ModuleType
-
-        mock_base_module = ModuleType("selfhealing.api.django.views.xtest.base")
-        mock_base_module.add_healing_incident = mock_add_healing_incident
-        mock_base_module.collect_system_snapshot = lambda: {}
-        mock_base_module.get_healing_events = lambda limit: []
-
-        mock_store_module = ModuleType("selfhealing.services.postmortem_store")
-        mock_store_module.add_healing_incident = mock_add_healing_incident
-        mock_store_module.build_timeline = lambda h, l: []
-        mock_store_module.collect_service_states = lambda cb: ([], [])
-        mock_store_module.generate_postmortem_data = lambda *args, **kwargs: {
-            "incident_id": "AUTO-test-123",
-            "duration_seconds": 10,  # min_duration(60) 미만
-            "timeline": [],
-        }
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "selfhealing.api.django.views.xtest.base": mock_base_module,
-                    "selfhealing.services.postmortem_store": mock_store_module,
-                },
-            ),
-            patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
-                return_value=mock_cb_service,
-            ),
-        ):
+        # Celery task가 위임되는지 확인 (duration 체크는 task 내부에서 수행)
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
             _on_circuit_breaker_closed_postmortem(event)
 
-            # duration이 최소값 미만이므로 저장되지 않아야 함
-            assert len(add_incident_called) == 0
+            # Celery task에 위임됨 — duration 체크는 task에서 수행
+            mock_delay.assert_called_once()
 
 
 class TestPostmortemHandlerRegistration:

@@ -579,127 +579,47 @@ def _on_error_budget_critical(event: SelfHealingEvent):
 
 def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
     """
-    CB OPEN 시 알림 발송.
+    CB OPEN 시 알림 발송을 Celery Task로 위임.
 
-    EventBus 핸들러로 등록되어 CB 상태 변경 시 자동 호출됩니다.
-    알림 실패가 시스템에 영향을 주지 않도록 전체를 try-except로 감쌉니다.
-
-    CB 상태 변경 → EventBus 발행 → 알림 핸들러 호출 순서이므로,
-    이 함수가 호출되는 시점에 CB 상태 변경은 이미 완료된 상태입니다.
-
-    Actionable Alert 추가
-    - dashboard_url: Grafana 대시보드 (읽기 전용)
-    - admin_url: Admin 제어판 (쿼리 파라미터로 컨텍스트 전달)
-    - runbook_url: 장애 대응 매뉴얼
+    Slack Webhook HTTP 호출 등 네트워크 I/O를 포함한 알림 발송을
+    Celery Worker에서 비동기로 처리하여 발행자 스레드 차단을 제거한다.
+    Celery 미설치 환경에서는 ImportError fallback으로 안전하게 스킵한다.
     """
     try:
-        from selfhealing.services.circuit_breaker.actionable_alert_urls import (
-            get_actionable_alert_url_builder,
+        from selfhealing.adapters.celery.tasks import send_cb_open_notification
+
+        send_cb_open_notification.delay(
+            service_name=event.data.get("service_name", "unknown"),
+            trace_id=event.data.get("trace_id"),
+            trace_url=event.data.get("trace_url"),
+            timestamp=event.data.get("timestamp", ""),
         )
-        from selfhealing.services.unified_notification import (
-            NotificationCategory,
-            NotificationPayload,
-            NotificationPriority,
-            get_unified_notification_manager,
-        )
-
-        service_name = event.data.get("service_name", "unknown")
-        trace_id = event.data.get("trace_id")
-        trace_url = event.data.get("trace_url")
-        timestamp = event.data.get("timestamp", "")
-
-        # Actionable URLs 생성
-        url_builder = get_actionable_alert_url_builder()
-        actionable_urls = url_builder.build_cb_open_urls(
-            service_name=service_name,
-            trigger_time=timestamp,
-        )
-
-        manager = get_unified_notification_manager()
-        manager.notify(
-            NotificationPayload(
-                title=f"🔴 Circuit Breaker OPEN: {service_name}",
-                message=f"서비스 '{service_name}'의 Circuit Breaker가 열렸습니다.",
-                priority=NotificationPriority.HIGH,
-                category=NotificationCategory.CIRCUIT_BREAKER,
-                source="circuit_breaker_service",
-                dedup_key=f"cb:{service_name}:open",
-                metadata={
-                    "service_name": service_name,
-                    "trace_id": trace_id,
-                    "trace_url": trace_url,
-                    "event_type": "circuit_breaker_opened",
-                    "trigger_time": timestamp,
-                    # Actionable Alert URLs
-                    "dashboard_url": actionable_urls.dashboard_url,
-                    "admin_url": actionable_urls.admin_url,
-                    "runbook_url": actionable_urls.runbook_url,
-                },
-            )
-        )
-
-        logger.info(f"[Notification] CB OPEN notification sent for {service_name}")
-
+    except ImportError:
+        logger.debug("[EventHandler] Celery tasks not available, skipping CB notification")
     except Exception as e:
-        # ⚠️ 알림 실패가 시스템에 영향을 주지 않도록 함
-        logger.warning(f"[Notification] Failed to send CB notification: {e}")
+        logger.warning(f"[Notification] Failed to enqueue CB notification: {e}")
 
 
 def _on_circuit_breaker_opened_snapshot(event: SelfHealingEvent) -> None:
     """
-    CB OPEN 시 시스템 스냅샷을 Redis에 저장.
+    CB OPEN 시 시스템 스냅샷 수집을 Celery Task로 위임.
 
-    Postmortem 생성 시 장애 시작 시점의 메트릭을 참조할 수 있도록
-    CB OPEN 시점의 스냅샷을 임시 저장합니다 (TTL 30분).
-
-    저장 내용:
-    - timestamp: 캡처 시각
-    - cpu_percent: CPU 사용률
-    - memory_percent: 메모리 사용률
-    - db_connections: DB 활성 연결 수
-    - cb_states: 서비스별 CB 상태
+    psutil.cpu_percent(interval=0.1)의 100ms 블로킹과 Redis HSET를
+    Celery Worker에서 비동기로 처리하여 발행자 스레드 차단을 제거한다.
+    Celery 미설치 환경에서는 ImportError fallback으로 안전하게 스킵한다.
     """
     service_name = event.data.get("service_name", "unknown")
-
     try:
-        from selfhealing.api.django.views.xtest.base import collect_system_snapshot
-        from selfhealing.services.postmortem.snapshot_builder import (
-            save_open_snapshot_to_redis,
+        from selfhealing.adapters.celery.tasks import collect_cb_open_snapshot
+
+        collect_cb_open_snapshot.delay(
+            service_name=service_name,
+            event_timestamp=event.timestamp.isoformat(),
         )
-
-        # 시스템 스냅샷 수집
-        snapshot = collect_system_snapshot()
-        snapshot["captured_at"] = "open"
-        snapshot["service"] = service_name
-        snapshot["event_timestamp"] = event.timestamp.isoformat()
-
-        # CB 상태 정보 추가
-        try:
-            from selfhealing.services.circuit_breaker_service import (
-                get_circuit_breaker_service,
-            )
-
-            cb_service = get_circuit_breaker_service()
-            cb_states = {}
-            for name in cb_service.get_all_services():
-                status = cb_service.get_status(name)
-                cb_states[name] = status.get("state", "UNKNOWN") if status else "UNKNOWN"
-            snapshot["cb_states"] = str(cb_states)  # Redis HASH는 문자열만 저장
-        except Exception as e:
-            logger.debug(f"[EventHandler] Failed to get CB states: {e}")
-
-        # Redis에 저장
-        success = save_open_snapshot_to_redis(service_name, snapshot)
-
-        if success:
-            logger.info(f"[EventHandler] CB OPEN snapshot saved for {service_name}")
-        else:
-            logger.warning(f"[EventHandler] Failed to save CB OPEN snapshot for {service_name}")
-
-    except ImportError as e:
-        logger.debug(f"[EventHandler] Snapshot module not available: {e}")
+    except ImportError:
+        logger.debug("[EventHandler] Celery tasks not available, skipping CB snapshot")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to capture CB OPEN snapshot: {e}")
+        logger.warning(f"[EventHandler] Failed to enqueue CB snapshot: {e}")
 
 
 def _send_postmortem_notification(
@@ -876,13 +796,31 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
     if incident_group_enabled:
         try:
             _handle_incident_group(event, service_name, settings)
-            return  # 그룹핑 시 즉시 Postmortem 생성 안함
+            return  # 그룹핑 시 즉시 Postmortem 생성 안함 (close_incident_group task에서 처리)
         except Exception as e:
             logger.warning(f"[EventHandler] Incident grouping failed, fallback to individual: {e}")
-            # Fallback: 개별 Postmortem 생성
+            # Fallback: Celery task로 개별 Postmortem 위임
 
-    # 개별 Post-mortem 생성 (그룹핑 비활성화 또는 실패 시)
-    _create_individual_postmortem(event, service_name, settings, min_duration, history_limit)
+    # 개별 Post-mortem 생성을 Celery task로 위임
+    try:
+        from selfhealing.adapters.celery.tasks import process_individual_postmortem
+
+        # bus.get_history()는 프로세스 로컬 인메모리이므로 여기서 수집
+        bus = get_event_bus()
+        event_bus_history = bus.get_history(limit=history_limit)
+
+        # event.to_dict()로 직렬화 — Celery JSON serializer 호환
+        process_individual_postmortem.delay(
+            service_name=service_name,
+            event_data=event.to_dict(),
+            event_type="circuit_breaker_closed",
+            event_bus_history=event_bus_history,
+        )
+    except ImportError:
+        # Celery 미설치 환경: 기존 동기 방식 fallback
+        _create_individual_postmortem(event, service_name, settings, min_duration, history_limit)
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to enqueue postmortem: {e}")
 
 
 def _handle_incident_group(event: SelfHealingEvent, service_name: str, settings) -> None:
@@ -1262,12 +1200,13 @@ def _generate_emergency_postmortem_data(
 
 def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
     """
-    Emergency 복구 완료 시 자동 Postmortem 생성.
+    Emergency 복구 완료 시 Postmortem 생성을 Celery Task로 위임.
 
     RecoveryCoordinator가 복구를 완료하면 EMERGENCY_RECOVERY_COMPLETED 이벤트가
-    발행되고, 이 핸들러가 Emergency Postmortem을 자동 생성합니다.
+    발행되고, 스냅샷 수집/DB 저장/WAL 기록/알림 발송을 Celery Worker에 위임한다.
 
-    Settings에서 auto_enabled가 True인 경우에만 동작합니다.
+    Settings 검증과 min_duration 체크만 동기로 수행 (빠름).
+    Celery 미설치 환경에서는 기존 동기 방식으로 자동 fallback.
     """
     session_id = event.data.get("session_id", "unknown")
     namespace = event.data.get("namespace", "global")
@@ -1290,14 +1229,44 @@ def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
         logger.warning(f"[EventHandler] Failed to get postmortem settings: {e}")
         return
 
-    # 최소 duration 확인
+    # 최소 duration 확인 (빠른 체크, I/O 없음)
     if duration is not None and duration < min_duration:
         logger.debug(
             f"[EventHandler] Emergency postmortem skipped for {session_id}: " f"duration {duration:.0f}s < min {min_duration}s"
         )
         return
 
-    # Postmortem 생성
+    # Celery Task로 위임
+    try:
+        from selfhealing.adapters.celery.tasks import process_individual_postmortem
+
+        # bus.get_history()는 프로세스 로컬 인메모리이므로 여기서 수집
+        bus = get_event_bus()
+        event_bus_history = bus.get_history(limit=history_limit)
+
+        process_individual_postmortem.delay(
+            service_name=f"emergency-{namespace}",
+            event_data=event.to_dict(),
+            event_type="emergency_recovery_completed",
+            event_bus_history=event_bus_history,
+        )
+    except ImportError:
+        # Celery 미설치 환경: 기존 동기 방식 fallback
+        _create_emergency_postmortem_sync(event, namespace, history_limit)
+    except Exception as e:
+        logger.warning(f"[EventHandler] Failed to enqueue emergency postmortem: {e}")
+
+
+def _create_emergency_postmortem_sync(
+    event: SelfHealingEvent,
+    namespace: str,
+    history_limit: int,
+) -> None:
+    """Emergency Postmortem 동기 생성 (Celery 미설치 환경 Fallback)."""
+    session_id = event.data.get("session_id", "unknown")
+    trigger_level = event.data.get("trigger_level", "UNKNOWN")
+    duration = event.data.get("duration_seconds")
+
     try:
         from selfhealing.api.django.views.xtest.base import collect_system_snapshot
         from selfhealing.services.postmortem_store import add_healing_incident

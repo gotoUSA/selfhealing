@@ -51,17 +51,14 @@ class TestCircuitBreakerOpenedNotifyHandler:
 
         assert "_on_circuit_breaker_opened_notify" in handler_names
 
-    @patch("selfhealing.services.unified_notification.get_unified_notification_manager")
-    def test_notification_sent_on_cb_opened(self, mock_get_manager):
-        """CB OPENED 이벤트 발생 시 알림이 전송되는지 확인."""
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.send_cb_open_notification.delay")
+    def test_notification_sent_on_cb_opened(self, mock_delay):
+        """CB OPENED 이벤트 발생 시 Celery task로 알림이 위임되는지 확인."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_opened_notify,
             SelfHealingEvent,
             EventType,
         )
-
-        mock_manager = MagicMock()
-        mock_get_manager.return_value = mock_manager
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_OPENED,
@@ -76,29 +73,22 @@ class TestCircuitBreakerOpenedNotifyHandler:
 
         _on_circuit_breaker_opened_notify(event)
 
-        # notify가 호출되었는지 확인
-        mock_manager.notify.assert_called_once()
+        # Celery task .delay() 호출 확인
+        mock_delay.assert_called_once_with(
+            service_name="payment_service",
+            trace_id="abc123",
+            trace_url="https://jaeger.internal/trace/abc123",
+            timestamp="2026-01-06T10:00:00Z",
+        )
 
-        # 호출된 payload 확인
-        call_args = mock_manager.notify.call_args
-        payload = call_args[0][0]  # 첫 번째 위치 인자
-
-        assert "payment_service" in payload.title
-        assert payload.category.value == "circuit_breaker"
-        assert payload.priority.value == "high"
-        assert payload.dedup_key == "cb:payment_service:open"
-
-    @patch("selfhealing.services.unified_notification.get_unified_notification_manager")
-    def test_trace_url_included_in_metadata(self, mock_get_manager):
-        """알림 metadata에 trace_url이 포함되는지 확인."""
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.send_cb_open_notification.delay")
+    def test_trace_url_included_in_delay_args(self, mock_delay):
+        """Celery task 위임 시 trace_url이 전달되는지 확인."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_opened_notify,
             SelfHealingEvent,
             EventType,
         )
-
-        mock_manager = MagicMock()
-        mock_get_manager.return_value = mock_manager
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_OPENED,
@@ -112,23 +102,18 @@ class TestCircuitBreakerOpenedNotifyHandler:
 
         _on_circuit_breaker_opened_notify(event)
 
-        call_args = mock_manager.notify.call_args
-        payload = call_args[0][0]
+        call_kwargs = mock_delay.call_args[1]
+        assert call_kwargs["trace_id"] == "xyz789"
+        assert call_kwargs["trace_url"] == "https://jaeger.internal/trace/xyz789"
 
-        assert payload.metadata["trace_id"] == "xyz789"
-        assert payload.metadata["trace_url"] == "https://jaeger.internal/trace/xyz789"
-
-    @patch("selfhealing.services.unified_notification.get_unified_notification_manager")
-    def test_dedup_key_format(self, mock_get_manager):
-        """dedup_key가 올바른 형식으로 생성되는지 확인."""
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.send_cb_open_notification.delay")
+    def test_service_name_passed_to_delay(self, mock_delay):
+        """Celery task 위임 시 service_name이 정확히 전달되는지 확인."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_opened_notify,
             SelfHealingEvent,
             EventType,
         )
-
-        mock_manager = MagicMock()
-        mock_get_manager.return_value = mock_manager
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_OPENED,
@@ -138,24 +123,19 @@ class TestCircuitBreakerOpenedNotifyHandler:
 
         _on_circuit_breaker_opened_notify(event)
 
-        call_args = mock_manager.notify.call_args
-        payload = call_args[0][0]
+        call_kwargs = mock_delay.call_args[1]
+        assert call_kwargs["service_name"] == "inventory_service"
 
-        # 문서 명시: dedup_key=f"cb:{service_name}:open"
-        assert payload.dedup_key == "cb:inventory_service:open"
-
-    @patch("selfhealing.services.unified_notification.get_unified_notification_manager")
-    def test_notification_failure_does_not_raise(self, mock_get_manager):
-        """알림 실패 시 예외가 전파되지 않는지 확인 (신뢰성 보장)."""
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.send_cb_open_notification.delay")
+    def test_celery_enqueue_failure_does_not_raise(self, mock_delay):
+        """Celery task 위임 실패 시 예외가 전파되지 않는지 확인 (신뢰성 보장)."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_opened_notify,
             SelfHealingEvent,
             EventType,
         )
 
-        mock_manager = MagicMock()
-        mock_manager.notify.side_effect = Exception("Notification failed!")
-        mock_get_manager.return_value = mock_manager
+        mock_delay.side_effect = Exception("Broker connection failed!")
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_OPENED,
@@ -167,19 +147,16 @@ class TestCircuitBreakerOpenedNotifyHandler:
         try:
             _on_circuit_breaker_opened_notify(event)
         except Exception:
-            pytest.fail("Notification failure should not raise exception")
+            pytest.fail("Celery enqueue failure should not raise exception")
 
-    @patch("selfhealing.services.unified_notification.get_unified_notification_manager")
-    def test_unknown_service_name_handled(self, mock_get_manager):
-        """service_name이 없을 때 'unknown'으로 처리되는지 확인."""
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.send_cb_open_notification.delay")
+    def test_unknown_service_name_handled(self, mock_delay):
+        """service_name이 없을 때 'unknown'으로 전달되는지 확인."""
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_opened_notify,
             SelfHealingEvent,
             EventType,
         )
-
-        mock_manager = MagicMock()
-        mock_get_manager.return_value = mock_manager
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_OPENED,
@@ -189,11 +166,8 @@ class TestCircuitBreakerOpenedNotifyHandler:
 
         _on_circuit_breaker_opened_notify(event)
 
-        call_args = mock_manager.notify.call_args
-        payload = call_args[0][0]
-
-        assert "unknown" in payload.title
-        assert payload.dedup_key == "cb:unknown:open"
+        call_kwargs = mock_delay.call_args[1]
+        assert call_kwargs["service_name"] == "unknown"
 
 
 class TestEventBusIntegration:
@@ -210,18 +184,15 @@ class TestEventBusIntegration:
         """테스트 후 이벤트 버스 리셋."""
         self.bus.reset()
 
-    @patch("selfhealing.services.event_bus._on_circuit_breaker_opened_snapshot")
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.collect_cb_open_snapshot.delay")
     @patch("selfhealing.services.event_bus._on_circuit_breaker_opened_throttle")
-    @patch("selfhealing.services.unified_notification.get_unified_notification_manager")
-    def test_full_integration_via_emit(self, mock_get_manager, mock_throttle, mock_snapshot):
-        """emit을 통한 전체 흐름 테스트."""
+    @patch("selfhealing.adapters.celery.tasks.circuit_breaker.send_cb_open_notification.delay")
+    def test_full_integration_via_emit(self, mock_notify_delay, mock_throttle, mock_snapshot_delay):
+        """emit을 통한 전체 흐름 테스트 — Celery task 위임 확인."""
         from selfhealing.services.event_bus import (
             register_default_handlers,
             EventType,
         )
-
-        mock_manager = MagicMock()
-        mock_get_manager.return_value = mock_manager
 
         register_default_handlers()
 
@@ -239,8 +210,8 @@ class TestEventBusIntegration:
         # 핸들러가 호출되었는지 확인
         assert handlers_called >= 1
 
-        # 알림이 전송되었는지 확인
-        mock_manager.notify.assert_called_once()
+        # Celery 알림 task가 위임되었는지 확인
+        mock_notify_delay.assert_called_once()
 
     def test_handler_priority_is_high(self):
         """CB OPENED 핸들러의 우선순위가 HIGH인지 확인."""

@@ -184,7 +184,11 @@ class TestAutoPostmortemAuditIntegration:
         reset_api_view_settings()
 
     def test_auto_postmortem_calls_write_to_wal(self, monkeypatch):
-        """자동 Post-mortem 생성 시 _write_to_wal이 호출되는지 확인."""
+        """자동 Post-mortem 생성 시 Celery task로 위임되는지 확인.
+
+        WAL 기록은 Celery Worker의 process_individual_postmortem task에서 수행됩니다.
+        핸들러는 task.delay() 호출만 담당합니다 (문서 213).
+        """
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_closed_postmortem,
             SelfHealingEvent,
@@ -200,39 +204,27 @@ class TestAutoPostmortemAuditIntegration:
             source="test",
         )
 
-        wal_calls = []
-
-        def mock_write_to_wal(**kwargs):
-            wal_calls.append(kwargs)
-            return 1
-
-        mock_cb_service = MagicMock()
-        mock_cb_service.repository.get_all_states.return_value = []
-
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus_fn,
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
-            patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
-            patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
-            patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
-            patch("selfhealing.services.audit.base._write_to_wal", side_effect=mock_write_to_wal),
+            patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay,
         ):
             mock_bus_fn.return_value.get_history.return_value = []
 
             _on_circuit_breaker_closed_postmortem(event)
 
-        postmortem_audit_calls = [c for c in wal_calls if c.get("event_type") == "POSTMORTEM_AUTO_GENERATED"]
-        assert len(postmortem_audit_calls) == 1
-
-        wal_call = postmortem_audit_calls[0]
-        assert wal_call["source"] == "EventHandler.Postmortem"
-        assert wal_call["domain"] == "selfhealing"
-        assert "incident_id" in wal_call["details"]
-        assert "service_name" in wal_call["details"]
-        assert wal_call["details"]["service_name"] == "test_service"
+        # Celery task로 위임 확인
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args[1]
+        assert call_kwargs["service_name"] == "test_service"
+        assert call_kwargs["event_type"] == "circuit_breaker_closed"
+        assert isinstance(call_kwargs["event_data"], dict)
+        assert isinstance(call_kwargs["event_bus_history"], list)
 
     def test_auto_postmortem_wal_contains_correct_fields(self, monkeypatch):
-        """자동 Post-mortem Audit이 올바른 필드를 포함하는지 확인."""
+        """자동 Post-mortem Celery task 위임 시 올바른 필드가 전달되는지 확인.
+
+        WAL 기록은 Celery Worker의 process_individual_postmortem task에서 수행됩니다 (문서 213).
+        """
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_closed_postmortem,
             SelfHealingEvent,
@@ -248,52 +240,36 @@ class TestAutoPostmortemAuditIntegration:
             source="cb_recovery",
         )
 
-        wal_calls = []
-
-        def mock_write_to_wal(**kwargs):
-            wal_calls.append(kwargs)
-            return 1
-
-        mock_cb_service = MagicMock()
-        mock_state = MagicMock()
-        mock_state.service_name = "payment_service"
-        mock_state.state = "closed"
-        mock_cb_service.repository.get_all_states.return_value = [mock_state]
-
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus_fn,
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
-            patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
-            patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
-            patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
-            patch("selfhealing.services.audit.base._write_to_wal", side_effect=mock_write_to_wal),
+            patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay,
         ):
             mock_bus_fn.return_value.get_history.return_value = []
 
             _on_circuit_breaker_closed_postmortem(event)
 
-        postmortem_calls = [c for c in wal_calls if c.get("event_type") == "POSTMORTEM_AUTO_GENERATED"]
-        assert len(postmortem_calls) == 1
-
-        call = postmortem_calls[0]
+        # Celery task 위임 확인
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args[1]
 
         # 필수 필드 검증
-        assert call["event_type"] == "POSTMORTEM_AUTO_GENERATED"
-        assert call["source"] == "EventHandler.Postmortem"
-        assert call["success"] is True
-        assert call["domain"] == "selfhealing"
+        assert call_kwargs["service_name"] == "payment_service"
+        assert call_kwargs["event_type"] == "circuit_breaker_closed"
 
-        # details 필드 검증
-        details = call["details"]
-        assert "incident_id" in details
-        assert details["incident_id"].startswith("AUTO-payment_service-")
-        assert details["service_name"] == "payment_service"
-        assert details["trigger_event"] == "circuit_breaker_closed"
-        assert "duration_seconds" in details
-        assert "affected_services" in details
+        # event_data 직렬화 검증 (SelfHealingEvent.to_dict())
+        event_data = call_kwargs["event_data"]
+        assert isinstance(event_data, dict)
+        assert event_data["data"]["service_name"] == "payment_service"
 
-    def test_auto_trigger_uses_postmortem_auto_generated_event_type(self, monkeypatch):
-        """자동 트리거가 POSTMORTEM_AUTO_GENERATED 이벤트 타입을 사용하는지 확인."""
+        # event_bus_history 수집 검증
+        assert isinstance(call_kwargs["event_bus_history"], list)
+
+    def test_auto_trigger_uses_celery_task_delegation(self, monkeypatch):
+        """자동 트리거가 Celery task로 위임하는지 확인.
+
+        POSTMORTEM_AUTO_GENERATED 이벤트 타입의 WAL 기록은
+        Celery Worker의 process_individual_postmortem task에서 수행됩니다 (문서 213).
+        """
         from selfhealing.services.event_bus import (
             _on_circuit_breaker_closed_postmortem,
             SelfHealingEvent,
@@ -309,29 +285,18 @@ class TestAutoPostmortemAuditIntegration:
             source="test",
         )
 
-        wal_calls = []
-
-        def mock_write_to_wal(**kwargs):
-            wal_calls.append(kwargs)
-            return 1
-
-        mock_cb_service = MagicMock()
-        mock_cb_service.repository.get_all_states.return_value = []
-
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus_fn,
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
-            patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
-            patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
-            patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
-            patch("selfhealing.services.audit.base._write_to_wal", side_effect=mock_write_to_wal),
+            patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay,
         ):
             mock_bus_fn.return_value.get_history.return_value = []
 
             _on_circuit_breaker_closed_postmortem(event)
 
-        postmortem_calls = [c for c in wal_calls if c.get("event_type") == "POSTMORTEM_AUTO_GENERATED"]
-        assert len(postmortem_calls) == 1
+        # Celery task 위임 확인
+        mock_delay.assert_called_once()
+        call_kwargs = mock_delay.call_args[1]
 
-        # Source 확인: EventHandler.Postmortem (XTest.observability 아님)
-        assert postmortem_calls[0]["source"] == "EventHandler.Postmortem"
+        # event_type이 올바르게 전달되는지 확인
+        assert call_kwargs["event_type"] == "circuit_breaker_closed"
+        assert call_kwargs["service_name"] == "test_service"

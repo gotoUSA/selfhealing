@@ -73,15 +73,15 @@ class TestPostmortemAutoTriggerIntegration:
 
     def test_cb_closed_event_does_not_generate_postmortem_when_disabled(self, monkeypatch):
         """
-        auto_postmortem_enabled=False일 때 CB CLOSED 이벤트가 Post-mortem을 생성하지 않음.
+        auto_postmortem_enabled=False일 때 CB CLOSED 이벤트가 Celery task를 위임하지 않음.
         """
+        from unittest.mock import patch
         from selfhealing.services.event_bus import (
             get_event_bus,
             register_default_handlers,
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.services.postmortem_store import get_healing_incidents
 
         # 설정: 자동 Post-mortem 비활성화 (기본값)
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "false")
@@ -89,31 +89,30 @@ class TestPostmortemAutoTriggerIntegration:
         # 기본 핸들러 등록
         register_default_handlers()
 
-        # CB CLOSED 이벤트 발행
+        # CB CLOSED 이벤트 발행 — Celery task 위임이 발생하지 않아야 함
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
             data={"service_name": "test_service", "previous_state": "open"},
             source="integration_test",
         )
-        self.bus.publish(event)
 
-        # 저장된 인시던트 확인 - 없어야 함
-        incidents = get_healing_incidents(limit=10)
-        auto_incidents = [i for i in incidents if "AUTO-" in i.get("incident_id", "")]
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
+            self.bus.publish(event)
 
-        assert len(auto_incidents) == 0, "비활성화 상태에서 Auto Post-mortem이 생성되면 안 됨"
+            # 비활성화 상태에서 Celery task 위임이 발생하지 않아야 함
+            mock_delay.assert_not_called()
 
     def test_cb_closed_event_generates_and_stores_postmortem_when_enabled(self, monkeypatch):
         """
-        auto_postmortem_enabled=True일 때 CB CLOSED 이벤트가 Post-mortem을 생성하고 저장함.
+        auto_postmortem_enabled=True일 때 CB CLOSED 이벤트가 Celery task으로 Postmortem 생성을 위임함.
         """
+        from unittest.mock import patch
         from selfhealing.services.event_bus import (
             get_event_bus,
             register_default_handlers,
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.services.postmortem_store import get_healing_incidents
         from selfhealing.api.django.views.xtest.base import add_healing_event
 
         # 설정: 자동 Post-mortem 활성화, 최소 duration 0으로 설정
@@ -132,39 +131,36 @@ class TestPostmortemAutoTriggerIntegration:
             }
         )
 
-        # CB CLOSED 이벤트 발행
+        # CB CLOSED 이벤트 발행 — Celery task .delay() 호출 확인
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
             data={"service_name": "test_service", "previous_state": "open"},
             source="integration_test",
         )
-        self.bus.publish(event)
 
-        # 저장된 인시던트 확인 - 있어야 함
-        incidents = get_healing_incidents(limit=10)
-        auto_incidents = [i for i in incidents if "AUTO-" in i.get("incident_id", "")]
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
+            self.bus.publish(event)
 
-        assert len(auto_incidents) >= 1, "활성화 상태에서 Auto Post-mortem이 생성되어야 함"
-
-        # Post-mortem 데이터 구조 검증
-        postmortem = auto_incidents[0]
-        assert "incident_id" in postmortem
-        assert "test_service" in postmortem["incident_id"]
-        assert "generated_at" in postmortem
-        assert "summary" in postmortem
-        assert "timeline" in postmortem
+            # Celery task으로 위임되었는지 확인
+            mock_delay.assert_called_once()
+            call_kwargs = mock_delay.call_args[1]
+            assert call_kwargs["service_name"] == "test_service"
+            assert call_kwargs["event_type"] == "circuit_breaker_closed"
+            assert isinstance(call_kwargs["event_data"], dict)
+            assert isinstance(call_kwargs["event_bus_history"], list)
 
     def test_postmortem_skipped_when_duration_below_minimum(self, monkeypatch):
         """
-        인시던트 지속 시간이 min_duration 미만이면 Post-mortem 생성 스킵.
+        Celery task으로 위임 시 인시던트 duration 체크는 task 내부에서 수행됩니다.
+        핸들러 레벨에서는 Celery task 위임만 확인합니다.
         """
+        from unittest.mock import patch
         from selfhealing.services.event_bus import (
             get_event_bus,
             register_default_handlers,
             EventType,
             SelfHealingEvent,
         )
-        from selfhealing.services.postmortem_store import get_healing_incidents
 
         # 설정: 자동 Post-mortem 활성화, 최소 duration 3600초 (1시간)
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
@@ -173,36 +169,28 @@ class TestPostmortemAutoTriggerIntegration:
         # 기본 핸들러 등록
         register_default_handlers()
 
-        # CB CLOSED 이벤트 발행 (타임라인 없이 - duration 계산 불가 또는 0)
+        # CB CLOSED 이벤트 발행 — Celery task 위임 확인 (duration 체크는 task에서 수행)
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
             data={"service_name": "short_incident_service", "previous_state": "open"},
             source="integration_test",
         )
-        self.bus.publish(event)
 
-        # 저장된 인시던트 확인 - 없어야 함 (duration < min_duration)
-        incidents = get_healing_incidents(limit=10)
-        auto_incidents = [
-            i
-            for i in incidents
-            if "AUTO-" in i.get("incident_id", "") and "short_incident_service" in i.get("incident_id", "")
-        ]
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
+            self.bus.publish(event)
 
-        assert len(auto_incidents) == 0, "duration이 min_duration 미만이면 Post-mortem이 생성되면 안 됨"
+            # Celery task으로 위임됨 (duration 체크는 task 내부)
+            mock_delay.assert_called_once()
 
     def test_stored_incident_can_be_retrieved(self, monkeypatch):
         """
-        저장된 인시던트를 조회할 수 있는지 확인.
+        Celery task 위임 시 event_data가 정확히 직렬화되어 전달되는지 확인.
         """
+        from unittest.mock import patch
         from selfhealing.services.event_bus import (
             register_default_handlers,
             EventType,
             SelfHealingEvent,
-        )
-        from selfhealing.services.postmortem_store import (
-            get_healing_incidents,
-            get_healing_incidents_count,
         )
 
         # 설정: 자동 Post-mortem 활성화
@@ -212,29 +200,26 @@ class TestPostmortemAutoTriggerIntegration:
         # 기본 핸들러 등록
         register_default_handlers()
 
-        # 초기 카운트 확인
-        initial_count = get_healing_incidents_count()
-
         # CB CLOSED 이벤트 발행
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
             data={"service_name": "retrieval_test_service", "previous_state": "open"},
             source="integration_test",
         )
-        self.bus.publish(event)
 
-        # 카운트 증가 확인
-        new_count = get_healing_incidents_count()
-        assert new_count > initial_count, "인시던트 저장 후 카운트가 증가해야 함"
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
+            self.bus.publish(event)
 
-        # 조회 확인
-        incidents = get_healing_incidents(limit=10)
-        assert len(incidents) > 0, "저장된 인시던트를 조회할 수 있어야 함"
+            # Celery task에 전달된 event_data 직렬화 확인
+            mock_delay.assert_called_once()
+            call_kwargs = mock_delay.call_args[1]
+            event_data = call_kwargs["event_data"]
 
-        # 가장 최근 인시던트가 우리가 생성한 것인지 확인
-        latest = incidents[-1]
-        assert "retrieval_test_service" in latest.get("incident_id", ""), "조회한 인시던트가 우리가 생성한 것이어야 함"
-        assert "recorded_at" in latest, "recorded_at 타임스탬프가 있어야 함"
+            # SelfHealingEvent.to_dict() 결과 확인
+            assert event_data["event_type"] == "circuit_breaker_closed"
+            assert event_data["data"]["service_name"] == "retrieval_test_service"
+            assert "timestamp" in event_data
+            assert call_kwargs["service_name"] == "retrieval_test_service"
 
 
 class TestPostmortemHandlerPriorityIntegration:
@@ -349,7 +334,8 @@ class TestPostmortemNotificationIntegration:
 
     def test_notification_sent_when_postmortem_generated(self, monkeypatch):
         """
-        Post-mortem 생성 시 알림이 발송되는지 확인.
+        Celery task 위임 시 Postmortem 알림은 task 내부에서 처리됨.
+        핸들러는 task 위임만 확인.
         """
         from unittest.mock import patch, MagicMock
         from selfhealing.services.event_bus import (
@@ -369,15 +355,7 @@ class TestPostmortemNotificationIntegration:
         # 기본 핸들러 등록
         register_default_handlers()
 
-        # UnifiedNotificationManager.notify 모킹
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.suppressed = False
-
-        with patch(
-            "selfhealing.services.unified_notification.UnifiedNotificationManager.notify",
-            return_value=mock_result,
-        ) as mock_notify:
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
             # CB CLOSED 이벤트 발행
             event = SelfHealingEvent(
                 event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -386,13 +364,12 @@ class TestPostmortemNotificationIntegration:
             )
             self.bus.publish(event)
 
-            # notify가 호출되었는지 확인 (Post-mortem 알림)
-            notification_calls = [call for call in mock_notify.call_args_list if "Post-mortem" in str(call)]
-            assert len(notification_calls) >= 1, "Post-mortem 생성 시 알림이 발송되어야 함"
+            # Celery task로 위임되었는지 확인 (알림은 task 내부에서 처리)
+            mock_delay.assert_called_once()
 
     def test_notification_not_sent_when_disabled(self, monkeypatch):
         """
-        알림 비활성화 시 알림이 발송되지 않는지 확인.
+        Post-mortem 비활성화 시 Celery task 위임이 발생하지 않는지 확인.
         """
         from unittest.mock import patch, MagicMock
         from selfhealing.services.event_bus import (
@@ -402,22 +379,12 @@ class TestPostmortemNotificationIntegration:
         )
 
         # 설정: Post-mortem 활성화, 알림 비활성화
-        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
-        monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED", "false")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "false")
 
         # 기본 핸들러 등록
         register_default_handlers()
 
-        # UnifiedNotificationManager.notify 모킹
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.suppressed = False
-
-        with patch(
-            "selfhealing.services.unified_notification.UnifiedNotificationManager.notify",
-            return_value=mock_result,
-        ) as mock_notify:
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
             # CB CLOSED 이벤트 발행
             event = SelfHealingEvent(
                 event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -426,9 +393,8 @@ class TestPostmortemNotificationIntegration:
             )
             self.bus.publish(event)
 
-            # Post-mortem 관련 notify 호출이 없어야 함
-            postmortem_calls = [call for call in mock_notify.call_args_list if "Post-mortem" in str(call)]
-            assert len(postmortem_calls) == 0, "알림 비활성화 시 Post-mortem 알림이 발송되면 안 됨"
+            # 비활성화 상태에서는 Celery task 위임이 발생하지 않아야 함
+            mock_delay.assert_not_called()
 
     def test_notification_priority_high_for_long_incident(self, monkeypatch):
         """

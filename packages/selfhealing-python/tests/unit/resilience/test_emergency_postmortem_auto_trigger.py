@@ -254,15 +254,13 @@ class TestEmergencyPostmortemHandler:
             assert any("skipped" in call.lower() for call in debug_calls)
 
     def test_handler_generates_postmortem_when_enabled(self, monkeypatch):
-        """auto_enabled=True일 때 Postmortem 생성 확인."""
+        """auto_enabled=True일 때 Celery task으로 Postmortem 생성 위임 확인."""
         from selfhealing.services.event_bus import (
             _on_emergency_recovery_completed_postmortem,
             SelfHealingEvent,
             EventType,
         )
         from selfhealing.settings.postmortem import reset_postmortem_settings
-        import sys
-        from types import ModuleType
 
         reset_postmortem_settings()
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
@@ -285,40 +283,18 @@ class TestEmergencyPostmortemHandler:
             source="recovery_coordinator",
         )
 
-        # Mock add_healing_incident
-        added_incidents = []
+        # Celery task .delay() mock
+        with patch("selfhealing.adapters.celery.tasks.postmortem.process_individual_postmortem.delay") as mock_delay:
+            _on_emergency_recovery_completed_postmortem(event)
 
-        def mock_add_incident(incident):
-            added_incidents.append(incident)
-
-        # Create mock module for selfhealing.api.django.views.xtest.base
-        mock_base_module = ModuleType("selfhealing.api.django.views.xtest.base")
-        mock_base_module.collect_system_snapshot = lambda: {"cpu": 50}
-        sys.modules["selfhealing.api.django.views.xtest.base"] = mock_base_module
-
-        try:
-            with patch(
-                "selfhealing.services.postmortem_store.add_healing_incident",
-                mock_add_incident,
-            ):
-                with patch(
-                    "selfhealing.services.audit.base._write_to_wal",
-                    return_value=1,
-                ):
-                    _on_emergency_recovery_completed_postmortem(event)
-
-            # Postmortem 생성 확인
-            assert len(added_incidents) == 1
-            postmortem = added_incidents[0]
-            assert postmortem["recovery_type"] == "emergency"
-            assert postmortem["namespace"] == "global"
-            assert postmortem["trigger_level"] == "LEVEL_3"
-            assert postmortem["recovery_session_id"] == "test-session-456"
-            assert "EMERGENCY-global" in postmortem["incident_id"]
-        finally:
-            # Cleanup mock module
-            if "selfhealing.api.django.views.xtest.base" in sys.modules:
-                del sys.modules["selfhealing.api.django.views.xtest.base"]
+            # Celery task가 위임되었는지 확인
+            mock_delay.assert_called_once()
+            call_kwargs = mock_delay.call_args[1]
+            assert call_kwargs["service_name"] == "emergency-global"
+            assert call_kwargs["event_type"] == "emergency_recovery_completed"
+            assert isinstance(call_kwargs["event_data"], dict)
+            assert call_kwargs["event_data"]["data"]["session_id"] == "test-session-456"
+            assert isinstance(call_kwargs["event_bus_history"], list)
 
 
 class TestGenerateEmergencyPostmortemData:

@@ -345,6 +345,187 @@ def force_close_circuit_breaker(
 
 @shared_task(
     bind=True,
+    name="selfhealing.adapters.celery.tasks.send_cb_open_notification",
+    queue="selfhealing",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    default_retry_delay=30,
+    acks_late=True,
+    time_limit=60,
+    soft_time_limit=55,
+)
+def send_cb_open_notification(
+    self,
+    service_name: str,
+    trace_id: str | None = None,
+    trace_url: str | None = None,
+    timestamp: str = "",
+) -> dict:
+    """
+    CB OPEN 알림을 비동기로 발송.
+
+    Slack Webhook 등 외부 HTTP 호출이 포함된 알림 발송을
+    Celery Worker에서 처리하여 EventBus 발행자 스레드 차단을 제거한다.
+
+    Args:
+        service_name: CB가 열린 서비스 이름
+        trace_id: 추적 ID
+        trace_url: 추적 URL
+        timestamp: CB OPEN 발생 시각
+
+    Returns:
+        알림 발송 결과 딕셔너리
+    """
+    logger.info(f"[SendCBOpenNotification] Sending notification for '{service_name}' " f"(attempt {self.request.retries + 1})")
+
+    try:
+        from selfhealing.services.circuit_breaker.actionable_alert_urls import (
+            get_actionable_alert_url_builder,
+        )
+        from selfhealing.services.unified_notification import (
+            NotificationCategory,
+            NotificationPayload,
+            NotificationPriority,
+            get_unified_notification_manager,
+        )
+
+        # Actionable URLs 생성
+        url_builder = get_actionable_alert_url_builder()
+        actionable_urls = url_builder.build_cb_open_urls(
+            service_name=service_name,
+            trigger_time=timestamp,
+        )
+
+        manager = get_unified_notification_manager()
+        result = manager.notify(
+            NotificationPayload(
+                title=f"🔴 Circuit Breaker OPEN: {service_name}",
+                message=f"서비스 '{service_name}'의 Circuit Breaker가 열렸습니다.",
+                priority=NotificationPriority.HIGH,
+                category=NotificationCategory.CIRCUIT_BREAKER,
+                source="circuit_breaker_service",
+                dedup_key=f"cb:{service_name}:open",
+                metadata={
+                    "service_name": service_name,
+                    "trace_id": trace_id,
+                    "trace_url": trace_url,
+                    "event_type": "circuit_breaker_opened",
+                    "trigger_time": timestamp,
+                    # Actionable Alert URLs
+                    "dashboard_url": actionable_urls.dashboard_url,
+                    "admin_url": actionable_urls.admin_url,
+                    "runbook_url": actionable_urls.runbook_url,
+                },
+            )
+        )
+
+        logger.info(f"[SendCBOpenNotification] Notification sent for '{service_name}'")
+
+        return {
+            "success": True,
+            "service_name": service_name,
+            "notification_sent": True,
+        }
+
+    except Exception as e:
+        logger.error(
+            f"[SendCBOpenNotification] Failed for '{service_name}': {e}",
+            exc_info=True,
+        )
+        raise
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.adapters.celery.tasks.collect_cb_open_snapshot",
+    queue="selfhealing",
+    max_retries=1,
+    default_retry_delay=10,
+    acks_late=True,
+    time_limit=30,
+    soft_time_limit=25,
+)
+def collect_cb_open_snapshot(
+    self,
+    service_name: str,
+    event_timestamp: str,
+) -> dict:
+    """
+    CB OPEN 시점 시스템 스냅샷을 비동기로 수집 및 Redis 저장.
+
+    psutil.cpu_percent(interval=0.1)의 100ms 블로킹과 Redis HSET를
+    Celery Worker에서 처리하여 발행자 스레드 차단을 제거한다.
+
+    Worker 실행 환경 주의:
+    - CPU/Memory 지표는 Celery Worker 노드의 시스템 상태를 반영한다.
+    - CB 상태 조회는 Redis 기반이므로 Worker에서도 정상 조회 가능하다.
+
+    Args:
+        service_name: CB가 열린 서비스 이름
+        event_timestamp: CB OPEN 이벤트 발생 시각 (ISO format)
+
+    Returns:
+        스냅샷 수집 결과 딕셔너리
+    """
+    logger.info(f"[CollectCBOpenSnapshot] Collecting snapshot for '{service_name}'")
+
+    try:
+        from selfhealing.api.django.views.xtest.base import collect_system_snapshot
+        from selfhealing.services.postmortem.snapshot_builder import (
+            save_open_snapshot_to_redis,
+        )
+
+        # 시스템 스냅샷 수집
+        snapshot = collect_system_snapshot()
+        snapshot["captured_at"] = "open"
+        snapshot["service"] = service_name
+        snapshot["event_timestamp"] = event_timestamp
+        snapshot["snapshot_source"] = "celery_worker"
+        snapshot["snapshot_note"] = "Worker 노드의 CPU/Memory. Web Server와 다를 수 있음."
+
+        # CB 상태 정보 추가 (Redis 기반이므로 Worker에서도 조회 가능)
+        try:
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
+
+            cb_service = get_circuit_breaker_service()
+            cb_states = {}
+            for name in cb_service.get_all_services():
+                status = cb_service.get_status(name)
+                cb_states[name] = status.get("state", "UNKNOWN") if status else "UNKNOWN"
+            snapshot["cb_states"] = str(cb_states)  # Redis HASH는 문자열만 저장
+        except Exception as e:
+            logger.debug(f"[CollectCBOpenSnapshot] Failed to get CB states: {e}")
+
+        # Redis에 저장
+        success = save_open_snapshot_to_redis(service_name, snapshot)
+
+        if success:
+            logger.info(f"[CollectCBOpenSnapshot] Snapshot saved for '{service_name}'")
+        else:
+            logger.warning(f"[CollectCBOpenSnapshot] Failed to save snapshot for '{service_name}'")
+
+        return {
+            "success": success,
+            "service_name": service_name,
+            "snapshot_source": "celery_worker",
+        }
+
+    except Exception as e:
+        logger.error(
+            f"[CollectCBOpenSnapshot] Failed for '{service_name}': {e}",
+            exc_info=True,
+        )
+        return {
+            "success": False,
+            "service_name": service_name,
+            "error": str(e),
+        }
+
+
+@shared_task(
+    bind=True,
     name="selfhealing.adapters.celery.tasks.expire_manual_overrides",
     queue="maintenance",
     max_retries=1,

@@ -46,10 +46,12 @@ from __future__ import annotations
 # ============================================================
 from .circuit_breaker import (
     check_circuit_breaker_recovery,
+    collect_cb_open_snapshot,
     conditional_replay_on_circuit_close,
     expire_manual_overrides,
     force_close_circuit_breaker,
     force_open_circuit_breaker,
+    send_cb_open_notification,
 )
 
 # ============================================================
@@ -92,6 +94,7 @@ from .postmortem import (
     check_stale_incident_groups,
     close_incident_group,
     flush_aggregated_notifications,
+    process_individual_postmortem,
 )
 
 # ============================================================
@@ -108,6 +111,8 @@ __all__ = [
     "force_open_circuit_breaker",
     "force_close_circuit_breaker",
     "expire_manual_overrides",
+    "send_cb_open_notification",
+    "collect_cb_open_snapshot",
     # DLQ Replay
     "replay_single_dlq_entry",
     "replay_batch_by_domain",
@@ -123,4 +128,5 @@ __all__ = [
     "close_incident_group",
     "flush_aggregated_notifications",
     "check_stale_incident_groups",
+    "process_individual_postmortem",
 ]
