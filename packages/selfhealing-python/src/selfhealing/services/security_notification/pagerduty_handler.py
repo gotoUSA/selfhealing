@@ -145,7 +145,8 @@ class PagerDutyHandlerMixin:
         try:
             import hashlib
 
-            dedup_key = hashlib.md5(f"{message['title']}".encode()).hexdigest()[:16]
+            # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): MD5 → SHA-256
+            dedup_key = hashlib.sha256(f"{message['title']}".encode()).hexdigest()[:16]
 
             payload = {
                 "routing_key": self.config.pagerduty_service_key,

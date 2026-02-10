@@ -25,7 +25,30 @@ logger = logging.getLogger(__name__)
 
 
 def _is_auth_disabled() -> bool:
-    """Check if SelfHealing auth is disabled for testing."""
+    """Check if SelfHealing auth is disabled for testing.
+
+    Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+    - 프로덕션 환경에서는 DISABLE_SELFHEALING_AUTH 환경변수가 설정되어도
+      절대로 인증을 우회할 수 없음 (Fail-Secure)
+    - ENVIRONMENT=production 또는 DJANGO_SETTINGS_MODULE에 'prod'가 포함된 경우 차단
+    - 인증 바이패스 시도 시 WARNING 로그 기록
+    """
+    # Fail-Secure: 프로덕션 환경에서는 절대 바이패스 불가
+    environment = os.environ.get("ENVIRONMENT", "development").lower()
+    django_settings = os.environ.get("DJANGO_SETTINGS_MODULE", "").lower()
+
+    is_production = environment in ("production", "prod", "live") or "prod" in django_settings
+
+    if is_production:
+        # 프로덕션에서 바이패스 시도 감지 시 경고 로그
+        if os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in ("true", "1", "yes"):
+            logger.error(
+                "[SECURITY] DISABLE_SELFHEALING_AUTH is set in PRODUCTION environment! "
+                "Auth bypass is BLOCKED. Remove this environment variable immediately. "
+                f"ENVIRONMENT={environment}, DJANGO_SETTINGS_MODULE={django_settings}"
+            )
+        return False
+
     return os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in (
         "true",
         "1",

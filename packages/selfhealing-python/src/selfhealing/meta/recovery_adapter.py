@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
@@ -311,7 +312,48 @@ class DockerComposeRecoveryAdapter(RecoveryInfrastructureAdapter):
     Docker Compose 복구 어댑터.
 
     로컬 개발 환경용. docker-compose 명령을 사용합니다.
+
+    Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+    - 서비스 이름 입력 검증 (OS 명령어 인젝션 방지)
+    - replicas 상한 제한 (DoS 방지)
     """
+
+    # 보안: 서비스 이름에 허용되는 문자 (영문, 숫자, 하이픈, 밑줄, 점)
+    _SAFE_NAME_PATTERN: re.Pattern = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_\-.]{0,127}$")
+    # 보안: 최대 허용 replica 수
+    _MAX_REPLICAS: int = 50
+
+    def _validate_service_name(self, name: str) -> None:
+        """
+        서비스 이름 검증 (OS 명령어 인젝션 방지).
+
+        Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+        - 영문, 숫자, 하이픈, 밑줄, 점만 허용
+        - 최대 128자
+        - 영문/숫자로 시작
+
+        Raises:
+            ValueError: 유효하지 않은 서비스 이름
+        """
+        if not name or not self._SAFE_NAME_PATTERN.match(name):
+            raise ValueError(
+                f"Invalid service name: {name!r}. "
+                "Must start with alphanumeric, contain only [a-zA-Z0-9_\\-.], "
+                "and be 1-128 characters long."
+            )
+
+    def _validate_replicas(self, replicas: int) -> None:
+        """
+        replica 수 검증 (DoS 방지).
+
+        Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+        - 최소 0, 최대 _MAX_REPLICAS
+
+        Raises:
+            ValueError: 범위 벗어난 replicas
+        """
+        if not isinstance(replicas, int) or replicas < 0 or replicas > self._MAX_REPLICAS:
+            raise ValueError(f"Invalid replicas count: {replicas}. " f"Must be integer between 0 and {self._MAX_REPLICAS}.")
 
     def is_available(self) -> bool:
         """docker-compose 또는 docker compose 사용 가능 여부."""
@@ -334,6 +376,7 @@ class DockerComposeRecoveryAdapter(RecoveryInfrastructureAdapter):
             RecoveryResult
         """
         try:
+            self._validate_service_name(worker_name)
             cmd = self._get_compose_command() + ["restart", worker_name]
             result = subprocess.run(
                 cmd,
@@ -378,6 +421,8 @@ class DockerComposeRecoveryAdapter(RecoveryInfrastructureAdapter):
             RecoveryResult
         """
         try:
+            self._validate_service_name(name)
+            self._validate_replicas(replicas)
             cmd = self._get_compose_command() + [
                 "up",
                 "-d",

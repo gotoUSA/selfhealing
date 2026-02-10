@@ -3,18 +3,25 @@ Secrets Settings - SecretStr 기반 민감 정보 설정.
 
 Pydantic SecretStr 특징:
 - repr(): '**********' 출력
-- str(): '**********' 출력  
+- str(): '**********' 출력
 - get_secret_value(): 실제 값 반환
 
 이점:
 - print(settings) 시 자동 마스킹
 - JSON 로깅 시 자동 마스킹
 - 감사(Audit) 로그 안전
+
+Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+- validate_required_secrets() 추가: 핵심 시크릿 미설정 시 경고/에러
 """
 
+import logging
+import os
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class SecretsSettings(BaseSettings):
@@ -151,9 +158,7 @@ class SecretsSettings(BaseSettings):
             "encryption_key": bool(self.encryption_key.get_secret_value()),
             "audit_signing_key": bool(self.audit_signing_key.get_secret_value()),
             "aws_access_key_id": bool(self.aws_access_key_id.get_secret_value()),
-            "aws_secret_access_key": bool(
-                self.aws_secret_access_key.get_secret_value()
-            ),
+            "aws_secret_access_key": bool(self.aws_secret_access_key.get_secret_value()),
         }
 
 
@@ -182,3 +187,86 @@ def reset_secrets() -> None:
     """
     global _secrets
     _secrets = None
+
+
+def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:
+    """
+    핵심 시크릿이 설정되었는지 검증.
+
+    Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+    - CRITICAL 시크릿 (encryption_key, audit_signing_key): 미설정 시 ERROR 로그
+    - IMPORTANT 시크릿 (database_password, redis_password): 미설정 시 WARNING 로그
+    - OPTIONAL 시크릿: 미설정 시 INFO 로그
+
+    프로덕션 환경에서 CRITICAL 시크릿 미설정 시 RuntimeError 발생.
+
+    Args:
+        secrets: 검증할 SecretsSettings 인스턴스 (None이면 싱글톤 사용)
+
+    Returns:
+        {"critical": [...], "warning": [...], "info": [...]} 미설정 시크릿 목록
+
+    Raises:
+        RuntimeError: 프로덕션에서 CRITICAL 시크릿 미설정 시
+    """
+    if secrets is None:
+        secrets = get_secrets()
+
+    # 시크릿 분류
+    critical_secrets = {
+        "encryption_key": secrets.encryption_key,
+        "audit_signing_key": secrets.audit_signing_key,
+    }
+    important_secrets = {
+        "database_password": secrets.database_password,
+        "redis_password": secrets.redis_password,
+    }
+    optional_secrets = {
+        "toss_secret_key": secrets.toss_secret_key,
+        "slack_webhook_token": secrets.slack_webhook_token,
+        "slack_bot_token": secrets.slack_bot_token,
+        "pagerduty_api_key": secrets.pagerduty_api_key,
+        "aws_access_key_id": secrets.aws_access_key_id,
+        "aws_secret_access_key": secrets.aws_secret_access_key,
+    }
+
+    result: dict[str, list[str]] = {"critical": [], "warning": [], "info": []}
+
+    # CRITICAL 시크릿 검증
+    for name, secret in critical_secrets.items():
+        if not secret.get_secret_value():
+            result["critical"].append(name)
+            logger.error(
+                f"[Security] CRITICAL secret '{name}' is not set. " "System security is compromised without this secret."
+            )
+
+    # IMPORTANT 시크릿 검증
+    for name, secret in important_secrets.items():
+        if not secret.get_secret_value():
+            result["warning"].append(name)
+            logger.warning(f"[Security] Important secret '{name}' is not set. " "Some features may not work correctly.")
+
+    # OPTIONAL 시크릿 검증
+    for name, secret in optional_secrets.items():
+        if not secret.get_secret_value():
+            result["info"].append(name)
+            logger.info(f"[Security] Optional secret '{name}' is not set.")
+
+    # 프로덕션 환경에서 CRITICAL 시크릿 미설정 시 에러
+    is_production = (
+        os.environ.get("ENVIRONMENT", "").lower()
+        in (
+            "production",
+            "prod",
+        )
+        or "production" in os.environ.get("DJANGO_SETTINGS_MODULE", "").lower()
+    )
+
+    if is_production and result["critical"]:
+        raise RuntimeError(
+            f"[Security] CRITICAL secrets not configured in production: "
+            f"{', '.join(result['critical'])}. "
+            "Cannot start Self-Healing system without these secrets."
+        )
+
+    return result

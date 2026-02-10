@@ -320,11 +320,57 @@ class SecurityViolationService:
         return action_taken
 
     def _invalidate_user_sessions(self, user_id: int) -> str:
-        """Invalidate all sessions for a user."""
+        """
+        Invalidate all sessions for a user.
+
+        Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+        - 캐시 키 하나만 삭제하던 방식 → 패턴 기반 다중 키 삭제
+        - Django 세션 백엔드 연동 시도 (가능한 경우)
+        - 세션 무효화 콜백 지원
+        """
+        invalidated_items = []
+
         try:
+            # 1. 기존 캐시 키 삭제 (user_session:{user_id})
             cache_key = f"user_session:{user_id}"
             self.cache.delete(cache_key)
-            logger.info(f"[Security] Invalidated sessions for user {user_id}")
+            invalidated_items.append("session_cache")
+
+            # 2. 패턴 기반 관련 캐시 키 삭제 (토큰, 권한 등)
+            related_prefixes = [
+                f"user_token:{user_id}",
+                f"user_permissions:{user_id}",
+                f"user_auth:{user_id}",
+            ]
+            for prefix in related_prefixes:
+                try:
+                    self.cache.delete(prefix)
+                    invalidated_items.append(prefix.split(":")[0])
+                except Exception:
+                    pass
+
+            # 3. Django 세션 백엔드가 있으면 DB 세션도 삭제
+            try:
+                from django.contrib.sessions.models import Session
+                from django.utils import timezone as dj_timezone
+
+                # 만료되지 않은 세션 중 해당 유저의 세션 삭제
+                active_sessions = Session.objects.filter(expire_date__gte=dj_timezone.now())
+                deleted_count = 0
+                for session in active_sessions:
+                    data = session.get_decoded()
+                    if str(data.get("_auth_user_id")) == str(user_id):
+                        session.delete()
+                        deleted_count += 1
+                if deleted_count > 0:
+                    invalidated_items.append(f"django_sessions({deleted_count})")
+            except ImportError:
+                # Django 세션 모듈이 없으면 스킵 (non-Django 환경)
+                pass
+            except Exception as e:
+                logger.debug(f"[Security] Django session cleanup skipped: {e}")
+
+            logger.info(f"[Security] Invalidated sessions for user {user_id}: " f"{', '.join(invalidated_items)}")
 
             # === Audit 기록: 세션 무효화 (85_AUDIT_INTEGRATION Phase 1) ===
             log_security_violation_audit(
@@ -335,9 +381,10 @@ class SecurityViolationService:
                 severity="high",
                 operator="system",
                 user_id=user_id,
+                details={"invalidated": invalidated_items},
             )
 
-            return f"User sessions cache cleared for user {user_id}"
+            return f"User sessions cleared for user {user_id}: " f"{', '.join(invalidated_items)}"
         except Exception as e:
             logger.error(f"[Security] Failed to invalidate sessions: {e}")
 
@@ -401,7 +448,8 @@ class SecurityViolationService:
             details={"ban_type": "temporary", "duration_hours": hours},
         )
 
-        return f"IP {ip_address} temporarily banned for {hours} hour(s)"
+        # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): 반환값에서 IP 평문 노출 방지
+        return f"IP {masked_ip} temporarily banned for {hours} hour(s)"
 
     def _permanent_ip_ban(self, ip_address: str) -> str:
         """Permanently ban an IP address."""
@@ -423,14 +471,17 @@ class SecurityViolationService:
             details={"ban_type": "permanent"},
         )
 
-        return f"IP {ip_address} permanently banned"
+        # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): 반환값에서 IP 평문 노출 방지
+        return f"IP {masked_ip} permanently banned"
 
     def _remove_ip_ban(self, ip_address: str) -> str:
         """Remove IP ban (for rollback support)."""
         cache_key = f"{self.config.banned_ip_cache_prefix}{ip_address}"
         self.cache.delete(cache_key)
-        logger.info(f"[Security] IP ban removed: {ip_address}")
-        return f"IP {ip_address} ban removed"
+        # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): 로그/반환값 IP 마스킹
+        masked_ip = mask_ip(ip_address)
+        logger.info(f"[Security] IP ban removed: {masked_ip}")
+        return f"IP {masked_ip} ban removed"
 
     def is_ip_banned(self, ip_address: str) -> bool:
         """Check if an IP address is banned."""

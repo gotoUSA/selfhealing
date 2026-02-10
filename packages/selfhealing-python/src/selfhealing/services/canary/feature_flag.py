@@ -251,7 +251,8 @@ def compute_stable_hash(value: str) -> int:
     Returns:
         0-99 범위의 정수
     """
-    hash_bytes = hashlib.md5(value.encode()).digest()
+    # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): MD5 → SHA-256
+    hash_bytes = hashlib.sha256(value.encode()).digest()
     hash_int = int.from_bytes(hash_bytes[:4], byteorder="big")
     return hash_int % 100
 
@@ -620,10 +621,7 @@ class CanaryFeatureFlag:
         old_percentage = self._flags[config_type].percentage
         self._flags[config_type].percentage = new_percentage
 
-        logger.info(
-            f"[CanaryFeatureFlag] Updated percentage: {config_type} "
-            f"{old_percentage}% → {new_percentage}%"
-        )
+        logger.info(f"[CanaryFeatureFlag] Updated percentage: {config_type} " f"{old_percentage}% → {new_percentage}%")
 
         return True
 

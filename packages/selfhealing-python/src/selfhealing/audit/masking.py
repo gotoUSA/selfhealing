@@ -7,16 +7,24 @@ Implements Privacy-by-Design principles for GDPR/CCPA compliance.
 Role-based Masking:
     - MaskingLevel.CLIENT: 클라이언트 응답용 - 완전 치환 (***REDACTED***)
     - MaskingLevel.AUDIT: 내부 감사용 - 해시화 (동일성 확인 가능)
-    - MaskingLevel.FORENSIC: 법적 조사용 - 암호화 저장 (복원 가능)
+    - MaskingLevel.FORENSIC: 법적 조사용 - Fernet 대칭 암호화 (복원 가능)
 
 RBAC 역할별 접근 가능 레벨:
     - selfhealing_admin (우선순위 3): FORENSIC까지 허용
     - selfhealing_operator (우선순위 2): AUDIT까지 허용
     - selfhealing_viewer (우선순위 1): CLIENT만 허용
+
+Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+    - FORENSIC 레벨: SHA-256 해시 → Fernet 대칭 암호화 (실제 복원 가능)
+    - encryption_key 미설정 시 AUDIT 레벨로 자동 폴백
 """
 
+import base64
 import hashlib
+import logging
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # MaskingLevel Enum (RBAC 연동)
@@ -41,7 +49,47 @@ class MaskingLevel(str, Enum):
     """내부 감사용: SHA-256 해시화 (동일성 확인만 가능)"""
 
     FORENSIC = "forensic"
-    """법적 조사용: 암호화 저장 (복원 가능)"""
+    """법적 조사용: Fernet 대칭 암호화 (복원 가능)"""
+
+
+def _get_forensic_fernet():
+    """
+    FORENSIC 레벨 암호화를 위한 Fernet 인스턴스 반환.
+
+    Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+    - SecretsSettings.encryption_key를 사용하여 Fernet 인스턴스 생성
+    - 키 미설정 시 None 반환 (호출측에서 AUDIT 폴백)
+
+    Returns:
+        Fernet 인스턴스 또는 None (키 미설정 시)
+    """
+    try:
+        from selfhealing.settings.secrets import get_secrets
+
+        secrets = get_secrets()
+        key = secrets.encryption_key.get_secret_value()
+        if not key:
+            return None
+
+        from cryptography.fernet import Fernet
+
+        # Fernet은 URL-safe base64 인코딩된 32바이트 키가 필요
+        # encryption_key가 이미 Fernet 키 형식이면 그대로 사용
+        try:
+            return Fernet(key.encode() if isinstance(key, str) else key)
+        except Exception:
+            # 키가 Fernet 형식이 아니면 SHA-256으로 32바이트 키 생성 후 base64 변환
+            derived_key = hashlib.sha256(key.encode()).digest()
+            fernet_key = base64.urlsafe_b64encode(derived_key)
+            return Fernet(fernet_key)
+    except ImportError:
+        logger.warning(
+            "[Security] cryptography library not installed. " "FORENSIC masking will fall back to AUDIT level (hash only)."
+        )
+        return None
+    except Exception as e:
+        logger.warning(f"[Security] Failed to initialize Fernet for FORENSIC masking: {e}. " "Falling back to AUDIT level.")
+        return None
 
 
 def mask_with_level(
@@ -80,15 +128,60 @@ def mask_with_level(
         return hash_for_audit(value, salt)
 
     elif level == MaskingLevel.FORENSIC:
-        # 암호화 저장 - 복원 가능 (실제 암호화는 별도 구현 필요)
-        # 현재는 hash_for_audit와 동일하게 처리하되 prefix만 다르게 함
-        # 실제 운영 환경에서는 AES 등으로 암호화하여 저장
-        data = f"{salt}:{value}" if salt else value
-        hash_value = hashlib.sha256(data.encode()).hexdigest()
-        return f"encrypted:{hash_value[:32]}"
+        # Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+        # Fernet 대칭 암호화 - 실제 복원 가능
+        fernet = _get_forensic_fernet()
+        if fernet is not None:
+            try:
+                encrypted = fernet.encrypt(value.encode())
+                return f"encrypted:{encrypted.decode()}"
+            except Exception as e:
+                logger.warning(f"[Security] Fernet encryption failed: {e}. " "Falling back to AUDIT level hash.")
+                # 암호화 실패 시 AUDIT 레벨로 폴백
+                return hash_for_audit(value, salt)
+        else:
+            # encryption_key 미설정 시 AUDIT 레벨로 폴백 (해시)
+            logger.debug("[Security] FORENSIC masking unavailable (no encryption_key). " "Using AUDIT level hash instead.")
+            return hash_for_audit(value, salt)
 
     # 기본값은 CLIENT 레벨
     return "***REDACTED***"
+
+
+def decrypt_forensic(encrypted_value: str) -> str:
+    """
+    FORENSIC 레벨로 암호화된 값을 복호화.
+
+    Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+    - Fernet 대칭 암호화로 저장된 값을 원래 값으로 복원
+    - selfhealing_admin 권한이 필요 (호출자가 권한 확인 필요)
+
+    Args:
+        encrypted_value: "encrypted:..." 형식의 암호화된 문자열
+
+    Returns:
+        복호화된 원본 문자열
+
+    Raises:
+        ValueError: 잘못된 형식이거나 복호화 실패 시
+        RuntimeError: encryption_key 미설정 시
+    """
+    if not encrypted_value.startswith("encrypted:"):
+        raise ValueError("Not a FORENSIC encrypted value (must start with 'encrypted:')")
+
+    token = encrypted_value[len("encrypted:") :]
+
+    fernet = _get_forensic_fernet()
+    if fernet is None:
+        raise RuntimeError(
+            "Cannot decrypt: encryption_key is not configured. " "Set SELFHEALING_SECRET_ENCRYPTION_KEY environment variable."
+        )
+
+    try:
+        decrypted = fernet.decrypt(token.encode())
+        return decrypted.decode()
+    except Exception as e:
+        raise ValueError(f"Decryption failed: {e}") from e
 
 
 def get_masking_level_for_context() -> MaskingLevel:

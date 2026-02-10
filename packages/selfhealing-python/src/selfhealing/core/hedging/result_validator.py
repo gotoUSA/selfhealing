@@ -269,7 +269,8 @@ class HedgingResultValidator:
         """
         try:
             serialized = json.dumps(value, sort_keys=True, default=str)
-            return hashlib.md5(serialized.encode()).hexdigest()[:8]
+            # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): MD5 → SHA-256
+            return hashlib.sha256(serialized.encode()).hexdigest()[:8]
         except Exception:
             return str(hash(str(value)))[:8]
 

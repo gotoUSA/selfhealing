@@ -912,10 +912,14 @@ class ConfigDriftMonitor:
             self._cache_functions[config_type] = func
 
     def _compute_env_hash(self, prefix: str) -> str:
-        """해당 prefix로 시작하는 환경변수들의 해시 계산."""
+        """해당 prefix로 시작하는 환경변수들의 해시 계산.
+
+        Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
+        - MD5 → SHA-256 교체 (충돌 저항성 강화)
+        """
         relevant_vars = {k: v for k, v in os.environ.items() if k.startswith(prefix)}
         content = str(sorted(relevant_vars.items()))
-        return hashlib.md5(content.encode()).hexdigest()
+        return hashlib.sha256(content.encode()).hexdigest()
 
     def check_and_invalidate(self, config_type: str, prefix: str) -> bool:
         """
