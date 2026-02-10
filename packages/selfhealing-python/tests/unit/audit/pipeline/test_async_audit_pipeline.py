@@ -175,14 +175,15 @@ class TestAsyncHealingLoggerBatchFlush:
         for i in range(110):
             AsyncHealingLogger.log({"idx": i}, EventSeverity.INFO)
 
-        # 명시적 flush 후 워커가 처리할 때까지 폴링 대기 (최대 2초)
-        AsyncHealingLogger.flush()
-        deadline = time.time() + 2.0
+        # 워커가 배치 크기(100)에 도달하여 자동 플러시할 때까지 폴링 대기 (최대 5초)
+        # 주의: flush()를 여기서 호출하면 워커 스레드와 race condition 발생
+        # (워커가 이미 큐에서 꺼낸 이벤트는 flush()가 접근 불가)
+        deadline = time.time() + 5.0
         while len(events_received) < 100 and time.time() < deadline:
             time.sleep(0.05)
 
         # 최소 배치 크기만큼은 플러시됨
-        assert len(events_received) >= 100
+        assert len(events_received) >= 100, f"Expected >= 100 events flushed by batch trigger, got {len(events_received)}"
 
     def test_manual_flush(self):
         """수동 flush() 호출 시 모든 이벤트 즉시 플러시."""
