@@ -87,7 +87,6 @@ def _create_default_service():
         audit_adapter = AuditAdapterWrapper()
 
     # InternalMetricsAdapter: throttle_rate 포함 실 메트릭 수집 (DummyMetricsAdapter 대체)
-    # DummyConfigApplier 유지 (ThrottleConfigApplier 구현 전까지 fallback)
     try:
         from selfhealing.adapters.metrics.auto_tuning_adapter import (
             InternalMetricsAdapter,
@@ -98,12 +97,43 @@ def _create_default_service():
         logger.warning("[AutoTuning] InternalMetricsAdapter import failed, " "falling back to DummyMetricsAdapter")
         metrics_adapter = DummyMetricsAdapter()
 
-    return AutoTuningService(
+    # CompositeConfigApplier: ThrottleConfigApplier(SLA 전용) + DummyConfigApplier(fallback)
+    try:
+        from selfhealing.adapters.config_applier.composite import (
+            CompositeConfigApplier,
+        )
+        from selfhealing.adapters.config_applier.throttle import (
+            ThrottleConfigApplier,
+        )
+
+        config_applier = CompositeConfigApplier(
+            [
+                ThrottleConfigApplier(),  # throttle_sla_*, rate_limit_rps(No-op)
+                DummyConfigApplier(),  # 나머지 모듈 (circuit_breaker, retry, jitter, timeout)
+            ]
+        )
+    except ImportError:
+        logger.warning("[AutoTuning] ThrottleConfigApplier import failed, " "falling back to DummyConfigApplier")
+        config_applier = DummyConfigApplier()
+
+    service = AutoTuningService(
         metrics_adapter=metrics_adapter,
         config_provider=DummyConfigProvider(),
-        config_applier=DummyConfigApplier(),
+        config_applier=config_applier,
         audit_adapter=audit_adapter,
     )
+
+    # SLA 전용 DecisionEngine 규칙 주입
+    try:
+        from selfhealing.services.auto_tuning.throttle_sla_rules import (
+            THROTTLE_SLA_RULES,
+        )
+
+        service.decision_engine.rules.extend(THROTTLE_SLA_RULES)
+    except ImportError:
+        logger.warning("[AutoTuning] THROTTLE_SLA_RULES import failed, " "SLA auto-tuning rules not loaded")
+
+    return service
 
 
 # 싱글톤 서비스 인스턴스

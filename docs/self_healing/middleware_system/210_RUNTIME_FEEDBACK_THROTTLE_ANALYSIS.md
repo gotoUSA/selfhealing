@@ -1,6 +1,6 @@
 # 210. Runtime Feedback ↔ AdaptiveThrottle 분석
 
-> **상태**: ⚠️ 선택적 연동 (정적 설정만)
+> **상태**: ✅ 구현 완료 (선택적 연동 — 정적 SLA 파라미터만)
 > **목적**: RuntimeFeedbackLoop → AutoTuningService의 `rate_limit` 모듈이 AdaptiveThrottle과 실제 연결되지 않은 문제를 분석하고, 안전한 연동 범위를 정의한다.
 > **근거 문서**: [207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md](207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md)
 
@@ -822,13 +822,13 @@ service.decision_engine.rules.extend(THROTTLE_SLA_RULES)
 
 ### 13-2. 신규 구현 검증
 
-- [ ] `ThrottleConfigApplier.apply("throttle_sla_warning_ms", 250)` → `throttle.config.sla_warning_ms`가 250으로 변경되는지
-- [ ] `ThrottleConfigApplier.apply("rate_limit_rps", 1000)` → No-op, `return True`, info 로그 출력
-- [ ] `model_copy(update={"sla_warning_ms": 250})` 후 원본 config 불변인지 (Pydantic v2 copy semantics)
-- [ ] `sla_warning_ms` 변경 후 30초(POST_ADJUSTMENT_WAIT) 내 `_detect_degradation()` 정상 판단
-- [ ] `SafetyBounds.is_within_bounds("throttle_sla_warning_ms", 250)` → True (50-2000 범위 내)
-- [ ] `DecisionEngine.analyze()` → `THROTTLE_SLA_RULES` 조건 충족 시 `AdjustmentDecision` 반환
-- [ ] `InternalMetricsAdapter.fetch_current_metrics()` → `throttle_rate` 포함 메트릭 반환
-- [ ] `CompositeConfigApplier.apply("circuit_breaker_threshold", 5)` → ThrottleConfigApplier skip → DummyConfigApplier 처리 → `return True`
-- [ ] `CompositeConfigApplier.get_current("throttle_sla_warning_ms")` → ThrottleConfigApplier에서 반환 (Dummy까지 가지 않음)
-- [ ] `sla_warning_ms` > `sla_critical_ms`가 되는 역전 상황 방지 (규칙의 `adjustment` lambda에서 상한/하한 제약)
+- [x] `ThrottleConfigApplier.apply("throttle_sla_warning_ms", 250)` → `throttle.config.sla_warning_ms`가 250으로 변경되는지 ✅ `test_apply_sla_warning_ms`
+- [x] `ThrottleConfigApplier.apply("rate_limit_rps", 1000)` → No-op, `return True`, info 로그 출력 ✅ `test_apply_rate_limit_rps_noop`
+- [x] `model_copy(update={"sla_warning_ms": 250})` 후 원본 config 불변인지 (Pydantic v2 copy semantics) ✅ `test_apply_original_config_immutable`, `test_swap_config_original_config_unchanged`
+- [ ] `sla_warning_ms` 변경 후 30초(POST_ADJUSTMENT_WAIT) 내 `_detect_degradation()` 정상 판단 — 런타임 시나리오 (통합 테스트 대상)
+- [x] `SafetyBounds.is_within_bounds("throttle_sla_warning_ms", 250)` → True (50-2000 범위 내) ✅ `test_is_within_bounds_sla_warning_valid`
+- [x] `DecisionEngine.analyze()` → `THROTTLE_SLA_RULES` 조건 충족 시 `AdjustmentDecision` 반환 ✅ `test_condition_true_when_p99_above_90_percent` 외 규칙 조건/조정 테스트
+- [ ] `InternalMetricsAdapter.fetch_current_metrics()` → `throttle_rate` 포함 메트릭 반환 — 기존 구현 확인 완료 (auto_tuning_adapter.py L90)
+- [x] `CompositeConfigApplier.apply("circuit_breaker_threshold", 5)` → ThrottleConfigApplier skip → DummyConfigApplier 처리 → `return True` ✅ `test_apply_falls_through_to_fallback`
+- [x] `CompositeConfigApplier.get_current("throttle_sla_warning_ms")` → ThrottleConfigApplier에서 반환 (Dummy까지 가지 않음) ✅ `test_get_current_from_first_handler`
+- [ ] `sla_warning_ms` > `sla_critical_ms`가 되는 역전 상황 방지 (규칙의 `adjustment` lambda에서 상한/하한 제약) ✅ `test_adjustment_capped_at_2000` (warning ≤ 2000), `test_adjustment_capped_at_5000` (critical ≤ 5000)

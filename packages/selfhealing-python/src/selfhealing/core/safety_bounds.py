@@ -88,6 +88,16 @@ class SafetyBounds:
                 max_value=settings.rate_limit_rps_max,
                 max_change_per_cycle=settings.rate_limit_rps_max_change,
             ),
+            "throttle_sla_warning_ms": ParameterBound(
+                min_value=settings.throttle_sla_warning_ms_min,
+                max_value=settings.throttle_sla_warning_ms_max,
+                max_change_per_cycle=settings.throttle_sla_warning_ms_max_change,
+            ),
+            "throttle_sla_critical_ms": ParameterBound(
+                min_value=settings.throttle_sla_critical_ms_min,
+                max_value=settings.throttle_sla_critical_ms_max,
+                max_change_per_cycle=settings.throttle_sla_critical_ms_max_change,
+            ),
             "backoff_base_ms": ParameterBound(
                 min_value=settings.backoff_base_ms_min,
                 max_value=settings.backoff_base_ms_max,
@@ -158,27 +168,19 @@ class SafetyBounds:
 
             if bound is None:
                 if self.strict_mode:
-                    logger.warning(
-                        f"[SafetyBounds] Unknown parameter rejected: {parameter}"
-                    )
+                    logger.warning(f"[SafetyBounds] Unknown parameter rejected: {parameter}")
                     return False
                 else:
-                    logger.debug(
-                        f"[SafetyBounds] Unknown parameter allowed (non-strict): {parameter}"
-                    )
+                    logger.debug(f"[SafetyBounds] Unknown parameter allowed (non-strict): {parameter}")
                     return True
 
             # 범위 검증
             if new_value < bound.min_value:
-                logger.warning(
-                    f"[SafetyBounds] {parameter}={new_value} below minimum {bound.min_value}"
-                )
+                logger.warning(f"[SafetyBounds] {parameter}={new_value} below minimum {bound.min_value}")
                 return False
 
             if new_value > bound.max_value:
-                logger.warning(
-                    f"[SafetyBounds] {parameter}={new_value} above maximum {bound.max_value}"
-                )
+                logger.warning(f"[SafetyBounds] {parameter}={new_value} above maximum {bound.max_value}")
                 return False
 
             # 변경폭 검증

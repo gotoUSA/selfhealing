@@ -2491,6 +2491,30 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
             "break_glass_active": self._break_glass_active,
         }
 
+    def swap_config(self, new_config: ThrottleConfig) -> ThrottleConfig:
+        """
+        Config 객체를 Atomic Swap으로 교체.
+
+        GIL에 의해 참조 대입은 atomic이므로,
+        _maybe_adjust_limit() 실행 중에도 안전하다.
+        _current_limit, _base_limit_before_emergency 등
+        파생 상태는 변경하지 않는다 (SLA 값만 교체 용도).
+
+        Args:
+            new_config: 새 ThrottleConfig (model_copy 등으로 생성)
+
+        Returns:
+            교체 전 이전 config 객체 (롤백용 보관)
+        """
+        old_config = self.config
+        self.config = new_config
+        logger.info(
+            f"[AdaptiveThrottle] Config swapped: "
+            f"sla_warning_ms={old_config.sla_warning_ms}→{new_config.sla_warning_ms}, "
+            f"sla_critical_ms={old_config.sla_critical_ms}→{new_config.sla_critical_ms}"
+        )
+        return old_config
+
 
 # =============================================================================
 # Singleton Instance for Global Use

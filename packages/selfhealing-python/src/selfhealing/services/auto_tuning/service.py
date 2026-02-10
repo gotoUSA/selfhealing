@@ -175,10 +175,7 @@ class AutoTuningService:
                 adjustment_type="service_start",
             )
             if not gov_result.allowed:
-                logger.warning(
-                    f"[AutoTuningService] Start blocked by governance: "
-                    f"{gov_result.block_message}"
-                )
+                logger.warning(f"[AutoTuningService] Start blocked by governance: " f"{gov_result.block_message}")
                 return False
 
             # 세션 시작
@@ -250,9 +247,7 @@ class AutoTuningService:
             return {
                 "enabled": self._enabled,
                 "mode": self._mode.value,
-                "disabled_at": (
-                    self._disabled_at.isoformat() if self._disabled_at else None
-                ),
+                "disabled_at": (self._disabled_at.isoformat() if self._disabled_at else None),
                 "disabled_by": self._disabled_by,
                 "disabled_reason": self._disabled_reason,
                 "last_adjustment": last_adjustment,
@@ -283,11 +278,7 @@ class AutoTuningService:
                 self._auto_enable_timer = None
 
             self._enabled = True
-            self._mode = (
-                TuningMode(mode)
-                if mode in [m.value for m in TuningMode]
-                else TuningMode.AUTOMATIC
-            )
+            self._mode = TuningMode(mode) if mode in [m.value for m in TuningMode] else TuningMode.AUTOMATIC
 
             # 피드백 루프 활성화
             self.feedback_loop.enabled = True
@@ -348,9 +339,7 @@ class AutoTuningService:
             auto_enable_at = None
             if duration_minutes:
                 auto_enable_at = self._disabled_at + timedelta(minutes=duration_minutes)
-                self._auto_enable_timer = Timer(
-                    duration_minutes * 60, self._auto_reenable
-                )
+                self._auto_enable_timer = Timer(duration_minutes * 60, self._auto_reenable)
                 self._auto_enable_timer.daemon = True
                 self._auto_enable_timer.start()
 
@@ -361,9 +350,7 @@ class AutoTuningService:
                     "reason": reason,
                     "disabled_by": disabled_by,
                     "duration_minutes": duration_minutes,
-                    "auto_enable_at": (
-                        auto_enable_at.isoformat() if auto_enable_at else None
-                    ),
+                    "auto_enable_at": (auto_enable_at.isoformat() if auto_enable_at else None),
                 },
             )
 
@@ -382,9 +369,7 @@ class AutoTuningService:
                 "disabled_at": self._disabled_at.isoformat(),
                 "disabled_by": disabled_by,
                 "reason": reason,
-                "auto_enable_at": (
-                    auto_enable_at.isoformat() if auto_enable_at else None
-                ),
+                "auto_enable_at": (auto_enable_at.isoformat() if auto_enable_at else None),
                 "audit_id": audit_id,
             }
 
@@ -480,9 +465,7 @@ class AutoTuningService:
                 },
             )
 
-            logger.warning(
-                f"[AutoTuningService] Module {module} disabled by {disabled_by}: {reason}"
-            )
+            logger.warning(f"[AutoTuningService] Module {module} disabled by {disabled_by}: {reason}")
 
             return {
                 "status": "disabled",
@@ -490,9 +473,7 @@ class AutoTuningService:
                 "disabled_at": disabled_at.isoformat(),
                 "disabled_by": disabled_by,
                 "reason": reason,
-                "auto_enable_at": (
-                    auto_enable_at.isoformat() if auto_enable_at else None
-                ),
+                "auto_enable_at": (auto_enable_at.isoformat() if auto_enable_at else None),
                 "audit_id": audit_id,
             }
 
@@ -551,9 +532,7 @@ class AutoTuningService:
             config = {
                 "min_value": bounds.get("min", previous.get("min_value", 0)),
                 "max_value": bounds.get("max", previous.get("max_value", float("inf"))),
-                "max_change_per_cycle": bounds.get(
-                    "max_change_per_cycle", previous.get("max_change_per_cycle", 0.3)
-                ),
+                "max_change_per_cycle": bounds.get("max_change_per_cycle", previous.get("max_change_per_cycle", 0.3)),
             }
 
             success = self.safety_bounds.update_bounds(parameter, config)
@@ -683,9 +662,7 @@ class AutoTuningService:
 
             # 자동 롤백 타이머
             if duration_minutes:
-                auto_rollback_at = datetime.now(timezone.utc) + timedelta(
-                    minutes=duration_minutes
-                )
+                auto_rollback_at = datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)
                 if disable_auto_tuning:
                     auto_tuning_disabled_until = auto_rollback_at
 
@@ -703,9 +680,7 @@ class AutoTuningService:
 
             # 해당 파라미터 자동 조정 비활성화
             if disable_auto_tuning:
-                self._disable_parameter_auto_tuning(
-                    parameter, auto_tuning_disabled_until
-                )
+                self._disable_parameter_auto_tuning(parameter, auto_tuning_disabled_until)
 
             # 조정 기록
             self.adjustment_recorder.record(
@@ -728,9 +703,7 @@ class AutoTuningService:
                 },
             )
 
-            logger.info(
-                f"[AutoTuningService] Override: {parameter}={value} by {overridden_by}"
-            )
+            logger.info(f"[AutoTuningService] Override: {parameter}={value} by {overridden_by}")
 
             return {
                 "status": "applied",
@@ -738,14 +711,8 @@ class AutoTuningService:
                 "previous_value": previous_value,
                 "new_value": value,
                 "override_type": "manual",
-                "auto_rollback_at": (
-                    auto_rollback_at.isoformat() if auto_rollback_at else None
-                ),
-                "auto_tuning_disabled_until": (
-                    auto_tuning_disabled_until.isoformat()
-                    if auto_tuning_disabled_until
-                    else None
-                ),
+                "auto_rollback_at": (auto_rollback_at.isoformat() if auto_rollback_at else None),
+                "auto_tuning_disabled_until": (auto_tuning_disabled_until.isoformat() if auto_tuning_disabled_until else None),
                 "audit_id": audit_id,
             }
 
@@ -773,9 +740,7 @@ class AutoTuningService:
             # 이전 값으로 복원
             if override_info.get("previous_value") is not None:
                 try:
-                    self.config_applier.apply(
-                        parameter, override_info["previous_value"]
-                    )
+                    self.config_applier.apply(parameter, override_info["previous_value"])
                 except Exception as e:
                     logger.warning(f"Failed to restore previous value: {e}")
 
@@ -838,9 +803,7 @@ class AutoTuningService:
                 "thresholds": thresholds,
             }
 
-    def get_adjustment_history(
-        self, parameter: str | None = None, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    def get_adjustment_history(self, parameter: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         """조정 이력 조회 (레거시 호환)"""
         records = self.adjustment_recorder.get_records(parameter, limit)
         return [r.to_dict() for r in records]
@@ -880,7 +843,7 @@ class AutoTuningService:
             "circuit_breaker": ["circuit_breaker_threshold"],
             "retry": ["retry_count"],
             "jitter": ["jitter_range"],
-            "rate_limit": ["rate_limit_rps"],
+            "rate_limit": ["throttle_sla_warning_ms", "throttle_sla_critical_ms", "rate_limit_rps"],
             "timeout": ["timeout_ms"],
         }
 
@@ -950,11 +913,7 @@ class AutoTuningService:
             "parameter": record.parameter,
             "old_value": record.old_value,
             "new_value": record.new_value,
-            "change_percent": (
-                ((record.new_value - record.old_value) / record.old_value * 100)
-                if record.old_value
-                else 0
-            ),
+            "change_percent": (((record.new_value - record.old_value) / record.old_value * 100) if record.old_value else 0),
             "triggered_by": record.triggered_by,
             "reason": record.reason,
             "result": "applied" if record.success else "failed",
@@ -969,6 +928,8 @@ class AutoTuningService:
             "retry_count": "retry",
             "jitter_range": "jitter",
             "rate_limit_rps": "rate_limit",
+            "throttle_sla_warning_ms": "rate_limit",
+            "throttle_sla_critical_ms": "rate_limit",
             "timeout_ms": "timeout",
         }
 
@@ -984,6 +945,8 @@ class AutoTuningService:
             "retry_count": "retry",
             "jitter_range": "jitter",
             "rate_limit_rps": "rate_limit",
+            "throttle_sla_warning_ms": "rate_limit",
+            "throttle_sla_critical_ms": "rate_limit",
             "timeout_ms": "timeout",
         }
 

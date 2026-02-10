@@ -1,0 +1,156 @@
+"""
+ThrottleConfigApplier 단위 테스트.
+
+SLA 파라미터 Atomic Swap, 레거시 No-op, 미지원 파라미터 거부를 검증한다.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from selfhealing.adapters.config_applier.throttle import ThrottleConfigApplier
+from selfhealing.services.throttle.adaptive import (
+    AdaptiveThrottle,
+    reset_adaptive_throttle,
+)
+from selfhealing.services.throttle.config import ThrottleConfig
+
+
+@pytest.fixture(autouse=True)
+def _reset_throttle():
+    """테스트 격리를 위해 글로벌 싱글톤 초기화."""
+    reset_adaptive_throttle()
+    yield
+    reset_adaptive_throttle()
+
+
+@pytest.fixture
+def applier():
+    """ThrottleConfigApplier 인스턴스."""
+    return ThrottleConfigApplier()
+
+
+@pytest.fixture
+def throttle():
+    """테스트용 AdaptiveThrottle 인스턴스 (싱글톤 등록)."""
+    from selfhealing.services.throttle.adaptive import (
+        _throttle_lock,
+    )
+    import selfhealing.services.throttle.adaptive as adaptive_module
+
+    config = ThrottleConfig(sla_warning_ms=200, sla_critical_ms=500)
+    t = AdaptiveThrottle(config)
+
+    with _throttle_lock:
+        adaptive_module._global_adaptive_throttle = t
+    return t
+
+
+class TestThrottleConfigApplierApply:
+    """apply() 메서드 테스트."""
+
+    def test_apply_sla_warning_ms(self, applier, throttle):
+        """throttle_sla_warning_ms 적용 시 config.sla_warning_ms가 변경되어야 한다."""
+        new_value = 250
+        result = applier.apply("throttle_sla_warning_ms", float(new_value))
+
+        assert result is True
+        assert throttle.config.sla_warning_ms == new_value
+
+    def test_apply_sla_critical_ms(self, applier, throttle):
+        """throttle_sla_critical_ms 적용 시 config.sla_critical_ms가 변경되어야 한다."""
+        new_value = 700
+        result = applier.apply("throttle_sla_critical_ms", float(new_value))
+
+        assert result is True
+        assert throttle.config.sla_critical_ms == new_value
+
+    def test_apply_atomic_swap_preserves_other_fields(self, applier, throttle):
+        """SLA 값 변경 시 다른 config 필드는 보존되어야 한다."""
+        original_initial_limit = throttle.config.initial_limit
+        original_sla_critical = throttle.config.sla_critical_ms
+
+        applier.apply("throttle_sla_warning_ms", 300.0)
+
+        assert throttle.config.initial_limit == original_initial_limit
+        assert throttle.config.sla_critical_ms == original_sla_critical
+
+    def test_apply_original_config_immutable(self, applier, throttle):
+        """apply() 후 이전 config 객체가 변경되지 않아야 한다 (Pydantic model_copy 검증)."""
+        old_config = throttle.config
+        old_warning = old_config.sla_warning_ms
+
+        applier.apply("throttle_sla_warning_ms", 999.0)
+
+        assert old_config.sla_warning_ms == old_warning
+
+    def test_apply_rate_limit_rps_noop(self, applier, throttle, caplog):
+        """rate_limit_rps는 No-op 처리되어 True를 반환하고 config 변경 없어야 한다."""
+        original_warning = throttle.config.sla_warning_ms
+        original_critical = throttle.config.sla_critical_ms
+
+        with caplog.at_level("INFO"):
+            result = applier.apply("rate_limit_rps", 1000.0)
+
+        assert result is True
+        assert throttle.config.sla_warning_ms == original_warning
+        assert throttle.config.sla_critical_ms == original_critical
+        assert any("deprecated" in r.message and "No-op" in r.message for r in caplog.records)
+
+    def test_apply_unknown_parameter_returns_false(self, applier, throttle):
+        """미지원 파라미터는 False를 반환해야 한다."""
+        result = applier.apply("unknown_param", 100.0)
+        assert result is False
+
+
+class TestThrottleConfigApplierGetCurrent:
+    """get_current() 메서드 테스트."""
+
+    def test_get_current_sla_warning_ms(self, applier, throttle):
+        """throttle_sla_warning_ms의 현재 값을 정확히 반환해야 한다."""
+        expected = float(throttle.config.sla_warning_ms)
+        assert applier.get_current("throttle_sla_warning_ms") == expected
+
+    def test_get_current_sla_critical_ms(self, applier, throttle):
+        """throttle_sla_critical_ms의 현재 값을 정확히 반환해야 한다."""
+        expected = float(throttle.config.sla_critical_ms)
+        assert applier.get_current("throttle_sla_critical_ms") == expected
+
+    def test_get_current_rate_limit_rps_returns_zero(self, applier, throttle):
+        """rate_limit_rps 레거시 파라미터는 0.0을 반환해야 한다."""
+        assert applier.get_current("rate_limit_rps") == 0.0
+
+    def test_get_current_unknown_parameter_raises(self, applier, throttle):
+        """미지원 파라미터는 ValueError를 발생시켜야 한다."""
+        with pytest.raises(ValueError, match="not supported"):
+            applier.get_current("unknown_param")
+
+
+class TestThrottleConfigApplierRollback:
+    """rollback() 메서드 테스트."""
+
+    def test_rollback_restores_value(self, applier, throttle):
+        """rollback()이 apply()와 동일하게 값을 적용해야 한다."""
+        original_value = float(throttle.config.sla_warning_ms)
+
+        # 변경 후 롤백
+        applier.apply("throttle_sla_warning_ms", 999.0)
+        result = applier.rollback("throttle_sla_warning_ms", original_value)
+
+        assert result is True
+        assert throttle.config.sla_warning_ms == int(original_value)
+
+
+class TestThrottleConfigApplierConstants:
+    """클래스 상수 검증."""
+
+    def test_param_to_config_mapping(self):
+        """PARAM_TO_CONFIG에 SLA 파라미터만 포함되어야 한다."""
+        expected_keys = {"throttle_sla_warning_ms", "throttle_sla_critical_ms"}
+        assert set(ThrottleConfigApplier.PARAM_TO_CONFIG.keys()) == expected_keys
+
+    def test_legacy_noop_params(self):
+        """LEGACY_NOOP_PARAMS에 rate_limit_rps가 포함되어야 한다."""
+        assert "rate_limit_rps" in ThrottleConfigApplier.LEGACY_NOOP_PARAMS

@@ -34,10 +34,7 @@ class ParameterBoundConfig(BaseModel):
     def validate_bounds(self) -> "ParameterBoundConfig":
         """min < max 검증."""
         if self.min_value > self.max_value:
-            raise ValueError(
-                f"min_value ({self.min_value}) cannot be greater than "
-                f"max_value ({self.max_value})"
-            )
+            raise ValueError(f"min_value ({self.min_value}) cannot be greater than " f"max_value ({self.max_value})")
         return self
 
 
@@ -157,6 +154,46 @@ class SafetyBoundsSettings(BaseSettings):
         ge=0.01,
         le=1.0,
         description="Rate Limit 한 사이클당 최대 변경 비율",
+    )
+
+    # ==========================================================================
+    # throttle_sla_warning_ms 한계
+    # ==========================================================================
+    throttle_sla_warning_ms_min: float = Field(
+        default=50,
+        ge=10,
+        description="SLA Warning 임계값 최소값 (ms)",
+    )
+    throttle_sla_warning_ms_max: float = Field(
+        default=2000,
+        le=5000,
+        description="SLA Warning 임계값 최대값 (ms)",
+    )
+    throttle_sla_warning_ms_max_change: float = Field(
+        default=0.3,
+        ge=0.01,
+        le=1.0,
+        description="SLA Warning 한 사이클당 최대 변경 비율",
+    )
+
+    # ==========================================================================
+    # throttle_sla_critical_ms 한계
+    # ==========================================================================
+    throttle_sla_critical_ms_min: float = Field(
+        default=100,
+        ge=50,
+        description="SLA Critical 임계값 최소값 (ms)",
+    )
+    throttle_sla_critical_ms_max: float = Field(
+        default=5000,
+        le=10000,
+        description="SLA Critical 임계값 최대값 (ms)",
+    )
+    throttle_sla_critical_ms_max_change: float = Field(
+        default=0.3,
+        ge=0.01,
+        le=1.0,
+        description="SLA Critical 한 사이클당 최대 변경 비율",
     )
 
     # ==========================================================================
