@@ -46,9 +46,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Context variable for thread-safe actor tracking
-_current_actor: contextvars.ContextVar[Actor | None] = contextvars.ContextVar(
-    "current_actor", default=None
-)
+_current_actor: contextvars.ContextVar[Actor | None] = contextvars.ContextVar("current_actor", default=None)
 
 
 # RBAC 역할 우선순위 상수
@@ -164,18 +162,14 @@ class ActorContext:
         )
         token = _current_actor.set(actor)
         try:
-            logger.debug(
-                f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source} roles={actor.roles}"
-            )
+            logger.debug(f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source} roles={actor.roles}")
             yield actor
         finally:
             _current_actor.reset(token)
             logger.debug(f"[ActorContext] Cleared actor: {actor_id}")
 
     @classmethod
-    def set_actor_from_django_request(
-        cls, request: Any
-    ) -> Generator[Actor, None, None]:
+    def set_actor_from_django_request(cls, request: Any) -> Generator[Actor, None, None]:
         """
         Set actor from Django request object.
 
@@ -238,11 +232,7 @@ class ActorContext:
         """
         try:
             if hasattr(user, "groups"):
-                return list(
-                    user.groups.filter(name__startswith="selfhealing_").values_list(
-                        "name", flat=True
-                    )
-                )
+                return list(user.groups.filter(name__startswith="selfhealing_").values_list("name", flat=True))
         except Exception:
             logger.debug(f"[ActorContext] Failed to extract RBAC roles for user {user}")
         return []
@@ -271,10 +261,9 @@ class ActorContext:
     @classmethod
     def _get_client_ip(cls, request: Any) -> str | None:
         """Extract client IP from Django request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
+        from selfhealing.utils.network import extract_client_ip
+
+        return extract_client_ip(request)
 
     @classmethod
     def get_current(cls) -> Actor:
@@ -359,8 +348,7 @@ def warn_if_untracked(operation: str) -> None:
             stacklevel=2,
         )
         logger.warning(
-            f"[ActorContext] UNTRACKED_OPERATION operation={operation} "
-            f"actor={ActorContext.get_current().actor_id}"
+            f"[ActorContext] UNTRACKED_OPERATION operation={operation} " f"actor={ActorContext.get_current().actor_id}"
         )
 
 
@@ -450,9 +438,7 @@ def get_actor_for_celery() -> dict[str, Any]:
 
 
 @contextmanager
-def restore_actor_from_celery(
-    actor_info: dict[str, Any]
-) -> Generator[Actor, None, None]:
+def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, None, None]:
     """
     Restore actor context in Celery task from passed info.
 
@@ -468,10 +454,7 @@ def restore_actor_from_celery(
     """
     if not actor_info:
         # No actor info passed, log warning
-        logger.warning(
-            "[ActorContext] Celery task started without actor_info. "
-            "Operations will be attributed to 'system'."
-        )
+        logger.warning("[ActorContext] Celery task started without actor_info. " "Operations will be attributed to 'system'.")
         yield SYSTEM_ACTOR
         return
 
@@ -516,7 +499,5 @@ def set_management_command_actor(
         actor_type="management_command",
         source=f"manage.py:{command_name}",
     ) as actor:
-        logger.info(
-            f"[ActorContext] Management command '{command_name}' started by {actor_id}"
-        )
+        logger.info(f"[ActorContext] Management command '{command_name}' started by {actor_id}")
         yield actor

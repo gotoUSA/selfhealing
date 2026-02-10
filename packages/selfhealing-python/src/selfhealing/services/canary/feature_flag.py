@@ -205,18 +205,9 @@ class RequestContextExtractor:
     @staticmethod
     def get_client_ip(request: HttpRequest) -> str | None:
         """요청에서 클라이언트 IP 추출."""
-        # X-Forwarded-For 헤더 확인 (프록시/로드밸런서 환경)
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
+        from selfhealing.utils.network import extract_client_ip
 
-        # X-Real-IP 헤더 확인
-        x_real_ip = request.META.get("HTTP_X_REAL_IP")
-        if x_real_ip:
-            return x_real_ip
-
-        # 직접 연결 IP
-        return request.META.get("REMOTE_ADDR")
+        return extract_client_ip(request)
 
     @staticmethod
     def get_header(request: HttpRequest, header_name: str) -> str | None:

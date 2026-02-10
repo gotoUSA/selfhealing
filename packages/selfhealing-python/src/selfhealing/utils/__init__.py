@@ -15,6 +15,7 @@ from selfhealing.utils.jitter import (
     sleep_with_jitter,
     with_jitter,
 )
+from selfhealing.utils.network import extract_client_ip
 from selfhealing.utils.time import (
     add_seconds,
     elapsed_seconds,
@@ -27,6 +28,8 @@ from selfhealing.utils.time import (
 )
 
 __all__ = [
+    # Network utilities (canonical IP extraction)
+    "extract_client_ip",
     "utc_now",
     "ensure_aware",
     "to_iso_string",

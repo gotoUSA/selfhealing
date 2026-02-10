@@ -592,10 +592,9 @@ class ThresholdBasedPermission(BasePermission):
 
     def _get_client_ip(self, request: Request) -> str | None:
         """클라이언트 IP 추출."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
+        from selfhealing.utils.network import extract_client_ip
+
+        return extract_client_ip(request)
 
 
 class IsPanicRollbackAuthorized(BasePermission):
@@ -758,10 +757,9 @@ class HasChaosTestPermission(BasePermission):
 
     def _get_client_ip(self, request: Request) -> str | None:
         """클라이언트 IP 추출."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
+        from selfhealing.utils.network import extract_client_ip
+
+        return extract_client_ip(request)
 
 
 # Backward compatibility aliases

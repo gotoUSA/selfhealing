@@ -388,22 +388,16 @@ def extract_ip_from_request(request) -> str:
     """
     Extract client IP from a Django request, handling proxies.
 
+    Thin wrapper around :func:`selfhealing.utils.network.extract_client_ip`
+    that preserves the original ``"unknown"`` default for backward
+    compatibility with audit callers.
+
     Args:
         request: Django HttpRequest object
 
     Returns:
-        Client IP address
+        Client IP address (``"unknown"`` when unresolvable)
     """
-    # Check X-Forwarded-For first (common proxy header)
-    x_forwarded_for = getattr(request, "META", {}).get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        # Take the first IP (original client)
-        return x_forwarded_for.split(",")[0].strip()
+    from selfhealing.utils.network import extract_client_ip
 
-    # Check X-Real-IP (nginx)
-    x_real_ip = getattr(request, "META", {}).get("HTTP_X_REAL_IP")
-    if x_real_ip:
-        return x_real_ip.strip()
-
-    # Fall back to REMOTE_ADDR
-    return getattr(request, "META", {}).get("REMOTE_ADDR", "unknown")
+    return extract_client_ip(request, default="unknown")  # type: ignore[return-value]
