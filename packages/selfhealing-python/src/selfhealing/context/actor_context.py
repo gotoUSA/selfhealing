@@ -260,10 +260,18 @@ class ActorContext:
 
     @classmethod
     def _get_client_ip(cls, request: Any) -> str | None:
-        """Extract client IP from Django request."""
-        from selfhealing.utils.network import extract_client_ip
+        """Extract client IP from Django request.
 
-        return extract_client_ip(request)
+        Fail-Open: IP 추출 실패 시 None 반환하여 Actor 생성은 계속 진행.
+        Actor.ip_address는 Optional[str]이므로 None이 안전한 기본값.
+        """
+        try:
+            from selfhealing.utils.network import extract_client_ip
+
+            return extract_client_ip(request)
+        except Exception as e:
+            logger.warning(f"[ActorContext] Failed to extract client IP: {e}")
+            return None
 
     @classmethod
     def get_current(cls) -> Actor:

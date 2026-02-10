@@ -49,7 +49,7 @@ class ActorContextMiddleware:
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]):
         self.get_response = get_response
         self._enabled = self._check_enabled()
-        
+
         status = "enabled" if self._enabled else "DISABLED"
         logger.info(f"[ActorContextMiddleware] Initialized - {status}")
 
@@ -57,7 +57,8 @@ class ActorContextMiddleware:
         """미들웨어 활성화 여부 확인"""
         try:
             from django.conf import settings
-            return getattr(settings, 'SELFHEALING_ACTOR_MIDDLEWARE_ENABLED', True)
+
+            return getattr(settings, "SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", True)
         except Exception:
             # settings 접근 불가 시 환경변수 확인
             return os.getenv("SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -66,19 +67,21 @@ class ActorContextMiddleware:
         # 미들웨어 비활성화 시 바이패스
         if not self._enabled:
             return self.get_response(request)
-        
+
         # Import here to avoid circular imports
         try:
             from selfhealing.context.actor_context import ActorContext
         except ImportError:
-            logger.warning(
-                "[ActorContextMiddleware] selfhealing package not installed. "
-                "Actor context tracking disabled."
-            )
+            logger.warning("[ActorContextMiddleware] selfhealing package not installed. " "Actor context tracking disabled.")
             return self.get_response(request)
 
         # Use context manager to set actor for this request
-        with ActorContext.set_actor_from_django_request(request):
+        # Fail-Open: Actor 설정 실패 시 요청은 계속 처리 (500 방지)
+        try:
+            with ActorContext.set_actor_from_django_request(request):
+                response = self.get_response(request)
+        except Exception as e:
+            logger.warning(f"[ActorContextMiddleware] Actor context setup failed: {e}. " "Proceeding without actor context.")
             response = self.get_response(request)
 
         return response

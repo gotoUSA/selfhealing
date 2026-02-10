@@ -204,10 +204,19 @@ class RequestContextExtractor:
 
     @staticmethod
     def get_client_ip(request: HttpRequest) -> str | None:
-        """요청에서 클라이언트 IP 추출."""
-        from selfhealing.utils.network import extract_client_ip
+        """요청에서 클라이언트 IP 추출.
 
-        return extract_client_ip(request)
+        Fail-Open: IP 추출 실패 시 None 반환.
+        호출부 _evaluate_ip_hash는 None일 때 baseline 사용,
+        _evaluate_whitelist는 None이면 whitelist 매칭을 건너뜀.
+        """
+        try:
+            from selfhealing.utils.network import extract_client_ip
+
+            return extract_client_ip(request)
+        except Exception as e:
+            logger.warning(f"[CanaryContextExtractor] Failed to extract client IP: {e}")
+            return None
 
     @staticmethod
     def get_header(request: HttpRequest, header_name: str) -> str | None:
