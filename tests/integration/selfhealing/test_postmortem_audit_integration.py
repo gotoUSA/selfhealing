@@ -29,39 +29,37 @@ class TestPostmortemViewAudit:
     """Postmortem View의 Audit 로깅 테스트."""
 
     def test_postmortem_generator_view_calls_audit(self, mock_request):
-        """PostmortemGeneratorView.post()가 log_xtest_audit을 호출하는지 확인."""
-        from selfhealing.api.django.views.xtest.observability import PostmortemGeneratorView
+        """PostmortemGeneratorView.post()가 _write_to_wal audit를 호출하는지 확인."""
+        from selfhealing.api.django.views.postmortem import PostmortemGeneratorView
 
         view = PostmortemGeneratorView()
         mock_request.data = {"incident_id": "TEST-INCIDENT-001"}
         mock_request.headers = {"X-Test-Session": "test-session-123", "X-Trace-ID": "trace-001"}
 
-        audit_calls = []
+        wal_calls = []
 
-        def mock_log_xtest_audit(**kwargs):
-            audit_calls.append(kwargs)
-            return 1
+        def mock_write_to_wal(**kwargs):
+            wal_calls.append(kwargs)
 
         with (
-            patch.object(view, "check_chaos_permission", return_value=None),
-            patch.object(view, "log_xtest_audit", side_effect=mock_log_xtest_audit),
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus,
             patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service") as mock_cb,
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
             patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
             patch("selfhealing.services.postmortem_store.add_healing_incident"),
+            patch("selfhealing.services.audit.base._write_to_wal", side_effect=mock_write_to_wal),
         ):
             mock_bus.return_value.get_history.return_value = []
             mock_cb.return_value.repository.get_all_states.return_value = []
 
             response = view.post(mock_request)
 
-        assert len(audit_calls) == 1
-        audit_call = audit_calls[0]
-        assert audit_call["action"] == "generate_postmortem"
-        assert audit_call["component"] == "observability"
-        assert audit_call["result"] == "success"
-        assert "incident_id" in audit_call["details"]
+        assert len(wal_calls) == 1
+        wal_call = wal_calls[0]
+        assert wal_call["event_type"] == "POSTMORTEM_MANUAL_GENERATED"
+        assert wal_call["source"] == "API.Postmortem"
+        assert wal_call["success"] is True
+        assert "incident_id" in wal_call["details"]
 
     def test_blast_radius_view_calls_audit(self, mock_request):
         """BlastRadiusTestView.post()가 log_xtest_audit을 호출하는지 확인."""
@@ -178,10 +176,13 @@ class TestAutoPostmortemAuditIntegration:
     def reset_settings(self):
         """테스트 전후 설정 리셋."""
         from selfhealing.settings.api_view import reset_api_view_settings
+        from selfhealing.settings.postmortem import reset_postmortem_settings
 
         reset_api_view_settings()
+        reset_postmortem_settings()
         yield
         reset_api_view_settings()
+        reset_postmortem_settings()
 
     def test_auto_postmortem_calls_write_to_wal(self, monkeypatch):
         """자동 Post-mortem 생성 시 Celery task로 위임되는지 확인.
@@ -195,8 +196,13 @@ class TestAutoPostmortemAuditIntegration:
             EventType,
         )
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+
+        from selfhealing.settings.postmortem import reset_postmortem_settings
+
+        reset_postmortem_settings()
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -231,8 +237,13 @@ class TestAutoPostmortemAuditIntegration:
             EventType,
         )
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+
+        from selfhealing.settings.postmortem import reset_postmortem_settings
+
+        reset_postmortem_settings()
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,
@@ -276,8 +287,13 @@ class TestAutoPostmortemAuditIntegration:
             EventType,
         )
 
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_ENABLED", "true")
-        monkeypatch.setenv("SELFHEALING_API_VIEW_AUTO_POSTMORTEM_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+
+        from selfhealing.settings.postmortem import reset_postmortem_settings
+
+        reset_postmortem_settings()
 
         event = SelfHealingEvent(
             event_type=EventType.CIRCUIT_BREAKER_CLOSED,

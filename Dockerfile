@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y \
 # Python 의존성 파일 복사
 COPY requirements.txt /code/
 COPY requirements-dev.txt /code/
+COPY pyproject.toml /code/
+COPY setup.cfg /code/
 
 # selfhealing 패키지 먼저 복사 (editable 설치 위해)
 COPY packages/ /code/packages/

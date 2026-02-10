@@ -118,6 +118,11 @@ class TestPostmortemAutoTriggerIntegration:
         # 설정: 자동 Post-mortem 활성화, 최소 duration 0으로 설정
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+
+        from selfhealing.settings.postmortem import reset_postmortem_settings
+
+        reset_postmortem_settings()
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -165,6 +170,11 @@ class TestPostmortemAutoTriggerIntegration:
         # 설정: 자동 Post-mortem 활성화, 최소 duration 3600초 (1시간)
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "3600")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+
+        from selfhealing.settings.postmortem import reset_postmortem_settings
+
+        reset_postmortem_settings()
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -196,6 +206,11 @@ class TestPostmortemAutoTriggerIntegration:
         # 설정: 자동 Post-mortem 활성화
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_ENABLED", "true")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
+
+        from selfhealing.settings.postmortem import reset_postmortem_settings
+
+        reset_postmortem_settings()
 
         # 기본 핸들러 등록
         register_default_handlers()
@@ -350,6 +365,7 @@ class TestPostmortemNotificationIntegration:
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION", "0")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED", "true")
         monkeypatch.setenv("SELFHEALING_POSTMORTEM_NOTIFICATION_MIN_DURATION", "0")
+        monkeypatch.setenv("SELFHEALING_POSTMORTEM_INCIDENT_GROUP_ENABLED", "false")
         reset_postmortem_settings()
 
         # 기본 핸들러 등록

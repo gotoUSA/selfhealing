@@ -941,6 +941,33 @@ services:
       retries: 5
       start_period: 30s
 
+  # ---------------------------------------------------------------------------
+  # 213. Postmortem Celery Delegation 통합 테스트
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-postmortem-celery-delegation
+  # ---------------------------------------------------------------------------
+  test-postmortem-celery-delegation:
+    build: .
+    command: >
+      sh -c "pip uninstall crontab -y -q 2>/dev/null;
+             python -m pytest tests/integration/selfhealing/test_postmortem_audit_integration.py tests/integration/selfhealing/test_postmortem_auto_trigger_integration.py -v --tb=short --no-cov --override-ini='addopts=' -p no:cacheprovider --create-db"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Kafka Event Bus 통합 테스트 러너
   test-kafka-event-bus:
     build: .
