@@ -50,6 +50,11 @@ from selfhealing.api.django.middleware.recovery_logger import (
 from selfhealing.api.django.middleware.self_healing import SelfHealingMiddleware
 
 # ============================================================
+# Actor Context
+# ============================================================
+from selfhealing.api.django.middleware.actor_context import ActorContextMiddleware
+
+# ============================================================
 # Public API
 # ============================================================
 __all__ = [
@@ -64,6 +69,8 @@ __all__ = [
     "SelfHealingMiddleware",
     "SelfHealingRecoveryLogger",
     "get_recovery_logger",
+    # Actor Context
+    "ActorContextMiddleware",
     # Fail-Secure Permissions
     "FailSecureIsAuthenticated",
     "FailSecureIsAdminUser",

@@ -113,7 +113,7 @@ MIDDLEWARE = [
     # ==========================================================================
     # 모든 요청에서 "누가" 수행하는지 자동 추적 (Audit 연동)
     # 비활성화: SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = False
-    "myproject.middleware.actor_middleware.ActorContextMiddleware",
+    "selfhealing.api.django.middleware.actor_context.ActorContextMiddleware",
     # ==========================================================================
     # [6] Django Core Middlewares
     # ==========================================================================
