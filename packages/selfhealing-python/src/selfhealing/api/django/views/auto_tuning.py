@@ -86,8 +86,20 @@ def _create_default_service():
 
         audit_adapter = AuditAdapterWrapper()
 
+    # InternalMetricsAdapter: throttle_rate 포함 실 메트릭 수집 (DummyMetricsAdapter 대체)
+    # DummyConfigApplier 유지 (ThrottleConfigApplier 구현 전까지 fallback)
+    try:
+        from selfhealing.adapters.metrics.auto_tuning_adapter import (
+            InternalMetricsAdapter,
+        )
+
+        metrics_adapter = InternalMetricsAdapter()
+    except ImportError:
+        logger.warning("[AutoTuning] InternalMetricsAdapter import failed, " "falling back to DummyMetricsAdapter")
+        metrics_adapter = DummyMetricsAdapter()
+
     return AutoTuningService(
-        metrics_adapter=DummyMetricsAdapter(),
+        metrics_adapter=metrics_adapter,
         config_provider=DummyConfigProvider(),
         config_applier=DummyConfigApplier(),
         audit_adapter=audit_adapter,
