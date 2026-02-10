@@ -159,6 +159,7 @@ class TestLogOutput:
         handler.setLevel(logging.INFO)
 
         decision_logger = logging.getLogger("selfhealing.decision_record")
+        original_level = decision_logger.level
         decision_logger.addHandler(handler)
         decision_logger.setLevel(logging.INFO)
 
@@ -203,6 +204,7 @@ class TestLogOutput:
             assert "timestamp" in exit_record
         finally:
             decision_logger.removeHandler(handler)
+            decision_logger.setLevel(original_level)
 
     def test_policy_version_included_when_provided(self):
         """Verify policy_version is included when provided."""
@@ -214,6 +216,7 @@ class TestLogOutput:
         handler.setLevel(logging.INFO)
 
         decision_logger = logging.getLogger("selfhealing.decision_record")
+        original_level = decision_logger.level
         decision_logger.addHandler(handler)
         decision_logger.setLevel(logging.INFO)
 
@@ -229,6 +232,7 @@ class TestLogOutput:
             assert record["policy_version"] == "v1.0.0"
         finally:
             decision_logger.removeHandler(handler)
+            decision_logger.setLevel(original_level)
 
     def test_only_allowed_fields_present(self):
         """Verify no extra fields beyond specification."""
@@ -243,6 +247,7 @@ class TestLogOutput:
         handler.setLevel(logging.INFO)
 
         decision_logger = logging.getLogger("selfhealing.decision_record")
+        original_level = decision_logger.level
         decision_logger.addHandler(handler)
         decision_logger.setLevel(logging.INFO)
 
@@ -267,6 +272,7 @@ class TestLogOutput:
             assert set(eval_record.keys()) == allowed_fields_eval
         finally:
             decision_logger.removeHandler(handler)
+            decision_logger.setLevel(original_level)
 
 
 class TestImportFromCore:

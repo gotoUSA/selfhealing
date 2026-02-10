@@ -395,6 +395,7 @@ class TestIncidentLogHandler:
         # 핸들러 생성 및 로거에 추가
         handler = IncidentLogHandler(level=logging.ERROR, service_name="test-handler")
         test_logger = logging.getLogger("test.incident.handler")
+        original_level = test_logger.level
         test_logger.addHandler(handler)
         test_logger.setLevel(logging.DEBUG)
 
@@ -413,6 +414,7 @@ class TestIncidentLogHandler:
 
         finally:
             test_logger.removeHandler(handler)
+            test_logger.setLevel(original_level)
             reset_incident_log_buffer()
 
 

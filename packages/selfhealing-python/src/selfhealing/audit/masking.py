@@ -136,16 +136,37 @@ def mask_with_level(
                 encrypted = fernet.encrypt(value.encode())
                 return f"encrypted:{encrypted.decode()}"
             except Exception as e:
-                logger.warning(f"[Security] Fernet encryption failed: {e}. " "Falling back to AUDIT level hash.")
-                # 암호화 실패 시 AUDIT 레벨로 폴백
-                return hash_for_audit(value, salt)
+                logger.warning(f"[Security] Fernet encryption failed: {e}. " "Using HMAC fallback.")
+                return _forensic_hmac_fallback(value, salt)
         else:
-            # encryption_key 미설정 시 AUDIT 레벨로 폴백 (해시)
-            logger.debug("[Security] FORENSIC masking unavailable (no encryption_key). " "Using AUDIT level hash instead.")
-            return hash_for_audit(value, salt)
+            # encryption_key 미설정 시 HMAC 기반 폴백 (encrypted: 접두사 유지)
+            logger.debug("[Security] FORENSIC masking unavailable (no encryption_key). " "Using HMAC fallback.")
+            return _forensic_hmac_fallback(value, salt)
 
     # 기본값은 CLIENT 레벨
     return "***REDACTED***"
+
+
+def _forensic_hmac_fallback(value: str, salt: str | None = None) -> str:
+    """FORENSIC 레벨 HMAC 기반 폴백.
+
+    Fernet 암호화가 불가능할 때 HMAC-SHA256으로 비가역 암호화 형태를 생성.
+    encrypted: 접두사를 유지하여 FORENSIC 레벨 API 계약을 보장하되,
+    이 값은 복호화가 불가능함을 인지해야 한다.
+
+    Args:
+        value: 마스킹할 원본 값
+        salt: 추가 솔트 (선택)
+
+    Returns:
+        'encrypted:hmac:<base64-encoded HMAC>' 형식 문자열
+    """
+    import hmac as _hmac
+
+    key = (salt or "forensic-fallback-key").encode()
+    digest = _hmac.new(key, value.encode(), hashlib.sha256).digest()
+    encoded = base64.urlsafe_b64encode(digest).decode()
+    return f"encrypted:hmac:{encoded}"
 
 
 def decrypt_forensic(encrypted_value: str) -> str:

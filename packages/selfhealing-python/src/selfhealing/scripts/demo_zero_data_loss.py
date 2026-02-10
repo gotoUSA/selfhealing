@@ -32,11 +32,15 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
 logger = logging.getLogger(__name__)
+
+
+def _configure_demo_logging() -> None:
+    """데모 스크립트 전용 로깅 설정. __main__에서만 호출."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
 
 
 class DemoStats:
@@ -280,4 +284,5 @@ def main():
 
 
 if __name__ == "__main__":
+    _configure_demo_logging()
     sys.exit(main())

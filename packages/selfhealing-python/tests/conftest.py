@@ -189,6 +189,55 @@ def _reset_all_audit_settings():
 
 
 # =============================================================================
+# Logging State Isolation (테스트 간 로거 오염 방지)
+# =============================================================================
+
+
+@pytest.fixture(autouse=True, scope="function")
+def _isolate_logging_state():
+    """
+    모든 테스트 전후에 루트 로거와 selfhealing 로거의 상태를 복원하는 fixture.
+
+    근본 원인: django.setup()이 호출되면 Django LOGGING 설정이 적용되어
+    selfhealing 로거에 propagate=False + 전용 StreamHandler가 설정된다.
+    이로 인해 selfhealing.* 로거의 레코드가 루트 로거(caplog 핸들러 위치)까지
+    전파되지 않아 caplog가 빈 결과를 반환하는 문제가 발생한다.
+
+    해결: 각 테스트 시작 시 selfhealing 네임스페이스 로거의 propagate를 True로
+    강제하고 Django가 추가한 핸들러를 제거하여 caplog가 정상 동작하도록 한다.
+    테스트 종료 후 원래 상태로 복원한다.
+    """
+    import logging as _logging
+
+    root = _logging.getLogger()
+    root_level = root.level
+    root_handlers = list(root.handlers)
+
+    # selfhealing 네임스페이스 로거 상태 저장 + propagate 강제 활성화
+    _saved: dict[str, tuple[int, bool, list]] = {}
+    for name, logger_obj in _logging.Logger.manager.loggerDict.items():
+        if isinstance(logger_obj, _logging.Logger) and name.startswith("selfhealing"):
+            _saved[name] = (logger_obj.level, logger_obj.propagate, list(logger_obj.handlers))
+            # Django LOGGING 설정에 의해 추가된 propagate=False 해제
+            logger_obj.propagate = True
+            # Django가 추가한 핸들러 제거 (caplog과 충돌 방지)
+            logger_obj.handlers = []
+
+    yield
+
+    # 루트 로거 복원
+    root.setLevel(root_level)
+    root.handlers = root_handlers
+
+    # selfhealing 로거 복원
+    for name, (level, propagate, handlers) in _saved.items():
+        logger_obj = _logging.getLogger(name)
+        logger_obj.setLevel(level)
+        logger_obj.propagate = propagate
+        logger_obj.handlers = handlers
+
+
+# =============================================================================
 # Singleton Reset Fixtures (테스트 격리용)
 # =============================================================================
 
