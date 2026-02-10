@@ -3,9 +3,9 @@ THROTTLE_SLA_RULES 단위 테스트.
 
 DecisionEngine에 주입되는 SLA 자동 조정 규칙의 조건/조정 로직을 검증한다.
 
-- 소스 상수 참조: AdjustmentPriority enum 직접 import
-- 규칙 필터링: 인덱스 접근 대신 parameter 기반 필터링으로 순서 의존 제거
-- 함수 동작 검증: condition/adjustment 입출력 테스트 (guideline 2.1 허용)
+테스트 분류:
+- 계약 검증 (Contract): 규칙 구조, 계수, 상한/하한, 신뢰도 등 설계 사양 고정
+- 동작 검증 (Behavior): condition/adjustment 입출력 매핑 (guideline §2.1 허용)
 """
 
 from __future__ import annotations
@@ -44,8 +44,15 @@ def _find_down_rule(parameter: str) -> AdjustmentRule:
     return down_rules[0]
 
 
-class TestThrottleSlaRulesDefinition:
-    """규칙 정의 구조 검증."""
+# =============================================================================
+# 계약 검증 (Contract Tests) — 규칙 구조 및 설계 사양을 하드코딩으로 고정
+# =============================================================================
+
+
+class TestThrottleSlaRulesContract:
+    """SLA 규칙 설계 계약 검증 (하드코딩 허용)."""
+
+    # -- 구조 계약 --
 
     def test_rules_count(self):
         """THROTTLE_SLA_RULES에 3개의 규칙이 있어야 한다."""
@@ -78,9 +85,66 @@ class TestThrottleSlaRulesDefinition:
         for rule in critical_rules:
             assert rule.priority == AdjustmentPriority.MEDIUM
 
+    # -- 조정 계수 계약 --
 
-class TestSlaWarningUpRule:
-    """SLA Warning 상향 규칙 (P99 > 90% of threshold) 테스트."""
+    def test_warning_up_coefficient_1_15(self):
+        """Warning 상향 조정 계수는 1.15이다."""
+        rule = _find_up_rule("throttle_sla_warning_ms")
+        # 100 * 1.15 = 115.0 (cap 2000 미적용 구간)
+        assert rule.adjustment(100, 95) == pytest.approx(115.0)
+
+    def test_warning_down_coefficient_0_85(self):
+        """Warning 하향 조정 계수는 0.85이다."""
+        rule = _find_down_rule("throttle_sla_warning_ms")
+        # 200 * 0.85 = 170.0 (floor 50 미적용 구간)
+        assert rule.adjustment(200, 80) == pytest.approx(170.0)
+
+    def test_critical_up_coefficient_1_15(self):
+        """Critical 상향 조정 계수는 1.15이다."""
+        rule = _find_up_rule("throttle_sla_critical_ms")
+        # 100 * 1.15 = 115.0 (cap 5000 미적용 구간)
+        assert rule.adjustment(100, 90) == pytest.approx(115.0)
+
+    # -- 상한/하한 계약 --
+
+    def test_warning_up_cap_2000(self):
+        """Warning 상향 상한은 2000이다."""
+        rule = _find_up_rule("throttle_sla_warning_ms")
+        # 1800 * 1.15 = 2070 → min(2070, 2000) = 2000
+        assert rule.adjustment(1800, 1650) == 2000
+
+    def test_warning_down_floor_50(self):
+        """Warning 하향 하한은 50이다."""
+        rule = _find_down_rule("throttle_sla_warning_ms")
+        # 55 * 0.85 = 46.75 → max(46.75, 50) = 50
+        assert rule.adjustment(55, 20) == 50
+
+    def test_critical_up_cap_5000(self):
+        """Critical 상향 상한은 5000이다."""
+        rule = _find_up_rule("throttle_sla_critical_ms")
+        # 4500 * 1.15 = 5175 → min(5175, 5000) = 5000
+        assert rule.adjustment(4500, 4000) == 5000
+
+    # -- 최소 신뢰도 계약 --
+
+    def test_warning_min_confidence_0_6(self):
+        """Warning 규칙의 최소 신뢰도는 0.6이다."""
+        for rule in _find_rules_by_param("throttle_sla_warning_ms"):
+            assert rule.min_confidence == 0.6
+
+    def test_critical_min_confidence_0_7(self):
+        """Critical 규칙의 최소 신뢰도는 0.7이다."""
+        for rule in _find_rules_by_param("throttle_sla_critical_ms"):
+            assert rule.min_confidence == 0.7
+
+
+# =============================================================================
+# 동작 검증 (Behavior Tests) — condition/adjustment 입출력 매핑
+# =============================================================================
+
+
+class TestSlaWarningUpRuleBehavior:
+    """SLA Warning 상향 규칙 동작 검증 (P99 > 90% of threshold)."""
 
     @pytest.fixture
     def rule(self):
@@ -106,15 +170,9 @@ class TestSlaWarningUpRule:
         result = rule.adjustment(200, 185)
         assert result > 200
 
-    def test_adjustment_capped_at_max(self, rule):
-        """조정값은 상한값을 초과하지 않아야 한다."""
-        result = rule.adjustment(1800, 1650)
-        # 1800 * 1.15 = 2070 → cap 적용
-        assert result <= 2000
 
-
-class TestSlaWarningDownRule:
-    """SLA Warning 하향 규칙 (P99 < 50% of threshold) 테스트."""
+class TestSlaWarningDownRuleBehavior:
+    """SLA Warning 하향 규칙 동작 검증 (P99 < 50% of threshold)."""
 
     @pytest.fixture
     def rule(self):
@@ -140,15 +198,9 @@ class TestSlaWarningDownRule:
         result = rule.adjustment(200, 80)
         assert result < 200
 
-    def test_adjustment_floored_at_min(self, rule):
-        """조정값은 하한값 미만으로 내려가지 않아야 한다."""
-        result = rule.adjustment(55, 20)
-        # 55 * 0.85 = 46.75 → floor 적용
-        assert result >= 50
 
-
-class TestSlaCriticalUpRule:
-    """SLA Critical 상향 규칙 (P99 > 85% of threshold) 테스트."""
+class TestSlaCriticalUpRuleBehavior:
+    """SLA Critical 상향 규칙 동작 검증 (P99 > 85% of threshold)."""
 
     @pytest.fixture
     def rule(self):
@@ -173,9 +225,3 @@ class TestSlaCriticalUpRule:
         """조정값은 현재 값보다 커야 한다 (상향 조정)."""
         result = rule.adjustment(500, 440)
         assert result > 500
-
-    def test_adjustment_capped_at_max(self, rule):
-        """조정값은 상한값을 초과하지 않아야 한다."""
-        result = rule.adjustment(4500, 4000)
-        # 4500 * 1.15 = 5175 → cap 적용
-        assert result <= 5000

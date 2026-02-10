@@ -153,14 +153,18 @@ class TestThrottleConfigApplierRollback:
 
 
 class TestThrottleConfigApplierConstants:
-    """클래스 상수 검증 (계약 테스트)."""
+    """클래스 상수 설계 계약 검증 (하드코딩 허용)."""
 
     def test_param_to_config_has_sla_parameters(self):
-        """PARAM_TO_CONFIG에 SLA 파라미터가 포함되어야 한다."""
-        # 계약 검증: SLA 파라미터 키 존재 확인
+        """PARAM_TO_CONFIG에 SLA 파라미터 2개가 포함되어야 한다."""
         assert "throttle_sla_warning_ms" in _PARAM_TO_CONFIG
         assert "throttle_sla_critical_ms" in _PARAM_TO_CONFIG
         assert len(_PARAM_TO_CONFIG) == 2
+
+    def test_param_to_config_exact_mapping(self):
+        """PARAM_TO_CONFIG의 정확한 값 매핑 (설계 계약)."""
+        assert _PARAM_TO_CONFIG["throttle_sla_warning_ms"] == "sla_warning_ms"
+        assert _PARAM_TO_CONFIG["throttle_sla_critical_ms"] == "sla_critical_ms"
 
     def test_legacy_noop_params_has_rate_limit_rps(self):
         """LEGACY_NOOP_PARAMS에 rate_limit_rps가 포함되어야 한다."""
