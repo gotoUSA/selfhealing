@@ -2,11 +2,13 @@
 ThrottleConfigApplier 단위 테스트.
 
 SLA 파라미터 Atomic Swap, 레거시 No-op, 미지원 파라미터 거부를 검증한다.
+
+
+- 기본값 참조: ThrottleConfig() 기본값에서 파생
+- 상수 import: PARAM_TO_CONFIG, LEGACY_NOOP_PARAMS 소스 참조
 """
 
 from __future__ import annotations
-
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +18,10 @@ from selfhealing.services.throttle.adaptive import (
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.config import ThrottleConfig
+
+# 소스 상수 참조 (하드코딩 방지)
+_PARAM_TO_CONFIG = ThrottleConfigApplier.PARAM_TO_CONFIG
+_LEGACY_NOOP_PARAMS = ThrottleConfigApplier.LEGACY_NOOP_PARAMS
 
 
 @pytest.fixture(autouse=True)
@@ -34,13 +40,13 @@ def applier():
 
 @pytest.fixture
 def throttle():
-    """테스트용 AdaptiveThrottle 인스턴스 (싱글톤 등록)."""
+    """테스트용 AdaptiveThrottle 인스턴스 (싱글톤 등록, 기본 config 사용)."""
     from selfhealing.services.throttle.adaptive import (
         _throttle_lock,
     )
     import selfhealing.services.throttle.adaptive as adaptive_module
 
-    config = ThrottleConfig(sla_warning_ms=200, sla_critical_ms=500)
+    config = ThrottleConfig()  # 기본값 사용 (하드코딩 방지)
     t = AdaptiveThrottle(config)
 
     with _throttle_lock:
@@ -53,7 +59,8 @@ class TestThrottleConfigApplierApply:
 
     def test_apply_sla_warning_ms(self, applier, throttle):
         """throttle_sla_warning_ms 적용 시 config.sla_warning_ms가 변경되어야 한다."""
-        new_value = 250
+        original = throttle.config.sla_warning_ms
+        new_value = original + 50
         result = applier.apply("throttle_sla_warning_ms", float(new_value))
 
         assert result is True
@@ -61,7 +68,8 @@ class TestThrottleConfigApplierApply:
 
     def test_apply_sla_critical_ms(self, applier, throttle):
         """throttle_sla_critical_ms 적용 시 config.sla_critical_ms가 변경되어야 한다."""
-        new_value = 700
+        original = throttle.config.sla_critical_ms
+        new_value = original + 200
         result = applier.apply("throttle_sla_critical_ms", float(new_value))
 
         assert result is True
@@ -72,7 +80,8 @@ class TestThrottleConfigApplierApply:
         original_initial_limit = throttle.config.initial_limit
         original_sla_critical = throttle.config.sla_critical_ms
 
-        applier.apply("throttle_sla_warning_ms", 300.0)
+        new_warning = throttle.config.sla_warning_ms + 100
+        applier.apply("throttle_sla_warning_ms", float(new_warning))
 
         assert throttle.config.initial_limit == original_initial_limit
         assert throttle.config.sla_critical_ms == original_sla_critical
@@ -82,7 +91,7 @@ class TestThrottleConfigApplierApply:
         old_config = throttle.config
         old_warning = old_config.sla_warning_ms
 
-        applier.apply("throttle_sla_warning_ms", 999.0)
+        applier.apply("throttle_sla_warning_ms", float(old_warning + 799))
 
         assert old_config.sla_warning_ms == old_warning
 
@@ -136,7 +145,7 @@ class TestThrottleConfigApplierRollback:
         original_value = float(throttle.config.sla_warning_ms)
 
         # 변경 후 롤백
-        applier.apply("throttle_sla_warning_ms", 999.0)
+        applier.apply("throttle_sla_warning_ms", original_value + 799.0)
         result = applier.rollback("throttle_sla_warning_ms", original_value)
 
         assert result is True
@@ -144,13 +153,15 @@ class TestThrottleConfigApplierRollback:
 
 
 class TestThrottleConfigApplierConstants:
-    """클래스 상수 검증."""
+    """클래스 상수 검증 (계약 테스트)."""
 
-    def test_param_to_config_mapping(self):
-        """PARAM_TO_CONFIG에 SLA 파라미터만 포함되어야 한다."""
-        expected_keys = {"throttle_sla_warning_ms", "throttle_sla_critical_ms"}
-        assert set(ThrottleConfigApplier.PARAM_TO_CONFIG.keys()) == expected_keys
+    def test_param_to_config_has_sla_parameters(self):
+        """PARAM_TO_CONFIG에 SLA 파라미터가 포함되어야 한다."""
+        # 계약 검증: SLA 파라미터 키 존재 확인
+        assert "throttle_sla_warning_ms" in _PARAM_TO_CONFIG
+        assert "throttle_sla_critical_ms" in _PARAM_TO_CONFIG
+        assert len(_PARAM_TO_CONFIG) == 2
 
-    def test_legacy_noop_params(self):
+    def test_legacy_noop_params_has_rate_limit_rps(self):
         """LEGACY_NOOP_PARAMS에 rate_limit_rps가 포함되어야 한다."""
-        assert "rate_limit_rps" in ThrottleConfigApplier.LEGACY_NOOP_PARAMS
+        assert "rate_limit_rps" in _LEGACY_NOOP_PARAMS

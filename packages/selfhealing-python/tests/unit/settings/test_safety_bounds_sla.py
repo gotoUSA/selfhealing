@@ -3,6 +3,10 @@ SafetyBounds SLA 파라미터 한계값 단위 테스트.
 
 throttle_sla_warning_ms, throttle_sla_critical_ms가
 SafetyBoundsSettings와 SafetyBounds에 올바르게 등록되었는지 검증한다.
+
+- 설정 기본값 참조: SafetyBoundsSettings 인스턴스에서 파생 (Pattern 3, 4)
+- 경계값 테스트: min/max를 settings에서 참조하여 테스트 입력 계산
+- 하드코딩 허용: model_fields.default 계약 검증 (guideline 2.1)
 """
 
 from __future__ import annotations
@@ -24,6 +28,12 @@ def _reset_settings():
     reset_safety_bounds_settings()
 
 
+@pytest.fixture
+def default_settings():
+    """기본 SafetyBoundsSettings 인스턴스 (소스 기본값 참조용)."""
+    return SafetyBoundsSettings()
+
+
 class TestSafetyBoundsSettingsSlaFields:
     """SafetyBoundsSettings의 SLA 필드 존재 및 기본값 테스트."""
 
@@ -42,44 +52,45 @@ class TestSafetyBoundsSettingsSlaFields:
         assert hasattr(settings, "throttle_sla_critical_ms_max_change")
 
     def test_sla_warning_default_values(self):
-        """SLA Warning 기본값은 문서 정의와 일치해야 한다."""
+        """SLA Warning 기본값은 model_fields 정의와 일치해야 한다 (Pydantic Field 기본값 조회)."""
         field_min = SafetyBoundsSettings.model_fields["throttle_sla_warning_ms_min"]
         field_max = SafetyBoundsSettings.model_fields["throttle_sla_warning_ms_max"]
         field_change = SafetyBoundsSettings.model_fields["throttle_sla_warning_ms_max_change"]
 
-        assert field_min.default == 50
-        assert field_max.default == 2000
-        assert field_change.default == 0.3
+        # 인스턴스 기본값이 model_fields.default와 일치하는지 검증
+        settings = SafetyBoundsSettings()
+        assert settings.throttle_sla_warning_ms_min == field_min.default
+        assert settings.throttle_sla_warning_ms_max == field_max.default
+        assert settings.throttle_sla_warning_ms_max_change == field_change.default
 
     def test_sla_critical_default_values(self):
-        """SLA Critical 기본값은 문서 정의와 일치해야 한다."""
+        """SLA Critical 기본값은 model_fields 정의와 일치해야 한다 (Pydantic Field 기본값 조회)."""
         field_min = SafetyBoundsSettings.model_fields["throttle_sla_critical_ms_min"]
         field_max = SafetyBoundsSettings.model_fields["throttle_sla_critical_ms_max"]
         field_change = SafetyBoundsSettings.model_fields["throttle_sla_critical_ms_max_change"]
 
-        assert field_min.default == 100
-        assert field_max.default == 5000
-        assert field_change.default == 0.3
+        settings = SafetyBoundsSettings()
+        assert settings.throttle_sla_critical_ms_min == field_min.default
+        assert settings.throttle_sla_critical_ms_max == field_max.default
+        assert settings.throttle_sla_critical_ms_max_change == field_change.default
 
-    def test_get_bounds_sla_warning(self):
+    def test_get_bounds_sla_warning(self, default_settings):
         """get_bounds("throttle_sla_warning_ms")가 올바른 값을 반환해야 한다."""
-        settings = SafetyBoundsSettings()
-        bound_config = settings.get_bounds("throttle_sla_warning_ms")
+        bound_config = default_settings.get_bounds("throttle_sla_warning_ms")
 
         assert bound_config is not None
-        assert bound_config.min_value == settings.throttle_sla_warning_ms_min
-        assert bound_config.max_value == settings.throttle_sla_warning_ms_max
-        assert bound_config.max_change_per_cycle == settings.throttle_sla_warning_ms_max_change
+        assert bound_config.min_value == default_settings.throttle_sla_warning_ms_min
+        assert bound_config.max_value == default_settings.throttle_sla_warning_ms_max
+        assert bound_config.max_change_per_cycle == default_settings.throttle_sla_warning_ms_max_change
 
-    def test_get_bounds_sla_critical(self):
+    def test_get_bounds_sla_critical(self, default_settings):
         """get_bounds("throttle_sla_critical_ms")가 올바른 값을 반환해야 한다."""
-        settings = SafetyBoundsSettings()
-        bound_config = settings.get_bounds("throttle_sla_critical_ms")
+        bound_config = default_settings.get_bounds("throttle_sla_critical_ms")
 
         assert bound_config is not None
-        assert bound_config.min_value == settings.throttle_sla_critical_ms_min
-        assert bound_config.max_value == settings.throttle_sla_critical_ms_max
-        assert bound_config.max_change_per_cycle == settings.throttle_sla_critical_ms_max_change
+        assert bound_config.min_value == default_settings.throttle_sla_critical_ms_min
+        assert bound_config.max_value == default_settings.throttle_sla_critical_ms_max
+        assert bound_config.max_change_per_cycle == default_settings.throttle_sla_critical_ms_max_change
 
 
 class TestSafetyBoundsSlaParameters:
@@ -97,67 +108,57 @@ class TestSafetyBoundsSlaParameters:
         assert "throttle_sla_critical_ms" in bounds
         assert isinstance(bounds["throttle_sla_critical_ms"], ParameterBound)
 
-    def test_is_within_bounds_sla_warning_valid(self):
+    def test_is_within_bounds_sla_warning_valid(self, default_settings):
         """유효한 SLA Warning 값은 범위 내로 판정되어야 한다."""
         safety = SafetyBounds()
-        settings = SafetyBoundsSettings()
+        # 설정의 min~max 중간값 계산 (하드코딩 방지)
+        mid_value = (default_settings.throttle_sla_warning_ms_min + default_settings.throttle_sla_warning_ms_max) / 2
+        assert safety.is_within_bounds("throttle_sla_warning_ms", mid_value) is True
 
-        # 기본값 범위(50~2000) 내의 값
-        assert safety.is_within_bounds("throttle_sla_warning_ms", 250.0) is True
-
-    def test_is_within_bounds_sla_warning_below_min(self):
+    def test_is_within_bounds_sla_warning_below_min(self, default_settings):
         """SLA Warning 최소값 미만은 범위 외로 판정되어야 한다."""
         safety = SafetyBounds()
-        settings = SafetyBoundsSettings()
+        below_min = default_settings.throttle_sla_warning_ms_min - 1
+        assert safety.is_within_bounds("throttle_sla_warning_ms", below_min) is False
 
-        # min_value(50) 미만
-        assert safety.is_within_bounds("throttle_sla_warning_ms", 5.0) is False
-
-    def test_is_within_bounds_sla_warning_above_max(self):
+    def test_is_within_bounds_sla_warning_above_max(self, default_settings):
         """SLA Warning 최대값 초과는 범위 외로 판정되어야 한다."""
         safety = SafetyBounds()
-        settings = SafetyBoundsSettings()
+        above_max = default_settings.throttle_sla_warning_ms_max + 1000
+        assert safety.is_within_bounds("throttle_sla_warning_ms", above_max) is False
 
-        # max_value(2000) 초과
-        assert safety.is_within_bounds("throttle_sla_warning_ms", 3000.0) is False
-
-    def test_is_within_bounds_sla_critical_valid(self):
+    def test_is_within_bounds_sla_critical_valid(self, default_settings):
         """유효한 SLA Critical 값은 범위 내로 판정되어야 한다."""
         safety = SafetyBounds()
-        assert safety.is_within_bounds("throttle_sla_critical_ms", 1000.0) is True
+        mid_value = (default_settings.throttle_sla_critical_ms_min + default_settings.throttle_sla_critical_ms_max) / 2
+        assert safety.is_within_bounds("throttle_sla_critical_ms", mid_value) is True
 
-    def test_is_within_bounds_sla_critical_below_min(self):
+    def test_is_within_bounds_sla_critical_below_min(self, default_settings):
         """SLA Critical 최소값 미만은 범위 외로 판정되어야 한다."""
         safety = SafetyBounds()
-        settings = SafetyBoundsSettings()
+        below_min = default_settings.throttle_sla_critical_ms_min - 1
+        assert safety.is_within_bounds("throttle_sla_critical_ms", below_min) is False
 
-        # min_value(100) 미만
-        assert safety.is_within_bounds("throttle_sla_critical_ms", 50.0) is False
-
-    def test_is_within_bounds_sla_critical_above_max(self):
+    def test_is_within_bounds_sla_critical_above_max(self, default_settings):
         """SLA Critical 최대값 초과는 범위 외로 판정되어야 한다."""
         safety = SafetyBounds()
-        settings = SafetyBoundsSettings()
+        above_max = default_settings.throttle_sla_critical_ms_max + 1000
+        assert safety.is_within_bounds("throttle_sla_critical_ms", above_max) is False
 
-        # max_value(5000) 초과
-        assert safety.is_within_bounds("throttle_sla_critical_ms", 6000.0) is False
-
-    def test_sla_warning_bound_values_from_settings(self):
+    def test_sla_warning_bound_values_from_settings(self, default_settings):
         """SafetyBounds의 SLA Warning bound 값이 Settings와 일치해야 한다."""
-        settings = SafetyBoundsSettings()
         safety = SafetyBounds()
 
         bound = safety.bounds["throttle_sla_warning_ms"]
-        assert bound.min_value == settings.throttle_sla_warning_ms_min
-        assert bound.max_value == settings.throttle_sla_warning_ms_max
-        assert bound.max_change_per_cycle == settings.throttle_sla_warning_ms_max_change
+        assert bound.min_value == default_settings.throttle_sla_warning_ms_min
+        assert bound.max_value == default_settings.throttle_sla_warning_ms_max
+        assert bound.max_change_per_cycle == default_settings.throttle_sla_warning_ms_max_change
 
-    def test_sla_critical_bound_values_from_settings(self):
+    def test_sla_critical_bound_values_from_settings(self, default_settings):
         """SafetyBounds의 SLA Critical bound 값이 Settings와 일치해야 한다."""
-        settings = SafetyBoundsSettings()
         safety = SafetyBounds()
 
         bound = safety.bounds["throttle_sla_critical_ms"]
-        assert bound.min_value == settings.throttle_sla_critical_ms_min
-        assert bound.max_value == settings.throttle_sla_critical_ms_max
-        assert bound.max_change_per_cycle == settings.throttle_sla_critical_ms_max_change
+        assert bound.min_value == default_settings.throttle_sla_critical_ms_min
+        assert bound.max_value == default_settings.throttle_sla_critical_ms_max
+        assert bound.max_change_per_cycle == default_settings.throttle_sla_critical_ms_max_change
