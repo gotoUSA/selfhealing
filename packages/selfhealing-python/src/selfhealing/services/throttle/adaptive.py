@@ -35,6 +35,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from selfhealing.services.governance.checks import GovernanceCheckMixin
 from selfhealing.services.throttle.adaptive_dlq_replay import ThrottleDLQReplayMixin
 from selfhealing.services.throttle.base import SlidingWindowThrottle
 from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
@@ -499,7 +500,7 @@ EMERGENCY_LEVEL_LIMIT_MULTIPLIERS: dict[int, float] = {
 PROTECTED_TIERS_ON_429: set[str] = {"critical"}
 
 
-class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
+class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWindowThrottle):
     """
     Netflix Gradient-based Adaptive Throttle.
 
@@ -511,7 +512,17 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
     - Emergency Level에 따라 limit 자동 조정
     - LEVEL_3에서 Gradient 계산은 유지하되 적용만 Freeze
     - Hard-Cap으로 Emergency 배율 최종 적용
+
+    Governance 연동:
+    - GovernanceCheckMixin 상속으로 Kill Switch / Emergency / Error Budget / Break Glass 체크
+    - Kill Switch EventBus 구독으로 gradient freeze 즉시 반영
+    - Break Glass 활성화 시 Full Stop 해제 후 Recovery Dampening 시작
+    - _maybe_adjust_limit() Control Plane에서 is_automation_allowed() Safety Net 체크
     """
+
+    # GovernanceCheckMixin 설정
+    _governance_service_name: str | None = "adaptive_throttle"
+    _governance_domain: str | None = "throttle"
 
     def __init__(self, config: ThrottleConfig | None = None):
         super().__init__(config)
@@ -595,10 +606,17 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         # Recovery Jitter 설정 (Thundering Herd 방지)
         self._recovery_jitter_max_seconds: int = 10
 
+        # =====================================================================
+        # Governance 연동 상태
+        # =====================================================================
+        self._kill_switch_active: bool = False  # Kill Switch → Gradient Freeze
+        self._break_glass_active: bool = False  # Break Glass → Full Stop 해제
+
         # EventBus 구독 등록
         self._subscribe_rate_limit_events()
         self._subscribe_error_budget_events()
         self._subscribe_load_shedding_events()
+        self._subscribe_kill_switch_events()
 
         # DLQ Replay 연동 초기화 (Fail-Open)
         try:
@@ -753,6 +771,70 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         """특정 외부 API가 현재 cooldown 상태인지 확인."""
         cooldown_until = self._rate_limit_keys.get(key, 0)
         return time.time() < cooldown_until
+
+    # =========================================================================
+    # Kill Switch EventBus 연동 (Governance 통합)
+    # =========================================================================
+
+    def _subscribe_kill_switch_events(self) -> None:
+        """Kill Switch 이벤트 구독 (Fail-Open)."""
+        try:
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            bus = get_event_bus()
+            bus.subscribe(EventType.KILL_SWITCH_ACTIVATED, self._handle_kill_switch_activated)
+            bus.subscribe(EventType.KILL_SWITCH_DEACTIVATED, self._handle_kill_switch_deactivated)
+            logger.info("[AdaptiveThrottle] Subscribed to kill switch events")
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] EventBus not available for kill switch")
+        except Exception as e:
+            logger.warning(f"[AdaptiveThrottle] Failed to subscribe to kill switch events: {e}")
+
+    def _handle_kill_switch_activated(self, event) -> None:
+        """Kill Switch 활성화 → Gradient Freeze + limit 유지 (즉시)."""
+        self._kill_switch_active = True
+        self._gradient_frozen = True
+        logger.warning("[AdaptiveThrottle] Kill Switch activated: gradient frozen, limit preserved")
+
+        _record_audit_safe(
+            action="throttle_kill_switch_activated",
+            old_limit=self._current_limit,
+            new_limit=self._current_limit,
+            trigger_source="kill_switch",
+        )
+
+    def _handle_kill_switch_deactivated(self, event) -> None:
+        """Kill Switch 비활성화 → 조건부 Gradient 재개."""
+        self._kill_switch_active = False
+
+        # LEVEL_3 Emergency가 활성화되어 있으면 frozen 유지
+        if self._emergency_level < 3:
+            self._gradient_frozen = False
+
+        self.start_recovery_dampening()
+        logger.info("[AdaptiveThrottle] Kill Switch deactivated: recovery started")
+
+        _record_audit_safe(
+            action="throttle_kill_switch_deactivated",
+            old_limit=self._current_limit,
+            new_limit=self._current_limit,
+            trigger_source="kill_switch",
+        )
+
+    # =========================================================================
+    # Break Glass 상태 동기화 (Governance Settings 기반)
+    # =========================================================================
+
+    def _sync_break_glass_state(self) -> None:
+        """Break Glass 상태를 로컬 플래그로 동기화 (Fail-Open)."""
+        try:
+            from selfhealing.settings.governance import get_governance_settings
+
+            self._break_glass_active = get_governance_settings().break_glass_enabled
+        except ImportError:
+            logger.debug("[AdaptiveThrottle] Governance settings not available")
+        except Exception as e:
+            logger.debug(f"[AdaptiveThrottle] Break glass sync failed: {e}")
 
     # =========================================================================
     # Load Shedding EventBus 연동
@@ -1246,17 +1328,34 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
     def _maybe_adjust_limit(self, rtt_ms: float) -> None:
         """Adjust limit based on gradient and SLA thresholds.
 
-        LEVEL_3 Emergency 상태에서는 Gradient 계산은 유지하되 limit 적용만 Freeze.
+        LEVEL_3 Emergency 또는 Kill Switch 상태에서는 Gradient 계산은 유지하되 limit 적용만 Freeze.
+        Governance Safety Net으로 EventBus 이벤트 유실 시 30초 내 Drift 교정.
         """
         now = time.time()
 
         with self._adjustment_lock:
-            # LEVEL_3 Freeze: Gradient 계산은 유지하되 limit 적용 스킵
+            # 로컬 플래그 조기 반환 (LEVEL_3 또는 Kill Switch에 의해 즉시 설정됨)
             if self._gradient_frozen:
                 logger.debug(
-                    "[AdaptiveThrottle] Gradient frozen (LEVEL_3), " "skipping limit adjustment but RTT data collected"
+                    "[AdaptiveThrottle] Gradient frozen (LEVEL_3/KillSwitch), "
+                    "skipping limit adjustment but RTT data collected"
                 )
                 return
+
+            # Governance Safety Net: EventBus 이벤트 유실 대비 Drift 교정 (30초 TTL 캐시)
+            try:
+                if not self.is_automation_allowed(
+                    operation_name="adaptive_throttle:limit_adjustment",
+                ):
+                    self._gradient_frozen = True
+                    logger.warning("[AdaptiveThrottle] Governance blocked limit adjustment, " "gradient frozen")
+                    return
+            except Exception:
+                # Fail-Open: Governance 체크 실패 시 기존 동작 유지
+                pass
+
+            # Break Glass 상태 동기화 (Settings 기반, 주기적 polling)
+            self._sync_break_glass_state()
 
             # Only adjust every sample_interval_ms
             interval_seconds = self.config.sample_interval_ms / 1000.0
@@ -1490,6 +1589,11 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         Returns:
             ThrottleResult with adaptive info
         """
+        # Break Glass 활성 + Full Stop → Full Stop 해제 후 Recovery Dampening 시작
+        if self._break_glass_active and self._full_stop_active:
+            logger.warning("[AdaptiveThrottle] Break Glass: overriding Full Stop")
+            self.deactivate_full_stop()
+
         # Check on Use 패턴: TTL 만료 시 Emergency 상태 동기화
         self.check_and_sync_emergency_state()
 
@@ -1615,6 +1719,10 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
                 "base_limit_before_emergency": self._base_limit_before_emergency,
                 "tier_multipliers": self._emergency_tier_multipliers.copy(),
                 "full_stop_active": self._full_stop_active,
+            },
+            "governance": {
+                "kill_switch_active": self._kill_switch_active,
+                "break_glass_active": self._break_glass_active,
             },
             "recovery": {
                 "dampening_active": self._recovery_dampening_active,
@@ -1845,6 +1953,9 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         self._shedding_affected_services = set()
         # 상태 동기화 초기화
         self._last_emergency_check_time = 0.0
+        # Governance 연동 상태 초기화
+        self._kill_switch_active = False
+        self._break_glass_active = False
 
     # =========================================================================
     # Phase 4: Full Stop 조건 (3중 조건: LEVEL_3 + DB_CB_OPEN + BUDGET_EXHAUSTED)
@@ -2299,6 +2410,9 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
         self._gradient_frozen = False
         self._full_stop_active = False
         self._recovery_dampening_active = False
+        # Governance 연동 상태 해제
+        self._kill_switch_active = False
+        self._break_glass_active = False
 
         # base limit으로 복구
         self.current_limit = self._base_limit_before_emergency
@@ -2339,6 +2453,8 @@ class AdaptiveThrottle(ThrottleDLQReplayMixin, SlidingWindowThrottle):
             "service_name": self._service_name,
             "sla_warning_ms": self.config.sla_warning_ms,
             "sla_critical_ms": self.config.sla_critical_ms,
+            "kill_switch_active": self._kill_switch_active,
+            "break_glass_active": self._break_glass_active,
         }
 
 

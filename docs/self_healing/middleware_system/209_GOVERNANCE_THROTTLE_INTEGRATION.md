@@ -1,6 +1,6 @@
 # 209. Governance Checks ↔ AdaptiveThrottle 연동 계획
 
-> **상태**: ✅ 연동 추천
+> **상태**: ✅ 구현 완료 (1단계)
 > **목적**: AdaptiveThrottle에 Governance 3단계 안전 체크(Kill Switch → Emergency → Error Budget)를 공식 통합한다.
 > **근거 문서**: [207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md](207_ADAPTIVE_THROTTLE_INTEGRATION_OVERVIEW.md)
 
@@ -279,12 +279,12 @@ level = manager.get_current_level()
 
 ## 6. 검증 항목
 
-- [ ] Kill Switch 활성화 시 AdaptiveThrottle gradient가 freeze 되는지
-- [ ] Break Glass 활성화 시 Full Stop이 해제되는지
-- [ ] `check_all_governance()` TTL 캐시(30초)로 check() 성능 영향 최소인지
-- [ ] Governance 차단 시 Audit Log에 `operation_name="adaptive_throttle:limit_adjustment"` 기록되는지
-- [ ] Governance 패키지 Import 실패 시 Fail-Open으로 기존 동작 유지
-- [ ] AutoTuningService와 동일한 governance 체크 수준(Kill Switch + Emergency + Error Budget) 달성
+- [x] Kill Switch 활성화 시 AdaptiveThrottle gradient가 freeze 되는지
+- [x] Break Glass 활성화 시 Full Stop이 해제되는지
+- [x] `check_all_governance()` TTL 캐시(30초)로 check() 성능 영향 최소인지
+- [x] Governance 차단 시 Audit Log에 `operation_name="adaptive_throttle:limit_adjustment"` 기록되는지
+- [x] Governance 패키지 Import 실패 시 Fail-Open으로 기존 동작 유지
+- [x] AutoTuningService와 동일한 governance 체크 수준(Kill Switch + Emergency + Error Budget) 달성
 
 ---
 
@@ -798,34 +798,34 @@ except ImportError:
 
 ### 14-1. Kill Switch 연동
 
-- [ ] EventBus `KILL_SWITCH_ACTIVATED` 수신 시 `self._kill_switch_active = True`, `self._gradient_frozen = True` 즉시 설정
-- [ ] EventBus `KILL_SWITCH_DEACTIVATED` 수신 시 `self._kill_switch_active = False`, LEVEL_3 아닐 때만 `self._gradient_frozen = False`
-- [ ] Kill Switch 활성화 중 `_maybe_adjust_limit()` 진입 시 `self._gradient_frozen` 조기 반환
-- [ ] Kill Switch 활성화 중 `check()` → 기존 limit으로 트래픽 계속 처리 (차단 아님)
-- [ ] `is_automation_allowed()` Safety Net: EventBus 유실 시 30초 내 Governance 캐시로 Kill Switch 감지
+- [x] EventBus `KILL_SWITCH_ACTIVATED` 수신 시 `self._kill_switch_active = True`, `self._gradient_frozen = True` 즉시 설정
+- [x] EventBus `KILL_SWITCH_DEACTIVATED` 수신 시 `self._kill_switch_active = False`, LEVEL_3 아닐 때만 `self._gradient_frozen = False`
+- [x] Kill Switch 활성화 중 `_maybe_adjust_limit()` 진입 시 `self._gradient_frozen` 조기 반환
+- [x] Kill Switch 활성화 중 `check()` → 기존 limit으로 트래픽 계속 처리 (차단 아님)
+- [x] `is_automation_allowed()` Safety Net: EventBus 유실 시 30초 내 Governance 캐시로 Kill Switch 감지
 
 ### 14-2. Break Glass 연동
 
-- [ ] `_sync_break_glass_state()` → `get_governance_settings().break_glass_enabled` 읽어 `self._break_glass_active` 갱신
-- [ ] `check()` 진입 시 `self._break_glass_active and self._full_stop_active` → `deactivate_full_stop()` 호출
-- [ ] `deactivate_full_stop()` 후 Recovery Dampening (80%→90%→100%) 정상 시작
-- [ ] Break Glass 비활성화 후 Full Stop 3중 조건 재충족 시 Full Stop 재활성화
+- [x] `_sync_break_glass_state()` → `get_governance_settings().break_glass_enabled` 읽어 `self._break_glass_active` 갱신
+- [x] `check()` 진입 시 `self._break_glass_active and self._full_stop_active` → `deactivate_full_stop()` 호출
+- [x] `deactivate_full_stop()` 후 Recovery Dampening (80%→90%→100%) 정상 시작
+- [x] Break Glass 비활성화 후 Full Stop 3중 조건 재충족 시 Full Stop 재활성화
 
 ### 14-3. 성능 (Control/Data Plane 분리)
 
-- [ ] `check()` Hot Path에서 Governance 함수 직접 호출 **없음** (로컬 플래그만)
-- [ ] `_maybe_adjust_limit()`에서 `is_automation_allowed()` 호출 시 `_governance_cache` TTL 30초 → 실제 체크는 30초마다 1회
-- [ ] `_governance_cache`는 순수 Python dict (checks.py L266): `self._cache: dict[str, tuple[Any, float]]`
+- [x] `check()` Hot Path에서 Governance 함수 직접 호출 **없음** (로컬 플래그만)
+- [x] `_maybe_adjust_limit()`에서 `is_automation_allowed()` 호출 시 `_governance_cache` TTL 30초 → 실제 체크는 30초마다 1회
+- [x] `_governance_cache`는 순수 Python dict (checks.py L266): `self._cache: dict[str, tuple[Any, float]]`
 
 ### 14-4. Fail-Open
 
-- [ ] Governance Import 실패 시 Fail-Open (`is_automation_allowed()` → True)
-- [ ] EventBus Import 실패 시 Kill Switch 구독 스킵 (Fail-Open)
-- [ ] Settings Import 실패 시 Break Glass 플래그 미변경 (Fail-Open)
+- [x] Governance Import 실패 시 Fail-Open (`is_automation_allowed()` → True)
+- [x] EventBus Import 실패 시 Kill Switch 구독 스킵 (Fail-Open)
+- [x] Settings Import 실패 시 Break Glass 플래그 미변경 (Fail-Open)
 
 ### 14-5. 일관성
 
-- [ ] AutoTuningService와 동일한 governance 체크 수준 달성 (Kill Switch + Emergency + Error Budget + Break Glass)
-- [ ] 기존 `check_and_sync_emergency_state()` 유지 (1단계), 향후 Governance 통합 체크로 일원화 (3단계)
-- [ ] `_kill_switch_active` / `_break_glass_active` 네이밍이 기존 `_full_stop_active` / `_429_reduction_active` 패턴과 일치
-- [ ] Governance 차단 시 Audit Log에 `operation_name="adaptive_throttle:limit_adjustment"` 기록
+- [x] AutoTuningService와 동일한 governance 체크 수준 달성 (Kill Switch + Emergency + Error Budget + Break Glass)
+- [x] 기존 `check_and_sync_emergency_state()` 유지 (1단계), 향후 Governance 통합 체크로 일원화 (3단계)
+- [x] `_kill_switch_active` / `_break_glass_active` 네이밍이 기존 `_full_stop_active` / `_429_reduction_active` 패턴과 일치
+- [x] Governance 차단 시 Audit Log에 `operation_name="adaptive_throttle:limit_adjustment"` 기록
