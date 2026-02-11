@@ -190,6 +190,36 @@ class AuditIntegritySettings(BaseSettings):
         description="S3 WORM 객체 보관 기간 (일). 1년 기본, 법적 요구사항에 따라 설정.",
     )
 
+    # ==========================================================================
+    # Integrity Triad - Background Verifier + Recovery Gate + Merkle
+    # ==========================================================================
+
+    background_verify_merkle_threshold: int = Field(
+        default=10000,
+        ge=1000,
+        le=1000000,
+        description="이 엔트리 수 이상이면 MerkleSpotChecker로 전환. 10000 기본.",
+    )
+
+    merkle_block_size: int = Field(
+        default=1000,
+        ge=100,
+        le=10000,
+        description="머클 스팟체크 블록 크기. 1000 기본.",
+    )
+
+    integrity_gate_fail_open: bool = Field(
+        default=True,
+        description="무결성 게이트 Fail-Open 정책. False면 Fail-Secure (PCI-DSS).",
+    )
+
+    integrity_gate_max_entries: int = Field(
+        default=50000,
+        ge=1000,
+        le=1000000,
+        description="게이트 검증 시 최대 엔트리 수. 초과 시 MerkleSpotChecker 사용.",
+    )
+
     @model_validator(mode="after")
     def validate_retention(self) -> "AuditIntegritySettings":
         """아카이브 임계치가 보관 기간보다 작은지 검증."""

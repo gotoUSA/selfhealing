@@ -38,9 +38,15 @@ from selfhealing.audit.integrity.local_manager import (
     HashChainManager,
 )
 
+# Merkle Spot Checker
+from selfhealing.audit.integrity.merkle_spot_checker import (
+    MerkleSpotChecker,
+)
+
 # Models and core functions
 from selfhealing.audit.integrity.models import (
     IntegrityInfo,
+    canonical_json_bytes,
     compute_hash,
 )
 
@@ -79,6 +85,9 @@ __all__ = [
     # Models
     "IntegrityInfo",
     "compute_hash",
+    "canonical_json_bytes",
+    # Merkle Spot Checker
+    "MerkleSpotChecker",
     # Protocol
     "HashChainManagerProtocol",
     # Verifier

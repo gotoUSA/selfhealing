@@ -99,15 +99,11 @@ def archive_cascade_events(
             _archive_single_event_to_db(event)
             archived_count += 1
         except Exception as e:
-            logger.error(
-                f"[CascadeCleanup] Archive failed: cascade={event.id}, error={e}"
-            )
+            logger.error(f"[CascadeCleanup] Archive failed: cascade={event.id}, error={e}")
             failed_count += 1
 
     logger.info(
-        f"[CascadeCleanup] Archive completed: "
-        f"archived={archived_count}, failed={failed_count}, "
-        f"namespace={namespace}"
+        f"[CascadeCleanup] Archive completed: " f"archived={archived_count}, failed={failed_count}, " f"namespace={namespace}"
     )
 
     return {
@@ -241,15 +237,11 @@ def purge_old_cascade_events(
             _delete_cascade_event(event.id, namespace)
             purged_count += 1
         except Exception as e:
-            logger.error(
-                f"[CascadeCleanup] Purge failed: cascade={event.id}, error={e}"
-            )
+            logger.error(f"[CascadeCleanup] Purge failed: cascade={event.id}, error={e}")
             failed_count += 1
 
     logger.warning(
-        f"[CascadeCleanup] Purge completed: "
-        f"purged={purged_count}, failed={failed_count}, "
-        f"namespace={namespace}"
+        f"[CascadeCleanup] Purge completed: " f"purged={purged_count}, failed={failed_count}, " f"namespace={namespace}"
     )
 
     return {
@@ -315,9 +307,27 @@ def create_cascade_daily_checkpoint(
     checkpoint = auditor.create_checkpoint(namespace)
 
     logger.info(
-        f"[CascadeCleanup] Daily checkpoint created: "
-        f"namespace={namespace}, event_count={checkpoint.get('event_count')}"
+        f"[CascadeCleanup] Daily checkpoint created: " f"namespace={namespace}, event_count={checkpoint.get('event_count')}"
     )
+
+    # 머클 블록 루트도 함께 빌드 (스팟체크 기준선)
+    try:
+        from selfhealing.adapters.redis import get_redis_client
+        from selfhealing.audit.integrity.merkle_spot_checker import MerkleSpotChecker
+        from selfhealing.settings.audit_integrity import get_audit_integrity_settings
+
+        settings = get_audit_integrity_settings()
+        redis_client = get_redis_client()
+        checker = MerkleSpotChecker(
+            block_size=settings.merkle_block_size,
+            redis_client=redis_client,
+            namespace=namespace,
+        )
+        events = auditor.get_recent_events(namespace, limit=100000)
+        merkle_result = checker.build_merkle_roots([e.to_dict() if hasattr(e, "to_dict") else e for e in events])
+        checkpoint["merkle_blocks"] = merkle_result["blocks_stored"]
+    except Exception as e:
+        logger.warning(f"[CascadeCleanup] Merkle root build failed: {e}")
 
     return checkpoint
 
@@ -354,15 +364,9 @@ def verify_cascade_chain_integrity(
         result = auditor.verify_chain_integrity(namespace)
 
     if result["valid"]:
-        logger.info(
-            f"[CascadeCleanup] Chain integrity verified: "
-            f"namespace={namespace}, checked={result['checked']}"
-        )
+        logger.info(f"[CascadeCleanup] Chain integrity verified: " f"namespace={namespace}, checked={result['checked']}")
     else:
-        logger.error(
-            f"[CascadeCleanup] Chain integrity FAILED: "
-            f"namespace={namespace}, errors={len(result['errors'])}"
-        )
+        logger.error(f"[CascadeCleanup] Chain integrity FAILED: " f"namespace={namespace}, errors={len(result['errors'])}")
 
     return result
 
@@ -430,10 +434,7 @@ def recover_cascade_from_wal(
                 continue
 
     if dry_run:
-        logger.info(
-            f"[CascadeCleanup] WAL recovery dry run: "
-            f"found {len(entries)} entries, namespace={namespace}"
-        )
+        logger.info(f"[CascadeCleanup] WAL recovery dry run: " f"found {len(entries)} entries, namespace={namespace}")
         return {
             "status": "dry_run",
             "namespace": namespace,
@@ -459,10 +460,7 @@ def recover_cascade_from_wal(
     if recovered > 0 and failed == 0:
         _remove_namespace_from_wal(namespace)
 
-    logger.info(
-        f"[CascadeCleanup] WAL recovery completed: "
-        f"recovered={recovered}, failed={failed}, namespace={namespace}"
-    )
+    logger.info(f"[CascadeCleanup] WAL recovery completed: " f"recovered={recovered}, failed={failed}, namespace={namespace}")
 
     return {
         "status": "completed",

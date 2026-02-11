@@ -719,10 +719,29 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
     """
     CB 복구 시 자동 Replay 트리거 (Track 1).
 
+    CRITICAL 우선순위의 PostRecoveryIntegrityGate
+    (integrity_gate.py)가 이 핸들러보다 먼저 실행되어
+    event.data[INTEGRITY_FAILED_KEY] 플래그를 설정합니다.
+    플래그가 True인 경우 리플레이를 차단합니다.
+
     RuntimeConfig에서 track1_enabled 설정을 확인하고,
     활성화된 경우 conditional_replay_on_circuit_close 태스크를 트리거합니다.
     """
     service_name = event.data.get("service_name", "unknown")
+
+    # IntegrityGate 결과 확인 (상수 import로 오타 방지)
+    try:
+        from selfhealing.services.event_bus.integrity_gate import INTEGRITY_FAILED_KEY
+
+        if event.data.get(INTEGRITY_FAILED_KEY, False):
+            logger.critical(
+                f"[EventHandler] Replay BLOCKED for {service_name}: "
+                f"integrity gate failed. "
+                f"Details: {event.data.get('integrity_gate_result', {})}"
+            )
+            return  # 리플레이 중단
+    except ImportError:
+        pass  # integrity_gate 모듈 미설치 시 무시
 
     # RuntimeConfig에서 replay_automation 설정 로드
     try:
@@ -1657,6 +1676,21 @@ def register_default_handlers():
     )
 
     # Circuit Breaker events
+
+    # 무결성 게이트 (CRITICAL: Replay보다 먼저 실행)
+    try:
+        from selfhealing.services.event_bus.integrity_gate import (
+            on_circuit_breaker_closed_integrity_gate,
+        )
+
+        bus.subscribe(
+            EventType.CIRCUIT_BREAKER_CLOSED,
+            on_circuit_breaker_closed_integrity_gate,
+            priority=EventPriority.CRITICAL,
+        )
+    except ImportError:
+        pass  # integrity_gate 모듈 미설치 시 무시
+
     bus.subscribe(
         EventType.CIRCUIT_BREAKER_CLOSED,
         _on_circuit_breaker_closed,
