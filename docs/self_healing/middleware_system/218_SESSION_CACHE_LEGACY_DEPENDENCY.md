@@ -4,8 +4,9 @@
 > **분류**: Security - Performance / Hardening / Dependency Fix
 > **선행 문서**: 214, 215, 216, 217
 > **작성일**: 2026-02-10
-> **최종 수정**: 2026-02-11 (리뷰 #1-#6 반영)
+> **최종 수정**: 2026-02-11 (리뷰 #1-#6 반영, 구현 완료)
 > **심각도**: HIGH (세션), MEDIUM (캐시 키, 레거시 해시), LOW (의존성)
+> **구현 상태**: ✅ 완료 (2026-02-11)
 
 ---
 
@@ -1270,3 +1271,39 @@ class TestSessionSignalHandlers:
     def test_signal_skips_anonymous_user(self):
         """user가 None이거나 pk가 None일 때 registry 호출 안 함 확인."""
 ```
+
+---
+
+## 8. 구현 결과 (2026-02-11)
+
+### 8.1 수정된 파일
+
+| 파일 | 변경 유형 | 설명 |
+|---|---|---|
+| `myproject/settings/production.py` | 수정 | `SESSION_ENGINE`, `SESSION_CACHE_ALIAS` 추가 |
+| `myproject/settings/local.py` | 수정 | 동일 |
+| `packages/selfhealing-python/src/selfhealing/services/security/session_registry.py` | **신규** | `UserSessionRegistry` 클래스 |
+| `shopping/signals.py` | 수정 | `user_logged_in`/`user_logged_out` 시그널 핸들러 추가 |
+| `packages/selfhealing-python/src/selfhealing/services/security/service.py` | 수정 | `_invalidate_user_sessions()` 재작성 |
+| `packages/selfhealing-python/src/selfhealing/audit/masking.py` | 수정 | `decrypt_forensic()` 레거시/HMAC 감지 추가 |
+| `packages/selfhealing-python/pyproject.toml` | 수정 | `[project.optional-dependencies]` forensic 추가 |
+
+### 8.2 테스트 파일
+
+| 파일 | 테스트 수 | 설명 |
+|---|---|---|
+| `packages/selfhealing-python/tests/unit/security/test_user_session_registry.py` | 14 | UserSessionRegistry 단위 테스트 |
+| `packages/selfhealing-python/tests/unit/security/test_invalidate_sessions.py` | 8 | 재작성된 _invalidate_user_sessions 검증 |
+| `packages/selfhealing-python/tests/unit/audit/test_decrypt_forensic.py` | 12 | decrypt_forensic 레거시/HMAC/Fernet 검증 |
+| `tests/self_healing/integration/django/test_session_backend.py` | 4 | Redis 세션 백엔드 설정 검증 |
+| `tests/self_healing/integration/django/test_session_signals.py` | 8 | 시그널 핸들러 검증 |
+
+### 8.3 기존 테스트 수정
+
+| 파일 | 변경 | 이유 |
+|---|---|---|
+| `packages/selfhealing-python/tests/unit/security/test_session_invalidation_hooks.py` | `"session_cache"` → `"redis_sessions"` (2건) | Dead Code 제거로 결과 문자열 변경 |
+
+### 8.4 테스트 결과
+
+- security + audit 전체: **568 passed, 0 failed**

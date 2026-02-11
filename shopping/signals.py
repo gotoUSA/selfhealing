@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
@@ -121,3 +122,53 @@ def generate_order_number(sender: type[Order], instance: Order, created: bool, *
 
         # 인스턴스도 업데이트
         instance.order_number = order_number
+
+
+# =============================================================================
+# Session Registry Signal Handlers
+# =============================================================================
+
+
+@receiver(user_logged_in)
+def on_user_login_register_session(sender: Any, request: HttpRequest, user: Any, **kwargs: Any) -> None:
+    """
+    로그인 시 UserSessionRegistry에 session_key 매핑 등록.
+
+    Redis 세션 백엔드에서는 user_id → session_key 역방향 조회가 불가능하므로,
+    로그인 시점에 매핑을 등록하여 세션 무효화 시 역방향 조회를 지원한다.
+    """
+    session_key = request.session.session_key
+    if not session_key:
+        request.session.save()
+        session_key = request.session.session_key
+
+    if session_key and user and user.pk:
+        try:
+            from selfhealing.services.security.session_registry import (
+                get_user_session_registry,
+            )
+
+            registry = get_user_session_registry()
+            registry.register(user.pk, session_key)
+        except ImportError:
+            pass  # selfhealing 미설치 환경
+
+
+@receiver(user_logged_out)
+def on_user_logout_unregister_session(sender: Any, request: HttpRequest, user: Any, **kwargs: Any) -> None:
+    """
+    로그아웃 시 UserSessionRegistry에서 session_key 매핑 제거.
+
+    로그인 시 등록한 session_key 매핑을 제거하여 불필요한 무효화 시도를 방지한다.
+    """
+    session_key = getattr(request.session, "session_key", None)
+    if session_key and user and user.pk:
+        try:
+            from selfhealing.services.security.session_registry import (
+                get_user_session_registry,
+            )
+
+            registry = get_user_session_registry()
+            registry.unregister(user.pk, session_key)
+        except ImportError:
+            pass

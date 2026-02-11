@@ -323,54 +323,62 @@ class SecurityViolationService:
         """
         Invalidate all sessions for a user.
 
-        Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
-        - 캐시 키 하나만 삭제하던 방식 → 패턴 기반 다중 키 삭제
-        - Django 세션 백엔드 연동 시도 (가능한 경우)
-        - 세션 무효화 콜백 지원
+        1. UserSessionRegistry를 통한 역방향 조회로 Redis 세션 삭제
+        2. SESSION_ENGINE이 DB 백엔드일 때만 django_session 테이블 스캔
+        3. 등록된 콜백(JWT 블랙리스트 등) 실행
         """
         invalidated_items = []
 
         try:
-            # 1. 기존 캐시 키 삭제 (user_session:{user_id})
-            cache_key = f"user_session:{user_id}"
-            self.cache.delete(cache_key)
-            invalidated_items.append("session_cache")
-
-            # 2. 패턴 기반 관련 캐시 키 삭제 (토큰, 권한 등)
-            related_prefixes = [
-                f"user_token:{user_id}",
-                f"user_permissions:{user_id}",
-                f"user_auth:{user_id}",
-            ]
-            for prefix in related_prefixes:
-                try:
-                    self.cache.delete(prefix)
-                    invalidated_items.append(prefix.split(":")[0])
-                except Exception:
-                    pass
-
-            # 3. Django 세션 백엔드가 있으면 DB 세션도 삭제
+            # 1. UserSessionRegistry를 통한 세션 무효화 (역방향 조회)
             try:
-                from django.contrib.sessions.models import Session
-                from django.utils import timezone as dj_timezone
+                from selfhealing.services.security.session_registry import (
+                    get_user_session_registry,
+                )
 
-                # 만료되지 않은 세션 중 해당 유저의 세션 삭제
-                active_sessions = Session.objects.filter(expire_date__gte=dj_timezone.now())
-                deleted_count = 0
-                for session in active_sessions:
-                    data = session.get_decoded()
-                    if str(data.get("_auth_user_id")) == str(user_id):
-                        session.delete()
-                        deleted_count += 1
+                registry = get_user_session_registry()
+                deleted_count = registry.invalidate_all(user_id)
                 if deleted_count > 0:
-                    invalidated_items.append(f"django_sessions({deleted_count})")
+                    invalidated_items.append(f"redis_sessions({deleted_count})")
+                else:
+                    invalidated_items.append("redis_sessions(0:no_registered_keys)")
             except ImportError:
-                # Django 세션 모듈이 없으면 스킵 (non-Django 환경)
+                pass
+            except Exception as e:
+                logger.debug(f"[Security] UserSessionRegistry cleanup failed: {e}")
+
+            # 2. Django DB 세션 삭제 (SESSION_ENGINE이 DB 백엔드일 때만)
+            # django.contrib.sessions가 INSTALLED_APPS에 있으면 Session import는
+            # 항상 성공하므로, SESSION_ENGINE을 명시적으로 체크해야 한다.
+            try:
+                from django.conf import settings as django_settings
+
+                session_engine = getattr(
+                    django_settings,
+                    "SESSION_ENGINE",
+                    "django.contrib.sessions.backends.db",
+                )
+                if "db" in session_engine or "cached_db" in session_engine:
+                    from django.contrib.sessions.models import Session
+                    from django.utils import timezone as dj_timezone
+
+                    active_sessions = Session.objects.filter(expire_date__gte=dj_timezone.now())
+                    deleted_count = 0
+                    for session in active_sessions:
+                        data = session.get_decoded()
+                        if str(data.get("_auth_user_id")) == str(user_id):
+                            session.delete()
+                            deleted_count += 1
+                    if deleted_count > 0:
+                        invalidated_items.append(f"django_sessions({deleted_count})")
+                else:
+                    logger.debug(f"[Security] Skipping DB session scan: " f"SESSION_ENGINE={session_engine}")
+            except ImportError:
                 pass
             except Exception as e:
                 logger.debug(f"[Security] Django session cleanup skipped: {e}")
 
-            # 4. 등록된 세션 무효화 콜백 실행 (JWT 블랙리스트 등)
+            # 3. 등록된 세션 무효화 콜백 실행 (JWT 블랙리스트 등)
             try:
                 from selfhealing.services.security.hooks import (
                     get_session_invalidation_hooks,
@@ -388,7 +396,7 @@ class SecurityViolationService:
 
             logger.info(f"[Security] Invalidated sessions for user {user_id}: " f"{', '.join(invalidated_items)}")
 
-            # === Audit 기록: 세션 무효화 (85_AUDIT_INTEGRATION Phase 1) ===
+            # === Audit 기록: 세션 무효화 ===
             log_security_violation_audit(
                 violation_type="session_invalidation",
                 action="invalidate_session",
@@ -404,7 +412,6 @@ class SecurityViolationService:
         except Exception as e:
             logger.error(f"[Security] Failed to invalidate sessions: {e}")
 
-            # === Audit 기록: 세션 무효화 실패 ===
             log_security_violation_audit(
                 violation_type="session_invalidation",
                 action="invalidate_session",

@@ -173,9 +173,10 @@ def decrypt_forensic(encrypted_value: str) -> str:
     """
     FORENSIC 레벨로 암호화된 값을 복호화.
 
-    Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
-    - Fernet 대칭 암호화로 저장된 값을 원래 값으로 복원
-    - selfhealing_admin 권한이 필요 (호출자가 권한 확인 필요)
+    지원 형식:
+    - "encrypted:{fernet_token}" → Fernet 복호화
+    - "sha256:..." → 단방향 해시, 복원 불가 → ValueError
+    - "encrypted:hmac:..." → HMAC fallback, 복원 불가 → ValueError
 
     Args:
         encrypted_value: "encrypted:..." 형식의 암호화된 문자열
@@ -187,10 +188,29 @@ def decrypt_forensic(encrypted_value: str) -> str:
         ValueError: 잘못된 형식이거나 복호화 실패 시
         RuntimeError: encryption_key 미설정 시
     """
-    if not encrypted_value.startswith("encrypted:"):
-        raise ValueError("Not a FORENSIC encrypted value (must start with 'encrypted:')")
+    # 레거시 SHA-256 해시 감지 (Fernet 도입 이전 데이터)
+    if encrypted_value.startswith("sha256:"):
+        raise ValueError(
+            "This value was stored as a SHA-256 hash (pre-Fernet era). "
+            "Hash values are one-way and cannot be decrypted. "
+            "Original data is not recoverable."
+        )
 
+    if not encrypted_value.startswith("encrypted:"):
+        raise ValueError(
+            "Not a FORENSIC encrypted value (must start with 'encrypted:'). " f"Got prefix: '{encrypted_value[:20]}...'"
+        )
+
+    # HMAC fallback 감지 (_forensic_hmac_fallback 출력)
+    # encryption_key 미설정 시 mask_with_level(FORENSIC)이 HMAC으로 폴백하며
+    # "encrypted:hmac:..." 형식을 생성한다. 이 값은 복원 불가.
     token = encrypted_value[len("encrypted:") :]
+    if token.startswith("hmac:"):
+        raise ValueError(
+            "This value was stored as an HMAC hash (Fernet key was unavailable "
+            "at encryption time). HMAC values are one-way and cannot be decrypted. "
+            "Original data is not recoverable."
+        )
 
     fernet = _get_forensic_fernet()
     if fernet is None:

@@ -48,6 +48,9 @@ django = [
     "django>=4.2",
     "djangorestframework>=3.14",
 ]
+forensic = [
+    "cryptography>=44.0.0",
+]
 celery = [
     "celery>=5.3",
     "redis>=4.0",
@@ -75,7 +78,7 @@ disk-buffer = [
     "lmdb>=1.4.0",
 ]
 all = [
-    "selfhealing[django,celery,prometheus,opentelemetry,kafka,fast-json,caching,disk-buffer]",
+    "selfhealing[django,celery,prometheus,opentelemetry,kafka,fast-json,caching,disk-buffer,forensic]",
 ]
 dev = [
     "selfhealing[all]",

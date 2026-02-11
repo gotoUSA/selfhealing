@@ -94,8 +94,8 @@ class TestInvalidateUserSessionsWithHooksBehavior:
         # 첫 번째 콜백은 실패하지만 두 번째는 실행됨
         success_hook.assert_called_once_with(42)
         assert "second_hook_ok" in result
-        # 세션 캐시 무효화는 여전히 포함
-        assert "session_cache" in result
+        # 세션 무효화(UserSessionRegistry)는 여전히 포함
+        assert "redis_sessions" in result
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_no_hooks_behaves_same_as_before(self, mock_audit, service):
@@ -103,7 +103,7 @@ class TestInvalidateUserSessionsWithHooksBehavior:
         # 콜백 미등록 상태
         result = service._invalidate_user_sessions(42)
 
-        assert "session_cache" in result
+        assert "redis_sessions" in result
         assert "jwt_blacklisted" not in result
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
