@@ -460,99 +460,65 @@ utils/network.py
 
 ### 6.2 단위 테스트
 
-**파일**: `tests/self_healing/django/test_ip_ban_middleware.py`
+**파일**: `packages/selfhealing-python/tests/unit/middleware/test_ip_ban_middleware.py`
 
-```python
-from unittest.mock import MagicMock, Mock
+- **Django 의존 없음**: `importlib`으로 `ip_ban.py` 직접 로드 (패키지 `__init__.py` Django 의존 회피)
+- **conftest.py**: `settings.configure(DEFAULT_CHARSET="utf-8")` (JsonResponse 최소 설정만)
+- **UNIT_TEST_GUIDELINES.md 준수**: Behavior/Contract 2클래스 분리, 클래스 기반
+- **26개 테스트**: 모두 통과 (0.26s)
 
-import pytest
+```
+TestIPBanMiddlewareBehavior (19 tests):
+  - test_banned_ip_returns_403
+  - test_banned_ip_temporary_returns_403
+  - test_non_banned_ip_passes_through
+  - test_cache_returns_none_passes_through
+  - test_health_check_path_exempt_even_if_banned
+  - test_readiness_path_exempt
+  - test_liveness_path_exempt
+  - test_non_exempt_path_checked
+  - test_redis_failure_fail_open
+  - test_cache_none_fail_open
+  - test_response_does_not_expose_ban_type
+  - test_response_contains_ip_banned_code
+  - test_response_json_structure
+  - test_ban_type_logged_in_warning
+  - test_extract_client_ip_used
+  - test_lazy_init_runs_once
+  - test_cache_retry_after_initial_failure
+  - test_non_dict_ban_info_ignored
+  - test_banned_false_value_ignored
 
-
-class TestIPBanMiddleware:
-    """IPBanMiddleware 단위 테스트."""
-
-    def _make_middleware(self, ban_info=None, cache_error=False):
-        """테스트용 미들웨어 팩토리.
-
-        Mock 주입 패턴: test_security_violation_service.py L432-L433과 동일.
-        """
-        from selfhealing.api.django.middleware.ip_ban import IPBanMiddleware
-
-        mock_response = Mock()
-        middleware = IPBanMiddleware(get_response=lambda r: mock_response)
-
-        mock_cache = MagicMock()
-        if cache_error:
-            mock_cache.get.side_effect = Exception("Redis down")
-        else:
-            mock_cache.get.return_value = ban_info
-
-        middleware._cache = mock_cache
-        middleware._initialized = True
-        return middleware, mock_response
-
-    def test_banned_ip_returns_403(self):
-        """ban된 IP의 요청이 403으로 거부되는지 확인."""
-
-    def test_non_banned_ip_passes_through(self):
-        """ban되지 않은 IP의 요청이 정상 통과하는지 확인."""
-
-    def test_health_check_exempt(self):
-        """헬스체크 경로가 ban에서 면제되는지 확인."""
-
-    def test_redis_failure_fail_open(self):
-        """Redis 장애 시 요청이 허용되는지 확인 (Fail-Open)."""
-
-    def test_response_does_not_expose_ban_type(self):
-        """403 응답에 ban_type이 노출되지 않는지 확인 (보안)."""
-
-    def test_ban_type_logged_in_warning(self):
-        """ban_type이 로그에는 기록되는지 확인."""
-
-    def test_extract_client_ip_integration(self):
-        """extract_client_ip가 올바르게 호출되는지 확인."""
-
-    def test_lazy_init_only_once(self):
-        """lazy init이 한 번만 실행되는지 확인."""
-
-    def test_cache_retry_on_initial_failure(self):
-        """초기 캐시 로드 실패 시 _get_cache()에서 재시도하는지 확인."""
+TestIPBanMiddlewareContract (7 tests):
+  - test_has_call_method
+  - test_has_exempt_path_prefixes
+  - test_has_check_ip_ban
+  - test_has_lazy_init
+  - test_has_get_cache
+  - test_has_get_banned_ip_prefix
+  - test_exempt_paths_include_health
 ```
 
 ### 6.3 통합 테스트
 
-```python
-from unittest.mock import MagicMock
+**파일**: `tests/self_healing/django/test_ip_ban_integration.py`
 
-from selfhealing.factory import ProviderRegistry
+- **docker-compose 실행**: `docker-compose.test.yml` → `test-global` 서비스
+- **5개 테스트**: 모두 통과 (32.73s)
+- **SecurityViolationService ↔ IPBanMiddleware** 전체 흐름 검증
 
-
-class TestIPBanIntegration:
-    """IP Ban → Middleware 연동 통합 테스트.
-
-    ProviderRegistry.override_provider를 사용한 격리된 테스트 환경.
-    """
-
-    def test_violation_triggers_ban_then_middleware_blocks(self):
-        """
-        mock_cache = MagicMock()
-        with ProviderRegistry.override_provider("cache", mock_cache):
-            1. SecurityViolationService.handle_violation(INJECTION_ATTEMPT) 호출
-            2. _temporary_ip_ban()으로 Redis에 ban 기록
-            3. 동일 IP의 후속 HTTP 요청이 403으로 차단됨
-        """
-
-    def test_ban_expiry_allows_request(self):
-        """
-        1. 임시 ban (TTL 1시간) 기록
-        2. TTL 만료 후 요청이 다시 허용됨
-        """
-
-    def test_key_prefix_matches_security_violation_service(self):
-        """
-        IPBanMiddleware와 SecurityViolationService가
-        동일한 Redis 키 프리픽스(security:banned_ip:)를 사용하는지 확인.
-        """
+```
+TestIPBanMiddlewareIntegration (5 tests):
+  - test_temporary_ban_then_middleware_blocks
+    → SecurityViolationService._temporary_ip_ban() → 동일 IP 403 차단
+  - test_permanent_ban_then_middleware_blocks
+    → SecurityViolationService._permanent_ip_ban() → 동일 IP 403 차단
+  - test_ban_expiry_allows_request
+    → ban 기록 → 차단 확인 → _remove_ip_ban() → 요청 허용 확인
+  - test_key_prefix_matches_between_service_and_middleware
+    → middleware fallback 프리픽스 == SecurityConfig.banned_ip_cache_prefix
+  - test_unbanned_ip_passes_through
+    → ban 미등록 IP → 정상 통과
 ```
 
 ---
