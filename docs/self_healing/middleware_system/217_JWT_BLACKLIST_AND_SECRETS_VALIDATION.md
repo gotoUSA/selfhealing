@@ -554,26 +554,21 @@ class TestJWTBlacklistHookRegistration:
 
 | 항목 | 내용 |
 |---|---|
-| 판정 | **추가** (TODO 코멘트) |
-| 반영 위치 | 섹션 2.3.3 `_register_jwt_blacklist_hook()` 코드 블록 |
+| 판정 | **추가** (TODO 코멘트) → **구현 완료** |
+| 반영 위치 | `tasks/cleanup_tasks.py` + `adapters/django/apps.py` DONE 코멘트 |
 
 **코드 근거**:
-- 코드베이스 전체 `flushexpiredtokens` 검색 결과: **0건** — 만료 토큰 정리 메커니즘 없음
+- 코드베이스 전체 `flushexpiredtokens` 검색 결과: ~~**0건**~~ → **구현 완료**
 - `OutstandingToken`은 `user_id` FK 인덱스가 있으나 (Django 자동 생성), 만료 토큰 자체의 정리는 별도 필요
 - `simplejwt`의 내장 management command `flushexpiredtokens`가 이 용도로 제공됨
 
-**TODO 위치 선택 근거**:
+**구현 위치**:
 
-| 후보 위치 | 선택 | 이유 |
-|---|---|---|
-| `_register_jwt_blacklist_hook()` 내부 | **✅ 채택** | JWT 블랙리스트 로직과 직접 관련 — 근접성 원칙 |
-| `myproject/settings/base.py` CELERY_BEAT_SCHEDULE 근처 | ❌ | 217 구현과 분리되어 맥락 단절 |
-
-TODO를 `_register_jwt_blacklist_hook()` 내부에 배치한 이유:
-1. 개발자가 JWT 블랙리스트 코드를 읽을 때 자연스럽게 정리 필요성을 인지
-2. TODO 내용 자체가 `CELERY_BEAT_SCHEDULE`에 추가할 구체적 코드를 포함하므로 실행 가능
-3. selfhealing 앱의 관심사이므로 selfhealing 코드 내에 두는 것이 일관적
-4. `apps.py`에 기존 TODO/FIXME가 0건이므로 첫 TODO가 되지만, 운영 필수 사항이므로 허용
+| 파일 | 역할 |
+|---|---|
+| `selfhealing/tasks/cleanup_tasks.py` | Thin wrapper `flush_expired_jwt_tokens()` + `@shared_task` 래퍼 + `get_cleanup_beat_schedule()` 엔트리 |
+| `myproject/celery.py` | `flush-expired-jwt-tokens` beat schedule 엔트리 (매일 02:30, maintenance 큐) |
+| `adapters/django/apps.py` | TODO → DONE 코멘트 변경 |
 
 ---
 
@@ -588,3 +583,7 @@ TODO를 `_register_jwt_blacklist_hook()` 내부에 배치한 이유:
 | 2026-02-11 | `adapters/django/apps.py` `_register_jwt_blacklist_hook()` 추가 | ✅ |
 | 2026-02-11 | 단위 테스트 26개 작성 (hooks 6 + service 7 + apps 13) | ✅ |
 | 2026-02-11 | 통합 테스트 4개 추가 (`test_app_config.py`) | ✅ |
+| 2026-02-11 | `tasks/cleanup_tasks.py` `flush_expired_jwt_tokens` 추가 (TODO #217 구현) | ✅ |
+| 2026-02-11 | `myproject/celery.py` beat schedule 엔트리 추가 | ✅ |
+| 2026-02-11 | `adapters/django/apps.py` TODO → DONE 코멘트 변경 | ✅ |
+| 2026-02-11 | 단위 테스트 11개 작성 (`test_flush_expired_jwt_tokens.py`) | ✅ |

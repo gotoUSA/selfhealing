@@ -667,16 +667,9 @@ class SelfHealingConfig(AppConfig):
             register_session_invalidation_hook(blacklist_user_jwt)
             logger.info("[SelfHealing] JWT blacklist hook registered")
 
-            # TODO(#217): OutstandingToken 정리를 위해 Celery Beat에 flushexpiredtokens 등록 필요
-            # 블랙리스트에 추가된 토큰의 OutstandingToken 레코드가 DB에 계속 누적됨.
-            # OutstandingToken.user_id에는 FK 인덱스가 있으나, 만료 토큰 정리는 별도 필요.
-            # Django 프로젝트의 CELERY_BEAT_SCHEDULE에 추가할 것:
-            #   'flush-expired-tokens': {
-            #       'task': 'django.core.management.call_command',
-            #       'schedule': crontab(hour=2, minute=0),  # 매일 02:00
-            #       'args': ('flushexpiredtokens',),
-            #   }
-            # Reference: simplejwt 내장 management command 'flushexpiredtokens'
+            # DONE(#217): OutstandingToken 정리 Celery Beat 등록 완료
+            # 태스크: selfhealing/tasks/cleanup_tasks.py flush_expired_jwt_tokens
+            # 스케줄: get_cleanup_beat_schedule() + myproject/celery.py (매일 02:30)
 
         except ImportError as e:
             logger.debug(f"[SelfHealing] JWT hook registration skipped: {e}")

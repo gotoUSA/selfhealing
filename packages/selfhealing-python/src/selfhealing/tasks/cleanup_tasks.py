@@ -160,6 +160,53 @@ def purge_archived_dlq_entries(
         raise
 
 
+def flush_expired_jwt_tokens() -> dict[str, Any]:
+    """
+    만료된 JWT OutstandingToken 정리.
+
+    rest_framework_simplejwt의 flushexpiredtokens 관리 명령을 실행하여
+    만료된 OutstandingToken 레코드를 DB에서 제거합니다.
+
+    JWT 블랙리스트 연동(#217) 이후 OutstandingToken이 누적되므로
+    주기적 정리가 필요합니다.
+
+    Precondition:
+        - rest_framework_simplejwt.token_blacklist가 INSTALLED_APPS에 포함
+
+    Returns:
+        dict: {
+            "success": bool,
+            "message": str,
+            "skipped": bool (optional, token_blacklist 미설치 시만),
+        }
+
+    Reference:
+        docs/self_healing/middleware_system/217_JWT_BLACKLIST_AND_SECRETS_VALIDATION.md §7.3
+    """
+    try:
+        from django.apps import apps
+
+        if not apps.is_installed("rest_framework_simplejwt.token_blacklist"):
+            msg = "token_blacklist 앱이 설치되지 않아 건너뜁니다."
+            logger.info(f"[CleanupTask] flush_expired_jwt_tokens skipped: {msg}")
+            return {"success": True, "message": msg, "skipped": True}
+
+        from django.core.management import call_command
+
+        call_command("flushexpiredtokens")
+
+        msg = "만료된 JWT OutstandingToken 정리 완료"
+        logger.info(f"[CleanupTask] {msg}")
+        return {"success": True, "message": msg}
+
+    except Exception as e:
+        logger.error(
+            f"[CleanupTask] flush_expired_jwt_tokens failed: {e}",
+            exc_info=True,
+        )
+        raise
+
+
 # =============================================================================
 # Celery Task Registration
 # =============================================================================
@@ -212,6 +259,16 @@ try:
         """Celery task wrapper for purge_archived_dlq_entries."""
         return purge_archived_dlq_entries(older_than_days, dry_run)
 
+    @shared_task(
+        name="selfhealing.flush_expired_jwt_tokens",
+        bind=True,
+        max_retries=1,
+        default_retry_delay=300,
+    )
+    def flush_expired_jwt_tokens_task(self):
+        """Celery task wrapper for flush_expired_jwt_tokens."""
+        return flush_expired_jwt_tokens()
+
     CELERY_TASKS_AVAILABLE = True
 
 except ImportError:
@@ -263,6 +320,12 @@ def get_cleanup_beat_schedule() -> dict[str, Any]:
                 "options": {"queue": "critical_maintenance"},
                 "kwargs": {"older_than_days": 90},
             },
+            # 매일 02:30 - 만료된 JWT OutstandingToken 정리 (#217)
+            "flush-expired-jwt-tokens": {
+                "task": "selfhealing.flush_expired_jwt_tokens",
+                "schedule": crontab(hour=2, minute=30),
+                "options": {"queue": "maintenance"},
+            },
         }
     except ImportError:
         logger.debug("[CleanupTasks] Celery not available for beat schedule")
@@ -275,6 +338,7 @@ __all__ = [
     "cleanup_expired_config",
     "expire_approval_requests",
     "purge_archived_dlq_entries",
+    "flush_expired_jwt_tokens",
     # Beat schedule
     "get_cleanup_beat_schedule",
     # Service re-exports (for testing convenience)

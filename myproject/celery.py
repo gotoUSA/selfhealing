@@ -111,6 +111,17 @@ app.conf.beat_schedule = {
             "expires": 3600,
         },
     },
+    # 만료된 JWT OutstandingToken 정리 - 매일 새벽 2시 30분
+    # JWT 블랙리스트 연동(#217) 이후 누적되는 OutstandingToken 레코드 정리
+    # Reference: simplejwt 내장 management command 'flushexpiredtokens'
+    "flush-expired-jwt-tokens": {
+        "task": "selfhealing.flush_expired_jwt_tokens",
+        "schedule": crontab(hour=2, minute=30),  # 매일 02:30
+        "options": {
+            "expires": 3600,
+            "queue": "maintenance",
+        },
+    },
     # 포인트 만료 처리 - 매일 새벽 2시
     "expire-points-daily": {
         "task": "shopping.tasks.expire_points_task",
@@ -249,6 +260,8 @@ app.conf.beat_schedule = {
     # 스케줄 설명
     # 실행 시간표:
     # - 02:00 - 만료된 토큰 정리
+    # - 02:00 - 포인트 만료 처리
+    # - 02:30 - 만료된 JWT OutstandingToken 정리 (#217)
     # - 03:00 - 미인증 계정 삭제
     # - 04:00 - 이메일 로그 정리 (일요일만)
     # - 04:30 - 사용된 토큰 정리 (일요일만)
