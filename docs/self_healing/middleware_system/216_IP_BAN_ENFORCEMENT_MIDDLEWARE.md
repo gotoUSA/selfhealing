@@ -137,7 +137,8 @@ Redis에 기록된 IP ban을 실제 HTTP 요청 단계에서 강제 적용합니
 설계:
 - FAIL-OPEN: Redis 장애 시 요청 허용 (가용성 우선)
 - 헬스체크 경로 면제: /health/ 경로는 ban 대상에서 제외
-- IP 추출: X-Forwarded-For → X-Real-IP → REMOTE_ADDR 순서
+- IP 추출: selfhealing.utils.network.extract_client_ip() 재사용 (프로젝트 표준)
+- 응답 최소화: 403 응답에 ban_type 미포함 (공격자 정보 노출 방지)
 
 미들웨어 위치 (base.py MIDDLEWARE):
     [3] TieringMiddleware 다음
@@ -156,8 +157,9 @@ Usage in settings.py:
 from __future__ import annotations
 
 import logging
-import time
 from typing import TYPE_CHECKING, Any
+
+from selfhealing.utils.network import extract_client_ip
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -179,6 +181,7 @@ class IPBanMiddleware:
     """
 
     # 헬스체크 경로 면제 (K8s probe, ELB health check 등)
+    # 참고: /health/는 nginx.conf에서 직접 응답하여 Django 미도달이나, 방어적으로 유지
     EXEMPT_PATH_PREFIXES = (
         "/health/",
         "/readiness/",
@@ -226,10 +229,14 @@ class IPBanMiddleware:
         return self._cache
 
     def _get_banned_ip_prefix(self) -> str:
-        """Get banned IP cache prefix from config."""
+        """Get banned IP cache prefix from config.
+
+        CRITICAL: SecurityViolationService._temporary_ip_ban()/_permanent_ip_ban()과
+        반드시 동일한 키 프리픽스를 사용해야 함. 변경 시 ban 조회 불가 버그 발생.
+        """
         if self._config is not None:
             return self._config.banned_ip_cache_prefix
-        # SecuritySettings의 기본값과 동일 (settings/security.py L113)
+        # SecurityConfig 기본값과 동일 (models.py L112, settings/security.py L113)
         return "security:banned_ip:"
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
@@ -241,8 +248,8 @@ class IPBanMiddleware:
         if any(request.path.startswith(prefix) for prefix in self.EXEMPT_PATH_PREFIXES):
             return self.get_response(request)
 
-        # IP 추출 (masking.py의 get_client_ip와 동일한 로직)
-        client_ip = self._get_client_ip(request)
+        # IP 추출 (프로젝트 표준: selfhealing.utils.network.extract_client_ip)
+        client_ip = extract_client_ip(request, default="unknown")
 
         # ban 여부 확인
         ban_info = self._check_ip_ban(client_ip)
@@ -254,35 +261,17 @@ class IPBanMiddleware:
                 f"type={ban_type}, path={request.path}"
             )
 
+            # 보안: ban_type을 응답에 포함하지 않음 (공격자 정보 노출 방지)
+            # ban_type은 로그에만 기록
             return JsonResponse(
                 {
                     "error": "Access denied",
                     "code": "IP_BANNED",
-                    "ban_type": ban_type,
                 },
                 status=403,
             )
 
         return self.get_response(request)
-
-    def _get_client_ip(self, request: HttpRequest) -> str:
-        """
-        클라이언트 IP 추출.
-
-        audit/masking.py의 get_client_ip()와 동일한 순서:
-        1. X-Forwarded-For (프록시/로드밸런서)
-        2. X-Real-IP (리버스 프록시)
-        3. REMOTE_ADDR (직접 연결)
-        """
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-
-        x_real_ip = request.META.get("HTTP_X_REAL_IP")
-        if x_real_ip:
-            return x_real_ip.strip()
-
-        return request.META.get("REMOTE_ADDR", "unknown")
 
     def _check_ip_ban(self, ip_address: str) -> dict[str, Any] | None:
         """
@@ -386,33 +375,119 @@ def __call__(self, request: HttpRequest) -> HttpResponse:
 
 ---
 
-## 5. IP 추출 로직 일원화
+## 5. IP 추출 로직 일원화 (리뷰 반영: utils.network 재사용)
 
-### 5.1 현재 상태: 동일 로직 2곳 중복
+### 5.1 결정: `selfhealing.utils.network.extract_client_ip()` 직접 사용
 
-| 위치 | 함수명 | 로직 |
-|---|---|---|
-| `audit/masking.py` L393-L410 | `get_client_ip(request)` | X-Forwarded-For → X-Real-IP → REMOTE_ADDR |
-| 본 문서 신규 IPBanMiddleware | `_get_client_ip(request)` | 동일 |
+**원래 문서**: `_get_client_ip()` 인라인 구현 후 후속 리팩토링으로 `utils.network` 분리 예정
 
-### 5.2 권장 사항
+**리뷰 반영**: `selfhealing.utils.network.extract_client_ip()`가 **이미 존재**하므로 즉시 사용. `_get_client_ip()` 메서드 제거.
 
-IPBanMiddleware에서 `audit.masking.get_client_ip()`를 직접 import하면 순환 의존성 위험이 있다 (middleware → audit → 기타 모듈). 따라서:
+### 5.2 코드 근거
 
-1. **1단계 (본 문서)**: IPBanMiddleware 내에 `_get_client_ip()` 인라인 구현
-2. **후속 리팩토링**: `selfhealing.utils.network` 모듈로 IP 추출 로직을 분리하여 양쪽에서 import
+**파일**: `packages/selfhealing-python/src/selfhealing/utils/network.py`
+
+```python
+"""
+Network Utilities.
+
+All modules requiring client IP should use ``extract_client_ip``
+to ensure consistent behaviour across audit, permission, actor context,
+and canary feature-flag subsystems.
+"""
+
+def extract_client_ip(request: Any, *, default: str | None = None) -> str | None:
+    meta = getattr(request, "META", None) or {}
+    # 1) X-Forwarded-For – first entry is the original client
+    # 2) X-Real-IP (nginx convention)
+    # 3) REMOTE_ADDR – direct connection fallback
+    ...
+```
+
+**사용 선례** (`context/actor_context.py` L269-L271):
+
+```python
+from selfhealing.utils.network import extract_client_ip
+return extract_client_ip(request)
+```
+
+### 5.3 순환 참조 안전성 분석
+
+`selfhealing.utils.network` 모듈의 import 체인:
+
+```
+utils/network.py
+  └── from __future__ import annotations
+  └── from typing import Any
+  └── (외부 의존성 없음)
+```
+
+**결론**: 순수 유틸리티 모듈이므로 모듈 상단에서 직접 import 가능. lazy import 불필요.
+
+### 5.4 IP Spoofing 대응
+
+리뷰에서 `X-Forwarded-For` 첫 번째 값 신뢰의 위험성이 지적됨:
+
+> 클라이언트가 `X-Forwarded-For: 1.2.3.4`를 조작하면, Nginx가 `1.2.3.4, real_ip`로 전달.
+> `split(",")[0]`으로 조작된 `1.2.3.4`가 사용될 수 있음.
+
+**분석 결과 — 미들웨어 단독 변경 불가**:
+
+1. **Nginx 설정** (`nginx/nginx.conf` L69-L72): `X-Real-IP $remote_addr` 설정으로 Nginx 직접 연결 IP 보존
+2. **시스템 전체 일관성**: `extract_client_ip`, `actor_context`, `access_logging`, `audit/masking` 모두 동일 순서 사용
+3. **IPBanMiddleware만 독자적으로 변경하면**: ban 기록 시의 IP(SecurityViolationService)와 조회 시의 IP(IPBanMiddleware)가 불일치 → **ban 우회 버그 발생**
+
+**결론**: IP Spoofing 방지는 인프라 레벨(Nginx에서 `X-Forwarded-For` 덮어쓰기 또는 trusted proxy 계층 고정)에서 해결해야 함. 미들웨어 단독 변경은 시스템 IP 불일치를 유발.
+
+### 5.5 후속 리팩토링 대상
+
+`access_logging.py`의 `_get_client_ip()`도 아직 `extract_client_ip`를 사용하지 않음 (인라인 구현 유지 중). 별도 PR에서 정리 권장.
 
 ---
 
-## 6. 테스트 명세
+## 6. 테스트 명세 (리뷰 반영: Mock 전략 구체화)
 
-### 6.1 단위 테스트
+### 6.1 Mock 전략
+
+프로젝트 표준 패턴에 따라 (`fakeredis` 미사용):
+
+| 유형 | 방식 | 근거 |
+|---|---|---|
+| **단위 테스트** | `middleware._cache = MagicMock()` 직접 주입 | `test_security_violation_service.py` L432-L433 패턴 |
+| **통합 테스트** | `ProviderRegistry.override_provider("cache", mock)` | `test_provider_registry_isolation.py` 패턴 |
+
+### 6.2 단위 테스트
 
 **파일**: `tests/self_healing/django/test_ip_ban_middleware.py`
 
 ```python
+from unittest.mock import MagicMock, Mock
+
+import pytest
+
+
 class TestIPBanMiddleware:
     """IPBanMiddleware 단위 테스트."""
+
+    def _make_middleware(self, ban_info=None, cache_error=False):
+        """테스트용 미들웨어 팩토리.
+
+        Mock 주입 패턴: test_security_violation_service.py L432-L433과 동일.
+        """
+        from selfhealing.api.django.middleware.ip_ban import IPBanMiddleware
+
+        mock_response = Mock()
+        middleware = IPBanMiddleware(get_response=lambda r: mock_response)
+
+        mock_cache = MagicMock()
+        if cache_error:
+            mock_cache.get.side_effect = Exception("Redis down")
+        else:
+            mock_cache.get.return_value = ban_info
+
+        middleware._cache = mock_cache
+        middleware._initialized = True
+        return middleware, mock_response
 
     def test_banned_ip_returns_403(self):
         """ban된 IP의 요청이 403으로 거부되는지 확인."""
@@ -426,36 +501,55 @@ class TestIPBanMiddleware:
     def test_redis_failure_fail_open(self):
         """Redis 장애 시 요청이 허용되는지 확인 (Fail-Open)."""
 
-    def test_temporary_ban_type_in_response(self):
-        """응답에 ban_type이 포함되는지 확인."""
+    def test_response_does_not_expose_ban_type(self):
+        """403 응답에 ban_type이 노출되지 않는지 확인 (보안)."""
 
-    def test_permanent_ban_type_in_response(self):
-        """영구 ban의 ban_type이 정확한지 확인."""
+    def test_ban_type_logged_in_warning(self):
+        """ban_type이 로그에는 기록되는지 확인."""
 
-    def test_x_forwarded_for_ip_extraction(self):
-        """X-Forwarded-For에서 IP가 올바르게 추출되는지 확인."""
+    def test_extract_client_ip_integration(self):
+        """extract_client_ip가 올바르게 호출되는지 확인."""
 
     def test_lazy_init_only_once(self):
         """lazy init이 한 번만 실행되는지 확인."""
+
+    def test_cache_retry_on_initial_failure(self):
+        """초기 캐시 로드 실패 시 _get_cache()에서 재시도하는지 확인."""
 ```
 
-### 6.2 통합 테스트
+### 6.3 통합 테스트
 
 ```python
+from unittest.mock import MagicMock
+
+from selfhealing.factory import ProviderRegistry
+
+
 class TestIPBanIntegration:
-    """IP Ban → Middleware 연동 통합 테스트."""
+    """IP Ban → Middleware 연동 통합 테스트.
+
+    ProviderRegistry.override_provider를 사용한 격리된 테스트 환경.
+    """
 
     def test_violation_triggers_ban_then_middleware_blocks(self):
         """
-        1. SecurityViolationService.handle_violation(INJECTION_ATTEMPT) 호출
-        2. _temporary_ip_ban()으로 Redis에 ban 기록
-        3. 동일 IP의 후속 HTTP 요청이 403으로 차단됨
+        mock_cache = MagicMock()
+        with ProviderRegistry.override_provider("cache", mock_cache):
+            1. SecurityViolationService.handle_violation(INJECTION_ATTEMPT) 호출
+            2. _temporary_ip_ban()으로 Redis에 ban 기록
+            3. 동일 IP의 후속 HTTP 요청이 403으로 차단됨
         """
 
     def test_ban_expiry_allows_request(self):
         """
         1. 임시 ban (TTL 1시간) 기록
         2. TTL 만료 후 요청이 다시 허용됨
+        """
+
+    def test_key_prefix_matches_security_violation_service(self):
+        """
+        IPBanMiddleware와 SecurityViolationService가
+        동일한 Redis 키 프리픽스(security:banned_ip:)를 사용하는지 확인.
         """
 ```
 
@@ -482,3 +576,52 @@ class TestIPBanIntegration:
 - **모든 요청**에 Redis GET 1회 추가 (O(1), ~0.1ms)
 - 헬스체크 경로는 Redis 조회 없이 즉시 통과
 - 비교: `HybridRateLimitMiddleware`도 매 요청마다 Redis 조회 수행 중
+
+---
+
+## 8. 리뷰 반영 요약
+
+> 리뷰 일자: 2026-02-11
+
+### 8.1 반영된 항목
+
+| # | 리뷰 항목 | 결정 | 근거 |
+|---|---|---|---|
+| 1 | 순환 참조 방지 전략 강화 | **현행 유지** | `SecurityConfig` → `SecuritySettings` → pydantic 체인에 `api.django` 참조 없음. `SelfHealingMiddleware._lazy_init()` (self_healing.py L81) 패턴과 동일. `ProviderRegistry` (factory.py L41)도 middleware 미참조 |
+| 2 | IP Spoofing 방지 | **인프라 레벨에서 해결** | 미들웨어만 변경 시 `SecurityViolationService`의 ban 기록 IP와 불일치 발생. §5.4 상세 분석 참조 |
+| 3 | 헬스체크 경로 유연성 | **하드코딩 유지** | `HealthBridgeMiddleware.BRIDGE_PATHS` (health_bridge.py L62-L67) 동일 패턴. `nginx.conf` L108-L111에서 `/health/` 직접 응답하므로 Django 미도달 |
+| 4 | IP 추출 로직 재사용 | **`extract_client_ip` 사용** | `utils/network.py` 모듈이 이 목적으로 생성됨 (docstring: "All modules requiring client IP should use..."). `_get_client_ip()` 제거. §5 전면 개정 |
+| 5 | Lazy Init 강화 | **현행 유지 + 주석 보강** | config/cache 분리 로딩 이미 구현됨. `_get_banned_ip_prefix()` fallback 기본값에 CRITICAL 주석 추가 |
+| 6 | Redis Key Prefix 확인 | **`security:banned_ip:` 유지** | `SecurityViolationService`와 키 공유 필수. `_get_banned_ip_prefix()`에 CRITICAL 경고 주석 추가 |
+| 7 | 테스트 Mock 전략 | **`MagicMock` + `override_provider`** | `fakeredis` 미사용 (프로젝트 미도입). §6.1 Mock 전략 표 참조 |
+
+### 8.2 추가 보안 강화
+
+| 변경 | 이유 | 코드 근거 |
+|---|---|---|
+| 403 응답에서 `ban_type` 제거 | 공격자에게 ban이 임시/영구인지 정보 노출 방지 | `ban_type`은 `logger.warning`에만 기록 |
+| `import time` 제거 | 미사용 import 제거 | 원본 코드에서 `time` 사용처 0건 |
+| `EXEMPT_PATH_PREFIXES` 주석 보강 | `/health/`는 `nginx.conf`에서 직접 응답함을 명시 | `nginx.conf` L108-L111: `return 200 "OK\n"` |
+| `_get_banned_ip_prefix()` CRITICAL 주석 | 키 프리픽스 임의 변경 시 ban 무효화 버그 방지 | `service.py` L429, L456, L479, L488에서 동일 프리픽스 사용 |
+
+### 8.3 선택 이유 요약
+
+#### 리뷰 1 (순환 참조) — 현행 유지
+
+`SecurityConfig.from_settings()` 호출 체인: `models.py` → `settings/__init__.py` → `settings/security.py(pydantic)`. 이 체인에서 `selfhealing.api.django.*`를 참조하는 곳이 없으므로 순환 참조 불가. `ProviderRegistry.get_cache()`도 `factory.py`에서 adapter 클래스만 참조할 뿐 middleware를 import하지 않음. 추가 방어 코드는 과잉 설계.
+
+#### 리뷰 2 (IP Spoofing) — 인프라 레벨 해결
+
+`X-Forwarded-For`의 **마지막** IP를 신뢰하는 방식으로 변경하면, `SecurityViolationService`가 ban 기록 시 사용한 IP(첫 번째)와 불일치함. ban은 `service.py`에서 `request_info.get("ip")`로 추출된 IP에 대해 수행되는데, 이 IP가 동일한 `X-Forwarded-For` 첫 번째 값임. 따라서 조회도 같은 로직을 사용해야 함.
+
+#### 리뷰 3 (헬스체크 유연성) — 하드코딩 유지
+
+설정 주입 방식의 장점(유연성)보다 단점(복잡성 증가, 기존 미들웨어와 불일치)이 큼. `HealthBridgeMiddleware`, `TieringMiddleware` 등 **기존 미들웨어 중 설정에서 면제 경로를 주입받는 것이 하나도 없음**. 또한 `EXEMPT_PATH_PREFIXES`의 3개 경로는 모두 Nginx 또는 HealthBridge에서 먼저 처리되므로 실질적으로 도달하지 않음.
+
+#### 리뷰 4 (extract_client_ip) — 즉시 사용
+
+216 원본 문서의 §5.2에서 "후속 리팩토링으로 `utils.network` 분리"라고 했으나, `utils/network.py`는 **이미 존재**하며 `actor_context.py`에서 사용 중. "후속 리팩토링"이 아니라 "이미 완료된 리팩토링"을 활용하는 것. 인라인 구현은 DRY 위반.
+
+#### 리뷰 7 (테스트 Mock) — MagicMock + override_provider
+
+`test_security_violation_service.py`에서 `MagicMock()` 직접 주입, `test_provider_registry_isolation.py`에서 `override_provider` 컨텍스트 매니저 사용이 이미 검증된 표준. `fakeredis`는 `requirements-dev.txt`에 없으며 프로젝트에서 미사용.
