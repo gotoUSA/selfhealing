@@ -1028,7 +1028,7 @@ def _capture_forensic_context(
 ):
     """Capture forensic context for failed task."""
     try:
-        from selfhealing.services.forensic_context import capture_forensic_context
+        from selfhealing.services.forensic_context import capture_forensic_context  # type: ignore[import-not-found]  # noqa: E501 — 미구현 모듈, ImportError fallback으로 보호
 
         # API: capture_forensic_context(task_id, task_name, order, payment, user, request)
         context = capture_forensic_context(
