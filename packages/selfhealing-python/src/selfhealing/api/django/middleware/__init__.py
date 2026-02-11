@@ -50,6 +50,11 @@ from selfhealing.api.django.middleware.recovery_logger import (
 from selfhealing.api.django.middleware.self_healing import SelfHealingMiddleware
 
 # ============================================================
+# IP Ban Enforcement
+# ============================================================
+from selfhealing.api.django.middleware.ip_ban import IPBanMiddleware
+
+# ============================================================
 # Actor Context
 # ============================================================
 from selfhealing.api.django.middleware.actor_context import ActorContextMiddleware
@@ -60,6 +65,8 @@ from selfhealing.api.django.middleware.actor_context import ActorContextMiddlewa
 __all__ = [
     # Health Bridge
     "HealthBridgeMiddleware",
+    # IP Ban Enforcement
+    "IPBanMiddleware",
     # Access Logging
     "SensitiveEndpointAccessLogger",
     "SensitiveAccessLoggingMiddleware",

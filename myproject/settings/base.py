@@ -103,6 +103,12 @@ MIDDLEWARE = [
     # 비활성화: SELFHEALING_TIERING_MIDDLEWARE_ENABLED = False
     "selfhealing.api.django.tiering.TieringMiddleware",
     # ==========================================================================
+    # [3.5] IP Ban Enforcement (banned IP 즉시 차단)
+    # ==========================================================================
+    # Redis에 기록된 IP ban을 HTTP 요청 단계에서 강제 적용
+    # FAIL-OPEN: Redis 장애 시 요청 허용
+    "selfhealing.api.django.middleware.IPBanMiddleware",
+    # ==========================================================================
     # [4] Self-Healing Middleware (Circuit Breaker + DLQ)
     # ==========================================================================
     # DB 오류/502 감지 → CircuitBreaker 기록 + DLQ 자동 적재
