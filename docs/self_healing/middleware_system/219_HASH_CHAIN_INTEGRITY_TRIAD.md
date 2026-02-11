@@ -1166,67 +1166,156 @@ Phase 3 (2-3일): MerkleSpotChecker
 
 ## 10. 테스트 전략
 
-### 10.1 PostRecoveryIntegrityGate
+> **테스트 구현 상태**: ✅ 구현 완료 (2026-02-12)
+> **단위 테스트**: 64개 전체 통과 (pytest, 0.34s)
+> **통합 테스트**: Docker Compose 환경에서 실행 (7개 시나리오)
 
-```python
-# tests/self_healing/services/event_bus/test_integrity_gate.py
-class TestPostRecoveryIntegrityGate:
-    def test_valid_chain_allows_replay(self):
-        """무결성 정상 → integrity_failed=False → 리플레이 허용."""
+### 10.1 PostRecoveryIntegrityGate — 단위 테스트
 
-    def test_broken_chain_blocks_replay(self):
-        """무결성 깨짐 → integrity_failed=True → 리플레이 차단."""
-
-    def test_gate_error_fail_open(self):
-        """게이트 자체 오류 → Fail-Open → 리플레이 허용."""
-
-    def test_gate_error_fail_secure(self):
-        """PCI-DSS 모드 → 게이트 오류 시 리플레이 차단."""
-
-    def test_critical_priority_runs_before_replay(self):
-        """CRITICAL 우선순위가 NORMAL(Replay) 전에 실행되는지 확인."""
+```
+파일: packages/selfhealing-python/tests/unit/services/test_integrity_gate.py
+테스트 수: 18개
 ```
 
-### 10.2 BackgroundIntegrityVerifier
-
 ```python
-# tests/self_healing/tasks/test_integrity_tasks.py
-class TestBackgroundIntegrityVerifier:
-    def test_small_dataset_uses_full_chain(self):
-        """10000건 미만 → HashChainVerifier.verify_chain() 사용."""
+class TestIntegrityGateContract:
+    """계약 검증 — INTEGRITY_GATE_KEY, INTEGRITY_FAILED_KEY 상수값."""
 
-    def test_large_dataset_uses_merkle(self):
-        """10000건 이상 → MerkleSpotChecker.spot_check() 전환."""
+class TestIntegrityGateHandlerBehavior:
+    """동작 검증 — CB 복구 시 무결성 게이트 핸들러."""
+    # - 정상 체인 → integrity_failed=False
+    # - 위반 체인 → integrity_failed=True + alert 호출
+    # - 예외 + fail_open=True → 리플레이 허용
+    # - 예외 + fail_open=False → 리플레이 차단 (PCI-DSS)
+    # - 결과에 duration_ms, strategy 포함
+    # - settings 로드 실패 시 fail_open 기본값 적용
 
-    def test_health_score_updated_on_success(self):
-        """검증 성공 시 IntegrityHealthScore 업데이트."""
+class TestVerifyRecoveryWindowBehavior:
+    """동작 검증 — WAL 해시체인 검증."""
+    # - 빈 WAL → valid=True, strategy=no_entries
+    # - 정상 체인 → strategy=wal_chain_verify
+    # - 위반 체인 → find_tampering() 호출
 
-    def test_beat_schedule_registration(self):
-        """get_integrity_beat_schedule() 반환값 검증."""
+class TestGetUnsyncedWalEntriesBehavior:
+    """동작 검증 — WAL 미동기화 엔트리 조회."""
+    # - WAL None → 빈 목록
+    # - recover_unprocessed(last_processed_seq=0) 호출 확인 (A1)
+    # - 예외 → 빈 목록
+
+class TestUpdateHealthScoreBehavior:
+    """동작 검증 — IntegrityHealthScore 갱신."""
+    # - 성공 → record_recovery()
+    # - 실패 → record_chain_break()
+    # - 예외 비전파
 ```
 
-### 10.3 MerkleSpotChecker
+### 10.2 BackgroundIntegrityVerifier — 단위 테스트
+
+```
+파일: packages/selfhealing-python/tests/unit/tasks/test_integrity_tasks.py
+테스트 수: 22개
+```
 
 ```python
-# tests/self_healing/audit/integrity/test_merkle_spot_checker.py
-class TestMerkleSpotChecker:
-    def test_spot_check_all_valid(self):
-        """정상 데이터 → valid=True, blocks_failed=0."""
+class TestVerifyHashChainIntegrityBehavior:
+    """동작 검증 — 백그라운드 해시체인 검증 메인 함수."""
+    # - Redis 불가 → skipped=True
+    # - 락 경합 → skipped=True
+    # - 소규모 → full_chain 전략
+    # - 대규모 → merkle_spot_check 전략
+    # - 위반 → alert + record_chain_break
+    # - 성공 → record_recovery(event_type="background_verify_ok")
+    # - 최상위 예외 → valid=False
+    # - 락은 항상 해제 (R3)
 
-    def test_spot_check_detects_tampered_block(self):
-        """변조된 블록 → valid=False + 정확한 block_id 반환."""
+class TestVerifyWithRetryBehavior:
+    """동작 검증 — 재시도 포함 검증 로직 (R5-B)."""
+    # - 첫 시도 성공 → 즉시 반환
+    # - 재시도에서 성공
+    # - 3회 실패 → 마지막 에러 반환
+    # - 빈 엔트리 → valid=True
+    # - 매 재시도마다 소스 리로드
 
-    def test_drill_down_identifies_exact_entry(self):
-        """드릴다운 → find_tampering()으로 정확한 시퀀스 식별."""
+class TestMerkleSpotCheckBehavior:
+    """동작 검증 — MerkleSpotChecker 위임."""
 
-    def test_build_merkle_roots_stores_to_redis(self):
-        """build_merkle_roots() → Redis에 블록 루트 저장."""
+class TestAlertIntegrityViolationBehavior:
+    """동작 검증 — WAL 위반 기록."""
 
-    def test_first_run_stores_roots_without_failure(self):
-        """첫 실행 시 저장된 루트 없음 → 저장만, 실패 아님."""
+class TestGetEntriesSinceLastAnchorBehavior:
+    """동작 검증 — Anchor 이후 엔트리 로드."""
 
-    def test_performance_vs_full_chain(self):
-        """100만 건에서 MerkleSpotChecker가 O(n) 대비 빠른지 확인."""
+class TestGetIntegrityBeatScheduleBehavior:
+    """동작 검증 — Celery Beat 스케줄."""
+    # - 5분 주기 (merkle 활성화) + 1일 주기 (merkle 비활성화)
+    # - 큐: integrity
+```
+
+### 10.3 MerkleSpotChecker — 단위 테스트
+
+```
+파일: packages/selfhealing-python/tests/unit/audit/integrity/test_merkle_spot_checker.py
+테스트 수: 24개
+```
+
+```python
+class TestSplitIntoBlocksBehavior:
+    """동작 검증 — 시퀀스 기반 블록 분할 (R2)."""
+    # - 단일 블록, 다중 블록
+    # - block_id = (sequence - 1) // block_size 확인
+    # - 시퀀스 갭 → 다른 블록 무영향
+    # - 엔트리 삭제 → 다른 블록 구성 불변
+    # - 시퀀스 ≤ 0 무시
+    # - 빈 엔트리 → 빈 블록
+
+class TestSpotCheckBehavior:
+    """동작 검증 — 블록 단위 스팟체크."""
+    # - 빈 엔트리 → valid=True
+    # - 첫 실행 → 저장만, 실패 아님
+    # - 정상 데이터 → blocks_failed=0
+    # - 변조 블록 감지 + failed_block_ids 정확
+    # - Redis 없음 → 항상 valid
+    # - 결과 필수 키 포함 (valid, strategy, drill_down_results 등)
+    # - 실패 블록 drill_down_results 생성
+
+class TestBuildMerkleRootsBehavior:
+    """동작 검증 — 블록별 머클 루트 빌드."""
+    # - 올바른 블록 수 저장
+    # - TTL: anchor_retention_days 설정 참조 (R4)
+    # - 빈 엔트리 → 0블록
+
+class TestComputeBlockMerkleRootBehavior:
+    """동작 검증 — 블록 머클 루트 계산."""
+    # - canonical_json_bytes 사용 확인 (R5-A)
+    # - 결정적 루트 (동일 입력 → 동일 출력)
+    # - 다른 입력 → 다른 루트
+
+class TestMerkleSpotCheckerContract:
+    """계약 검증 — 기본값 및 상수."""
+    # - 기본 block_size=1000
+    # - 기본 namespace="global"
+    # - BLOCK_MERKLE_ROOT_KEY 형식 확인
+    # - strategy="merkle_spot_check"
+```
+
+### 10.4 통합 테스트 — Hash Chain Integrity Triad
+
+```
+파일: tests/integration/selfhealing/test_integrity_triad_integration.py
+테스트 수: 7개
+실행: docker-compose -f docker-compose.test.yml run test pytest tests/integration/selfhealing/test_integrity_triad_integration.py -v
+```
+
+```python
+@pytest.mark.django_db
+class TestIntegrityGateEventBusIntegration:
+    """IntegrityGate ↔ EventBus 통합 테스트."""
+    # - CRITICAL 우선순위 핸들러 등록 확인
+    # - 정상 체인 → 게이트 통과 → 리플레이 허용
+    # - 위반 체인 → 게이트 차단 → 리플레이 블록
+    # - CRITICAL → NORMAL → LOW 실행 순서 확인
+    # - 게이트 예외 + fail_open=True → 리플레이 허용
+    # - 빈 WAL → 게이트 통과
 ```
 
 ---
