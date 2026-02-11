@@ -942,6 +942,34 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
+  # 218. Session Signal Integration Test (세션 시그널 + UserSessionRegistry)
+  # connect_session_signals(), 시그널 디스패치, Registry ↔ Redis 연동 검증
+  # 실행: docker-compose -f docker-compose.test.yml run --rm test-session-signals
+  # ---------------------------------------------------------------------------
+  test-session-signals:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python -m pytest tests/self_healing/integration/django/test_session_signals.py -v --tb=short --no-cov --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
   # 213. Postmortem Celery Delegation 통합 테스트
   # 실행: docker-compose -f docker-compose.test.yml run --rm test-postmortem-celery-delegation
   # ---------------------------------------------------------------------------

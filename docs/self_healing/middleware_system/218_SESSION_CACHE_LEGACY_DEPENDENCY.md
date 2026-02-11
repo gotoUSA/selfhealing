@@ -1258,33 +1258,42 @@ class TestCryptographyOptionalDep:
             assert not result.startswith("encrypted:hmac:")
 ```
 
-### 7.6 시그널 핸들러 검증
+### 7.6 시그널 통합 테스트
+
+> **리뷰 #8 반영**: 유닛테스트(test_session_signal_hooks.py)는 핸들러 함수의 입출력만 mock으로 검증.
+> 통합테스트는 유닛테스트가 커버하지 못하는 4가지 경로를 검증한다:
+> 1. `connect_session_signals()` → 실제 Django 시그널 연결/해제/중복방지
+> 2. `SelfHealingConfig.ready()` → `_connect_session_signals()` 체인
+> 3. Django 시그널 fire → 핸들러 실행 → UserSessionRegistry 기록 (end-to-end)
+> 4. UserSessionRegistry ↔ 실제 캐시 백엔드 연동 (InMemory + Redis)
 
 **파일**: `tests/self_healing/integration/django/test_session_signals.py` (신규)
 
-```python
-import pytest
-from unittest.mock import patch, MagicMock
+**Docker 실행**: `docker-compose -f docker-compose.test.yml run --rm test-session-signals`
 
+**테스트 클래스 구성:**
 
-class TestSessionSignalHandlers:
-    """shopping/signals.py의 세션 시그널 핸들러 검증."""
+| 클래스 | 테스트 수 | 검증 대상 | Redis 필요 |
+|---|---|---|---|
+| `TestSignalConnectionContract` | 6 | `connect/disconnect_session_signals()`, `_connected` 가드, `dispatch_uid` | ❌ |
+| `TestAppConfigSignalChainContract` | 2 | `SelfHealingConfig._connect_session_signals()` → `connect_session_signals()` 체인 | ❌ |
+| `TestSignalDispatchBehavior` | 9 | `user_logged_in/out.send()` → 핸들러 → InMemory Registry (전체 경로) | ❌ |
+| `TestRegistryCacheIntegrationContract` | 5 | `UserSessionRegistry` ↔ `InMemoryCacheAdapter` 데이터 왕복 | ❌ |
+| `TestRedisSessionRegistryContract` | 6 | `UserSessionRegistry` ↔ 실제 Redis + Django 시그널 E2E | ✅ |
 
-    def test_login_signal_registers_session(self):
-        """user_logged_in 시그널 발생 시 UserSessionRegistry.register() 호출 확인."""
+**유닛테스트 vs 통합테스트 커버리지 비교:**
 
-    def test_login_signal_creates_session_key_if_missing(self):
-        """session_key가 None일 때 request.session.save() 호출 확인."""
-
-    def test_logout_signal_unregisters_session(self):
-        """user_logged_out 시그널 발생 시 UserSessionRegistry.unregister() 호출 확인."""
-
-    def test_signal_graceful_without_selfhealing(self):
-        """selfhealing 미설치 시 ImportError를 조용히 처리하는지 확인."""
-
-    def test_signal_skips_anonymous_user(self):
-        """user가 None이거나 pk가 None일 때 registry 호출 안 함 확인."""
-```
+| 검증 대상 | 유닛테스트 | 통합테스트 |
+|---|---|---|
+| 핸들러 함수 분기 로직 (`user=None`, `pk=None` 등) | ✅ `test_session_signal_hooks.py` | ✅ (시그널 경유로 재검증) |
+| `connect_session_signals()` 시그널 연결 | ❌ | ✅ `TestSignalConnectionContract` |
+| `_connected` 가드 + `dispatch_uid` 중복 방지 | ❌ | ✅ `TestSignalConnectionContract` |
+| `disconnect_session_signals()` 핸들러 해제 | ❌ | ✅ `TestSignalConnectionContract` |
+| `apps.py ready()` → `_connect_session_signals()` 체인 | ❌ | ✅ `TestAppConfigSignalChainContract` |
+| 시그널 fire → 핸들러 실행 → Registry 기록 | ❌ | ✅ `TestSignalDispatchBehavior` |
+| 다중 기기 로그인/로그아웃 시나리오 | ❌ | ✅ `TestSignalDispatchBehavior` |
+| Registry ↔ InMemory 캐시 왕복 | ❌ | ✅ `TestRegistryCacheIntegrationContract` |
+| Registry ↔ 실제 Redis 연동 | ❌ | ✅ `TestRedisSessionRegistryContract` |
 
 ---
 
@@ -1311,7 +1320,8 @@ class TestSessionSignalHandlers:
 | `packages/selfhealing-python/tests/unit/security/test_invalidate_sessions.py` | 8 | 재작성된 _invalidate_user_sessions 검증 |
 | `packages/selfhealing-python/tests/unit/audit/test_decrypt_forensic.py` | 12 | decrypt_forensic 레거시/HMAC/Fernet 검증 |
 | `tests/self_healing/integration/django/test_session_backend.py` | 4 | Redis 세션 백엔드 설정 검증 |
-| `packages/selfhealing-python/tests/unit/security/test_session_signal_hooks.py` | 7 | 시그널 핸들러 검증 (`adapters/django/signal_hooks.py`) |
+| `packages/selfhealing-python/tests/unit/security/test_session_signal_hooks.py` | 7 | 시그널 핸들러 동작 검증 (유닛, mock 기반) |
+| `tests/self_healing/integration/django/test_session_signals.py` | 28 | 시그널 연결/디스패치/Registry 연동 통합 테스트 |
 
 ### 8.3 기존 테스트 수정
 
@@ -1323,3 +1333,21 @@ class TestSessionSignalHandlers:
 
 - security + audit 전체: **48 passed, 0 failed** (218 관련 테스트)
 - 기존 session_invalidation_hooks: **7 passed** (회귀 없음)
+
+### 8.5 통합 테스트 (Docker 환경)
+
+**실행 방법:**
+
+```bash
+docker-compose -f docker-compose.test.yml run --rm test-session-signals
+```
+
+**테스트 구성:**
+- InMemory 기반 (Docker 불필요): 22개 — 시그널 연결/디스패치/Registry 연동
+- Redis 기반 (Docker 필요): 6개 — `@pytest.mark.skipif(not TEST_REDIS_AVAILABLE)` 조건부
+
+**커버리지 보완 (유닛테스트 미커버 → 통합테스트 커버):**
+- `connect_session_signals()` / `disconnect_session_signals()` / `_connected` 가드
+- `SelfHealingConfig._connect_session_signals()` → `connect_session_signals()` 위임 체인
+- `user_logged_in.send()` → `on_user_login_register_session` → `registry.register()` 전체 경로
+- `UserSessionRegistry` ↔ `InMemoryCacheAdapter` / 실제 Redis 데이터 왕복
