@@ -14,7 +14,6 @@ import pytest
 
 from selfhealing.adapters.django.apps import SelfHealingConfig
 from selfhealing.services.security.hooks import (
-    clear_session_invalidation_hooks,
     get_session_invalidation_hooks,
 )
 
@@ -22,14 +21,6 @@ from selfhealing.services.security.hooks import (
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture(autouse=True)
-def _reset_hooks():
-    """각 테스트 전후로 콜백 레지스트리 초기화."""
-    clear_session_invalidation_hooks()
-    yield
-    clear_session_invalidation_hooks()
 
 
 @pytest.fixture
@@ -43,8 +34,8 @@ def app_config():
 # =============================================================================
 
 
-class TestJWTBlacklistHookRegistration:
-    """JWT 블랙리스트 훅 등록 테스트."""
+class TestJWTBlacklistHookRegistrationBehavior:
+    """JWT 블랙리스트 훅 등록 동작 검증."""
 
     def test_hook_registered_when_token_blacklist_installed(self, app_config):
         """token_blacklist 앱 설치 시 훅이 등록되는지 확인."""
@@ -139,8 +130,8 @@ class TestJWTBlacklistHookRegistration:
 # =============================================================================
 
 
-class TestValidateSecrets:
-    """시크릿 검증 테스트."""
+class TestValidateSecretsBehavior:
+    """시크릿 검증 동작 검증."""
 
     def test_validate_secrets_called_successfully(self, app_config):
         """validate_required_secrets()가 정상 호출되는지 확인."""

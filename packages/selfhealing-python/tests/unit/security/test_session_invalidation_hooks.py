@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.services.security.hooks import (
-    clear_session_invalidation_hooks,
     register_session_invalidation_hook,
 )
 from selfhealing.services.security.models import SecurityConfig
@@ -22,14 +21,6 @@ from selfhealing.services.security.service import SecurityViolationService
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture(autouse=True)
-def _reset_hooks():
-    """각 테스트 전후로 콜백 레지스트리 초기화."""
-    clear_session_invalidation_hooks()
-    yield
-    clear_session_invalidation_hooks()
 
 
 @pytest.fixture
@@ -55,8 +46,8 @@ def service(mock_cache):
 # =============================================================================
 
 
-class TestInvalidateUserSessionsWithHooks:
-    """_invalidate_user_sessions() 콜백 호출 테스트."""
+class TestInvalidateUserSessionsWithHooksBehavior:
+    """_invalidate_user_sessions() 콜백 호출 동작 검증."""
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_hook_called_on_invalidation(self, mock_audit, service):

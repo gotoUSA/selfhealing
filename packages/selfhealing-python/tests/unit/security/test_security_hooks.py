@@ -15,19 +15,6 @@ from selfhealing.services.security.hooks import (
 )
 
 
-# =============================================================================
-# Fixtures
-# =============================================================================
-
-
-@pytest.fixture(autouse=True)
-def _reset_hooks():
-    """각 테스트 전후로 콜백 레지스트리 초기화."""
-    clear_session_invalidation_hooks()
-    yield
-    clear_session_invalidation_hooks()
-
-
 def _dummy_hook(user_id: int) -> str:
     return f"dummy({user_id})"
 
@@ -41,8 +28,8 @@ def _another_hook(user_id: int) -> str:
 # =============================================================================
 
 
-class TestSecurityHooks:
-    """세션 무효화 콜백 레지스트리 테스트."""
+class TestSecurityHooksBehavior:
+    """세션 무효화 콜백 레지스트리 동작 검증."""
 
     def test_register_hook(self):
         """콜백 등록 후 목록에 포함되는지 확인."""
