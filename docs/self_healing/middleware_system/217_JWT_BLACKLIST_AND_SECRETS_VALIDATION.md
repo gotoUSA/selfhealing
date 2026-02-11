@@ -159,6 +159,13 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 
 # 콜백 타입: (user_id: int) -> str (결과 설명)
+# ──────────────────────────────────────────────────────────────────
+# user_id 타입이 int인 근거 (리뷰 #1 반영):
+#   - shopping.User(AbstractUser)에 커스텀 PK 없음 → default PK 사용
+#   - DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField" (base.py L267)
+#   - BigAutoField는 Python int 타입
+# 파일: shopping/models/user.py L20 | myproject/settings/base.py L267
+# ──────────────────────────────────────────────────────────────────
 SessionInvalidationHook = Callable[[int], str]
 
 _hooks: list[SessionInvalidationHook] = []
@@ -258,6 +265,17 @@ def clear_session_invalidation_hooks() -> None:
             register_session_invalidation_hook(blacklist_user_jwt)
             logger.info("[SelfHealing] JWT blacklist hook registered")
 
+            # TODO(#217): OutstandingToken 정리를 위해 Celery Beat에 flushexpiredtokens 등록 필요
+            # 블랙리스트에 추가된 토큰의 OutstandingToken 레코드가 DB에 계속 누적됨.
+            # OutstandingToken.user_id에는 FK 인덱스가 있으나, 만료 토큰 정리는 별도 필요.
+            # Django 프로젝트의 CELERY_BEAT_SCHEDULE에 추가할 것:
+            #   'flush-expired-tokens': {
+            #       'task': 'django.core.management.call_command',
+            #       'schedule': crontab(hour=2, minute=0),  # 매일 02:00
+            #       'args': ('flushexpiredtokens',),
+            #   }
+            # Reference: simplejwt 내장 management command 'flushexpiredtokens'
+
         except ImportError as e:
             logger.debug(f"[SelfHealing] JWT hook registration skipped: {e}")
         except Exception as e:
@@ -328,9 +346,13 @@ def ready(self):
         """
         핵심 시크릿 검증.
 
-        Best-effort: 검증 실패 자체가 시스템 시작을 막지 않음.
-        단, 프로덕션 환경에서 CRITICAL 시크릿 미설정 시 RuntimeError 발생.
-        (validate_required_secrets() 내부에서 처리)
+        동작 모드:
+        - Non-production: best-effort (검증 실패해도 시스템 시작 계속)
+        - Production + CRITICAL 시크릿 미설정: RuntimeError 재발생으로 시작 차단
+
+        Note: _validate_startup_config()은 모든 예외를 warning 처리(best-effort)하지만,
+        이 메서드는 프로덕션 CRITICAL 시크릿에 한해 의도적으로 시작을 차단함.
+        보안 시크릿 미설정 상태로 운영하는 것은 용납할 수 없기 때문.
 
         Reference: 215_SECURITY_VULNERABILITY_FIXES_PART2 섹션 6.1
         """
@@ -354,8 +376,23 @@ def ready(self):
             else:
                 logger.info("[SelfHealing] All secrets validated successfully")
 
-        except RuntimeError:
+        except RuntimeError as e:
             # 프로덕션에서 CRITICAL 시크릿 미설정 → 재발생으로 시작 차단
+            # ──────────────────────────────────────────────────────────
+            # 리뷰 #2 반영: traceback + resolution guide 추가
+            # secrets.py L240-L254가 이미 개별 시크릿별 ERROR/WARNING을 로깅하지만,
+            # traceback과 해결 방법(환경변수 설정 가이드)은 제공하지 않음.
+            # 이 블록에서 보완하여 운영자가 즉시 조치할 수 있도록 함.
+            # ──────────────────────────────────────────────────────────
+            logger.critical(
+                f"[SelfHealing] Secrets validation FAILED: {e}\n"
+                "Resolution: Set the missing environment variables before starting.\n"
+                "  CRITICAL secrets (env_prefix='SELFHEALING_SECRET_'):\n"
+                "  - SELFHEALING_SECRET_ENCRYPTION_KEY: 데이터 암호화 키\n"
+                "  - SELFHEALING_SECRET_AUDIT_SIGNING_KEY: 감사 로그 서명 키\n"
+                "See: selfhealing/settings/secrets.py SecretsSettings 클래스 참조",
+                exc_info=True,
+            )
             raise
         except Exception as e:
             # 기타 오류 → best-effort로 시작 계속
@@ -459,4 +496,79 @@ class TestJWTBlacklistHookRegistration:
 
     def test_validate_secrets_called_in_ready(self):
         """ready()에서 validate_required_secrets()가 호출되는지 확인."""
+
+    def test_validate_secrets_critical_failure_logs_resolution_guide(self):
+        """프로덕션 CRITICAL 시크릿 미설정 시 traceback + resolution guide가 로깅되는지 확인."""
 ```
+
+---
+
+## 7. 사전 리뷰 반영 사항
+
+> 구현 전 코드 근거 검증(사전 질의 6건)과 리뷰(3건)를 수행하여 아래 사항을 본 문서에 반영함.
+
+### 7.1 리뷰 #1: `SessionInvalidationHook` 타입 확인 — `Callable[[int], str]` 유지
+
+| 항목 | 내용 |
+|---|---|
+| 판정 | **수정 불필요** (원안 유지) |
+| 반영 위치 | 섹션 2.3.1 `hooks.py` 코드 블록 — 타입 근거 주석 추가 |
+
+**코드 근거**:
+- `shopping/models/user.py` L20: `class User(AbstractUser)` — 커스텀 PK 필드 없음
+- `myproject/settings/base.py` L267: `DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"`
+- `BigAutoField`는 Python `int` 타입이므로 `Callable[[int], str]`이 정확함
+- `SIMPLE_JWT` 설정: `USER_ID_FIELD = "id"`, `USER_ID_CLAIM = "user_id"` — PK를 그대로 사용
+
+### 7.2 리뷰 #2: `_validate_secrets` 에러 로깅 강화 — traceback + resolution guide
+
+| 항목 | 내용 |
+|---|---|
+| 판정 | **보완** (except RuntimeError 블록 강화) |
+| 반영 위치 | 섹션 3.3 `_validate_secrets()` 메서드 코드 블록 |
+
+**코드 근거**:
+
+| 기존 제공 (secrets.py) | 미제공 → 본 리뷰에서 추가 |
+|---|---|
+| 개별 시크릿별 ERROR/WARNING 로그 (L240-L254) | traceback (`exc_info=True`) |
+| RuntimeError 메시지에 누락 시크릿 이름 포함 (L266) | resolution guide (환경변수명 + 설정 방법) |
+| — | `[SelfHealing]` 접두사 통합 로그 |
+
+**설계 결정**: `_validate_startup_config()`과의 동작 차이
+
+| 메서드 | 예외 처리 | 근거 |
+|---|---|---|
+| `_validate_startup_config()` (apps.py L289) | Best-effort: `logger.warning()` 후 계속 | 설정은 Safe Default 적용 가능 |
+| `_validate_secrets()` | Production CRITICAL → `raise` (시작 차단) | 암호화 키 없이 운영 불가 |
+
+이 차이는 의도적이며 docstring에 명시함.
+
+**환경변수 접두사 근거**:
+- `secrets.py` L54: `env_prefix="SELFHEALING_SECRET_"`
+- CRITICAL 시크릿: `SELFHEALING_SECRET_ENCRYPTION_KEY`, `SELFHEALING_SECRET_AUDIT_SIGNING_KEY`
+
+### 7.3 리뷰 #3: `flushexpiredtokens` Celery Beat TODO 추가
+
+| 항목 | 내용 |
+|---|---|
+| 판정 | **추가** (TODO 코멘트) |
+| 반영 위치 | 섹션 2.3.3 `_register_jwt_blacklist_hook()` 코드 블록 |
+
+**코드 근거**:
+- 코드베이스 전체 `flushexpiredtokens` 검색 결과: **0건** — 만료 토큰 정리 메커니즘 없음
+- `OutstandingToken`은 `user_id` FK 인덱스가 있으나 (Django 자동 생성), 만료 토큰 자체의 정리는 별도 필요
+- `simplejwt`의 내장 management command `flushexpiredtokens`가 이 용도로 제공됨
+
+**TODO 위치 선택 근거**:
+
+| 후보 위치 | 선택 | 이유 |
+|---|---|---|
+| `_register_jwt_blacklist_hook()` 내부 | **✅ 채택** | JWT 블랙리스트 로직과 직접 관련 — 근접성 원칙 |
+| `myproject/settings/base.py` CELERY_BEAT_SCHEDULE 근처 | ❌ | 217 구현과 분리되어 맥락 단절 |
+
+TODO를 `_register_jwt_blacklist_hook()` 내부에 배치한 이유:
+1. 개발자가 JWT 블랙리스트 코드를 읽을 때 자연스럽게 정리 필요성을 인지
+2. TODO 내용 자체가 `CELERY_BEAT_SCHEDULE`에 추가할 구체적 코드를 포함하므로 실행 가능
+3. selfhealing 앱의 관심사이므로 selfhealing 코드 내에 두는 것이 일관적
+4. `apps.py`에 기존 TODO/FIXME가 0건이므로 첫 TODO가 되지만, 운영 필수 사항이므로 허용
