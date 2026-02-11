@@ -28,7 +28,7 @@ def registry(mock_cache):
     return UserSessionRegistry(cache=mock_cache)
 
 
-class TestRegister:
+class TestRegisterBehavior:
     """register() 동작 검증."""
 
     def test_adds_session_key_to_empty_list(self, registry, mock_cache):
@@ -62,7 +62,7 @@ class TestRegister:
         # 예외 없이 종료되어야 함
 
 
-class TestUnregister:
+class TestUnregisterBehavior:
     """unregister() 동작 검증."""
 
     def test_removes_specific_session_key(self, registry, mock_cache):
@@ -88,7 +88,7 @@ class TestUnregister:
         mock_cache.set.assert_called_once()
 
 
-class TestGetSessionKeys:
+class TestGetSessionKeysBehavior:
     """get_session_keys() 동작 검증."""
 
     def test_returns_session_key_list(self, registry, mock_cache):
@@ -108,7 +108,7 @@ class TestGetSessionKeys:
         assert registry.get_session_keys(user_id=1) == []
 
 
-class TestInvalidateAll:
+class TestInvalidateAllBehavior:
     """invalidate_all() 동작 검증."""
 
     def test_deletes_all_sessions_and_registry_key(self, registry, mock_cache):
@@ -126,18 +126,18 @@ class TestInvalidateAll:
         assert deleted == 0
 
 
-class TestKeyFormat:
-    """캐시 키 형식 검증."""
+class TestKeyFormatContract:
+    """캐시 키 형식 계약 검증."""
 
     def test_key_prefix_uses_security_namespace(self, registry):
         """키 프리픽스가 security: 네임스페이스를 따르는지 확인."""
         key = registry._key(42)
-        assert key == "security:user_sessions:42"
+        assert key == f"{UserSessionRegistry.KEY_PREFIX}42"
         assert key.startswith("security:")
 
 
-class TestSingleton:
-    """싱글톤 패턴 검증."""
+class TestSingletonBehavior:
+    """싱글톤 패턴 동작 검증."""
 
     def test_reset_clears_singleton(self):
         """reset_user_session_registry()가 싱글톤을 초기화하는지 확인."""

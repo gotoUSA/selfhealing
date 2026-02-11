@@ -13,6 +13,8 @@ Provides:
 - BaseDLQEntryAdmin: Base Admin class for DLQ (FailedOperation) entries
 - BaseCircuitBreakerStateAdmin: Base Admin class for Circuit Breaker states
 - DjangoStatisticsAdapter: Statistics adapter using Django ORM
+- connect_session_signals: Django 세션 시그널 핸들러 연결
+- disconnect_session_signals: Django 세션 시그널 핸들러 해제 (테스트용)
 """
 
 from selfhealing.adapters.django.apps import (
@@ -123,4 +125,7 @@ __all__ = [
     "get_base_postmortem_admin",
     "get_base_dlq_admin",
     "get_base_circuit_breaker_admin",
+    # Signal hooks
+    "connect_session_signals",
+    "disconnect_session_signals",
 ]

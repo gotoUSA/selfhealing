@@ -43,8 +43,8 @@ def service(mock_cache):
 # =============================================================================
 
 
-class TestDeadCodeRemoval:
-    """이전 Dead Code (user_token:, user_permissions:, user_auth:) 제거 확인."""
+class TestDeadCodeRemovalContract:
+    """이전 Dead Code (user_token:, user_permissions:, user_auth:) 제거 계약 확인."""
 
     def test_no_user_token_reference(self):
         """_invalidate_user_sessions 소스에 user_token: 문자열이 없어야 함."""
@@ -72,8 +72,8 @@ class TestDeadCodeRemoval:
 # =============================================================================
 
 
-class TestUserSessionRegistryIntegration:
-    """UserSessionRegistry.invalidate_all() 호출 검증."""
+class TestUserSessionRegistryIntegrationBehavior:
+    """UserSessionRegistry.invalidate_all() 호출 동작 검증."""
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     @patch("selfhealing.services.security.session_registry.get_user_session_registry")
@@ -106,8 +106,8 @@ class TestUserSessionRegistryIntegration:
 # =============================================================================
 
 
-class TestSessionEngineCheck:
-    """SESSION_ENGINE에 따른 DB 스캔 조건부 실행 검증."""
+class TestSessionEngineCheckBehavior:
+    """SESSION_ENGINE에 따른 DB 스캔 조건부 실행 동작 검증."""
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_skips_db_scan_for_cache_backend(self, mock_audit, service):
@@ -129,8 +129,8 @@ class TestSessionEngineCheck:
 # =============================================================================
 
 
-class TestHooksStillExecuted:
-    """기존 hooks 동작이 유지되는지 확인."""
+class TestHooksStillExecutedBehavior:
+    """기존 hooks 동작이 유지되는지 검증."""
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_hooks_called_after_rewrite(self, mock_audit, service):

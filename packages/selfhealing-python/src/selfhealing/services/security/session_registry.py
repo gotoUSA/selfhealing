@@ -11,21 +11,10 @@ Redis 키 구조:
 다중 세션 지원:
     한 유저가 여러 기기에서 로그인할 수 있으므로 단일 값이 아닌 리스트를 사용.
 
-Usage (호스트 앱의 signals.py에서):
-    from selfhealing.services.security.session_registry import (
-        get_user_session_registry,
-    )
-
-    @receiver(user_logged_in)
-    def on_user_login(sender, request, user, **kwargs):
-        registry = get_user_session_registry()
-        registry.register(user.id, request.session.session_key)
-
-    @receiver(user_logged_out)
-    def on_user_logout(sender, request, user, **kwargs):
-        if user and request.session.session_key:
-            registry = get_user_session_registry()
-            registry.unregister(user.id, request.session.session_key)
+시그널 연결:
+    SelfHealingConfig.ready()가 adapters/django/signal_hooks.py의
+    connect_session_signals()를 호출하여 user_logged_in / user_logged_out
+    시그널에 자동 연결된다. 호스트 앱에서 별도 코드 불필요.
 """
 
 from __future__ import annotations

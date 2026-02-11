@@ -131,6 +131,10 @@ class SelfHealingConfig(AppConfig):
             dispatch_uid="selfhealing_create_rbac_groups",
         )
 
+        # Connect session signal handlers (user_logged_in / user_logged_out)
+        # UserSessionRegistry에 session_key 역방향 매핑을 자동 관리
+        self._connect_session_signals()
+
         # Log environment variable snapshot (환경변수 Audit)
         # This runs on every server start because env vars can change
         # between restarts (e.g., Docker container restart with new env)
@@ -157,6 +161,18 @@ class SelfHealingConfig(AppConfig):
 
         # Register JWT blacklist hook for session invalidation
         self._register_jwt_blacklist_hook()
+
+    @staticmethod
+    def _connect_session_signals():
+        """Django 세션 시그널 핸들러 연결."""
+        try:
+            from selfhealing.adapters.django.signal_hooks import (
+                connect_session_signals,
+            )
+
+            connect_session_signals()
+        except Exception as e:
+            logger.warning(f"[SelfHealing] Failed to connect session signals: {e}")
 
     def _log_env_snapshot(self):
         """

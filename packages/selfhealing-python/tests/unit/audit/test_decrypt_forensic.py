@@ -18,8 +18,8 @@ from selfhealing.audit.masking import (
 )
 
 
-class TestSha256LegacyDetection:
-    """sha256: 접두사 레거시 해시 감지."""
+class TestSha256LegacyDetectionBehavior:
+    """sha256: 접두사 레거시 해시 감지 동작 검증."""
 
     def test_sha256_prefix_raises_value_error(self):
         """sha256: 접두사 값은 복원 불가 에러 발생."""
@@ -32,8 +32,8 @@ class TestSha256LegacyDetection:
             decrypt_forensic("sha256:anything")
 
 
-class TestHmacFallbackDetection:
-    """encrypted:hmac: 접두사 HMAC fallback 감지."""
+class TestHmacFallbackDetectionBehavior:
+    """encrypted:hmac: 접두사 HMAC fallback 감지 동작 검증."""
 
     def test_hmac_prefix_raises_value_error(self):
         """encrypted:hmac: 접두사 값은 복원 불가 에러 발생."""
@@ -46,8 +46,8 @@ class TestHmacFallbackDetection:
             decrypt_forensic("encrypted:hmac:dGVzdA==")
 
 
-class TestUnknownPrefix:
-    """인식 불가 접두사 처리."""
+class TestUnknownPrefixBehavior:
+    """인식 불가 접두사 처리 동작 검증."""
 
     def test_unknown_prefix_raises_value_error(self):
         """encrypted: 로 시작하지 않는 값은 ValueError."""
@@ -65,8 +65,8 @@ class TestUnknownPrefix:
             decrypt_forensic("")
 
 
-class TestFernetDecryption:
-    """Fernet 정상 복호화 경로."""
+class TestFernetDecryptionBehavior:
+    """Fernet 정상 복호화 경로 동작 검증."""
 
     def test_no_fernet_key_raises_runtime_error(self):
         """encryption_key 미설정 시 RuntimeError."""
@@ -103,7 +103,7 @@ class TestFernetDecryption:
                 decrypt_forensic("encrypted:corrupted_data")
 
 
-class TestCryptographyOptionalDependency:
+class TestCryptographyOptionalDependencyBehavior:
     """cryptography optional dependency 동작 검증."""
 
     def test_forensic_masking_falls_back_to_hmac_without_fernet(self):

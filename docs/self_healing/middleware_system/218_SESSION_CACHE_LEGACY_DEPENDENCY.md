@@ -411,64 +411,77 @@ def reset_user_session_registry() -> None:
     _registry = None
 ```
 
-#### 1.5.5 호스트 앱 시그널 핸들러
+#### 1.5.5 Django 어댑터 시그널 핸들러
 
-**파일**: `shopping/signals.py` (기존 파일에 추가)
+> **리뷰 #7 반영**: 218 초기 구현에서는 `shopping/signals.py`(테스트베드)에 시그널 핸들러를 배치했으나,
+> shopping은 테스트베드일 뿐이므로 selfhealing 패키지 내부로 이동.
+> `adapters/celery/signal_hooks.py`와 동일한 패턴으로 `adapters/django/signal_hooks.py`에 배치.
+> `SelfHealingConfig.ready()`에서 자동 연결되므로 호스트 앱에서 별도 코드 불필요.
+
+**파일**: `packages/selfhealing-python/src/selfhealing/adapters/django/signal_hooks.py` (신규)
 
 ```python
-from django.contrib.auth.signals import user_logged_in, user_logged_out
+from selfhealing.services.security.session_registry import get_user_session_registry
 
 
-@receiver(user_logged_in)
 def on_user_login_register_session(
     sender: Any, request: HttpRequest, user: Any, **kwargs: Any
 ) -> None:
     """
-    로그인 시 UserSessionRegistry에 session_key 매핑.
+    로그인 시 UserSessionRegistry에 session_key 매핑 등록.
 
-    이것이 없으면 _invalidate_user_sessions()가 Redis 전환 후
-    해당 유저의 세션을 찾을 수 없다.
-
-    Reference: 218_SESSION_CACHE_LEGACY_DEPENDENCY 섹션 1.5
+    Redis 세션 백엔드에서는 user_id → session_key 역방향 조회가 불가능하므로,
+    로그인 시점에 매핑을 등록하여 세션 무효화 시 역방향 조회를 지원한다.
     """
     session_key = request.session.session_key
     if not session_key:
-        # session_key가 아직 생성 안 된 경우 (미들웨어 순서 문제)
         request.session.save()
         session_key = request.session.session_key
 
     if session_key and user and user.pk:
-        try:
-            from selfhealing.services.security.session_registry import (
-                get_user_session_registry,
-            )
-
-            registry = get_user_session_registry()
-            registry.register(user.pk, session_key)
-        except ImportError:
-            pass  # selfhealing 미설치 환경
+        registry = get_user_session_registry()
+        registry.register(user.pk, session_key)
 
 
-@receiver(user_logged_out)
 def on_user_logout_unregister_session(
     sender: Any, request: HttpRequest, user: Any, **kwargs: Any
 ) -> None:
     """
-    로그아웃 시 UserSessionRegistry에서 session_key 제거.
-
-    Reference: 218_SESSION_CACHE_LEGACY_DEPENDENCY 섹션 1.5
+    로그아웃 시 UserSessionRegistry에서 session_key 매핑 제거.
     """
     session_key = getattr(request.session, "session_key", None)
     if session_key and user and user.pk:
-        try:
-            from selfhealing.services.security.session_registry import (
-                get_user_session_registry,
-            )
+        registry = get_user_session_registry()
+        registry.unregister(user.pk, session_key)
 
-            registry = get_user_session_registry()
-            registry.unregister(user.pk, session_key)
-        except ImportError:
-            pass
+
+def connect_session_signals() -> None:
+    """SelfHealingConfig.ready()에서 호출. dispatch_uid로 중복 방지."""
+    from django.contrib.auth.signals import user_logged_in, user_logged_out
+
+    user_logged_in.connect(
+        on_user_login_register_session,
+        dispatch_uid="selfhealing_session_register",
+    )
+    user_logged_out.connect(
+        on_user_logout_unregister_session,
+        dispatch_uid="selfhealing_session_unregister",
+    )
+```
+
+**`SelfHealingConfig.ready()`에서 자동 연결:**
+
+```python
+# apps.py ready() 내부
+self._connect_session_signals()
+
+@staticmethod
+def _connect_session_signals():
+    try:
+        from selfhealing.adapters.django.signal_hooks import connect_session_signals
+        connect_session_signals()
+    except Exception as e:
+        logger.warning(f"[SelfHealing] Failed to connect session signals: {e}")
 ```
 
 #### 1.5.6 Redis Persistence 운영 참고사항
@@ -910,7 +923,8 @@ except ImportError:
 | `myproject/settings/production.py` | 수정 | #1 | `SESSION_ENGINE`, `SESSION_CACHE_ALIAS` 추가 + 운영 주석 |
 | `myproject/settings/local.py` | 수정 | #1 | 동일 |
 | `services/security/session_registry.py` | **신규** | #1 (리뷰 #1) | `UserSessionRegistry` — `user_id → session_key` 역방향 매핑 |
-| `shopping/signals.py` | 수정 | #1 (리뷰 #1) | `user_logged_in` / `user_logged_out` 시그널 핸들러 추가 |
+| `adapters/django/signal_hooks.py` | **신규** | #1 (리뷰 #1, #7) | `user_logged_in`/`user_logged_out` 시그널 핸들러. `SelfHealingConfig.ready()`에서 자동 연결 |
+| `adapters/django/apps.py` | 수정 | #1 (리뷰 #7) | `ready()`에 `_connect_session_signals()` 추가 |
 | `services/security/service.py` | 수정 | #1, #2 (리뷰 #1, #2, #5) | `_invalidate_user_sessions()` 전체 재작성: Dead Code 제거 + UserSessionRegistry 연동 + SESSION_ENGINE 조건부 체크 |
 | `audit/masking.py` | 수정 | #3 (리뷰 #6) | `decrypt_forensic()`에 `sha256:` 감지 + `encrypted:hmac:` 감지 추가 |
 | `packages/selfhealing-python/pyproject.toml` | 수정 | #4 | `[project.optional-dependencies]` forensic 추가 |
@@ -1283,7 +1297,8 @@ class TestSessionSignalHandlers:
 | `myproject/settings/production.py` | 수정 | `SESSION_ENGINE`, `SESSION_CACHE_ALIAS` 추가 |
 | `myproject/settings/local.py` | 수정 | 동일 |
 | `packages/selfhealing-python/src/selfhealing/services/security/session_registry.py` | **신규** | `UserSessionRegistry` 클래스 |
-| `shopping/signals.py` | 수정 | `user_logged_in`/`user_logged_out` 시그널 핸들러 추가 |
+| `packages/selfhealing-python/src/selfhealing/adapters/django/signal_hooks.py` | **신규** | 세션 시그널 핸들러 (`connect_session_signals`) |
+| `packages/selfhealing-python/src/selfhealing/adapters/django/apps.py` | 수정 | `ready()`에 `_connect_session_signals()` 추가 |
 | `packages/selfhealing-python/src/selfhealing/services/security/service.py` | 수정 | `_invalidate_user_sessions()` 재작성 |
 | `packages/selfhealing-python/src/selfhealing/audit/masking.py` | 수정 | `decrypt_forensic()` 레거시/HMAC 감지 추가 |
 | `packages/selfhealing-python/pyproject.toml` | 수정 | `[project.optional-dependencies]` forensic 추가 |
@@ -1296,7 +1311,7 @@ class TestSessionSignalHandlers:
 | `packages/selfhealing-python/tests/unit/security/test_invalidate_sessions.py` | 8 | 재작성된 _invalidate_user_sessions 검증 |
 | `packages/selfhealing-python/tests/unit/audit/test_decrypt_forensic.py` | 12 | decrypt_forensic 레거시/HMAC/Fernet 검증 |
 | `tests/self_healing/integration/django/test_session_backend.py` | 4 | Redis 세션 백엔드 설정 검증 |
-| `tests/self_healing/integration/django/test_session_signals.py` | 8 | 시그널 핸들러 검증 |
+| `packages/selfhealing-python/tests/unit/security/test_session_signal_hooks.py` | 7 | 시그널 핸들러 검증 (`adapters/django/signal_hooks.py`) |
 
 ### 8.3 기존 테스트 수정
 
@@ -1306,4 +1321,5 @@ class TestSessionSignalHandlers:
 
 ### 8.4 테스트 결과
 
-- security + audit 전체: **568 passed, 0 failed**
+- security + audit 전체: **48 passed, 0 failed** (218 관련 테스트)
+- 기존 session_invalidation_hooks: **7 passed** (회귀 없음)
