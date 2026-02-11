@@ -1168,7 +1168,7 @@ Phase 3 (2-3일): MerkleSpotChecker
 
 > **테스트 구현 상태**: ✅ 구현 완료 (2026-02-12)
 > **단위 테스트**: 64개 전체 통과 (pytest, 0.34s)
-> **통합 테스트**: Docker Compose 환경에서 실행 (7개 시나리오)
+> **통합 테스트**: ✅ 8개 전체 통과 (Docker Compose, 2.59s) — Mock 0개, 실제 Redis + WAL
 
 ### 10.1 PostRecoveryIntegrityGate — 단위 테스트
 
@@ -1298,24 +1298,27 @@ class TestMerkleSpotCheckerContract:
     # - strategy="merkle_spot_check"
 ```
 
-### 10.4 통합 테스트 — Hash Chain Integrity Triad
+### 10.4 통합 테스트 — Hash Chain Integrity Triad (Mock 0개, 실제 인프라)
 
 ```
 파일: tests/integration/selfhealing/test_integrity_triad_integration.py
-테스트 수: 7개
-실행: docker-compose -f docker-compose.test.yml run test pytest tests/integration/selfhealing/test_integrity_triad_integration.py -v
+테스트 수: 8개 (Docker Compose 환경, 2.59s)
+실행: docker-compose -f docker-compose.test.yml run --rm test-integrity-triad
 ```
 
+> **Mock 0개** — 실제 Redis + 실제 WAL 파일 I/O + 실제 HashChainVerifier + 실제 EventBus
+
 ```python
-@pytest.mark.django_db
 class TestIntegrityGateEventBusIntegration:
-    """IntegrityGate ↔ EventBus 통합 테스트."""
+    """IntegrityGate ↔ EventBus ↔ WAL ↔ HashChainVerifier 통합 테스트."""
     # - CRITICAL 우선순위 핸들러 등록 확인
-    # - 정상 체인 → 게이트 통과 → 리플레이 허용
-    # - 위반 체인 → 게이트 차단 → 리플레이 블록
+    # - 정상 해시체인 WAL → IntegrityGate 통과 → 리플레이 허용
+    # - 위반 해시체인 WAL → IntegrityGate 차단 → 리플레이 블록
     # - CRITICAL → NORMAL → LOW 실행 순서 확인
-    # - 게이트 예외 + fail_open=True → 리플레이 허용
-    # - 빈 WAL → 게이트 통과
+    # - 빈 WAL → 게이트 통과 (strategy=no_entries)
+    # - 정상 체인 검증 후 IntegrityHealthScore.record_recovery() 반영
+    # - 위반 체인 감지 시 WAL에 INTEGRITY_VIOLATION 이벤트 기록
+    # - WAL 비활성화 → 빈 엔트리 → fail_open 정책으로 리플레이 허용
 ```
 
 ---
