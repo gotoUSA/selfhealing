@@ -4,7 +4,9 @@
 > **분류**: Security - Critical Gap Fix
 > **선행 문서**: 214, 215, 216
 > **작성일**: 2026-02-10
+> **구현일**: 2026-02-11
 > **심각도**: CRITICAL (JWT), CRITICAL (시크릿 검증)
+> **상태**: ✅ 구현 완료
 
 ---
 
@@ -572,3 +574,17 @@ TODO를 `_register_jwt_blacklist_hook()` 내부에 배치한 이유:
 2. TODO 내용 자체가 `CELERY_BEAT_SCHEDULE`에 추가할 구체적 코드를 포함하므로 실행 가능
 3. selfhealing 앱의 관심사이므로 selfhealing 코드 내에 두는 것이 일관적
 4. `apps.py`에 기존 TODO/FIXME가 0건이므로 첫 TODO가 되지만, 운영 필수 사항이므로 허용
+
+---
+
+## 8. 구현 이력
+
+| 날짜 | 항목 | 상태 |
+|---|---|---|
+| 2026-02-11 | `services/security/hooks.py` 신규 생성 | ✅ |
+| 2026-02-11 | `services/security/service.py` 콜백 호출 추가 (`_invalidate_user_sessions`) | ✅ |
+| 2026-02-11 | `services/security/__init__.py` hooks export 추가 | ✅ |
+| 2026-02-11 | `adapters/django/apps.py` `_validate_secrets()` 추가 | ✅ |
+| 2026-02-11 | `adapters/django/apps.py` `_register_jwt_blacklist_hook()` 추가 | ✅ |
+| 2026-02-11 | 단위 테스트 26개 작성 (hooks 6 + service 7 + apps 13) | ✅ |
+| 2026-02-11 | 통합 테스트 4개 추가 (`test_app_config.py`) | ✅ |

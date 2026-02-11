@@ -152,6 +152,12 @@ class SelfHealingConfig(AppConfig):
         # Start Meta-Watchdog (Self-Healing 시스템 자체 모니터링)
         self._start_meta_watchdog()
 
+        # Validate required secrets (Security Hardening)
+        self._validate_secrets()
+
+        # Register JWT blacklist hook for session invalidation
+        self._register_jwt_blacklist_hook()
+
     def _log_env_snapshot(self):
         """
         Log environment variable snapshot for audit trail.
@@ -569,6 +575,113 @@ class SelfHealingConfig(AppConfig):
         """
         with cls._meta_watchdog_lock:
             cls._meta_watchdog_started = False
+
+    # =========================================================================
+    # Secrets Validation
+    # =========================================================================
+
+    def _validate_secrets(self):
+        """
+        핵심 시크릿 검증.
+
+        동작 모드:
+        - Non-production: best-effort (검증 실패해도 시스템 시작 계속)
+        - Production + CRITICAL 시크릿 미설정: RuntimeError 재발생으로 시작 차단
+
+        Note: _validate_startup_config()은 모든 예외를 warning 처리(best-effort)하지만,
+        이 메서드는 프로덕션 CRITICAL 시크릿에 한해 의도적으로 시작을 차단함.
+        보안 시크릿 미설정 상태로 운영하는 것은 용납할 수 없기 때문.
+        """
+        try:
+            from selfhealing.settings.secrets import validate_required_secrets
+
+            result = validate_required_secrets()
+
+            critical_count = len(result.get("critical", []))
+            warning_count = len(result.get("warning", []))
+
+            if critical_count > 0:
+                logger.error(f"[SelfHealing] {critical_count} CRITICAL secrets not configured. " "Check logs for details.")
+            elif warning_count > 0:
+                logger.warning(f"[SelfHealing] {warning_count} important secrets not configured. " "Check logs for details.")
+            else:
+                logger.info("[SelfHealing] All secrets validated successfully")
+
+        except RuntimeError as e:
+            # 프로덕션에서 CRITICAL 시크릿 미설정 → 재발생으로 시작 차단
+            # secrets.py가 이미 개별 시크릿별 ERROR/WARNING을 로깅하지만,
+            # traceback과 해결 방법(환경변수 설정 가이드)은 제공하지 않음.
+            # 이 블록에서 보완하여 운영자가 즉시 조치할 수 있도록 함.
+            logger.critical(
+                f"[SelfHealing] Secrets validation FAILED: {e}\n"
+                "Resolution: Set the missing environment variables before starting.\n"
+                "  CRITICAL secrets (env_prefix='SELFHEALING_SECRET_'):\n"
+                "  - SELFHEALING_SECRET_ENCRYPTION_KEY: 데이터 암호화 키\n"
+                "  - SELFHEALING_SECRET_AUDIT_SIGNING_KEY: 감사 로그 서명 키\n"
+                "See: selfhealing/settings/secrets.py SecretsSettings 클래스 참조",
+                exc_info=True,
+            )
+            raise
+        except Exception as e:
+            # 기타 오류 → best-effort로 시작 계속
+            logger.warning(f"[SelfHealing] Secrets validation failed: {e}")
+
+    # =========================================================================
+    # JWT Blacklist Hook Registration
+    # =========================================================================
+
+    def _register_jwt_blacklist_hook(self):
+        """
+        JWT 블랙리스트 콜백 등록.
+
+        rest_framework_simplejwt.token_blacklist가 INSTALLED_APPS에 있을 때만
+        콜백을 등록합니다. 보안 위반(TOKEN_FORGED) 감지 시 해당 사용자의
+        모든 OutstandingToken을 블랙리스트에 추가합니다.
+        """
+        try:
+            from django.apps import apps
+
+            if not apps.is_installed("rest_framework_simplejwt.token_blacklist"):
+                logger.debug("[SelfHealing] token_blacklist not installed, skipping JWT hook")
+                return
+
+            from selfhealing.services.security.hooks import (
+                register_session_invalidation_hook,
+            )
+
+            def blacklist_user_jwt(user_id: int) -> str:
+                """사용자의 모든 OutstandingToken을 블랙리스트에 추가."""
+                from rest_framework_simplejwt.token_blacklist.models import (
+                    BlacklistedToken,
+                    OutstandingToken,
+                )
+
+                tokens = OutstandingToken.objects.filter(user_id=user_id)
+                count = 0
+                for token in tokens:
+                    _, created = BlacklistedToken.objects.get_or_create(token=token)
+                    if created:
+                        count += 1
+                return f"jwt_blacklisted({count})" if count > 0 else ""
+
+            register_session_invalidation_hook(blacklist_user_jwt)
+            logger.info("[SelfHealing] JWT blacklist hook registered")
+
+            # TODO(#217): OutstandingToken 정리를 위해 Celery Beat에 flushexpiredtokens 등록 필요
+            # 블랙리스트에 추가된 토큰의 OutstandingToken 레코드가 DB에 계속 누적됨.
+            # OutstandingToken.user_id에는 FK 인덱스가 있으나, 만료 토큰 정리는 별도 필요.
+            # Django 프로젝트의 CELERY_BEAT_SCHEDULE에 추가할 것:
+            #   'flush-expired-tokens': {
+            #       'task': 'django.core.management.call_command',
+            #       'schedule': crontab(hour=2, minute=0),  # 매일 02:00
+            #       'args': ('flushexpiredtokens',),
+            #   }
+            # Reference: simplejwt 내장 management command 'flushexpiredtokens'
+
+        except ImportError as e:
+            logger.debug(f"[SelfHealing] JWT hook registration skipped: {e}")
+        except Exception as e:
+            logger.warning(f"[SelfHealing] JWT hook registration failed: {e}")
 
     # =========================================================================
     # Test Helpers

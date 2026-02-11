@@ -36,6 +36,11 @@ from .helpers import (
     handle_security_violation,
     reset_security_violation_service,
 )
+from .hooks import (
+    clear_session_invalidation_hooks,
+    get_session_invalidation_hooks,
+    register_session_invalidation_hook,
+)
 from .models import (
     ProtectionResult,
     SecurityConfig,
@@ -71,6 +76,10 @@ __all__ = [
     "SecurityViolationService",
     # Orchestrator
     "ProtectionOrchestrator",
+    # Hooks
+    "register_session_invalidation_hook",
+    "get_session_invalidation_hooks",
+    "clear_session_invalidation_hooks",
     # Helpers
     "get_security_violation_service",
     "reset_security_violation_service",

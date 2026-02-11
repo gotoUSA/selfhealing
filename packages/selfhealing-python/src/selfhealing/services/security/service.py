@@ -370,6 +370,22 @@ class SecurityViolationService:
             except Exception as e:
                 logger.debug(f"[Security] Django session cleanup skipped: {e}")
 
+            # 4. 등록된 세션 무효화 콜백 실행 (JWT 블랙리스트 등)
+            try:
+                from selfhealing.services.security.hooks import (
+                    get_session_invalidation_hooks,
+                )
+
+                for hook in get_session_invalidation_hooks():
+                    try:
+                        result = hook(user_id)
+                        if result:
+                            invalidated_items.append(result)
+                    except Exception as hook_err:
+                        logger.warning(f"[Security] Session invalidation hook failed: {hook_err}")
+            except ImportError:
+                pass
+
             logger.info(f"[Security] Invalidated sessions for user {user_id}: " f"{', '.join(invalidated_items)}")
 
             # === Audit 기록: 세션 무효화 (85_AUDIT_INTEGRATION Phase 1) ===
