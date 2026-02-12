@@ -181,13 +181,13 @@ replay_outcomes_total = get_or_create_counter(
 error_budget_remaining_percent = get_or_create_gauge(
     "error_budget_remaining_percent",
     "Error budget remaining as percentage (0-100)",
-    ["slo_name", "is_synthetic"],
+    ["slo_name", "is_synthetic", "region", "tier"],
 )
 
 error_budget_remaining_minutes = get_or_create_gauge(
     "error_budget_remaining_minutes",
     "Error budget remaining in minutes",
-    ["slo_name", "is_synthetic"],
+    ["slo_name", "is_synthetic", "region", "tier"],
 )
 
 burn_rate_1h = get_or_create_gauge(
@@ -441,7 +441,7 @@ xtest_global_scope_requests_total = get_or_create_counter(
 canary_governance_blocked_total = get_or_create_counter(
     "selfhealing_canary_governance_blocked_total",
     "Total canary promotions blocked by governance",
-    ["block_reason"],  # kill_switch, emergency_mode, error_budget
+    ["block_reason", "region", "tier"],  # kill_switch, emergency_mode, error_budget
 )
 
 canary_pending_promotion_gauge = get_or_create_gauge(

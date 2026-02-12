@@ -71,6 +71,9 @@ from selfhealing.services.error_budget_gate.gate import (
 from selfhealing.services.error_budget_gate.rate_limiter import (
     InMemoryRateLimiter,
 )
+from selfhealing.services.error_budget_gate.region_tier_resolver import (
+    resolve_tier_from_region,
+)
 
 __all__ = [
     # Configuration
@@ -82,6 +85,8 @@ __all__ = [
     "GateFaultState",
     "GateFaultDetector",
     "GateAlertManager",
+    # Region / Tier Resolution
+    "resolve_tier_from_region",
     # Exceptions
     "AutomationBlockedError",
     # Main Gate

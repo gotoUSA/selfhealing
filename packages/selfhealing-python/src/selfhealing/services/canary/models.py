@@ -103,6 +103,37 @@ class PassCriteria:
     min_requests_required: int = 100  # 최소 샘플 수
     evaluation_window_seconds: int = 300  # 5분 윈도우
 
+    @classmethod
+    def for_tier(cls, tier_id: str) -> "PassCriteria":
+        """
+        티어별 기본 PassCriteria 반환.
+
+        Args:
+            tier_id: "critical" | "standard" | "non_essential"
+
+        Returns:
+            해당 티어의 기본 PassCriteria
+        """
+        _TIER_DEFAULTS: dict[str, dict] = {
+            "critical": {
+                "error_budget_drain_rate_max": 0.8,
+                "error_budget_remaining_min": 0.15,
+                "error_rate_absolute_max": 0.03,
+            },
+            "standard": {
+                "error_budget_drain_rate_max": 1.2,
+                "error_budget_remaining_min": 0.10,
+                "error_rate_absolute_max": 0.05,
+            },
+            "non_essential": {
+                "error_budget_drain_rate_max": 2.0,
+                "error_budget_remaining_min": 0.05,
+                "error_rate_absolute_max": 0.10,
+            },
+        }
+        overrides = _TIER_DEFAULTS.get(tier_id, {})
+        return cls(**overrides)
+
     def evaluate(self, metrics: "CanaryMetrics") -> tuple[bool, str | None]:
         """
         메트릭 평가.
@@ -299,3 +330,49 @@ class CanaryRollout:
             return 0.0
         # 현재 단계까지의 percentage 합계
         return sum(stage.percentage for i, stage in enumerate(self.stages) if i <= self.current_stage_index)
+
+
+def apply_tier_floor(user_criteria: PassCriteria, tier_id: str) -> PassCriteria:
+    """
+    사용자 기준과 티어 하한 중 더 엄격한 값을 적용.
+
+    "max" 필드: min(user, tier) → 더 작은 값이 더 엄격
+    "min" 필드: max(user, tier) → 더 큰 값이 더 엄격
+
+    Args:
+        user_criteria: 사용자가 지정한 PassCriteria
+        tier_id: "critical" | "standard" | "non_essential"
+
+    Returns:
+        티어 하한이 적용된 새 PassCriteria
+    """
+    tier_floor = PassCriteria.for_tier(tier_id)
+
+    return PassCriteria(
+        # max 필드: 더 작은 값 = 더 엄격
+        error_rate_absolute_max=min(
+            user_criteria.error_rate_absolute_max,
+            tier_floor.error_rate_absolute_max,
+        ),
+        error_rate_increase_max=min(
+            user_criteria.error_rate_increase_max,
+            tier_floor.error_rate_increase_max,
+        ),
+        error_budget_drain_rate_max=min(
+            user_criteria.error_budget_drain_rate_max,
+            tier_floor.error_budget_drain_rate_max,
+        ),
+        # min 필드: 더 큰 값 = 더 엄격
+        error_budget_remaining_min=max(
+            user_criteria.error_budget_remaining_min,
+            tier_floor.error_budget_remaining_min,
+        ),
+        min_requests_required=max(
+            user_criteria.min_requests_required,
+            tier_floor.min_requests_required,
+        ),
+        # 사용자 값 유지 (티어와 무관)
+        latency_p95_delta_ms=user_criteria.latency_p95_delta_ms,
+        latency_p99_delta_pct=user_criteria.latency_p99_delta_pct,
+        evaluation_window_seconds=user_criteria.evaluation_window_seconds,
+    )

@@ -56,6 +56,7 @@ class ErrorBudgetCalculator:
         window_end: datetime | None = None,
         exclude_chaos: bool | None = None,
         exclude_synthetic: bool = True,
+        region: str | None = None,
     ) -> ErrorBudgetStatus:
         """
         Error Budget 상태 계산.
@@ -106,29 +107,39 @@ class ErrorBudgetCalculator:
 
         if self._get_failed_operation_stats:
             try:
-                # exclude_synthetic 파라미터 우선 시도
+                # exclude_synthetic + region 파라미터 우선 시도
                 stats = self._get_failed_operation_stats(
                     start_time=window_start,
                     end_time=current_time,
                     exclude_synthetic=exclude_synthetic,
+                    region=region,
                 )
                 error_count = stats.get("total_errors", 0)
             except TypeError:
-                # 이전 버전 호환: exclude_synthetic/exclude_chaos 미지원 시
+                # region 미지원 콜백 — exclude_synthetic만 전달
                 try:
                     stats = self._get_failed_operation_stats(
                         start_time=window_start,
                         end_time=current_time,
-                        exclude_chaos=exclude_synthetic,
+                        exclude_synthetic=exclude_synthetic,
                     )
                     error_count = stats.get("total_errors", 0)
                 except TypeError:
-                    # 파라미터 없는 버전
-                    stats = self._get_failed_operation_stats(
-                        start_time=window_start,
-                        end_time=current_time,
-                    )
-                    error_count = stats.get("total_errors", 0)
+                    # 이전 버전 호환: exclude_synthetic/exclude_chaos 미지원 시
+                    try:
+                        stats = self._get_failed_operation_stats(
+                            start_time=window_start,
+                            end_time=current_time,
+                            exclude_chaos=exclude_synthetic,
+                        )
+                        error_count = stats.get("total_errors", 0)
+                    except TypeError:
+                        # 파라미터 없는 버전
+                        stats = self._get_failed_operation_stats(
+                            start_time=window_start,
+                            end_time=current_time,
+                        )
+                        error_count = stats.get("total_errors", 0)
             except Exception as e:
                 logger.warning(f"[ErrorBudget] Failed to get error stats: {e}")
 
@@ -186,6 +197,7 @@ class ErrorBudgetCalculator:
             measured_at=current_time,
             error_count_window=error_count,
             total_requests_window=total_requests,
+            region=region,
         )
 
     def _calculate_burn_rate(

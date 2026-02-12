@@ -43,6 +43,13 @@ class ErrorBudgetStatus:
     error_count_window: int = 0
     total_requests_window: int = 0
 
+    # 리전/티어 식별
+    region: str | None = None
+    """버짯이 속한 리전 (None이면 글로벌 집계)."""
+
+    tier_id: str | None = None
+    """버짯이 속한 티어 (None이면 전체)."""
+
     @property
     def is_healthy(self) -> bool:
         """버짓이 건강한 상태인지."""

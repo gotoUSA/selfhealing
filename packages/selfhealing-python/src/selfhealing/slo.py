@@ -87,6 +87,7 @@ class SLO:
     description: str | None = None
     service_name: str | None = None
     domain: str | None = None
+    region: str | None = None
 
     # Thresholds for alerting
     warning_threshold: float | None = None  # Alert when dropping below this
@@ -99,9 +100,7 @@ class SLO:
     def __post_init__(self) -> None:
         if self.warning_threshold is None:
             # Default: warn when 50% of error budget consumed
-            self.warning_threshold = (
-                1 + self.target
-            ) / 2  # midpoint between target and 1.0
+            self.warning_threshold = (1 + self.target) / 2  # midpoint between target and 1.0
 
         if self.critical_threshold is None:
             # Default: critical when approaching SLO target
@@ -200,10 +199,7 @@ class SLOStatus:
         """Check if in warning state."""
         if not self.is_meeting_target:
             return True
-        if (
-            self.slo.warning_threshold
-            and self.current_value < self.slo.warning_threshold
-        ):
+        if self.slo.warning_threshold and self.current_value < self.slo.warning_threshold:
             return True
         if self.budget_remaining is not None and self.budget_remaining < 0.5:
             return True
@@ -212,10 +208,7 @@ class SLOStatus:
     @property
     def is_critical(self) -> bool:
         """Check if in critical state."""
-        if (
-            self.slo.critical_threshold
-            and self.current_value < self.slo.critical_threshold
-        ):
+        if self.slo.critical_threshold and self.current_value < self.slo.critical_threshold:
             return True
         if self.budget_remaining is not None and self.budget_remaining < 0.1:
             return True

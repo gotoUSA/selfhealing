@@ -113,6 +113,7 @@ from selfhealing.services.canary.models import (
     CanaryStage,
     CanaryState,
     PassCriteria,
+    apply_tier_floor,
 )
 
 # Service
@@ -136,6 +137,7 @@ __all__ = [
     "CanaryRollout",
     "CanaryMetrics",
     "PassCriteria",
+    "apply_tier_floor",
     # Service
     "CanaryRolloutService",
     "get_canary_rollout_service",

@@ -388,27 +388,35 @@ def is_emergency_blocking(min_level: int | None = None) -> tuple[bool, str]:
         return False, "UNKNOWN"
 
 
-def is_error_budget_blocking() -> tuple[bool, float, float]:
+def is_error_budget_blocking(
+    tier_id: str | None = None,
+    region: str | None = None,
+) -> tuple[bool, float, float]:
     """
     에러 예산 부족으로 자동화가 차단되어야 하는지 확인.
+
+    Args:
+        tier_id: 서비스 티어 ("critical" | "standard" | "non_essential")
+        region: 리전 식별자
 
     Returns:
         (is_blocked, current_budget_percent, threshold_percent) 튜플
     """
-    cached = _governance_cache.get("error_budget_blocking")
+    cache_key = f"error_budget_blocking:{tier_id or ''}:{region or ''}"
+    cached = _governance_cache.get(cache_key)
     if cached is not None:
         return cached
 
     try:
         from selfhealing.services.error_budget_gate import check_automation_allowed
 
-        gate_result = check_automation_allowed()
+        gate_result = check_automation_allowed(tier_id=tier_id, region=region)
         result = (
             not gate_result.allowed,
             gate_result.error_budget_percent,
             gate_result.threshold_percent,
         )
-        _governance_cache.set("error_budget_blocking", result)
+        _governance_cache.set(cache_key, result)
         return result
     except Exception as e:
         logger.warning(f"[GovernanceChecks] Could not check error budget: {e}")
@@ -425,6 +433,8 @@ def check_all_governance(
     service_name: str | None = None,
     domain: str | None = None,
     audit_on_block: bool = True,
+    tier_id: str | None = None,
+    region: str | None = None,
 ) -> GovernanceCheckResult:
     """
     모든 거버넌스 체크를 순차적으로 수행.
@@ -447,6 +457,8 @@ def check_all_governance(
         service_name: 서비스 이름 (Audit 로깅용)
         domain: 도메인 (Audit 로깅용)
         audit_on_block: 차단 시 Audit Log 기록 여부
+        tier_id: 서비스 티어 (Error Budget 판정용)
+        region: 리전 식별자 (Error Budget 판정용)
 
     Returns:
         GovernanceCheckResult
@@ -523,7 +535,7 @@ def check_all_governance(
 
     # 3. Error Budget
     if check_error_budget:
-        is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
+        is_blocked, budget_pct, threshold_pct = is_error_budget_blocking(tier_id=tier_id, region=region)
         if is_blocked:
             logger.warning(f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%")
 

@@ -55,8 +55,8 @@ class ErrorBudgetGate:
         """Initialize ErrorBudgetGate."""
         self._config = config or ErrorBudgetGateConfig()
         self._lock = threading.RLock()
-        self._cache: GateCheckResult | None = None
-        self._cache_time: datetime | None = None
+        self._cache: dict[str, GateCheckResult] = {}
+        self._cache_time: dict[str, datetime] = {}
 
         # Fail-Open Rate Limiter 초기화 (Redis 의존 없음)
         self._fail_open_rate_limiter = InMemoryRateLimiter(
@@ -107,15 +107,23 @@ class ErrorBudgetGate:
         except Exception as e:
             logger.warning(f"[ErrorBudgetGate] Failed to load config: {e}")
 
-    def _is_cache_valid(self) -> bool:
+    def _is_cache_valid(self, cache_key: str = "__global__") -> bool:
         """캐시 유효성 체크."""
-        if self._cache is None or self._cache_time is None:
+        if cache_key not in self._cache or cache_key not in self._cache_time:
             return False
 
-        elapsed = (datetime.now(timezone.utc) - self._cache_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self._cache_time[cache_key]).total_seconds()
         return elapsed < self._config.cache_ttl_seconds
 
-    def _get_error_budget_percent(self) -> float | None:
+    @staticmethod
+    def _build_cache_key(region: str | None, tier_id: str | None) -> str:
+        """티어/리전 조합으로 캐시 키 생성."""
+        return f"{region or '__global__'}:{tier_id or '__global__'}"
+
+    def _get_error_budget_percent(
+        self,
+        region: str | None = None,
+    ) -> float | None:
         """
         현재 에러 예산 잔여율 조회.
 
@@ -132,11 +140,17 @@ class ErrorBudgetGate:
             )
 
             service = get_error_budget_service()
-            status = service.get_current_status()
+            status = service.get_budget_status(region=region)
 
             if status is None:
-                self._fault_detector.record_failure()
-                return None
+                # 리전 데이터 Missing 시 글로벌 버짯으로 Fallback
+                if region is not None:
+                    logger.warning(f"[ErrorBudgetGate] Region '{region}' data missing, " "falling back to global budget")
+                    status = service.get_budget_status(region=None)
+
+                if status is None:
+                    self._fault_detector.record_failure()
+                    return None
 
             # Dict 형태인 경우 (API 응답)
             if isinstance(status, dict):
@@ -180,8 +194,8 @@ class ErrorBudgetGate:
                     logger.info(f"[ErrorBudgetGate] Updated config.{key} = {value}")
 
             # 캐시 무효화
-            self._cache = None
-            self._cache_time = None
+            self._cache.clear()
+            self._cache_time.clear()
 
             # 컴포넌트 설정 동기화
             self._fail_open_rate_limiter.update_limits(
@@ -211,12 +225,19 @@ class ErrorBudgetGate:
         except Exception as e:
             logger.warning(f"[ErrorBudgetGate] Failed to persist config: {e}")
 
-    def check(self, force_refresh: bool = False) -> GateCheckResult:
+    def check(
+        self,
+        force_refresh: bool = False,
+        tier_id: str | None = None,
+        region: str | None = None,
+    ) -> GateCheckResult:
         """
         자동화 허용 여부 체크.
 
         Args:
             force_refresh: 캐시 무시하고 새로 조회
+            tier_id: 서비스 티어 ("critical" | "standard" | "non_essential")
+            region: 리전 식별자
 
         Returns:
             GateCheckResult: 체크 결과
@@ -229,26 +250,31 @@ class ErrorBudgetGate:
                     status=GateStatus.DISABLED,
                     reason="Error budget gate is disabled",
                     recommendation="Gate disabled - all automation allowed",
+                    tier_id=tier_id,
+                    region=region,
                 )
 
             # 캐시 사용
-            if not force_refresh and self._is_cache_valid() and self._cache:
-                return self._cache
+            cache_key = self._build_cache_key(region, tier_id)
+            if not force_refresh and self._is_cache_valid(cache_key) and cache_key in self._cache:
+                return self._cache[cache_key]
 
             # 에러 예산 조회
-            budget_percent = self._get_error_budget_percent()
+            budget_percent = self._get_error_budget_percent(region=region)
 
             # 조회 실패 시 Fail-open
             if budget_percent is None:
                 result = self._handle_fail_open()
-                self._cache = result
-                self._cache_time = datetime.now(timezone.utc)
+                result.tier_id = tier_id
+                result.region = region
+                self._cache[cache_key] = result
+                self._cache_time[cache_key] = datetime.now(timezone.utc)
                 return result
 
             # 정상 판정
-            result = self._evaluate(budget_percent)
-            self._cache = result
-            self._cache_time = datetime.now(timezone.utc)
+            result = self._evaluate(budget_percent, tier_id=tier_id, region=region)
+            self._cache[cache_key] = result
+            self._cache_time[cache_key] = datetime.now(timezone.utc)
 
             # 로깅
             if result.status == GateStatus.BLOCKED:
@@ -264,24 +290,34 @@ class ErrorBudgetGate:
 
             return result
 
-    def _evaluate(self, budget_percent: float) -> GateCheckResult:
+    def _evaluate(
+        self,
+        budget_percent: float,
+        tier_id: str | None = None,
+        region: str | None = None,
+    ) -> GateCheckResult:
         """
         에러 예산 기반 판정 (히스테리시스 적용).
 
         플래핑 방지를 위해 진입/복구 임계치를 분리합니다:
-        - 진입 임계치: critical=10%, warning=20%
-        - 복구 임계치: critical=12%, warning=22% (buffer=2%)
+        - 진입 임계치: tier/region별 차등 적용
+        - 복구 임계치: 진입 임계치 + buffer
         """
+        # 티어/리전별 차등 임계치 조회
+        critical_threshold, warning_threshold = self._config.get_effective_thresholds(
+            tier_id=tier_id or "standard", region=region
+        )
+
         # 히스테리시스 적용된 복구 임계치
-        critical_recovery = self._config.critical_threshold_percent + self._config.threshold_hysteresis_buffer_percent
-        warning_recovery = self._config.warning_threshold_percent + self._config.threshold_hysteresis_buffer_percent
+        critical_recovery = critical_threshold + self._config.threshold_hysteresis_buffer_percent
+        warning_recovery = warning_threshold + self._config.threshold_hysteresis_buffer_percent
 
         previous_status = self._current_status
         new_status: GateStatus
 
         # 현재 상태에 따른 상태 전이 결정
         if self._current_status == GateStatus.BLOCKED:
-            # BLOCKED → 복구 임계치(12%)로 WARNING 복귀 판정
+            # BLOCKED → 복구 임계치로 WARNING 복귀 판정
             if budget_percent >= critical_recovery:
                 new_status = GateStatus.WARNING
             else:
@@ -289,11 +325,11 @@ class ErrorBudgetGate:
 
         elif self._current_status == GateStatus.WARNING:
             # WARNING 상태에서 전이 판정
-            if budget_percent < self._config.critical_threshold_percent:
+            if budget_percent < critical_threshold:
                 # WARNING → BLOCKED (진입 임계치로 CRITICAL 진입)
                 new_status = GateStatus.BLOCKED
             elif budget_percent >= warning_recovery:
-                # WARNING → OPEN (복구 임계치 22%로 복귀)
+                # WARNING → OPEN (복구 임계치로 복귀)
                 new_status = GateStatus.OPEN
             else:
                 # WARNING 유지
@@ -301,16 +337,23 @@ class ErrorBudgetGate:
 
         else:
             # OPEN 상태: 표준 진입 임계치 적용
-            if budget_percent < self._config.critical_threshold_percent:
+            if budget_percent < critical_threshold:
                 new_status = GateStatus.BLOCKED
-            elif budget_percent < self._config.warning_threshold_percent:
+            elif budget_percent < warning_threshold:
                 new_status = GateStatus.WARNING
             else:
                 new_status = GateStatus.OPEN
 
         # 상태 업데이트 및 이벤트 발행
         self._current_status = new_status
-        result = self._build_gate_check_result(budget_percent, new_status)
+        result = self._build_gate_check_result(
+            budget_percent,
+            new_status,
+            critical_threshold=critical_threshold,
+            warning_threshold=warning_threshold,
+            tier_id=tier_id,
+            region=region,
+        )
 
         # 상태 변경 시에만 이벤트 발행 (플래핑 시 중복 이벤트 방지)
         if new_status != previous_status:
@@ -327,38 +370,51 @@ class ErrorBudgetGate:
         self,
         budget_percent: float,
         status: GateStatus,
+        critical_threshold: float | None = None,
+        warning_threshold: float | None = None,
+        tier_id: str | None = None,
+        region: str | None = None,
     ) -> GateCheckResult:
         """상태에 따른 GateCheckResult 생성."""
+        crit = critical_threshold or self._config.critical_threshold_percent
+        warn = warning_threshold or self._config.warning_threshold_percent
+
         if status == GateStatus.BLOCKED:
             return GateCheckResult(
                 allowed=False,
                 status=GateStatus.BLOCKED,
                 error_budget_percent=budget_percent,
-                threshold_percent=self._config.critical_threshold_percent,
-                reason=f"Error budget critically low: {budget_percent:.1f}% < {self._config.critical_threshold_percent}%",
+                threshold_percent=crit,
+                reason=f"Error budget critically low: {budget_percent:.1f}% < {crit}%",
                 recommendation=(
                     "모든 자동화 기능이 중단되었습니다. "
                     "수동 검토 후 조치하세요. "
                     "에러 예산이 회복되면 자동으로 재개됩니다."
                 ),
+                tier_id=tier_id,
+                region=region,
             )
         elif status == GateStatus.WARNING:
             return GateCheckResult(
                 allowed=True,
                 status=GateStatus.WARNING,
                 error_budget_percent=budget_percent,
-                threshold_percent=self._config.critical_threshold_percent,
-                reason=f"Error budget low: {budget_percent:.1f}% < {self._config.warning_threshold_percent}%",
+                threshold_percent=crit,
+                reason=f"Error budget low: {budget_percent:.1f}% < {warn}%",
                 recommendation=("에러 예산이 낮습니다. " "자동화는 계속 허용되지만, 수동 확인을 권장합니다."),
+                tier_id=tier_id,
+                region=region,
             )
         else:
             return GateCheckResult(
                 allowed=True,
                 status=GateStatus.OPEN,
                 error_budget_percent=budget_percent,
-                threshold_percent=self._config.critical_threshold_percent,
+                threshold_percent=crit,
                 reason=f"Error budget healthy: {budget_percent:.1f}%",
                 recommendation="자동화 정상 동작 중",
+                tier_id=tier_id,
+                region=region,
             )
 
     def _handle_fail_open(self) -> GateCheckResult:
@@ -535,8 +591,8 @@ class ErrorBudgetGate:
     def clear_cache(self) -> None:
         """캐시 초기화."""
         with self._lock:
-            self._cache = None
-            self._cache_time = None
+            self._cache.clear()
+            self._cache_time.clear()
 
     # -------------------------------------------------------------------------
     # Event Bus
@@ -736,20 +792,21 @@ def get_error_budget_gate() -> ErrorBudgetGate:
     return _gate_instance
 
 
-def check_automation_allowed(force_refresh: bool = False) -> GateCheckResult:
+def check_automation_allowed(
+    force_refresh: bool = False,
+    tier_id: str | None = None,
+    region: str | None = None,
+) -> GateCheckResult:
     """
     자동화 허용 여부 체크 (편의 함수).
 
-    Usage:
-        result = check_automation_allowed()
-        if result.allowed:
-            do_automation()
-        else:
-            # 수동 처리
-            notify_operator(result.reason)
+    Args:
+        force_refresh: 캐시 무시하고 새로 조회
+        tier_id: 서비스 티어 ("critical" | "standard" | "non_essential")
+        region: 리전 식별자
     """
     gate = get_error_budget_gate()
-    return gate.check(force_refresh=force_refresh)
+    return gate.check(force_refresh=force_refresh, tier_id=tier_id, region=region)
 
 
 def require_automation_allowed(action: str = "") -> GateCheckResult:

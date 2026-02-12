@@ -44,10 +44,8 @@ class ErrorBudgetService:
         self._simulated_requests: int = 0
 
         # Simulation Stats Callback - Chaos 연동
-        def _simulation_stats_callback(
-            start_time, end_time, exclude_chaos=False
-        ) -> dict:
-            """Chaos Engineering 테스트용 콜백."""
+        def _simulation_stats_callback(start_time, end_time, exclude_chaos=False, **kwargs) -> dict:
+            """Chaos Engineering 테스트용 콜백. region 등 추가 파라미터 허용."""
             if self._simulated_errors > 0:
                 return {
                     "total_errors": self._simulated_errors,
@@ -74,13 +72,56 @@ class ErrorBudgetService:
             emit_otel_event=emit_otel_event,
         )
 
-    def get_budget_status(self, slo_name: str = "availability") -> ErrorBudgetStatus:
-        """Error Budget 상태 조회."""
-        return self.calculator.calculate_budget_status(slo_name)
+    def get_budget_status(
+        self,
+        slo_name: str = "availability",
+        region: str | None = None,
+    ) -> ErrorBudgetStatus:
+        """
+        Error Budget 상태 조회.
 
-    def get_deployment_verdict(
-        self, slo_name: str = "availability"
-    ) -> DeploymentVerdict:
+        Args:
+            slo_name: SLO 이름
+            region: 리전 식별자.
+                    None이면 ClusterIdentity.region (현재 리전) 자동 사용.
+        """
+        if region is None:
+            try:
+                from selfhealing.core.cluster_identity import get_cluster_identity
+
+                identity = get_cluster_identity()
+                region = identity.region
+            except Exception:
+                pass
+        return self.calculator.calculate_budget_status(slo_name, region=region)
+
+    def get_all_region_statuses(
+        self,
+        slo_name: str = "availability",
+        regions: list[str] | None = None,
+    ) -> dict[str, ErrorBudgetStatus]:
+        """
+        전체 리전별 Error Budget 상태 조회.
+
+        Args:
+            slo_name: SLO 이름
+            regions: 조회할 리전 목록 (None이면 현재 리전 단일 조회)
+
+        Returns:
+            {region: ErrorBudgetStatus} 딕셔너리
+        """
+        if regions is None:
+            try:
+                from selfhealing.core.cluster_identity import get_cluster_identity
+
+                identity = get_cluster_identity()
+                regions = [identity.region] if identity.region else []
+            except Exception:
+                regions = []
+
+        return {r: self.calculator.calculate_budget_status(slo_name, region=r) for r in regions}
+
+    def get_deployment_verdict(self, slo_name: str = "availability") -> DeploymentVerdict:
         """배포 가능 여부 판정."""
         return self.advisor.get_deployment_verdict(slo_name)
 
@@ -189,9 +230,7 @@ class ErrorBudgetService:
         return {
             "previous_remaining_percent": current_remaining,
             "target_remaining_percent": target_remaining_percent,
-            "simulated_errors_added": (
-                errors_needed if current_remaining > target_remaining_percent else 0
-            ),
+            "simulated_errors_added": (errors_needed if current_remaining > target_remaining_percent else 0),
             "total_simulated_errors": self._simulated_errors,
             "budget_exhausted": target_remaining_percent <= 0,
         }

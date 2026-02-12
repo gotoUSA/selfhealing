@@ -119,21 +119,25 @@ ALERTING_RULES: dict = {
     # Error Budget Alerting Rules
     # =========================================================================
     "ErrorBudgetCritical": {
-        "expr": "error_budget_remaining_percent < 20",
+        "expr": 'error_budget_remaining_percent{tier="critical"} < 10 or '
+        'error_budget_remaining_percent{tier="standard"} < 20 or '
+        'error_budget_remaining_percent{tier="non_essential"} < 30',
         "for": "5m",
         "severity": "critical",
         "team": "ops",
-        "summary": "Error budget critical - deployment freeze recommended",
-        "description": "Error budget remaining is {{ $value }}%. Deployment freeze is recommended.",
+        "summary": "Error budget critical - tier-aware deployment freeze",
+        "description": "Error budget remaining is {{ $value }}% (tier={{ $labels.tier }}, region={{ $labels.region }}). Deployment freeze is recommended.",
         "runbook_url": "https://docs.internal/runbooks/error-budget-critical",
     },
     "ErrorBudgetWarning": {
-        "expr": "error_budget_remaining_percent < 50",
+        "expr": 'error_budget_remaining_percent{tier="critical"} < 30 or '
+        'error_budget_remaining_percent{tier="standard"} < 50 or '
+        'error_budget_remaining_percent{tier="non_essential"} < 60',
         "for": "10m",
         "severity": "warning",
         "team": "ops",
-        "summary": "Error budget warning",
-        "description": "Error budget remaining is {{ $value }}%. Consider reducing deployments.",
+        "summary": "Error budget warning - tier-aware",
+        "description": "Error budget remaining is {{ $value }}% (tier={{ $labels.tier }}, region={{ $labels.region }}). Consider reducing deployments.",
         "runbook_url": "https://docs.internal/runbooks/error-budget-warning",
     },
     "ErrorBudgetFastBurn": {

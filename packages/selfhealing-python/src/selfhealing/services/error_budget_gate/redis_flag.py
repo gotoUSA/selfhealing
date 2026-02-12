@@ -19,6 +19,10 @@ BUDGET_EXHAUSTED_FLAG_KEY = "selfhealing:error_budget:exhausted"
 BUDGET_EXHAUSTED_BY_SLO_KEY = "selfhealing:error_budget:exhausted:{slo_name}"
 BUDGET_STATUS_KEY = "selfhealing:error_budget:status:{slo_name}"
 
+# 리전별 Redis 키 패턴
+BUDGET_EXHAUSTED_BY_SLO_REGION_KEY = "selfhealing:error_budget:exhausted:{slo_name}:{region}"
+BUDGET_STATUS_REGION_KEY = "selfhealing:error_budget:status:{slo_name}:{region}"
+
 # TTL: 캐시보다 약간 길게 (stale 방지)
 BUDGET_FLAG_TTL_SECONDS = 60
 
@@ -47,15 +51,36 @@ class BudgetExhaustedFlagManager:
         self._local_cache_time: dict[str, float] = {}
         self._local_ttl_seconds = 5.0  # 로컬 캐시 TTL
 
-    def set_exhausted(self, slo_name: str, exhausted: bool) -> None:
+    @staticmethod
+    def _build_slo_key(slo_name: str, region: str | None = None) -> str:
+        """SLO별 Redis 키 생성. region이 있으면 리전별 키 반환."""
+        if region:
+            return BUDGET_EXHAUSTED_BY_SLO_REGION_KEY.format(slo_name=slo_name, region=region)
+        return BUDGET_EXHAUSTED_BY_SLO_KEY.format(slo_name=slo_name)
+
+    @staticmethod
+    def _build_status_key(slo_name: str, region: str | None = None) -> str:
+        """SLO별 상태 Redis 키 생성. region이 있으면 리전별 키 반환."""
+        if region:
+            return BUDGET_STATUS_REGION_KEY.format(slo_name=slo_name, region=region)
+        return BUDGET_STATUS_KEY.format(slo_name=slo_name)
+
+    def set_exhausted(
+        self,
+        slo_name: str,
+        exhausted: bool,
+        region: str | None = None,
+    ) -> None:
         """
         예산 소진 상태 설정 (Redis + 로컬 캐시).
 
         Args:
             slo_name: SLO 이름 (예: "availability", "availability:payment")
             exhausted: 소진 여부
+            region: 리전 식별자 (None이면 글로벌 키 사용)
         """
-        key = BUDGET_EXHAUSTED_BY_SLO_KEY.format(slo_name=slo_name)
+        key = self._build_slo_key(slo_name, region)
+        cache_key = f"{slo_name}:{region}" if region else slo_name
 
         if self._redis:
             try:
@@ -67,35 +92,41 @@ class BudgetExhaustedFlagManager:
                 logger.warning(f"[BudgetFlag] Redis write failed: {e}")
 
         # 로컬 캐시 업데이트
-        self._local_cache[slo_name] = exhausted
-        self._local_cache_time[slo_name] = time.time()
+        self._local_cache[cache_key] = exhausted
+        self._local_cache_time[cache_key] = time.time()
 
-    def is_exhausted(self, slo_name: str = "availability") -> bool:
+    def is_exhausted(
+        self,
+        slo_name: str = "availability",
+        region: str | None = None,
+    ) -> bool:
         """
         예산 소진 상태 조회 (로컬 캐시 → Redis → False).
 
         Args:
             slo_name: SLO 이름
+            region: 리전 식별자 (None이면 글로벌 키 조회)
 
         Returns:
             True if budget is exhausted, False otherwise (Fail-Open)
         """
+        cache_key = f"{slo_name}:{region}" if region else slo_name
         now = time.time()
 
         # 1. 로컬 캐시 확인
-        if slo_name in self._local_cache:
-            cache_time = self._local_cache_time.get(slo_name, 0)
+        if cache_key in self._local_cache:
+            cache_time = self._local_cache_time.get(cache_key, 0)
             if now - cache_time < self._local_ttl_seconds:
-                return self._local_cache[slo_name]
+                return self._local_cache[cache_key]
 
         # 2. Redis 조회
         if self._redis:
             try:
-                key = BUDGET_EXHAUSTED_BY_SLO_KEY.format(slo_name=slo_name)
+                key = self._build_slo_key(slo_name, region)
                 value = self._redis.get(key)
                 result = value == b"1" or value == "1"
-                self._local_cache[slo_name] = result
-                self._local_cache_time[slo_name] = now
+                self._local_cache[cache_key] = result
+                self._local_cache_time[cache_key] = now
                 return result
             except Exception as e:
                 logger.warning(f"[BudgetFlag] Redis read failed: {e}")
@@ -169,5 +200,7 @@ __all__ = [
     "BUDGET_EXHAUSTED_FLAG_KEY",
     "BUDGET_EXHAUSTED_BY_SLO_KEY",
     "BUDGET_STATUS_KEY",
+    "BUDGET_EXHAUSTED_BY_SLO_REGION_KEY",
+    "BUDGET_STATUS_REGION_KEY",
     "BUDGET_FLAG_TTL_SECONDS",
 ]

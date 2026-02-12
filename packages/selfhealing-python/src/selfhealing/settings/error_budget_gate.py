@@ -80,6 +80,43 @@ class ErrorBudgetGateSettings(BaseSettings):
         description="에러 예산 캐시 TTL (초)",
     )
 
+    # 티어별 차등 임계치
+    tier_thresholds_enabled: bool = Field(
+        default=False,
+        description="티어별 차등 임계치 활성화 여부 (False면 기존 글로벌 임계치 사용)",
+    )
+    tier_thresholds: dict[str, dict[str, float]] = Field(
+        default={
+            "critical": {
+                "critical_threshold_percent": 15.0,
+                "warning_threshold_percent": 30.0,
+            },
+            "standard": {
+                "critical_threshold_percent": 10.0,
+                "warning_threshold_percent": 20.0,
+            },
+            "non_essential": {
+                "critical_threshold_percent": 5.0,
+                "warning_threshold_percent": 10.0,
+            },
+        },
+        description="티어별 차등 임계치. VALID_TIER_IDS(서비스 중요도) 기반.",
+    )
+
+    # 리전별 임계치 오버라이드
+    regional_thresholds_enabled: bool = Field(
+        default=False,
+        description="리전별 임계치 오버라이드 활성화 여부",
+    )
+    regional_thresholds: dict[str, dict[str, float]] = Field(
+        default={},
+        description=(
+            "리전별 임계치 오버라이드. "
+            "키는 ClusterIdentity.region 값과 일치해야 함. "
+            "예: {'seoul': {'critical_threshold_percent': 15.0}}"
+        ),
+    )
+
     # Fail-Open Rate Limiting (최소한의 제약이 있는 방임)
     fail_open_rate_limit_enabled: bool = Field(
         default=True,
@@ -137,6 +174,10 @@ class ErrorBudgetGateSettings(BaseSettings):
             "threshold_hysteresis_buffer_percent": self.threshold_hysteresis_buffer_percent,
             "fail_open": self.fail_open,
             "cache_ttl_seconds": self.cache_ttl_seconds,
+            "tier_thresholds_enabled": self.tier_thresholds_enabled,
+            "tier_thresholds": self.tier_thresholds,
+            "regional_thresholds_enabled": self.regional_thresholds_enabled,
+            "regional_thresholds": self.regional_thresholds,
             "fail_open_rate_limit_enabled": self.fail_open_rate_limit_enabled,
             "fail_open_rate_limit_per_minute": self.fail_open_rate_limit_per_minute,
             "fail_open_rate_limit_window_seconds": self.fail_open_rate_limit_window_seconds,
@@ -146,6 +187,92 @@ class ErrorBudgetGateSettings(BaseSettings):
             "alert_on_fail_open": self.alert_on_fail_open,
             "alert_cooldown_seconds": self.alert_cooldown_seconds,
         }
+
+    def get_thresholds_for_tier(self, tier_id: str) -> tuple[float, float]:
+        """
+        티어별 (critical_threshold, warning_threshold) 반환.
+
+        tier_thresholds_enabled=False면 글로벌 임계치 반환.
+
+        Args:
+            tier_id: "critical" | "standard" | "non_essential"
+
+        Returns:
+            (critical_threshold_percent, warning_threshold_percent)
+        """
+        if not self.tier_thresholds_enabled:
+            return self.critical_threshold_percent, self.warning_threshold_percent
+
+        tier_config = self.tier_thresholds.get(tier_id)
+        if tier_config is None:
+            return self.critical_threshold_percent, self.warning_threshold_percent
+
+        return (
+            tier_config.get("critical_threshold_percent", self.critical_threshold_percent),
+            tier_config.get("warning_threshold_percent", self.warning_threshold_percent),
+        )
+
+    def get_thresholds_for_region(self, region: str) -> tuple[float, float]:
+        """
+        리전별 (critical_threshold, warning_threshold) 반환.
+
+        regional_thresholds_enabled=False면 글로벌 임계치 반환.
+
+        Args:
+            region: 리전 식별자 (e.g., "seoul", "tokyo")
+
+        Returns:
+            (critical_threshold_percent, warning_threshold_percent)
+        """
+        if not self.regional_thresholds_enabled:
+            return self.critical_threshold_percent, self.warning_threshold_percent
+
+        region_config = self.regional_thresholds.get(region)
+        if region_config is None:
+            return self.critical_threshold_percent, self.warning_threshold_percent
+
+        return (
+            region_config.get("critical_threshold_percent", self.critical_threshold_percent),
+            region_config.get("warning_threshold_percent", self.warning_threshold_percent),
+        )
+
+    def get_effective_thresholds(
+        self,
+        tier_id: str | None = None,
+        region: str | None = None,
+    ) -> tuple[float, float]:
+        """
+        최종 적용 임계치 반환.
+
+        우선순위:
+        1. regional_thresholds[region] (리전 명시 오버라이드)
+        2. tier_thresholds[tier_id] (티어별 기본값)
+        3. global (critical_threshold_percent, warning_threshold_percent)
+
+        Returns:
+            (critical_threshold_percent, warning_threshold_percent)
+        """
+        # 1단계: 리전 오버라이드 확인
+        if region and self.regional_thresholds_enabled:
+            region_config = self.regional_thresholds.get(region)
+            if region_config:
+                return (
+                    region_config.get(
+                        "critical_threshold_percent",
+                        self.critical_threshold_percent,
+                    ),
+                    region_config.get(
+                        "warning_threshold_percent",
+                        self.warning_threshold_percent,
+                    ),
+                )
+
+        # 2단계: 티어별 확인
+        if tier_id and self.tier_thresholds_enabled:
+            return self.get_thresholds_for_tier(tier_id)
+
+        # 3단계: 글로벌 기본값
+        return self.critical_threshold_percent, self.warning_threshold_percent
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ErrorBudgetGateSettings":

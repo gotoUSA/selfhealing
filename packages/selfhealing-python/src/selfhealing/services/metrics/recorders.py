@@ -277,6 +277,8 @@ def record_error_budget_status(
     remaining_minutes: float,
     burn_rate_1h_value: float,
     burn_rate_6h_value: float,
+    region: str = "",
+    tier: str = "",
 ) -> None:
     """
     Record Error Budget status metrics.
@@ -287,23 +289,29 @@ def record_error_budget_status(
         remaining_minutes: Budget remaining in minutes
         burn_rate_1h_value: 1-hour burn rate
         burn_rate_6h_value: 6-hour burn rate
+        region: 리전 식별자 (빈 문자열이면 글로벌)
+        tier: 티어 식별자 (빈 문자열이면 미지정)
     """
     try:
         is_synthetic = TestModeContext.get_synthetic_label_value()
         error_budget_remaining_percent.labels(
             slo_name=slo_name,
             is_synthetic=is_synthetic,
+            region=region,
+            tier=tier,
         ).set(remaining_percent)
         error_budget_remaining_minutes.labels(
             slo_name=slo_name,
             is_synthetic=is_synthetic,
+            region=region,
+            tier=tier,
         ).set(remaining_minutes)
         burn_rate_1h.labels(slo_name=slo_name).set(burn_rate_1h_value)
         burn_rate_6h.labels(slo_name=slo_name).set(burn_rate_6h_value)
         logger.debug(
             f"[Metrics] Error budget recorded: slo={slo_name}, "
             f"remaining={remaining_percent:.1f}%, burn_1h={burn_rate_1h_value:.2f}, "
-            f"is_synthetic={is_synthetic}"
+            f"is_synthetic={is_synthetic}, region={region}, tier={tier}"
         )
     except Exception as e:
         logger.warning(f"[Metrics] Failed to record error budget metric: {e}")

@@ -78,6 +78,12 @@ class GateCheckResult:
     rate_limit_reset_at: datetime | None = None
     """Rate limit 리셋 시각."""
 
+    tier_id: str | None = None
+    """판정 대상 티어 (None이면 글로벌)."""
+
+    region: str | None = None
+    """판정 대상 리전 (None이면 글로벌)."""
+
     def to_dict(self) -> dict[str, Any]:
         result = {
             "allowed": self.allowed,
@@ -93,6 +99,10 @@ class GateCheckResult:
             result["rate_limit_remaining"] = self.rate_limit_remaining
         if self.rate_limit_reset_at is not None:
             result["rate_limit_reset_at"] = self.rate_limit_reset_at.isoformat()
+        if self.tier_id is not None:
+            result["tier_id"] = self.tier_id
+        if self.region is not None:
+            result["region"] = self.region
         return result
 
 
