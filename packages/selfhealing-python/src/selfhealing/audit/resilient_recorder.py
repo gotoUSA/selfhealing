@@ -30,6 +30,8 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -74,6 +76,7 @@ class ResilientRecorderConfig:
     circuit_failure_threshold: int = 3
     circuit_success_threshold: int = 2
     circuit_timeout_seconds: float = 30.0
+    circuit_call_timeout_seconds: float = 5.0
 
     # Fallback
     fallback_file_path: str | None = None
@@ -109,6 +112,7 @@ class ResilientRecorderConfig:
             circuit_failure_threshold=s.circuit_failure_threshold,
             circuit_success_threshold=s.circuit_success_threshold,
             circuit_timeout_seconds=s.circuit_timeout_seconds,
+            circuit_call_timeout_seconds=s.circuit_call_timeout_seconds,
             fallback_file_path=s.fallback_file_path,
             enable_syslog_fallback=s.enable_syslog_fallback,
         )
@@ -182,6 +186,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 failure_threshold=self._resilient_config.circuit_failure_threshold,
                 success_threshold=self._resilient_config.circuit_success_threshold,
                 timeout_seconds=self._resilient_config.circuit_timeout_seconds,
+                call_timeout_seconds=self._resilient_config.circuit_call_timeout_seconds,
             ),
         )
         self._syslog_fallback = SyslogFallback.get_instance()
@@ -194,6 +199,12 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         self._buffer: RingBuffer[dict[str, Any]] = RingBuffer(
             capacity=self._resilient_config.buffer_capacity,
             strategy=self._resilient_config.backpressure_strategy,
+        )
+
+        # Primary Store 기록용 executor (timeout 보호, 좌비 스레드 최대 1개)
+        self._write_executor: ThreadPoolExecutor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="audit_write",
         )
 
         # Background flush worker
@@ -256,8 +267,12 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         if self._flush_thread:
             self._flush_thread.join(timeout=timeout)
 
-        # Drain remaining buffer
+        # Drain remaining buffer (executor 필요)
         self._flush_remaining()
+
+        # executor 정리: _flush_remaining() 완료 후 호출
+        # wait=False — hang된 좌비 스레드가 있어도 애플리케이션 종료를 막지 않음
+        self._write_executor.shutdown(wait=False)
 
         self._started = False
         self_audit().log(SelfAuditEvent.SHUTDOWN, "Background flush worker stopped")
@@ -369,7 +384,10 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         # 1. Primary Store (with Circuit Breaker)
         if self._circuit_breaker.can_execute():
             try:
-                self._write_to_primary(entry_dict)
+                self._write_to_primary_with_timeout(
+                    entry_dict,
+                    timeout=self._circuit_breaker.config.call_timeout_seconds,
+                )
                 self._circuit_breaker.record_success()
                 self._metrics.record_write(
                     "Primary",
@@ -431,6 +449,21 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         self._write_to_stderr(entry_dict)
         return True
 
+    def _write_to_primary_with_timeout(
+        self,
+        entry_dict: dict[str, Any],
+        timeout: float,
+    ) -> None:
+        """Primary Store에 timeout 제한으로 기록."""
+        future = self._write_executor.submit(self._write_to_primary, entry_dict)
+        try:
+            future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            # 이미 실행 중인 작업: cancel 무효 (Python thread는 강제 종료 불가)
+            # 큐에서 대기 중인 작업: 큐에서 제거하여 뒤늦은 실행/중복 기록 방지
+            future.cancel()
+            raise TimeoutError(f"Primary store write timed out after {timeout}s")
+
     def _write_to_primary(self, entry_dict: dict[str, Any]) -> None:
         """Primary Store에 기록."""
         entry = AuditEntry.from_dict(entry_dict)
@@ -487,6 +520,10 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 "capacity": buffer_stats.capacity,
                 "drop_rate": buffer_stats.drop_rate,
                 "total_dropped": buffer_stats.total_dropped,
+            },
+            "write_executor": {
+                "active_threads": len(self._write_executor._threads),
+                "pending_tasks": self._write_executor._work_queue.qsize(),
             },
             "degraded_mode": self._degraded_manager.is_degraded,
             "self_audit": {

@@ -187,6 +187,7 @@ class CircuitBreaker:
                     "failure_threshold": self.config.failure_threshold,
                     "success_threshold": self.config.success_threshold,
                     "timeout_seconds": self.config.timeout_seconds,
+                    "call_timeout_seconds": self.config.call_timeout_seconds,
                 },
             }
 

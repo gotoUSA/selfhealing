@@ -103,6 +103,12 @@ class ResilientRecorderSettings(BaseSettings):
         le=600.0,
         description="Circuit Breaker 타임아웃 (초)",
     )
+    circuit_call_timeout_seconds: float = Field(
+        default=5.0,
+        ge=0.5,
+        le=60.0,
+        description="개별 호출 타임아웃 (초). 외부 백엔드 hang 방지.",
+    )
 
     # ==========================================================================
     # Fallback Settings
@@ -122,10 +128,7 @@ class ResilientRecorderSettings(BaseSettings):
         """Validate backpressure strategy is valid."""
         valid_strategies = {"DROP_OLDEST", "DROP_NEWEST", "BLOCK"}
         if v not in valid_strategies:
-            raise ValueError(
-                f"Invalid backpressure_strategy: {v}. "
-                f"Valid options: {valid_strategies}"
-            )
+            raise ValueError(f"Invalid backpressure_strategy: {v}. " f"Valid options: {valid_strategies}")
         return v
 
     @field_validator("circuit_failure_threshold")
@@ -133,10 +136,7 @@ class ResilientRecorderSettings(BaseSettings):
     def validate_circuit_failure_threshold(cls, v: int) -> int:
         """Warn if circuit failure threshold is very low."""
         if v < 2:
-            logger.warning(
-                f"Very low circuit_failure_threshold={v}. "
-                "May cause frequent circuit opens on transient errors"
-            )
+            logger.warning(f"Very low circuit_failure_threshold={v}. " "May cause frequent circuit opens on transient errors")
         return v
 
     # ==========================================================================
