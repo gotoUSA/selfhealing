@@ -1210,3 +1210,676 @@ class AbstractPostmortemRecord(models.Model if DJANGO_AVAILABLE else object):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "source": self.source,
         }
+
+
+# =============================================================================
+# Concrete PostmortemRecord (223 Host App Decoupling)
+# =============================================================================
+
+
+class PostmortemRecord(AbstractPostmortemRecord):
+    """
+    Concrete PostmortemRecord model provided by selfhealing package.
+
+    이 모델은 selfhealing/0001_initial migration에 의해 생성된 테이블을 그대로 사용한다.
+    shopping/models/postmortem_record.py의 중복을 제거하고 패키지에서 직접 제공.
+
+    호스트 앱이 커스터마이징이 필요한 경우 AbstractPostmortemRecord를 직접 상속하면 된다.
+    """
+
+    class Meta(AbstractPostmortemRecord.Meta):
+        abstract = False
+        db_table = "selfhealing_postmortem"
+
+    def __str__(self):
+        return f"PostmortemRecord({self.incident_id})"
+
+
+# =============================================================================
+# Abstract Failed External Request (223 Host App Decoupling)
+# =============================================================================
+
+
+class AbstractFailedExternalRequest(models.Model if DJANGO_AVAILABLE else object):
+    """
+    Abstract Dead Letter Queue model for unrecoverable external API requests.
+
+    도메인 중립적 설계 - 특정 비즈니스 도메인(결제, 주문 등)에 의존하지 않음.
+    FK 대신 entity_type/entity_id로 느슨한 결합.
+
+    Subclasses should:
+    - Set abstract = False in Meta
+    - Optionally override db_table
+    - Add project-specific domain choices or fields
+
+    Usage:
+        from selfhealing.adapters.django.models import AbstractFailedExternalRequest
+
+        class FailedExternalRequest(AbstractFailedExternalRequest):
+            class Meta(AbstractFailedExternalRequest.Meta):
+                abstract = False
+                db_table = "my_failed_external_request"
+    """
+
+    if not DJANGO_AVAILABLE:
+        raise ImportError("Django is required to use AbstractFailedExternalRequest. " "Install it with: pip install django")
+
+    # 실패 유형
+    FAILURE_TYPE_CHOICES = [
+        ("max_retries_exceeded", "Max Retries Exceeded"),
+        ("non_retryable_error", "Non-Retryable Error"),
+        ("sla_timeout", "SLA Timeout Exceeded"),
+        ("circuit_breaker_open", "Circuit Breaker Open"),
+        ("manual_abort", "Manual Abort"),
+        ("unknown", "Unknown Error"),
+    ]
+
+    # 처리 상태
+    STATUS_CHOICES = [
+        ("pending", "Pending Review"),
+        ("reviewing", "Reviewing"),
+        ("resolved", "Resolved"),
+        ("rejected", "Rejected"),
+        ("expired", "Expired"),
+    ]
+
+    # 도메인 타입
+    DOMAIN_CHOICES = [
+        ("external_api", "External API"),
+        ("payment", "Payment"),
+        ("point", "Point"),
+        ("inventory", "Inventory"),
+        ("webhook", "Webhook"),
+        ("notification", "Notification"),
+    ]
+
+    domain = models.CharField(
+        max_length=50,
+        choices=DOMAIN_CHOICES,
+        default="external_api",
+        verbose_name="Domain",
+    )
+
+    entity_type = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name="Entity Type",
+        help_text="Related entity type (e.g., 'order', 'payment', 'subscription')",
+    )
+
+    entity_id = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        verbose_name="Entity ID",
+        help_text="Related entity ID",
+    )
+
+    entity_refs = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Entity References",
+        help_text="Additional entity references (e.g., {'user_id': 123, 'tenant_id': 'abc'})",
+    )
+
+    user_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="User ID",
+    )
+
+    external_request_id = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="External Request ID",
+    )
+
+    external_transaction_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="External Transaction ID",
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        default=0,
+        verbose_name="Amount",
+    )
+
+    failure_type = models.CharField(
+        max_length=30,
+        choices=FAILURE_TYPE_CHOICES,
+        default="unknown",
+        verbose_name="Failure Type",
+    )
+
+    error_code = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Error Code",
+    )
+
+    error_message = models.TextField(
+        blank=True,
+        verbose_name="Error Message",
+    )
+
+    retry_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Retry Count",
+    )
+
+    last_retry_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Last Retry At",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+        verbose_name="Status",
+    )
+
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Resolved At",
+    )
+
+    resolved_by_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Resolved By ID",
+    )
+
+    resolution_note = models.TextField(
+        blank=True,
+        verbose_name="Resolution Note",
+    )
+
+    request_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Request Data",
+    )
+
+    response_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Response Data",
+    )
+
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Metadata",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created At",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated At",
+    )
+
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Expires At",
+    )
+
+    class Meta:
+        abstract = True
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["failure_type", "-created_at"]),
+            models.Index(fields=["domain", "-created_at"]),
+            models.Index(fields=["entity_type", "entity_id"]),
+            models.Index(fields=["expires_at"]),
+            models.Index(fields=["-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        entity_info = f"{self.entity_type}:{self.entity_id}" if self.entity_type else "N/A"
+        return f"[{self.domain}] {self.get_failure_type_display()} {entity_info} - {self.get_status_display()}"
+
+    def mark_as_resolved(self, resolved_by_id: int | None = None, note: str = "") -> None:
+        """Mark as resolved."""
+        self.status = "resolved"
+        self.resolved_at = timezone.now()
+        self.resolved_by_id = resolved_by_id
+        self.resolution_note = note
+        self.save(update_fields=["status", "resolved_at", "resolved_by_id", "resolution_note", "updated_at"])
+
+    def mark_as_rejected(self, resolved_by_id: int | None = None, note: str = "") -> None:
+        """Mark as rejected (unrecoverable)."""
+        self.status = "rejected"
+        self.resolved_at = timezone.now()
+        self.resolved_by_id = resolved_by_id
+        self.resolution_note = note
+        self.save(update_fields=["status", "resolved_at", "resolved_by_id", "resolution_note", "updated_at"])
+
+    @classmethod
+    def create_from_failure(
+        cls,
+        domain: str = "external_api",
+        entity_type: str = "",
+        entity_id: str = "",
+        entity_refs: dict[str, Any] | None = None,
+        user_id: int | None = None,
+        failure_type: str = "unknown",
+        error_code: str = "",
+        error_message: str = "",
+        retry_count: int = 0,
+        external_request_id: str = "",
+        external_transaction_id: str = "",
+        amount: Any = None,
+        request_data: dict[str, Any] | None = None,
+        response_data: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        snapshot_data: dict[str, Any] | None = None,
+    ) -> "AbstractFailedExternalRequest":
+        """Factory method to create a DLQ entry from an external request failure."""
+        from decimal import Decimal
+
+        try:
+            from django.conf import settings as django_settings
+
+            self_healing_config = getattr(django_settings, "SELF_HEALING", {})
+        except Exception:
+            self_healing_config = {}
+        retention_days = self_healing_config.get("DLQ_RETENTION_DAYS", 30)
+        expires_at = timezone.now() + timedelta(days=retention_days)
+
+        final_metadata = metadata or {}
+        if snapshot_data:
+            final_metadata["snapshot_data"] = snapshot_data
+
+        return cls.objects.create(
+            domain=domain,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_refs=entity_refs or {},
+            user_id=user_id,
+            external_request_id=external_request_id,
+            external_transaction_id=external_transaction_id,
+            amount=amount if amount is not None else Decimal("0"),
+            failure_type=failure_type,
+            error_code=error_code,
+            error_message=error_message,
+            retry_count=retry_count,
+            last_retry_at=timezone.now() if retry_count > 0 else None,
+            request_data=request_data or {},
+            response_data=response_data or {},
+            metadata=final_metadata,
+            expires_at=expires_at,
+        )
+
+
+# =============================================================================
+# Abstract Security Incident (223 Host App Decoupling)
+# =============================================================================
+
+
+class AbstractSecurityIncident(models.Model if DJANGO_AVAILABLE else object):
+    """
+    Abstract Security Incident model for violations that never auto-recover.
+
+    Security violations are immediately blocked and routed to security team.
+    Domain-free: no FK dependencies on specific host app models.
+
+    Subclasses can:
+    - Add FK fields to host app models (user, order, payment, etc.)
+    - Set abstract = False in Meta
+    - Optionally override db_table
+
+    Usage:
+        from selfhealing.adapters.django.models import AbstractSecurityIncident
+
+        class SecurityIncident(AbstractSecurityIncident):
+            user = models.ForeignKey("auth.User", ...)
+            class Meta(AbstractSecurityIncident.Meta):
+                abstract = False
+                db_table = "security_incidents"
+    """
+
+    if not DJANGO_AVAILABLE:
+        raise ImportError("Django is required to use AbstractSecurityIncident. " "Install it with: pip install django")
+
+    class IncidentType(models.TextChoices):
+        """Types of security incidents."""
+
+        WEBHOOK_SIGNATURE_INVALID = "webhook_signature_invalid", "Webhook Signature Invalid"
+        PAYMENT_AMOUNT_TAMPERED = "payment_amount_tampered", "Payment Amount Tampered"
+        TOKEN_FORGED = "token_forged", "Token Forged"
+        UNAUTHORIZED_ACCESS = "unauthorized_access", "Unauthorized Access"
+        RATE_LIMIT_ABUSE = "rate_limit_abuse", "Rate Limit Abuse"
+        SUSPICIOUS_ACTIVITY = "suspicious_activity", "Suspicious Activity"
+        REPLAY_ATTACK = "replay_attack", "Replay Attack Detected"
+        INJECTION_ATTEMPT = "injection_attempt", "Injection Attempt"
+
+    class Severity(models.TextChoices):
+        """Severity levels for incidents."""
+
+        CRITICAL = "critical", "Critical"
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+
+    class Status(models.TextChoices):
+        """Investigation status."""
+
+        OPEN = "open", "Open"
+        INVESTIGATING = "investigating", "Investigating"
+        RESOLVED = "resolved", "Resolved"
+        FALSE_POSITIVE = "false_positive", "False Positive"
+
+    # Classification
+    incident_type = models.CharField(
+        max_length=100,
+        choices=IncidentType.choices,
+        db_index=True,
+        verbose_name="Incident Type",
+    )
+
+    severity = models.CharField(
+        max_length=20,
+        choices=Severity.choices,
+        db_index=True,
+        verbose_name="Severity",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+        verbose_name="Status",
+    )
+
+    # Source Information
+    source_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Source IP",
+        help_text="IP address of the request origin",
+    )
+
+    user_agent = models.TextField(
+        blank=True,
+        verbose_name="User Agent",
+    )
+
+    # Incident Details
+    description = models.TextField(
+        verbose_name="Description",
+        help_text="Detailed description of the security incident",
+    )
+
+    raw_request = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Raw Request",
+        help_text="Sanitized request data for forensic analysis",
+    )
+
+    # Response & Resolution
+    action_taken = models.TextField(
+        blank=True,
+        verbose_name="Action Taken",
+        help_text="Immediate protective action taken",
+    )
+
+    investigation_notes = models.TextField(
+        blank=True,
+        verbose_name="Investigation Notes",
+    )
+
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Resolved At",
+    )
+
+    # Lifecycle
+    detected_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="Detected At",
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated At",
+    )
+
+    # Severity mapping by incident type
+    SEVERITY_BY_TYPE: dict[str, str] = {}  # Populated after class
+
+    class Meta:
+        abstract = True
+        ordering = ["-detected_at"]
+        indexes = [
+            models.Index(fields=["incident_type", "status"]),
+            models.Index(fields=["severity", "status"]),
+            models.Index(fields=["source_ip", "-detected_at"]),
+            models.Index(fields=["status", "-detected_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.severity}] {self.incident_type} - {self.status}"
+
+    def start_investigation(self, investigator: Any = None) -> None:
+        """Mark incident as being investigated."""
+        self.status = self.Status.INVESTIGATING
+        update_fields = ["status", "updated_at"]
+        self.save(update_fields=update_fields)
+
+    def resolve(
+        self,
+        investigator: Any = None,
+        notes: str = "",
+        is_false_positive: bool = False,
+    ) -> None:
+        """Resolve the security incident."""
+        self.status = self.Status.FALSE_POSITIVE if is_false_positive else self.Status.RESOLVED
+        self.investigation_notes = notes
+        self.resolved_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "investigation_notes",
+                "resolved_at",
+                "updated_at",
+            ]
+        )
+
+    def add_action_taken(self, action: str) -> None:
+        """Record an action taken in response to the incident."""
+        timestamp = timezone.now().isoformat()
+        if self.action_taken:
+            self.action_taken = f"{self.action_taken}\n[{timestamp}] {action}"
+        else:
+            self.action_taken = f"[{timestamp}] {action}"
+        self.save(update_fields=["action_taken", "updated_at"])
+
+    @property
+    def is_open(self) -> bool:
+        """Check if incident is still open."""
+        return self.status in (self.Status.OPEN, self.Status.INVESTIGATING)
+
+    @property
+    def age_seconds(self) -> float:
+        """Get age of this incident in seconds."""
+        return (timezone.now() - self.detected_at).total_seconds()
+
+    @classmethod
+    def create_incident(
+        cls,
+        incident_type: str,
+        description: str,
+        source_ip: str | None = None,
+        user_agent: str = "",
+        raw_request: dict | None = None,
+        immediate_action: str = "",
+        **extra_fields: Any,
+    ) -> "AbstractSecurityIncident":
+        """
+        Factory method to create a security incident.
+
+        Automatically determines severity based on incident type.
+        Subclasses can pass additional FK fields via **extra_fields.
+        """
+        severity_map = {
+            cls.IncidentType.WEBHOOK_SIGNATURE_INVALID: cls.Severity.CRITICAL,
+            cls.IncidentType.PAYMENT_AMOUNT_TAMPERED: cls.Severity.CRITICAL,
+            cls.IncidentType.TOKEN_FORGED: cls.Severity.CRITICAL,
+            cls.IncidentType.REPLAY_ATTACK: cls.Severity.CRITICAL,
+            cls.IncidentType.UNAUTHORIZED_ACCESS: cls.Severity.HIGH,
+            cls.IncidentType.INJECTION_ATTEMPT: cls.Severity.HIGH,
+            cls.IncidentType.RATE_LIMIT_ABUSE: cls.Severity.MEDIUM,
+            cls.IncidentType.SUSPICIOUS_ACTIVITY: cls.Severity.MEDIUM,
+        }
+        severity = severity_map.get(incident_type, cls.Severity.MEDIUM)
+
+        return cls.objects.create(
+            incident_type=incident_type,
+            severity=severity,
+            description=description,
+            source_ip=source_ip,
+            user_agent=user_agent,
+            raw_request=raw_request or {},
+            action_taken=(f"[{timezone.now().isoformat()}] {immediate_action}" if immediate_action else ""),
+            **extra_fields,
+        )
+
+    @classmethod
+    def get_open_by_ip(cls, ip_address: str, hours: int = 24):
+        """Get open incidents from a specific IP in the last N hours."""
+        cutoff = timezone.now() - timedelta(hours=hours)
+        return cls.objects.filter(
+            source_ip=ip_address,
+            status__in=[cls.Status.OPEN, cls.Status.INVESTIGATING],
+            detected_at__gte=cutoff,
+        )
+
+
+# =============================================================================
+# Concrete Models (223 Host App Decoupling)
+# Provided by the package for zero-copy installation.
+# =============================================================================
+
+
+class FailedOperation(AbstractFailedOperation):
+    """
+    Concrete DLQ model provided by the selfhealing package.
+
+    Includes a swappable user FK via settings.AUTH_USER_MODEL
+    and default domain choices suitable for most applications.
+    """
+
+    class Domain(models.TextChoices if DJANGO_AVAILABLE else object):
+        PAYMENT = "payment", "Payment"
+        POINT = "point", "Point"
+        INVENTORY = "inventory", "Inventory"
+        WEBHOOK = "webhook", "Webhook"
+        NOTIFICATION = "notification", "Notification"
+
+    domain = models.CharField(
+        max_length=50,
+        choices=Domain.choices,
+        db_index=True,
+        verbose_name="Domain",
+        help_text="Business domain where the failure occurred",
+    )
+
+    user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="selfhealing_failed_operations",
+        verbose_name="User",
+    )
+
+    resolved_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="selfhealing_resolved_operations",
+        verbose_name="Resolved By",
+    )
+
+    # Additional entity references as JSON
+    entity_refs = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Entity References",
+        help_text="Additional entity references as {type: id} mapping",
+    )
+
+    class Meta(AbstractFailedOperation.Meta):
+        abstract = False
+        db_table = "failed_operations"
+        verbose_name = "Failed Operation (DLQ)"
+        verbose_name_plural = "Failed Operations (DLQ)"
+
+
+class FailedExternalRequest(AbstractFailedExternalRequest):
+    """
+    Concrete FailedExternalRequest model provided by the selfhealing package.
+    """
+
+    class Meta(AbstractFailedExternalRequest.Meta):
+        abstract = False
+        db_table = "selfhealing_failed_external_request"
+        verbose_name = "Failed External Request (DLQ)"
+        verbose_name_plural = "Failed External Requests (DLQ)"
+
+
+class SecurityIncident(AbstractSecurityIncident):
+    """
+    Concrete SecurityIncident model provided by the selfhealing package.
+
+    Domain-free version without host app FK dependencies.
+    Host apps that need FKs (user, order, payment) should create their own
+    concrete subclass of AbstractSecurityIncident.
+    """
+
+    # Generic user reference (no FK, domain-neutral)
+    user_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="User ID",
+        help_text="Associated user ID (domain-neutral, no FK)",
+    )
+
+    # Generic entity references
+    related_entity_type = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Related Entity Type",
+    )
+
+    related_entity_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Related Entity ID",
+    )
+
+    class Meta(AbstractSecurityIncident.Meta):
+        abstract = False
+        db_table = "security_incidents"
+        verbose_name = "Security Incident"
+        verbose_name_plural = "Security Incidents"

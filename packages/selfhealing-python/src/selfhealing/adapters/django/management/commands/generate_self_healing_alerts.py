@@ -51,11 +51,9 @@ class Command(BaseCommand):
         validate = options["validate"]
 
         if output_path is None:
-            # Default path relative to project root
             base_dir = getattr(settings, "BASE_DIR", Path.cwd())
             output_path = os.path.join(base_dir, "scripts", "prometheus", "self_healing_alerts.yml")
 
-        # Generate YAML content
         yaml_content = self._generate_yaml()
 
         if validate:
@@ -67,7 +65,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("\n--- Dry run complete. No file written. ---"))
             return
 
-        # Write to file
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(yaml_content)
@@ -78,7 +75,6 @@ class Command(BaseCommand):
 
     def _generate_yaml(self) -> str:
         """Generate Prometheus alerting rules YAML from ALERTING_RULES."""
-        # Group rules by category (based on rule name prefix)
         groups = {
             "self_healing_dlq": [],
             "self_healing_retry": [],
@@ -88,7 +84,6 @@ class Command(BaseCommand):
         }
 
         for rule_name, rule_config in ALERTING_RULES.items():
-            # Determine group based on rule name
             if "DLQ" in rule_name:
                 group_name = "self_healing_dlq"
             elif "Retry" in rule_name:
@@ -100,7 +95,7 @@ class Command(BaseCommand):
             elif "Replay" in rule_name:
                 group_name = "self_healing_replay"
             else:
-                group_name = "self_healing_dlq"  # Default
+                group_name = "self_healing_dlq"
 
             alert_rule = {
                 "alert": rule_name,
@@ -115,20 +110,17 @@ class Command(BaseCommand):
                 },
             }
 
-            # Add 'for' duration if specified
             if "for" in rule_config:
                 alert_rule["for"] = rule_config["for"]
 
-            # Add runbook_url if available
             if "runbook_url" in rule_config:
                 alert_rule["annotations"]["runbook_url"] = rule_config["runbook_url"]
 
             groups[group_name].append(alert_rule)
 
-        # Build final structure
         prometheus_groups = []
         for group_name, rules in groups.items():
-            if rules:  # Only include non-empty groups
+            if rules:
                 prometheus_groups.append(
                     {
                         "name": group_name,
@@ -140,9 +132,8 @@ class Command(BaseCommand):
             "groups": prometheus_groups,
         }
 
-        # Generate YAML with header comment
         header = """# L3 Self-Healing System Alerting Rules
-# Auto-generated from ALERTING_RULES in shopping/services/self_healing/metrics.py
+# Auto-generated from ALERTING_RULES in selfhealing.services.metrics
 # DO NOT EDIT MANUALLY - Run: python manage.py generate_self_healing_alerts
 #
 # Reference: docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
@@ -167,7 +158,6 @@ class Command(BaseCommand):
         with open(file_path, "r", encoding="utf-8") as f:
             existing_content = f.read()
 
-        # Compare (ignoring trailing whitespace)
         if existing_content.strip() == expected_content.strip():
             self.stdout.write(self.style.SUCCESS("✓ File is in sync with ALERTING_RULES"))
         else:

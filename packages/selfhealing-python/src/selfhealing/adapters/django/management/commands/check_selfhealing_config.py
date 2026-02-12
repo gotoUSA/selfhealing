@@ -12,12 +12,12 @@ Exit Codes:
     0: 모든 설정 유효 (또는 non-fatal 경고만 있음)
     1: Fatal 설정 위반 감지 (--strict 모드)
     2: 실행 오류
-    
+
 Governance:
     - Phase 6: Fail-Safe Default
     - Fatal 설정: security, chaos, error_budget 관련 필수 설정
     - Non-fatal 설정: Safe Default로 대체 가능
-    
+
 Reference:
     docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART2.md
 """
@@ -43,12 +43,11 @@ class Command(BaseCommand):
             action="store_true",
             help="결과를 JSON 형식으로 출력",
         )
-        # Note: Django already provides --verbosity/-v option
 
     def handle(self, *args, **options):
         strict_mode = options["strict"]
         json_output = options["json"]
-        verbose = options.get("verbosity", 1)  # Django's built-in verbosity
+        verbose = options.get("verbosity", 1)
 
         try:
             from selfhealing.core.safe_defaults import (
@@ -59,14 +58,14 @@ class Command(BaseCommand):
             from selfhealing.adapters.django.config_provider import get_config
         except ImportError as e:
             if json_output:
-                self._output_json({
-                    "status": "error",
-                    "message": f"Failed to import selfhealing modules: {e}",
-                })
-            else:
-                self.stderr.write(
-                    self.style.ERROR(f"❌ Failed to import selfhealing modules: {e}")
+                self._output_json(
+                    {
+                        "status": "error",
+                        "message": f"Failed to import selfhealing modules: {e}",
+                    }
                 )
+            else:
+                self.stderr.write(self.style.ERROR(f"❌ Failed to import selfhealing modules: {e}"))
             sys.exit(2)
 
         try:
@@ -74,27 +73,22 @@ class Command(BaseCommand):
             result = validate_config_preflight(config)
         except Exception as e:
             if json_output:
-                self._output_json({
-                    "status": "error",
-                    "message": f"Failed to validate config: {e}",
-                })
-            else:
-                self.stderr.write(
-                    self.style.ERROR(f"❌ Failed to validate config: {e}")
+                self._output_json(
+                    {
+                        "status": "error",
+                        "message": f"Failed to validate config: {e}",
+                    }
                 )
+            else:
+                self.stderr.write(self.style.ERROR(f"❌ Failed to validate config: {e}"))
             sys.exit(2)
 
-        # 결과 구성
         output_data = {
             "status": "valid" if result.is_valid else "invalid",
             "fatal_violations": result.fatal_violations,
             "non_fatal_warnings": result.non_fatal_warnings,
-            "fatal_violation_count": sum(
-                len(keys) for keys in result.fatal_violations.values()
-            ),
-            "warning_count": sum(
-                len(keys) for keys in result.non_fatal_warnings.values()
-            ),
+            "fatal_violation_count": sum(len(keys) for keys in result.fatal_violations.values()),
+            "warning_count": sum(len(keys) for keys in result.non_fatal_warnings.values()),
         }
 
         if json_output:
@@ -102,7 +96,6 @@ class Command(BaseCommand):
         else:
             self._output_text(output_data, verbose, FATAL_CONFIGS)
 
-        # Exit code 결정
         if result.has_fatal_violations and strict_mode:
             sys.exit(1)
         else:
@@ -112,47 +105,30 @@ class Command(BaseCommand):
         """JSON 형식으로 출력."""
         self.stdout.write(json.dumps(data, indent=2, ensure_ascii=False))
 
-    def _output_text(
-        self, 
-        data: Dict[str, Any], 
-        verbose: int,
-        fatal_configs: Dict[str, set]
-    ):
+    def _output_text(self, data: Dict[str, Any], verbose: int, fatal_configs: Dict[str, set]):
         """텍스트 형식으로 출력."""
         self.stdout.write("")
         self.stdout.write("=" * 60)
-        self.stdout.write(
-            self.style.HTTP_INFO("  Self-Healing Configuration Pre-flight Check")
-        )
+        self.stdout.write(self.style.HTTP_INFO("  Self-Healing Configuration Pre-flight Check"))
         self.stdout.write("=" * 60)
         self.stdout.write("")
 
-        # Fatal Violations
         if data["fatal_violations"]:
-            self.stdout.write(
-                self.style.ERROR(f"❌ FATAL VIOLATIONS ({data['fatal_violation_count']})")
-            )
-            self.stdout.write(
-                self.style.WARNING("   These MUST be fixed before deployment!")
-            )
+            self.stdout.write(self.style.ERROR(f"❌ FATAL VIOLATIONS ({data['fatal_violation_count']})"))
+            self.stdout.write(self.style.WARNING("   These MUST be fixed before deployment!"))
             self.stdout.write("")
-            
+
             for config_type, violations in data["fatal_violations"].items():
                 self.stdout.write(f"   [{config_type}]")
                 for key, msg in violations.items():
                     self.stdout.write(f"      • {key}: {msg}")
             self.stdout.write("")
-        
-        # Non-fatal Warnings
+
         if data["non_fatal_warnings"]:
-            self.stdout.write(
-                self.style.WARNING(f"⚠️  NON-FATAL WARNINGS ({data['warning_count']})")
-            )
-            self.stdout.write(
-                "   These will be replaced with Safe Defaults at runtime."
-            )
+            self.stdout.write(self.style.WARNING(f"⚠️  NON-FATAL WARNINGS ({data['warning_count']})"))
+            self.stdout.write("   These will be replaced with Safe Defaults at runtime.")
             self.stdout.write("")
-            
+
             if verbose >= 1:
                 for config_type, warnings in data["non_fatal_warnings"].items():
                     self.stdout.write(f"   [{config_type}]")
@@ -160,37 +136,21 @@ class Command(BaseCommand):
                         self.stdout.write(f"      • {key}: {msg}")
                 self.stdout.write("")
 
-        # Summary
         self.stdout.write("-" * 60)
-        
+
         if data["status"] == "valid":
             if data["warning_count"] > 0:
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"⚠️  Config valid with {data['warning_count']} warning(s)"
-                    )
-                )
+                self.stdout.write(self.style.WARNING(f"⚠️  Config valid with {data['warning_count']} warning(s)"))
             else:
-                self.stdout.write(
-                    self.style.SUCCESS("✅ All configurations are valid!")
-                )
+                self.stdout.write(self.style.SUCCESS("✅ All configurations are valid!"))
         else:
-            self.stdout.write(
-                self.style.ERROR(
-                    f"❌ FAILED: {data['fatal_violation_count']} fatal violation(s) detected"
-                )
-            )
+            self.stdout.write(self.style.ERROR(f"❌ FAILED: {data['fatal_violation_count']} fatal violation(s) detected"))
             self.stdout.write("")
-            self.stdout.write(
-                self.style.WARNING("   → Use --strict flag to block CI/CD pipeline")
-            )
-            self.stdout.write(
-                self.style.WARNING("   → Fix fatal violations before deployment")
-            )
+            self.stdout.write(self.style.WARNING("   → Use --strict flag to block CI/CD pipeline"))
+            self.stdout.write(self.style.WARNING("   → Fix fatal violations before deployment"))
 
         self.stdout.write("")
-        
-        # Fatal configs 정보 (verbose >= 2)
+
         if verbose >= 2:
             self.stdout.write("-" * 60)
             self.stdout.write(self.style.HTTP_INFO("Fatal Configuration Keys:"))

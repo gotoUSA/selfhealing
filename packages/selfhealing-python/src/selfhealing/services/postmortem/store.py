@@ -90,14 +90,10 @@ def _get_postmortem_model():
     except ImportError:
         pass
 
-    # 2. 하위 호환성: 직접 import (deprecated, 향후 제거 예정)
+    # 2. 하위 호환성: selfhealing 패키지 concrete 모델 직접 import
     try:
-        from shopping.models import PostmortemRecord
+        from selfhealing.adapters.django.models import PostmortemRecord
 
-        logger.warning(
-            "[Postmortem] Using direct shopping.models import is deprecated. "
-            "Please register model via ProviderRegistry.register_postmortem_model()"
-        )
         return PostmortemRecord
     except ImportError:
         return None

@@ -167,20 +167,21 @@ class TestRegionInjectionLogicBehavior:
 
 
 # =============================================================================
-# 계약 검증: shopping/models/failed_operation.py region 주입 패턴
+# 계약 검증: selfhealing adapters/django/models.py region 주입 패턴
+# (223 Host App Decoupling: shopping → selfhealing 패키지로 이동)
 # =============================================================================
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
-_SHOPPING_MODELS_PATH = _PROJECT_ROOT / "shopping" / "models" / "failed_operation.py"
+_PACKAGE_SRC = Path(__file__).resolve().parent.parent.parent.parent / "src"
+_MODELS_PATH = _PACKAGE_SRC / "selfhealing" / "adapters" / "django" / "models.py"
 
 
 class TestShoppingFailedOperationRegionInjectionContract:
-    """shopping/models/failed_operation.py create_from_failure() region 주입 계약."""
+    """selfhealing/adapters/django/models.py FailedOperation create_from_failure() region 주입 계약."""
 
     @pytest.fixture(scope="class")
     def source(self) -> str:
-        """shopping/models/failed_operation.py 소스 코드."""
-        return _SHOPPING_MODELS_PATH.read_text(encoding="utf-8")
+        """selfhealing/adapters/django/models.py 소스 코드."""
+        return _MODELS_PATH.read_text(encoding="utf-8")
 
     def test_get_cluster_identity_imported(self, source):
         """create_from_failure() 내 get_cluster_identity import 존재."""

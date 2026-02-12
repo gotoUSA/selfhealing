@@ -902,3 +902,119 @@ class BaseCircuitBreakerStateAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else obj
             request,
             f"Successfully reset {count} circuit breaker(s).",
         )
+
+
+# =============================================================================
+# Auto-register concrete models (223 Host App Decoupling)
+# =============================================================================
+
+
+def _auto_register_concrete_admin():
+    """
+    Auto-register concrete models provided by the selfhealing package.
+
+    This is called at module-load time and registers admin classes
+    for FailedOperation, FailedExternalRequest, SecurityIncident,
+    and PostmortemRecord provided by the package.
+
+    Uses admin.site.is_registered() to avoid double registration
+    when the host app already registers its own admin classes.
+    """
+    if not DJANGO_AVAILABLE:
+        return
+
+    try:
+        from selfhealing.adapters.django.models import (
+            FailedExternalRequest,
+            FailedOperation,
+            SecurityIncident,
+        )
+
+        # FailedOperation Admin
+        if not admin.site.is_registered(FailedOperation):
+
+            @admin.register(FailedOperation)
+            class FailedOperationAdmin(BaseDLQEntryAdmin):
+                """Auto-registered FailedOperation admin from selfhealing package."""
+
+                def get_user_admin_url(self, user: Any) -> str:
+                    """Dynamic user admin URL based on AUTH_USER_MODEL."""
+                    from django.conf import settings as django_settings
+
+                    user_model = django_settings.AUTH_USER_MODEL
+                    app_label, model_name = user_model.split(".")
+                    return reverse(
+                        f"admin:{app_label}_{model_name.lower()}_change",
+                        args=[user.pk],
+                    )
+
+        # FailedExternalRequest Admin
+        if not admin.site.is_registered(FailedExternalRequest):
+
+            @admin.register(FailedExternalRequest)
+            class FailedExternalRequestAdmin(admin.ModelAdmin):
+                """Auto-registered FailedExternalRequest admin."""
+
+                list_display = [
+                    "id",
+                    "domain",
+                    "failure_type",
+                    "status",
+                    "entity_type",
+                    "entity_id",
+                    "retry_count",
+                    "created_at",
+                ]
+                list_filter = ["domain", "status", "failure_type", "created_at"]
+                search_fields = ["error_code", "error_message", "entity_type", "entity_id"]
+                ordering = ["-created_at"]
+                readonly_fields = [
+                    "domain",
+                    "entity_type",
+                    "entity_id",
+                    "failure_type",
+                    "error_code",
+                    "error_message",
+                    "retry_count",
+                    "last_retry_at",
+                    "request_data",
+                    "response_data",
+                    "metadata",
+                    "created_at",
+                    "updated_at",
+                    "expires_at",
+                ]
+
+        # SecurityIncident Admin
+        if not admin.site.is_registered(SecurityIncident):
+
+            @admin.register(SecurityIncident)
+            class SecurityIncidentAdmin(admin.ModelAdmin):
+                """Auto-registered SecurityIncident admin."""
+
+                list_display = [
+                    "id",
+                    "incident_type",
+                    "severity",
+                    "status",
+                    "source_ip",
+                    "detected_at",
+                ]
+                list_filter = ["incident_type", "severity", "status", "detected_at"]
+                search_fields = ["description", "source_ip", "investigation_notes"]
+                ordering = ["-detected_at"]
+                readonly_fields = [
+                    "incident_type",
+                    "severity",
+                    "source_ip",
+                    "user_agent",
+                    "raw_request",
+                    "detected_at",
+                    "updated_at",
+                ]
+
+    except Exception as e:
+        logger.debug(f"[SelfHealing] Admin auto-registration skipped: {e}")
+
+
+_auto_register_concrete_admin()

@@ -40,12 +40,6 @@ from .notification_admin import (
     NotificationAdmin,
 )
 
-# DLQ (Dead Letter Queue) domain
-from .dlq_admin import FailedOperationAdmin
-
-# Postmortem domain
-from .postmortem_admin import PostmortemRecordAdmin
-
 
 __all__ = [
     # User
@@ -73,10 +67,6 @@ __all__ = [
     "NotificationAdmin",
     "EmailVerificationTokenAdmin",
     "EmailLogAdmin",
-    # Security
-    "FailedOperationAdmin",
-    # Postmortem
-    "PostmortemRecordAdmin",
 ]
 
 

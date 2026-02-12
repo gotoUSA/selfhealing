@@ -139,6 +139,9 @@ class SelfHealingConfig(AppConfig):
         # UserSessionRegistry에 session_key 역방향 매핑을 자동 관리
         self._connect_session_signals()
 
+        # Celery autodiscover: selfhealing.celery_tasks 등록 (223 Host App Decoupling)
+        self._autodiscover_celery_tasks()
+
         # Log environment variable snapshot (환경변수 Audit)
         # This runs on every server start because env vars can change
         # between restarts (e.g., Docker container restart with new env)
@@ -180,6 +183,25 @@ class SelfHealingConfig(AppConfig):
             connect_session_signals()
         except Exception as e:
             logger.warning(f"[SelfHealing] Failed to connect session signals: {e}")
+
+    @staticmethod
+    def _autodiscover_celery_tasks():
+        """
+        Celery autodiscover: selfhealing.celery_tasks 모듈 자동 등록.
+
+        호스트 앱(shopping)에서 수동으로 import 하던 셀러리 태스크를
+        패키지 자체에서 autodiscover 하여 등록한다.
+        Celery가 설치되지 않은 환경에서는 조용히 건너뛴다.
+        """
+        try:
+            from celery import current_app
+
+            current_app.autodiscover_tasks(["selfhealing.celery_tasks"])
+            logger.info("[SelfHealing] Celery tasks autodiscovered from selfhealing.celery_tasks")
+        except ImportError:
+            logger.debug("[SelfHealing] Celery not installed, skipping task autodiscovery")
+        except Exception as e:
+            logger.warning(f"[SelfHealing] Failed to autodiscover celery tasks: {e}")
 
     def _log_env_snapshot(self):
         """

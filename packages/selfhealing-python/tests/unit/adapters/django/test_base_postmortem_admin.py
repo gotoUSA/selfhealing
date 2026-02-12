@@ -36,7 +36,7 @@ def admin_class():
 def admin_instance():
     """BasePostmortemRecordAdmin 인스턴스를 반환합니다."""
     from django.contrib.admin.sites import AdminSite
-    from shopping.models import PostmortemRecord
+    from selfhealing.adapters.django.models import PostmortemRecord
 
     site = AdminSite()
     return BasePostmortemRecordAdmin(model=PostmortemRecord, admin_site=site)

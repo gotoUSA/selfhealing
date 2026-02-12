@@ -7,9 +7,8 @@ Django Audit Log Adapter.
 
 Usage:
     from selfhealing.adapters.audit.django_adapter import DjangoAuditLogAdapter
-    from shopping.models import AuditLog
 
-    adapter = DjangoAuditLogAdapter(model_class=AuditLog)
+    adapter = DjangoAuditLogAdapter(model_class=YourAuditLogModel)
 
     # ContinuousAuditRecorder와 연동
     from selfhealing.audit.continuous_audit import ContinuousAuditRecorder

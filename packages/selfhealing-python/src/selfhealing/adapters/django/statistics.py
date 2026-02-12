@@ -10,9 +10,9 @@ Usage:
     from selfhealing.factory import ProviderRegistry
     from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
 
-    class ShoppingConfig(AppConfig):
+    class MyAppConfig(AppConfig):
         def ready(self):
-            from shopping.models import FailedOperation
+            from selfhealing.adapters.django.models import FailedOperation
 
             ProviderRegistry.register_statistics_adapter(
                 DjangoStatisticsAdapter(
@@ -75,14 +75,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         self._circuit_breaker_model = circuit_breaker_model
 
         if failed_operation_model:
-            logger.info(
-                f"[DjangoStatisticsAdapter] Initialized with model: "
-                f"{failed_operation_model.__name__}"
-            )
+            logger.info(f"[DjangoStatisticsAdapter] Initialized with model: " f"{failed_operation_model.__name__}")
         else:
             logger.warning(
-                "[DjangoStatisticsAdapter] No failed_operation_model provided. "
-                "Some statistics will not be available."
+                "[DjangoStatisticsAdapter] No failed_operation_model provided. " "Some statistics will not be available."
             )
 
     def _get_model(self) -> type[Model] | None:
@@ -139,11 +135,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             if total == 0:
                 return []
 
-            queryset = (
-                model.objects.values("domain")
-                .annotate(count=Count("id"))
-                .order_by("-count")[:limit]
-            )
+            queryset = model.objects.values("domain").annotate(count=Count("id")).order_by("-count")[:limit]
 
             return [
                 DomainDistribution(
@@ -154,14 +146,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(
-                f"[DjangoStatisticsAdapter] get_domain_distribution error: {e}"
-            )
+            logger.error(f"[DjangoStatisticsAdapter] get_domain_distribution error: {e}")
             return []
 
-    def get_failure_type_distribution(
-        self, limit: int = 10
-    ) -> list[FailureTypeDistribution]:
+    def get_failure_type_distribution(self, limit: int = 10) -> list[FailureTypeDistribution]:
         """Get distribution of DLQ entries by failure type."""
         if not self._check_model():
             return []
@@ -175,11 +163,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             if total == 0:
                 return []
 
-            queryset = (
-                model.objects.values("failure_type")
-                .annotate(count=Count("id"))
-                .order_by("-count")[:limit]
-            )
+            queryset = model.objects.values("failure_type").annotate(count=Count("id")).order_by("-count")[:limit]
 
             return [
                 FailureTypeDistribution(
@@ -190,9 +174,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(
-                f"[DjangoStatisticsAdapter] get_failure_type_distribution error: {e}"
-            )
+            logger.error(f"[DjangoStatisticsAdapter] get_failure_type_distribution error: {e}")
             return []
 
     def get_recent_activity(self, hours: int = 24, days: int = 7) -> RecentActivity:
@@ -404,11 +386,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             model = self._get_model()
 
             # Count by status
-            status_counts = dict(
-                model.objects.values("status")
-                .annotate(count=Count("id"))
-                .values_list("status", "count")
-            )
+            status_counts = dict(model.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
 
             # Resolved older than 30 days
             thirty_days_ago = timezone.now() - timedelta(days=30)
@@ -517,9 +495,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return summary
         except Exception as e:
-            logger.error(
-                f"[DjangoStatisticsAdapter] get_circuit_breaker_summary error: {e}"
-            )
+            logger.error(f"[DjangoStatisticsAdapter] get_circuit_breaker_summary error: {e}")
             return CircuitBreakerSummary()
 
     def _get_cb_summary_from_redis(self) -> CircuitBreakerSummary:
@@ -541,9 +517,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return summary
         except Exception as e:
-            logger.error(
-                f"[DjangoStatisticsAdapter] _get_cb_summary_from_redis error: {e}"
-            )
+            logger.error(f"[DjangoStatisticsAdapter] _get_cb_summary_from_redis error: {e}")
             return CircuitBreakerSummary()
 
     def list_circuit_breakers(self) -> list[CircuitBreakerInfo]:
@@ -582,11 +556,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             return [
                 CircuitBreakerInfo(
                     service_name=name,
-                    state=(
-                        state.state.value
-                        if hasattr(state.state, "value")
-                        else str(state.state)
-                    ),
+                    state=(state.state.value if hasattr(state.state, "value") else str(state.state)),
                     failure_count=state.failure_count,
                     success_count=state.success_count,
                     last_failure_time=state.last_failure_time,
@@ -672,9 +642,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                     trail.resolved_at = getattr(entry, "resolved_at", None)
                     trail.current_status = getattr(entry, "status", "unknown")
             except Exception as e:
-                logger.warning(
-                    f"[DjangoStatisticsAdapter] Failed to get DLQ entry: {e}"
-                )
+                logger.warning(f"[DjangoStatisticsAdapter] Failed to get DLQ entry: {e}")
 
         # Get audit log entries from the audit adapter
         try:
@@ -695,31 +663,13 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                         AuditTrailEntry(
                             timestamp=audit_entry.timestamp,
                             action=(
-                                audit_entry.action.value
-                                if hasattr(audit_entry.action, "value")
-                                else str(audit_entry.action)
+                                audit_entry.action.value if hasattr(audit_entry.action, "value") else str(audit_entry.action)
                             ),
                             actor_id=audit_entry.actor_id,
-                            status=(
-                                audit_entry.new_value
-                                if hasattr(audit_entry, "new_value")
-                                else None
-                            ),
-                            details=(
-                                audit_entry.details
-                                if hasattr(audit_entry, "details")
-                                else None
-                            ),
-                            hash_chain=(
-                                audit_entry.hash
-                                if hasattr(audit_entry, "hash")
-                                else None
-                            ),
-                            previous_hash=(
-                                audit_entry.previous_hash
-                                if hasattr(audit_entry, "previous_hash")
-                                else None
-                            ),
+                            status=(audit_entry.new_value if hasattr(audit_entry, "new_value") else None),
+                            details=(audit_entry.details if hasattr(audit_entry, "details") else None),
+                            hash_chain=(audit_entry.hash if hasattr(audit_entry, "hash") else None),
+                            previous_hash=(audit_entry.previous_hash if hasattr(audit_entry, "previous_hash") else None),
                         )
                     )
         except Exception as e:

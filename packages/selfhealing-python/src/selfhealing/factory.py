@@ -149,12 +149,12 @@ class ProviderRegistry:
             model_class: Concrete Django model inheriting AbstractPostmortemRecord
 
         Example (Django):
-            # shopping/apps.py
+            # myapp/apps.py
             from selfhealing.factory import ProviderRegistry
 
-            class ShoppingConfig(AppConfig):
+            class MyAppConfig(AppConfig):
                 def ready(self):
-                    from shopping.models import PostmortemRecord
+                    from selfhealing.adapters.django.models import PostmortemRecord
                     ProviderRegistry.register_postmortem_model(PostmortemRecord)
         """
         cls._postmortem_model = model_class

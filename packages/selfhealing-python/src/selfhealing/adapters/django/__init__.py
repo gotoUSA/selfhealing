@@ -111,6 +111,30 @@ def get_base_circuit_breaker_admin():
     return BaseCircuitBreakerStateAdmin
 
 
+def get_abstract_failed_external_request():
+    """
+    Get AbstractFailedExternalRequest model class (223 Host App Decoupling).
+
+    Returns:
+        AbstractFailedExternalRequest class
+    """
+    from selfhealing.adapters.django.models import AbstractFailedExternalRequest
+
+    return AbstractFailedExternalRequest
+
+
+def get_abstract_security_incident():
+    """
+    Get AbstractSecurityIncident model class (223 Host App Decoupling).
+
+    Returns:
+        AbstractSecurityIncident class
+    """
+    from selfhealing.adapters.django.models import AbstractSecurityIncident
+
+    return AbstractSecurityIncident
+
+
 __all__ = [
     # AppConfig
     "SelfHealingConfig",
@@ -121,6 +145,8 @@ __all__ = [
     # Lazy imports for models
     "get_abstract_failed_operation",
     "get_abstract_postmortem_record",
+    "get_abstract_failed_external_request",
+    "get_abstract_security_incident",
     # Lazy imports for admin
     "get_base_postmortem_admin",
     "get_base_dlq_admin",

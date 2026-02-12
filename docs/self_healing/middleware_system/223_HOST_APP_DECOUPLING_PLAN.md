@@ -3,6 +3,18 @@
 > **목표**: `pip install selfhealing-python[django]` + `INSTALLED_APPS` 추가만으로 동작하도록 하여,
 > 새 시스템(billing, logistics 등)에 19+ 파일 복사 없이 연동 가능하게 한다.
 
+> **구현 상태**: ✅ **완료** (Phase 1–4 전체 구현, Phase 5 테스트 통과 — 11320 passed)
+
+### 구현 이력
+
+| Phase | 상태 | 내용 |
+|-------|------|------|
+| Phase 1 | ✅ 완료 | Abstract 2개 + Concrete 4개 모델 추가 (models.py), 0002 migration (SeparateDatabaseAndState), Admin 자동 등록 |
+| Phase 2 | ✅ 완료 | management/commands/ 4개 커맨드 패키지로 이동 |
+| Phase 3 | ✅ 완료 | apps.py ready()에 _autodiscover_celery_tasks() 추가 |
+| Phase 4 | ✅ 완료 | shopping에서 15개 파일 삭제, __init__.py 정리, 0033 migration (모델 소유권 이전) |
+| Phase 5 | ✅ 완료 | packages/selfhealing-python 전체 테스트: 11320 passed, 2 failed (기존 버그, 무관), 1 skipped |
+
 ---
 
 ## 1. 문제 정의

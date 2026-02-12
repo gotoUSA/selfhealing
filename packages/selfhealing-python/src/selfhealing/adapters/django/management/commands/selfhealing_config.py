@@ -22,7 +22,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 class Command(BaseCommand):
     help = "Self-Healing Pydantic 설정 검사 및 문서화"
-    
+
     def add_arguments(self, parser):
         parser.add_argument(
             "--inspect",
@@ -61,7 +61,7 @@ class Command(BaseCommand):
             action="store_true",
             help="SecretsSettings 상태 확인 (값은 마스킹됨)",
         )
-    
+
     def handle(self, *args, **options):
         if options["inspect"]:
             self._inspect_config(options["format"], options.get("config_type"))
@@ -74,40 +74,37 @@ class Command(BaseCommand):
         elif options["secrets"]:
             self._show_secrets()
         else:
-            self.stdout.write(self.style.WARNING(
-                "옵션을 지정해주세요. --help로 사용법을 확인하세요."
-            ))
-    
+            self.stdout.write(self.style.WARNING("옵션을 지정해주세요. --help로 사용법을 확인하세요."))
+
     def _get_root_settings(self):
         """SelfHealingSettings 로드."""
         try:
             from selfhealing.settings import get_config
+
             return get_config()
         except ImportError as e:
             raise CommandError(f"selfhealing.settings를 로드할 수 없습니다: {e}")
-    
+
     def _inspect_config(self, fmt: str, config_type: str = None):
         """모든 설정값 출력."""
         config = self._get_root_settings()
-        
+
         if config_type:
-            # 특정 설정 타입만 출력
             if not hasattr(config, config_type):
                 raise CommandError(f"알 수 없는 설정 타입: {config_type}")
             sub_config = getattr(config, config_type)
             data = self._model_to_dict(sub_config)
             self._output_data({config_type: data}, fmt)
         else:
-            # 전체 출력
             data = self._model_to_dict(config)
             self._output_data(data, fmt)
-    
+
     def _model_to_dict(self, model) -> Dict[str, Any]:
         """Pydantic 모델을 dict로 변환 (중첩 처리)."""
         if hasattr(model, "model_dump"):
             return model.model_dump()
         return dict(model)
-    
+
     def _output_data(self, data: Dict[str, Any], fmt: str):
         """포맷에 따라 출력."""
         if fmt == "json":
@@ -116,7 +113,7 @@ class Command(BaseCommand):
             self._output_table(data)
         else:
             self._output_text(data)
-    
+
     def _output_text(self, data: Dict[str, Any], prefix: str = ""):
         """텍스트 형식 출력."""
         for key, value in data.items():
@@ -126,14 +123,14 @@ class Command(BaseCommand):
                 self._output_text(value, prefix="  ")
             else:
                 self.stdout.write(f"  {key}: {value}")
-    
+
     def _output_table(self, data: Dict[str, Any], prefix: str = ""):
         """테이블 형식 출력."""
         self.stdout.write(self.style.SUCCESS("=" * 70))
         self.stdout.write(f"{'Key':<40} {'Value':<30}")
         self.stdout.write("=" * 70)
         self._output_table_rows(data, prefix)
-    
+
     def _output_table_rows(self, data: Dict[str, Any], prefix: str = ""):
         """테이블 행 출력 (재귀)."""
         for key, value in data.items():
@@ -146,79 +143,67 @@ class Command(BaseCommand):
                 if len(value_str) > 30:
                     value_str = value_str[:27] + "..."
                 self.stdout.write(f"{full_key:<40} {value_str:<30}")
-    
+
     def _validate_config(self, config_type: str = None):
         """설정 유효성 검증."""
         self.stdout.write(self.style.SUCCESS("=== Self-Healing 설정 검증 ===\n"))
-        
+
         try:
             config = self._get_root_settings()
-            
+
             errors = []
             warnings = []
-            
-            # 필수 설정 검증
+
             if not config.circuit_breaker.enabled:
                 warnings.append("Circuit Breaker가 비활성화되어 있습니다")
-            
+
             if config.circuit_breaker.failure_threshold > 50:
                 warnings.append(
-                    f"failure_threshold({config.circuit_breaker.failure_threshold})가 "
-                    "높습니다. 50 이하를 권장합니다."
+                    f"failure_threshold({config.circuit_breaker.failure_threshold})가 " "높습니다. 50 이하를 권장합니다."
                 )
-            
+
             if config.retry.max_retries > 10:
-                warnings.append(
-                    f"max_retries({config.retry.max_retries})가 높습니다. "
-                    "10 이하를 권장합니다."
-                )
-            
+                warnings.append(f"max_retries({config.retry.max_retries})가 높습니다. " "10 이하를 권장합니다.")
+
             if config.dlq.max_items > 50000:
-                warnings.append(
-                    f"DLQ max_items({config.dlq.max_items})가 매우 높습니다."
-                )
-            
-            # 결과 출력
+                warnings.append(f"DLQ max_items({config.dlq.max_items})가 매우 높습니다.")
+
             if errors:
                 for err in errors:
                     self.stdout.write(self.style.ERROR(f"❌ ERROR: {err}"))
-            
+
             if warnings:
                 for warn in warnings:
                     self.stdout.write(self.style.WARNING(f"⚠️  WARNING: {warn}"))
-            
+
             if not errors and not warnings:
                 self.stdout.write(self.style.SUCCESS("✅ 모든 설정이 정상입니다."))
             elif not errors:
-                self.stdout.write(self.style.SUCCESS(
-                    f"\n✅ 검증 완료 (경고 {len(warnings)}개)"
-                ))
+                self.stdout.write(self.style.SUCCESS(f"\n✅ 검증 완료 (경고 {len(warnings)}개)"))
             else:
                 raise CommandError(f"검증 실패: {len(errors)}개 오류")
-                
+
         except ImportError as e:
             raise CommandError(f"설정을 로드할 수 없습니다: {e}")
-    
+
     def _export_schema(self, config_type: str = None):
         """JSON Schema 내보내기."""
         try:
             from selfhealing.settings.root import SelfHealingSettings
-            
+
             if config_type:
-                # 특정 타입의 스키마
                 settings_map = self._get_settings_map()
                 if config_type not in settings_map:
                     raise CommandError(f"알 수 없는 설정 타입: {config_type}")
                 schema = settings_map[config_type].model_json_schema()
             else:
-                # 전체 스키마
                 schema = SelfHealingSettings.model_json_schema()
-            
+
             self.stdout.write(json.dumps(schema, indent=2, ensure_ascii=False))
-            
+
         except ImportError as e:
             raise CommandError(f"설정 모듈을 로드할 수 없습니다: {e}")
-    
+
     def _get_settings_map(self) -> Dict[str, type]:
         """설정 타입 → 클래스 매핑."""
         from selfhealing.settings import (
@@ -239,6 +224,7 @@ class Command(BaseCommand):
             L2StorageSettings,
             LoggingSettings,
         )
+
         return {
             "circuit_breaker": CircuitBreakerSettings,
             "dlq": DLQSettings,
@@ -257,32 +243,31 @@ class Command(BaseCommand):
             "l2_storage": L2StorageSettings,
             "logging": LoggingSettings,
         }
-    
+
     def _show_sources(self, config_type: str = None):
         """각 설정값의 출처 표시."""
         self.stdout.write(self.style.SUCCESS("=== 설정값 출처 분석 ===\n"))
-        
+
         try:
             from selfhealing.settings.layered_provider import (
                 get_config_with_sources,
             )
-            
+
             settings_map = self._get_settings_map()
             types_to_check = [config_type] if config_type else list(settings_map.keys())
-            
+
             for ct in types_to_check:
                 if ct not in settings_map:
                     self.stdout.write(self.style.ERROR(f"알 수 없는 타입: {ct}"))
                     continue
-                
+
                 self.stdout.write(self.style.SUCCESS(f"\n[{ct}]"))
                 try:
                     info = get_config_with_sources(settings_map[ct], ct)
                     for field_name, details in info.items():
                         source = details["source"]
                         value = details["value"]
-                        
-                        # 출처별 스타일
+
                         if source == "ENV":
                             style = self.style.WARNING
                         elif source == "RUNTIME":
@@ -291,43 +276,35 @@ class Command(BaseCommand):
                             style = self.style.ERROR
                         else:
                             style = lambda x: x
-                        
+
                         value_str = str(value)
                         if len(value_str) > 40:
                             value_str = value_str[:37] + "..."
-                        
-                        self.stdout.write(
-                            f"  {field_name:<30} {value_str:<40} [{style(source)}]"
-                        )
+
+                        self.stdout.write(f"  {field_name:<30} {value_str:<40} [{style(source)}]")
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f"  분석 실패: {e}"))
-                    
+
         except ImportError as e:
             raise CommandError(f"layered_provider를 로드할 수 없습니다: {e}")
-    
+
     def _show_secrets(self):
         """SecretsSettings 상태 표시 (값은 마스킹)."""
         self.stdout.write(self.style.SUCCESS("=== Secrets 설정 상태 ===\n"))
-        
+
         try:
             from selfhealing.settings.secrets import get_secrets
-            
+
             secrets = get_secrets()
             summary = secrets.get_masked_summary()
-            
+
             for name, is_set in summary.items():
                 if is_set:
-                    self.stdout.write(
-                        self.style.SUCCESS(f"  ✅ {name}: 설정됨 (마스킹됨)")
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"  ✅ {name}: 설정됨 (마스킹됨)"))
                 else:
-                    self.stdout.write(
-                        self.style.WARNING(f"  ⚠️  {name}: 미설정")
-                    )
-            
-            self.stdout.write(self.style.NOTICE(
-                "\n참고: 실제 값은 보안상 표시되지 않습니다."
-            ))
-            
+                    self.stdout.write(self.style.WARNING(f"  ⚠️  {name}: 미설정"))
+
+            self.stdout.write(self.style.NOTICE("\n참고: 실제 값은 보안상 표시되지 않습니다."))
+
         except ImportError as e:
             raise CommandError(f"secrets 모듈을 로드할 수 없습니다: {e}")

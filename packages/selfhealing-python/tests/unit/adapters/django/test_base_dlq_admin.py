@@ -34,7 +34,7 @@ def admin_class():
 def admin_instance():
     """BaseDLQEntryAdmin 인스턴스를 반환합니다."""
     from django.contrib.admin.sites import AdminSite
-    from shopping.models import FailedOperation
+    from selfhealing.adapters.django.models import FailedOperation
 
     site = AdminSite()
     return BaseDLQEntryAdmin(model=FailedOperation, admin_site=site)

@@ -52,7 +52,6 @@ def check_security_violation_service() -> list[CheckResult]:
             ViolationType,
         )
 
-        # Check 1: All violation types have severity mapping
         unmapped = []
         for vtype in ViolationType:
             if vtype not in SEVERITY_BY_VIOLATION_TYPE and vtype.value not in SEVERITY_BY_VIOLATION_TYPE:
@@ -67,7 +66,6 @@ def check_security_violation_service() -> list[CheckResult]:
             )
         )
 
-        # Check 2: Critical violations properly classified
         critical_types = [
             ViolationType.WEBHOOK_SIGNATURE_INVALID,
             ViolationType.PAYMENT_AMOUNT_TAMPERED,
@@ -86,7 +84,6 @@ def check_security_violation_service() -> list[CheckResult]:
             )
         )
 
-        # Check 3: Service instantiates
         try:
             SecurityViolationService()
             results.append(
@@ -130,7 +127,6 @@ def check_security_notification_service() -> list[CheckResult]:
             SecurityNotificationService,
         )
 
-        # Check 1: Service instantiates
         try:
             config = NotificationConfig(dry_run=True)
             SecurityNotificationService(config=config)
@@ -151,7 +147,6 @@ def check_security_notification_service() -> list[CheckResult]:
                 )
             )
 
-        # Check 2: Multi-channel support
         channels = list(NotificationChannel)
         expected = ["slack", "email", "sms", "pagerduty"]
         has_all = all(any(c.value.lower() == exp for c in channels) for exp in expected)
@@ -182,9 +177,8 @@ def check_security_incident_model() -> list[CheckResult]:
     results = []
 
     try:
-        from shopping.models.security_incident import SecurityIncident
+        from selfhealing.adapters.django.models import SecurityIncident
 
-        # Check 1: Required fields
         required = ["incident_type", "severity", "status", "source_ip", "description"]
         fields = [f.name for f in SecurityIncident._meta.get_fields()]
         missing = [f for f in required if f not in fields]
@@ -198,7 +192,6 @@ def check_security_incident_model() -> list[CheckResult]:
             )
         )
 
-        # Check 2: Severity choices
         results.append(
             CheckResult(
                 "model",
@@ -207,7 +200,6 @@ def check_security_incident_model() -> list[CheckResult]:
             )
         )
 
-        # Check 3: Status choices
         results.append(
             CheckResult(
                 "model",
@@ -226,8 +218,6 @@ def check_data_protection() -> list[CheckResult]:
     """Check sensitive data protection."""
     results = []
 
-    # ForensicContext has been removed from the system.
-    # Data protection is now handled directly by DLQService.
     results.append(CheckResult("data_protection", "ForensicContext removed (handled by DLQService)", True))
 
     try:
@@ -251,12 +241,10 @@ def check_access_control() -> list[CheckResult]:
 
         service = CircuitBreakerService()
 
-        # Check force_open tracking (uses controlled_by parameter)
         sig = inspect.signature(service.force_open)
         has_controlled_by = "controlled_by" in sig.parameters
         results.append(CheckResult("access_control", "force_open tracks operator", has_controlled_by))
 
-        # Check force_close tracking (uses controlled_by parameter)
         sig = inspect.signature(service.force_close)
         has_controlled_by = "controlled_by" in sig.parameters
         results.append(CheckResult("access_control", "force_close tracks operator", has_controlled_by))
@@ -265,7 +253,7 @@ def check_access_control() -> list[CheckResult]:
         results.append(CheckResult("access_control", "CircuitBreakerService exists", False, str(e)))
 
     try:
-        from shopping.models.failed_operation import FailedOperation
+        from selfhealing.adapters.django.models import FailedOperation
 
         fields = [f.name for f in FailedOperation._meta.get_fields()]
         has_resolved_by = "resolved_by" in fields
@@ -287,7 +275,7 @@ def check_audit_trail() -> list[CheckResult]:
     results = []
 
     try:
-        from shopping.models.failed_operation import FailedOperation
+        from selfhealing.adapters.django.models import FailedOperation
 
         fields = [f.name for f in FailedOperation._meta.get_fields()]
 
@@ -301,7 +289,6 @@ def check_audit_trail() -> list[CheckResult]:
             )
         )
 
-        # Soft-delete check
         has_archived = hasattr(FailedOperation, "Status") and hasattr(FailedOperation.Status, "ARCHIVED")
         results.append(CheckResult("audit_trail", "Soft-delete (ARCHIVED status) implemented", has_archived))
 
@@ -320,7 +307,6 @@ def check_ip_management() -> list[CheckResult]:
 
         service = SecurityViolationService()
 
-        # Check for IP-related methods
         ip_methods = [m for m in dir(service) if not m.startswith("_") and "ip" in m.lower()]
         results.append(
             CheckResult(
@@ -331,7 +317,6 @@ def check_ip_management() -> list[CheckResult]:
             )
         )
 
-        # Check for ban capability
         has_ban = any("ban" in m.lower() or "block" in m.lower() for m in dir(service) if not m.startswith("_"))
         results.append(CheckResult("ip_management", "Temporary ban capability", has_ban))
 
@@ -393,14 +378,12 @@ class Command(BaseCommand):
         self._check_pass_threshold(summary["pass_rate"])
 
     def _print_header(self, review_date: str, quiet: bool) -> None:
-        """Print review header information."""
         if quiet:
             return
         self.stdout.write(self.style.NOTICE(f"\nSecurity Review v{REVIEW_VERSION}"))
         self.stdout.write(f"Date: {review_date}\n")
 
     def _run_all_checks(self, quiet: bool) -> list[CheckResult]:
-        """Run all security checks and return results."""
         all_results: list[CheckResult] = []
 
         for section_name, check_func in CHECK_FUNCTIONS:
@@ -412,7 +395,6 @@ class Command(BaseCommand):
         return all_results
 
     def _print_section_header(self, section_name: str, quiet: bool) -> None:
-        """Print section header for a check category."""
         if quiet:
             return
         self.stdout.write(f"\n{'=' * 50}")
@@ -420,7 +402,6 @@ class Command(BaseCommand):
         self.stdout.write("=" * 50)
 
     def _print_check_results(self, results: list[CheckResult], quiet: bool) -> None:
-        """Print individual check results."""
         if quiet:
             return
         for r in results:
@@ -431,7 +412,6 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"        {r.details}"))
 
     def _calculate_summary(self, all_results: list[CheckResult]) -> dict[str, Any]:
-        """Calculate summary statistics from check results."""
         passed = sum(1 for r in all_results if r.passed)
         failed = sum(1 for r in all_results if not r.passed)
         total = passed + failed
@@ -439,7 +419,6 @@ class Command(BaseCommand):
         return {"passed": passed, "failed": failed, "total": total, "pass_rate": pass_rate}
 
     def _print_summary(self, summary: dict[str, Any]) -> None:
-        """Print review summary."""
         self.stdout.write(f"\n{'=' * 50}")
         self.stdout.write(self.style.MIGRATE_HEADING("Summary"))
         self.stdout.write("=" * 50)
@@ -451,7 +430,6 @@ class Command(BaseCommand):
         self._print_review_status(summary["pass_rate"])
 
     def _print_review_status(self, pass_rate: float) -> None:
-        """Print overall review status based on pass rate."""
         if pass_rate >= 90:
             self.stdout.write(self.style.SUCCESS("\n  ✓ SECURITY REVIEW PASSED"))
         elif pass_rate >= 70:
@@ -466,7 +444,6 @@ class Command(BaseCommand):
         all_results: list[CheckResult],
         summary: dict[str, Any],
     ) -> None:
-        """Export results to JSON file if output path specified."""
         if not output_path:
             return
 
@@ -493,6 +470,5 @@ class Command(BaseCommand):
         self.stdout.write(f"\n  Results exported to: {output_path}")
 
     def _check_pass_threshold(self, pass_rate: float) -> None:
-        """Raise error if pass rate is below threshold."""
         if pass_rate < 70:
             raise CommandError("Security review failed")

@@ -1,6 +1,9 @@
 """
 Celery 태스크 패키지
 모든 태스크를 여기서 임포트하여 Celery가 자동으로 발견할 수 있게 함
+
+selfhealing 전용 태스크는 selfhealing.celery_tasks에서 직접 제공됨 (223 Host App Decoupling).
+selfhealing.adapters.django.apps.SelfHealingConfig.ready()에서 autodiscover_tasks로 자동 등록.
 """
 
 from .cleanup_tasks import (
@@ -8,13 +11,6 @@ from .cleanup_tasks import (
     cleanup_old_email_logs_task,
     cleanup_used_tokens_task,
     delete_unverified_users_task,
-)
-from selfhealing.celery_tasks import (
-    cleanup_resolved_dlq_entries,
-    replay_batch_by_domain,
-    replay_batch_by_failure_type,
-    conditional_replay_on_circuit_close as replay_on_circuit_breaker_close,
-    replay_single_dlq_entry,
 )
 from .email_tasks import retry_failed_emails_task, send_email_task, send_verification_email_task
 from .order_tasks import process_order_heavy_tasks
@@ -33,15 +29,6 @@ from .point_tasks import (
     process_single_user_points,
     send_email_notification,
     send_expiry_notification_task,
-)
-from selfhealing.celery_tasks import (
-    check_and_report_sla_breaches,
-    check_circuit_breaker_recovery,
-    collect_self_healing_metrics,
-    conditional_replay_on_circuit_close,
-    expire_manual_overrides,
-    force_close_circuit_breaker,
-    force_open_circuit_breaker,
 )
 
 __all__ = [
@@ -72,18 +59,4 @@ __all__ = [
     "cleanup_expired_dlq",
     "process_dlq_batch",
     "reset_circuit_breaker",
-    # DLQ Replay 태스크 (L3 Self-Healing Phase 3)
-    "replay_single_dlq_entry",
-    "replay_batch_by_failure_type",
-    "replay_batch_by_domain",
-    "replay_on_circuit_breaker_close",
-    "cleanup_resolved_dlq_entries",
-    # Self-Healing Tasks (L3 Phase 4-5)
-    "conditional_replay_on_circuit_close",
-    "check_circuit_breaker_recovery",
-    "force_open_circuit_breaker",
-    "force_close_circuit_breaker",
-    "expire_manual_overrides",
-    "collect_self_healing_metrics",
-    "check_and_report_sla_breaches",
 ]
