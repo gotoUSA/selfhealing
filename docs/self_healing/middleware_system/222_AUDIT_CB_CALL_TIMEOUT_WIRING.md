@@ -562,42 +562,53 @@ boto3, httpx 등 클라이언트 라이브러리는 자체적으로 `connect_tim
 
 ## 8. 테스트 계획
 
-### 8.1 단위 테스트
+> **상태**: ✅ 단위 테스트 33개 구현 완료 (2026-02-12)
+> **파일**: `packages/selfhealing-python/tests/unit/audit/call_timeout_wiring/test_call_timeout_wiring.py`
 
-```python
-class TestCallTimeoutWiring:
-    """call_timeout_seconds 연결 테스트."""
+### 8.1 단위 테스트 (33개)
 
-    def test_timeout_triggers_on_slow_primary(self):
-        """느린 Primary Store가 call_timeout_seconds 내에 중단된다."""
+#### 계약 검증 (Contract) — 8개
 
-    def test_timeout_triggers_circuit_failure(self):
-        """timeout 시 record_failure()가 호출되어 CB 카운트가 증가한다."""
+| 클래스 | 테스트 | 검증 내용 |
+|---|---|---|
+| `TestCallTimeoutSettingsContract` | `test_default_value_is_5_seconds` | `ResilientRecorderSettings.circuit_call_timeout_seconds` 기본값 5.0 |
+| | `test_minimum_bound_is_0_5_seconds` | 최솟값 제약 0.5 |
+| | `test_maximum_bound_is_60_seconds` | 최댓값 제약 60.0 |
+| `TestCallTimeoutDataclassContract` | `test_default_value_is_5_seconds` | `AuditCircuitBreakerConfig.call_timeout_seconds` 기본값 5.0 |
+| | `test_resilient_recorder_config_default_is_5_seconds` | `ResilientRecorderConfig.circuit_call_timeout_seconds` 기본값 5.0 |
+| `TestGetStatsIncludesCallTimeoutContract` | `test_config_section_has_call_timeout_seconds_key` | `get_stats()['config']`에 키 존재 |
+| | `test_config_call_timeout_seconds_matches_config_value` | 커스텀 설정값과 일치 |
+| `TestGetStatsConfigKeysContract` | `test_config_has_exactly_four_keys` | config 섹션 키 4개 |
 
-    def test_cb_opens_after_timeout_threshold(self):
-        """연속 timeout으로 failure_threshold 도달 시 CB가 OPEN된다."""
+#### 동작 검증 (Behavior) — 25개
 
-    def test_fallback_chain_after_timeout_cb_open(self):
-        """CB OPEN 후 Fallback → Syslog → stderr 체인이 작동한다."""
-
-    def test_get_stats_includes_call_timeout(self):
-        """get_stats() 결과에 call_timeout_seconds가 포함된다."""
-
-    def test_settings_env_override(self):
-        """환경변수로 circuit_call_timeout_seconds를 오버라이드할 수 있다."""
-
-    def test_no_deadlock_on_with_statement_avoided(self):
-        """with ThreadPoolExecutor 대신 수동 관리로 Deadlock이 발생하지 않는다."""
-
-    def test_zombie_thread_limited_to_one(self):
-        """인스턴스 레벨 단일 executor(max_workers=1)에서 좀비 스레드가 최대 1개로 제한된다."""
-
-    def test_executor_shutdown_on_stop(self):
-        """stop() 호출 시 _write_executor.shutdown(wait=False)가 호출된다."""
-
-    def test_health_status_includes_write_executor(self):
-        """get_health_status()에 write_executor 정보(active_threads, pending_tasks)가 포함된다."""
-```
+| 클래스 | 테스트 | 검증 내용 |
+|---|---|---|
+| `TestSettingsEnvOverrideBehavior` | `test_env_override_applies_custom_value` | 환경변수 오버라이드 적용 |
+| `TestCallTimeoutConfigPropagationBehavior` | `test_from_settings_propagates_call_timeout` | Settings → Config 전파 |
+| | `test_recorder_passes_call_timeout_to_circuit_breaker` | Config → CB config 전파 |
+| `TestWriteToPrimaryWithTimeoutBehavior` | `test_slow_primary_raises_timeout_error` | 느린 Primary → TimeoutError |
+| | `test_fast_primary_completes_without_error` | 빠른 Primary → 정상 완료 |
+| | `test_timeout_calls_future_cancel` | timeout 시 future.cancel() 호출 |
+| `TestTimeoutTriggersCircuitFailureBehavior` | `test_timeout_increments_failure_count` | timeout → failure_count 증가 |
+| | `test_consecutive_timeouts_open_circuit` | 연속 timeout → CB OPEN |
+| `TestFallbackAfterTimeoutCbOpenBehavior` | `test_cb_open_skips_primary_and_uses_stderr` | CB OPEN → Primary skip |
+| | `test_cb_open_then_fallback_file_used` | CB OPEN → Fallback 파일 사용 |
+| `TestExecutorShutdownOnStopBehavior` | `test_stop_calls_executor_shutdown_wait_false` | stop() → shutdown(wait=False) |
+| | `test_stop_shuts_down_executor_after_flush_remaining` | flush_remaining → shutdown 순서 |
+| `TestHealthStatusWriteExecutorBehavior` | `test_health_status_has_write_executor_section` | write_executor 섹션 존재 |
+| | `test_write_executor_has_active_threads_key` | active_threads 키 존재 |
+| | `test_write_executor_has_pending_tasks_key` | pending_tasks 키 존재 |
+| | `test_initial_active_threads_is_zero` | 초기 active_threads == 0 |
+| | `test_initial_pending_tasks_is_zero` | 초기 pending_tasks == 0 |
+| `TestWriteExecutorInstanceLevelBehavior` | `test_executor_max_workers_is_one` | max_workers == 1 |
+| | `test_executor_thread_name_prefix` | thread_name_prefix == "audit_write" |
+| | `test_zombie_thread_limited_to_one` | hang 시 좀비 스레드 ≤ 1개 |
+| `TestNoDeadlockWithoutContextManagerBehavior` | `test_flush_thread_not_blocked_after_timeout` | timeout 후 flush thread 즉시 반환 |
+| `TestSettingsValidationBehavior` | `test_rejects_below_minimum` | 0.5 미만 → ValidationError |
+| | `test_rejects_above_maximum` | 60.0 초과 → ValidationError |
+| | `test_accepts_minimum_boundary` | 0.5 경계값 허용 |
+| | `test_accepts_maximum_boundary` | 60.0 경계값 허용 |
 
 ### 8.2 기존 테스트 영향
 
