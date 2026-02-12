@@ -1504,3 +1504,39 @@ if status is None and region is not None:
 | `ServiceThrottleConfig.__default__` | `packages/selfhealing-python/src/selfhealing/services/throttle/registry.py` | L101 |
 | `RecoveryCoordinator.get_current_status()` | `packages/selfhealing-python/src/selfhealing/services/coordination/recovery_coordinator.py` | L1283 |
 | `ClusterIdentity.namespace` property | `packages/selfhealing-python/src/selfhealing/core/cluster_identity.py` | L90-L92 |
+
+---
+
+## 부록 B. 단위 테스트 현황
+
+> **위치**: `packages/selfhealing-python/tests/unit/error_budget_gate/`
+> **총 테스트**: 148개 (기존 `test_gate_hysteresis.py` 14개 포함)
+> **실행 결과**: 148 passed
+
+| 테스트 파일 | 테스트 수 | 검증 대상 |
+|------------|:---------:|----------|
+| `test_tiered_regional_settings.py` | 22 | `ErrorBudgetGateSettings` 티어/리전 임계치, `get_effective_thresholds()` 우선순위 |
+| `test_tiered_regional_gate.py` | 19 | `ErrorBudgetGate.check()` 티어/리전 판정, 캐시 키 분리, Fail-Open, 히스테리시스 |
+| `test_gate_check_result_tier_region.py` | 8 | `GateCheckResult` tier_id/region 필드, `to_dict()` 조건부 포함 |
+| `test_error_budget_status_region_tier.py` | 5 | `ErrorBudgetStatus` region/tier_id 필드 |
+| `test_calculator_region.py` | 5 | `ErrorBudgetCalculator` region 파라미터 파이프라인, TypeError 폴백 |
+| `test_error_budget_service_region.py` | 7 | `ErrorBudgetService` region 자동 해석, `get_all_region_statuses()` |
+| `test_redis_flag_region.py` | 12 | `BudgetExhaustedFlagManager` 리전별 키, `_build_slo_key()` / `_build_status_key()` |
+| `test_region_tier_resolver.py` | 13 | `resolve_tier_from_region()` priority 경계값, ImportError 폴백 |
+| `test_governance_tier_region.py` | 5 | `is_error_budget_blocking()` / `check_all_governance()` tier_id/region 전파 |
+| `test_pass_criteria_tier.py` | 17 | `PassCriteria.for_tier()`, `apply_tier_floor()` 티어별 기준 |
+| `test_metrics_region_tier.py` | 12 | Prometheus 레이블 확장, `record_error_budget_status()`, 티어별 PromQL |
+| `test_convenience_functions_tier_region.py` | 5 | `check_automation_allowed()` 시그니처 계약 |
+| `test_slo_region.py` | 4 | `SLO.region` 필드 |
+| `test_gate_hysteresis.py` | 14 | (기존) 히스테리시스 상태 전이 |
+
+### 통합 테스트 현황
+
+통합 테스트는 §11 Phase 6 [25]에 해당하며, 현재 **미구현** (선택적 확장).
+
+단위 테스트 148개가 개별 컴포넌트 및 인터페이스 계약을 충분히 검증하고 있으나,
+향후 다음 3개 시나리오의 통합 테스트 추가를 권장:
+
+1. **Settings 환경변수 → Gate 판정 관통**: `TIER_THRESHOLDS_ENABLED=true` 설정 → `ErrorBudgetGate.check(tier_id=...)` 판정 결과 검증
+2. **Redis 리전 플래그 → Governance 흐름**: `BudgetExhaustedFlagManager` 리전별 설정 → `check_all_governance(tier_id=..., region=...)` 결과 검증
+3. **리전 데이터 Missing → Global Fallback**: 특정 리전 데이터 부재 시 글로벌 값 폴백 전체 경로 검증
