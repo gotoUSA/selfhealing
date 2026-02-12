@@ -215,7 +215,9 @@ except TimeoutError:
 | `settings/resilient_recorder.py` | `circuit_call_timeout_seconds` 필드 추가 |
 | `audit/resilient_recorder.py` | `ResilientRecorderConfig`에 `circuit_call_timeout_seconds` 추가 |
 | `audit/resilient_recorder.py` | `_write_to_primary()`를 timeout 보호로 감싸는 메서드 추가 |
+| `audit/resilient_recorder.py` | `__init__`에 인스턴스 레벨 `_write_executor` 생성, `stop()`에서 `shutdown(wait=False)` |
 | `audit/resilient_recorder.py` | `AuditCircuitBreakerConfig` 생성 시 `call_timeout_seconds` 전달 |
+| `audit/resilient_recorder.py` | `get_health_status()`에 좀비 스레드 모니터링 항목 추가 |
 | `audit/resilience/circuit_breaker.py` | `get_stats()`에 `call_timeout_seconds` 추가 |
 
 ### 5.2 변경하지 않는 것
@@ -269,24 +271,85 @@ self._circuit_breaker = self._cb_registry.get_or_create(
 )
 ```
 
+#### 인스턴스 레벨 `_write_executor` 초기화 (`__init__`에 추가)
+
+```python
+# __init__에서 (신규 구성요소 섹션)
+from concurrent.futures import ThreadPoolExecutor
+
+self._write_executor: ThreadPoolExecutor = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="audit_write",
+)
+```
+
+#### `stop()` 메서드에 executor 정리 추가
+
+> **순서 중요**: `_flush_remaining()` **이후에** `shutdown(wait=False)`를 호출해야 한다.
+> `_flush_remaining()`은 내부적으로 `_write_with_fallback()` → `_write_to_primary_with_timeout()`을
+> 호출하므로, executor가 살아있어야 남은 버퍼를 drain할 수 있다.
+> CB가 OPEN 상태라면 `can_execute()` → `False`이므로 primary를 skip하고
+> fallback 경로로 drain되어 executor hang과 무관하게 종료된다.
+>
+> 근거: `audit/resilient_recorder.py` L249-L265 — `stop()` 내부에서
+> `self._stop_event.set()` → `self._flush_thread.join()` → **`self._flush_remaining()`** → `self._started = False`
+
+```python
+def stop(self, timeout: float = 5.0) -> None:
+    """Background flush worker 중지."""
+    if not self._started:
+        return
+
+    self._stop_event.set()
+
+    if self._flush_thread:
+        self._flush_thread.join(timeout=timeout)
+
+    # Drain remaining buffer (executor 필요)
+    self._flush_remaining()
+
+    # executor 정리: _flush_remaining() 완료 후에 호출
+    # wait=False — hang된 좀비 스레드가 있어도 애플리케이션 종료를 막지 않음
+    self._write_executor.shutdown(wait=False)
+
+    self._started = False
+    self_audit().log(SelfAuditEvent.SHUTDOWN, "Background flush worker stopped")
+    logger.info("[ResilientRecorder] Background flush worker stopped")
+```
+
 #### `_write_to_primary`를 timeout 보호로 감싸기
+
+> **⚠ 주의**: `with ThreadPoolExecutor()` 컨텍스트 매니저를 사용하지 않는다.
+> `with` 블록 탈출 시 내부적으로 `shutdown(wait=True)`가 호출되어,
+> hang된 worker thread가 종료될 때까지 Background flush thread도 무한 대기하게 되므로
+> 이 구현이 해결하려는 바로 그 문제(flush thread 교착)가 재현된다.
+>
+> 근거: Python `concurrent.futures` 소스 — `ThreadPoolExecutor.__exit__` → `self.shutdown(wait=True)`
 
 ```python
 def _write_to_primary_with_timeout(
     self, entry_dict: dict[str, Any], timeout: float,
 ) -> None:
     """Primary Store에 timeout 제한으로 기록."""
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+    from concurrent.futures import TimeoutError as FuturesTimeoutError
 
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="audit_write") as executor:
-        future = executor.submit(self._write_to_primary, entry_dict)
-        try:
-            future.result(timeout=timeout)
-        except FuturesTimeoutError:
-            future.cancel()
-            raise TimeoutError(
-                f"Primary store write timed out after {timeout}s"
-            )
+    future = self._write_executor.submit(self._write_to_primary, entry_dict)
+    try:
+        future.result(timeout=timeout)
+    except FuturesTimeoutError:
+        # future.cancel()의 이중 역할 (영속적 executor 환경):
+        #
+        # 1. 이미 실행 중인 작업: 무효 (Python thread는 강제 종료 불가)
+        # 2. 큐에서 대기 중인 작업: 큐에서 제거하여 뒤늦은 실행 방지
+        #    → 이 엔트리는 fallback으로 이미 기록되므로,
+        #      cancel() 없이 워커가 풀렸을 때 뒤늦게 실행되면
+        #      primary + fallback 모두에 중복 기록되는 위험이 있음
+        #
+        # 선례: resilience/bulkhead/threadpool.py L211-L218 동일 패턴
+        future.cancel()
+        raise TimeoutError(
+            f"Primary store write timed out after {timeout}s"
+        )
 ```
 
 #### `_write_with_fallback` 호출부 변경
@@ -321,21 +384,179 @@ if self._circuit_breaker.can_execute():
 
 ### 7.1 매 호출마다 `with ThreadPoolExecutor()` 생성 vs 인스턴스 공유
 
-**선택: 매 호출마다 생성 (`with` 문)**
+**선택: 인스턴스 레벨 단일 executor 공유 (`__init__`에서 1회 생성)**
 
 이유:
-- `_flush_batch()`는 1초(`flush_interval_seconds`)마다 최대 100건(`flush_batch_size`) 처리
-- 엔트리당 ThreadPoolExecutor 생성 오버헤드 ≈ ~0.1ms (Python 3.12 기준)
-- 100건 × 0.1ms = 10ms — 1초 주기 대비 무시할 수 있는 수준
-- 인스턴스 공유 시 shutdown/lifecycle 관리 복잡도가 불필요하게 증가
-- `ThreadPoolBulkhead`와 달리 이 사용처는 단발성 보호 목적
+- `_flush_batch()`는 **엔트리별 루프**로 `_write_with_fallback`를 호출함 (L340)
 
-### 7.2 Timeout 후 thread 누수 방지
+  ```python
+  # audit/resilient_recorder.py L326-L348
+  def _flush_batch(self) -> int:
+      batch = self._buffer.get_batch(self._resilient_config.flush_batch_size)  # 기본 100
+      if not batch:
+          return 0
+      processed = 0
+      for entry_dict in batch:
+          success = self._write_with_fallback(entry_dict)  # ← 엔트리별 호출
+          if success:
+              processed += 1
+      return processed
+  ```
 
-`future.cancel()`은 이미 실행 중인 thread를 강제 종료하지 않음. 그러나:
-- `with ThreadPoolExecutor()` 블록이 끝나면 `shutdown(wait=True)` 호출됨
-- 이는 의도적 설계 — timeout 후 원래 thread가 종료되기를 잠시 대기
-- 실제 hang 시에는 daemon thread이므로 프로세스 종료 시 정리됨
+- `flush_interval_seconds=1.0`, `flush_batch_size=100` 기본값 기준 — **초당 최대 100건** 처리
+- 매 건마다 ThreadPoolExecutor 생성 시: OS thread 생성/파괴 100회/초, 컨텍스트 스위칭 × 100
+- 인스턴스 레벨 단일 executor(`max_workers=1`) 사용 시: 동일 thread 재사용, OS 오버헤드 제거
+- hang 발생 시에도 **좀비 스레드가 최대 1개로 제한됨** (7.3절 참조)
+- `stop()` 시점에 `shutdown(wait=False)` 호출로 lifecycle 명확
+
+기존 코드베이스 선례 — `ThreadPoolBulkhead`도 인스턴스 레벨 executor 사용:
+
+```python
+# resilience/bulkhead/threadpool.py L233-L240
+def shutdown(self, wait: bool = True) -> None:
+    self._executor.shutdown(wait=wait)
+```
+
+### 7.2 `with ThreadPoolExecutor()` 컨텍스트 매니저 사용 금지 근거
+
+Python의 `ThreadPoolExecutor.__exit__`는 내부적으로 `shutdown(wait=True)`를 호출한다.
+이는 실행 중인 worker thread가 **완전히 종료될 때까지** 호출부 thread를 무한 대기시킨다.
+
+**Deadlock 시나리오:**
+
+```
+_flush_loop()  [Background daemon thread, L241: daemon=True]
+  → _write_to_primary_with_timeout()
+    → with ThreadPoolExecutor() as executor:      # ← 컨텍스트 매니저 진입
+      → future.result(timeout=5.0)                # ← 5초 후 FuturesTimeoutError 발생 (OK)
+      → future.cancel()                            # ← 실행 중인 thread에는 무효 (OK)
+    → with 블록 탈출: __exit__ → shutdown(wait=True)
+      → hang된 worker thread 종료 대기 → **무한 대기**
+        → Background flush thread block
+          → 문서 2.3의 장애 전파 경로가 그대로 재현됨
+```
+
+**해결책:** `with` 문 사용 금지 → 수동 `shutdown(wait=False)` 관리
+
+```python
+# ✘ 금지 — Deadlock 위험
+with ThreadPoolExecutor(max_workers=1) as executor:
+    future = executor.submit(self._write_to_primary, entry_dict)
+    future.result(timeout=timeout)  # timeout 후에도 with 탈출 시 무한 대기
+
+# ✔ 안전 — 인스턴스 레벨 executor + stop()에서 shutdown(wait=False)
+future = self._write_executor.submit(self._write_to_primary, entry_dict)
+future.result(timeout=timeout)  # timeout 후 즉시 반환, flush thread 계속 진행
+```
+
+### 7.3 좀비 스레드(Zombie Thread) 누적 위험 및 대비책
+
+`future.cancel()`은 CPython에서 이미 실행 중인 callable을 중단하지 못한다.
+`shutdown(wait=False)` 사용 시 hang된 worker thread는 프로세스 메모리에 계속 잔류한다.
+
+**인스턴스 레벨 단일 executor(`max_workers=1`) 사용 시 좀비 제한 메커니즘:**
+
+```
+1회차 timeout 발생:
+  → worker thread #1이 엔트리 A 실행 시작 → hang (좀비)
+  → future.cancel() → A는 이미 실행 중이므로 무효
+  → record_failure() 호출 (failure_count = 1)
+
+2회차 submit:
+  → max_workers=1이므로 worker thread #1(A에 묶임)이 정리될 때까지 대기 큐에 적재
+  → future.result(timeout=5.0) → 워커가 A에 묶여 B는 시작조차 못함 → timeout
+  → future.cancel() → B는 큐에서 대기 중이므로 큐에서 제거됨 (뒤늦은 실행 및 중복 기록 방지)
+  → record_failure() (failure_count = 2)
+
+3회차 submit:
+  → 동일 패턴
+  → record_failure() (failure_count = 3 = failure_threshold)
+  → CB OPEN → can_execute() → False
+  → 이후 Primary 호출 완전 skip
+```
+
+결과: **좀비 스레드 최대 1개**로 제한.
+CB가 `timeout_seconds=30.0`초 후 HALF_OPEN → 1건 재시도 시에도 동일 executor의 동일 thread가 재사용될 수 있으므로 추가 좀비 발생 없음.
+
+#### 7.3.1 예상 동작: 워커 스레드 점유에 의한 후속 작업 큐잉 (Worker Starvation)
+
+`max_workers=1`인 영속적 executor에서 선행 작업이 hang되면 후속 작업에 특수한 동작이 발생한다.
+이는 **의도된 Fail Fast 동작**이며 정상이다.
+
+**동작 원리:**
+
+| 단계 | flush loop (Background daemon thread) | worker thread |
+|---|---|---|
+| 1 | 엔트리 A `submit()` | A 실행 시작 → hang |
+| 2 | `future.result(timeout=5.0)` → 5초 후 `TimeoutError` | A 계속 hang |
+| 3 | `future.cancel()` → A는 이미 실행 중이므로 무효 | A 계속 hang |
+| 4 | `record_failure()` (failure_count=1) | A 계속 hang |
+| 5 | 엔트리 B `submit()` → worker 큐에 적재 (즉시 반환) | A 계속 hang |
+| 6 | `future.result(timeout=5.0)` → 워커가 A에 묶여 B **시작조차 못함** → 5초 후 `TimeoutError` | A 계속 hang |
+| 7 | `future.cancel()` → B는 **큐에서 대기 중**이므로 **큐에서 제거됨** | A 계속 hang |
+| 8 | `record_failure()` (failure_count=2) | A 계속 hang |
+
+**핵심:**
+- 작업이 "실행되다가 hang"된 것(A)뿐 아니라, "선행 작업 때문에 실행 기회를 얻지 못한 것"(B)도
+  `TimeoutError`로 처리되어 CB 실패 카운트에 **올바르게 집계**됨
+- `future.cancel()`은 큐에서 대기 중인 B를 제거하여, 나중에 워커가 풀렸을 때
+  이미 fallback으로 기록된 B를 primary에 중복 기록하는 것을 방지함
+- 이것은 시스템이 의도한 Fail Fast 동작이므로 정상임
+
+> 근거:
+> - `audit/resilient_recorder.py` L326-L348 — `_flush_batch()`가 엔트리별 루프로 `_write_with_fallback` 호출
+> - `audit/resilience/circuit_breaker.py` L105-L108 — CB OPEN 시 `can_execute()` → `False`
+> - `resilience/bulkhead/threadpool.py` L211-L218 — 동일한 `future.cancel()` 패턴 선례
+
+**좀비 vs 매 호출 생성 비교:**
+
+| 방식 | 좀비 스레드 상한 | 1시간 장애 시 |
+|---|---|---|
+| 매 호출 `with` 생성 (**기존 문서**) | Deadlock으로 실용 불가 | flush thread 교착 |
+| 매 호출 수동 생성 + `shutdown(wait=False)` | 초기 3개 + 30초마다 1개 ≈ **123개/시간** | 메모리 누수 위험 |
+| **인스턴스 레벨 단일 executor** (채택) | **최대 1개** | 안전 |
+
+**모니터링:** `get_health_status()`에 활성 thread 수 추가
+
+```python
+# get_health_status() 에 항목 추가
+"write_executor": {
+    "active_threads": len(self._write_executor._threads),
+    "pending_tasks": self._write_executor._work_queue.qsize(),
+},
+```
+
+### 7.4 백엔드 라이브러리 자체 Timeout — 다층 방어 권장사항
+
+ThreadPoolExecutor로 감싸는 방식은 **최후의 안전망**이다.
+boto3, httpx 등 클라이언트 라이브러리는 자체적으로 `connect_timeout`/`read_timeout`을 지원하며,
+이를 우선 적용하면 좀비 스레드 자체가 발생하지 않는다.
+
+**현재 코드 상태:** 모든 백엔드가 stub(Interface Only)이므로 라이브러리 timeout 주입이 불가능
+
+| 백엔드 | 파일 | 자체 timeout 상태 | 코드 근거 |
+|---|---|---|---|
+| CloudWatchBackend | `audit/backends/cloudwatch.py` | **stub** — boto3 client 생성 코드 주석 처리 | L61: `self._client = None  # boto3 client placeholder` |
+| S3WORMBackend | `audit/backends/s3_worm.py` | **stub** — 동일 | L88-L89: `# import boto3`, `# self._client = boto3.client(...)` |
+| RemoteAuditBackend | `audit/backends/remote.py` | timeout 파라미터 존재하나 **사용처 주석 처리** | L70: `self._timeout = timeout` → L94: `#     timeout=self._timeout,` |
+| LocalFileBackend | `audit/backends/local.py` | timeout 개념 없음 (로컬 디스크) | timeout 관련 코드 0건 |
+
+**권장 다층 방어 구조:**
+
+```
+1차 방어 (우선): 백엔드 라이브러리 자체 timeout
+  boto3: Config(connect_timeout=2, read_timeout=5)
+  httpx:  timeout=httpx.Timeout(connect=2.0, read=5.0)
+  → 정상적으로 예외 발생, CB record_failure() 즉시 호출, 좀비 스레드 없음
+
+2차 방어 (안전망): ThreadPoolExecutor + future.result(timeout=)
+  → 라이브러리 timeout이 동작하지 않는 엣지 케이스 대비
+  → NFS hang, 예상치 못한 OS-level blocking 등
+```
+
+**후속 작업:** 백엔드 stub이 실체화될 때 `call_timeout_seconds` 값을
+각 백엔드 `__init__`에 주입하여 라이브러리 자체 timeout을 1차 방어로 활성화해야 한다.
+이 작업은 별도 문서로 추적한다.
 
 ---
 
@@ -364,6 +585,18 @@ class TestCallTimeoutWiring:
 
     def test_settings_env_override(self):
         """환경변수로 circuit_call_timeout_seconds를 오버라이드할 수 있다."""
+
+    def test_no_deadlock_on_with_statement_avoided(self):
+        """with ThreadPoolExecutor 대신 수동 관리로 Deadlock이 발생하지 않는다."""
+
+    def test_zombie_thread_limited_to_one(self):
+        """인스턴스 레벨 단일 executor(max_workers=1)에서 좀비 스레드가 최대 1개로 제한된다."""
+
+    def test_executor_shutdown_on_stop(self):
+        """stop() 호출 시 _write_executor.shutdown(wait=False)가 호출된다."""
+
+    def test_health_status_includes_write_executor(self):
+        """get_health_status()에 write_executor 정보(active_threads, pending_tasks)가 포함된다."""
 ```
 
 ### 8.2 기존 테스트 영향
@@ -371,7 +604,7 @@ class TestCallTimeoutWiring:
 | 테스트 파일 | 영향 |
 |---|---|
 | `tests/audit/test_resilience.py` | `get_stats()` 반환값 검증 시 `call_timeout_seconds` 키 추가 필요 |
-| `tests/unit/storage/test_resilient_recorder.py` | `_write_with_fallback` 호출 시그니처 변경 없음 (내부 구현만 변경) |
+| `tests/unit/storage/test_resilient_recorder.py` | `_write_with_fallback` 호출 시그니처 변경 없음 (내부 구현만 변경). `stop()` 호출 시 executor 정리 검증 추가 필요 |
 
 ---
 
