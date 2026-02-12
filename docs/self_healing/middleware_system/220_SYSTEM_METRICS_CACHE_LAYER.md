@@ -1013,11 +1013,11 @@ Celery Worker에서는 `AppConfig.ready()`가 실행되지 않으므로 캐시�
 
 ### 8.3 테스트
 
-| 테스트 파일 | 내용 |
-|-------------|------|
-| 신규: `tests/self_healing/services/test_system_metrics_cache.py` | `SystemMetricsCache` 단위 테스트 |
-| 수정: `tests/self_healing/api/test_xtest_*.py` | `collect_system_snapshot` mock 업데이트 |
-| 수정: `tests/self_healing/chaos/test_resource_guard.py` | 캐시 fallback 경로 테스트 |
+| 테스트 파일 | 내용 | 상태 |
+|-------------|------|------|
+| 신규: `packages/selfhealing-python/tests/unit/services/test_system_metrics_cache.py` | `SystemMetricsCache` + `CachedMetrics` + `SystemMetricsCacheSettings` + 모듈 API + 소비자 연동 + 스레드 안전성 단위 테스트 (59개) | ✅ 완료 |
+| 수정: `tests/self_healing/api/test_xtest_*.py` | `collect_system_snapshot` mock 업데이트 | 📋 예정 |
+| 수정: `tests/self_healing/chaos/test_resource_guard.py` | 캐시 fallback 경로 테스트 | 📋 예정 |
 
 ---
 
