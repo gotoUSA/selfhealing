@@ -337,3 +337,278 @@ class TestResourceGuardExport:
         assert ResourceCheckResult is not None
         assert callable(get_resource_guard)
         assert callable(reset_resource_guard)
+
+
+class TestResourceGuardCacheFallback:
+    """_get_cpu_percent() 캐시 → psutil fallback 경로 테스트.
+
+    220 구현에서 _get_cpu_percent()가 변경됨:
+    1. SystemMetricsCache 캐시에서 값 조회 시도 (~0ms)
+    2. 캐시 미가동 시 psutil.cpu_percent(interval=0.1) fallback (100ms)
+    3. psutil도 실패 시 0.0 반환
+
+    소스:
+    - services/chaos/safety_guard/resource_guard.py L120-133
+    - 220_SYSTEM_METRICS_CACHE_LAYER.md §4.2
+    """
+
+    def test_cache_running_returns_cache_value(self):
+        """캐시 가동 중이면 캐시 값 반환 (~0ms).
+
+        소스: resource_guard.py L126-127
+            cache = get_system_metrics_cache()
+            if cache.is_running():
+                return cache.get_cpu_percent()
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        mock_cache = MagicMock()
+        mock_cache.is_running.return_value = True
+        mock_cache.get_cpu_percent.return_value = 42.5
+
+        with patch(
+            "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+            return_value=mock_cache,
+        ):
+            result = guard._get_cpu_percent()
+
+        assert result == 42.5
+        mock_cache.is_running.assert_called_once()
+        mock_cache.get_cpu_percent.assert_called_once()
+
+    def test_cache_not_running_falls_back_to_psutil(self):
+        """캐시 미가동 시 psutil 직접 호출 fallback.
+
+        소스: resource_guard.py L128-132
+            except Exception:
+                pass
+            # Fallback: 직접 측정 (캐시 미가동 시)
+            try:
+                return psutil.cpu_percent(interval=0.1)
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        mock_cache = MagicMock()
+        mock_cache.is_running.return_value = False
+
+        with (
+            patch(
+                "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+                return_value=mock_cache,
+            ),
+            patch(
+                "selfhealing.services.chaos.safety_guard.resource_guard.psutil.cpu_percent",
+                return_value=67.3,
+            ) as mock_psutil_cpu,
+        ):
+            result = guard._get_cpu_percent()
+
+        assert result == 67.3
+        mock_cache.is_running.assert_called_once()
+        mock_cache.get_cpu_percent.assert_not_called()
+        mock_psutil_cpu.assert_called_once_with(interval=0.1)
+
+    def test_cache_import_error_falls_back_to_psutil(self):
+        """캐시 import 실패 시 psutil fallback.
+
+        소스: resource_guard.py L123-128
+            try:
+                from selfhealing.services.system_metrics_cache import get_system_metrics_cache
+                ...
+            except Exception:
+                pass
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        with (
+            patch(
+                "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+                side_effect=ImportError("module not found"),
+            ),
+            patch(
+                "selfhealing.services.chaos.safety_guard.resource_guard.psutil.cpu_percent",
+                return_value=55.0,
+            ) as mock_psutil_cpu,
+        ):
+            result = guard._get_cpu_percent()
+
+        assert result == 55.0
+        mock_psutil_cpu.assert_called_once_with(interval=0.1)
+
+    def test_cache_exception_falls_back_to_psutil(self):
+        """캐시 조회 중 예외 발생 시 psutil fallback.
+
+        소스: resource_guard.py L123-128
+            try:
+                ...
+                cache = get_system_metrics_cache()
+                if cache.is_running():
+                    return cache.get_cpu_percent()
+            except Exception:
+                pass
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        mock_cache = MagicMock()
+        mock_cache.is_running.return_value = True
+        mock_cache.get_cpu_percent.side_effect = RuntimeError("cache broken")
+
+        with (
+            patch(
+                "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+                return_value=mock_cache,
+            ),
+            patch(
+                "selfhealing.services.chaos.safety_guard.resource_guard.psutil.cpu_percent",
+                return_value=30.0,
+            ) as mock_psutil_cpu,
+        ):
+            result = guard._get_cpu_percent()
+
+        assert result == 30.0
+        mock_psutil_cpu.assert_called_once_with(interval=0.1)
+
+    def test_both_cache_and_psutil_fail_returns_zero(self):
+        """캐시 + psutil 모두 실패 시 0.0 반환.
+
+        소스: resource_guard.py L131-133
+            except Exception as e:
+                logger.warning(f"[ResourceGuard] Failed to get CPU percent: {e}")
+                return 0.0
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        mock_cache = MagicMock()
+        mock_cache.is_running.return_value = False
+
+        with (
+            patch(
+                "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+                return_value=mock_cache,
+            ),
+            patch(
+                "selfhealing.services.chaos.safety_guard.resource_guard.psutil.cpu_percent",
+                side_effect=OSError("psutil failed"),
+            ),
+        ):
+            result = guard._get_cpu_percent()
+
+        assert result == 0.0
+
+    def test_cache_value_used_in_is_safe_for_chaos(self):
+        """캐시 값이 is_safe_for_chaos()까지 전파되어 차단 판정에 사용.
+
+        소스: resource_guard.py L198-230
+            status = self.get_resource_status()
+            ...
+            if status.cpu_percent > settings.cpu_threshold: → block
+
+        검증: 캐시에서 90.0 반환 → cpu_threshold(80) 초과 → is_safe=False
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        mock_cache = MagicMock()
+        mock_cache.is_running.return_value = True
+        mock_cache.get_cpu_percent.return_value = 90.0  # > 80% threshold
+
+        with (
+            patch(
+                "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+                return_value=mock_cache,
+            ),
+            patch.object(guard, "_get_memory_percent_cgroup", return_value=None),
+            patch.object(guard, "_get_memory_percent_psutil", return_value=50.0),
+        ):
+            result = guard.is_safe_for_chaos()
+
+        assert result.is_safe is False
+        assert result.cpu_percent == 90.0
+        assert "CPU usage" in result.block_reason
+
+    def test_cache_below_threshold_allows_chaos(self):
+        """캐시 값이 임계값 이하이면 X-Test 허용.
+
+        검증: 캐시에서 40.0 반환 → cpu_threshold(80) 미만 → is_safe=True
+        """
+        from selfhealing.services.chaos.safety_guard.resource_guard import (
+            ResourceGuard,
+            reset_resource_guard,
+        )
+        from selfhealing.settings.resource_guard import reset_resource_guard_settings
+
+        reset_resource_guard_settings()
+        reset_resource_guard()
+
+        guard = ResourceGuard()
+
+        mock_cache = MagicMock()
+        mock_cache.is_running.return_value = True
+        mock_cache.get_cpu_percent.return_value = 40.0  # < 80% threshold
+
+        with (
+            patch(
+                "selfhealing.services.system_metrics_cache.get_system_metrics_cache",
+                return_value=mock_cache,
+            ),
+            patch.object(guard, "_get_memory_percent_cgroup", return_value=None),
+            patch.object(guard, "_get_memory_percent_psutil", return_value=50.0),
+        ):
+            result = guard.is_safe_for_chaos()
+
+        assert result.is_safe is True
+        assert result.cpu_percent == 40.0
+        assert result.block_reason is None

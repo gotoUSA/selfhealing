@@ -63,6 +63,7 @@ def mock_system_snapshot():
             "timestamp": "2026-01-26T12:00:00Z",
             "cpu_percent": 25.0,
             "memory_percent": 50.0,
+            "metrics_source": "cache",
         },
     ):
         yield

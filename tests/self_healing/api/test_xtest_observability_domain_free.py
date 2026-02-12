@@ -101,7 +101,7 @@ class TestBlastRadiusTestViewDomainFree:
             patch("selfhealing.api.django.views.xtest.observability.add_healing_event"),
             patch(
                 "selfhealing.api.django.views.xtest.observability.collect_system_snapshot",
-                return_value={},
+                return_value={"metrics_source": "cache"},
             ),
         ):
             response = api_client.post(
@@ -133,7 +133,7 @@ class TestBlastRadiusTestViewDomainFree:
             patch("selfhealing.api.django.views.xtest.observability.add_healing_event"),
             patch(
                 "selfhealing.api.django.views.xtest.observability.collect_system_snapshot",
-                return_value={},
+                return_value={"metrics_source": "cache"},
             ),
         ):
             response = api_client.post(

@@ -121,11 +121,11 @@ def mock_snapshot():
     """Mock system snapshot collection."""
     with patch(
         "selfhealing.api.django.views.xtest.integration.collect_system_snapshot",
-        return_value={"timestamp": "2026-01-26T12:00:00Z", "cpu_percent": 10.0},
+        return_value={"timestamp": "2026-01-26T12:00:00Z", "cpu_percent": 10.0, "metrics_source": "cache"},
     ):
         with patch(
             "selfhealing.api.django.views.xtest.base.collect_system_snapshot",
-            return_value={"timestamp": "2026-01-26T12:00:00Z", "cpu_percent": 10.0},
+            return_value={"timestamp": "2026-01-26T12:00:00Z", "cpu_percent": 10.0, "metrics_source": "cache"},
         ):
             yield
 
