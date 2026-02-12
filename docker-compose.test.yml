@@ -1043,6 +1043,31 @@ services:
       redis:
         condition: service_healthy
 
+  # 221. 티어별 차등 임계치 / 리전별 버짓 분리 통합 테스트
+  test-tiered-regional-error-budget:
+    build: .
+    command: >
+      sh -c "pip uninstall -y crontab 2>/dev/null;
+             python -m pytest tests/integration/selfhealing/test_tiered_regional_error_budget_integration.py -v --tb=short --no-cov -p no:xdist --override-ini='addopts='"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=myproject.settings.test
+      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEST_REDIS_AVAILABLE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_test_data:
   otel_buffer_test:

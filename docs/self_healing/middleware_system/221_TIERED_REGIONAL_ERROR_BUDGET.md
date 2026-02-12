@@ -1532,11 +1532,19 @@ if status is None and region is not None:
 
 ### 통합 테스트 현황
 
-통합 테스트는 §11 Phase 6 [25]에 해당하며, 현재 **미구현** (선택적 확장).
+> **위치**: `tests/integration/selfhealing/test_tiered_regional_error_budget_integration.py`
+> **총 테스트**: 38개
+> **실행 결과**: 38 passed (Docker Compose, 2026-02-12)
+> **실행 환경**: `docker-compose -f docker-compose.test.yml run test-tiered-regional-error-budget`
 
-단위 테스트 148개가 개별 컴포넌트 및 인터페이스 계약을 충분히 검증하고 있으나,
-향후 다음 3개 시나리오의 통합 테스트 추가를 권장:
-
-1. **Settings 환경변수 → Gate 판정 관통**: `TIER_THRESHOLDS_ENABLED=true` 설정 → `ErrorBudgetGate.check(tier_id=...)` 판정 결과 검증
-2. **Redis 리전 플래그 → Governance 흐름**: `BudgetExhaustedFlagManager` 리전별 설정 → `check_all_governance(tier_id=..., region=...)` 결과 검증
-3. **리전 데이터 Missing → Global Fallback**: 특정 리전 데이터 부재 시 글로벌 값 폴백 전체 경로 검증
+| 테스트 클래스 | 테스트 수 | 검증 대상 |
+|-------------|:---------:|----------|
+| `TestTierThresholdsToGateDecision` | 6 | Settings → Gate.check(tier_id) 판정 관통, 캐시 키 분리, GateCheckResult 필드 |
+| `TestRedisRegionalFlagToGovernanceFlow` | 7 | Redis 리전별 키 생성/조회, 리전-글로벌 격리, Governance 파라미터 전파 |
+| `TestRegionDataMissingGlobalFallback` | 7 | Calculator region 전달, TypeError polyfill, Service 리전별 조회 |
+| `TestSettingsThresholdPriority` | 3 | get_effective_thresholds() 우선순위: regional > tier > global |
+| `TestPassCriteriaTierFloorEnforcement` | 5 | PassCriteria.for_tier(), apply_tier_floor() 티어별 하한 강제 |
+| `TestRegionTierResolver` | 4 | resolve_tier_from_region() priority 기반 매핑 |
+| `TestMetricsRegionTierLabels` | 2 | record_error_budget_status() region/tier 레이블 수용 |
+| `TestGateCheckResultSerialization` | 2 | to_dict() tier_id/region 조건부 포함/제외 |
+| `TestHysteresisWithTierThresholds` | 2 | 히스테리시스 버퍼 + 티어별 임계치 결합 상태 전이 |
