@@ -579,6 +579,17 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
         """
         expires_at = timezone.now() + timedelta(days=retention_days)
 
+        # Phase 0: metadata에 region 자동 주입 (221 설계)
+        metadata = metadata or {}
+        try:
+            from selfhealing.core.cluster_identity import get_cluster_identity
+
+            identity = get_cluster_identity()
+            if identity.region:
+                metadata.setdefault("region", identity.region)
+        except Exception:
+            pass  # Fail-Open: region 주입 실패 시 무시
+
         return cls.objects.create(
             domain=domain,
             failure_type=failure_type,
@@ -589,7 +600,7 @@ class AbstractFailedOperation(models.Model if DJANGO_AVAILABLE else object):
             snapshot_data=snapshot_data or {},
             request_data=request_data or {},
             response_data=response_data or {},
-            metadata=metadata or {},
+            metadata=metadata,
             next_action_hint=next_action_hint,
             recommended_action=recommended_action,
             expires_at=expires_at,

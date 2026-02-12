@@ -5,7 +5,23 @@
 > **기준일**: 2026-02-12
 > **리뷰 반영일**: 2026-02-12
 > **구현 완료일**: 2026-02-12
+> **구현 보완일**: 2026-02-12 (P0-1, P0-2, 9a 누락 항목 구현 완료)
 > **선행 문서**: 12_ERROR_BUDGET.md, 70_MULTI_CLUSTER_ARCHITECTURE.md, 74_CANARY_SAFETY_INTERLOCK.md
+
+---
+
+### 구현 보완 이력 (2026-02-12)
+
+| # | 항목 | 파일 | 변경 내용 |
+|---|------|------|----------|
+| P0-1 | metadata region 주입 | `adapters/django/models.py` | `create_from_failure()`에서 `get_cluster_identity().region` → `metadata.setdefault("region", ...)` 자동 주입 + Fail-Open |
+| P0-2 | metadata region 주입 | `shopping/models/failed_operation.py` | 동일 패턴 적용 |
+| 9a | apply_tier_floor 연동 | `services/canary/service.py` | `_is_stage_healthy(tier_id=)` 파라미터 추가, evaluate 직전 `apply_tier_floor()` 호출 삽입. `promote(tier_id=)` 시그니처 확장 |
+
+**테스트 추가**:
+- `tests/unit/error_budget_gate/test_create_from_failure_region.py` — 15개 (계약+동작)
+- `tests/unit/error_budget_gate/test_canary_tier_floor_wiring.py` — 10개 (동작)
+- `tests/self_healing/django/test_create_from_failure_region.py` — 4개 (Django 통합, Docker 필요)
 
 ---
 

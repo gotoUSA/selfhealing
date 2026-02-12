@@ -325,6 +325,7 @@ class CanaryRolloutService:
         bypass_governance: bool = False,
         bypass_reason: str = "",
         requested_by: str = "",
+        tier_id: str | None = None,
     ) -> bool:
         """
         다음 단계로 프로모션.
@@ -335,6 +336,7 @@ class CanaryRolloutService:
             bypass_governance: 거버넌스 검증 무시 (Audit 필수)
             bypass_reason: bypass 시 사유 (bypass_governance=True일 때 필수, 최소 10자)
             requested_by: 요청자 (Audit 로깅용)
+            tier_id: 티어 ID (apply_tier_floor 적용용, None이면 미적용)
 
         Returns:
             성공 여부
@@ -397,6 +399,7 @@ class CanaryRolloutService:
             is_healthy, failure_reason = self._is_stage_healthy(
                 rollout.current_stage,
                 metrics,
+                tier_id=tier_id,
             )
 
             if not is_healthy:
@@ -973,9 +976,15 @@ class CanaryRolloutService:
         self,
         stage: CanaryStage | None,
         metrics: list[CanaryMetrics],
+        tier_id: str | None = None,
     ) -> tuple[bool, str | None]:
         """
         단계 건강 상태 판정.
+
+        Args:
+            stage: 현재 Canary 단계
+            metrics: 수집된 메트릭 목록
+            tier_id: 티어 ID (설정 시 apply_tier_floor 적용)
 
         Returns:
             (건강 여부, 실패 사유)
@@ -987,9 +996,17 @@ class CanaryRolloutService:
             # 메트릭 없으면 통과 (샘플 부족)
             return True, None
 
+        # 티어별 최소 보안 기준 강제 (221 설계 §4.9)
+        if tier_id:
+            from selfhealing.services.canary.models import apply_tier_floor
+
+            effective_criteria = apply_tier_floor(stage.pass_criteria, tier_id)
+        else:
+            effective_criteria = stage.pass_criteria
+
         # PassCriteria 사용
         for m in metrics:
-            passed, reason = stage.pass_criteria.evaluate(m)
+            passed, reason = effective_criteria.evaluate(m)
             if not passed:
                 return False, reason
 
