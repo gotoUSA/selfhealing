@@ -54,7 +54,7 @@ class UserSessionRegistry:
             try:
                 self._cache = ProviderRegistry.get_cache()
             except (ValueError, ImportError):
-                from selfhealing.interfaces.cache_provider import InMemoryCacheAdapter
+                from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
 
                 self._cache = InMemoryCacheAdapter()
         return self._cache
