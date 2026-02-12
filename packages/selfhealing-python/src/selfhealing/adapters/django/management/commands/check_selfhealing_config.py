@@ -55,7 +55,7 @@ class Command(BaseCommand):
                 get_all_fatal_configs,
                 FATAL_CONFIGS,
             )
-            from selfhealing.adapters.django.config_provider import get_config
+            from selfhealing.settings import get_config
         except ImportError as e:
             if json_output:
                 self._output_json(
