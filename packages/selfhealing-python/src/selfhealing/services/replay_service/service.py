@@ -23,8 +23,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
-from selfhealing.services.audit_helpers import log_dlq_replay_audit
-from selfhealing.services.governance_checks import (
+from selfhealing.services.audit import log_dlq_replay_audit
+from selfhealing.services.governance.checks import (
     GovernanceCheckResult,
     check_all_governance,
 )

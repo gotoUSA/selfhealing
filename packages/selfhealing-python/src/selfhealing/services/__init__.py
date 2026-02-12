@@ -124,7 +124,7 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
 from ..core.config import get_sla_thresholds
 
 # --- Core Services (사용 빈도 순) ---
-from .circuit_breaker_service import (  # Backward compatibility - commonly used in tests; Convenience functions; Rate limit tracking
+from .circuit_breaker import (  # Canonical package; Convenience functions; Rate limit tracking
     CircuitBreakerConfig,
     CircuitBreakerResult,
     CircuitBreakerService,
@@ -143,7 +143,7 @@ from .control_api_service import (
     ControlRequest,
     ControlResponse,
 )
-from .dlq_service import (  # Backward compatibility - commonly used in tests
+from .dlq import (  # Canonical package
     DLQConfig,
     DLQEntryResult,
     DLQService,
@@ -151,8 +151,8 @@ from .dlq_service import (  # Backward compatibility - commonly used in tests
     store_to_dlq,
 )
 
-# --- Backward Compatibility - Idempotency ---
-from .idempotency_service import (
+# --- Idempotency ---
+from .idempotency import (
     IdempotencyDomain,
     IdempotencyKey,
     IdempotencyService,

@@ -190,7 +190,7 @@ class AuditSyncWorker:
         """
         self._wal = wal
         self._central_adapter = central_adapter
-        self._config = config or SyncWorkerConfig.from_env()
+        self._config = config or SyncWorkerConfig.from_settings()
         self._on_sync_complete = on_sync_complete
         self._on_sync_error = on_sync_error
         self._checkpoint_strategy: CheckpointStorageStrategy | None = None

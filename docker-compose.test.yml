@@ -1,4 +1,65 @@
 # Docker Compose for testing Stage 26, 27, 28
+
+# ---------------------------------------------------------------------------
+# Extension fields - YAML anchors to eliminate redundancy
+# ---------------------------------------------------------------------------
+
+# Common base for all test services: build context, volumes, working directory
+x-base-test: &base-test
+  build: .
+  volumes:
+    - .:/code
+  working_dir: /code
+
+# Base Python environment variables
+x-base-env: &base-env
+  PYTHONPATH: /code:/code/packages/selfhealing-python/src
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
+# Django test environment (extends base-env)
+x-django-env: &django-env
+  <<: *base-env
+  DJANGO_SETTINGS_MODULE: myproject.settings.test
+  DATABASE_URL: postgres://shopping_user:shopping_pass@db:5432/shopping_db
+
+# Common Redis connection variables
+x-redis-env: &redis-env
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  TEST_REDIS_AVAILABLE: "true"
+
+# OTEL test base environment (extends base-env)
+x-otel-env: &otel-env
+  <<: *base-env
+  OTEL_COLLECTOR_ENDPOINT: http://otel-collector:4318
+  COLLECTOR_HEALTH_ENDPOINT: http://otel-collector:13133
+
+# OTEL full backends environment (extends otel-env with all backend endpoints)
+x-otel-full-env: &otel-full-env
+  <<: *otel-env
+  TEMPO_ENDPOINT: http://tempo:3200
+  MIMIR_ENDPOINT: http://mimir:9009
+  LOKI_ENDPOINT: http://loki:3100
+
+# Common depends_on: db + redis
+x-depends-db-redis: &depends-db-redis
+  db:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+# Common depends_on: all OTEL backends
+x-depends-otel-all: &depends-otel-all
+  otel-collector:
+    condition: service_healthy
+  tempo:
+    condition: service_healthy
+  mimir:
+    condition: service_healthy
+  loki:
+    condition: service_healthy
+
 services:
   # PostgreSQL database for SQLAlchemy integration tests
   db:
@@ -30,95 +91,57 @@ services:
 
   # Chaos tests runner
   test-chaos:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/self_healing/chaos/ -v --tb=short --no-cov"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
+      <<: *django-env
+      DISABLE_SELFHEALING_AUTH: "false"
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # 167. Async Audit Pipeline 통합 테스트
   test-async-audit:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_async_audit_middleware_integration.py -v --tb=short --no-cov"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # Test runner for selfhealing package
   test:
-    build: .
+    <<: *base-test
     command: >
       sh -c "cd /code/packages/selfhealing-python &&
              pip install -e . &&
              python -m pytest tests/unit/test_connection_pool.py tests/unit/test_graceful_shutdown.py -v --tb=short"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
+      <<: *base-env
 
   # Stage 28-4: In-Memory Repository integration test
   test-inmemory:
-    build: .
+    <<: *base-test
     command: >
       sh -c "cd /code/packages/selfhealing-python &&
              pip install -e . &&
              python -m pytest tests/unit/adapters/test_memory_repositories.py -v --tb=short &&
              python /code/scripts/test_inmemory_integration.py"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
+      <<: *base-env
 
   # SQLAlchemy adapter integration test
   test-sqlalchemy:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install psycopg2-binary sqlalchemy pytest -q &&
              python scripts/test_sqlalchemy_postgres.py"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/test_selfhealing
+      <<: *base-env
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/test_selfhealing
     depends_on:
       db:
         condition: service_healthy
@@ -126,146 +149,87 @@ services:
   # X-Test Cross-Region Conflict 통합 테스트 (144 문서)
   # AtomicStateQuery Lua 스크립트 실제 검증
   test-cross-region:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_xtest_cross_region_integration.py -v --tb=short --no-cov"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # 179. Global Leader Election 통합 테스트
   test-leader-election:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_leader_election_integration.py -v --tb=short --no-cov -p no:xdist --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # Hybrid Storage Architecture integration tests (Phase 7)
   test-hybrid-storage:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install redis pytest -q &&
              python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_hybrid_storage_integration.py -v --tb=short"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
+      <<: *base-env
+      DJANGO_SETTINGS_MODULE: myproject.settings
+      DATABASE_URL: postgres://shopping_user:shopping_pass@db:5432/shopping_db
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # Statistics Repository unit tests
   test-statistics-unit:
-    build: .
+    <<: *base-test
     command: >
       sh -c "cd /code/packages/selfhealing-python &&
              pip install -e . &&
              python -m pytest tests/unit/adapters/test_statistics_repository.py -v --tb=short"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings
+      <<: *base-env
+      DJANGO_SETTINGS_MODULE: myproject.settings
 
   # tests/hybrid folder runner - Celery/Redis integration tests
   test-hybrid:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/hybrid/ -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - TEST_DB_AVAILABLE=true
-      - TEST_REDIS_AVAILABLE=true
-      - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
+      <<: *django-env
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      TEST_DB_AVAILABLE: "true"
+      TEST_REDIS_AVAILABLE: "true"
+      DISABLE_SELFHEALING_AUTH: "false"
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
       celery-worker:
         condition: service_healthy
 
   # Global tests folder runner - for fixing broken tests
   test-global:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/ -v --tb=short --no-cov
              --ignore=tests/load --ignore=tests/_unclassified --ignore=tests/hybrid -x"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
-      - TEST_DB_AVAILABLE=true
-      - TEST_REDIS_AVAILABLE=true
-      - DISABLE_SELFHEALING_AUTH=false  # RBAC 테스트 시 인증 바이패스 비활성화
-      - CELERY_BROKER_URL=redis://redis:6379/1
+      <<: *django-env
+      REDIS_URL: redis://redis:6379/0
+      TEST_DB_AVAILABLE: "true"
+      TEST_REDIS_AVAILABLE: "true"
+      DISABLE_SELFHEALING_AUTH: "false"
+      CELERY_BROKER_URL: redis://redis:6379/1
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
       celery-worker:
         condition: service_healthy
 
@@ -309,46 +273,31 @@ services:
   # Audit Integration Test Runner
   # ---------------------------------------------------------------------------
   test-audit-integration:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/self_healing/integration/test_audit_wal_redis_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
-      - TEST_DB_AVAILABLE=true
-      - TEST_REDIS_AVAILABLE=true
+      <<: *django-env
+      REDIS_URL: redis://redis:6379/0
+      TEST_DB_AVAILABLE: "true"
+      TEST_REDIS_AVAILABLE: "true"
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # Settings Redis TTL 통합 테스트
   # 실행: docker-compose -f docker-compose.test.yml run --rm test-settings-redis-ttl
   test-settings-redis-ttl:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install redis pytest -q &&
              python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_settings_redis_ttl_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - REDIS_URL=redis://redis:6379/15
-      - TEST_REDIS_AVAILABLE=true
+      <<: *base-env
+      DJANGO_SETTINGS_MODULE: myproject.settings.test
+      REDIS_URL: redis://redis:6379/15
+      TEST_REDIS_AVAILABLE: "true"
     depends_on:
       redis:
         condition: service_healthy
@@ -447,9 +396,6 @@ services:
   # ---------------------------------------------------------------------------
   # OpenTelemetry Collector - 텔레메트리 수집기 (테스트용)
   # ---------------------------------------------------------------------------
-  # 참고: Alpine 기반 커스텀 이미지로 wget 헬스체크 지원
-  # v0.115.0: redaction processor가 traces, logs, metrics 모두 지원
-  # ---------------------------------------------------------------------------
   otel-collector:
     build:
       context: ./docker/otel-collector
@@ -485,52 +431,29 @@ services:
 
   # ---------------------------------------------------------------------------
   # OTEL Collector 및 Tempo 통합 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-collector
   # ---------------------------------------------------------------------------
   test-otel-collector:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_otel_collector_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-env
+      TEMPO_ENDPOINT: http://tempo:3200
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # OTEL Collector Metrics 파이프라인 통합 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-metrics
   # ---------------------------------------------------------------------------
   test-otel-metrics:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_metrics_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-env
+      MIMIR_ENDPOINT: http://mimir:9009
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -539,23 +462,15 @@ services:
 
   # ---------------------------------------------------------------------------
   # OTEL Collector Logs 파이프라인 통합 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-logs
   # ---------------------------------------------------------------------------
   test-otel-logs:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_logs_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-env
+      LOKI_ENDPOINT: http://loki:3100
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -564,149 +479,69 @@ services:
 
   # ---------------------------------------------------------------------------
   # OTEL 전체 파이프라인 통합 테스트 (Traces, Metrics, Logs)
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-all
   # ---------------------------------------------------------------------------
   test-otel-all:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/ -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-full-env
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # OTEL 전체 파이프라인 E2E 테스트 (Phase 5.1)
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-e2e
   # ---------------------------------------------------------------------------
   test-otel-e2e:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_e2e_pipeline_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-full-env
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # OTEL 텔레메트리 상관관계 테스트 (Phase 5.3)
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-correlation
   # ---------------------------------------------------------------------------
   test-otel-correlation:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_telemetry_correlation_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-full-env
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # OTEL Collector 성능 테스트 (Phase 5.4)
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-performance
   # ---------------------------------------------------------------------------
   test-otel-performance:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_collector_performance_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
-      - COLLECTOR_METRICS_ENDPOINT=http://otel-collector:8888
+      <<: *otel-full-env
+      COLLECTOR_METRICS_ENDPOINT: http://otel-collector:8888
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # Grafana 스택 (Loki/Tempo) 대시보드 통합 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-grafana-stack
   # ---------------------------------------------------------------------------
   test-grafana-stack:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_grafana_stack_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-env
+      TEMPO_ENDPOINT: http://tempo:3200
+      LOKI_ENDPOINT: http://loki:3100
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -717,198 +552,102 @@ services:
 
   # ---------------------------------------------------------------------------
   # Mimir PromQL 호환성 및 상관관계 E2E 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-mimir-correlation
   # ---------------------------------------------------------------------------
   test-mimir-correlation:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_mimir_correlation_integration.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - LOKI_ENDPOINT=http://loki:3100
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-full-env
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # Grafana 검증 기준 통합 테스트 (web 서비스 포함)
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-grafana-verification
   # ---------------------------------------------------------------------------
   test-grafana-verification:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_grafana_verification_criteria.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - TEMPO_ENDPOINT=http://tempo:3200
-      - MIMIR_ENDPOINT=http://mimir:9009
-      - LOKI_ENDPOINT=http://loki:3100
-      - WEB_ENDPOINT=http://web:8000
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
+      <<: *otel-full-env
+      WEB_ENDPOINT: http://web:8000
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
       web:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
   # OTEL Collector file_storage 익스텐션 통합 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-file-storage
   # ---------------------------------------------------------------------------
   test-otel-file-storage:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install requests pytest -q &&
              python -m pytest tests/integration/otel/test_file_storage_extension.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - OTEL_COLLECTOR_ENDPOINT=http://otel-collector:4318
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
-      - COLLECTOR_METRICS_ENDPOINT=http://otel-collector:8888
+      <<: *otel-env
+      COLLECTOR_METRICS_ENDPOINT: http://otel-collector:8888
     depends_on:
-      otel-collector:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
-      mimir:
-        condition: service_healthy
-      loki:
-        condition: service_healthy
+      <<: *depends-otel-all
 
   # ---------------------------------------------------------------------------
   # OTEL Collector redaction processor 및 prometheusremotewrite 통합 테스트
-  # 민감정보 마스킹 및 Mimir file_storage 연동 검증
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-redaction
   # ---------------------------------------------------------------------------
   test-otel-redaction:
-    build: .
+    <<: *base-test
     command: >
       sh -c "sleep 5 && pip install pyyaml requests pytest -q &&
              python -m pytest tests/integration/otel/test_redaction_processor.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - COLLECTOR_HEALTH_ENDPOINT=http://otel-collector:13133
-      - COLLECTOR_METRICS_ENDPOINT=http://otel-collector:8888/metrics
+      <<: *base-env
+      COLLECTOR_HEALTH_ENDPOINT: http://otel-collector:13133
+      COLLECTOR_METRICS_ENDPOINT: http://otel-collector:8888/metrics
     depends_on:
       otel-collector:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
   # Agent-Gateway 2단계 아키텍처 설정 검증 테스트
-  # 프로덕션 환경용 Agent/Gateway 설정 파일 유효성 검증
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-otel-agent-gateway
   # ---------------------------------------------------------------------------
   test-otel-agent-gateway:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install pyyaml requests pytest -q &&
              python -m pytest tests/integration/otel/test_agent_gateway_architecture.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      # 통합 테스트 비활성화 (설정 파일 검증만)
-      - OTEL_AGENT_GATEWAY_TEST=false
+      <<: *base-env
+      OTEL_AGENT_GATEWAY_TEST: "false"
 
   # ---------------------------------------------------------------------------
   # Throttle ↔ Circuit Breaker 통합 시나리오 테스트
-  # CB OPEN/CLOSE 전체 라이프사이클, Recovery Dampening, 다중 서비스 처리
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-throttle-cb-scenario
   # ---------------------------------------------------------------------------
   test-throttle-cb-scenario:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install redis pytest -q &&
              python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_throttle_cb_full_scenario.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # ---------------------------------------------------------------------------
   # Throttle Redis Race Condition 분산 환경 테스트
-  # Lua 스크립트 원자성, CAS 업데이트, Cold Start 복구, 동시 RTT 샘플 기록
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-throttle-race-condition
   # ---------------------------------------------------------------------------
   test-throttle-race-condition:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install redis pytest -q &&
              python manage.py migrate --noinput &&
              python -m pytest tests/integration/selfhealing/test_throttle_redis_race_condition.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # ==========================================================================
   # Kafka Event Bus 통합 테스트 (175 문서)
@@ -942,131 +681,71 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # 218. Session Signal Integration Test (세션 시그널 + UserSessionRegistry)
-  # connect_session_signals(), 시그널 디스패치, Registry ↔ Redis 연동 검증
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-session-signals
+  # 218. Session Signal Integration Test
   # ---------------------------------------------------------------------------
   test-session-signals:
-    build: .
+    <<: *base-test
     command: >
       sh -c "python manage.py migrate --noinput &&
              python -m pytest tests/self_healing/integration/django/test_session_signals.py -v --tb=short --no-cov --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # ---------------------------------------------------------------------------
   # 213. Postmortem Celery Delegation 통합 테스트
-  # 실행: docker-compose -f docker-compose.test.yml run --rm test-postmortem-celery-delegation
   # ---------------------------------------------------------------------------
   test-postmortem-celery-delegation:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip uninstall crontab -y -q 2>/dev/null;
              python -m pytest tests/integration/selfhealing/test_postmortem_audit_integration.py tests/integration/selfhealing/test_postmortem_auto_trigger_integration.py -v --tb=short --no-cov --override-ini='addopts=' -p no:cacheprovider --create-db"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # Kafka Event Bus 통합 테스트 러너
   test-kafka-event-bus:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip install confluent-kafka -q &&
              cd /code/packages/selfhealing-python &&
              pip install -e . -q &&
              python -m pytest tests/integration/kafka/ -v --tb=short --no-cov"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - SELFHEALING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
-      - SELFHEALING_KAFKA_TOPIC_PREFIX=test.selfhealing.
-      - ENVIRONMENT=development
+      <<: *base-env
+      SELFHEALING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SELFHEALING_KAFKA_TOPIC_PREFIX: "test.selfhealing."
+      ENVIRONMENT: development
     depends_on:
       kafka:
         condition: service_healthy
 
   # 219. Hash Chain Integrity Triad 통합 테스트
   test-integrity-triad:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip uninstall -y crontab 2>/dev/null;
              python -m pytest tests/integration/selfhealing/test_integrity_triad_integration.py -v --tb=short --no-cov -p no:xdist --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
   # 221. 티어별 차등 임계치 / 리전별 버짓 분리 통합 테스트
   test-tiered-regional-error-budget:
-    build: .
+    <<: *base-test
     command: >
       sh -c "pip uninstall -y crontab 2>/dev/null;
              python -m pytest tests/integration/selfhealing/test_tiered_regional_error_budget_integration.py -v --tb=short --no-cov -p no:xdist --override-ini='addopts='"
-    volumes:
-      - .:/code
-    working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - DJANGO_SETTINGS_MODULE=myproject.settings.test
-      - DATABASE_URL=postgres://shopping_user:shopping_pass@db:5432/shopping_db
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - TEST_REDIS_AVAILABLE=true
+      <<: [*django-env, *redis-env]
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      <<: *depends-db-redis
 
 volumes:
   postgres_test_data:
@@ -1074,4 +753,3 @@ volumes:
   tempo_data_test:
   mimir_data_test:
   loki_data_test:
-

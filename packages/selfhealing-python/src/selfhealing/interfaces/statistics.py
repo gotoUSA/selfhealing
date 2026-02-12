@@ -69,9 +69,9 @@ class RecentActivity:
     trend: str = "stable"  # up, down, stable
 
 
-# CleanupStats: 단일 소스는 services/dlq_models.py (Item 24 중복 제거)
-# dlq_models.py 버전이 can_archive/can_purge 프로퍼티 포함
-from selfhealing.services.dlq_models import CleanupStats  # noqa: E402, F401
+# CleanupStats: 단일 소스는 services/dlq/models.py (Item 24 중복 제거)
+# dlq/models.py 버전이 can_archive/can_purge 프로퍼티 포함
+from selfhealing.services.dlq.models import CleanupStats  # noqa: E402, F401
 
 
 @dataclass

@@ -29,7 +29,7 @@ from selfhealing.api.django.permissions import (
     IsViewer,
 )
 from selfhealing.api.django.serializers import DLQReplayRequestSerializer
-from selfhealing.services.dlq_service import get_dlq_service
+from selfhealing.services.dlq import get_dlq_service
 
 logger = logging.getLogger(__name__)
 

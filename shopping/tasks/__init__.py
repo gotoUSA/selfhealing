@@ -9,11 +9,11 @@ from .cleanup_tasks import (
     cleanup_used_tokens_task,
     delete_unverified_users_task,
 )
-from .dlq_replay_tasks import (
+from selfhealing.celery_tasks import (
     cleanup_resolved_dlq_entries,
     replay_batch_by_domain,
     replay_batch_by_failure_type,
-    replay_on_circuit_breaker_close,
+    conditional_replay_on_circuit_close as replay_on_circuit_breaker_close,
     replay_single_dlq_entry,
 )
 from .email_tasks import retry_failed_emails_task, send_email_task, send_verification_email_task
@@ -34,7 +34,7 @@ from .point_tasks import (
     send_email_notification,
     send_expiry_notification_task,
 )
-from .self_healing_tasks import (
+from selfhealing.celery_tasks import (
     check_and_report_sla_breaches,
     check_circuit_breaker_recovery,
     collect_self_healing_metrics,

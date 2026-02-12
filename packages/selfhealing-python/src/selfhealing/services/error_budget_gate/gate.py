@@ -135,7 +135,7 @@ class ErrorBudgetGate:
             return None
 
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 

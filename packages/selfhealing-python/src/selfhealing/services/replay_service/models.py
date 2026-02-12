@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from selfhealing.services.governance_checks import GovernanceCheckResult
+from selfhealing.services.governance.checks import GovernanceCheckResult
 
 
 # =============================================================================

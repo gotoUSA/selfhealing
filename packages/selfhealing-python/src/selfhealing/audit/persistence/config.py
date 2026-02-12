@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 def _get_default_data_dir() -> str:
@@ -227,12 +228,11 @@ class DiskBufferSettings(BaseSettings):
         description="Graceful Shutdown 핸들러 자동 등록",
     )
 
-    class Config:
-        """Pydantic Settings 설정."""
-
-        env_prefix = "SELFHEALING_DISK_BUFFER_"
-        env_file = ".env"
-        extra = "ignore"
+    model_config = ConfigDict(
+        env_prefix="SELFHEALING_DISK_BUFFER_",
+        env_file=".env",
+        extra="ignore",
+    )
 
     @property
     def data_path(self) -> Path:
