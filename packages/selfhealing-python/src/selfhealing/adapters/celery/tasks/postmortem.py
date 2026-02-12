@@ -555,6 +555,7 @@ def process_individual_postmortem(
     event_data: dict,
     event_type: str,
     event_bus_history: list[dict] | None = None,
+    web_server_metrics: dict | None = None,
 ) -> dict[str, Any]:
     """
     개별 Postmortem을 비동기로 생성.
@@ -596,12 +597,14 @@ def process_individual_postmortem(
                 service_name=service_name,
                 event_data=event_data,
                 event_bus_history=event_bus_history,
+                web_server_metrics=web_server_metrics,
             )
         elif event_type == "emergency_recovery_completed":
             return _process_emergency_postmortem(
                 service_name=service_name,
                 event_data=event_data,
                 event_bus_history=event_bus_history,
+                web_server_metrics=web_server_metrics,
             )
         else:
             logger.warning(f"[ProcessIndividualPostmortem] Unknown event_type: {event_type}")
@@ -627,6 +630,7 @@ def _process_cb_closed_postmortem(
     service_name: str,
     event_data: dict,
     event_bus_history: list[dict],
+    web_server_metrics: dict | None = None,
 ) -> dict[str, Any]:
     """CB 복구 시 개별 Postmortem 생성 (Celery Worker에서 실행)."""
     from selfhealing.api.django.views.xtest.base import (
@@ -653,7 +657,23 @@ def _process_cb_closed_postmortem(
     local_events = get_healing_events(20, use_redis=True)
     timeline = _build_timeline(event_bus_history, local_events)
     snapshot = collect_system_snapshot()
-    snapshot["snapshot_source"] = "celery_worker"
+
+    if web_server_metrics:
+        # Worker 원본 값을 별도 필드로 보존
+        snapshot["worker_cpu_percent"] = snapshot.get("cpu_percent")
+        snapshot["worker_memory_percent"] = snapshot.get("memory_percent")
+        snapshot["worker_memory_used_mb"] = snapshot.get("memory_used_mb")
+        snapshot["worker_memory_available_mb"] = snapshot.get("memory_available_mb")
+        # 주 필드를 Web Server 값으로 교체
+        snapshot["cpu_percent"] = web_server_metrics.get("cpu_percent", snapshot["cpu_percent"])
+        snapshot["memory_percent"] = web_server_metrics.get("memory_percent", snapshot["memory_percent"])
+        snapshot["memory_used_mb"] = web_server_metrics.get("memory_used_mb", snapshot.get("memory_used_mb", 0))
+        snapshot["memory_available_mb"] = web_server_metrics.get("memory_available_mb", snapshot.get("memory_available_mb", 0))
+        snapshot["snapshot_source"] = "web_server_cache+worker"
+        snapshot["snapshot_note"] = "주 CPU/Memory=Web Server 캐시, worker_*=Celery Worker 측정값."
+    else:
+        snapshot["snapshot_source"] = "celery_worker"
+        snapshot["snapshot_note"] = "Worker 노드의 CPU/Memory. Web Server와 다를 수 있음."
 
     # Fast fail 카운트
     fast_fail_count = len([e for e in event_bus_history if e.get("data", {}).get("fast_fail")])
@@ -736,6 +756,7 @@ def _process_emergency_postmortem(
     service_name: str,
     event_data: dict,
     event_bus_history: list[dict],
+    web_server_metrics: dict | None = None,
 ) -> dict[str, Any]:
     """Emergency 복구 완료 시 Postmortem 생성 (Celery Worker에서 실행)."""
     from selfhealing.api.django.views.xtest.base import collect_system_snapshot
@@ -753,7 +774,23 @@ def _process_emergency_postmortem(
 
     # 스냅샷 수집
     snapshot = collect_system_snapshot()
-    snapshot["snapshot_source"] = "celery_worker"
+
+    if web_server_metrics:
+        # Worker 원본 값을 별도 필드로 보존
+        snapshot["worker_cpu_percent"] = snapshot.get("cpu_percent")
+        snapshot["worker_memory_percent"] = snapshot.get("memory_percent")
+        snapshot["worker_memory_used_mb"] = snapshot.get("memory_used_mb")
+        snapshot["worker_memory_available_mb"] = snapshot.get("memory_available_mb")
+        # 주 필드를 Web Server 값으로 교체
+        snapshot["cpu_percent"] = web_server_metrics.get("cpu_percent", snapshot["cpu_percent"])
+        snapshot["memory_percent"] = web_server_metrics.get("memory_percent", snapshot["memory_percent"])
+        snapshot["memory_used_mb"] = web_server_metrics.get("memory_used_mb", snapshot.get("memory_used_mb", 0))
+        snapshot["memory_available_mb"] = web_server_metrics.get("memory_available_mb", snapshot.get("memory_available_mb", 0))
+        snapshot["snapshot_source"] = "web_server_cache+worker"
+        snapshot["snapshot_note"] = "주 CPU/Memory=Web Server 캐시, worker_*=Celery Worker 측정값."
+    else:
+        snapshot["snapshot_source"] = "celery_worker"
+        snapshot["snapshot_note"] = "Worker 노드의 CPU/Memory. Web Server와 다를 수 있음."
 
     # Emergency Postmortem 데이터 생성
     postmortem = _generate_emergency_postmortem_data(

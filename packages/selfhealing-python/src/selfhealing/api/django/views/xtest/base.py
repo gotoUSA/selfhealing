@@ -252,7 +252,8 @@ class XTestModeMixin:
             if environment == "development":
                 # 개발 환경에서는 경고만 출력
                 logger.warning(
-                    "[X-Test-Mode] SELFHEALING_NAMESPACE_REGION not set in development. " "GLOBAL scope API allowed with warning."
+                    "[X-Test-Mode] SELFHEALING_NAMESPACE_REGION not set in development. "
+                    "GLOBAL scope API allowed with warning."
                 )
                 return True, None
 
@@ -634,16 +635,35 @@ def collect_system_snapshot() -> dict[str, Any]:
         - request_rate: 요청률 (있는 경우)
     """
     try:
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        memory = psutil.virtual_memory()
+        # 캐시에서 CPU/Memory 조회 (~0ms), 캐시 미가동 시 직접 측정으로 fallback (100ms)
+        try:
+            from selfhealing.services.system_metrics_cache import get_system_metrics_cache
 
-        snapshot = {
-            "timestamp": timezone.now().isoformat(),
-            "cpu_percent": cpu_percent,
-            "memory_percent": memory.percent,
-            "memory_used_mb": memory.used / (1024 * 1024),
-            "memory_available_mb": memory.available / (1024 * 1024),
-        }
+            cache = get_system_metrics_cache()
+            if cache.is_running():
+                metrics = cache.get_metrics()
+                snapshot = {
+                    "timestamp": timezone.now().isoformat(),
+                    "cpu_percent": metrics.cpu_percent,
+                    "memory_percent": metrics.memory_percent,
+                    "memory_used_mb": metrics.memory_used_mb,
+                    "memory_available_mb": metrics.memory_available_mb,
+                    "metrics_source": metrics.source,
+                }
+            else:
+                raise RuntimeError("Cache not running")
+        except Exception:
+            # Fallback: 직접 측정 (기존 동작 유지)
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            snapshot = {
+                "timestamp": timezone.now().isoformat(),
+                "cpu_percent": round(cpu_percent, 1),
+                "memory_percent": round(memory.percent, 1),
+                "memory_used_mb": round(memory.used / (1024 * 1024), 1),
+                "memory_available_mb": round(memory.available / (1024 * 1024), 1),
+                "metrics_source": "direct",
+            }
 
         # DB 연결 수 (Repository 사용)
         try:

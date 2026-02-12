@@ -108,6 +108,10 @@ class SelfHealingConfig(AppConfig):
     _cache_worker_started: bool = False
     _cache_worker_lock: threading.Lock = threading.Lock()
 
+    # System Metrics Cache - 중복 실행 방지
+    _metrics_cache_started: bool = False
+    _metrics_cache_lock: threading.Lock = threading.Lock()
+
     def ready(self):
         """
         Called when the app is ready (every server start).
@@ -152,6 +156,9 @@ class SelfHealingConfig(AppConfig):
 
         # V3: Start pre-computed cache worker for L3 observability endpoints
         self._start_precomputed_cache_worker()
+
+        # Start System Metrics Cache for non-blocking psutil access
+        self._start_system_metrics_cache()
 
         # Start Meta-Watchdog (Self-Healing 시스템 자체 모니터링)
         self._start_meta_watchdog()
@@ -518,6 +525,59 @@ class SelfHealingConfig(AppConfig):
             logger.warning(
                 f"[SelfHealing] Failed to start pre-computed cache worker (non-fatal): {e}. "
                 f"L3 endpoints will compute on-demand."
+            )
+
+    # =========================================================================
+    # System Metrics Cache - psutil CPU/Memory 백그라운드 캐시
+    # =========================================================================
+
+    def _start_system_metrics_cache(self):
+        """
+        시스템 메트릭 캐시 워커 시작.
+
+        psutil CPU/Memory를 1초마다 백그라운드에서 캐시하여
+        collect_system_snapshot(), ResourceGuard 등의 100ms 블로킹을 제거.
+        실패 시 모든 소비자가 직접 psutil 호출로 fallback.
+        """
+        from selfhealing.settings.system_metrics_cache import (
+            get_system_metrics_cache_settings,
+        )
+
+        settings = get_system_metrics_cache_settings()
+        if not settings.enabled:
+            logger.debug("[SelfHealing] System metrics cache disabled by settings")
+            return
+
+        with self._metrics_cache_lock:
+            if self._metrics_cache_started:
+                return
+            SelfHealingConfig._metrics_cache_started = True
+
+        try:
+            from selfhealing.services.system_metrics_cache import (
+                get_system_metrics_cache,
+                start_system_metrics_cache,
+            )
+
+            cache = get_system_metrics_cache()
+            cache._refresh_interval = settings.refresh_interval
+            cache._sample_interval = settings.sample_interval
+            cache._max_age_seconds = settings.max_age_seconds
+
+            start_system_metrics_cache()
+
+            logger.info(
+                f"[SelfHealing] System metrics cache started "
+                f"(refresh={settings.refresh_interval}s, "
+                f"sample={settings.sample_interval}s)"
+            )
+
+        except ImportError:
+            logger.debug("[SelfHealing] system_metrics_cache module not available")
+        except Exception as e:
+            logger.warning(
+                f"[SelfHealing] Failed to start system metrics cache (non-fatal): {e}. "
+                f"Consumers will use direct psutil calls."
             )
 
     # =========================================================================

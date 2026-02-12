@@ -449,6 +449,7 @@ def collect_cb_open_snapshot(
     self,
     service_name: str,
     event_timestamp: str,
+    web_server_metrics: dict | None = None,
 ) -> dict:
     """
     CB OPEN 시점 시스템 스냅샷을 비동기로 수집 및 Redis 저장.
@@ -456,13 +457,13 @@ def collect_cb_open_snapshot(
     psutil.cpu_percent(interval=0.1)의 100ms 블로킹과 Redis HSET를
     Celery Worker에서 처리하여 발행자 스레드 차단을 제거한다.
 
-    Worker 실행 환경 주의:
-    - CPU/Memory 지표는 Celery Worker 노드의 시스템 상태를 반영한다.
-    - CB 상태 조회는 Redis 기반이므로 Worker에서도 정상 조회 가능하다.
+    web_server_metrics가 전달되면 주 CPU/Memory 필드를 Web Server 값으로 교체하고,
+    Worker 원본 값은 worker_* 접두사 필드에 보존한다.
 
     Args:
         service_name: CB가 열린 서비스 이름
         event_timestamp: CB OPEN 이벤트 발생 시각 (ISO format)
+        web_server_metrics: Web Server의 캐시된 시스템 메트릭 (EventBus 핸들러에서 전달)
 
     Returns:
         스냅샷 수집 결과 딕셔너리
@@ -480,8 +481,25 @@ def collect_cb_open_snapshot(
         snapshot["captured_at"] = "open"
         snapshot["service"] = service_name
         snapshot["event_timestamp"] = event_timestamp
-        snapshot["snapshot_source"] = "celery_worker"
-        snapshot["snapshot_note"] = "Worker 노드의 CPU/Memory. Web Server와 다를 수 있음."
+
+        if web_server_metrics:
+            # Worker 원본 값을 별도 필드로 보존
+            snapshot["worker_cpu_percent"] = snapshot.get("cpu_percent")
+            snapshot["worker_memory_percent"] = snapshot.get("memory_percent")
+            snapshot["worker_memory_used_mb"] = snapshot.get("memory_used_mb")
+            snapshot["worker_memory_available_mb"] = snapshot.get("memory_available_mb")
+            # 주 필드를 Web Server 캐시 값으로 교체
+            snapshot["cpu_percent"] = web_server_metrics.get("cpu_percent", snapshot["cpu_percent"])
+            snapshot["memory_percent"] = web_server_metrics.get("memory_percent", snapshot["memory_percent"])
+            snapshot["memory_used_mb"] = web_server_metrics.get("memory_used_mb", snapshot.get("memory_used_mb", 0))
+            snapshot["memory_available_mb"] = web_server_metrics.get(
+                "memory_available_mb", snapshot.get("memory_available_mb", 0)
+            )
+            snapshot["snapshot_source"] = "web_server_cache+worker"
+            snapshot["snapshot_note"] = "주 CPU/Memory=Web Server 캐시, worker_*=Celery Worker 측정값."
+        else:
+            snapshot["snapshot_source"] = "celery_worker"
+            snapshot["snapshot_note"] = "Worker 노드의 CPU/Memory. Web Server와 다를 수 있음."
 
         # CB 상태 정보 추가 (Redis 기반이므로 Worker에서도 조회 가능)
         try:

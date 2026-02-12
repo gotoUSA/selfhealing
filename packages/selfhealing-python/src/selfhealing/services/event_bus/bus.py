@@ -600,6 +600,19 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
         logger.warning(f"[Notification] Failed to enqueue CB notification: {e}")
 
 
+def _collect_web_server_metrics() -> dict | None:
+    """Web Server의 캐시된 시스템 메트릭을 수집 (~0ms). 실패 시 None 반환."""
+    try:
+        from selfhealing.services.system_metrics_cache import get_system_metrics_cache
+
+        cache = get_system_metrics_cache()
+        if cache.is_running():
+            return cache.get_snapshot_dict()
+    except Exception:
+        pass
+    return None
+
+
 def _on_circuit_breaker_opened_snapshot(event: SelfHealingEvent) -> None:
     """
     CB OPEN 시 시스템 스냅샷 수집을 Celery Task로 위임.
@@ -612,9 +625,12 @@ def _on_circuit_breaker_opened_snapshot(event: SelfHealingEvent) -> None:
     try:
         from selfhealing.adapters.celery.tasks import collect_cb_open_snapshot
 
+        web_metrics = _collect_web_server_metrics()
+
         collect_cb_open_snapshot.delay(
             service_name=service_name,
             event_timestamp=event.timestamp.isoformat(),
+            web_server_metrics=web_metrics,
         )
     except ImportError:
         logger.debug("[EventHandler] Celery tasks not available, skipping CB snapshot")
@@ -828,12 +844,15 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         bus = get_event_bus()
         event_bus_history = bus.get_history(limit=history_limit)
 
+        web_metrics = _collect_web_server_metrics()
+
         # event.to_dict()로 직렬화 — Celery JSON serializer 호환
         process_individual_postmortem.delay(
             service_name=service_name,
             event_data=event.to_dict(),
             event_type="circuit_breaker_closed",
             event_bus_history=event_bus_history,
+            web_server_metrics=web_metrics,
         )
     except ImportError:
         # Celery 미설치 환경: 기존 동기 방식 fallback
@@ -1263,11 +1282,14 @@ def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
         bus = get_event_bus()
         event_bus_history = bus.get_history(limit=history_limit)
 
+        web_metrics = _collect_web_server_metrics()
+
         process_individual_postmortem.delay(
             service_name=f"emergency-{namespace}",
             event_data=event.to_dict(),
             event_type="emergency_recovery_completed",
             event_bus_history=event_bus_history,
+            web_server_metrics=web_metrics,
         )
     except ImportError:
         # Celery 미설치 환경: 기존 동기 방식 fallback

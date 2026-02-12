@@ -1,8 +1,9 @@
 # 220. 시스템 메트릭 캐시 레이어 (System Metrics Cache Layer)
 
-> **상태**: 📋 구현 예정
+> **상태**: ✅ 구현 완료
 > **목적**: `psutil.cpu_percent(interval=0.1)`의 100ms 블로킹을 백그라운드 스레드로 격리하고, 모든 소비자(EventBus 핸들러, Celery Task, ResourceGuard)가 캐시된 값을 ~0ms에 읽을 수 있도록 한다.
 > **기준일**: 2026-02-12
+> **구현일**: 2026-02-12
 > **선행 문서**: 213_EVENTBUS_HANDLER_CELERY_DELEGATION_PLAN.md
 
 ---

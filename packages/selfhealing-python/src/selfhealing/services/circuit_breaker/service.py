@@ -600,14 +600,23 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Add system metrics if available
         try:
-            import psutil
+            from selfhealing.services.system_metrics_cache import get_system_metrics_cache
 
-            snapshot["system_metrics"] = {
-                "cpu_percent": psutil.cpu_percent(interval=None),
-                "memory_percent": psutil.virtual_memory().percent,
-            }
+            cache = get_system_metrics_cache()
+            if cache.is_running():
+                snapshot["system_metrics"] = {
+                    "cpu_percent": cache.get_cpu_percent(),
+                    "memory_percent": cache.get_memory_percent(),
+                }
+            else:
+                import psutil
+
+                snapshot["system_metrics"] = {
+                    "cpu_percent": psutil.cpu_percent(interval=None),
+                    "memory_percent": psutil.virtual_memory().percent,
+                }
         except Exception:
-            pass  # psutil not available or failed
+            pass  # system_metrics_cache or psutil not available
 
         # Add error context if provided
         if error_context:

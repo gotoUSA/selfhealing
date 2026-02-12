@@ -112,12 +112,22 @@ class ResourceGuard:
         """
         현재 CPU 사용률 조회.
 
-        psutil을 사용하여 CPU 사용률을 측정합니다.
-        interval=0.1로 짧은 샘플링 사용.
+        SystemMetricsCache에서 캐시된 값을 우선 조회하고 (~0ms),
+        캐시 미가동 시 psutil 직접 측정으로 fallback.
 
         Returns:
             CPU 사용률 (0.0 ~ 100.0)
         """
+        try:
+            from selfhealing.services.system_metrics_cache import get_system_metrics_cache
+
+            cache = get_system_metrics_cache()
+            if cache.is_running():
+                return cache.get_cpu_percent()
+        except Exception:
+            pass
+
+        # Fallback: 직접 측정 (캐시 미가동 시)
         try:
             return psutil.cpu_percent(interval=0.1)
         except Exception as e:
@@ -218,10 +228,7 @@ class ResourceGuard:
         # CPU 임계값 체크
         if status.cpu_percent > settings.cpu_threshold:
             result.is_safe = False
-            result.block_reason = (
-                f"CPU usage {status.cpu_percent:.1f}% exceeds threshold "
-                f"{settings.cpu_threshold}%"
-            )
+            result.block_reason = f"CPU usage {status.cpu_percent:.1f}% exceeds threshold " f"{settings.cpu_threshold}%"
             logger.warning(f"[ResourceGuard] X-Test blocked: {result.block_reason}")
             return result
 
@@ -229,15 +236,13 @@ class ResourceGuard:
         if status.memory_percent > settings.memory_threshold:
             result.is_safe = False
             result.block_reason = (
-                f"Memory usage {status.memory_percent:.1f}% exceeds threshold "
-                f"{settings.memory_threshold}%"
+                f"Memory usage {status.memory_percent:.1f}% exceeds threshold " f"{settings.memory_threshold}%"
             )
             logger.warning(f"[ResourceGuard] X-Test blocked: {result.block_reason}")
             return result
 
         logger.debug(
-            f"[ResourceGuard] Resource check passed: "
-            f"CPU={status.cpu_percent:.1f}%, Memory={status.memory_percent:.1f}%"
+            f"[ResourceGuard] Resource check passed: " f"CPU={status.cpu_percent:.1f}%, Memory={status.memory_percent:.1f}%"
         )
         return result
 
