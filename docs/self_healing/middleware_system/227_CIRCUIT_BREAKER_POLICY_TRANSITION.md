@@ -331,6 +331,7 @@ self._cb_service.record_failure(
 - [ ] `failure_rate_threshold` 기본값 `0.0` → 프로덕션 활성화 가이드 작성 (§9.2)
 - [ ] **저장소 전환** — `ProviderRegistry` 기본값을 `"layered"` 등록 추가 검토 (§7.4)
 - [x] `CircuitBreakerPolicy`가 `LayeredRepository` 기반 `CircuitBreakerService`를 사용하도록 통합 (§7.4)
+- [x] **단위 테스트 89건 작성** — CircuitBreakerPolicy, Sliding Window, DeprecationWarning, export 검증 (§10)
 
 ## 7. 설계 논의 확정 사항
 
@@ -858,3 +859,56 @@ sliding_window_size=runtime_config.get("sliding_window_size", 100)
 | 5 | `CircuitBreakerService` 또는 `CircuitBreakerPolicy`가 config.sliding_window_size를 Repository에 전달 | `service.py` 또는 Policy 생성 시 |
 | 6 | `LayeredRepositoryBase.__init__`에서 L1 생성 시 window_size 전달 | `layered_repository/base.py` L73 |
 | 7 | 기존 테스트 + window 관련 신규 테스트 | `tests/` |
+
+## 10. 단위 테스트 (89건)
+
+### 10.1 테스트 파일 구조
+
+```
+tests/unit/circuit_breaker/
+├── test_circuit_breaker_policy.py     # CircuitBreakerPolicy 핵심 동작 (57건)
+├── test_sliding_window.py             # InMemoryRepo Sliding Window (22건)
+└── test_cb_policy_integration.py      # DeprecationWarning, Layered, export (10건)
+```
+
+### 10.2 테스트 분류
+
+UNIT_TEST_GUIDELINES.md 기준 계약/동작 검증 분리:
+
+| 파일 | 클래스 | 유형 | 건수 | 대상 |
+|------|--------|------|------|------|
+| `test_circuit_breaker_policy.py` | `TestCircuitBreakerPolicyContract` | 계약 | 10 | name, outcome, executed_policies, 기본값 |
+| | `TestCircuitBreakerPolicyDisabledBehavior` | 동작 | 5 | CB disabled → 직접 실행 |
+| | `TestCircuitBreakerPolicyRejectedBehavior` | 동작 | 7 | CB OPEN → REJECTED |
+| | `TestCircuitBreakerPolicySuccessBehavior` | 동작 | 8 | 성공 경로 → record_success |
+| | `TestCircuitBreakerPolicyFailureBehavior` | 동작 | 5 | 실패 경로 → record_failure + raise |
+| | `TestCircuitBreakerPolicyExceptionFilterBehavior` | 동작 | 7 | _is_failure(), ignore/failure 필터 |
+| | `TestCircuitBreakerPolicyContextBehavior` | 동작 | 2 | PolicyContext 전달 |
+| | `TestCircuitBreakerOpenErrorContract` | 계약 | 5 | 예외 속성, 메시지, 상속 |
+| | `TestCircuitBreakerDecoratorBehavior` | 동작 | 8 | @circuit_breaker() 데코레이터 |
+| `test_sliding_window.py` | `TestSlidingWindowContract` | 계약 | 4 | 기본값 100, deque maxlen |
+| | `TestSlidingWindowRecordFailureBehavior` | 동작 | 7 | record_failure() ring buffer |
+| | `TestSlidingWindowRecordSuccessBehavior` | 동작 | 4 | record_success() ring buffer |
+| | `TestSlidingWindowResetBehavior` | 동작 | 5 | reset/clear 시 window 초기화 |
+| | `TestSlidingWindowIsolationBehavior` | 동작 | 2 | 서비스별 window 격리 |
+| `test_cb_policy_integration.py` | `TestShouldAllowWithFallbackDeprecationContract` | 계약 | 3 | DeprecationWarning 발생/메시지 |
+| | `TestLayeredRepositorySlidingWindowBehavior` | 동작 | 3 | sliding_window_size L1 전달 |
+| | `TestCircuitBreakerModuleExportsContract` | 계약 | 4 | __init__.py export 검증 |
+
+### 10.3 코드 근거 매핑
+
+| 테스트 축 | 코드 근거 |
+|-----------|----------|
+| `name == "circuit_breaker"` | `policy.py` L80-82 |
+| CB disabled → SUCCESS | `policy.py` L118-123: `if not self._cb_service.is_enabled` |
+| REJECTED + CircuitBreakerOpenError | `policy.py` L126-134: `if not self._cb_service.should_allow()` |
+| record_success 호출 | `policy.py` L140: `self._cb_service.record_success(self._service_name)` |
+| record_failure + error_context | `policy.py` L148-150: `error_context={"error": str(e), "type": type(e).__name__}` |
+| 예외 재전파 (raise) | `policy.py` L155: `raise` |
+| ignore_exceptions 우선 | `policy.py` L100-101: `if isinstance(error, self._ignore_exceptions): return False` |
+| 데코레이터 qualname | `policy.py` L173: `name = service_name or func.__qualname__` |
+| Sliding Window ring buffer | `circuit_breaker.py` L62-67: `deque(maxlen=sliding_window_size)` |
+| Window overflow eviction | `circuit_breaker.py` L246-254: `window.append(False)` + deque maxlen |
+| DeprecationWarning | `service.py` L322-328: `warnings.warn(...)` |
+| LayeredRepo window_size 전달 | `base.py` L76: `InMemoryCircuitBreakerStateRepository(sliding_window_size=sliding_window_size)` |
+| __init__.py export | `__init__.py` L58-59: `from .exceptions import ...`, `from .policy import ...` |
