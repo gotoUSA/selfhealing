@@ -9,7 +9,7 @@
 
 ## 2. 핵심 질문: 모든 시스템을 Policy Composition으로 바꿔야 하는가?
 
-### 결론: **아니오.** 6개 패턴만 전환 대상이며, 나머지는 인프라로 유지한다.
+### 결론: **아니오.** 7개 패턴만 전환 대상이며, 나머지는 인프라로 유지한다.
 
 ### 2.1 전환 대상 (POLICY_CANDIDATE) — 함수 호출을 래핑하는 패턴
 
@@ -21,6 +21,7 @@
 | **Fallback** | `core/fallback_strategy.py` | `SimpleFallback`, `PartitionAwareFallback` 존재하나, Retry/CB 실패 후 자동 전환 미지원 |
 | **Hedging** | `core/hedging/` | Bulkhead/Backpressure가 내부 하드코딩. `FallbackStrategy` 상속 커플링 |
 | **Timeout** | 현재 독립 구현 없음 | `DegradedModeHandler`의 `DEFAULT_TIMEOUT_MS` 상수만 존재. Policy로 신규 생성 필요 |
+| **Throttle** | `services/throttle/adaptive.py` | `check()` 내부에 13개 외부 패턴이 하드코딩 (GovernanceCheckMixin, Emergency, CB, ErrorBudget, Kill Switch, LoadShedding, DLQ 등). RetryHandler에 필적하는 커플링. PolicyComposer에서 이중 CB 체크 문제 유발 |
 
 ### 2.2 전환 비대상 (INFRASTRUCTURE) — 인프라로 유지
 
@@ -40,7 +41,7 @@
 | **ErrorBudgetGate** | `services/error_budget_gate/` | Guard hook으로 Policy Pipeline에 참조 (`add_guard()`) |
 | **Backpressure Middleware** | `api/django/middleware/backpressure.py` | HTTP 미들웨어로 유지, Policy와 별도 레이어 |
 | **Load Shedding** | `circuit_breaker/load_shedding/` | Guard hook 또는 인프라 유지 |
-| **Traffic Gate** | `scaling/traffic_gate.py` | 복합 게이트, Bulkhead 부분만 Policy 후보 |
+| **Traffic Gate** | `scaling/traffic_gate.py` | Bulkhead+LoadShedding+RateController 3단계 파이프라인. PolicyComposer 구현 후 `compose(bulkhead(), throttle())` + `LoadSheddingGuard`로 대체되어 클래스 자체 불필요 → 232 참조 |
 
 ## 3. 현재 하드코딩 의존성 현황
 
@@ -85,7 +86,54 @@ ErrorBudgetGate 체크 (L428)
 | Prometheus metrics | L290 lazy import | ImportError 무시 | ✅ 메트릭 인터페이스로 |
 | dlq_service.store_to_dlq | L587 lazy import | 실패 시 호출 | ✅ DLQ Protocol 주입 |
 
-### 3.2 HedgingStrategy — **Bulkhead/EventBus 하드코딩 (3건)**
+### 3.2 AdaptiveThrottle — **RetryHandler에 필적하는 커플링 (13건)**
+
+`services/throttle/adaptive.py`의 `check()` 실행 흐름:
+
+```
+[고정 순서, 코드에 하드코딩됨]
+
+Break Glass + Full Stop 판단 (L1566)
+    ↓
+Governance 통합 상태 동기화 (L1570)
+  ├ Emergency Level 체크    ← EmergencyMode lazy import (L2202)
+  ├ Kill Switch Drift 교정  ← governance.checks lazy import (L2238)
+  └ Break Glass polling     ← GovernanceSettings lazy import (L831)
+    ↓
+Recovery Dampening 진행 (L1574)
+    ↓
+Error Budget Critical → non_essential 거부 (L1577)
+    ↓
+429 감소 → CRITICAL 보호 (L1607)
+    ↓
+Load Shedding 제한적 limit (L1650)
+    ↓
+SlidingWindow.check() (L1661)
+    ↓
+거부 시 DLQ 저장 (L1688)  ← ThrottleDLQReplayMixin 상속
+```
+
+**참조 파일**: `adaptive.py` L1555-L1695, **상세: 232 문서**
+
+하드코딩 의존성 상세:
+
+| 의존 대상 | 위치 | import 방식 | 제거 가능 |
+|-----------|------|------------|----------|
+| GovernanceCheckMixin (상속) | L38 정적 import | 클래스 상속으로 혼입 | ✅ Guard Protocol로 분리 |
+| EmergencyMode.get_current_level() | L2202 lazy import | `_sync_governance_state()` | ✅ Guard로 추출 |
+| governance.checks.is_system_enabled() | L2238 lazy import | `_sync_kill_switch_state()` | ✅ Guard로 추출 |
+| GovernanceSettings.break_glass_enabled | L831 lazy import | `_sync_break_glass_state()` | ✅ Guard로 추출 |
+| EventBus — RATE_LIMIT_429 구독 | L634 lazy import | `_subscribe_rate_limit_events()` | ✅ Hook으로 추출 |
+| EventBus — ERROR_BUDGET 구독 | L910 lazy import | `_subscribe_error_budget_events()` | ✅ Hook으로 추출 |
+| EventBus — LOAD_SHEDDING 구독 | L846 lazy import | `_subscribe_load_shedding_events()` | ✅ Hook으로 추출 |
+| EventBus — KILL_SWITCH 구독 | L782 lazy import | `_subscribe_kill_switch_events()` | ✅ Hook으로 추출 |
+| CircuitBreakerService.get_state() | L2007 lazy import | Full Stop 3중 조건 | ✅ Guard 생성자 주입 |
+| ThrottleDLQReplayMixin (상속) | L39 정적 import | 거부 시 DLQ 저장 | ✅ Sink Protocol로 분리 |
+| Prometheus Metrics (25+ 메트릭) | L133 lazy import | `_record_throttle_metrics()` | ✅ Hook으로 추출 |
+| Audit (감사 로깅) | L64 lazy import | `_record_audit_safe()` | ✅ Hook으로 추출 |
+| ErrorBudgetService + Forecaster | L1155-L1156 lazy import | `_check_preemptive_protection()` | ✅ Guard 또는 외부 피드백 루프 |
+
+### 3.3 HedgingStrategy — **Bulkhead/EventBus 하드코딩 (3건)**
 
 `core/hedging/strategy.py`:
 
@@ -95,7 +143,7 @@ ErrorBudgetGate 체크 (L428)
 | BulkheadRegistry | L97 lazy import | ✅ optional 연동, 인터페이스 추출 가능 |
 | EventBus | L108 lazy import | ✅ optional 구독, 훅으로 추출 가능 |
 
-### 3.3 독립 패턴 (크로스-패턴 의존 0건)
+### 3.4 독립 패턴 (크로스-패턴 의존 0건)
 
 | 패턴 | 위치 | 상태 |
 |------|------|------|
@@ -125,9 +173,9 @@ ErrorBudgetGate 체크 (L428)
 ┌───────────────▼─────────────────────────────────────────┐
 │              Policy Composition Layer (NEW)               │
 │                                                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
-│  │TimeoutPol│→│BulkheadPol│→│  CBPol   │→│RetryPol  │→… │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘   │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │TimeoutPol│→│ThrottlePol│→│BulkheadPol│→│  CBPol   │→│RetryPol  │→…│
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
 │                                                          │
 │  Guards: [ErrorBudgetGate, LoadShedding]                 │
 │  Hooks:  [Audit, Metrics, EventBus]                      │
@@ -153,6 +201,7 @@ ErrorBudgetGate 체크 (L428)
 | **229** | FallbackPolicy 전환 | `FallbackStrategy` ABC 리팩토링, 독립 Policy 추출 |
 | **230** | HedgingPolicy 전환 | Bulkhead 하드코딩 분리, 커스텀 내부 Policy 주입 지원 |
 | **231** | PolicyComposer 조합 엔진 | `compose()` 빌더, 실행 순서 제어, Guard/Hook/Sink 연결 |
+| **232** | ThrottlePolicy 전환 | `adaptive.py` 하드코딩 13건 분리, 순수 Throttle 로직 추출, TrafficGate 대체 |
 
 ## 6. 전환 원칙
 
@@ -175,6 +224,7 @@ Phase 2: 독립 패턴 Policy 래핑 — 의존성 0건인 것부터
 Phase 3: 복잡 패턴 Policy 래핑
     - RetryPolicy (226) ← 하드코딩 12건 분리 필요
     - HedgingPolicy (230) ← FallbackStrategy 상속 분리 필요
+    - ThrottlePolicy (232) ← 하드코딩 13건 분리 필요, TrafficGate 대체
     ↓
 Phase 4: 조합 엔진 구현
     - PolicyComposer (231)
