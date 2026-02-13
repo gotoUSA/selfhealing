@@ -24,10 +24,12 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
     PolicyResult,
+    ResiliencePolicy,
 )
 
 from .config import CircuitBreakerConfig
 from .exceptions import CircuitBreakerOpenError
+from .hooks import build_default_hooks
 from .service import CircuitBreakerService
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-class CircuitBreakerPolicy:
+class CircuitBreakerPolicy(ResiliencePolicy[T]):
     """
     Circuit Breaker Policy — 함수 래핑 기반.
 
@@ -53,6 +55,7 @@ class CircuitBreakerPolicy:
         config: CircuitBreakerConfig (cb_service가 None일 때 사용)
         failure_exceptions: 실패로 카운팅할 예외 타입 튜플
         ignore_exceptions: 실패로 카운팅하지 않을 예외 타입 튜플
+        hooks: PolicyHook 목록 (None이면 기본 Audit+EventBus 훅 사용)
     """
 
     def __init__(
@@ -62,11 +65,34 @@ class CircuitBreakerPolicy:
         config: CircuitBreakerConfig | None = None,
         failure_exceptions: tuple[type[Exception], ...] = (Exception,),
         ignore_exceptions: tuple[type[Exception], ...] = (),
+        hooks: list | None = None,
     ):
         self._service_name = service_name
-        self._cb_service = cb_service or CircuitBreakerService(config=config)
+        self._cb_service = cb_service or self._create_default_service(config)
         self._failure_exceptions = failure_exceptions
         self._ignore_exceptions = ignore_exceptions
+        self._hooks = hooks if hooks is not None else build_default_hooks()
+
+    @staticmethod
+    def _create_default_service(
+        config: CircuitBreakerConfig | None = None,
+    ) -> CircuitBreakerService:
+        """
+        기본 CircuitBreakerService 생성 — LayeredRepository 사용.
+
+        ProviderRegistry에 "layered" 키가 등록되어 있으면 LayeredRepository를 사용한다.
+        등록되지 않은 경우 ProviderRegistry 기본값(redis)으로 fallback한다.
+        이를 통해 hot path에서 Redis I/O를 제거하고 L1 Memory 판정을 보장한다 (#227 §7.4).
+        """
+        repository = None
+        try:
+            from selfhealing.factory import ProviderRegistry
+
+            repository = ProviderRegistry.get_circuit_breaker_repo(name="layered")
+        except (ValueError, ImportError):
+            # "layered" 미등록 시 ProviderRegistry 기본값 사용
+            logger.debug("[CircuitBreakerPolicy] 'layered' repo not available, " "falling back to ProviderRegistry default")
+        return CircuitBreakerService(config=config, repository=repository)
 
     @property
     def name(self) -> str:
@@ -94,6 +120,14 @@ class CircuitBreakerPolicy:
             return False
         return isinstance(error, self._failure_exceptions)
 
+    def _invoke_hooks(self, method: str, *args: Any) -> None:
+        """Fail-Open으로 모든 훅을 호출한다."""
+        for hook in self._hooks:
+            try:
+                getattr(hook, method)(*args)
+            except Exception as e:
+                logger.debug(f"[CircuitBreakerPolicy] Hook {type(hook).__name__}.{method} failed: {e}")
+
     def execute(
         self,
         func: Callable[..., T],
@@ -105,10 +139,10 @@ class CircuitBreakerPolicy:
         Circuit Breaker 상태 기반으로 함수를 실행한다.
 
         1. CB 비활성화 → 바로 실행
-        2. should_allow() == False → REJECTED 반환 (함수 미실행)
+        2. should_allow() == False → REJECTED 반환 (함수 미실행) + hook.on_reject
         3. should_allow() == True → 함수 실행
-           - 성공 → record_success() 후 SUCCESS 반환
-           - 실패 → _is_failure() 판단 후 record_failure(), 예외 재전파
+           - 성공 → record_success() 후 SUCCESS 반환 + hook.on_success
+           - 실패 → _is_failure() 판단 후 record_failure() + hook.on_failure, 예외 재전파
 
         CB OPEN으로 인한 거부 시에는 예외를 던지지 않고 PolicyResult로 반환한다.
         함수 실행 중 발생한 예외는 상위 Policy(Retry 등)에서 처리하도록 재전파한다.
@@ -122,9 +156,12 @@ class CircuitBreakerPolicy:
                 executed_policies=["circuit_breaker"],
             )
 
+        # Hook: 실행 시작
+        self._invoke_hooks("on_execute", self._service_name, 1)
+
         # 요청 허용 여부 확인
         if not self._cb_service.should_allow(self._service_name):
-            return PolicyResult(
+            reject_result = PolicyResult(
                 outcome=PolicyOutcome.REJECTED,
                 error=CircuitBreakerOpenError(self._service_name),
                 executed_policies=["circuit_breaker"],
@@ -133,22 +170,30 @@ class CircuitBreakerPolicy:
                     "state": self._cb_service.get_state(self._service_name),
                 },
             )
+            # Hook: CB OPEN 거부 (Audit + EventBus)
+            self._invoke_hooks("on_reject", self._service_name, "circuit_open")
+            return reject_result
 
         # 함수 실행
         try:
             result = func(*args, **kwargs)
             self._cb_service.record_success(self._service_name)
-            return PolicyResult(
+            success_result = PolicyResult(
                 value=result,
                 outcome=PolicyOutcome.SUCCESS,
                 executed_policies=["circuit_breaker"],
             )
+            # Hook: 실행 성공 (Audit + EventBus)
+            self._invoke_hooks("on_success", self._service_name, success_result)
+            return success_result
         except Exception as e:
             if self._is_failure(e):
                 self._cb_service.record_failure(
                     self._service_name,
                     error_context={"error": str(e), "type": type(e).__name__},
                 )
+            # Hook: 실행 실패 (Audit + EventBus)
+            self._invoke_hooks("on_failure", self._service_name, e, 1)
             raise  # 상위 Policy(Retry 등)에서 처리하도록 전파
 
 

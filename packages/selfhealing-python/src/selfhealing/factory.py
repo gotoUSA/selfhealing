@@ -635,6 +635,27 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
+    # Layered repository (L1=Memory + L2=Redis) — 프로덕션 권장 (#227 §7.4)
+    try:
+        from selfhealing.adapters.memory.layered_repository import (
+            LayeredCircuitBreakerStateRepository,
+        )
+        from selfhealing.adapters.redis import RedisCircuitBreakerStateRepository as _RedisCBRepo
+        from selfhealing.adapters.resilient.backend import get_storage_backend as _get_backend
+
+        def _create_layered_cb_repo():
+            l2_repo = _RedisCBRepo(_get_backend())
+            return LayeredCircuitBreakerStateRepository(
+                l2_repo=l2_repo,
+                sync_interval_seconds=5.0,
+                adapter_type="redis",
+                use_bulkhead=True,
+            )
+
+        ProviderRegistry.register_circuit_breaker_repo("layered", _create_layered_cb_repo)
+    except ImportError:
+        pass
+
     # Audit adapters
     try:
         from selfhealing.adapters.audit.file_adapter import FileAuditLogAdapter

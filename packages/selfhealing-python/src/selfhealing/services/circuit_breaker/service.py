@@ -537,6 +537,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         Determine if circuit should be opened based on failure threshold and minimum calls.
 
         Implements both count-based and rate-based thresholds with minimum_calls protection.
+        Rate-based threshold uses sliding_window_size to bound the calculation,
+        ensuring repository가 window-based count를 제공하지 않는 경우에도
+        누적 카운트 오염을 방지한다.
 
         Args:
             state: Current circuit breaker state
@@ -545,6 +548,19 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             True if circuit should open
         """
         total_calls = state.failure_count + state.success_count
+
+        # Sliding Window: total_calls를 window 크기로 제한 (§9)
+        # InMemoryRepo(ring buffer)는 이미 window-based count를 반환하므로 no-op.
+        # RedisRepo 등 non-windowed repo 사용 시 누적 카운트 오염을 방지한다.
+        window_size = self.config.sliding_window_size
+        if window_size > 0 and total_calls > window_size:
+            logger.debug(
+                f"[CircuitBreaker] Capping total_calls for '{state.service_name}': "
+                f"{total_calls} → {window_size} (sliding_window_size)"
+            )
+            # 비율 계산 시 window 범위 내 카운트만 사용
+            # count-based threshold는 failure_count 원본을 사용 (§9.4)
+            total_calls = window_size
 
         # Check minimum_calls - prevent false positives with low traffic
         if total_calls < self.config.minimum_calls:
@@ -560,7 +576,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             if failure_rate >= self.config.failure_rate_threshold:
                 logger.info(
                     f"[CircuitBreaker] Rate threshold exceeded for '{state.service_name}': "
-                    f"{failure_rate:.1f}% >= {self.config.failure_rate_threshold}%"
+                    f"{failure_rate:.1f}% >= {self.config.failure_rate_threshold}% "
+                    f"(window_size={window_size})"
                 )
                 return True
 

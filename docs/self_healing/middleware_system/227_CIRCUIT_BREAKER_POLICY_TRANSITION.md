@@ -320,17 +320,18 @@ self._cb_service.record_failure(
 - [x] `_is_failure()` 예외 필터링 구현 (§8.2)
 - [x] `failure_exceptions` / `ignore_exceptions` 생성자 파라미터 (§8.2)
 - [x] `should_allow_with_fallback()` → `DeprecationWarning` 추가 (§8.7, 229번 연계)
-- [ ] Audit lazy import → PolicyHook `on_reject`, `on_success` 연결 계획
-- [ ] EventBus lazy import → PolicyHook 연결 계획
+- [x] Audit lazy import → PolicyHook `on_reject`, `on_success` 연결 (`hooks.py` `AuditPolicyHook`, `policy.py` `_invoke_hooks`)
+- [x] EventBus lazy import → PolicyHook 연결 (`hooks.py` `EventBusPolicyHook`, `policy.py` `_invoke_hooks`)
 - [x] 기존 `convenience.py` 함수들의 하위 호환성 유지
 - [x] `service_name` 미지정 시 `func.__qualname__` fallback (데코레이터용, §8.8)
 - [x] 기존 테스트 통과 확인
 - [x] **Sliding Window 구현** — `_should_open_circuit()`에서 `config.sliding_window_size` 실제 사용 (§9)
 - [x] `InMemoryCircuitBreakerStateRepository.record_failure()`에 ring buffer 도입 (§9.3)
-- [x] `_should_open_circuit()`의 `total_calls` 계산을 ring buffer 기반으로 수정 (§9.4)
-- [ ] `failure_rate_threshold` 기본값 `0.0` → 프로덕션 활성화 가이드 작성 (§9.2)
-- [ ] **저장소 전환** — `ProviderRegistry` 기본값을 `"layered"` 등록 추가 검토 (§7.4)
+- [x] `_should_open_circuit()`의 `total_calls` 계산을 ring buffer + `sliding_window_size` cap 기반으로 수정 (§9.4)
+- [x] `failure_rate_threshold` 기본값 `0.0` → 프로덕션 활성화 가이드 작성 (§9.8)
+- [x] **저장소 전환** — `ProviderRegistry`에 `"layered"` 등록 추가, `CircuitBreakerPolicy`가 기본으로 layered 사용 (§7.4)
 - [x] `CircuitBreakerPolicy`가 `LayeredRepository` 기반 `CircuitBreakerService`를 사용하도록 통합 (§7.4)
+- [x] `CircuitBreakerPolicy(ResiliencePolicy[T])` 명시적 Protocol 상속 — `isinstance()` 검증 통과
 - [x] **단위 테스트 89건 작성** — CircuitBreakerPolicy, Sliding Window, DeprecationWarning, export 검증 (§10)
 
 ## 7. 설계 논의 확정 사항
@@ -805,14 +806,22 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 현재 코드(`service.py` L536)에서 `total_calls = state.failure_count + state.success_count`는
 ring buffer 도입 후 **자동으로 window 내 카운트**가 된다.
 
-`_should_open_circuit()`의 로직 자체는 변경 불필요 — `state.failure_count`와 `state.success_count`가
-window 기반 값으로 바뀌면 기존 rate 계산이 자연스럽게 window-based가 된다.
+InMemoryRepo(ring buffer)가 window-based count를 제공하므로 기본 동작은 동일하지만,
+non-windowed repo(Redis 등) 사용 시 누적 카운트 오염을 방지하기 위해
+`_should_open_circuit()`에서 `config.sliding_window_size`를 **직접 참조하여 cap**한다:
 
 ```python
-# 변경 없음 — Repository가 window-based count를 반환하면 그대로 동작
 def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
-    total_calls = state.failure_count + state.success_count  # ← 이제 window 내 카운트
-    # ... 기존 로직 그대로
+    total_calls = state.failure_count + state.success_count
+
+    # Sliding Window: total_calls를 window 크기로 제한 (§9)
+    window_size = self.config.sliding_window_size
+    if window_size > 0 and total_calls > window_size:
+        total_calls = window_size  # non-windowed repo fallback 방어
+
+    if total_calls < self.config.minimum_calls:
+        return False
+    # ... rate/count threshold 판정
 ```
 
 ### 9.5 L2 동기화 시 Window 처리
@@ -859,6 +868,79 @@ sliding_window_size=runtime_config.get("sliding_window_size", 100)
 | 5 | `CircuitBreakerService` 또는 `CircuitBreakerPolicy`가 config.sliding_window_size를 Repository에 전달 | `service.py` 또는 Policy 생성 시 |
 | 6 | `LayeredRepositoryBase.__init__`에서 L1 생성 시 window_size 전달 | `layered_repository/base.py` L73 |
 | 7 | 기존 테스트 + window 관련 신규 테스트 | `tests/` |
+
+### 9.8 `failure_rate_threshold` 프로덕션 활성화 가이드
+
+#### 전제 조건
+
+`failure_rate_threshold`를 활성화하려면 다음이 **모두 충족**되어야 한다:
+
+1. **Sliding Window Ring Buffer 구현 완료** — `InMemoryCircuitBreakerStateRepository`에 `deque(maxlen=N)` 기반 ring buffer 적용 (§9.3)
+2. **LayeredRepository 기본 경로 확보** — `CircuitBreakerPolicy`가 `ProviderRegistry.get_circuit_breaker_repo(name="layered")`를 사용 (§7.4)
+3. **`_should_open_circuit()`의 `sliding_window_size` 직접 참조** — non-windowed repo fallback 시 누적 카운트 오염 방지 (§9.4)
+
+#### 활성화 단계
+
+**Step 1 — Django settings 변경** (`settings.py` 또는 환경 변수):
+
+```python
+# settings.py
+SELF_HEALING = {
+    "CIRCUIT_BREAKER": {
+        "failure_rate_threshold": 50.0,   # 50% 이상 실패 시 OPEN
+        "sliding_window_size": 100,        # 최근 100건 기준
+        "minimum_calls": 10,               # 최소 10건 이후 판정
+        "failure_threshold": 5,            # count-based도 동시 유지 (안전망)
+    }
+}
+```
+
+**Step 2 — RuntimeConfigManager 경유 서비스별 오버라이드** (무중단 변경):
+
+```python
+from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+
+# 서비스별 config 생성
+config = CircuitBreakerConfig.from_runtime_config(
+    service_name="payment_api",
+    # RuntimeConfigManager가 서비스별 설정을 반환
+)
+# → config.failure_rate_threshold = 50.0  (payment_api 전용)
+# → config.sliding_window_size = 1000     (고트래픽 설정)
+```
+
+**Step 3 — 모니터링 확인**:
+
+| 지표 | Prometheus 쿼리 | 기대값 |
+|------|-----------------|--------|
+| CB OPEN 빈도 | `rate(circuit_breaker_state_changes_total{to="open"}[5m])` | 급등 없음 |
+| 거부율 | `rate(circuit_breaker_rejections_total[5m])` | 이전 대비 ±10% 이내 |
+| failure_rate | `circuit_breaker_failure_rate{service="X"}` | threshold 근처 수렴 확인 |
+
+**Step 4 — Canary 배포** (권장):
+
+```yaml
+# k8s/ 환경에서 canary pod에만 Rate-based threshold 활성화
+env:
+  - name: SELF_HEALING__CIRCUIT_BREAKER__FAILURE_RATE_THRESHOLD
+    value: "50.0"
+```
+
+일반 pod는 `failure_rate_threshold=0.0`(비활성) 유지.
+Canary pod의 CB 판정을 2-4시간 관찰 후 전체 롤아웃.
+
+#### 서비스별 추천 프로파일
+
+| 서비스 유형 | `sliding_window_size` | `failure_rate_threshold` | `minimum_calls` | 근거 |
+|------------|----------------------|-------------------------|-----------------|------|
+| 고트래픽 (결제 API) | 1000 | 50.0% | 50 | 0.05% 오류에 과민 반응 방지 |
+| 중트래픽 (내부 API) | 100 | 60.0% | 10 | resilience4j 기본값 준용 |
+| 저트래픽 (관리자 API) | 20 | 80.0% | 5 | 소량 호출에서도 작동 보장 |
+
+#### Rollback 절차
+
+`failure_rate_threshold`를 `0.0`으로 되돌리면 즉시 rate-based 판정이 비활성화된다.
+count-based (`failure_threshold`) 판정은 항상 활성 상태이므로 안전망이 유지된다.
 
 ## 10. 단위 테스트 (89건)
 
