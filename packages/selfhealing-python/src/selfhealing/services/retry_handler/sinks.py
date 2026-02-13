@@ -1,0 +1,98 @@
+"""
+Retry Policy Sinks — DLQ(Dead Letter Queue) 최종 실패 처리.
+
+모든 Policy가 소진된 후 최종 실패를 DLQ에 저장하는 Sink 구현.
+should_dlq 플래그 기반 Dumb Sink: 저장 여부 판단은 RetryPolicy가 담당한다.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from selfhealing.interfaces.resilience_policy import PolicyContext, PolicyResult
+
+logger = logging.getLogger(__name__)
+
+
+class DLQSink:
+    """
+    DLQ(Dead Letter Queue)에 최종 실패를 저장하는 Sink.
+
+    PolicyResult.metadata["should_dlq"] 플래그만 확인하고,
+    True이면 저장, False이면 스킵한다 (Dumb Sink 패턴).
+    저장 여부 판단 로직은 RetryPolicy가 config.enable_dlq로 마킹한다.
+    """
+
+    def handle_failure(
+        self,
+        error: Exception,
+        context: PolicyContext | None,
+        policy_result: PolicyResult,
+    ) -> str | None:
+        """
+        최종 실패를 DLQ에 저장.
+
+        Args:
+            error: 최종 실패 예외
+            context: PolicyContext (order_id, user_id 등)
+            policy_result: 파이프라인 전체 결과
+
+        Returns:
+            DLQ 레코드 ID 문자열, 또는 None (저장하지 않은 경우)
+        """
+        if not policy_result.metadata.get("should_dlq", False):
+            return None
+
+        return self._store_to_dlq(error, context, policy_result)
+
+    def _store_to_dlq(
+        self,
+        error: Exception,
+        context: PolicyContext | None,
+        policy_result: PolicyResult,
+    ) -> str | None:
+        """DLQ 서비스를 호출하여 실패를 저장."""
+        try:
+            from selfhealing.services.dlq import store_to_dlq
+
+            error_type = type(error).__name__ if error else "Unknown"
+            domain = policy_result.metadata.get("domain", "default")
+
+            metadata: dict[str, Any] = {
+                "retry_history": policy_result.metadata.get("retry_history", []),
+                "max_attempts": policy_result.metadata.get("max_attempts"),
+                "domain": domain,
+                "final_attempt": policy_result.total_attempts,
+                "executed_policies": policy_result.executed_policies,
+            }
+
+            # Context에서 비즈니스 식별자 추출
+            order_id = context.order_id if context else None
+            user_id = context.extra.get("user_id") if context and context.extra else None
+
+            result = store_to_dlq(
+                domain=domain,
+                failure_type=f"MAX_RETRIES_{error_type.upper()}",
+                entity_id=order_id,
+                user_id=int(user_id) if user_id is not None else None,
+                error_code=error_type,
+                error_message=str(error)[:1000] if error else "",
+                snapshot_data=context.extra.get("snapshot_data", {}) if context and context.extra else {},
+                request_data=context.extra.get("request_data", {}) if context and context.extra else {},
+                response_data=context.extra.get("response_data", {}) if context and context.extra else {},
+                metadata=metadata,
+                next_action_hint="Review error and retry if transient",
+                recommended_action="manual_check",
+            )
+
+            if result.success:
+                logger.info("[DLQSink] Created DLQ entry: id=%s", result.dlq_id)
+                return str(result.dlq_id) if result.dlq_id is not None else None
+            else:
+                logger.error("[DLQSink] Failed to create DLQ entry: %s", result.error)
+                return None
+
+        except Exception as dlq_error:
+            logger.error("[DLQSink] Failed to create DLQ entry: %s", dlq_error)
+            return None

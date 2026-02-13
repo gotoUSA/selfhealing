@@ -30,16 +30,29 @@ from .models import (
     MaxRetriesExceededError,
     RetryAction,
     RetryConfig,
+    RetryPolicyConfig,
     RetryResult,
     T,
 )
 
-# Handler
+# Handler (legacy)
 from .handler import (
     RetryHandler,
     _is_system_enabled,
     logger,
 )
+
+# Policy (new)
+from .policy import RetryPolicy
+
+# Guards
+from .guards import ErrorBudgetGuard, KillSwitchGuard
+
+# Hooks
+from .hooks import AuditHook, MetricsHook
+
+# Sinks
+from .sinks import DLQSink
 
 # Decorators
 from .decorators import (
@@ -51,12 +64,23 @@ __all__ = [
     "RetryAction",
     "MaxRetriesExceededError",
     "RetryConfig",
+    "RetryPolicyConfig",
     "RetryResult",
     "T",
-    # handler
+    # handler (legacy)
     "RetryHandler",
     "_is_system_enabled",
     "logger",
+    # policy
+    "RetryPolicy",
+    # guards
+    "KillSwitchGuard",
+    "ErrorBudgetGuard",
+    # hooks
+    "AuditHook",
+    "MetricsHook",
+    # sinks
+    "DLQSink",
     # decorators
     "with_retry",
 ]
@@ -67,14 +91,18 @@ __all__ = [
 # Eagerly copy all sub-module attributes to package level.
 # 기존 `from selfhealing.services.retry_handler import X` 패턴 호환 유지.
 
-_SUB_MODULES = ("models", "handler", "decorators")
+_SUB_MODULES = ("models", "handler", "policy", "guards", "hooks", "sinks", "decorators")
 
 from . import decorators as _decorators_mod  # noqa: E402
+from . import guards as _guards_mod  # noqa: E402
 from . import handler as _handler_mod  # noqa: E402
+from . import hooks as _hooks_mod  # noqa: E402
 from . import models as _models_mod  # noqa: E402
+from . import policy as _policy_mod  # noqa: E402
+from . import sinks as _sinks_mod  # noqa: E402
 
 _pkg = _sys.modules[__name__]
-for _mod in (_models_mod, _handler_mod, _decorators_mod):
+for _mod in (_models_mod, _handler_mod, _policy_mod, _guards_mod, _hooks_mod, _sinks_mod, _decorators_mod):
     for _name in dir(_mod):
         if not _name.startswith("__") and not hasattr(_pkg, _name):
             setattr(_pkg, _name, getattr(_mod, _name))

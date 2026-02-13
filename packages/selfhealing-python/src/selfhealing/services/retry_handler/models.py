@@ -4,7 +4,8 @@ Retry Handler Models
 Data classes, enums, and exceptions for retry handling.
 
 RetryAction(Enum), MaxRetriesExceededError(Exception),
-RetryConfig(dataclass), RetryResult(dataclass), T TypeVar.
+RetryConfig(dataclass), RetryPolicyConfig(dataclass),
+RetryResult(dataclass), T TypeVar.
 """
 
 from __future__ import annotations
@@ -120,6 +121,77 @@ class RetryConfig:
 
 
 @dataclass
+class RetryPolicyConfig:
+    """순수 재시도 Policy 전용 설정. 외부 의존 설정은 포함하지 않는다."""
+
+    max_attempts: int = 3
+    backoff_base: int = 4
+    backoff_max: int = 180
+    jitter_percent: int = 25
+    retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=lambda: (Exception,))
+    non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
+    domain: str = "default"
+    enable_dlq: bool = True
+
+    @classmethod
+    def from_settings(cls, domain: str = "default") -> RetryPolicyConfig:
+        """
+        Settings에서 순수 재시도 설정만 로드.
+
+        Args:
+            domain: 도메인별 오버라이드를 위한 도메인명
+
+        Returns:
+            RetryPolicyConfig 인스턴스
+        """
+        try:
+            from selfhealing.services.runtime_config import get_runtime_config_manager
+
+            manager = get_runtime_config_manager()
+            retry_config = manager.get_retry_config()
+            dlq_config = manager.get_dlq_config()
+
+            return cls(
+                max_attempts=retry_config.get("max_attempts", 3),
+                backoff_base=retry_config.get("backoff_base", 4),
+                backoff_max=int(retry_config.get("max_delay", 180)),
+                jitter_percent=retry_config.get("jitter_percent", 25),
+                enable_dlq=dlq_config.get("enabled", True),
+                domain=domain,
+            )
+        except Exception:
+            pass
+
+        config = get_config()
+        retry_settings = config.retry
+        dlq_settings = config.dlq
+        domain_config = config.domain_configs.get(domain, {}).get("retry", {})
+
+        return cls(
+            max_attempts=domain_config.get("max_attempts", retry_settings.max_attempts),
+            backoff_base=domain_config.get("backoff_base", retry_settings.backoff_base),
+            backoff_max=domain_config.get("max_delay", retry_settings.max_delay),
+            jitter_percent=retry_settings.jitter_percent,
+            enable_dlq=dlq_settings.enabled,
+            domain=domain,
+        )
+
+    @classmethod
+    def from_retry_config(cls, config: RetryConfig) -> RetryPolicyConfig:
+        """기존 RetryConfig에서 순수 재시도 설정만 추출."""
+        return cls(
+            max_attempts=config.max_attempts,
+            backoff_base=config.backoff_base,
+            backoff_max=config.backoff_max,
+            jitter_percent=config.jitter_percent,
+            retryable_exceptions=config.retryable_exceptions,
+            non_retryable_exceptions=config.non_retryable_exceptions,
+            domain=config.domain,
+            enable_dlq=config.enable_dlq,
+        )
+
+
+@dataclass
 class RetryResult:
     """Result of a retry operation."""
 
@@ -140,3 +212,21 @@ class RetryResult:
     def was_retried(self) -> bool:
         """Whether this result came from a retry (not first attempt)."""
         return self.attempt > 1
+
+    def to_policy_result(self) -> PolicyResult:
+        """PolicyResult 통합 결과 타입으로 변환."""
+        from selfhealing.interfaces.resilience_policy import PolicyOutcome, PolicyResult
+
+        if self.success:
+            outcome = PolicyOutcome.SUCCESS
+        else:
+            outcome = PolicyOutcome.FAILURE
+
+        return PolicyResult(
+            value=self.value,
+            outcome=outcome,
+            error=self.error,
+            total_attempts=self.attempt,
+            executed_policies=["retry"],
+            metadata={"dlq_id": self.dlq_id, "action": self.action.value},
+        )

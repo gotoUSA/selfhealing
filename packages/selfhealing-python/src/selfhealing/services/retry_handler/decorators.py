@@ -2,6 +2,7 @@
 Retry Handler Decorators
 
 Decorator factory for adding retry logic to functions.
+내부적으로 RetryPolicy를 사용한다.
 """
 
 from __future__ import annotations
@@ -10,8 +11,8 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
-from .handler import RetryHandler
-from .models import MaxRetriesExceededError, RetryConfig, T
+from .models import MaxRetriesExceededError, RetryPolicyConfig, T
+from .policy import RetryPolicy
 
 
 def with_retry(
@@ -39,21 +40,21 @@ def with_retry(
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
-            config = RetryConfig.from_settings(domain)
+            config = RetryPolicyConfig.from_settings(domain)
             if max_attempts is not None:
                 config.max_attempts = max_attempts
             if retryable_exceptions is not None:
                 config.retryable_exceptions = retryable_exceptions
 
-            handler = RetryHandler(config=config, domain=domain)
-            result = handler.execute(func, *args, **kwargs)
+            policy = RetryPolicy(config=config)
+            result = policy.execute(func, *args, **kwargs)
 
             if result.success:
                 return result.value
             else:
                 raise MaxRetriesExceededError(
                     f"Max retries exceeded for {func.__name__}",
-                    retry_count=result.attempt,
+                    retry_count=result.total_attempts,
                     max_retries=config.max_attempts,
                     last_error=result.error,
                 )

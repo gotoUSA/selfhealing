@@ -5,21 +5,28 @@ This module provides various backoff strategies for calculating
 delay between retry attempts.
 """
 
+from __future__ import annotations
+
 import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.interfaces.resilience_policy import PolicyContext
 
 
 class BackoffStrategy(ABC):
     """Abstract base class for backoff calculation strategies."""
 
     @abstractmethod
-    def calculate(self, attempt: int) -> float:
+    def calculate(self, attempt: int, context: PolicyContext | None = None) -> float:
         """
         Calculate the delay for the given attempt number.
 
         Args:
             attempt: The current attempt number (1-indexed)
+            context: Policy 실행 컨텍스트 (tier_id, domain 등 활용 가능)
 
         Returns:
             The delay in seconds before the next retry
@@ -70,7 +77,7 @@ class ExponentialBackoff(BackoffStrategy):
             jitter_factor=overrides.get("jitter_factor", s.exponential_jitter_factor),
         )
 
-    def calculate(self, attempt: int) -> float:
+    def calculate(self, attempt: int, context: PolicyContext | None = None) -> float:
         """Calculate exponential delay with optional jitter."""
         delay = self.base_delay * (self.multiplier ** (attempt - 1))
         delay = min(delay, self.max_delay)
@@ -124,7 +131,7 @@ class LinearBackoff(BackoffStrategy):
             jitter_factor=overrides.get("jitter_factor", s.linear_jitter_factor),
         )
 
-    def calculate(self, attempt: int) -> float:
+    def calculate(self, attempt: int, context: PolicyContext | None = None) -> float:
         """Calculate linear delay."""
         delay = self.base_delay + (self.increment * (attempt - 1))
         delay = min(delay, self.max_delay)
@@ -174,7 +181,7 @@ class ConstantBackoff(BackoffStrategy):
             jitter_factor=overrides.get("jitter_factor", s.constant_jitter_factor),
         )
 
-    def calculate(self, attempt: int) -> float:
+    def calculate(self, attempt: int, context: PolicyContext | None = None) -> float:
         """Return constant delay."""
         result = self.delay
 
@@ -223,7 +230,7 @@ class DecorrelatedJitterBackoff(BackoffStrategy):
             max_delay=overrides.get("max_delay", s.decorrelated_max_delay),
         )
 
-    def calculate(self, attempt: int) -> float:
+    def calculate(self, attempt: int, context: PolicyContext | None = None) -> float:
         """Calculate decorrelated jitter delay."""
         if self._previous_delay is None or attempt == 1:
             delay = self.base_delay

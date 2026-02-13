@@ -669,6 +669,9 @@ class TestPolicyHookContract:
             def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
                 pass
 
+            def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
+                pass
+
             def on_reject(self, policy_name: str, reason: str) -> None:
                 pass
 
@@ -695,6 +698,9 @@ class TestPolicyHookContract:
 
             def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
                 events.append(f"failure:{policy_name}:{attempt}")
+
+            def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
+                events.append(f"retry:{policy_name}:{attempt}:{delay}")
 
             def on_reject(self, policy_name: str, reason: str) -> None:
                 events.append(f"reject:{policy_name}:{reason}")

@@ -388,18 +388,18 @@ def with_retry(domain="default", max_attempts=None, ...):
 ## 7. 체크리스트
 
 - [x] `interfaces/resilience_policy.py` 생성 (225번 인터페이스) — ✅ 완료
-- [ ] `PolicyHook.on_retry(policy_name, attempt, delay)` 메서드 추가 (225 인터페이스 보완)
-- [ ] `BackoffStrategy.calculate(attempt, context=None)` 서명 확장 (기존 `core/backoff.py` ABC)
-- [ ] `RetryPolicyConfig` 데이터 클래스 생성
-- [ ] `RetryPolicy` 클래스 구현 (순수 Retry 로직 + Collaborator 패턴)
-- [ ] `KillSwitchGuard` 구현
-- [ ] `ErrorBudgetGuard` 구현
-- [ ] `AuditHook` 구현 (log_retry_audit 래핑)
-- [ ] `MetricsHook` 구현 (Prometheus 메트릭 래핑)
-- [ ] `DLQSink` 구현 (store_to_dlq 래핑, Dumb Sink — `should_dlq` 플래그만 확인)
-- [ ] `@with_retry` 데코레이터가 RetryPolicy 사용하도록 전환
-- [ ] RetryHandler에 `@deprecated` 표시
-- [ ] 기존 테스트 통과 확인
+- [x] `PolicyHook.on_retry(policy_name, attempt, delay)` 메서드 추가 (225 인터페이스 보완) — ✅ 완료
+- [x] `BackoffStrategy.calculate(attempt, context=None)` 서명 확장 (기존 `core/backoff.py` ABC) — ✅ 완료
+- [x] `RetryPolicyConfig` 데이터 클래스 생성 — ✅ 완료
+- [x] `RetryPolicy` 클래스 구현 (순수 Retry 로직 + Collaborator 패턴) — ✅ 완료
+- [x] `KillSwitchGuard` 구현 — ✅ 완료
+- [x] `ErrorBudgetGuard` 구현 — ✅ 완료
+- [x] `AuditHook` 구현 (log_retry_audit 래핑) — ✅ 완료
+- [x] `MetricsHook` 구현 (Prometheus 메트릭 래핑) — ✅ 완료
+- [x] `DLQSink` 구현 (store_to_dlq 래핑, Dumb Sink — `should_dlq` 플래그만 확인) — ✅ 완료
+- [x] `@with_retry` 데코레이터가 RetryPolicy 사용하도록 전환 — ✅ 완료
+- [x] RetryHandler에 `@deprecated` 표시 — ✅ 완료
+- [x] 기존 테스트 통과 확인 — ✅ 187 tests passed (retry_handler 30 + resilience_policy 79 + backoff 78)
 
 > **변경 사항 (이전 체크리스트 대비)**:
 > - `RetryBudgetGuard` 항목 삭제 → RetryPolicy Collaborator로 재분류 (Guard 부적합)

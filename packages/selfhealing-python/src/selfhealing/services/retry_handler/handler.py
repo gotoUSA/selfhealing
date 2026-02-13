@@ -1,13 +1,18 @@
 """
-Retry Handler
+Retry Handler (Legacy)
 
 Core retry handler with exponential backoff, rate limit awareness,
 and throttle-aware backoff.
+
+.. deprecated::
+    RetryPolicy를 사용하세요. RetryHandler는 하위 호환을 위해 유지됩니다.
+    새 코드에서는 RetryPolicy + PolicyComposer 조합을 권장합니다.
 """
 
 from __future__ import annotations
 
 import logging
+import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -37,6 +42,9 @@ def _is_system_enabled() -> bool:
 class RetryHandler:
     """
     Handles retry logic with exponential backoff.
+
+    .. deprecated::
+        RetryPolicy를 사용하세요. RetryHandler는 하위 호환을 위해 유지됩니다.
 
     Now includes Rate Limit Awareness to prevent Self-DDoS:
     - Detects 429 responses
@@ -76,6 +84,11 @@ class RetryHandler:
             throttle_aware: Override throttle awareness (defaults to config)
             service_name: Service name for Throttle Registry (defaults to domain)
         """
+        warnings.warn(
+            "RetryHandler is deprecated. Use RetryPolicy instead. " "RetryHandler will be removed in a future version.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.config = config or RetryConfig.from_settings(domain)
 
         # Throttle-aware 설정 결정 (파라미터 > config)

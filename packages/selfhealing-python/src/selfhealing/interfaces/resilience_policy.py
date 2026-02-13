@@ -308,6 +308,10 @@ class PolicyHook(Protocol):
         """실행 실패 시 호출."""
         ...
 
+    def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
+        """재시도 예정 시 호출 (마지막 실패 또는 예산 소진 시에는 미호출)."""
+        ...
+
     def on_reject(self, policy_name: str, reason: str) -> None:
         """Policy에 의해 거부 시 호출 (CB open, Bulkhead full 등)."""
         ...
