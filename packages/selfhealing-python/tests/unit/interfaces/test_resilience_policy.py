@@ -686,7 +686,7 @@ class TestPolicyHookContract:
         assert not isinstance(NotAHook(), PolicyHook)
 
     def test_hook_methods_callable(self):
-        """Hook의 4개 메서드가 모두 호출 가능하다."""
+        """Hook의 5개 메서드가 모두 호출 가능하다."""
         events: list[str] = []
 
         class RecordingHook:
@@ -709,13 +709,48 @@ class TestPolicyHookContract:
         hook.on_execute("retry", 1)
         hook.on_success("retry", PolicyResult(value="ok"))
         hook.on_failure("retry", ValueError("err"), 2)
+        hook.on_retry("retry", 2, 5.0)
         hook.on_reject("circuit_breaker", "open")
 
-        assert len(events) == 4
+        assert len(events) == 5
         assert events[0] == "execute:retry:1"
         assert events[1] == "success:retry"
         assert events[2] == "failure:retry:2"
-        assert events[3] == "reject:circuit_breaker:open"
+        assert events[3] == "retry:retry:2:5.0"
+        assert events[4] == "reject:circuit_breaker:open"
+
+    def test_on_retry_receives_delay_info(self):
+        """on_retry는 재시도 예정 시점에 delay 정보를 전달받는다.
+
+        226 문서 §8.6 코드 근거: handler.py L540-542
+        "재시도 예정" 시점에 별도 로그를 남기는 기존 패턴.
+        on_failure와 의미론적으로 분리 — 마지막 시도 실패 시 on_retry 미호출.
+        """
+        retry_events: list[tuple[str, int, float]] = []
+
+        class RetryTrackingHook:
+            def on_execute(self, policy_name: str, attempt: int) -> None:
+                pass
+
+            def on_success(self, policy_name: str, result: PolicyResult) -> None:
+                pass
+
+            def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
+                pass
+
+            def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
+                retry_events.append((policy_name, attempt, delay))
+
+            def on_reject(self, policy_name: str, reason: str) -> None:
+                pass
+
+        hook = RetryTrackingHook()
+        hook.on_retry("retry", 1, 2.5)
+        hook.on_retry("retry", 2, 5.0)
+
+        assert len(retry_events) == 2
+        assert retry_events[0] == ("retry", 1, 2.5)
+        assert retry_events[1] == ("retry", 2, 5.0)
 
 
 # =============================================================================

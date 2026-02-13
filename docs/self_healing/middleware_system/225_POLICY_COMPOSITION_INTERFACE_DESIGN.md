@@ -2,7 +2,7 @@
 
 **구현 상태**: ✅ 완료
 **구현 파일**: `packages/selfhealing-python/src/selfhealing/interfaces/resilience_policy.py`
-**단위 테스트**: ✅ 79건 통과 (`packages/selfhealing-python/tests/unit/interfaces/test_resilience_policy.py`)
+**단위 테스트**: ✅ 80건 통과 (`packages/selfhealing-python/tests/unit/interfaces/test_resilience_policy.py`)
 
 ## 1. 개요
 
@@ -351,6 +351,15 @@ class PolicyHook(Protocol):
         """실패 시."""
         ...
 
+    def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
+        """재시도 예정 시 (마지막 실패 또는 예산 소진 시에는 미호출).
+
+        코드 근거: handler.py L540-542 — "재시도 예정" 시점에 별도 로그를 남기는 기존 패턴.
+        on_failure와 의미론적 분리: 마지막 시도 실패/Budget 소진 시 on_retry는 미호출.
+        226 문서 §8.6에서 확정.
+        """
+        ...
+
     def on_reject(self, policy_name: str, reason: str) -> None:
         """거부 시 (CB open, Bulkhead full 등)."""
         ...
@@ -588,7 +597,7 @@ class RetryPolicy:
 ## 8. 단위 테스트
 
 **테스트 파일**: `packages/selfhealing-python/tests/unit/interfaces/test_resilience_policy.py`
-**결과**: 79건 전체 통과 (2026-02-13)
+**결과**: 80건 전체 통과 (2026-02-13)
 
 ### 8.1 테스트 구성
 
@@ -604,7 +613,7 @@ class RetryPolicy:
 | `TestResiliencePolicyContract` | 계약 검증 | runtime_checkable, 구조적 하위타입 isinstance, execute 동작 | 5 |
 | `TestAsyncResiliencePolicyContract` | 계약 검증 | runtime_checkable, 비동기 구조적 하위타입, async execute | 4 |
 | `TestPolicyGuardContract` | 계약 검증 | runtime_checkable, context=None/context 전달 Guard 동작 | 5 |
-| `TestPolicyHookContract` | 계약 검증 | runtime_checkable, 4개 메서드 호출 가능 | 4 |
+| `TestPolicyHookContract` | 계약 검증 | runtime_checkable, 5개 메서드 호출 가능, on_retry delay 전달 | 5 |
 | `TestFailureSinkContract` | 계약 검증 | runtime_checkable, handle_failure 반환값 (DLQ ID / None) | 4 |
 | `TestPublicExportsContract` | 계약 검증 | interfaces/__init__.py import 가능, __all__ 포함 | 2 |
 
