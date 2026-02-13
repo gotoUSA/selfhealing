@@ -400,6 +400,14 @@ def with_retry(domain="default", max_attempts=None, ...):
 - [x] `@with_retry` 데코레이터가 RetryPolicy 사용하도록 전환 — ✅ 완료
 - [x] RetryHandler에 `@deprecated` 표시 — ✅ 완료
 - [x] 기존 테스트 통과 확인 — ✅ 187 tests passed (retry_handler 30 + resilience_policy 79 + backoff 78)
+- [x] 단위 테스트 작성 — ✅ 110 tests passed (6개 파일 분리)
+  - `test_retry_policy.py` — RetryPolicy 핵심 실행 흐름, Collaborator(sleeper·budget·coordinator·backoff), rate_limit 감지, context (36 tests)
+  - `test_retry_policy_config.py` — RetryPolicyConfig 기본값·변환, RetryResult→PolicyResult 변환 (16 tests)
+  - `test_retry_guards.py` — KillSwitchGuard·ErrorBudgetGuard 계약·동작·Fail-Open (12 tests)
+  - `test_retry_hooks.py` — AuditHook·MetricsHook 계약·동작·Fail-Open, PolicyHook.on_retry Protocol (19 tests)
+  - `test_retry_sinks.py` — DLQSink handle_failure·should_dlq 플래그·Fail-Open (7 tests)
+  - `test_retry_handler_exports.py` — 패키지 re-export 검증, with_retry 데코레이터 RetryPolicy 전환 (14 tests)
+  - 기존 레거시 테스트(`test_retry_handler_unit.py` 30 tests) 미파손 확인
 
 > **변경 사항 (이전 체크리스트 대비)**:
 > - `RetryBudgetGuard` 항목 삭제 → RetryPolicy Collaborator로 재분류 (Guard 부적합)
