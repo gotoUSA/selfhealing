@@ -66,20 +66,114 @@ class PolicyResult(Generic[T]):
         return self.outcome == PolicyOutcome.REJECTED
 ```
 
-### 2.2 ResiliencePolicy — 핵심 Protocol
+### 2.2 PolicyContext — 실행 컨텍스트 (Immutable)
+
+Guard(ErrorBudgetGate 등), Hook(Audit/Metrics), Sink(DLQ)가 올바르게 작동하려면
+단순 함수 인자 외에 메타데이터(Trace ID, User ID, Request Context 등)가 필요하다.
+
+현재 코드에서 이미 명시적 `context: dict` 파라미터를 사용하는 증거:
+
+| 사용처 | 시그니처 | 활용 필드 |
+|--------|---------|----------|
+| `RetryHandler.execute()` | `context: dict[str, Any] \| None = None` (`handler.py` L386) | `order_id`, `payment_id`, `user_id`, `snapshot_data`, `request_data` → DLQ/Audit 전달 |
+| `AdaptiveThrottle.check()` | `context: dict \| None = None` (`adaptive.py` L1572) | `service_id` → Load Shedding 대상 식별, DLQ 저장 |
+| `_move_to_dlq()` | `context: dict[str, Any] \| None` (`handler.py` L578) | `context.get("order_id")`, `context.get("user_id")` 등 직접 추출 |
+
+이를 공식 타입으로 승격한다:
 
 ```python
-from typing import Protocol, Callable, TypeVar
+from __future__ import annotations
+from dataclasses import dataclass, replace, field
+from typing import Any
+
+
+@dataclass(frozen=True)
+class PolicyContext:
+    """
+    Policy 파이프라인 실행 컨텍스트 (Immutable).
+
+    frozen=True로 설정하여 파이프라인 내 사이드 이펙트를 방지한다.
+    수정 필요 시 dataclasses.replace()로 복사본을 생성한다 (Copy-on-Write).
+
+    기존 시스템 frozen 선례:
+    - CachedMetrics  (services/system_metrics_cache.py L24)
+      → "frozen=True로 설정하여 읽기 시 동시성 문제를 원천 방지"
+    - TaskResult     (interfaces/task_queue.py L56)
+    - ExecutionMode  (core/execution_mode.py L40)
+    - config.py의 Pydantic Settings 5건 (config.py L63, L100, L430, L530)
+    """
+
+    # 비즈니스 식별자 — handler.py L616-627 store_to_dlq()에서 사용
+    order_id: str | None = None
+    payment_id: str | None = None
+    user_id: str | None = None
+
+    # Policy 판정 기준 — ErrorBudgetGate.check(tier_id=, region=) 참조
+    tier_id: str | None = None   # "critical" | "standard" | "non_essential"
+    region: str | None = None
+
+    # 도메인/추적 — RetryConfig.domain, OTel trace_id
+    domain: str = ""
+    trace_id: str | None = None
+
+    # 확장 필드 — snapshot_data, request_data 등
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def with_updates(self, **kwargs: Any) -> PolicyContext:
+        """Copy-on-Write: 변경된 필드만 교체한 새 인스턴스 반환."""
+        return replace(self, **kwargs)
+```
+
+**Immutability 원칙**:
+
+- `frozen=True`: 필드 직접 대입 시 `FrozenInstanceError` 발생
+- 수정 필요 시 반드시 `context.with_updates(tier_id="critical")` 사용
+- `extra: dict`의 내부 값은 Python 한계로 완전 불변 보장 불가하나,
+  기존 `CachedMetrics` 선례와 동일하게 참조 불변 + Copy-on-Write 원칙으로 운영
+
+### 2.3 ResiliencePolicy / AsyncResiliencePolicy — 핵심 Protocol
+
+현재 코드베이스에서 동기/비동기는 **별도 클래스**로 구현되어 있다:
+
+| 패턴 | 동기 | 비동기 | 비고 |
+|------|------|--------|------|
+| Retry | `RetryHandler` — `async def` 0건 | 없음 | 순수 동기 |
+| Circuit Breaker | `CircuitBreakerService` — `async def` 0건 | 없음 | 순수 동기 |
+| Hedging | `HedgingStrategy` — `async def` 0건 | 없음 | 순수 동기 |
+| Throttle | `AdaptiveThrottle` — `async def` 0건 | 없음 | 순수 동기 |
+| Fallback | `SimpleFallback` — `async def` 0건 | 없음 | 순수 동기 |
+| Bulkhead | `Bulkhead(ABC)` → `SemaphoreBulkhead` | `AsyncSemaphoreBulkhead` (**별도 클래스**, Bulkhead 미상속) | **유일한 분리** |
+
+7개 전환 대상 중 async를 지원하는 것은 **Bulkhead 하나**뿐이며,
+그것도 `Bulkhead(ABC)`를 상속하지 않는 완전 독립 클래스(`async_semaphore.py`)이다.
+하나의 Protocol에 `execute` + `execute_async`를 모두 넣으면 6개 구현체가
+`execute_async`를 `NotImplementedError`로 두게 되어 Protocol의 의미가 퇴색된다.
+
+따라서 동기/비동기 Protocol을 **분리**한다:
+
+```python
+from typing import Protocol, Callable, TypeVar, Any
 
 T = TypeVar("T")
 
 
 class ResiliencePolicy(Protocol[T]):
     """
-    모든 resilience 패턴이 구현하는 핵심 Protocol.
+    동기 resilience 패턴이 구현하는 핵심 Protocol.
 
     각 Policy는 함수를 래핑하여 resilience 로직을 적용한다.
     Policy 간 조합은 PolicyComposer가 담당한다.
+
+    예외 처리 컨트랙트:
+    - 모든 비즈니스 예외는 PolicyResult(outcome=FAILURE, error=e)에 포장하여 반환한다.
+    - except Exception 패턴을 사용하여 KeyboardInterrupt/SystemExit은 통과시킨다.
+      (Python에서 KeyboardInterrupt/SystemExit은 Exception이 아닌 BaseException
+       직속 하위 클래스이므로 except Exception에 catch되지 않는다.)
+    - 기존 코드 근거: RetryHandler.execute()가 except Exception으로 catch 후
+      RetryResult(success=False)로 반환 (handler.py L492).
+      SimpleFallback.execute()도 동일 (fallback_strategy.py L69-L113).
+    - Bulkhead의 BulkheadFullError만 유일한 예외 기반 → Policy 래퍼에서
+      catch하여 PolicyResult(outcome=REJECTED)로 변환.
     """
 
     @property
@@ -91,6 +185,7 @@ class ResiliencePolicy(Protocol[T]):
         self,
         func: Callable[..., T],
         *args: Any,
+        context: PolicyContext | None = None,
         **kwargs: Any,
     ) -> PolicyResult[T]:
         """
@@ -98,26 +193,60 @@ class ResiliencePolicy(Protocol[T]):
 
         Args:
             func: 실행할 함수
-            *args, **kwargs: 함수 인자
+            *args: 함수 위치 인자
+            context: 실행 컨텍스트 (Guard/Hook/Sink에 전파)
+            **kwargs: 함수 키워드 인자
 
         Returns:
-            PolicyResult[T]: 통합 결과
+            PolicyResult[T]: 통합 결과. 예외를 던지지 않는다.
         """
         ...
 
-    async def execute_async(
+
+class AsyncResiliencePolicy(Protocol[T]):
+    """
+    비동기 resilience 패턴이 구현하는 Protocol.
+
+    현재 해당하는 구현: AsyncSemaphoreBulkhead (async_semaphore.py).
+    동일한 예외 처리 컨트랙트를 따른다.
+    """
+
+    @property
+    def name(self) -> str:
+        """Policy 식별자."""
+        ...
+
+    async def execute(
         self,
         func: Callable[..., T],
         *args: Any,
+        context: PolicyContext | None = None,
         **kwargs: Any,
     ) -> PolicyResult[T]:
-        """비동기 함수 실행. 동기 전용 Policy는 NotImplementedError."""
+        """
+        비동기 함수를 Policy로 감싸서 실행.
+
+        Returns:
+            PolicyResult[T]: 통합 결과. 예외를 던지지 않는다.
+        """
         ...
 ```
 
-### 2.3 Guard — 사전 검증 훅
+### 2.4 Guard — 사전 검증 훅
 
 현재 `RetryHandler.execute()` 내부에 하드코딩된 pre-check 로직을 독립 Guard로 분리한다.
+
+**Guard에 context가 필요한 코드 근거**:
+
+| Guard 후보 | 인자 의존성 | 코드 근거 |
+|-----------|-----------|----------|
+| `KillSwitchGuard` | 인자 없음 — 전역 상태만 | `SystemControlManager().is_enabled()` 파라미터 없음 (`handler.py` L25-34) |
+| `ErrorBudgetGuard` | `tier_id`, `region` 의존 | `ErrorBudgetGate.check(tier_id=, region=)` — tier_id에 따라 판정이 달라짐 (`gate.py` L228-249) |
+| `RetryBudgetGuard` | 재시도 여부 의존 | `record_request(is_retry=(attempt > 1))` (`handler.py` L461-465) |
+
+현재 `RetryHandler._check_error_budget_gate()`는 `check_automation_allowed()`를 **인자 없이** 호출하여
+(`handler.py` L175) `tier_id`/`region` 정보를 전달하지 않는 상태이다.
+이는 현재 코드의 미비점으로, `PolicyContext`를 통해 해소한다.
 
 ```python
 class PolicyGuard(Protocol):
@@ -127,6 +256,10 @@ class PolicyGuard(Protocol):
     현재 하드코딩 위치:
     - Kill Switch: handler.py L419 `_is_system_enabled()`
     - ErrorBudgetGate: handler.py L428 `_check_error_budget_gate()`
+
+    context: PolicyContext | None 설계 원칙:
+    - context가 None이면 전역 상태만 체크 (KillSwitchGuard)
+    - context가 있으면 tier_id/region 등 활용 가능 (ErrorBudgetGuard)
     """
 
     @property
@@ -134,9 +267,12 @@ class PolicyGuard(Protocol):
         """Guard 식별자."""
         ...
 
-    def check(self) -> GuardResult:
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
         """
         실행 허용 여부 확인.
+
+        Args:
+            context: 실행 컨텍스트. None이면 전역 상태만 검증.
 
         Returns:
             GuardResult: allowed=True면 통과, False면 거부
@@ -152,6 +288,30 @@ class GuardResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 ```
 
+**context=None 기본 동작 (Null Safety)**:
+
+Guard 구현 시 `context=None`에 대한 기본 동작을 반드시 정의해야 한다.
+기존 코드가 이미 동일 패턴을 사용 중이다:
+
+| Guard | context=None 시 기본 동작 | 코드 근거 |
+|-------|-------------------------|----------|
+| `KillSwitchGuard` | context 무시, 전역 체크 | `SystemControlManager().is_enabled()` — 인자 없음 |
+| `ErrorBudgetGuard` | `tier_id=None` → **글로벌 판정** (티어 무관) | `ErrorBudgetGate.check(tier_id=None)` → 글로벌 캐시 키 사용 (`gate.py` L262) |
+| `RetryBudgetGuard` | 기본 예산 기준으로 판정 | `should_allow_retry()` — 인자 없음 |
+
+> **주의**: `tier_id=None`은 `"standard"`가 아니라 **글로벌**(티어 무관) 판정이다.
+> 현재 `ErrorBudgetGate.check(tier_id=None)`이 글로벌 캐시 키로 판정하는 것과 일치.
+
+```python
+# ErrorBudgetGuard 구현 예시
+class ErrorBudgetGuard:
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
+        tier_id = context.tier_id if context else None   # None = 글로벌 판정
+        region = context.region if context else None
+        result = self._gate.check(tier_id=tier_id, region=region)
+        return GuardResult(allowed=result.allowed, reason=result.reason)
+```
+
 **현재 코드에서의 Guard 후보**:
 
 | Guard | 현재 위치 | 현재 사용처 |
@@ -160,7 +320,7 @@ class GuardResult:
 | `ErrorBudgetGuard` | `services/error_budget_gate/` → `check_automation_allowed()` | `handler.py` L157 `_check_error_budget_gate()` 내부에서 lazy import |
 | `RetryBudgetGuard` | `services/backoff_calculator/` → `AdaptiveRetryBudget.should_allow_retry()` | `handler.py` L463 루프 내부 |
 
-### 2.4 PolicyHook — 실행 이벤트 옵저버
+### 2.5 PolicyHook — 실행 이벤트 옵저버
 
 ```python
 class PolicyHook(Protocol):
@@ -192,7 +352,7 @@ class PolicyHook(Protocol):
         ...
 ```
 
-### 2.5 FailureSink — 최종 실패 처리
+### 2.6 FailureSink — 최종 실패 처리
 
 ```python
 class FailureSink(Protocol):
@@ -206,11 +366,16 @@ class FailureSink(Protocol):
     def handle_failure(
         self,
         error: Exception,
-        context: dict[str, Any],
+        context: PolicyContext | None,
         policy_result: PolicyResult,
     ) -> str | None:
         """
         최종 실패 처리.
+
+        Args:
+            error: 최종 실패 예외
+            context: PolicyContext (order_id, user_id 등 DLQ 저장에 필요)
+            policy_result: 파이프라인 전체 결과
 
         Returns:
             실패 기록 ID (예: DLQ ID) 또는 None
@@ -290,8 +455,29 @@ interfaces/
 ```
 interfaces/
 ├── (기존 파일들 유지)
-└── resilience_policy.py  # NEW: ResiliencePolicy, PolicyResult, PolicyGuard, PolicyHook, FailureSink
+└── resilience_policy.py  # NEW: 아래 타입 모두 포함
+    # - PolicyContext (frozen=True, Immutable 실행 컨텍스트)
+    # - PolicyOutcome, PolicyResult (통합 결과 타입)
+    # - ResiliencePolicy (동기 Protocol)
+    # - AsyncResiliencePolicy (비동기 Protocol)
+    # - PolicyGuard, GuardResult (사전 검증)
+    # - PolicyHook (실행 이벤트 옵저버)
+    # - FailureSink (최종 실패 처리)
 ```
+
+**네이밍 충돌 검증**:
+
+| 새 이름 | 기존 시스템 존재 여부 | 판정 |
+|---------|---------------------|------|
+| `PolicyContext` | 미존재 | ✅ 안전 — `*Context` 패턴 20건+ 존재 (`RequestContext`, `ActorContext` 등) |
+| `PolicyResult` | 미존재 | ✅ 안전 |
+| `PolicyOutcome` | 미존재 | ✅ 안전 |
+| `ResiliencePolicy` | 미존재 | ✅ 안전 — `*Policy` 패턴 다수 (`NotificationPolicy`, `RollbackPolicy` 등) |
+| `AsyncResiliencePolicy` | 미존재 | ✅ 안전 |
+| `PolicyGuard` | 미존재 | ✅ 안전 — `*Guard` 패턴 11건 존재 (`SafetyGuard`, `AutoRollbackGuard` 등) |
+| `GuardResult` | 미존재 | ✅ 안전 — `*Result` 패턴 다수 (`GateCheckResult`, `SafetyCheckResult` 등) |
+| `PolicyHook` | 미존재 | ✅ 안전 — `HookInfo` (core/hooks.py)와 별개 |
+| `FailureSink` | 미존재 | ✅ 안전 — `PostgreSQLSinkConfig/Consumer` (kafka_consumer.py)와 별개 |
 
 ## 5. Hedging 커스터마이징을 위한 내부 Policy 주입
 
@@ -364,3 +550,33 @@ class RetryPolicy:
 
 단, `RetryHandler` 내부의 하드코딩 의존성(Kill Switch, ErrorBudgetGate 등)은
 생성자 주입 또는 Guard/Hook으로 외부화하는 리팩토링이 필요하다. → 226번 문서 참조
+
+## 7. 설계 약속 요약
+
+논의를 통해 확정된 인터페이스 설계 약속:
+
+### 7.1 Execution Context — 명시적 PolicyContext 전달
+
+- `args/kwargs`에 암시적 포함이 **아닌**, `context: PolicyContext | None` 명시적 파라미터
+- 기존 `RetryHandler.execute(context=dict)`, `AdaptiveThrottle.check(context=dict)` 패턴의 공식 타입 승격
+- `frozen=True`로 파이프라인 내 사이드 이펙트 방지 (기존 `CachedMetrics` Copy-on-Write 선례)
+- Guard/Hook/Sink 모두 동일한 `PolicyContext` 참조
+
+### 7.2 예외 처리 — Swallow + Fatal Pass-through
+
+- **강제 사항**: 모든 Policy는 비즈니스 예외를 `PolicyResult(outcome=FAILURE, error=e)`로 포장 반환
+- `except Exception` 패턴으로 `KeyboardInterrupt`/`SystemExit` 자동 통과 (Python 언어 보장)
+- Bulkhead의 `BulkheadFullError`만 유일한 예외 기반 → Policy 래퍼에서 catch → `PolicyResult(outcome=REJECTED)` 변환
+- 기존 코드 5개 패턴 중 4개가 이미 swallow 패턴, Bulkhead만 예외 기반 (완전 호환)
+
+### 7.3 Guard context 전달 — Optional PolicyContext
+
+- `check(context: PolicyContext | None = None)` 서명으로 전역/컨텍스트 의존 Guard 모두 수용
+- `context=None` 기본 동작: `tier_id=None` → 글로벌 판정 (기존 `ErrorBudgetGate.check(tier_id=None)` 동작 유지)
+- `"standard"` 기본값이 **아닌** `None`(글로벌)이 현재 코드와 일관된 기본 동작
+
+### 7.4 Sync/Async 분리 — 별도 Protocol
+
+- `ResiliencePolicy` (동기) / `AsyncResiliencePolicy` (비동기) 분리
+- 기존 Bulkhead의 `Bulkhead(ABC)` + `AsyncSemaphoreBulkhead`(별도 클래스) 선례 일치
+- Composer 타입 체크는 231번 문서에서 정의 → `compose()` / `compose_async()` 시그니처 분리

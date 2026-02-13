@@ -314,6 +314,94 @@ def compose(*policies: ResiliencePolicy) -> PolicyComposer:
     return composer
 ```
 
+### 3.4 Sync/Async 타입 안전성 — Composer 분리
+
+225번 문서에서 `ResiliencePolicy`(동기)와 `AsyncResiliencePolicy`(비동기) Protocol을 분리했다.
+이에 따라 Composer도 동기/비동기를 분리하여, **타입 수준에서 혼용을 차단**한다.
+
+**기존 코드 근거** — Bulkhead의 동기/비동기 완전 분리 선례:
+
+| 동기 | 비동기 | 관계 |
+|------|--------|------|
+| `Bulkhead(ABC)` → `SemaphoreBulkhead` (`bulkhead/base.py`) | `AsyncSemaphoreBulkhead` (`bulkhead/async_semaphore.py`) | **별도 클래스, 상속 없음** |
+
+동일 원리로:
+
+```python
+# 동기 Composer — ResiliencePolicy만 허용
+class PolicyComposer(Generic[T]):
+    """동기 Policy 조합 엔진."""
+
+    def add(self, policy: ResiliencePolicy) -> PolicyComposer[T]:
+        """ResiliencePolicy(동기)만 추가 가능."""
+        self._policies.append(policy)
+        return self
+
+    def execute(self, func: Callable[..., T], *args,
+                context: PolicyContext | None = None, **kwargs) -> PolicyResult[T]:
+        ...
+
+
+# 비동기 Composer — AsyncResiliencePolicy만 허용
+class AsyncPolicyComposer(Generic[T]):
+    """비동기 Policy 조합 엔진."""
+
+    def add(self, policy: AsyncResiliencePolicy) -> AsyncPolicyComposer[T]:
+        """AsyncResiliencePolicy(비동기)만 추가 가능."""
+        self._policies.append(policy)
+        return self
+
+    async def execute(self, func: Callable[..., T], *args,
+                      context: PolicyContext | None = None, **kwargs) -> PolicyResult[T]:
+        ...
+
+
+# 편의 함수도 분리
+def compose(*policies: ResiliencePolicy) -> PolicyComposer:
+    """동기 Policy 조합."""
+    composer = PolicyComposer()
+    for policy in policies:
+        composer.add(policy)
+    return composer
+
+
+def compose_async(*policies: AsyncResiliencePolicy) -> AsyncPolicyComposer:
+    """비동기 Policy 조합."""
+    composer = AsyncPolicyComposer()
+    for policy in policies:
+        composer.add(policy)
+    return composer
+```
+
+**타입 안전성 효과**:
+
+```python
+# ✅ 정상 — 동기 Policy끼리 조합
+compose(RetryPolicy(...), CircuitBreakerPolicy(...), BulkheadPolicy(...))
+
+# ✅ 정상 — 비동기 Policy끼리 조합
+await compose_async(AsyncBulkheadPolicy(...)).execute(async_func)
+
+# ❌ Mypy 타입 에러 — 동기 Composer에 비동기 Policy 혼용
+compose(RetryPolicy(...), AsyncBulkheadPolicy(...))
+# error: Argument 2 to "compose" has incompatible type "AsyncBulkheadPolicy";
+#        expected "ResiliencePolicy[T]"
+
+# ❌ 런타임 에러 — 타입 힌트 무시 시 방어
+class PolicyComposer:
+    def add(self, policy: ResiliencePolicy) -> PolicyComposer[T]:
+        if isinstance(policy, AsyncResiliencePolicy) and not isinstance(policy, ResiliencePolicy):
+            raise TypeError(
+                f"Cannot add async policy '{policy.name}' to sync PolicyComposer. "
+                f"Use AsyncPolicyComposer or compose_async() instead."
+            )
+        self._policies.append(policy)
+        return self
+```
+
+> **참고**: Mypy 정적 분석으로 컴파일 타임에 잡히는 것이 이상적이며,
+> 런타임 `isinstance` 체크는 타입 힌트를 무시하는 환경을 위한 추가 방어선이다.
+
 ## 4. Guard / Hook / Sink 통합
 
 ### 4.1 Guard — 사전 검증
