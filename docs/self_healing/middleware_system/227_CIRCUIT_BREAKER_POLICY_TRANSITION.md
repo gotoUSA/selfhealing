@@ -100,18 +100,35 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
         service_name: str,
         cb_service: CircuitBreakerService | None = None,
         config: CircuitBreakerConfig | None = None,
+        # 예외 필터링 (§8.2 확정)
+        failure_exceptions: tuple[type[Exception], ...] = (Exception,),
+        ignore_exceptions: tuple[type[Exception], ...] = (),
     ):
         self._service_name = service_name
         self._cb_service = cb_service or CircuitBreakerService(config=config)
+        self._failure_exceptions = failure_exceptions
+        self._ignore_exceptions = ignore_exceptions
 
     @property
     def name(self) -> str:
         return "circuit_breaker"
 
+    def _is_failure(self, error: Exception) -> bool:
+        """
+        예외가 실패로 카운팅되어야 하는지 판단.
+
+        ignore_exceptions에 해당하면 False.
+        failure_exceptions에 해당하면 True.
+        """
+        if isinstance(error, self._ignore_exceptions):
+            return False
+        return isinstance(error, self._failure_exceptions)
+
     def execute(
         self,
         func: Callable[..., T],
         *args: Any,
+        context: PolicyContext | None = None,
         **kwargs: Any,
     ) -> PolicyResult[T]:
         """
@@ -120,7 +137,17 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
         1. should_allow() → False면 REJECTED 반환
         2. True면 func 실행
         3. 성공 → record_success()
-        4. 실패 → record_failure() → 임계값 초과 시 OPEN 전환
+        4. 실패 → _is_failure() 판단 후 record_failure() → 임계값 초과 시 OPEN 전환
+
+        Args:
+            func: 실행할 함수
+            *args: 함수 위치 인자
+            context: PolicyContext (225 Protocol 준수)
+            **kwargs: 함수 키워드 인자
+
+        Returns:
+            PolicyResult[T]: 통합 결과. 예외를 던지지 않는다 (reject 시).
+            다만 func 실행 실패 시에는 raise하여 상위 Policy에 전파한다.
         """
         # CB 비활성화 시 바로 실행
         if not self._cb_service.is_enabled:
@@ -132,9 +159,7 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
         if not self._cb_service.should_allow(self._service_name):
             return PolicyResult(
                 outcome=PolicyOutcome.REJECTED,
-                error=CircuitBreakerOpenError(
-                    f"Circuit breaker '{self._service_name}' is OPEN"
-                ),
+                error=CircuitBreakerOpenError(self._service_name),
                 executed_policies=["circuit_breaker"],
                 metadata={
                     "service_name": self._service_name,
@@ -152,7 +177,12 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
                 executed_policies=["circuit_breaker"],
             )
         except Exception as e:
-            self._cb_service.record_failure(self._service_name, e)
+            # 예외 필터링: ignore_exceptions은 카운팅하지 않음
+            if self._is_failure(e):
+                self._cb_service.record_failure(
+                    self._service_name,
+                    error_context={"error": str(e), "type": type(e).__name__},
+                )
             raise  # 상위 Policy(Retry 등)에서 처리하도록 전파
 ```
 
@@ -199,32 +229,69 @@ policy = compose(
 result = policy.execute(call_api)
 ```
 
-## 4. record_success / record_failure 메서드
+## 4. record_success / record_failure 메서드 — 확정
 
-현재 `CircuitBreakerService`에 이 메서드가 **존재하지 않는다** (토글 기반이므로).
-CircuitBreakerPolicy에서 자동 실패 카운팅을 지원하려면 추가가 필요하다.
+### 4.1 메서드 존재 확인 (문서 초기 기술 오류 정정)
 
-현재 구현은 `manual_control.py`의 `force_open()`/`force_close()`만 제공:
+~~현재 `CircuitBreakerService`에 이 메서드가 **존재하지 않는다** (토글 기반이므로).~~
+
+**정정**: `CircuitBreakerService`에 `record_failure()`와 `record_success()`가 **이미 구현되어 있다**.
+
+- `service.py` L451: `record_failure(self, service_name: str, error_context: dict[str, Any] | None = None)`
+  — failure_count 증가 후 `_should_open_circuit()` 판단, 임계값 초과 시 자동 OPEN 전환
+- `service.py` L713: `record_success(self, service_name: str)`
+  — HALF_OPEN 상태에서 `success_threshold` 도달 시 자동 CLOSED 전환
+- `service.py` L523-L561: `_should_open_circuit()` — count-based (`failure_count >= failure_threshold`)
+  AND rate-based (`failure_rate_threshold > 0` 시 비율 계산) 양쪽 구현 완료
+
+Repository 레이어에도 대응 메서드가 존재한다:
+- `interfaces/repositories.py` L620: `record_failure(service_name) -> CircuitBreakerStateData` (ABC)
+- `interfaces/repositories.py` L625: `record_success(service_name) -> CircuitBreakerStateData` (ABC)
+- `adapters/redis/circuit_breaker.py` L498: `RedisCircuitBreakerStateRepository.record_failure()`
+- `adapters/memory/circuit_breaker.py` L234: `InMemoryCircuitBreakerStateRepository.record_failure()`
+
+### 4.2 Config에 이미 존재하는 자동 카운팅 설정
+
+`config.py` L34-L48에 자동 카운팅용 Config 필드가 **이미 존재**한다:
 
 ```python
-# manual_control.py — 운영자 수동 제어만 존재
-def force_open(self, service_name, reason, controlled_by): ...
-def force_close(self, service_name, reason, controlled_by, trigger_replay): ...
+# config.py — 이미 존재하는 필드들
+failure_threshold: int = 5              # count-based 임계값
+recovery_timeout: int = 60              # seconds
+success_threshold: int = 2              # HALF_OPEN → CLOSED 성공 횟수
+minimum_calls: int = 10                 # 최소 호출 수 (false positive 방지)
+sliding_window_size: int = 100          # Sliding Window 크기
+failure_rate_threshold: float = 0.0     # 0 = disabled, >0 = percentage
 ```
 
-### 선택지
+### 4.3 선택지 재평가 → B안 (자동 카운팅) 확정
 
-| 방안 | 설명 | 장단점 |
-|------|------|--------|
-| A. 토글 유지 | CB는 운영자 수동 제어만. 자동 카운팅 안 함 | 현재 동작 유지. Policy에서는 should_allow() 체크만 |
-| B. 자동 카운팅 추가 | record_failure() 추가, 임계값 초과 시 자동 OPEN | resilience4j 스타일. 완전한 Policy 구현 |
-| C. 하이브리드 | 수동 제어 유지 + ProtectionMixin의 기존 자동 보호 활용 | `protection.py`에 이미 rate_limit_cascade, self_ddos 보호 존재 |
+| 방안 | 설명 | 상태 |
+|------|------|------|
+| A. 토글 유지 | CB는 운영자 수동 제어만 | ❌ 기각 — record_failure가 이미 존재 |
+| **B. 자동 카운팅** | record_failure() + 임계값 초과 시 자동 OPEN | **✅ 확정** — 이미 구현되어 있음 |
+| C. 하이브리드 | 수동 제어 + ProtectionMixin 활용 | ❌ 기각 — B안이 이미 하이브리드를 포함 |
 
-**권장**: **방안 C (하이브리드)**. 이유:
-- `protection.py`에 이미 자동 보호 로직이 존재 (rate limit cascade → 자동 CB open)
-- 운영자 수동 제어(force_open/close)는 엔터프라이즈 요구사항
-- CircuitBreakerPolicy는 should_allow() 기반으로 구현하되,
-  향후 자동 카운팅이 필요하면 ProtectionMixin을 확장
+**B안이 실질적으로 하이브리드인 이유**:
+- `record_failure()` L468: `if state.manually_controlled: return` — 수동 제어 시 자동 카운팅 skip
+- `ProtectionMixin`의 429 cascade → `force_open()` 경로는 별개 유지
+- 즉, 자동 카운팅(record_failure)과 수동 제어(force_open/close)와 429 보호(ProtectionMixin)가 **3개 레이어로 공존**
+
+### 4.4 3.1 코드 수정 사항
+
+`record_failure()`의 실제 시그니처는 `(service_name: str, error_context: dict | None)` 이므로,
+3.1 코드의 `self._cb_service.record_failure(self._service_name, e)` 호출을 수정해야 한다:
+
+```python
+# Before (3.1 의사코드)
+self._cb_service.record_failure(self._service_name, e)
+
+# After (실제 시그니처 대응)
+self._cb_service.record_failure(
+    self._service_name,
+    error_context={"error": str(e), "type": type(e).__name__},
+)
+```
 
 ## 5. 영향 범위
 
@@ -247,11 +314,282 @@ def force_close(self, service_name, reason, controlled_by, trigger_replay): ...
 
 ## 6. 체크리스트
 
-- [ ] `CircuitBreakerPolicy` 클래스 생성
-- [ ] `CircuitBreakerOpenError` 예외 타입 정의
-- [ ] should_allow() 기반 execute() 구현
-- [ ] should_allow_with_fallback() 내장 Fallback을 FallbackPolicy로 분리 계획
-- [ ] Audit lazy import → PolicyHook으로 분리 계획
-- [ ] EventBus lazy import → PolicyHook으로 분리 계획
-- [ ] 기존 convenience.py 함수들의 하위 호환성 유지
+- [ ] `CircuitBreakerPolicy` 클래스 생성 (§3.1 갱신 코드 기반)
+- [ ] `CircuitBreakerOpenError` 예외 타입 정의 (`services/circuit_breaker/exceptions.py` 신설, §8.6)
+- [ ] `execute()` 구현 — `context: PolicyContext | None` 서명 준수 (225 Protocol)
+- [ ] `_is_failure()` 예외 필터링 구현 (§8.2)
+- [ ] `failure_exceptions` / `ignore_exceptions` 생성자 파라미터 (§8.2)
+- [ ] `should_allow_with_fallback()` → `DeprecationWarning` 추가 (§8.7, 229번 연계)
+- [ ] Audit lazy import → PolicyHook `on_reject`, `on_success` 연결 계획
+- [ ] EventBus lazy import → PolicyHook 연결 계획
+- [ ] 기존 `convenience.py` 함수들의 하위 호환성 유지
+- [ ] `service_name` 미지정 시 `func.__qualname__` fallback (데코레이터용, §8.8)
 - [ ] 기존 테스트 통과 확인
+
+## 7. 설계 논의 확정 사항
+
+8가지 설계 질문에 대한 논의 결과를 확정한다. 모든 결정은 코드 근거에 기반한다.
+
+### 7.1 record_failure / record_success 실체 확인
+
+**질문**: `CircuitBreakerService`에 `record_failure()`와 `record_success()`가 실제로 구현되어 있는가?
+문서 §4에서 "존재하지 않는다"고 기술했으나 사실인가?
+
+**확정**: **이미 구현되어 있다.** 문서 §4의 초기 기술은 오류였으며, 정정 완료 (§4.1 참조).
+
+**코드 근거**:
+- `service.py` L451: `record_failure(self, service_name: str, error_context: dict[str, Any] | None = None)`
+  — `repository.record_failure()` 호출 후 `_should_open_circuit()` 판정
+- `service.py` L713: `record_success(self, service_name: str)`
+  — HALF_OPEN에서 `success_count >= config.success_threshold` 시 CLOSED 전환
+- `service.py` L473: `updated_state = self.repository.record_failure(service_name)` — Repository 위임
+- `service.py` L737: `updated_state = self.repository.record_success(service_name)` — Repository 위임
+- `interfaces/repositories.py` L620-625: `record_failure()`, `record_success()` ABC 메서드
+- `adapters/redis/circuit_breaker.py` L498: Redis 구현체
+- `adapters/memory/circuit_breaker.py` L234: InMemory 구현체
+
+**3.1 코드 수정**: `record_failure(name, e)` → `record_failure(name, error_context={...})` 변경 완료.
+
+### 7.2 예외(Exception) 판단 기준 — `failure_exceptions` / `ignore_exceptions`
+
+**질문**: `CircuitBreakerConfig`에 예외 필터링 필드가 없는 상태에서,
+Policy가 함수를 래핑하면 "어떤 예외를 실패로 간주할 것인가"를 어떻게 결정하는가?
+
+**확정**: `CircuitBreakerPolicy.__init__`에 `failure_exceptions`와 `ignore_exceptions` 파라미터 추가.
+Config(dataclass) 자체에는 추가하지 않고 **Policy 생성자 레벨**에서 처리한다.
+
+**코드 근거**:
+- `service.py` L451-497: `record_failure()`는 호출되면 **무조건** failure 카운팅.
+  예외 판별 로직이 내부에 없음 → 호출자(Policy)가 판단해야 함
+- `models.py` L55-56: `RetryPolicyConfig`의 `retryable_exceptions` / `non_retryable_exceptions` 선례
+  — Retry도 Config가 아닌 PolicyConfig 레벨에서 예외 필터링 보유
+
+**Config에 넣지 않는 이유**:
+- `CircuitBreakerConfig`는 `from_settings()` 팩토리로 Redis/설정에서 로드되는 dataclass
+- `tuple[type[Exception], ...]`는 직렬화 불가 → RuntimeConfigManager 호환 불가
+- `RetryPolicyConfig`도 같은 이유로 별도 Policy 레벨에 보유
+
+**네이밍 선택**:
+| 후보 | 채택 | 이유 |
+|------|------|------|
+| `record_failure_exceptions` | ❌ | 과도하게 긴 이름 |
+| `failure_exceptions` | ✅ | `RetryPolicyConfig.retryable_exceptions`와 유사한 간결함 |
+| `ignore_exceptions` | ✅ | `RetryPolicyConfig.non_retryable_exceptions`의 의미 동일 (더 직관적) |
+
+**네이밍 충돌 검증**: `failure_exceptions` — 시스템 전체 검색 0건. `ignore_exceptions` — 시스템 전체 검색 0건. 안전.
+
+**구현 코드** (§3.1 갱신 반영):
+```python
+def _is_failure(self, error: Exception) -> bool:
+    if isinstance(error, self._ignore_exceptions):
+        return False
+    return isinstance(error, self._failure_exceptions)
+```
+
+### 7.3 Half-Open Probe 성공 처리 — `record_success()` 호출만으로 충분
+
+**질문**: HALF_OPEN 상태에서 탐침 요청이 성공하면 누가 서킷을 CLOSED로 바꾸는가?
+`CircuitBreakerPolicy.execute()` 내부에서 `force_close()`를 호출해야 하는가?
+
+**확정**: **`record_success()`만 호출하면 된다.** `force_close()` 호출은 불필요.
+
+**코드 근거**:
+- `service.py` L727-750:
+  ```python
+  if state.state == "half_open":
+      updated_state = self.repository.record_success(service_name)
+      if updated_state.success_count >= self.config.success_threshold:
+          self.repository.update_state(
+              service_name=service_name,
+              state="closed",
+              failure_count=0,
+              success_count=0,
+              opened_at=None,
+          )
+          circuit_closed = True
+  ```
+  HALF_OPEN에서 `success_threshold` (기본값 2) 도달 시 **자동 CLOSED 전환**.
+- `service.py` L754-766: 전환 후 동기 콜백 → Audit → Metrics Push → 조건부 Replay 순차 실행
+- `service.py` L748-750: CLOSED 상태에서 `record_success()` 호출 시 `failure_count`를 0으로 리셋
+
+**force_close()와의 차이**:
+| 속성 | `record_success()` | `force_close()` |
+|------|--------------------|-----------------|
+| `manually_controlled` 설정 | ❌ | ✅ (True) |
+| Kill Switch 체크 | ❌ | ✅ |
+| TTL 설정 | ❌ | ✅ |
+| 용도 | 자동 복구 | 운영자 수동 제어 |
+
+Policy는 자동 복구 경로이므로 `record_success()`가 정확히 맞는 메서드.
+
+### 7.4 상태 저장소 — Redis 기반, 로컬 캐싱 추가 없음
+
+**질문**: 매 `execute()` 호출마다 Redis I/O가 발생하는데 이를 수용하는가?
+로컬 메모리 캐싱(Sliding Window)을 별도 도입해야 하는가?
+
+**확정**: **기존 `ProviderRegistry` 경유 Redis Repository를 그대로 사용.** 로컬 캐싱 추가 없음.
+
+**코드 근거**:
+- `service.py` L176-179: `ProviderRegistry.get_circuit_breaker_repo()` → 기본값 Redis
+- `adapters/redis/circuit_breaker.py` L26: `RedisCircuitBreakerStateRepository` → `ResilientStorageBackend` 사용
+- `ResilientStorageBackend`의 Degraded Mode: Redis 장애 시 자동으로 Memory + WAL 전환
+  (네트워크 장애 시에도 로컬에서 계속 동작)
+
+**I/O 횟수 분석 (execute 1회당)**:
+| 단계 | 호출 | Redis 작업 |
+|------|------|------------|
+| `should_allow()` | `get_or_create()` | 1 HGETALL |
+| (OPEN→HALF_OPEN 시) | `update_state()` | 1 HSET |
+| (성공) | `record_success()` | 1 HGETALL + 1 HSET |
+| (실패) | `record_failure()` | 1 HGETALL + 1 HSET + (자동 OPEN 시) 1 HSET |
+
+최소 2~3 Redis 작업이 발생하나, 분산 환경에서의 상태 일관성(여러 워커가 동일 CB 상태 공유)이
+latency보다 우선이므로 수용한다.
+
+**대안 (향후 최적화 필요 시)**:
+- `LayeredCircuitBreakerStateRepository` (adapters/memory/layered_repository/) — L1 = Memory, L2 = Redis
+- `InMemoryCircuitBreakerStateRepository` — 단일 프로세스 전용
+
+### 7.5 ProtectionMixin 이원화 — 자동 카운팅 vs 429 보호
+
+**질문**: `CircuitBreakerPolicy`와 `ProtectionMixin`의 역할 분담은?
+
+**확정**: **이원화 구조 유지.**
+- `CircuitBreakerPolicy` (`record_failure`)  → 일반 Exception 기반 자동 카운팅 경로
+- `ProtectionMixin` (`record_rate_limit_response`) → 429 / 트래픽 기반 `force_open` 경로
+- `ManualControlMixin` (`force_open` / `force_close`) → 운영자 수동 제어 경로
+
+**코드 근거**:
+- `service.py` L468: `if state.manually_controlled: return` — `record_failure()`는 수동 제어 상태 skip
+- `protection.py` L80: `self.force_open(...)` — ProtectionMixin은 `force_open()` 호출 (수동 제어 플래그 설정)
+- `protection.py` L46-87: `record_rate_limit_response()` — 429 카운트 → cascade 임계값 → `force_open()`
+
+**3개 경로 비교**:
+| 경로 | 트리거 | 상태 전환 | manually_controlled |
+|------|--------|-----------|---------------------|
+| `record_failure()` | 일반 Exception | `update_state("open")` | ❌ False |
+| `record_rate_limit_response()` | 429 storm | `force_open()` | ✅ True 가능 |
+| `force_open()` | 운영자 수동 | `atomic_force_open()` | ✅ True |
+
+**Policy는 ProtectionMixin의 로직을 침범하지 않는다.** 429 감지는 ProtectionMixin이
+별도로 미들웨어/백그라운드에서 감지하여 `force_open()`을 호출하는 기존 흐름을 유지한다.
+
+### 7.6 CircuitBreakerOpenError 정의 위치 — `services/circuit_breaker/exceptions.py`
+
+**질문**: 새 예외 타입을 어디에 정의하는가?
+
+**확정**: `services/circuit_breaker/exceptions.py` (신규 파일)
+
+**코드 근거 — 기존 유사 에러 분석**:
+| 클래스 | 위치 | 부모 | 도메인 |
+|--------|------|------|--------|
+| `CircuitBreakerOpenError` | `shopping/services/payment_recovery_service.py` L40 | `PaymentRecoveryError` | Shopping 전용 |
+| `IPCCircuitBreakerOpenError` | `adapters/ipc/exceptions.py` L112 | `IPCError` | IPC 전용 |
+| (신규) `CircuitBreakerOpenError` | `services/circuit_breaker/exceptions.py` | `Exception` | selfhealing 범용 |
+
+**Shopping의 `CircuitBreakerOpenError`와의 충돌 분석**:
+- Shopping 버전: `from shopping.services.payment_recovery_service import CircuitBreakerOpenError`
+- selfhealing 버전: `from selfhealing.services.circuit_breaker.exceptions import CircuitBreakerOpenError`
+- **모듈 경로가 다르므로 import 충돌 없음** (Python은 fully qualified name으로 구분)
+- Shopping 버전은 `PaymentRecoveryError`를 상속, selfhealing 버전은 `Exception`을 상속
+  → `isinstance()` 체크에서도 충돌 없음
+
+**신규 파일 내용**:
+```python
+# services/circuit_breaker/exceptions.py
+
+class CircuitBreakerOpenError(Exception):
+    """Circuit Breaker가 OPEN 상태일 때 Policy에서 발생하는 범용 예외."""
+
+    def __init__(self, service_name: str, message: str | None = None):
+        self.service_name = service_name
+        super().__init__(message or f"Circuit breaker '{service_name}' is OPEN")
+```
+
+### 7.7 should_allow_with_fallback Deprecated 처리
+
+**질문**: `should_allow_with_fallback()` 메서드를 삭제하는가, 유지하는가?
+
+**확정**: **DeprecationWarning 추가 후 유지.** 229번 FallbackPolicy 도입 후 점진 제거.
+
+**코드 근거 — 현재 사용처**:
+| 위치 | 호출 방식 |
+|------|----------|
+| `stale_cache_integration.py` L320 | `service.should_allow_with_fallback(...)` |
+| `recovery_strategy.py` L458 | `self._stale_cache.should_allow_with_fallback(...)` |
+| `__init__.py` L404 | `should_allow_with_fallback as canary_should_allow_with_fallback` re-export |
+| 테스트 6건 | `test_circuit_breaker_enhancements.py` L221-312 |
+
+**Deprecated 처리 계획** (229번 문서 L476-486과 일관):
+```python
+# service.py — 기존 메서드에 DeprecationWarning 추가
+def should_allow_with_fallback(self, ...) -> CircuitBreakerFallbackResult:
+    import warnings
+    warnings.warn(
+        "should_allow_with_fallback() is deprecated. "
+        "Use compose(circuit_breaker(), fallback()) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    # 기존 로직 그대로 유지
+    ...
+```
+
+**제거 조건**:
+1. FallbackPolicy (229번) 구현 완료
+2. `stale_cache_integration.py`, `recovery_strategy.py` 마이그레이션 완료
+3. 최소 1 릴리스 주기 동안 DeprecationWarning 노출
+
+### 7.8 service_name 동적 처리 — 명시적 이름 기본, `__qualname__` fallback
+
+**질문**: 데코레이터 사용 시 `service_name`을 자동으로 함수 이름에서 추론하는가?
+
+**확정**: `CircuitBreakerPolicy.__init__`은 `service_name: str` 필수 파라미터.
+향후 데코레이터에서 `func.__qualname__`을 기본값으로 활용.
+
+**코드 근거**:
+- 현재 `@circuit_breaker` 데코레이터는 **시스템에 존재하지 않음** (전체 검색 0건)
+- 기존 사용 패턴은 모두 명시적 이름 전달:
+  - `convenience.py` L39: `should_allow_request(service_name: str)`
+  - `shopping/tasks/payment_recovery_tasks.py` L415: `should_allow("external_api")`
+- `service_name`은 외부 서비스 식별자 (예: `"toss_payment"`, `"pg_api"`)로 사용
+  → 함수명 자동 추론은 의미가 달라질 수 있음
+
+**데코레이터 설계 (향후 Phase 5용)**:
+```python
+# 향후 convenience 레이어에 추가
+def circuit_breaker(
+    service_name: str | None = None,
+    failure_exceptions: tuple[type[Exception], ...] = (Exception,),
+    ignore_exceptions: tuple[type[Exception], ...] = (),
+    **kwargs,
+):
+    def decorator(func):
+        name = service_name or func.__qualname__
+        policy = CircuitBreakerPolicy(
+            service_name=name,
+            failure_exceptions=failure_exceptions,
+            ignore_exceptions=ignore_exceptions,
+            **kwargs,
+        )
+        @wraps(func)
+        def wrapper(*args, **kw):
+            return policy.execute(func, *args, **kw)
+        return wrapper
+    return decorator
+```
+
+**네이밍 충돌 검증**: `circuit_breaker` 함수 — 시스템 전체에서 `def circuit_breaker` 검색 0건.
+224번 마스터 플랜의 `compose(circuit_breaker("api"), ...)` 구문과 일관.
+
+## 8. 네이밍 충돌 검증 종합
+
+| 새 이름 | 시스템 존재 여부 | 판정 | 비고 |
+|---------|----------------|------|------|
+| `CircuitBreakerPolicy` | 문서에만 존재 (227 본 문서) | ✅ 안전 | 구현 파일 없음 |
+| `CircuitBreakerOpenError` | `shopping/` L40 (도메인 전용) | ✅ 안전 | 모듈 경로 다름, 상속 계통 다름 |
+| `failure_exceptions` | 미존재 | ✅ 안전 | |
+| `ignore_exceptions` | 미존재 | ✅ 안전 | |
+| `_is_failure` | 미존재 (Policy 내부 private) | ✅ 안전 | |
+| `exceptions.py` (CB 패키지) | 미존재 | ✅ 안전 | 신규 파일 |
+| `circuit_breaker` (데코레이터) | 미존재 | ✅ 안전 | 224 마스터 플랜과 일관 |
