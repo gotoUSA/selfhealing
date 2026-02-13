@@ -942,7 +942,7 @@ Canary pod의 CB 판정을 2-4시간 관찰 후 전체 롤아웃.
 `failure_rate_threshold`를 `0.0`으로 되돌리면 즉시 rate-based 판정이 비활성화된다.
 count-based (`failure_threshold`) 판정은 항상 활성 상태이므로 안전망이 유지된다.
 
-## 10. 단위 테스트 (89건)
+## 10. 단위 테스트 (155건)
 
 ### 10.1 테스트 파일 구조
 
@@ -950,7 +950,9 @@ count-based (`failure_threshold`) 판정은 항상 활성 상태이므로 안전
 tests/unit/circuit_breaker/
 ├── test_circuit_breaker_policy.py     # CircuitBreakerPolicy 핵심 동작 (57건)
 ├── test_sliding_window.py             # InMemoryRepo Sliding Window (22건)
-└── test_cb_policy_integration.py      # DeprecationWarning, Layered, export (10건)
+├── test_cb_policy_integration.py      # DeprecationWarning, Layered, export (10건)
+├── test_circuit_breaker_hooks.py      # PolicyHook 구현체 + build_default_hooks (32건)
+└── test_cb_policy_hooks_window.py     # Protocol 상속, hooks 파라미터, _invoke_hooks, _create_default_service, window cap (34건)
 ```
 
 ### 10.2 테스트 분류
@@ -976,21 +978,42 @@ UNIT_TEST_GUIDELINES.md 기준 계약/동작 검증 분리:
 | `test_cb_policy_integration.py` | `TestShouldAllowWithFallbackDeprecationContract` | 계약 | 3 | DeprecationWarning 발생/메시지 |
 | | `TestLayeredRepositorySlidingWindowBehavior` | 동작 | 3 | sliding_window_size L1 전달 |
 | | `TestCircuitBreakerModuleExportsContract` | 계약 | 4 | __init__.py export 검증 |
+| `test_circuit_breaker_hooks.py` | `TestAuditPolicyHookContract` | 계약 | 5 | PolicyHook 인터페이스 메서드 존재 |
+| | `TestAuditPolicyHookBehavior` | 동작 | 8 | on_reject → log_cb_state_change_audit, Fail-Open |
+| | `TestEventBusPolicyHookContract` | 계약 | 5 | PolicyHook 인터페이스 메서드 존재 |
+| | `TestEventBusPolicyHookBehavior` | 동작 | 7 | on_reject → EventBus.emit, Fail-Open |
+| | `TestBuildDefaultHooksContract` | 계약 | 4 | 반환 리스트, 2개, 타입 순서 |
+| | `TestBuildDefaultHooksBehavior` | 동작 | 3 | 개별 실패 허용, 전부 실패 시 빈 리스트 |
+| `test_cb_policy_hooks_window.py` | `TestCircuitBreakerPolicyProtocolContract` | 계약 | 4 | ResiliencePolicy[T] isinstance, MRO |
+| | `TestCircuitBreakerPolicyHooksParamContract` | 계약 | 3 | hooks 기본값, 커스텀, 빈 리스트 |
+| | `TestInvokeHooksBehavior` | 동작 | 5 | _invoke_hooks 전달 인자, Fail-Open |
+| | `TestPolicyExecuteHooksIntegrationBehavior` | 동작 | 9 | execute() 내 on_execute/on_reject/on_success/on_failure 타이밍 |
+| | `TestCreateDefaultServiceBehavior` | 동작 | 5 | ProviderRegistry "layered" → fallback |
+| | `TestShouldOpenCircuitWindowCapBehavior` | 동작 | 8 | sliding_window_size cap, count-based threshold |
 
 ### 10.3 코드 근거 매핑
 
 | 테스트 축 | 코드 근거 |
 |-----------|----------|
-| `name == "circuit_breaker"` | `policy.py` L80-82 |
-| CB disabled → SUCCESS | `policy.py` L118-123: `if not self._cb_service.is_enabled` |
-| REJECTED + CircuitBreakerOpenError | `policy.py` L126-134: `if not self._cb_service.should_allow()` |
-| record_success 호출 | `policy.py` L140: `self._cb_service.record_success(self._service_name)` |
-| record_failure + error_context | `policy.py` L148-150: `error_context={"error": str(e), "type": type(e).__name__}` |
-| 예외 재전파 (raise) | `policy.py` L155: `raise` |
-| ignore_exceptions 우선 | `policy.py` L100-101: `if isinstance(error, self._ignore_exceptions): return False` |
-| 데코레이터 qualname | `policy.py` L173: `name = service_name or func.__qualname__` |
-| Sliding Window ring buffer | `circuit_breaker.py` L62-67: `deque(maxlen=sliding_window_size)` |
-| Window overflow eviction | `circuit_breaker.py` L246-254: `window.append(False)` + deque maxlen |
-| DeprecationWarning | `service.py` L322-328: `warnings.warn(...)` |
-| LayeredRepo window_size 전달 | `base.py` L76: `InMemoryCircuitBreakerStateRepository(sliding_window_size=sliding_window_size)` |
-| __init__.py export | `__init__.py` L58-59: `from .exceptions import ...`, `from .policy import ...` |
+| `name == "circuit_breaker"` | `policy.py` → `CircuitBreakerPolicy.__init__` super().__init__(name=) |
+| CB disabled → SUCCESS | `policy.py` → `execute()`: `if not self._cb_service.is_enabled` |
+| REJECTED + CircuitBreakerOpenError | `policy.py` → `execute()`: `if not self._cb_service.should_allow()` |
+| record_success 호출 | `policy.py` → `execute()`: `self._cb_service.record_success()` |
+| record_failure + error_context | `policy.py` → `execute()`: `error_context={"error": str(e), "type": type(e).__name__}` |
+| 예외 재전파 (raise) | `policy.py` → `execute()`: `raise` |
+| ignore_exceptions 우선 | `policy.py` → `_is_failure()`: `if isinstance(error, self._ignore_exceptions): return False` |
+| 데코레이터 qualname | `policy.py` → `circuit_breaker()`: `name = service_name or func.__qualname__` |
+| Sliding Window ring buffer | `circuit_breaker.py` → `InMemoryCircuitBreakerStateRepository.__init__`: `deque(maxlen=sliding_window_size)` |
+| Window overflow eviction | `circuit_breaker.py` → `record_failure()`/`record_success()`: `window.append()` + deque maxlen |
+| DeprecationWarning | `service.py` → `should_allow_with_fallback()`: `warnings.warn(...)` |
+| LayeredRepo window_size 전달 | `base.py` → `__init__`: `InMemoryCircuitBreakerStateRepository(sliding_window_size=)` |
+| __init__.py export | `__init__.py`: `from .exceptions import ...`, `from .policy import ...` |
+| ResiliencePolicy[T] 상속 | `policy.py` → `class CircuitBreakerPolicy(ResiliencePolicy[T])` |
+| hooks 기본값 build_default_hooks | `policy.py` → `__init__`: `hooks: list[PolicyHook] = None` → `build_default_hooks()` |
+| _invoke_hooks Fail-Open | `policy.py` → `_invoke_hooks()`: try/except per hook, logger.warning |
+| on_execute/on_reject/on_success/on_failure 타이밍 | `policy.py` → `execute()`: 각 분기에서 `_invoke_hooks()` 호출 |
+| AuditPolicyHook.on_reject → audit | `hooks.py` → `AuditPolicyHook.on_reject()`: lazy import `log_cb_state_change_audit` |
+| EventBusPolicyHook.on_reject → EventBus | `hooks.py` → `EventBusPolicyHook.on_reject()`: `EventBus.emit(CIRCUIT_BREAKER_OPENED)` |
+| build_default_hooks 개별 실패 허용 | `hooks.py` → `build_default_hooks()`: try/except per hook, 실패 시 건너뜀 |
+| _create_default_service layered fallback | `policy.py` → `_create_default_service()`: `ProviderRegistry.get("layered")` → except → `CircuitBreakerService(config)` |
+| _should_open_circuit window cap | `service.py` → `_should_open_circuit()`: `if window_size > 0 and total_calls > window_size: total_calls = window_size` |
