@@ -2,6 +2,7 @@
 
 **구현 상태**: ✅ 완료
 **구현 파일**: `packages/selfhealing-python/src/selfhealing/interfaces/resilience_policy.py`
+**단위 테스트**: ✅ 79건 통과 (`packages/selfhealing-python/tests/unit/interfaces/test_resilience_policy.py`)
 
 ## 1. 개요
 
@@ -583,3 +584,33 @@ class RetryPolicy:
 - `ResiliencePolicy` (동기) / `AsyncResiliencePolicy` (비동기) 분리
 - 기존 Bulkhead의 `Bulkhead(ABC)` + `AsyncSemaphoreBulkhead`(별도 클래스) 선례 일치
 - Composer 타입 체크는 231번 문서에서 정의 → `compose()` / `compose_async()` 시그니처 분리
+
+## 8. 단위 테스트
+
+**테스트 파일**: `packages/selfhealing-python/tests/unit/interfaces/test_resilience_policy.py`
+**결과**: 79건 전체 통과 (2026-02-13)
+
+### 8.1 테스트 구성
+
+| 클래스 | 검증 유형 | 대상 | 테스트 수 |
+|--------|----------|------|-----------|
+| `TestPolicyOutcomeContract` | 계약 검증 | Enum 멤버 값, 멤버 수, str 상속 | 7 |
+| `TestPolicyResultContract` | 계약 검증 | 필드 기본값 (value, outcome, error, executed_policies, total_attempts, total_duration_ms, metadata) | 7 |
+| `TestPolicyResultBehavior` | 동작 검증 | success/rejected 프로퍼티, 값 저장, mutable default 격리, Generic 타입 | 15 |
+| `TestPolicyContextContract` | 계약 검증 | 필드 기본값 8개, frozen=True | 9 |
+| `TestPolicyContextBehavior` | 동작 검증 | 불변성, with_updates Copy-on-Write, 필드 저장, extra 격리 | 11 |
+| `TestGuardResultContract` | 계약 검증 | 필드 기본값 (reason, metadata) | 2 |
+| `TestGuardResultBehavior` | 동작 검증 | allowed 판정, reason, metadata 격리 | 4 |
+| `TestResiliencePolicyContract` | 계약 검증 | runtime_checkable, 구조적 하위타입 isinstance, execute 동작 | 5 |
+| `TestAsyncResiliencePolicyContract` | 계약 검증 | runtime_checkable, 비동기 구조적 하위타입, async execute | 4 |
+| `TestPolicyGuardContract` | 계약 검증 | runtime_checkable, context=None/context 전달 Guard 동작 | 5 |
+| `TestPolicyHookContract` | 계약 검증 | runtime_checkable, 4개 메서드 호출 가능 | 4 |
+| `TestFailureSinkContract` | 계약 검증 | runtime_checkable, handle_failure 반환값 (DLQ ID / None) | 4 |
+| `TestPublicExportsContract` | 계약 검증 | interfaces/__init__.py import 가능, __all__ 포함 | 2 |
+
+### 8.2 가이드라인 준수
+
+- **계약 검증** (`Test*Contract`): 설계 값 하드코딩 (Enum 값, 기본값, 멤버 수)
+- **동작 검증** (`Test*Behavior`): 소스 타입 참조, 프로퍼티 로직 검증
+- **Protocol 검증**: `runtime_checkable` + Stub 구현체로 구조적 하위타입 isinstance 확인
+- **mutable default 격리**: `executed_policies`, `metadata`, `extra` 인스턴스 간 독립성 검증
