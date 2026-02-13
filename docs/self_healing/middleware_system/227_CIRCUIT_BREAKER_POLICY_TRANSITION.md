@@ -325,6 +325,12 @@ self._cb_service.record_failure(
 - [ ] 기존 `convenience.py` 함수들의 하위 호환성 유지
 - [ ] `service_name` 미지정 시 `func.__qualname__` fallback (데코레이터용, §8.8)
 - [ ] 기존 테스트 통과 확인
+- [ ] **Sliding Window 구현** — `_should_open_circuit()`에서 `config.sliding_window_size` 실제 사용 (§9)
+- [ ] `InMemoryCircuitBreakerStateRepository.record_failure()`에 ring buffer 도입 (§9.3)
+- [ ] `_should_open_circuit()`의 `total_calls` 계산을 ring buffer 기반으로 수정 (§9.4)
+- [ ] `failure_rate_threshold` 기본값 `0.0` → 프로덕션 활성화 가이드 작성 (§9.2)
+- [ ] **저장소 전환** — `ProviderRegistry` 기본값을 `"layered"` 등록 추가 검토 (§7.4)
+- [ ] `CircuitBreakerPolicy`가 `LayeredRepository` 기반 `CircuitBreakerService`를 사용하도록 통합 (§7.4)
 
 ## 7. 설계 논의 확정 사항
 
@@ -422,20 +428,20 @@ def _is_failure(self, error: Exception) -> bool:
 
 Policy는 자동 복구 경로이므로 `record_success()`가 정확히 맞는 메서드.
 
-### 7.4 상태 저장소 — Redis 기반, 로컬 캐싱 추가 없음
+### 7.4 상태 저장소 — Layered 하이브리드 확정 (§7.4 개정)
 
 **질문**: 매 `execute()` 호출마다 Redis I/O가 발생하는데 이를 수용하는가?
 로컬 메모리 캐싱(Sliding Window)을 별도 도입해야 하는가?
 
-**확정**: **기존 `ProviderRegistry` 경유 Redis Repository를 그대로 사용.** 로컬 캐싱 추가 없음.
+~~**확정**: 기존 `ProviderRegistry` 경유 Redis Repository를 그대로 사용. 로컬 캐싱 추가 없음.~~
 
-**코드 근거**:
-- `service.py` L176-179: `ProviderRegistry.get_circuit_breaker_repo()` → 기본값 Redis
-- `adapters/redis/circuit_breaker.py` L26: `RedisCircuitBreakerStateRepository` → `ResilientStorageBackend` 사용
-- `ResilientStorageBackend`의 Degraded Mode: Redis 장애 시 자동으로 Memory + WAL 전환
-  (네트워크 장애 시에도 로컬에서 계속 동작)
+**개정**: **`LayeredCircuitBreakerStateRepository` (L1=Memory, L2=Redis) 하이브리드 구조로 전환.**
+Redis 직접 사용은 hot path에 I/O가 개입하여 레이턴시 민감 서비스에 부적합.
+Sliding Window 구현을 위해서도 L1 Memory 레이어가 필수 (§9 참조).
 
-**I/O 횟수 분석 (execute 1회당)**:
+#### 7.4.1 기존 판정의 문제 (Redis 직접)
+
+Redis 직접 사용 시 `execute()` 1회당 최소 2~3 Redis I/O:
 | 단계 | 호출 | Redis 작업 |
 |------|------|------------|
 | `should_allow()` | `get_or_create()` | 1 HGETALL |
@@ -443,12 +449,92 @@ Policy는 자동 복구 경로이므로 `record_success()`가 정확히 맞는 �
 | (성공) | `record_success()` | 1 HGETALL + 1 HSET |
 | (실패) | `record_failure()` | 1 HGETALL + 1 HSET + (자동 OPEN 시) 1 HSET |
 
-최소 2~3 Redis 작업이 발생하나, 분산 환경에서의 상태 일관성(여러 워커가 동일 CB 상태 공유)이
-latency보다 우선이므로 수용한다.
+- 분산 환경에서 상태 일관성은 중요하나, **판정 호출을 hot path에서 Redis로 매번 치는 것은 과도**
+- `failure_rate_threshold` 활성화 시 sliding window가 필수인데, Redis에서 window를 관리하면
+  `ZADD`/`ZRANGEBYSCORE` 등 추가 I/O 발생 → 더 악화
 
-**대안 (향후 최적화 필요 시)**:
-- `LayeredCircuitBreakerStateRepository` (adapters/memory/layered_repository/) — L1 = Memory, L2 = Redis
-- `InMemoryCircuitBreakerStateRepository` — 단일 프로세스 전용
+#### 7.4.2 개정 — Layered 하이브리드 구조
+
+**확정**: `LayeredCircuitBreakerStateRepository` 사용.
+
+**코드 근거 — 이미 완전 구현되어 있다**:
+- `adapters/memory/layered_repository/__init__.py`: 7개 Mixin + Base 조합
+  ```
+  LayeredCircuitBreakerStateRepository(
+      L2LoadMixin, ErrorHandlingMixin, DriftOperationsMixin,
+      L2SyncMixin, RepositoryOperationsMixin, MonitoringMixin,
+      AuditHelpersMixin, LayeredRepositoryBase,
+      CircuitBreakerStateRepository,
+  )
+  ```
+- `adapters/memory/layered_repository/base.py` L73: `self._l1 = InMemoryCircuitBreakerStateRepository()`
+- `adapters/memory/layered_repository/base.py` L74: `self._l2 = l2_repo` (Redis 등 외부 저장소)
+- `adapters/memory/layered_repository/repository_operations.py` L173-177:
+  ```python
+  def record_failure(self, service_name: str) -> CircuitBreakerStateData:
+      """L1에서 실패 기록 후 L2 동기화."""
+      result = self._l1.record_failure(service_name)
+      self._sync_to_l2_async(service_name, result)
+      return result
+  ```
+- `adapters/memory/layered_repository/l2_sync.py`: L2 비동기 동기화 + 타임아웃 (Fail-Fast)
+- `adapters/memory/layered_repository/base.py` L89-99: DriftReconciler, Bulkhead, ShadowLogger 통합
+- `services/factory/base.py` L193-220: `StorageMode.LAYERED` 선택 시 자동 생성:
+  ```python
+  def _create_layered_repository(self, repo_type: str):
+      l2_repo = RedisCircuitBreakerStateRepository()  # Redis를 L2로
+      return LayeredCircuitBreakerStateRepository(l2_repo=l2_repo)
+  ```
+
+**테스트 존재**: `test_drift_reconciliation.py` (12+ 케이스), `test_shadow_log_forensic.py`, `test_l2_timeout.py`
+
+**동작 구조**:
+```
+execute() → should_allow() → L1 Memory (0.01ms)  ← hot path, Redis I/O 없음
+                                  │
+                             백그라운드
+                                  ↓
+                          L2 Redis async sync
+                                  │
+                             DriftReconciler
+                                  ↓
+                          L1 ← L2 eventual consistency
+```
+
+#### 7.4.3 3가지 저장소 비교 (모두 구현 완료)
+
+| 저장소 | 구현 위치 | 판정 레이턴시 | 분산 동기화 | Redis 장애 내성 | 권장 시나리오 |
+|--------|----------|-------------|-----------|---------------|-------------|
+| `RedisCircuitBreakerStateRepository` | `adapters/redis/circuit_breaker.py` (745줄) | 2~5ms (HGETALL) | ✅ 즉시 일관 | ⚠️ `ResilientStorageBackend` WAL fallback | Redis 레이턴시 허용 가능한 서비스 |
+| `InMemoryCircuitBreakerStateRepository` | `adapters/memory/circuit_breaker.py` (459줄) | 0.01ms | ❌ 프로세스 격리 | ✅ 외부 의존 없음 | 단일 프로세스, 사이드카, 테스트 |
+| **`LayeredCircuitBreakerStateRepository`** | `adapters/memory/layered_repository/` (8파일) | **0.01ms (L1)** | **✅ L2 비동기** | **✅ L1 격리 + ShadowLog** | **프로덕션 권장** |
+
+**ProviderRegistry 등록 상태**:
+- `factory.py` L614: `register_circuit_breaker_repo("memory", InMemoryCircuitBreakerStateRepository)` ✅
+- `factory.py` L633: `register_circuit_breaker_repo("redis", _create_redis_cb_repo)` ✅
+- `factory/base.py` L197: `StorageMode.LAYERED` → `LayeredCircuitBreakerStateRepository(l2_repo=...)` ✅
+
+#### 7.4.4 Layered 구조에서 RedisRepository의 역할
+
+`RedisCircuitBreakerStateRepository`는 단독 사용 시 hot path I/O 문제가 있으나,
+**L2로 사용 시 다음 이점을 제공**:
+
+1. **분산 상태 수렴**: 여러 워커/노드가 동일 CB 상태에 최종적으로 수렴
+2. **`ResilientStorageBackend`의 WAL 보호**: L2(Redis) 자체가 장애 나도 Memory+WAL로 자동 전환
+   (`adapters/resilient/backend.py` L427-441: `hset()` → Redis 실패 시 `_hset_degraded()` → WAL-First)
+3. **DriftReconciler 연동**: L1↔L2 불일치 자동 감지 및 보정
+   (`adapters/memory/layered_repository/base.py` L81: `self._drift_reconciler`)
+
+**최종 권장 구성**:
+```python
+# 프로덕션 환경
+LayeredCircuitBreakerStateRepository(
+    l2_repo=RedisCircuitBreakerStateRepository(backend=get_storage_backend()),
+    sync_interval_seconds=5,
+    adapter_type="redis",
+    use_bulkhead=True,  # L2 작업 리소스 격리
+)
+```
 
 ### 7.5 ProtectionMixin 이원화 — 자동 카운팅 vs 429 보호
 
@@ -593,3 +679,182 @@ def circuit_breaker(
 | `_is_failure` | 미존재 (Policy 내부 private) | ✅ 안전 | |
 | `exceptions.py` (CB 패키지) | 미존재 | ✅ 안전 | 신규 파일 |
 | `circuit_breaker` (데코레이터) | 미존재 | ✅ 안전 | 224 마스터 플랜과 일관 |
+
+## 9. Sliding Window 구현 설계
+
+`failure_rate_threshold`를 프로덕션에서 활성화하기 위해 Sliding Window 구현이 필수이다.
+현재 `config.sliding_window_size = 100`은 **Dead Code**이며, 실제 판정 로직에서 참조되지 않는다.
+
+### 9.1 현재 문제 — `sliding_window_size`가 Dead Code
+
+**코드 근거**:
+
+`config.py` L43에 선언:
+```python
+sliding_window_size: int = 100  # Number of calls to track
+failure_rate_threshold: float = 0.0  # 0 = disabled, >0 = percentage
+```
+
+그러나 `service.py` L523-561 `_should_open_circuit()`에서 **한 번도 참조하지 않는다**:
+```python
+def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
+    total_calls = state.failure_count + state.success_count  # ← 누적 카운터
+
+    if total_calls < self.config.minimum_calls:
+        return False
+
+    if self.config.failure_rate_threshold > 0:
+        failure_rate = (state.failure_count / total_calls * 100)  # ← 누적 비율
+        if failure_rate >= self.config.failure_rate_threshold:
+            return True
+
+    if state.failure_count >= self.config.failure_threshold:
+        return True
+
+    return False
+```
+
+- `self.config.sliding_window_size` 참조: **0건** (service.py 전체 검색)
+- `total_calls`는 `state.failure_count + state.success_count` — **누적 값**이므로 window 개념이 없음
+- `failure_rate`는 전체 누적 호출 대비 비율 → 시간이 지날수록 과거 데이터에 오염
+
+Repository 레이어에도 window 로직이 없다:
+- `adapters/redis/circuit_breaker.py` L498-509: `record_failure()` → `increment_failure()` → 단순 `failure_count + 1`
+- `adapters/memory/circuit_breaker.py` L234-257: `record_failure()` → `new_count = entry.failure_count + 1`
+
+### 9.2 왜 `failure_rate_threshold` 프로덕션 활성화가 필수인가
+
+count-based (`failure_threshold=5`)만으로는 트래픽 규모 대응이 불가:
+
+| 시나리오 | 트래픽 | 5건 실패 의미 | count-based 판정 |
+|---------|--------|-------------|------------------|
+| 고트래픽 | 10,000 RPM | 0.05% 오류 | ❌ OPEN (과민 반응) |
+| 저트래픽 | 10 RPM | 50% 오류 | ✅ OPEN (적절한 반응) |
+
+비율 기반은 트래픽 규모와 무관하게 일관된 판정을 보장한다.
+그러나 비율 기반이 의미를 가지려면 **"최근 N건"에 대한 비율**이어야 한다.
+누적 비율은 시간이 지날수록 희석되어 무의미해진다.
+
+### 9.3 구현 설계 — Count-Based Sliding Window (Ring Buffer)
+
+**방식 선택**:
+| 방식 | 구현 복잡도 | 메모리 | I/O 부담 | 정밀도 |
+|------|-----------|--------|---------|--------|
+| **Count-Based Ring Buffer** | ✅ 낮음 | N bytes | ✅ 없음 (L1 메모리) | O(1) |
+| Time-Based Bucket | ⚠️ 중간 | 가변 | ⚠️ 타이머 필요 | 시간 정밀도 |
+| Redis Sorted Set | ❌ 높음 | Redis 측 | ❌ ZADD/ZRANGEBYSCORE per call | 정밀하나 고비용 |
+
+**업계 표준과의 비교**:
+| 라이브러리 | 기본 window | 타입 |
+|-----------|------------|------|
+| **resilience4j** (Java) | **100 (count)** / 60s (time) | 선택 가능 |
+| Netflix Hystrix | 10초 × 10 bucket | time-based |
+| Polly (.NET) | 수동 설정 | — |
+| Envoy proxy | 5초 / 10초 | time-based |
+
+`config.sliding_window_size = 100` 기본값은 **resilience4j와 동일**하며 업계 표준.
+RuntimeConfigManager를 통해 서비스별 조정 가능 (`config.py` L87: `runtime_config.get("sliding_window_size", 100)`).
+
+**구현 위치: `InMemoryCircuitBreakerStateRepository`**
+
+`adapters/memory/circuit_breaker.py`의 `record_failure()` / `record_success()`에
+ring buffer를 추가한다. L1 메모리 레이어에서 window를 관리하므로:
+1. Redis I/O 없음 (hot path 보호)
+2. `LayeredRepository`의 L2 동기화에는 **집계된 카운트만 전달** (window 전체를 동기화할 필요 없음)
+3. `repository_operations.py` L173-177의 기존 `L1 → L2 async sync` 흐름에 영향 없음
+
+**의사코드**:
+```python
+class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
+    def __init__(self, sliding_window_size: int = 100):
+        self._storage: dict[str, CircuitBreakerStateData] = {}
+        self._lock = threading.RLock()
+        # Sliding Window: 서비스별 ring buffer
+        self._sliding_window_size = sliding_window_size
+        self._call_windows: dict[str, deque[bool]] = {}  # True=success, False=failure
+
+    def record_failure(self, service_name: str) -> CircuitBreakerStateData:
+        with self._lock:
+            window = self._get_or_create_window(service_name)
+            if len(window) >= self._sliding_window_size:
+                window.popleft()  # 가장 오래된 항목 제거
+            window.append(False)  # failure
+
+            # window 기반 카운트 계산
+            failure_count = window.count(False)
+            success_count = window.count(True)
+            # ... CircuitBreakerStateData 갱신
+
+    def record_success(self, service_name: str) -> CircuitBreakerStateData:
+        with self._lock:
+            window = self._get_or_create_window(service_name)
+            if len(window) >= self._sliding_window_size:
+                window.popleft()
+            window.append(True)  # success
+            # ... CircuitBreakerStateData 갱신
+
+    def _get_or_create_window(self, service_name: str) -> deque[bool]:
+        if service_name not in self._call_windows:
+            self._call_windows[service_name] = deque(maxlen=self._sliding_window_size)
+        return self._call_windows[service_name]
+```
+
+### 9.4 `_should_open_circuit()` 수정
+
+현재 코드(`service.py` L536)에서 `total_calls = state.failure_count + state.success_count`는
+ring buffer 도입 후 **자동으로 window 내 카운트**가 된다.
+
+`_should_open_circuit()`의 로직 자체는 변경 불필요 — `state.failure_count`와 `state.success_count`가
+window 기반 값으로 바뀌면 기존 rate 계산이 자연스럽게 window-based가 된다.
+
+```python
+# 변경 없음 — Repository가 window-based count를 반환하면 그대로 동작
+def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
+    total_calls = state.failure_count + state.success_count  # ← 이제 window 내 카운트
+    # ... 기존 로직 그대로
+```
+
+### 9.5 L2 동기화 시 Window 처리
+
+`LayeredRepository`의 L2 동기화는 `state.failure_count` / `state.success_count`만 전달한다.
+Window 자체(ring buffer)는 L1 로컬에서만 유지:
+
+```
+L1 (InMemory)           L2 (Redis)
+┌──────────────────┐   ┌──────────────────┐
+│ ring buffer:     │   │ failure_count: 3  │ ← 집계된 값만
+│ [F,S,S,F,S,F,S]  │──→│ success_count: 4  │
+│ failure_count: 3 │   │ state: closed     │
+│ success_count: 4 │   └──────────────────┘
+└──────────────────┘
+```
+
+- 각 노드가 독립적으로 ring buffer를 운영 → 노드별 판정은 즉시
+- L2에는 집계 카운트만 비동기 동기화 → 노드 간 최종 수렴
+- DriftReconciler가 L1↔L2 불일치 자동 감지 → 극단적 불일치 시 보정
+
+### 9.6 `sliding_window_size` 서비스별 오버라이드
+
+100이 기본값이나, 서비스별 조정이 가능해야 한다:
+
+```python
+# RuntimeConfigManager 경유 — 이미 지원됨 (config.py L87)
+sliding_window_size=runtime_config.get("sliding_window_size", 100)
+
+# 서비스별 추천값
+# 고트래픽 (toss_payment): sliding_window_size=1000, failure_rate_threshold=50.0
+# 중트래픽 (internal_api):  sliding_window_size=100,  failure_rate_threshold=60.0
+# 저트래픽 (admin_api):     sliding_window_size=20,   failure_rate_threshold=80.0
+```
+
+### 9.7 구현 순서
+
+| 단계 | 작업 | 영향 범위 |
+|------|------|----------|
+| 1 | `InMemoryCircuitBreakerStateRepository`에 ring buffer 추가 | `adapters/memory/circuit_breaker.py` |
+| 2 | `__init__`에 `sliding_window_size` 파라미터 추가 | 동일 파일 |
+| 3 | `record_failure()` / `record_success()`가 window 기반 count 반환 | 동일 파일 |
+| 4 | `reset()` / `clear()` 시 window도 초기화 | 동일 파일 |
+| 5 | `CircuitBreakerService` 또는 `CircuitBreakerPolicy`가 config.sliding_window_size를 Repository에 전달 | `service.py` 또는 Policy 생성 시 |
+| 6 | `LayeredRepositoryBase.__init__`에서 L1 생성 시 window_size 전달 | `layered_repository/base.py` L73 |
+| 7 | 기존 테스트 + window 관련 신규 테스트 | `tests/` |
