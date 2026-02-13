@@ -300,6 +300,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         """
         Check if requests should be allowed with fallback strategy support.
 
+        .. deprecated::
+            이 메서드는 deprecated 되었습니다.
+            CircuitBreakerPolicy + FallbackPolicy 조합으로 대체하세요.
+
         When CB is open, instead of simply blocking, this method can:
         1. Return cached (stale) data
         2. Queue the request to DLQ for later retry
@@ -314,6 +318,14 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         Returns:
             CircuitBreakerFallbackResult with decision and optional fallback data
         """
+        import warnings
+
+        warnings.warn(
+            "should_allow_with_fallback() is deprecated. " "Use CircuitBreakerPolicy + FallbackPolicy 조합으로 대체하세요.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if not self.is_enabled:
             return CircuitBreakerFallbackResult.allow()
 

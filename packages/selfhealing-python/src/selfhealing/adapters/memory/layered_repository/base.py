@@ -56,6 +56,7 @@ class LayeredRepositoryBase:
         adapter_type: str = "unknown",
         drift_reconciler: DriftReconciler | None = None,
         use_bulkhead: bool = True,
+        sliding_window_size: int = 100,
     ):
         """
         Args:
@@ -64,13 +65,16 @@ class LayeredRepositoryBase:
             adapter_type: L2 어댑터 타입 (redis, django 등) - 타임아웃 결정에 사용
             drift_reconciler: 드리프트 복구 인스턴스. None이면 기본 인스턴스 사용.
             use_bulkhead: Bulkhead 패턴 사용 여부 (기본 True)
+            sliding_window_size: L1 Sliding Window ring buffer 크기 (기본 100)
         """
         # Lazy import to avoid circular dependency
         from selfhealing.adapters.memory.circuit_breaker import (
             InMemoryCircuitBreakerStateRepository,
         )
 
-        self._l1 = InMemoryCircuitBreakerStateRepository()
+        self._l1 = InMemoryCircuitBreakerStateRepository(
+            sliding_window_size=sliding_window_size,
+        )
         self._l2 = l2_repo
         self._sync_interval = sync_interval_seconds
         self._adapter_type = adapter_type

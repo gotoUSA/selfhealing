@@ -314,23 +314,23 @@ self._cb_service.record_failure(
 
 ## 6. 체크리스트
 
-- [ ] `CircuitBreakerPolicy` 클래스 생성 (§3.1 갱신 코드 기반)
-- [ ] `CircuitBreakerOpenError` 예외 타입 정의 (`services/circuit_breaker/exceptions.py` 신설, §8.6)
-- [ ] `execute()` 구현 — `context: PolicyContext | None` 서명 준수 (225 Protocol)
-- [ ] `_is_failure()` 예외 필터링 구현 (§8.2)
-- [ ] `failure_exceptions` / `ignore_exceptions` 생성자 파라미터 (§8.2)
-- [ ] `should_allow_with_fallback()` → `DeprecationWarning` 추가 (§8.7, 229번 연계)
+- [x] `CircuitBreakerPolicy` 클래스 생성 (§3.1 갱신 코드 기반)
+- [x] `CircuitBreakerOpenError` 예외 타입 정의 (`services/circuit_breaker/exceptions.py` 신설, §8.6)
+- [x] `execute()` 구현 — `context: PolicyContext | None` 서명 준수 (225 Protocol)
+- [x] `_is_failure()` 예외 필터링 구현 (§8.2)
+- [x] `failure_exceptions` / `ignore_exceptions` 생성자 파라미터 (§8.2)
+- [x] `should_allow_with_fallback()` → `DeprecationWarning` 추가 (§8.7, 229번 연계)
 - [ ] Audit lazy import → PolicyHook `on_reject`, `on_success` 연결 계획
 - [ ] EventBus lazy import → PolicyHook 연결 계획
-- [ ] 기존 `convenience.py` 함수들의 하위 호환성 유지
-- [ ] `service_name` 미지정 시 `func.__qualname__` fallback (데코레이터용, §8.8)
-- [ ] 기존 테스트 통과 확인
-- [ ] **Sliding Window 구현** — `_should_open_circuit()`에서 `config.sliding_window_size` 실제 사용 (§9)
-- [ ] `InMemoryCircuitBreakerStateRepository.record_failure()`에 ring buffer 도입 (§9.3)
-- [ ] `_should_open_circuit()`의 `total_calls` 계산을 ring buffer 기반으로 수정 (§9.4)
+- [x] 기존 `convenience.py` 함수들의 하위 호환성 유지
+- [x] `service_name` 미지정 시 `func.__qualname__` fallback (데코레이터용, §8.8)
+- [x] 기존 테스트 통과 확인
+- [x] **Sliding Window 구현** — `_should_open_circuit()`에서 `config.sliding_window_size` 실제 사용 (§9)
+- [x] `InMemoryCircuitBreakerStateRepository.record_failure()`에 ring buffer 도입 (§9.3)
+- [x] `_should_open_circuit()`의 `total_calls` 계산을 ring buffer 기반으로 수정 (§9.4)
 - [ ] `failure_rate_threshold` 기본값 `0.0` → 프로덕션 활성화 가이드 작성 (§9.2)
 - [ ] **저장소 전환** — `ProviderRegistry` 기본값을 `"layered"` 등록 추가 검토 (§7.4)
-- [ ] `CircuitBreakerPolicy`가 `LayeredRepository` 기반 `CircuitBreakerService`를 사용하도록 통합 (§7.4)
+- [x] `CircuitBreakerPolicy`가 `LayeredRepository` 기반 `CircuitBreakerService`를 사용하도록 통합 (§7.4)
 
 ## 7. 설계 논의 확정 사항
 

@@ -47,7 +47,7 @@ import importlib
 from typing import TYPE_CHECKING
 
 # =============================================================================
-# CORE API - 직접 import (7개) - 가장 자주 사용되는 핵심 API
+# CORE API - 직접 import (10개) - 가장 자주 사용되는 핵심 API
 # =============================================================================
 from .config import CircuitBreakerConfig, CircuitBreakerResult, CircuitState
 from .convenience import (
@@ -55,6 +55,8 @@ from .convenience import (
     get_circuit_breaker_service,
     should_allow_request,
 )
+from .exceptions import CircuitBreakerOpenError
+from .policy import CircuitBreakerPolicy, circuit_breaker
 from .service import CircuitBreakerService
 
 # =============================================================================
@@ -421,6 +423,9 @@ __all__ = [
     "CircuitBreakerResult",
     "CircuitState",
     "CircuitBreakerService",
+    "CircuitBreakerPolicy",
+    "CircuitBreakerOpenError",
+    "circuit_breaker",
     "get_circuit_breaker_service",
     "should_allow_request",
     "force_open_circuit",
