@@ -129,6 +129,21 @@ from selfhealing.interfaces.task_queue import (  # Enums; DTOs; Exceptions; Inte
 )
 
 # =============================================================================
+# Resilience Policy Interfaces (Policy Composition)
+# =============================================================================
+from selfhealing.interfaces.resilience_policy import (  # Enums; DTOs; Protocols
+    AsyncResiliencePolicy,
+    FailureSink,
+    GuardResult,
+    PolicyContext,
+    PolicyGuard,
+    PolicyHook,
+    PolicyOutcome,
+    PolicyResult,
+    ResiliencePolicy,
+)
+
+# =============================================================================
 # Web Framework Interface
 # =============================================================================
 from selfhealing.interfaces.web_framework import (  # Enums; DTOs; Exceptions; Interface; Type alias
@@ -264,4 +279,19 @@ __all__ = [
     "EntityAuditTrail",
     # Interface
     "StatisticsRepositoryInterface",
+    # =========================================================================
+    # Resilience Policy Interfaces (Policy Composition)
+    # =========================================================================
+    # Enums
+    "PolicyOutcome",
+    # DTOs
+    "PolicyResult",
+    "PolicyContext",
+    "GuardResult",
+    # Protocols
+    "ResiliencePolicy",
+    "AsyncResiliencePolicy",
+    "PolicyGuard",
+    "PolicyHook",
+    "FailureSink",
 ]

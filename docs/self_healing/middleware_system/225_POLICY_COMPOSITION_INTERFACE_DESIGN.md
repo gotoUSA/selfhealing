@@ -1,5 +1,8 @@
 # 225. Policy Composition 인터페이스 설계
 
+**구현 상태**: ✅ 완료
+**구현 파일**: `packages/selfhealing-python/src/selfhealing/interfaces/resilience_policy.py`
+
 ## 1. 개요
 
 이 문서는 Policy Composition의 핵심 인터페이스를 정의한다.
