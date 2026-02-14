@@ -28,6 +28,7 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
     PolicyResult,
+    ResiliencePolicy,
 )
 from selfhealing.resilience.bulkhead.async_semaphore import AsyncSemaphoreBulkhead
 from selfhealing.resilience.bulkhead.base import Bulkhead
@@ -46,7 +47,7 @@ T = TypeVar("T")
 # =============================================================================
 
 
-class BulkheadPolicy:
+class BulkheadPolicy(ResiliencePolicy[T]):
     """
     동기 Bulkhead Policy — 리소스 격리.
 

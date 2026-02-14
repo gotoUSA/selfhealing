@@ -23,6 +23,7 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
     PolicyResult,
+    ResiliencePolicy,
 )
 
 from .models import RetryPolicyConfig
@@ -46,7 +47,7 @@ _RATE_LIMIT_INDICATORS = [
 ]
 
 
-class RetryPolicy:
+class RetryPolicy(ResiliencePolicy[T]):
     """
     순수 재시도 Policy.
 

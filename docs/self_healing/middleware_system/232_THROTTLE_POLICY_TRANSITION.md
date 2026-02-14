@@ -133,7 +133,9 @@ adaptive.py L630: _subscribe_kill_switch_events()
 ### 3.1 순수 ThrottlePolicy — 핵심 rate limit만 담당
 
 ```python
-from selfhealing.core.types import PolicyResult, ResiliencePolicy
+from selfhealing.interfaces.resilience_policy import (
+    PolicyContext, PolicyOutcome, PolicyResult, ResiliencePolicy,
+)
 
 class ThrottlePolicy(ResiliencePolicy[T]):
     """
@@ -153,14 +155,17 @@ class ThrottlePolicy(ResiliencePolicy[T]):
     def __init__(
         self,
         config: ThrottleConfig | None = None,
-        gradient_calculator: GradientCalculator | None = None,
+        gradient_calculator: Any | None = None,
+        dampening_manager: Any | None = None,
     ):
         self._config = config or ThrottleConfig()
-        self._engine = SlidingWindowThrottle(config)
+        self._engine = SlidingWindowThrottle(self._config)
         self._gradient = gradient_calculator or GradientCalculator(
             smoothing_factor=self._config.smoothing_factor,
         )
+        self._dampening_manager = dampening_manager
         self._current_limit = self._config.initial_limit
+        self._gradient_frozen = False
 
     @property
     def name(self) -> str:
@@ -170,6 +175,7 @@ class ThrottlePolicy(ResiliencePolicy[T]):
         self,
         func: Callable[..., T],
         *args,
+        context: PolicyContext | None = None,
         **kwargs,
     ) -> PolicyResult[T]:
         """
@@ -177,12 +183,14 @@ class ThrottlePolicy(ResiliencePolicy[T]):
 
         Args:
             func: 실행할 함수
-            *args, **kwargs: 함수 인자
+            *args: 함수 위치 인자
+            context: PolicyContext (throttle_key 등)
+            **kwargs: 함수 키워드 인자
 
         Returns:
             PolicyResult — allowed면 함수 실행, rejected면 거부
         """
-        key = kwargs.pop("_throttle_key", "default")
+        key = self._resolve_throttle_key(context)
 
         result = self._engine.check(key)
 
@@ -249,21 +257,23 @@ class ThrottlePolicy(ResiliencePolicy[T]):
             )
         elif gradient < -0.05:
             new_limit = self._current_limit + self._config.increase_step
-
-            # Recovery Dampening Cap: Dampening 활성 시 상한 제한
-            # 근거: recovery_dampening.py L130 — phase별 target_limit * ratio로 Cap 설정
-            #       adaptive.py L2361 — advance_recovery_dampening()이 limit 직접 설정
-            #       Gradient가 독립적으로 limit을 올리면 Dampening 의미 소실
-            if self._dampening_manager and self._dampening_manager.is_recovery_active(
-                self._config.service_name,
-            ):
-                dampened_limit = self._dampening_manager.get_current_dampened_limit(
-                    self._config.service_name,
-                )
-                if dampened_limit is not None:
-                    new_limit = min(new_limit, dampened_limit)
-
+            new_limit = self._apply_dampening_cap(new_limit)
             self._current_limit = min(new_limit, self._config.max_limit)
+
+    def _apply_dampening_cap(self, new_limit: int) -> int:
+        """Dampening 활성 시 limit 상향을 현재 복구 단계의 dampened_limit 이하로 제한."""
+        if self._dampening_manager is None:
+            return new_limit
+        service_name = self._config.service_name
+        if not self._dampening_manager.is_recovery_active(service_name):
+            return new_limit
+        recovery_state = self._dampening_manager.get_recovery_state(service_name)
+        if recovery_state is None:
+            return new_limit
+        target_limit = recovery_state.get("target_limit", self._config.max_limit)
+        multiplier = self._dampening_manager.get_current_multiplier(service_name)
+        dampened_limit = int(target_limit * multiplier)
+        return min(new_limit, dampened_limit)
 
 ### 3.1.1 비동기 지원 제외
 
@@ -304,7 +314,7 @@ class ThrottleGovernanceGuard:
     PolicyComposer에서 add_guard()로 등록.
     """
 
-    def check(self) -> GuardResult:
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
         """
         Kill Switch, Emergency Level, Error Budget, Break Glass 순서로 체크.
 
@@ -347,9 +357,9 @@ class ThrottleLimitAdjuster:
     """
 
     def __init__(self) -> None:
-        self._policies: list[ThrottlePolicy] = []
+        self._policies: list[Any] = []
 
-    def register(self, policy: ThrottlePolicy) -> None:
+    def register(self, policy: Any) -> None:
         """limit 조정 대상 ThrottlePolicy 등록."""
         self._policies.append(policy)
 
@@ -366,12 +376,12 @@ class ThrottleLimitAdjuster:
             bus = get_event_bus()
             bus.subscribe(EventType.RATE_LIMIT_429, self._handle_rate_limit_429)
             bus.subscribe(EventType.RATE_LIMIT_COOLDOWN_END, self._handle_cooldown_end)
-            bus.subscribe(EventType.ERROR_BUDGET_WARNING, self._handle_error_budget)
-            bus.subscribe(EventType.ERROR_BUDGET_CRITICAL, self._handle_error_budget)
+            bus.subscribe(EventType.ERROR_BUDGET_WARNING, self._handle_error_budget_warning)
+            bus.subscribe(EventType.ERROR_BUDGET_CRITICAL, self._handle_error_budget_critical)
             bus.subscribe(EventType.ERROR_BUDGET_RECOVERED, self._handle_error_budget_recovered)
             bus.subscribe(EventType.LOAD_SHEDDING_LEVEL_CHANGED, self._handle_shedding_changed)
-            bus.subscribe(EventType.KILL_SWITCH_ACTIVATED, self._handle_kill_switch)
-            bus.subscribe(EventType.KILL_SWITCH_DEACTIVATED, self._handle_kill_switch)
+            bus.subscribe(EventType.KILL_SWITCH_ACTIVATED, self._handle_kill_switch_activated)
+            bus.subscribe(EventType.KILL_SWITCH_DEACTIVATED, self._handle_kill_switch_deactivated)
         except ImportError:
             pass  # Fail-Open
         except Exception:
@@ -432,6 +442,7 @@ class LoadSheddingGuard:
                            None이면 lazy import로 획득 (Fail-Open).
         """
         self._load_shedding = load_shedding
+        self._initialized = load_shedding is not None
 
     def check(self, context: PolicyContext | None = None) -> GuardResult:
         """
@@ -440,7 +451,8 @@ class LoadSheddingGuard:
         context.extra["priority"]에서 요청 우선순위를 읽는다.
         context=None이면 전역 체크 (priority 무관, 통과 허용).
         """
-        if self._load_shedding is None:
+        shedding = self._get_load_shedding()
+        if shedding is None:
             return GuardResult(allowed=True)
 
         priority = 0
@@ -448,16 +460,29 @@ class LoadSheddingGuard:
             priority = context.extra.get("priority", 0)
 
         try:
-            result = self._load_shedding.should_accept(priority=priority)
+            result = shedding.should_accept(priority=priority)
             if isinstance(result, dict) and not result.get("accepted", True):
                 return GuardResult(
                     allowed=False,
                     reason=f"load_shedding_rejected:priority={priority}",
+                    metadata={"priority": priority},
                 )
         except Exception:
             pass  # Fail-Open
 
         return GuardResult(allowed=True)
+
+    def _get_load_shedding(self) -> Any | None:
+        """CascadeLoadShedding 인스턴스 획득 (lazy import, Fail-Open)."""
+        if self._initialized:
+            return self._load_shedding
+        try:
+            from selfhealing.audit.cascade_load_shedding import get_cascade_load_shedding
+            self._load_shedding = get_cascade_load_shedding()
+        except (ImportError, Exception):
+            pass
+        self._initialized = True
+        return self._load_shedding
 ```
 
 #### ThrottleDLQSink (Sink 1건)
@@ -569,20 +594,43 @@ class BackpressureGuard:
     def name(self) -> str:
         return "backpressure"
 
-    def __init__(self, rate_controller: RateController | None = None):
+    def __init__(self, rate_controller: Any | None = None):
         self._controller = rate_controller
+        self._initialized = rate_controller is not None
 
     def check(self, context: PolicyContext | None = None) -> GuardResult:
-        if self._controller is None:
+        controller = self._get_rate_controller()
+        if controller is None:
             return GuardResult(allowed=True)
 
-        if not self._controller.should_process():
-            level = self._controller.get_state().level
-            return GuardResult(
-                allowed=False,
-                reason=f"backpressure:level={level.value}",
-            )
+        try:
+            if not controller.should_process():
+                state = controller.get_state()
+                level_value = state.level.value if hasattr(state.level, "value") else str(state.level)
+                return GuardResult(
+                    allowed=False,
+                    reason=f"backpressure:level={level_value}",
+                    metadata={
+                        "backpressure_level": level_value,
+                        "queue_size": state.queue_size,
+                        "current_rate": state.current_rate,
+                    },
+                )
+        except Exception:
+            pass  # Fail-Open
         return GuardResult(allowed=True)
+
+    def _get_rate_controller(self) -> Any | None:
+        """RateController 인스턴스 획득 (lazy import, Fail-Open)."""
+        if self._initialized:
+            return self._controller
+        try:
+            from selfhealing.scaling.rate_controller import get_rate_controller
+            self._controller = get_rate_controller()
+        except (ImportError, Exception):
+            pass
+        self._initialized = True
+        return self._controller
 ```
 
 **전환 후 TrafficGate 완전 대체:**
@@ -680,9 +728,9 @@ def create_default_full_stop_guard() -> FullStopGuard:
 
     def _get_emergency_level() -> int:
         try:
-            from selfhealing.core.emergency_mode import EmergencyMode
+            from selfhealing.services.emergency_mode import get_emergency_manager
 
-            return EmergencyMode.get_current_level()
+            return get_emergency_manager().get_current_level().value
         except ImportError:
             return 0  # Fail-Open: Emergency 모듈 없으면 NORMAL
         except Exception:
@@ -838,21 +886,28 @@ def get_adaptive_throttle(config=None):
 ```python
 class AdaptiveThrottleFacade:
     """
-    레거시 check()/record_response() API를 유지하는 과도기 Facade.
+    레거시 check()/record_response() API를 유지하는 Facade.
 
     내부적으로 ThrottlePolicy에 위임한다.
-    기존 __init__.py 공식 Usage와 동일한 2단계 패턴을 보장한다:
-        result = throttle.check("user_123")
-        throttle.record_response(response_time_ms=45.2)
+
+    사용 예시::
+
+        facade = AdaptiveThrottleFacade(
+            policy=throttle_policy,
+            guards=[governance_guard, full_stop_guard],
+            sinks=[dlq_sink],
+        )
+        result = facade.check("user_123")
+        facade.record_response(rtt_ms=45.2)
     """
 
     def __init__(
         self,
-        policy: ThrottlePolicy,
-        guards: list | None = None,
-        limit_adjuster: ThrottleLimitAdjuster | None = None,
-        sinks: list | None = None,
-    ):
+        policy: Any,
+        guards: list[Any] | None = None,
+        limit_adjuster: Any | None = None,
+        sinks: list[Any] | None = None,
+    ) -> None:
         self._policy = policy
         self._guards = guards or []
         self._limit_adjuster = limit_adjuster
@@ -862,33 +917,52 @@ class AdaptiveThrottleFacade:
         self,
         key: str,
         tier_id: str = "standard",
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
         store_rejection: bool = True,
     ) -> ThrottleResult:
         """
         기존 AdaptiveThrottle.check() API와 동일한 시그니처.
 
-        Guards → SlidingWindowThrottle.check() → DLQ Sink 순서로 실행.
+        Guards → ThrottlePolicy.check() → DLQ Sink 순서로 실행.
+        Guard 예외 시 Fail-Open (로깅 후 다음 Guard로 계속).
         """
-        # Guard 체크
+        # Guard 체크 (Fail-Open)
         for guard in self._guards:
-            result = guard.check()
-            if not result.allowed:
-                return ThrottleResult(
-                    allowed=False, current_count=0, limit=0,
-                    remaining=0, reset_at=0, reason=result.reason,
+            try:
+                guard_result = guard.check()
+                if not guard_result.allowed:
+                    throttle_result = ThrottleResult(
+                        allowed=False,
+                        current_count=0,
+                        limit=self._policy.current_limit,
+                        remaining=0,
+                        reset_at=0,
+                        reason=guard_result.reason,
+                    )
+
+                    if store_rejection and context:
+                        self._store_rejection(
+                            context,
+                            guard_result.reason or "guard_rejected",
+                        )
+
+                    return throttle_result
+            except Exception as e:
+                logger.debug(
+                    "[AdaptiveThrottleFacade] Guard %s failed (fail-open): %s",
+                    getattr(guard, "name", "unknown"),
+                    e,
                 )
 
-        # 순수 rate limit 체크
-        throttle_result = self._policy._engine.check(key)
+        # 순수 rate limit 체크 — ThrottlePolicy.check()에 위임
+        throttle_result = self._policy.check(key)
 
         # 거부 시 DLQ Sink 처리
         if not throttle_result.allowed and store_rejection and context:
-            for sink in self._sinks:
-                try:
-                    sink.handle_rejection(context, throttle_result.reason or "rate_limit_exceeded")
-                except Exception:
-                    pass  # Fail-Open
+            self._store_rejection(
+                context,
+                throttle_result.reason or "rate_limit_exceeded",
+            )
 
         return throttle_result
 
@@ -896,19 +970,37 @@ class AdaptiveThrottleFacade:
         """
         RTT 기록 + Gradient 기반 limit 동적 조정.
 
-        기존 AdaptiveThrottle.record_response() (adaptive.py L1257-L1340)과
-        동일한 동작을 ThrottlePolicy에 위임한다.
+        기존 AdaptiveThrottle.record_response()와 동일한 동작을
+        ThrottlePolicy에 위임한다.
         """
-        self._policy._gradient.add_sample(rtt_ms)
-        self._policy._maybe_adjust_limit(rtt_ms)
+        self._policy.record_response(rtt_ms)
+
+    def _store_rejection(self, context: dict[str, Any], reason: str) -> None:
+        """거부 요청을 DLQ Sink에 저장 (Fail-Open)."""
+        for sink in self._sinks:
+            try:
+                sink.handle_rejection(context, reason)
+            except Exception as e:
+                logger.debug(
+                    "[AdaptiveThrottleFacade] Sink failed (fail-open): %s",
+                    e,
+                )
 ```
+
+**실제 구현 설계 결정:**
+- `policy: Any` 타입 힌트 — 순환 import 방지 (ThrottlePolicy ↔ Facade 모듈 간)
+- `self._policy.check(key)` — 캡슐화 원칙 준수, 내부 `_engine`에 직접 접근하지 않음
+- `self._policy.record_response(rtt_ms)` — Gradient 샘플링 + limit 조정을 Policy 내부에 위임
+- Guard 예외 시 **Fail-Open** — try/except로 감싸서 Guard 실패가 서비스를 중단하지 않도록 함
+- Guard 거부 시 `limit=self._policy.current_limit` — 0이 아닌 실제 limit 값 반환
+- Guard 거부 시에도 DLQ 저장 — `_store_rejection()` 헬퍼로 통합
 
 ## 8. 기존 코드와의 대응 맵
 
 | 기존 (adaptive.py) | 전환 후 | 책임 |
 |-------------------|---------|------|
-| `SlidingWindowThrottle.check()` | `ThrottlePolicy._engine.check()` | 순수 rate limit |
-| `GradientCalculator + _maybe_adjust_limit()` | `ThrottlePolicy._maybe_adjust_limit()` | 순수 Gradient 기반 limit 조정 |
+| `SlidingWindowThrottle.check()` | `ThrottlePolicy.check(key)` | 순수 rate limit |
+| `GradientCalculator + _maybe_adjust_limit()` | `ThrottlePolicy.record_response(rtt_ms)` / `_maybe_adjust_limit()` | 순수 Gradient 기반 limit 조정 |
 | `GovernanceCheckMixin` (상속) | `ThrottleGovernanceGuard` (Guard) | Kill Switch/Emergency/ErrorBudget/BreakGlass |
 | `_subscribe_rate_limit_events()` | `ThrottleLimitAdjuster` (독립 컴포넌트) | 429 이벤트 → limit 감소 |
 | `_subscribe_error_budget_events()` | `ThrottleLimitAdjuster` (독립 컴포넌트) | Error Budget 이벤트 → limit 감소 |
@@ -962,7 +1054,7 @@ Phase 6: TrafficGate 대체
 
 ## 11. 구현 결과 — 설계 모순 해결 및 파일 구조
 
-### 11.1 설계 모순 해결 (3건)
+### 11.1 설계 모순 해결 (8건 + 보충 2건)
 
 #### 모순 1: ThrottleDLQSink — FailureSink vs handle_rejection()
 
@@ -1018,6 +1110,92 @@ Guard/Hook/Sink에 context가 전달되지 않는다.
 throttle key를 kwargs.pop()으로 꺼내면 다운스트림 함수에
 전달될 kwargs가 오염되므로 context.extra 경유가 적합하다.
 
+#### 모순 4: ThrottlePolicy — ResiliencePolicy[T] 상속 누락
+
+| 항목 | 설계 문서 §3.1 | 실제 코드 (수정 전) |
+|------|----------------|---------------------|
+| 클래스 선언 | `class ThrottlePolicy(ResiliencePolicy[T])` | `class ThrottlePolicy:` (duck typing) |
+| import | `from selfhealing.core.types import ResiliencePolicy` | 없음 |
+
+**해결**: **코드를 문서에 맞게 수정** — `class ThrottlePolicy(ResiliencePolicy[T]):` 상속 추가.
+import 경로는 실제 위치인 `selfhealing.interfaces.resilience_policy`로 수정.
+
+**근거**: 기존 5개 Policy 중 3개(CircuitBreakerPolicy, FallbackPolicy, HedgingPolicy)가
+명시적으로 `ResiliencePolicy[T]`를 상속한다. 과반수 패턴을 따르는 것이 일관성 있고,
+`isinstance()` 체크 및 정적 타입 검증이 가능해진다.
+
+**보충 (RetryPolicy/BulkheadPolicy 일괄 정리)**:
+동일한 근거로 RetryPolicy(`services/retry_handler/policy.py`)와
+BulkheadPolicy(`resilience/bulkhead/policy.py`)에도 `ResiliencePolicy[T]` 상속을 추가.
+결과적으로 6개 동기 Policy 전체가 명시적 상속으로 통일:
+
+| Policy | 파일 | 상속 | 비고 |
+|--------|------|------|------|
+| CircuitBreakerPolicy | `services/circuit_breaker/policy.py` | `ResiliencePolicy[T]` | 기존 |
+| FallbackPolicy | `resilience/policies/fallback.py` | `ResiliencePolicy[T]` | 기존 |
+| HedgingPolicy | `resilience/policies/hedging.py` | `ResiliencePolicy[T]` | 기존 |
+| ThrottlePolicy | `services/throttle/policy.py` | `ResiliencePolicy[T]` | 이번 추가 |
+| RetryPolicy | `services/retry_handler/policy.py` | `ResiliencePolicy[T]` | 이번 추가 (226번 문서 §3.1 설계대로) |
+| BulkheadPolicy | `resilience/bulkhead/policy.py` | `ResiliencePolicy[T]` | 이번 추가 (228번 문서 업데이트) |
+
+#### 모순 5: import 경로 — selfhealing.core.types vs selfhealing.interfaces
+
+| 항목 | 설계 문서 §3.1 | 실제 코드 |
+|------|----------------|----------|
+| import 경로 | `from selfhealing.core.types import ResiliencePolicy` | `from selfhealing.interfaces.resilience_policy import ResiliencePolicy` |
+| 비고 | `selfhealing.core.types`에는 ResiliencePolicy 존재하지 않음 | 실제 Protocol 정의 위치 |
+
+**해결**: 문서를 코드에 맞게 수정.
+
+**근거**: `selfhealing.core.types`에 ResiliencePolicy가 정의되어 있지 않다.
+실제 `@runtime_checkable Protocol[T]`은 `selfhealing.interfaces.resilience_policy`에 위치하며,
+기존 5개 Policy 모두 동일 경로에서 import한다.
+
+#### 모순 6: Facade 캡슐화 — 내부 속성 직접 접근 vs 공개 메서드 위임
+
+| 항목 | 설계 문서 §7.3 | 실제 코드 |
+|------|----------------|----------|
+| rate limit 체크 | `self._policy._engine.check(key)` | `self._policy.check(key)` |
+| RTT 기록 | `self._policy._gradient.add_sample(rtt_ms)` + `self._policy._maybe_adjust_limit(rtt_ms)` | `self._policy.record_response(rtt_ms)` |
+| 타입 힌트 | `policy: ThrottlePolicy` | `policy: Any` |
+
+**해결**: 문서를 코드에 맞게 수정.
+
+**근거**: Facade가 Policy 내부 `_engine`, `_gradient` 비공개 속성에 직접 접근하면
+캡슐화 위반이다. `ThrottlePolicy.check(key)`, `ThrottlePolicy.record_response(rtt_ms)`
+공개 메서드를 통해 위임하는 것이 OCP 원칙에 부합하고,
+Policy 내부 구현 변경 시 Facade가 영향받지 않는다.
+`policy: Any`는 순환 import 방지를 위한 실용적 선택이다.
+
+#### 모순 7: Guard Fail-Open 패턴 + DLQ 저장 + limit 값
+
+| 항목 | 설계 문서 §7.3 | 실제 코드 |
+|------|----------------|----------|
+| Guard 예외 처리 | 없음 (예외 시 크래시) | try/except Fail-Open + 로깅 |
+| Guard 거부 limit | `limit=0` | `limit=self._policy.current_limit` |
+| Guard 거부 DLQ | 미지원 | `_store_rejection()` 호출하여 DLQ 저장 |
+
+**해결**: 문서를 코드에 맞게 수정.
+
+**근거**: Guard 예외 시 Fail-Open은 resilience 시스템의 핵심 원칙이다.
+Guard 자체 장애로 정상 요청이 거부되면 안 된다.
+`limit=0`보다 실제 `current_limit`을 반환하는 것이 소비자에게 정확한 정보를 제공한다.
+Guard 거부 시에도 DLQ에 저장하여 감사 추적성을 보장한다.
+
+#### 모순 8: Guard lazy import — 인스턴스 캐싱 최적화
+
+| 항목 | 설계 문서 §3.2/§4.3 | 실제 코드 |
+|------|---------------------|----------|
+| LoadSheddingGuard | 매 호출 lazy import | `_initialized` 플래그 + 인스턴스 캐시 |
+| BackpressureGuard | 매 호출 lazy import | `_initialized` 플래그 + 인스턴스 캐시 |
+| BackpressureGuard reject | metadata 없음 | `metadata={"queue_depth": depth}` 포함 |
+
+**해결**: 문서를 코드에 맞게 수정.
+
+**근거**: lazy import를 매 `check()` 호출마다 수행하면 성능 오버헤드가 발생한다.
+`_initialized` 플래그로 최초 1회만 import + 인스턴스 생성하고 이후 캐시를 사용하는 것이
+hot-path 성능에 적합하다. BackpressureGuard의 metadata는 디버깅·모니터링에 유용하다.
+
 ### 11.2 구현 파일 구조
 
 ```
@@ -1048,13 +1226,13 @@ packages/selfhealing-python/src/selfhealing/
 | 기존 Throttle 커버리지 | `test_throttle_eventbus_integration.py` 등 7건이 하위 인프라 연동 검증 |
 | 신규 코드 특성 | 기존 SlidingWindowThrottle/GradientCalculator 래핑 + lazy import Fail-Open 패턴 |
 
-## 12. 단위 테스트 결과 — 8개 컴포넌트 × 130 테스트
+## 12. 단위 테스트 결과 — 8개 컴포넌트 × 131 테스트
 
 ### 12.1 테스트 파일 구조
 
 ```
 packages/selfhealing-python/tests/unit/throttle/
-├── test_throttle_policy.py              # ThrottlePolicy 순수 rate limit        (51건)
+├── test_throttle_policy.py              # ThrottlePolicy 순수 rate limit        (52건)
 ├── test_throttle_limit_adjuster.py      # ThrottleLimitAdjuster EventBus 반응    (18건)
 ├── test_throttle_dlq_sink.py            # ThrottleDLQSink 거부 요청 DLQ          (6건)
 ├── test_throttle_facade.py              # AdaptiveThrottleFacade 레거시 호환      (13건)
@@ -1068,7 +1246,7 @@ packages/selfhealing-python/tests/unit/throttle/
 
 | 테스트 파일 | 통과 | 검증 항목 |
 |------------|------|----------|
-| `test_throttle_policy.py` | 51/51 | execute(), check(), record_response(), SLA 임계값별 limit 조정, dampening, throttle key 해석, current_limit 클램프 |
+| `test_throttle_policy.py` | 52/52 | execute(), check(), record_response(), SLA 임계값별 limit 조정, dampening, throttle key 해석, current_limit 클램프, ResiliencePolicy isinstance 계약 |
 | `test_throttle_limit_adjuster.py` | 18/18 | 8개 EventBus 구독 핸들러, register/start 수명주기, Warning/Critical multiplier |
 | `test_throttle_dlq_sink.py` | 6/6 | handle_rejection() context 기본값, lazy import Fail-Open |
 | `test_throttle_facade.py` | 13/13 | Guards→Policy→DLQ 체인, get_stats(), record_response() 위임 |
@@ -1076,7 +1254,7 @@ packages/selfhealing-python/tests/unit/throttle/
 | `test_throttle_full_stop_guard.py` | 13/13 | 3중 조건 AND 로직, 개별 조건 미충족 시 통과, 팩토리 Fail-Open |
 | `test_throttle_load_shedding_guard.py` | 9/9 | priority 기반 should_accept(), lazy import 캐싱, Fail-Open |
 | `test_throttle_backpressure_guard.py` | 9/9 | should_process() 결과, metadata 포함, lazy import 캐싱, Fail-Open |
-| **합계** | **130/130** | |
+| **합계** | **131/131** | |
 
 ### 12.3 Lazy Import Fail-Open 검증 패턴
 

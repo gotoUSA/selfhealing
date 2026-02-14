@@ -26,6 +26,7 @@ import pytest
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
+    ResiliencePolicy,
 )
 from selfhealing.services.throttle.config import ThrottleConfig
 from selfhealing.services.throttle.policy import ThrottlePolicy
@@ -72,7 +73,12 @@ class TestThrottlePolicyInitBehavior:
 
 
 class TestThrottlePolicyNameContract:
-    """ThrottlePolicy.name 계약값 검증."""
+    """ThrottlePolicy.name 및 Protocol 계약값 검증."""
+
+    def test_throttle_policy_is_resilience_policy(self):
+        """ThrottlePolicy는 ResiliencePolicy Protocol과 isinstance 호환이다."""
+        policy = ThrottlePolicy()
+        assert isinstance(policy, ResiliencePolicy)
 
     def test_name_is_throttle(self):
         """name 속성은 'throttle'이어야 한다."""

@@ -175,7 +175,7 @@ class BulkheadTimeoutError(BulkheadError):
 파일 배치 근거: `RetryPolicy` → `services/retry_handler/policy.py`, `CircuitBreakerPolicy` → `services/circuit_breaker/policy.py` 선례를 따라 각 패턴 패키지 내부에 `policy.py` 배치.
 
 ```python
-class BulkheadPolicy:
+class BulkheadPolicy(ResiliencePolicy[T]):
     """
     Bulkhead Policy — 리소스 격리.
 
@@ -188,6 +188,10 @@ class BulkheadPolicy:
 
     코드 근거: CircuitBreakerPolicy (services/circuit_breaker/policy.py L199)
     함수 실행 예외를 raise로 재전파하여 상위 Retry 등에서 catch하도록 함.
+
+    상속 근거: 6개 Policy 전체 일관성.
+    CircuitBreakerPolicy, FallbackPolicy, HedgingPolicy, ThrottlePolicy가
+    명시적으로 ResiliencePolicy[T]를 상속하므로 동일 패턴을 적용한다.
     """
 
     def __init__(

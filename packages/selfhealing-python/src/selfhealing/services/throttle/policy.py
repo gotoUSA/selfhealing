@@ -26,6 +26,7 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
     PolicyResult,
+    ResiliencePolicy,
 )
 from selfhealing.services.throttle.base import SlidingWindowThrottle
 from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-class ThrottlePolicy:
+class ThrottlePolicy(ResiliencePolicy[T]):
     """
     순수 Throttle Policy — SlidingWindowThrottle + GradientCalculator 래핑.
 

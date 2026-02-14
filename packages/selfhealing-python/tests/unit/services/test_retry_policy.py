@@ -24,6 +24,7 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
     PolicyResult,
+    ResiliencePolicy,
 )
 from selfhealing.services.retry_handler.models import RetryPolicyConfig
 from selfhealing.services.retry_handler.policy import (
@@ -39,6 +40,11 @@ from selfhealing.services.retry_handler.policy import (
 
 class TestRetryPolicyContract:
     """RetryPolicy 고정 식별자 및 결과 구조 검증."""
+
+    def test_retry_policy_is_resilience_policy(self):
+        """RetryPolicy는 ResiliencePolicy Protocol과 isinstance 호환이다."""
+        policy = RetryPolicy(config=RetryPolicyConfig(max_attempts=1))
+        assert isinstance(policy, ResiliencePolicy)
 
     def test_name_is_retry(self):
         """RetryPolicy.name은 'retry'이다."""
