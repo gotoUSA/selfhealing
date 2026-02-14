@@ -270,6 +270,7 @@ class FallbackPolicy(ResiliencePolicy[T]):
         default_value: T | None = None,
         fallback_chain: list[Callable[[], T]] | None = None,
         predicate: Callable[[PolicyResult[T]], bool] | None = None,
+        strategy: FallbackStrategy | None = None,
     ):
         """
         Args:
@@ -277,18 +278,20 @@ class FallbackPolicy(ResiliencePolicy[T]):
             default_value: 기본값 (모든 fallback 실패 시)
             fallback_chain: 순차 시도할 fallback 함수 리스트
             predicate: Fallback 활성화 조건 (기본: 실패 시 항상)
+            strategy: 기존 FallbackStrategy 구현체 래핑 (과도기 Shim)
         """
         self._fallback_fn = fallback_fn
         self._default_value = default_value
         self._fallback_chain = fallback_chain or []
         self._predicate = predicate or self._default_predicate
+        self._strategy = strategy
 
     @property
     def name(self) -> str:
         return "fallback"
 
     @staticmethod
-    def _default_predicate(result: PolicyResult[T]) -> bool:
+    def _default_predicate(result: PolicyResult) -> bool:
         """기본 조건: outcome이 SUCCESS가 아니면 Fallback 활성화."""
         return result.outcome != PolicyOutcome.SUCCESS
 
@@ -345,10 +348,11 @@ class FallbackPolicy(ResiliencePolicy[T]):
         FallbackPolicy만 "단독 시 func 실행 + Composer 시 func 미실행"이 필요하다.
 
         실행 순서:
-        1. fallback_chain 순차 시도 (설정된 경우)
-        2. fallback_fn 시도 (단일 fallback)
-        3. default_value 반환 (설정된 경우)
-        4. 모든 실패 → PolicyResult(FAILURE)
+        1. strategy Shim 시도 (설정된 경우, 과도기)
+        2. fallback_chain 순차 시도 (설정된 경우)
+        3. fallback_fn 시도 (단일 fallback)
+        4. default_value 반환 (설정된 경우)
+        5. 모든 실패 → PolicyResult(FAILURE)
 
         Args:
             original_error: 이전 Policy 체인에서 발생한 원본 예외
@@ -357,7 +361,13 @@ class FallbackPolicy(ResiliencePolicy[T]):
         Returns:
             PolicyResult[T]: Fallback 결과. 예외를 던지지 않는다.
         """
-        # Step 1: Fallback 체인 순차 시도
+        # Step 1: strategy Shim 시도 (과도기 — 기존 FallbackStrategy 래핑)
+        if self._strategy is not None:
+            shim_result = self._execute_strategy_shim(original_error)
+            if shim_result is not None and shim_result.success:
+                return shim_result
+
+        # Step 2: Fallback 체인 순차 시도
         for i, fallback in enumerate(self._fallback_chain):
             try:
                 result = fallback()
@@ -375,7 +385,7 @@ class FallbackPolicy(ResiliencePolicy[T]):
                 logger.warning(f"Fallback chain[{i}] failed: {e}")
                 continue
 
-        # Step 2: 단일 fallback_fn 시도
+        # Step 3: 단일 fallback_fn 시도
         if self._fallback_fn is not None:
             try:
                 result = self._fallback_fn()
@@ -392,7 +402,7 @@ class FallbackPolicy(ResiliencePolicy[T]):
             except Exception as e:
                 logger.warning(f"Fallback function failed: {e}")
 
-        # Step 3: Default 값 반환
+        # Step 4: Default 값 반환
         if self._default_value is not None:
             return PolicyResult(
                 value=self._default_value,
@@ -405,7 +415,7 @@ class FallbackPolicy(ResiliencePolicy[T]):
                 },
             )
 
-        # Step 4: 모든 실패
+        # Step 5: 모든 실패
         return PolicyResult(
             value=None,
             outcome=PolicyOutcome.FAILURE,
@@ -532,7 +542,9 @@ result = strategy.execute(primary_fn=lambda: call_api())
 # TO-BE: FallbackPolicy + state_provider (실행 시점 최신 상태 조회)
 def partition_aware_chain(
     state_provider: Callable[[], PartitionState],
-) -> list[Callable]:
+    cache_fn: Callable[[], T] | None = None,
+    db_fn: Callable[[], T] | None = None,
+) -> list[Callable[[], T]]:
     """
     PartitionState Provider 기반 동적 fallback chain 생성.
 
@@ -709,7 +721,7 @@ class AsyncFallbackPolicy:
         return "fallback"
 
     @staticmethod
-    def _default_predicate(result: PolicyResult[T]) -> bool:
+    def _default_predicate(result: PolicyResult) -> bool:
         return result.outcome != PolicyOutcome.SUCCESS
 
     async def execute(
@@ -874,13 +886,13 @@ result = await compose_async(
 ### 4.3 FallbackMode → PolicyOutcome 매핑
 
 ```python
-_FALLBACK_MODE_TO_OUTCOME = {
-    FallbackMode.FAIL_FAST: PolicyOutcome.FAILURE,
-    FallbackMode.USE_CACHE: PolicyOutcome.SUCCESS_WITH_FALLBACK,
-    FallbackMode.USE_DEFAULT: PolicyOutcome.SUCCESS_WITH_FALLBACK,
-    FallbackMode.DEGRADE_GRACEFULLY: PolicyOutcome.SUCCESS_WITH_FALLBACK,
-    FallbackMode.RETRY_ALTERNATIVE: PolicyOutcome.SUCCESS_WITH_FALLBACK,
-    FallbackMode.HEDGE: PolicyOutcome.SUCCESS_WITH_FALLBACK,
+_FALLBACK_MODE_TO_OUTCOME: dict[str, PolicyOutcome] = {
+    "fail_fast": PolicyOutcome.FAILURE,
+    "use_cache": PolicyOutcome.SUCCESS_WITH_FALLBACK,
+    "use_default": PolicyOutcome.SUCCESS_WITH_FALLBACK,
+    "degrade": PolicyOutcome.SUCCESS_WITH_FALLBACK,
+    "retry_alt": PolicyOutcome.SUCCESS_WITH_FALLBACK,
+    "hedge": PolicyOutcome.SUCCESS_WITH_FALLBACK,
 }
 ```
 
@@ -932,11 +944,13 @@ class FallbackPolicy(ResiliencePolicy[T]):
         default_value: T | None = None,
         fallback_chain: list[Callable[[], T]] | None = None,
         predicate: Callable[[PolicyResult[T]], bool] | None = None,
+        strategy: FallbackStrategy | None = None,
     ):
         self._fallback_fn = fallback_fn
         self._default_value = default_value
         self._fallback_chain = fallback_chain or []
         self._predicate = predicate or self._default_predicate
+        self._strategy = strategy
 ```
 
 #### `strategy` 파라미터 — 과도기 Shim (완벽한 하위 호환 미보장)
@@ -1168,12 +1182,15 @@ result = compose(
 | `resilience/policies/fallback.py` | FallbackPolicy, AsyncFallbackPolicy, partition_aware_chain, _FALLBACK_MODE_TO_OUTCOME | ✅ 완료 |
 | `resilience/policies/__init__.py` | 패키지 export | ✅ 완료 |
 | `resilience/bulkhead/decorator.py` | `@bulkhead(fallback=...)` DeprecationWarning 추가 | ✅ 완료 |
+| `tests/unit/resilience/policies/__init__.py` | 테스트 패키지 마커 | ✅ 완료 |
 
 ### 9.2 구현 상세
 
 **FallbackPolicy (동기)**:
 - `execute(func, *args, context=, **kwargs) -> PolicyResult[T]`: 단독 사용 — func 실행 후 실패 시 fallback_chain → fallback_fn → default_value 순차 시도
 - `_apply_fallback(original_error, context=) -> PolicyResult[T]`: Composer 전용 — func 재실행 없이 Fallback 체인만 시도
+- `_execute_strategy_shim(original_error) -> PolicyResult[T] | None`: 기존 FallbackStrategy 구현체를 통한 과도기 Fallback 시도. 예외를 던지는 더미 함수를 primary_fn에 주입하여 fallback 경로 유도
+- `_convert_fallback_result(fallback_result, original_error) -> PolicyResult[T]`: FallbackResult → PolicyResult 변환. FallbackMode 값을 _FALLBACK_MODE_TO_OUTCOME 매핑으로 PolicyOutcome에 대응
 - `strategy` 파라미터: 기존 FallbackStrategy 구현체 과도기 Shim (SUCCESS 시 사용, FAILURE 시 네이티브 경로로 fall-through)
 - `predicate` 파라미터: Fallback 활성화 조건 커스터마이징 (Composer에서 사용)
 
@@ -1217,10 +1234,10 @@ result = compose(
 | `TestAsyncFallbackPolicyExecuteBehavior` | 동작 | async execute() 성공/실패/chain/default | 9 |
 | `TestAsyncFallbackPolicyApplyFallbackBehavior` | 동작 | async `_apply_fallback()` chain/fn/default/exhausted | 4 |
 | `TestAsyncFallbackPolicyPredicateBehavior` | 동작 | async 기본/커스텀 predicate | 3 |
-| `TestPartitionAwareChainBehavior` | 동작 | chain 생성, 가용성 체크, Stale State 방지, Policy 통합 | 14 |
+| `TestPartitionAwareChainBehavior` | 동작 | chain 생성, 가용성 체크, Stale State 방지, Policy 통합 | 13 |
 | `TestBulkheadDecoratorFallbackDeprecationBehavior` | 동작 | `@bulkhead(fallback=...)` DeprecationWarning 발생/미발생 | 3 |
 | `TestFallbackPolicyExceptionHandlingBehavior` | 동작 | 예외 흡수 컨트랙트 (다양한 예외 타입) | 3 |
-| `TestFallbackPolicyEdgeCaseBehavior` | 동작 | 빈 chain, None strategy, 0/False/"" default_value | 5 |
+| `TestFallbackPolicyEdgeCaseBehavior` | 동작 | 빈 chain, None strategy, context, 0/False/"" default_value | 6 |
 
 ### 9.5 통합테스트
 
