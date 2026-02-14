@@ -72,6 +72,12 @@ from selfhealing.resilience.bulkhead.otel import (
     bulkhead_operation_span,
     bulkhead_span,
 )
+from selfhealing.resilience.bulkhead.policy import (
+    AsyncBulkheadPolicy,
+    BulkheadPolicy,
+    async_bulkhead_policy,
+    bulkhead_policy,
+)
 from selfhealing.resilience.bulkhead.registry import (
     BulkheadRegistry,
     get_bulkhead_registry,
@@ -115,4 +121,9 @@ __all__ = [
     # OTel
     "bulkhead_span",
     "bulkhead_operation_span",
+    # Policy
+    "BulkheadPolicy",
+    "AsyncBulkheadPolicy",
+    "bulkhead_policy",
+    "async_bulkhead_policy",
 ]

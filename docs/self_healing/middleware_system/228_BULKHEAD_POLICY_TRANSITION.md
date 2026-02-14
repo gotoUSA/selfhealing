@@ -576,20 +576,21 @@ hedging = HedgingPolicy(
 
 ### Phase 2 범위 (이번 단계)
 
-- [ ] `BulkheadPolicy` 클래스 생성 (`resilience/bulkhead/policy.py`)
+- [x] `BulkheadPolicy` 클래스 생성 (`resilience/bulkhead/policy.py`)
   - Bulkhead DI 생성자
   - ThreadPoolBulkhead isinstance 분기
   - BulkheadFullError → REJECTED, BulkheadTimeoutError → TIMEOUT
   - 함수 실행 예외는 raise 재전파
-- [ ] `AsyncBulkheadPolicy` 클래스 생성 (같은 파일)
+- [x] `AsyncBulkheadPolicy` 클래스 생성 (같은 파일)
   - AsyncSemaphoreBulkhead DI 생성자
   - BulkheadFullError → REJECTED
   - 함수 실행 예외는 raise 재전파
-- [ ] `bulkhead_policy()` 팩토리 함수 (Registry 연동)
-- [ ] `async_bulkhead_policy()` 팩토리 함수 (Registry 연동)
-- [ ] `__init__.py` export 추가
+- [x] `bulkhead_policy()` 팩토리 함수 (Registry 연동)
+- [x] `async_bulkhead_policy()` 팩토리 함수 (Registry 연동)
+- [x] `__init__.py` export 추가
 - [ ] 단위 테스트 작성
-- [ ] 기존 테스트 통과 확인
+- [x] 기존 테스트 통과 확인
+- [x] `ResiliencePolicy` Protocol 호환성 검증 완료 (`isinstance` = True)
 
 ### Phase 5 범위 (231번 이후)
 
