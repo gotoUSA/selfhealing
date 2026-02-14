@@ -1158,3 +1158,43 @@ result = compose(
 - **228번 문서**: `@bulkhead(fallback=...)` 분리 설계
 - **230번 문서**: HedgingStrategy → FallbackStrategy 상속 해체 (예정)
 - **231번 문서**: PolicyComposer의 FallbackPolicy 조건부 실행 로직 (예정)
+
+## 9. 구현 완료 현황
+
+### 9.1 구현 파일
+
+| 파일 | 내용 | 상태 |
+|------|------|------|
+| `resilience/policies/fallback.py` | FallbackPolicy, AsyncFallbackPolicy, partition_aware_chain, _FALLBACK_MODE_TO_OUTCOME | ✅ 완료 |
+| `resilience/policies/__init__.py` | 패키지 export | ✅ 완료 |
+| `resilience/bulkhead/decorator.py` | `@bulkhead(fallback=...)` DeprecationWarning 추가 | ✅ 완료 |
+
+### 9.2 구현 상세
+
+**FallbackPolicy (동기)**:
+- `execute(func, *args, context=, **kwargs) -> PolicyResult[T]`: 단독 사용 — func 실행 후 실패 시 fallback_chain → fallback_fn → default_value 순차 시도
+- `_apply_fallback(original_error, context=) -> PolicyResult[T]`: Composer 전용 — func 재실행 없이 Fallback 체인만 시도
+- `strategy` 파라미터: 기존 FallbackStrategy 구현체 과도기 Shim (SUCCESS 시 사용, FAILURE 시 네이티브 경로로 fall-through)
+- `predicate` 파라미터: Fallback 활성화 조건 커스터마이징 (Composer에서 사용)
+
+**AsyncFallbackPolicy (비동기)**:
+- 동기 FallbackPolicy와 동일 로직의 async 버전
+- BulkheadPolicy/AsyncBulkheadPolicy 분리 선례와 동일 패턴
+- strategy Shim 미지원 (기존 FallbackStrategy 구현체는 모두 동기)
+
+**partition_aware_chain 헬퍼**:
+- `Callable[[], PartitionState]` Provider 기반 동적 fallback chain 생성
+- 실행 시점 PartitionState 가용성 실시간 체크로 Stale State 문제 해결
+
+**Bulkhead Decorator DeprecationWarning**:
+- `@bulkhead(fallback=...)` 사용 시 DeprecationWarning 발생
+- BulkheadPolicy + FallbackPolicy 조합으로 전환 안내
+
+### 9.3 기존 코드 보존
+
+- `core/fallback_strategy.py`: FallbackStrategy ABC + 3개 구현체 유지 (Hedging 상속 등 기존 사용처 존재)
+- `services/circuit_breaker/service.py`: `should_allow_with_fallback()` deprecated 유지 (이전 구현에서 완료)
+
+### 9.4 통합테스트
+
+통합테스트 불필요 — FallbackPolicy는 순수 인메모리 Policy. DB/Redis/Django 등 외부 시스템 무의존.

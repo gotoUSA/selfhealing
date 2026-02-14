@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
@@ -78,6 +79,15 @@ def bulkhead(
     """
 
     def decorator(fn: Callable[..., T]) -> Callable[..., T]:
+        if fallback is not None:
+            warnings.warn(
+                "@bulkhead(fallback=...) is deprecated. "
+                "Use BulkheadPolicy + FallbackPolicy composition instead. "
+                "Example: compose(BulkheadPolicy(...), FallbackPolicy(fallback_fn=...)).execute(func)",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+
         # 비동기 함수인 경우
         if asyncio.iscoroutinefunction(fn):
 
