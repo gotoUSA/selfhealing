@@ -959,3 +959,91 @@ Phase 6: TrafficGate 대체
 | **226** | RetryPolicy 전환 | AdaptiveThrottle과 동일 구조의 하드코딩 분리 패턴 참조 |
 | **228** | BulkheadPolicy 전환 | TrafficGate 대체 시 BulkheadPolicy와 조합 |
 | **231** | PolicyComposer 조합 엔진 | compose() 빌더에 ThrottlePolicy 포함 |
+
+## 11. 구현 결과 — 설계 모순 해결 및 파일 구조
+
+### 11.1 설계 모순 해결 (3건)
+
+#### 모순 1: ThrottleDLQSink — FailureSink vs handle_rejection()
+
+| 항목 | 설계 문서 | 실제 코드 |
+|------|-----------|----------|
+| §3.2 텍스트 | "FailureSink 인터페이스를 구현" | `handle_rejection(context, reason)` |
+| FailureSink Protocol | `handle_failure(error, context, policy_result) → str` | 파이프라인 종단 실행 실패 전용 |
+| §7.3 Facade | N/A | `sink.handle_rejection(context, reason)` |
+
+**해결**: FailureSink를 구현하지 않고 독립 인터페이스로 구현.
+
+**근거**: FailureSink.handle_failure()는 "함수 실행 실패 후" 최종 처리 목적이다.
+Throttle 거부는 "함수 실행 이전의 정책 결정"이므로 실행 실패가 아니다.
+기존 AdaptiveThrottle._auto_store_rejection_to_dlq(context, reason)도
+FailureSink가 아닌 거부 전용 저장이었다.
+동일한 개념적 분리를 유지하여 handle_rejection(context, reason)을 제공한다.
+
+#### 모순 2: get_current_dampened_limit() 미존재 메서드
+
+| 항목 | 설계 문서 §3.1 | 실제 RecoveryDampeningManager |
+|------|----------------|-------------------------------|
+| 호출 | `self._dampening_manager.get_current_dampened_limit(service_name)` | 해당 메서드 없음 |
+| 가용 API | N/A | `get_current_multiplier() → float`, `get_recovery_state() → dict` |
+
+**해결**: 기존 공개 API 2개를 조합하여 dampened_limit 계산.
+
+```python
+# ThrottlePolicy._apply_dampening_cap() 내부
+recovery_state = self._dampening_manager.get_recovery_state(service_name)
+target_limit = recovery_state["target_limit"]
+multiplier = self._dampening_manager.get_current_multiplier(service_name)
+dampened_limit = int(target_limit * multiplier)
+```
+
+**근거**: RecoveryDampeningManager는 외부 의존성 0건의 독립 모듈이며
+이미 안정화된 상태이므로 새 메서드를 추가하지 않고
+기존 공개 API만 사용하여 안정성을 유지한다.
+
+#### 모순 3: execute() 시그니처 — context 파라미터 누락
+
+| 항목 | 설계 문서 §3.1 | ResiliencePolicy Protocol |
+|------|----------------|--------------------------|
+| 시그니처 | `execute(func, *args, **kwargs)` | `execute(func, *args, context=None, **kwargs)` |
+| throttle key | `kwargs.pop("_throttle_key", "default")` | N/A |
+
+**해결**: Protocol에 맞게 `context: PolicyContext | None = None` 추가.
+throttle key는 `context.extra["throttle_key"]`에서 읽도록 변경.
+
+**근거**: 모든 기존 Policy(RetryPolicy, CircuitBreakerPolicy, BulkheadPolicy,
+FallbackPolicy, HedgingPolicy)가 context 파라미터를 포함한다.
+PolicyComposer가 context를 체인 전체에 전파하므로 누락 시
+Guard/Hook/Sink에 context가 전달되지 않는다.
+throttle key를 kwargs.pop()으로 꺼내면 다운스트림 함수에
+전달될 kwargs가 오염되므로 context.extra 경유가 적합하다.
+
+### 11.2 구현 파일 구조
+
+```
+packages/selfhealing-python/src/selfhealing/
+├── services/throttle/
+│   ├── policy.py              # ThrottlePolicy — 순수 rate limit Policy (신규)
+│   ├── limit_adjuster.py      # ThrottleLimitAdjuster — EventBus limit 조정 (신규)
+│   ├── dlq_sink.py            # ThrottleDLQSink — 거부 요청 DLQ 저장 (신규)
+│   ├── facade.py              # AdaptiveThrottleFacade — 레거시 API 호환 (신규)
+│   └── __init__.py            # re-export 추가
+├── resilience/policies/
+│   ├── guards/
+│   │   ├── governance.py      # ThrottleGovernanceGuard (신규)
+│   │   ├── full_stop.py       # FullStopGuard + create_default_full_stop_guard (신규)
+│   │   ├── load_shedding.py   # LoadSheddingGuard (신규)
+│   │   ├── backpressure.py    # BackpressureGuard (신규)
+│   │   └── __init__.py        # re-export 추가
+│   └── __init__.py            # ThrottlePolicy + Guards re-export 추가
+```
+
+### 11.3 통합 테스트 판단
+
+**결론: 별도 통합 테스트 불필요.**
+
+| 근거 | 상세 |
+|------|------|
+| 기존 Policy 선례 | RetryPolicy, BulkheadPolicy, FallbackPolicy, HedgingPolicy 중 전용 통합 테스트 0건 |
+| 기존 Throttle 커버리지 | `test_throttle_eventbus_integration.py` 등 7건이 하위 인프라 연동 검증 |
+| 신규 코드 특성 | 기존 SlidingWindowThrottle/GradientCalculator 래핑 + lazy import Fail-Open 패턴 |

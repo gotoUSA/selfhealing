@@ -49,11 +49,17 @@ from selfhealing.resilience.policies.fallback import (
 from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
 from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
 from selfhealing.services.retry_handler.policy import RetryPolicy
+from selfhealing.services.throttle.policy import ThrottlePolicy
 
 # Guards
 from selfhealing.resilience.policies.guards import (
+    BackpressureGuard,
     ErrorBudgetGuard,
+    FullStopGuard,
     KillSwitchGuard,
+    LoadSheddingGuard,
+    ThrottleGovernanceGuard,
+    create_default_full_stop_guard,
 )
 
 # Hooks
@@ -109,10 +115,16 @@ __all__ = [
     "HedgingConfigUpdateHook",
     "HedgingPolicy",
     "RetryPolicy",
+    "ThrottlePolicy",
     "partition_aware_chain",
     # Guards
+    "BackpressureGuard",
     "ErrorBudgetGuard",
+    "FullStopGuard",
     "KillSwitchGuard",
+    "LoadSheddingGuard",
+    "ThrottleGovernanceGuard",
+    "create_default_full_stop_guard",
     # Hooks
     "AuditHook",
     "EventBusHook",

@@ -31,6 +31,10 @@ from selfhealing.services.throttle.adaptive import (
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.base import BaseThrottle, SlidingWindowThrottle
+from selfhealing.services.throttle.dlq_sink import ThrottleDLQSink
+from selfhealing.services.throttle.facade import AdaptiveThrottleFacade
+from selfhealing.services.throttle.limit_adjuster import ThrottleLimitAdjuster
+from selfhealing.services.throttle.policy import ThrottlePolicy
 from selfhealing.services.throttle.cb_bridge import (
     RTTMetrics,
     RTTSeverity,
@@ -125,6 +129,11 @@ __all__ = [
     "RedisConnectionState",
     "get_safe_open_fallback_manager",
     "reset_safe_open_fallback_manager",
+    # ThrottlePolicy (순수 Policy)
+    "ThrottlePolicy",
+    "ThrottleLimitAdjuster",
+    "ThrottleDLQSink",
+    "AdaptiveThrottleFacade",
     # Time-Bucketed Window
     "TimeBucketedRTTWindow",
     "TimeBucketedGradientCalculator",
