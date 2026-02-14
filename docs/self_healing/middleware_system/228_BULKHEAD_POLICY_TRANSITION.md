@@ -146,14 +146,15 @@ class BulkheadTimeoutError(BulkheadError):
 - 소비자 구분: `isinstance(result.error, BulkheadFullError)` vs `CircuitBreakerOpenError` → 예외 타입으로 즉시 식별 가능
 - `PolicyResult`의 3중 구분 체계: `outcome` + `error` + `metadata`로 충분
 
-### 3.5 데코레이터 수정 — Phase 5 연기 확정
+### 3.5 데코레이터 수정 — 전환 완료
 
-**결정**: 이번 Phase 2에서는 `BulkheadPolicy` / `AsyncBulkheadPolicy` 클래스만 구현. `@bulkhead` 데코레이터 수정은 Phase 5(231번 PolicyComposer 이후)로 연기.
+**결정**: `@bulkhead` / `@bulkhead_for_database` / `@bulkhead_for_cache` 데코레이터의
+내부 구현을 BulkheadPolicy + FallbackPolicy + PolicyComposer 조합으로 전환 완료.
 
-**코드 근거**:
-- 데코레이터 전환 코드가 `PolicyComposer.compose()`에 의존 → PolicyComposer 미구현 시 불가
-- 224번 마스터 플랜: Phase 2 = "독립 패턴 Policy 래핑", Phase 4 = "PolicyComposer(231번)", Phase 5 = "데코레이터 마이그레이션"
-- 현재 `@bulkhead` 데코레이터는 프로덕션에서 `BulkheadFullError` catch + fallback 호출로 정상 동작 중 (`decorator.py` L131-L137)
+**구현 근거**:
+- PolicyComposer (`resilience/policies/composer.py`) 및 FallbackPolicy (`resilience/policies/fallback.py`) 구현 완료
+- 기존 `@bulkhead` 데코레이터는 시그니처 유지, fallback 파라미터에 DeprecationWarning
+- 기존 테스트 19건 하위 호환성 검증 통과
 
 ### 3.6 ThreadPoolBulkhead — 지원 확정 (isinstance 분기)
 
@@ -356,47 +357,63 @@ def bulkhead_policy(
 
 ### 4.4 @bulkhead 데코레이터의 fallback 분리 (Phase 5 연기)
 
-> **⚠️ 이 작업은 Phase 5(231번 PolicyComposer 이후)로 연기한다.**
-> Phase 2 범위에서는 기존 `@bulkhead` 데코레이터를 수정하지 않는다.
+> **이 작업은 완료되었다.**
+> 기존 `@bulkhead` 데코레이터는 하위 호환을 위해 시그니처를 유지하되,
+> 내부적으로 BulkheadPolicy + FallbackPolicy 조합으로 전환되었다.
 
-현재:
+기존 사용법 (하위 호환 유지):
 ```python
-# decorator.py — fallback이 bulkhead 내부에 하드코딩
+# decorator.py — fallback 파라미터는 deprecated
 @bulkhead("api", fallback=lambda: {"error": "service unavailable"})
 def api_call():
     return requests.get(url)
 ```
 
-Phase 5 전환 후 (참고):
+직접 Policy Composition 방식 (권장):
 ```python
-# Policy Composition — Fallback이 별도 Policy
+# Policy Composition — FallbackPolicy가 외곽, BulkheadPolicy가 내곽
 policy = compose(
-    bulkhead("api", max_concurrent=10),
-    fallback(lambda: {"error": "service unavailable"}),
+    FallbackPolicy(fallback_fn=lambda: {"error": "service unavailable"}),
+    bulkhead_policy("api", max_concurrent=10),
 )
 result = policy.execute(api_call)
 ```
 
-Phase 5에서 기존 `@bulkhead` 데코레이터는 하위 호환을 위해 유지하되,
-내부적으로 BulkheadPolicy + FallbackPolicy 조합으로 전환:
+데코레이터 내부 전환 구조 (동기 경로):
 
 ```python
-# Phase 5 전환 후 decorator.py 내부
+# decorator.py — 전환 완료
 def bulkhead(name, timeout=None, fallback=None):
     def decorator(fn):
         @wraps(fn)
-        def wrapper(*args, **kwargs):
-            policies = [bulkhead_policy(name, timeout=timeout)]
-            if fallback:
-                policies.append(FallbackPolicy(fallback_fn=fallback))
-            composed = PolicyComposer.compose(*policies)
-            result = composed.execute(fn, *args, **kwargs)
+        def sync_wrapper(*args, **kwargs):
+            bh = registry.get(key)
+            bp = BulkheadPolicy(bulkhead=bh, timeout=timeout)
+            if fallback is not None:
+                # BulkheadFullError 전용 predicate — 비즈니스 예외는 fallback 없이 재전파
+                fb_policy = FallbackPolicy(
+                    fallback_fn=lambda: fallback(*args, **kwargs),
+                    predicate=_bulkhead_full_predicate,
+                )
+                # FallbackPolicy(외곽) → BulkheadPolicy(내곽) 순서
+                result = compose(fb_policy, bp).execute(fn, *args, **kwargs)
+            else:
+                result = bp.execute(fn, *args, **kwargs)
             if result.success:
                 return result.value
-            raise result.error
-        return wrapper
+            if result.error:
+                raise result.error
+        return sync_wrapper
     return decorator
 ```
+
+주요 설계 결정 (§4.4 의사코드 대비 수정):
+1. **compose 순서**: `compose(FallbackPolicy, BulkheadPolicy)` — FallbackPolicy가 외곽이어야
+   Composer 체인에서 BulkheadFullError를 잡을 수 있다.
+2. **predicate**: `_bulkhead_full_predicate` — BulkheadFullError에만 fallback 활성화.
+   기본 predicate는 모든 실패에 활성화되어 비즈니스 예외도 fallback하는 문제가 있었다.
+3. **fallback_fn 클로저**: `lambda: fallback(*args, **kwargs)` — FallbackPolicy의 fallback_fn은
+   zero-arg Callable이므로, 데코레이터의 args를 클로저로 주입한다.
 
 ## 5. 비동기 지원
 
@@ -560,7 +577,6 @@ hedging = HedgingPolicy(
 | `semaphore.py`, `threadpool.py`, `async_semaphore.py` | 구현체 — 그대로 재사용 |
 | `registry.py` | 인프라 레이어 — Policy 외부에서 유지. 팩토리 함수에서만 참조 |
 | `metrics.py`, `otel.py` | 관측성 — Phase 4에서 PolicyHook으로 연결 |
-| `decorator.py` | Phase 5에서 수정 예정. 이번 단계에서는 변경 없음 |
 
 ### 7.3 네이밍 충돌 검증
 
@@ -599,11 +615,19 @@ hedging = HedgingPolicy(
 - [x] 기존 테스트 통과 확인
 - [x] `ResiliencePolicy` Protocol 호환성 검증 완료 (`isinstance` = True)
 
-### Phase 5 범위 (231번 이후)
+### 데코레이터 전환 범위
 
-- [ ] `@bulkhead` 데코레이터의 fallback 파라미터를 FallbackPolicy 조합으로 전환
-- [ ] `@bulkhead_for_database`, `@bulkhead_for_cache` 데코레이터 전환
+- [x] `@bulkhead` 데코레이터의 fallback 파라미터를 FallbackPolicy 조합으로 전환
+  - 내부적으로 BulkheadPolicy + FallbackPolicy + PolicyComposer 사용
+  - compose(FallbackPolicy, BulkheadPolicy) 순서 — FallbackPolicy가 외곽(BulkheadFullError 처리)
+  - BulkheadFullError 전용 predicate로 비즈니스 예외 가려냄
+  - 비동기 경로: AsyncBulkheadPolicy + AsyncFallbackPolicy + compose_async
+  - fallback 파라미터에 DeprecationWarning 유지
+- [x] `@bulkhead_for_database`, `@bulkhead_for_cache` 데코레이터 전환
+  - 동일한 BulkheadPolicy + FallbackPolicy 조합 전환
+  - fallback 파라미터에 DeprecationWarning 추가
+  - 기존 테스트 19건 통과 확인
 
 ### 별도 문서 범위
 
-- [ ] HedgingPolicy의 `per_candidate_policy`/`overall_policy` 인터페이스 설계 (230번 문서)
+- [x] HedgingPolicy의 `per_candidate_policy`/`overall_policy` 인터페이스 설계 (230번 문서에서 구현 완료)
