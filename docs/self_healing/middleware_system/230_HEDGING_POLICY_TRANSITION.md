@@ -207,15 +207,18 @@ class HedgingPolicy(ResiliencePolicy[T]):
         # === Policy Composition 신규 파라미터 ===
         per_candidate_policy: ResiliencePolicy[T] | None = None,
         overall_policy: ResiliencePolicy[T] | None = None,
+        # === Backpressure 초기 상태 ===
+        initial_load_level: str = "none",
     ):
         """
         Args:
-            candidates: 후보 함수 목록 (첫 번째가 Primary)
+            candidates: 후보 함수 목록
             candidate_names: 후보 이름 목록 (선택)
             config: 헷징 설정
             default_value: 모든 후보 실패 시 기본값
             per_candidate_policy: 각 후보에 적용할 Policy (Bulkhead, Timeout 등)
             overall_policy: 전체 헷징에 적용할 Policy (Bulkhead, Timeout 등)
+            initial_load_level: 초기 부하 레벨 ("none"|"low"|"medium"|"high"|"critical")
         """
         self._candidates = candidates or []
         self._candidate_names = candidate_names or []
@@ -228,15 +231,26 @@ class HedgingPolicy(ResiliencePolicy[T]):
         self._executor = HedgingExecutor(self._config)
 
         # Backpressure 상태 (Hedging 고유 로직 — 내부 유지)
-        self._current_load_level: str = "none"
+        self._current_load_level: str = initial_load_level
 
-    def execute(self, func: Callable[..., T], *args, **kwargs) -> PolicyResult[T]:
+    @property
+    def name(self) -> str:
+        """Policy 식별자."""
+        return "hedging"
+
+    def execute(
+        self,
+        func: Callable[..., T],
+        *args: Any,
+        context: PolicyContext | None = None,
+        **kwargs: Any,
+    ) -> PolicyResult[T]:
         """
-        헷징 실행 — Policy Composition 인터페이스.
+        헷징 실행 — ResiliencePolicy Protocol 구현.
 
         실행 순서:
         1. Backpressure 체크 → 비활성화 시 single 실행
-        2. overall_policy가 있으면 전체를 래핑
+        2. overall_policy가 있으면 전체를 래핑 (Double Wrapping 방지)
         3. 후보 목록 구성 (func이 Primary)
         4. per_candidate_policy가 있으면 각 후보를 래핑
         5. Executor로 병렬 실행
@@ -246,36 +260,88 @@ class HedgingPolicy(ResiliencePolicy[T]):
         if self._should_disable_hedging():
             return self._execute_single(func, *args, **kwargs)
 
-        # Step 2: overall_policy 적용
+        # Step 2: overall_policy 적용 (Double Wrapping 방지 — §8.3 참조)
         if self._overall_policy is not None:
-            # 전체 헷징을 하나의 함수로 감싸서 overall_policy로 래핑
-            def hedging_as_single():
-                return self._execute_hedging(func, *args, **kwargs)
-
-            result = self._overall_policy.execute(hedging_as_single)
-            return result
+            return self._execute_with_overall_policy(func, *args, **kwargs)
 
         # Step 3: 직접 헷징 실행
         return self._execute_hedging(func, *args, **kwargs)
 
-    def _execute_hedging(self, func, *args, **kwargs) -> PolicyResult[T]:
-        """실제 헷징 실행 로직."""
-        # 후보 목록 구성
-        candidates = self._build_candidates(func, *args, **kwargs)
+    def _execute_with_overall_policy(
+        self, func: Callable[..., T], *args, **kwargs
+    ) -> PolicyResult[T]:
+        """
+        overall_policy 적용 — Double Wrapping 방지.
 
-        if len(candidates) == 1:
-            return self._execute_single(func, *args, **kwargs)
+        overall_policy.execute()는 Callable[..., T]를 기대하므로,
+        _execute_hedging()의 PolicyResult[T]를 직접 반환하면
+        PolicyResult(value=PolicyResult(...))로 이중 포장됨.
 
-        # per_candidate_policy 적용
-        if self._per_candidate_policy is not None:
-            candidates = self._wrap_candidates_with_policy(candidates)
+        해결: hedging_as_single()에서 raw 값을 반환하고,
+        hedging metadata는 클로저로 캡처하여 최종 result에 병합.
+        """
+        hedging_metadata: dict = {}
+
+        def hedging_as_single():
+            inner = self._execute_hedging(func, *args, **kwargs)
+            hedging_metadata.update(inner.metadata)
+            if inner.success:
+                return inner.value
+            # Hedging 실패 → 예외 raise → overall_policy가 재전파
+            raise inner.error or HedgingError("All candidates failed")
 
         try:
+            result = self._overall_policy.execute(hedging_as_single)
+        except HedgingError as e:
+            # overall_policy가 비즈니스 예외를 재전파한 경우
+            if self._default_value is not None:
+                return PolicyResult(
+                    value=self._default_value,
+                    outcome=PolicyOutcome.SUCCESS_WITH_FALLBACK,
+                    error=e,
+                    executed_policies=["hedging"],
+                    metadata={"hedging_all_failed": True},
+                )
+            return PolicyResult(
+                value=None,
+                outcome=PolicyOutcome.FAILURE,
+                error=e,
+                executed_policies=["hedging"],
+            )
+
+        # overall_policy REJECTED/TIMEOUT → 그대로 반환 (hedging 미실행)
+        if not result.success:
+            result.executed_policies.append("hedging")
+            return result
+
+        # SUCCESS → hedging metadata 병합
+        result.metadata.update(hedging_metadata)
+        result.executed_policies.append("hedging")
+        return result
+
+    def _execute_hedging(self, func, *args, **kwargs) -> PolicyResult[T]:
+        """실제 헷징 실행 로직."""
+        # effective delay 적용 (Backpressure 조정)
+        original_delay = self._config.delay
+        try:
+            self._config.delay = self._get_effective_delay()
+
+            # 후보 목록 구성
+            candidates = self._build_candidates(func, *args, **kwargs)
+
+            if len(candidates) == 1:
+                return self._execute_single(func, *args, **kwargs)
+
+            # per_candidate_policy 적용
+            if self._per_candidate_policy is not None:
+                candidates = self._wrap_candidates_with_policy(candidates)
+
             result = self._executor.execute(candidates)
 
             return PolicyResult(
                 value=result.value,
                 outcome=PolicyOutcome.SUCCESS,
+                executed_policies=["hedging"],
                 metadata={
                     "hedged": result.hedged,
                     "winner": result.source,
@@ -289,18 +355,28 @@ class HedgingPolicy(ResiliencePolicy[T]):
                     value=self._default_value,
                     outcome=PolicyOutcome.SUCCESS_WITH_FALLBACK,
                     error=e,
+                    executed_policies=["hedging"],
                     metadata={"hedging_all_failed": True},
                 )
             return PolicyResult(
                 value=None,
                 outcome=PolicyOutcome.FAILURE,
                 error=e,
+                executed_policies=["hedging"],
             )
+        finally:
+            self._config.delay = original_delay
 
     def _wrap_candidates_with_policy(
         self, candidates: list[HedgingCandidate]
     ) -> list[HedgingCandidate]:
-        """각 후보를 per_candidate_policy로 래핑."""
+        """
+        각 후보를 per_candidate_policy로 래핑.
+
+        PolicyResult → Raw 값 변환 (Double Wrapping 방지):
+        - result.success → result.value 반환 (SUCCESS + SUCCESS_WITH_FALLBACK)
+        - REJECTED/TIMEOUT/FAILURE → RuntimeError raise → Executor가 후보 실패로 처리
+        """
         wrapped = []
         for c in candidates:
             original_fn = c.fn
@@ -308,9 +384,19 @@ class HedgingPolicy(ResiliencePolicy[T]):
 
             def policy_wrapped(fn=original_fn, p=policy):
                 result = p.execute(fn)
-                if result.outcome == PolicyOutcome.SUCCESS:
+                if result.success:  # SUCCESS + SUCCESS_WITH_FALLBACK
                     return result.value
-                raise RuntimeError(f"Candidate policy rejected: {result.outcome}")
+                if result.outcome == PolicyOutcome.REJECTED:
+                    raise RuntimeError(
+                        f"Candidate rejected by policy: {result.outcome}"
+                    )
+                if result.outcome == PolicyOutcome.TIMEOUT:
+                    raise TimeoutError(
+                        f"Candidate timed out in policy"
+                    )
+                raise RuntimeError(
+                    f"Candidate policy failed: {result.outcome}"
+                )
 
             wrapped.append(HedgingCandidate(
                 name=c.name,
@@ -319,6 +405,77 @@ class HedgingPolicy(ResiliencePolicy[T]):
                 metadata=c.metadata,
             ))
         return wrapped
+
+    def _build_candidates(
+        self, func: Callable[..., T], *args, **kwargs
+    ) -> list[HedgingCandidate]:
+        """
+        후보 목록 구성.
+
+        execute(func, *args, **kwargs)의 func을 Primary로,
+        생성자의 candidates를 Secondary로 조합.
+        func + args를 no-arg lambda로 래핑하여 HedgingCandidate.fn 시그니처에 맞춤.
+        기존 HedgingStrategy._build_candidates() 대비 시그니처만 변경 (동일 패턴).
+        """
+        candidates: list[HedgingCandidate] = []
+
+        # Primary: func + args를 no-arg callable로 래핑
+        def primary_fn(f=func, a=args, kw=kwargs):
+            return f(*a, **kw)
+
+        candidates.append(
+            HedgingCandidate(
+                name=self._get_name(0, "primary"),
+                fn=primary_fn,
+                priority=0,
+            )
+        )
+
+        # 등록된 후보들 추가
+        for i, fn in enumerate(self._candidates):
+            candidates.append(
+                HedgingCandidate(
+                    name=self._get_name(i + 1, f"candidate_{i + 1}"),
+                    fn=fn,
+                    priority=i + 1,
+                )
+            )
+
+        return candidates[: self._config.max_candidates]
+
+    def _execute_single(
+        self, func: Callable[..., T], *args, **kwargs
+    ) -> PolicyResult[T]:
+        """단일 함수 실행 (헷징 없음)."""
+        try:
+            result = func(*args, **kwargs)
+            return PolicyResult(
+                value=result,
+                outcome=PolicyOutcome.SUCCESS,
+                executed_policies=["hedging"],
+                metadata={"hedged": False},
+            )
+        except Exception as e:
+            if self._default_value is not None:
+                return PolicyResult(
+                    value=self._default_value,
+                    outcome=PolicyOutcome.SUCCESS_WITH_FALLBACK,
+                    error=e,
+                    executed_policies=["hedging"],
+                    metadata={"hedged": False, "single_failed": True},
+                )
+            return PolicyResult(
+                value=None,
+                outcome=PolicyOutcome.FAILURE,
+                error=e,
+                executed_policies=["hedging"],
+            )
+
+    def _get_name(self, index: int, default: str) -> str:
+        """후보 이름 반환."""
+        if index < len(self._candidate_names):
+            return self._candidate_names[index]
+        return default
 ```
 
 ### 3.2 FallbackStrategy 상속 해체
@@ -505,8 +662,13 @@ def _subscribe_config_updates(self) -> None:
 #### TO-BE: PolicyHook 인터페이스
 
 ```python
-class ConfigUpdateHook(PolicyHook):
-    """EventBus CONFIG_UPDATED 이벤트를 Policy에 전달하는 Hook."""
+class HedgingConfigUpdateHook(PolicyHook):
+    """
+    EventBus CONFIG_UPDATED 이벤트를 HedgingPolicy에 전달하는 Hook.
+
+    PolicyHook Protocol을 구현한다.
+    Fail-Open 원칙: Hook 실패 시 HedgingPolicy 동작에 영향 없음.
+    """
 
     def __init__(self):
         self._policies: list[HedgingPolicy] = []
@@ -515,23 +677,47 @@ class ConfigUpdateHook(PolicyHook):
         self._policies.append(policy)
 
     def start(self) -> None:
-        """EventBus 구독 시작."""
+        """
+        EventBus 구독 시작.
+
+        Usage:
+            hook = HedgingConfigUpdateHook()
+            hook.register(hedging_policy)
+            hook.start()  # EventBus 구독 시작
+        """
         try:
             from selfhealing.services.event_bus import EventType, get_event_bus
             bus = get_event_bus()
-            bus.subscribe(EventType.CONFIG_UPDATED, self._on_config_updated)
+            bus.subscribe(EventType.CONFIG_UPDATED, self._dispatch)
         except ImportError:
             pass
 
-    def _on_config_updated(self, event) -> None:
+    def _dispatch(self, event) -> None:
+        """이벤트를 등록된 모든 Policy에 전달."""
+        event_data = event.data if hasattr(event, "data") else event
         for policy in self._policies:
-            policy.update_config(event)
+            try:
+                policy.on_config_updated(event_data)
+            except Exception:
+                pass  # Fail-Open
 
 
-# HedgingPolicy에 update_config 메서드 추가
+# HedgingPolicy에 on_config_updated 메서드 추가
 class HedgingPolicy(ResiliencePolicy[T]):
-    def update_config(self, event: dict) -> None:
-        """외부에서 설정을 갱신하는 메서드."""
+    def on_config_updated(self, event: dict) -> None:
+        """
+        외부(PolicyHook)에서 설정을 갱신하는 메서드.
+
+        기존 _on_config_updated()의 public 버전.
+        HedgingConfigUpdateHook이 호출한다.
+
+        Thread-safety:
+        단일 필드 대입은 CPython GIL 하에서 atomic.
+        self._current_load_level = config_value.lower()는
+        STORE_ATTR 단일 바이트코드 연산이므로 tearing 발생하지 않음.
+        단, mode와 delay가 동시에 변경되는 복합 일관성은 보장하지 않음
+        (기존 HedgingStrategy도 동일한 제약).
+        """
         config_key = event.get("key", "")
         config_value = event.get("value")
 
@@ -550,28 +736,110 @@ class HedgingPolicy(ResiliencePolicy[T]):
 `AsyncHedgingStrategy`는 이미 `FallbackStrategy`를 **상속하지 않으므로** 변경이 상대적으로 용이하다.
 `FallbackResult`/`FallbackMode` import를 `PolicyResult`/`PolicyOutcome`으로 교체하면 된다.
 
+`AsyncResiliencePolicy` Protocol에 맞춰 `async execute()`를 구현한다.
+
 ```python
-class AsyncHedgingPolicy(ResiliencePolicy[T]):
-    """비동기 Hedging Policy."""
+class AsyncHedgingPolicy:
+    """
+    비동기 Hedging Policy — AsyncResiliencePolicy Protocol 구현.
+
+    BulkheadPolicy/AsyncBulkheadPolicy, FallbackPolicy/AsyncFallbackPolicy
+    분리 선례와 동일한 패턴으로 별도 클래스.
+
+    소비자 책임(Consumer Responsibility):
+    candidates에 전달하는 함수는 반드시 async def여야 한다.
+    동기 함수를 혼용하려면 소비자가 asyncio.to_thread()로 래핑하여 주입한다.
+    AsyncHedgingStrategy의 candidates 타입(list[Callable[[], Awaitable[T]]])과 동일 원칙.
+    """
 
     def __init__(
         self,
         candidates: list[Callable[[], Awaitable[T]]] | None = None,
+        candidate_names: list[str] | None = None,
         config: HedgingConfig | None = None,
-        per_candidate_policy: ResiliencePolicy[T] | None = None,
-        overall_policy: ResiliencePolicy[T] | None = None,
+        default_value: T | None = None,
+        per_candidate_policy: AsyncResiliencePolicy[T] | None = None,
+        overall_policy: AsyncResiliencePolicy[T] | None = None,
+        initial_load_level: str = "none",
     ):
-        self._executor = AsyncHedgingExecutor(self._config)
-        ...
+        """
+        Args:
+            candidates: 후보 코루틴 함수 목록
+            candidate_names: 후보 이름 목록 (선택)
+            config: 헷징 설정
+            default_value: 모든 후보 실패 시 기본값
+            per_candidate_policy: 각 후보에 적용할 비동기 Policy
+            overall_policy: 전체 헷징에 적용할 비동기 Policy
+            initial_load_level: 초기 부하 레벨
 
-    async def execute_async(
-        self, func: Callable[..., Awaitable[T]], *args, **kwargs
+        Raises:
+            TypeError: per_candidate_policy/overall_policy가
+                       AsyncResiliencePolicy Protocol을 준수하지 않을 때.
+        """
+        # === AsyncResiliencePolicy 타입 검사 (생성 시점 Fail-Fast) ===
+        if per_candidate_policy is not None:
+            if not isinstance(per_candidate_policy, AsyncResiliencePolicy):
+                raise TypeError(
+                    f"per_candidate_policy must implement AsyncResiliencePolicy, "
+                    f"got {type(per_candidate_policy).__name__}. "
+                    f"동기 Policy를 비동기 환경에서 사용하면 "
+                    f"'await policy.execute()'에서 TypeError 발생."
+                )
+        if overall_policy is not None:
+            if not isinstance(overall_policy, AsyncResiliencePolicy):
+                raise TypeError(
+                    f"overall_policy must implement AsyncResiliencePolicy, "
+                    f"got {type(overall_policy).__name__}"
+                )
+
+        self._candidates = candidates or []
+        self._candidate_names = candidate_names or []
+        self._config = config or HedgingConfig()
+        self._default_value = default_value
+        self._per_candidate_policy = per_candidate_policy
+        self._overall_policy = overall_policy
+        self._executor = AsyncHedgingExecutor(self._config)
+        self._current_load_level: str = initial_load_level
+
+    @property
+    def name(self) -> str:
+        """Policy 식별자."""
+        return "hedging"
+
+    async def execute(
+        self,
+        func: Callable[..., Awaitable[T]],
+        *args: Any,
+        context: PolicyContext | None = None,
+        **kwargs: Any,
     ) -> PolicyResult[T]:
-        """비동기 헷징 실행."""
+        """
+        비동기 헷징 실행 — AsyncResiliencePolicy Protocol 구현.
+
+        동기 HedgingPolicy.execute()와 동일한 흐름:
+        1. Backpressure 체크
+        2. overall_policy 적용 (Double Wrapping 방지)
+        3. 헷징 실행 (AsyncHedgingExecutor 재사용)
+        """
         ...
 ```
 
-`execute_async()` 내부에서 기존 `AsyncHedgingExecutor`를 **그대로 재사용**한다.
+`execute()` 내부에서 기존 `AsyncHedgingExecutor`를 **그대로 재사용**한다.
+
+**핵심: `@runtime_checkable` 활용**
+
+`AsyncResiliencePolicy`는 `@runtime_checkable` 데코레이터가 적용되어 있으므로
+`isinstance()` 체크가 가능하다 (`resilience_policy.py` L213):
+
+```python
+@runtime_checkable
+class AsyncResiliencePolicy(Protocol[T]):
+    async def execute(self, func, *args, context=None, **kwargs) -> PolicyResult[T]: ...
+```
+
+동기 `ResiliencePolicy`를 실수로 넣으면 `await policy.execute()`에서
+`TypeError: object PolicyResult can't be used in 'await' expression`이 발생하므로,
+생성 시점에 **Fail-Fast**하는 것이 안전하다.
 
 ### 3.6 Decorator 전환
 
@@ -795,3 +1063,193 @@ HedgingStrategy에서 `FallbackStrategy` 상속을 제거하고,
 - **228번 문서**: `BulkheadPolicy` — `per_candidate_policy`/`overall_policy`로 주입되는 Policy
 - **229번 문서**: `FallbackPolicy` — Hedging과 독립적으로 조합 가능
 - **231번 문서**: `PolicyComposer`의 HedgingPolicy 실행 순서 처리 (예정)
+
+## 8. 리뷰 반영 사항
+
+### 8.1 네이밍 검증 결과
+
+코드베이스 전체를 대상으로 네이밍 충돌 검사를 수행한 결과:
+
+| 네이밍 | 충돌 여부 | 비고 |
+|--------|----------|------|
+| `HedgingPolicy` | ✅ 충돌 없음 | 0건 |
+| `AsyncHedgingPolicy` | ✅ 충돌 없음 | 0건 |
+| `HedgingStrategyCompat` | ✅ 충돌 없음 | 0건. `Compat` 접미사 최초 사용이나, `Adapter`/`Wrapper`와 비교 시 의도 명확 |
+| `HedgingConfigUpdateHook` | ✅ 충돌 없음 | `ConfigUpdateHook` → `HedgingConfigUpdateHook`으로 변경 (타 Policy Hook과 구분) |
+| `per_candidate_policy` | ✅ 충돌 없음 | 0건 |
+| `overall_policy` | ✅ 충돌 없음 | 0건 |
+| `initial_load_level` | ✅ 충돌 없음 | 0건 |
+| `_build_candidates` | ⚠️ 기존 사용 | `HedgingStrategy._build_candidates()`, `AsyncHedgingStrategy._build_candidates()` — 동일 패턴 의도적 재사용 |
+| `_execute_single` | ⚠️ 기존 사용 | `HedgingStrategy._execute_single()`, `AsyncHedgingStrategy._execute_single()` — 동일 패턴 의도적 재사용 |
+| `name` 프로퍼티 `"hedging"` | ✅ 충돌 없음 | 기존: `"retry"`, `"circuit_breaker"`, `"bulkhead"`, `"fallback"` |
+
+#### `update_config` → `on_config_updated` 리네이밍 근거
+
+`update_config`는 코드베이스 내 **11개 클래스**에서 사용 중이며,
+모두 `**kwargs → Config` 패턴을 따른다:
+
+```
+ReconciliationService.update_config(**kwargs) → ReconciliationConfig
+ErrorBudgetGate.update_config(**kwargs) → ErrorBudgetGateConfig
+ChaosScheduler.update_config(**kwargs) → SchedulerConfig
+SafetyGuard.update_config(**kwargs) → SafetyConfig
+...
+```
+
+HedgingPolicy의 이벤트 핸들러는 `event: dict` 인자를 받고 `None`을 반환하므로
+기존 컨벤션과 **시그니처가 비호환**한다.
+`on_config_updated`로 변경하면:
+
+1. 기존 `HedgingStrategy._on_config_updated()`와 네이밍 일관성 유지 (private → public)
+2. `on_` 접두사가 이벤트 핸들러임을 명시
+3. 기존 `update_config(**kwargs)` 패턴과 혼동 방지
+
+### 8.2 시스템 일관성 검증
+
+기존 Policy 구현체와의 일관성 비교:
+
+| 항목 | RetryPolicy | CircuitBreakerPolicy | BulkheadPolicy | FallbackPolicy | **HedgingPolicy** |
+|------|------------|---------------------|---------------|---------------|-----------------|
+| `name` 프로퍼티 | `"retry"` | `"circuit_breaker"` | `"bulkhead"` | `"fallback"` | **`"hedging"`** |
+| `execute()` 시그니처 | `func, *args, context=, **kwargs` | `func, *args, context=, **kwargs` | `func, *args, context=, **kwargs` | `func, *args, context=, **kwargs` | **`func, *args, context=, **kwargs`** |
+| `executed_policies` | `["retry"]` | `["circuit_breaker"]` | `["bulkhead"]` | `["fallback"]` | **`["hedging"]`** |
+| 비동기 버전 | (없음) | (없음) | `AsyncBulkheadPolicy` | `AsyncFallbackPolicy` | **`AsyncHedgingPolicy`** |
+| 파일 위치 | `services/retry_handler/policy.py` | `services/circuit_breaker/policy.py` | `resilience/bulkhead/policy.py` | `resilience/policies/fallback.py` | **`resilience/policies/hedging.py`** |
+| Protocol | `ResiliencePolicy` | `ResiliencePolicy` | `ResiliencePolicy` | `ResiliencePolicy` | **`ResiliencePolicy`** |
+| 비동기 Protocol | — | — | `AsyncResiliencePolicy` | `AsyncResiliencePolicy` | **`AsyncResiliencePolicy`** |
+
+### 8.3 overall_policy Double Wrapping 수정
+
+**문제**: 원래 설계에서 `hedging_as_single()`이 `PolicyResult[T]`를 반환하면,
+`overall_policy.execute(hedging_as_single)`가 이를
+`PolicyResult(value=PolicyResult(...), outcome=SUCCESS)`로 이중 포장한다.
+
+**근거**: `BulkheadPolicy.execute()` 코드 (`resilience/bulkhead/policy.py` L98-L108):
+
+```python
+# BulkheadPolicy.execute() 내부
+result = func(*args, **kwargs)  # ← hedging_as_single()이 PolicyResult 반환
+return PolicyResult(
+    value=result,  # ← value에 PolicyResult 객체가 들어감!
+    outcome=PolicyOutcome.SUCCESS,
+    ...
+)
+```
+
+**해결**: `_execute_with_overall_policy()` 메서드를 분리하여:
+1. `hedging_as_single()`에서 raw 값(`T`)만 반환
+2. hedging metadata는 클로저(`hedging_metadata: dict`)로 캡처
+3. `overall_policy` 실행 후 metadata를 최종 result에 병합
+4. `HedgingError`가 `overall_policy`를 통과하여 재전파되면 catch
+
+이 패턴은 `per_candidate_policy`의 `_wrap_candidates_with_policy()`에서
+`result.value`를 벗겨내는 것과 동일한 원리이다.
+
+### 8.4 _wrap_candidates SUCCESS_WITH_FALLBACK 수정
+
+**문제**: 원래 코드에서 `result.outcome == PolicyOutcome.SUCCESS`만 체크하면,
+`per_candidate_policy`에 `FallbackPolicy`가 포함된 경우
+fallback 성공(`SUCCESS_WITH_FALLBACK`)이 실패로 오인된다.
+
+**근거**: `PolicyResult.success` 프로퍼티 (`resilience_policy.py` L103-L107):
+
+```python
+@property
+def success(self) -> bool:
+    return self.outcome in (
+        PolicyOutcome.SUCCESS,
+        PolicyOutcome.SUCCESS_WITH_FALLBACK,
+    )
+```
+
+**수정**: `result.success` 프로퍼티 사용으로 두 outcome을 모두 허용.
+
+추가로, `REJECTED`와 `TIMEOUT`을 구분하여 처리:
+- `REJECTED` → `RuntimeError` (Bulkhead full 등)
+- `TIMEOUT` → `TimeoutError` (후보별 타임아웃)
+- 기타 → `RuntimeError`
+
+Executor는 이 예외들을 일반적인 후보 실패로 처리한다.
+단, `_is_non_retryable()` 체크에서 `RuntimeError`/`TimeoutError`는
+기본 `non_retryable_exceptions` 목록에 포함되지 않으므로
+다른 후보가 시도된다 (의도된 동작).
+
+### 8.5 _build_candidates 구현
+
+`execute(func, *args, **kwargs)` 시그니처와 `HedgingCandidate.fn: Callable[[], T]`
+(no-arg callable) 간의 간극을 클로저로 해결한다:
+
+```python
+def primary_fn(f=func, a=args, kw=kwargs):
+    return f(*a, **kw)
+```
+
+기존 `HedgingStrategy._build_candidates()`와의 차이:
+
+| 항목 | HedgingStrategy | HedgingPolicy |
+|------|----------------|--------------|
+| 시그니처 | `(primary_fn, fallback_fn)` | `(func, *args, **kwargs)` |
+| Primary 소스 | `primary_fn` (no-arg) | `func + args` → no-arg 래핑 |
+| fallback_fn 지원 | 있음 (별도 인자) | 없음 (candidates에 통합) |
+| `max_candidates` 제한 | 있음 | 있음 (동일) |
+
+`fallback_fn` 인자가 제거된 이유: Policy Composition에서 Fallback은
+`FallbackPolicy`로 분리되므로 HedgingPolicy가 별도로 지원할 필요 없다.
+
+### 8.6 initial_load_level 주입
+
+**문제**: EventBus가 없는 환경에서 `_current_load_level`이 영원히 `"none"`이므로,
+Backpressure 기반 동적 제어가 불가능하다.
+
+**근거**: 기존 `HedgingStrategy.__init__()` (`strategy.py` L107):
+
+```python
+self._current_load_level: str = "none"  # ← 하드코딩
+```
+
+**수정**: `__init__`에 `initial_load_level: str = "none"` 파라미터 추가.
+기본값은 `"none"`이므로 **하위 호환**을 유지한다.
+
+이후 `on_config_updated()`를 통해 동적으로 변경 가능하며,
+단일 필드 대입의 Thread-safety는 CPython GIL 하에서
+`STORE_ATTR` 바이트코드의 원자성으로 보장된다.
+
+### 8.7 AsyncResiliencePolicy 타입 검사
+
+`AsyncResiliencePolicy`에 `@runtime_checkable` 데코레이터가 적용되어 있으므로
+(`resilience_policy.py` L213) `isinstance()` 검사가 가능하다:
+
+```python
+@runtime_checkable
+class AsyncResiliencePolicy(Protocol[T]):
+    async def execute(self, func, *args, context=None, **kwargs) -> PolicyResult[T]: ...
+```
+
+생성 시점에 검사하지 않으면, 동기 `ResiliencePolicy`를 넣었을 때
+실제 hedging 실행 중(요청 처리 도중)에야 런타임 에러가 발생한다:
+
+```
+TypeError: object PolicyResult can't be used in 'await' expression
+```
+
+생성 시점 Fail-Fast로 이 문제를 **배포 전 테스트에서 포착**할 수 있다.
+
+### 8.8 HedgingStrategyCompat 위치 확정
+
+**위치**: `core/hedging/strategy.py`
+
+**순환 참조 부재 확인**:
+
+```
+resilience/policies/hedging.py (HedgingPolicy)
+  → core/hedging/executor.py (HedgingExecutor)  ← 크로스 의존 0건
+
+core/hedging/strategy.py (HedgingStrategyCompat)
+  → resilience/policies/hedging.py (HedgingPolicy) ← 단방향
+```
+
+`executor.py`는 `strategy.py`를 import하지 않으므로 순환이 발생하지 않는다.
+
+**레거시 격리 효과**:
+- `resilience/policies/hedging.py`: `FallbackResult`, `FallbackMode`, `FallbackStrategy` 무의존 (청정)
+- `core/hedging/strategy.py`: `FallbackResult` import이 이미 존재 (`strategy.py` L13-L16)
