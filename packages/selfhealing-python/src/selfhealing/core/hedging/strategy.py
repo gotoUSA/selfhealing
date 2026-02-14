@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 from selfhealing.core.fallback_strategy import (
     FallbackMode,
@@ -39,6 +39,9 @@ from selfhealing.core.hedging.metrics import (
     record_hedging_benefit,
 )
 from selfhealing.core.hedging.otel import hedging_span, record_hedging_result
+
+if TYPE_CHECKING:
+    from selfhealing.resilience.policies.hedging import HedgingPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -420,7 +423,7 @@ class HedgingStrategyCompat:
         HedgingPolicy를 직접 사용하세요.
     """
 
-    def __init__(self, policy: Any):
+    def __init__(self, policy: HedgingPolicy):
         """
         Args:
             policy: HedgingPolicy 인스턴스.

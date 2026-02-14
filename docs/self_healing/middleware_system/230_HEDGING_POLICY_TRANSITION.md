@@ -62,7 +62,7 @@ core/hedging/
 
 ### 2.4 Executor 의존성 (0건)
 
-`HedgingExecutor` (executor.py, 279줄)와 `AsyncHedgingExecutor` (async_executor.py, 297줄)는
+`HedgingExecutor` (executor.py, 388줄)와 `AsyncHedgingExecutor` (async_executor.py, 297줄)는
 **크로스-패턴 의존성이 0건**이다. hedging 패키지 내부 모듈만 참조한다:
 
 - `config` → `HedgingCandidate`, `HedgingConfig`, `HedgingMode`
@@ -541,7 +541,7 @@ class HedgingPolicy(ResiliencePolicy[T]):
 과도기에 어댑터를 제공한다:
 
 ```python
-class HedgingStrategyCompat(HedgingStrategy):
+class HedgingStrategyCompat:
     """
     기존 HedgingStrategy와 호환되는 래퍼.
 
@@ -668,14 +668,13 @@ def _subscribe_config_updates(self) -> None:
     bus.subscribe(EventType.CONFIG_UPDATED, self._on_config_updated)
 ```
 
-#### TO-BE: PolicyHook 인터페이스
+#### TO-BE: HedgingConfigUpdateHook
 
 ```python
-class HedgingConfigUpdateHook(PolicyHook):
+class HedgingConfigUpdateHook:
     """
     EventBus CONFIG_UPDATED 이벤트를 HedgingPolicy에 전달하는 Hook.
 
-    PolicyHook Protocol을 구현한다.
     Fail-Open 원칙: Hook 실패 시 HedgingPolicy 동작에 영향 없음.
     """
 
@@ -838,7 +837,7 @@ class AsyncHedgingPolicy:
 **핵심: `@runtime_checkable` 활용**
 
 `AsyncResiliencePolicy`는 `@runtime_checkable` 데코레이터가 적용되어 있으므로
-`isinstance()` 체크가 가능하다 (`resilience_policy.py` L213):
+`isinstance()` 체크가 가능하다:
 
 ```python
 @runtime_checkable
@@ -889,7 +888,7 @@ result = policy.execute(primary)
 
 | 파일 | 이유 |
 |------|------|
-| `executor.py` (279줄) | 크로스 의존 0건. hedging 내부만 참조 |
+| `executor.py` (388줄) | 크로스 의존 0건. hedging 내부만 참조 |
 | `async_executor.py` (297줄) | 크로스 의존 0건. hedging 내부만 참조 |
 | `latency_tracker.py` | ADAPTIVE 모드 전용 P50 추적기 — 독립 |
 | `result.py` | `HedgingResult` — Executor 결과 타입 |
@@ -1160,7 +1159,7 @@ return PolicyResult(
 `per_candidate_policy`에 `FallbackPolicy`가 포함된 경우
 fallback 성공(`SUCCESS_WITH_FALLBACK`)이 실패로 오인된다.
 
-**근거**: `PolicyResult.success` 프로퍼티 (`resilience_policy.py` L103-L107):
+**근거**: `PolicyResult.success` 프로퍼티:
 
 ```python
 @property
@@ -1189,7 +1188,7 @@ Executor는 이 예외들을 일반적인 후보 실패로 처리한다.
 (no-arg callable) 간의 간극을 클로저로 해결한다:
 
 ```python
-def primary_fn(f=func, a=args, kw=kwargs):
+def primary_fn(f: Callable = func, a: tuple = args, kw: dict = kwargs) -> T:
     return f(*a, **kw)
 ```
 
@@ -1226,7 +1225,7 @@ self._current_load_level: str = "none"  # ← 하드코딩
 ### 8.7 AsyncResiliencePolicy 타입 검사
 
 `AsyncResiliencePolicy`에 `@runtime_checkable` 데코레이터가 적용되어 있으므로
-(`resilience_policy.py` L213) `isinstance()` 검사가 가능하다:
+`isinstance()` 검사가 가능하다:
 
 ```python
 @runtime_checkable
@@ -1292,16 +1291,16 @@ core/hedging/strategy.py (HedgingStrategyCompat)
 
 | 파일 | 테스트 수 | 상태 |
 |------|----------|------|
-| `tests/unit/resilience/policies/test_hedging_policy.py` | 139건 | ✅ 전체 통과 |
+| `tests/unit/resilience/policies/test_hedging_policy.py` | 140건 | ✅ 전체 통과 |
 
 **테스트 구성** (24개 클래스):
 
 | 클래스 | 유형 | 대상 | 건수 |
 |--------|------|------|------|
-| `TestHedgingPolicyContract` | 계약 | name, outcome, executed_policies, metadata 구조 | 12 |
+| `TestHedgingPolicyContract` | 계약 | name, outcome, executed_policies, metadata 구조, ResiliencePolicy 인스턴스 | 13 |
 | `TestLoadLevelOrderContract` | 계약 | `_LOAD_LEVEL_ORDER` 5개 매핑 + 단조증가 | 7 |
 | `TestAsyncHedgingPolicyContract` | 계약 | AsyncHedgingPolicy name, outcome, 반환 타입 | 5 |
-| `TestExportContract` | 계약 | `core/hedging/__init__.py`, `resilience/policies/__init__.py` export 및 `__all__` | 12 |
+| `TestExportContract` | 계약 | `core/hedging/__init__.py`, `resilience/policies/__init__.py` export 및 `__all__` | 13 |
 | `TestHedgingConfigDeprecatedContract` | 계약 | bulkhead_name, acquire_bulkhead_per_candidate deprecated 메타데이터 | 4 |
 | `TestHedgingStrategyDeprecatedContract` | 계약 | HedgingStrategy DeprecationWarning 발생 + 메시지 | 2 |
 | `TestHedgingStrategyCompatContract` | 계약 | HedgingStrategyCompat PolicyResult→FallbackResult 변환 | 5 |
@@ -1310,14 +1309,14 @@ core/hedging/strategy.py (HedgingStrategyCompat)
 | `TestHedgingPolicyBuildCandidatesBehavior` | 동작 | primary 순서, 이름 지정, max_candidates 제한, args 래핑 | 7 |
 | `TestHedgingPolicyExecuteSingleBehavior` | 동작 | _execute_single 성공/실패/default/metadata | 5 |
 | `TestHedgingPolicyOnConfigUpdatedBehavior` | 동작 | mode/delay/load_level 변경, 유효하지 않은 값 무시 | 6 |
-| `TestHedgingPolicyPerCandidateBehavior` | 동작 | per_candidate_policy 래핑, REJECTED/TIMEOUT/SUCCESS_WITH_FALLBACK/FAILURE | 7 |
+| `TestHedgingPolicyPerCandidateBehavior` | 동작 | per_candidate_policy 래핑, REJECTED/TIMEOUT/SUCCESS_WITH_FALLBACK/FAILURE | 6 |
 | `TestHedgingPolicyOverallPolicyBehavior` | 동작 | overall_policy Double Wrapping 방지, REJECTED 통과, HedgingError 처리 | 5 |
 | `TestShouldDisableHedgingBehavior` | 동작 | 임계값 경계값, 알 수 없는 레벨 기본값 | 4 |
 | `TestGetNameBehavior` | 동작 | 커스텀/기본/범위 초과 이름 결정 | 3 |
 | `TestAsyncHedgingPolicyExecuteBehavior` | 동작 | async execute() 성공, 전체 실패 + default, 부하 비활성화 | 3 |
-| `TestAsyncHedgingPolicyTypeCheckBehavior` | 동작 | 비Protocol 객체 TypeError, 유효 async 통과, runtime_checkable 구조적 타입 | 7 |
+| `TestAsyncHedgingPolicyTypeCheckBehavior` | 동작 | 비Protocol 객체 TypeError, 유효 async 통과, runtime_checkable 구조적 타입 | 6 |
 | `TestAsyncHedgingPolicyOnConfigUpdatedBehavior` | 동작 | async mode/delay/load_level 변경 | 3 |
-| `TestHedgingConfigUpdateHookBehavior` | 동작 | register, dispatch, event.data, Fail-Open, EventBus 미존재, async policy | 9 |
+| `TestHedgingConfigUpdateHookBehavior` | 동작 | register, dispatch, event.data, Fail-Open, EventBus 미존재, async policy | 8 |
 | `TestAsyncHedgingPolicyBackpressureBehavior` | 동작 | async _should_disable, _get_effective_delay | 5 |
 | `TestHedgingPolicyInitBehavior` | 동작 | 생성자 기본값 9건 (candidates, config, executor 등) | 9 |
 | `TestAsyncHedgingPolicyInitBehavior` | 동작 | async 생성자 기본값 (candidates, config, executor) | 4 |

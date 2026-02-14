@@ -224,6 +224,10 @@ class TestHedgingPolicyContract:
         result = policy.execute(lambda: "single")
         assert result.metadata["hedged"] is False
 
+    def test_hedging_policy_is_resilience_policy_instance(self, basic_policy):
+        """HedgingPolicy는 ResiliencePolicy의 인스턴스이다."""
+        assert isinstance(basic_policy, ResiliencePolicy)
+
 
 # =============================================================================
 # 계약 검증 (Contract) — _LOAD_LEVEL_ORDER 매핑 테이블

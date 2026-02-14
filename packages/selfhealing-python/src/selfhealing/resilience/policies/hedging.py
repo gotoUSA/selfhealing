@@ -59,7 +59,7 @@ _LOAD_LEVEL_ORDER: dict[str, int] = {
 # =============================================================================
 
 
-class HedgingPolicy:
+class HedgingPolicy(ResiliencePolicy[T]):
     """
     동기 Hedging Policy — 병렬 경쟁 실행.
 
