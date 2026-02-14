@@ -116,7 +116,7 @@ class TestAdaptiveThrottleFacadeCheckBehavior:
             guards=[mock_guard],
             sinks=[mock_sink],
         )
-        ctx = {"service_name": "payment", "domain": "order"}
+        ctx = {"service_name": "svc_alpha", "domain": "domain_a"}
         facade.check("user_1", context=ctx)
 
         mock_sink.handle_rejection.assert_called_once_with(ctx, "emergency_level_3")

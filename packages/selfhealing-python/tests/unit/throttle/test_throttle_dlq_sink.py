@@ -32,15 +32,15 @@ class TestThrottleDLQSinkHandleRejectionBehavior:
         sink = ThrottleDLQSink(dlq_integration=mock_integration)
 
         context = {
-            "service_name": "payment",
-            "domain": "order",
+            "service_name": "svc_alpha",
+            "domain": "domain_a",
             "tier_id": "critical",
         }
         sink.handle_rejection(context, reason="rate_limit_exceeded")
 
         mock_integration.store_denied_request.assert_called_once_with(
-            service_name="payment",
-            domain="order",
+            service_name="svc_alpha",
+            domain="domain_a",
             tier_id="critical",
             reason="rate_limit_exceeded",
             request_data=context,
