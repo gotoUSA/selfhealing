@@ -588,7 +588,10 @@ hedging = HedgingPolicy(
 - [x] `bulkhead_policy()` 팩토리 함수 (Registry 연동)
 - [x] `async_bulkhead_policy()` 팩토리 함수 (Registry 연동)
 - [x] `__init__.py` export 추가
-- [ ] 단위 테스트 작성
+- [x] 단위 테스트 작성 (`test_bulkhead_policy.py` — 89건 통과)
+  - 계약 검증: name, outcome, executed_policies, Protocol 호환, export
+  - 동작 검증: Semaphore 성공/REJECTED, ThreadPool 성공/TIMEOUT, 예외 재전파
+  - 동작 검증: _get_state_dict, PolicyContext 전달, 팩토리 함수 (동기/비동기)
 - [x] 기존 테스트 통과 확인
 - [x] `ResiliencePolicy` Protocol 호환성 검증 완료 (`isinstance` = True)
 
