@@ -103,10 +103,10 @@ adaptive.py L630: _subscribe_kill_switch_events()
 
 | # | 의존 대상 | 현재 위치 | 트리거 | 분리 후 |
 |---|-----------|-----------|--------|---------|
-| 5 | `RATE_LIMIT_429` 이벤트 → limit 감소 | adaptive.py L634, L651 `_handle_rate_limit_429()` | EventBus 구독 | `RateLimitHook` — 외부에서 limit 조정 콜백 주입 |
-| 6 | `ERROR_BUDGET_WARNING/CRITICAL` → limit 감소 | adaptive.py L910, L970 `_handle_error_budget_warning()` | EventBus 구독 | `ErrorBudgetHook` — 외부에서 limit 조정 콜백 주입 |
-| 7 | `LOAD_SHEDDING_LEVEL_CHANGED` → limit 조정 | adaptive.py L846, L862 `_handle_shedding_changed()` | EventBus 구독 | `LoadSheddingHook` — 외부에서 limit 조정 콜백 주입 |
-| 8 | `KILL_SWITCH_ACTIVATED/DEACTIVATED` → Gradient Freeze | adaptive.py L782, L793 `_handle_kill_switch_activated()` | EventBus 구독 | Guard의 실시간 알림 채널 |
+| 5 | `RATE_LIMIT_429` 이벤트 → limit 감소 | adaptive.py L634, L651 `_handle_rate_limit_429()` | EventBus 구독 | `ThrottleLimitAdjuster` — 독립 수명주기 컴포넌트 |
+| 6 | `ERROR_BUDGET_WARNING/CRITICAL` → limit 감소 | adaptive.py L910, L970 `_handle_error_budget_warning()` | EventBus 구독 | `ThrottleLimitAdjuster` — 독립 수명주기 컴포넌트 |
+| 7 | `LOAD_SHEDDING_LEVEL_CHANGED` → limit 조정 | adaptive.py L846, L862 `_handle_shedding_changed()` | EventBus 구독 | `ThrottleLimitAdjuster` — 독립 수명주기 컴포넌트 |
+| 8 | `KILL_SWITCH_ACTIVATED/DEACTIVATED` → Gradient Freeze | adaptive.py L782, L793 `_handle_kill_switch_activated()` | EventBus 구독 | `ThrottleLimitAdjuster` — 독립 수명주기 컴포넌트 |
 | 9 | `CircuitBreakerService.get_state()` (Full Stop 3중 조건) | adaptive.py L2007 lazy import | `_check_db_circuit_breaker_open()` | Policy 외부에서 Full Stop 판단 |
 
 #### Sink로 분리 (1건)
@@ -248,10 +248,41 @@ class ThrottlePolicy(ResiliencePolicy[T]):
                 self._config.min_limit,
             )
         elif gradient < -0.05:
-            self._current_limit = min(
-                self._current_limit + self._config.increase_step,
-                self._config.max_limit,
-            )
+            new_limit = self._current_limit + self._config.increase_step
+
+            # Recovery Dampening Cap: Dampening 활성 시 상한 제한
+            # 근거: recovery_dampening.py L130 — phase별 target_limit * ratio로 Cap 설정
+            #       adaptive.py L2361 — advance_recovery_dampening()이 limit 직접 설정
+            #       Gradient가 독립적으로 limit을 올리면 Dampening 의미 소실
+            if self._dampening_manager and self._dampening_manager.is_recovery_active(
+                self._config.service_name,
+            ):
+                dampened_limit = self._dampening_manager.get_current_dampened_limit(
+                    self._config.service_name,
+                )
+                if dampened_limit is not None:
+                    new_limit = min(new_limit, dampened_limit)
+
+            self._current_limit = min(new_limit, self._config.max_limit)
+
+### 3.1.1 비동기 지원 제외
+
+`AsyncThrottlePolicy`는 현재 구현하지 않는다.
+
+**근거**:
+
+| 항목 | 현재 상태 | 코드 위치 |
+|------|-----------|----------|
+| `AdaptiveThrottle` | `async def` 0건 — 순수 동기 | adaptive.py 전체 |
+| `SlidingWindowThrottle` | 인메모리 `dict`/`list` 기반, I/O 0건 | base.py L170-L222 |
+| 225 문서 결론 | "7개 전환 대상 중 async를 지원하는 것은 Bulkhead 하나" | 225 문서 §2.3 L151 |
+
+`SlidingWindowThrottle`은 `defaultdict(list)` + `threading.Lock()`으로만 동작한다 (base.py L185-L187).
+Redis 기반 분산 Throttle을 `check()` 경로에 도입할 경우에 한해 `AsyncThrottlePolicy`를 신설한다.
+
+`redis_lua.py`의 `RedisThrottleLimitManager`는 **분산 limit 동기화** 전용이며,
+`check()` 자체의 rate limit 판정 경로가 아니므로 async 전환 대상이 아니다.
+
 ```
 
 ### 3.2 분리된 Guard/Hook/Sink — 기존 코드에서 추출
@@ -283,12 +314,25 @@ class ThrottleGovernanceGuard:
         ...
 ```
 
-#### ThrottleEventBusHook (EventBus 5건 통합)
+#### ThrottleLimitAdjuster (EventBus 5건 통합 — 독립 수명주기 컴포넌트)
+
+`PolicyHook` 인터페이스(225 문서 §2.5)는 요청 생명주기(`on_execute`, `on_success`, `on_failure`) 메서드만 정의한다.
+EventBus 구독은 시스템 **전역 이벤트**(429, ErrorBudget, LoadShedding, KillSwitch)에 반응하여
+ThrottlePolicy의 limit을 **직접 변경**하는 것이므로 요청 생명주기와 무관하다.
+
+따라서 `PolicyHook`을 구현하지 않고, 230번 문서의 `HedgingConfigUpdateHook` (hedging.py L798-L844) 패턴을 따라
+`register()` + `start()` 수명주기를 가진 **독립 컴포넌트**로 정의한다.
+
+**네이밍 근거**:
+- `ThrottleEventBusHook` ❌ — `PolicyHook`을 구현하지 않으므로 "Hook" 접미사 부적합
+- `ThrottleConfigurationObserver` ❌ — 429, LoadShedding은 "Configuration" 변경이 아닌 시스템 상태 변경
+- `ThrottleLimitAdjuster` ✅ — 핵심 책임이 limit 조정이며, 코드베이스에 0건 충돌 없음
+- 기존 `Observer` 패턴: `AuditEventObserver` (audit_integration.py L463) — 순수 관찰. 본 컴포넌트는 limit을 **변경**하므로 Observer보다 Adjuster가 적확
 
 ```python
-class ThrottleEventBusHook:
+class ThrottleLimitAdjuster:
     """
-    AdaptiveThrottle에서 분리된 EventBus 연동 Hook.
+    AdaptiveThrottle에서 분리된 EventBus → Limit 조정 컴포넌트.
 
     기존 코드 위치:
     - _subscribe_rate_limit_events()     adaptive.py L627
@@ -296,19 +340,124 @@ class ThrottleEventBusHook:
     - _subscribe_load_shedding_events()  adaptive.py L846
     - _subscribe_kill_switch_events()    adaptive.py L782
 
-    PolicyHook 인터페이스(225 문서 §2.4)를 구현하여
-    PolicyComposer에서 add_hook()으로 등록.
+    PolicyHook이 아닌 독립 수명주기 컴포넌트.
+    HedgingConfigUpdateHook (hedging.py L798) 패턴과 동일 구조.
 
     ThrottlePolicy.current_limit에 대한 외부 조정을 수행.
     """
 
-    def __init__(self, throttle_policy: ThrottlePolicy):
-        self._policy = throttle_policy
-        self._subscribe_all()
+    def __init__(self) -> None:
+        self._policies: list[ThrottlePolicy] = []
 
-    def _subscribe_all(self) -> None:
-        """모든 EventBus 구독 등록 (Fail-Open)."""
-        ...
+    def register(self, policy: ThrottlePolicy) -> None:
+        """limit 조정 대상 ThrottlePolicy 등록."""
+        self._policies.append(policy)
+
+    def start(self) -> None:
+        """
+        EventBus 구독 시작.
+
+        EventBus가 없는 환경에서는 아무 동작도 하지 않는다 (Fail-Open).
+        HedgingConfigUpdateHook.start() (hedging.py L828)와 동일 패턴.
+        """
+        try:
+            from selfhealing.services.event_bus import EventType, get_event_bus
+
+            bus = get_event_bus()
+            bus.subscribe(EventType.RATE_LIMIT_429, self._handle_rate_limit_429)
+            bus.subscribe(EventType.RATE_LIMIT_COOLDOWN_END, self._handle_cooldown_end)
+            bus.subscribe(EventType.ERROR_BUDGET_WARNING, self._handle_error_budget)
+            bus.subscribe(EventType.ERROR_BUDGET_CRITICAL, self._handle_error_budget)
+            bus.subscribe(EventType.ERROR_BUDGET_RECOVERED, self._handle_error_budget_recovered)
+            bus.subscribe(EventType.LOAD_SHEDDING_LEVEL_CHANGED, self._handle_shedding_changed)
+            bus.subscribe(EventType.KILL_SWITCH_ACTIVATED, self._handle_kill_switch)
+            bus.subscribe(EventType.KILL_SWITCH_DEACTIVATED, self._handle_kill_switch)
+        except ImportError:
+            pass  # Fail-Open
+        except Exception:
+            pass  # Fail-Open
+
+    def _handle_rate_limit_429(self, event) -> None:
+        """429 이벤트 → 등록된 모든 Policy의 limit 감소."""
+        for policy in self._policies:
+            try:
+                policy.reduce_limit_for_429(event)
+            except Exception:
+                pass  # Fail-Open
+
+    # ... 기타 핸들러도 동일 Fail-Open 패턴
+```
+
+**Composer 연동**: `add_hook()` 대신 Facade 또는 팩토리 함수에서 직접 생성/시작한다:
+
+```python
+adjuster = ThrottleLimitAdjuster()
+adjuster.register(throttle_policy)
+adjuster.start()  # EventBus 구독 시작
+```
+
+#### LoadShedding 로직 분리 — Limit 조정 vs 요청 거부
+
+현재 AdaptiveThrottle에는 두 가지 LoadShedding 로직이 섞여 있다:
+
+| 로직 | 현재 위치 | 역할 | 전환 후 |
+|------|-----------|------|--------|
+| **Limit 조정** | adaptive.py L862 `_handle_shedding_changed()` | `_shedding_suggested_limit` 변경 | `ThrottleLimitAdjuster` (위 컴포넌트) |
+| **우선순위 거부** | traffic_gate.py L161 `should_allow(priority=)` | 특정 priority 이하 요청 거부 | `LoadSheddingGuard` (별도 Guard) |
+
+**ThrottlePolicy는 요청의 priority 정보를 전혀 알 필요가 없다.**
+우선순위 기반 거부는 `LoadSheddingGuard`가 `PolicyContext.extra["priority"]`에서 읽어 판단한다:
+
+```python
+class LoadSheddingGuard:
+    """
+    우선순위 기반 LoadShedding Guard.
+
+    기존 코드:
+    - traffic_gate.py L143-L158 _check_load_shedding(priority)
+    - CascadeLoadShedding.should_accept(priority=priority)
+
+    ThrottlePolicy 외부에서 PolicyComposer.add_guard()로 등록.
+    ThrottlePolicy는 priority를 알지 못한다.
+    """
+
+    @property
+    def name(self) -> str:
+        return "load_shedding"
+
+    def __init__(self, load_shedding: Any | None = None):
+        """
+        Args:
+            load_shedding: CascadeLoadShedding 인스턴스.
+                           None이면 lazy import로 획득 (Fail-Open).
+        """
+        self._load_shedding = load_shedding
+
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
+        """
+        우선순위 기반 LoadShedding 체크.
+
+        context.extra["priority"]에서 요청 우선순위를 읽는다.
+        context=None이면 전역 체크 (priority 무관, 통과 허용).
+        """
+        if self._load_shedding is None:
+            return GuardResult(allowed=True)
+
+        priority = 0
+        if context and context.extra:
+            priority = context.extra.get("priority", 0)
+
+        try:
+            result = self._load_shedding.should_accept(priority=priority)
+            if isinstance(result, dict) and not result.get("accepted", True):
+                return GuardResult(
+                    allowed=False,
+                    reason=f"load_shedding_rejected:priority={priority}",
+                )
+        except Exception:
+            pass  # Fail-Open
+
+        return GuardResult(allowed=True)
 ```
 
 #### ThrottleDLQSink (Sink 1건)
@@ -388,6 +537,67 @@ policy.add_guard(LoadSheddingGuard(priority_threshold=5))  # Guard로 분리
 
 **코드 근거**: `traffic_gate.py` L165-L218의 `should_allow()` 메서드는 Bulkhead → LoadShedding → RateController 순서가 고정이며, 소비자가 이 순서를 변경하거나 특정 단계를 생략할 수 없다. PolicyComposer의 `compose()`는 이 제약을 해소한다.
 
+#### RateController → BackpressureGuard 전환
+
+TrafficGate의 3번째 구성요소인 `RateController` (scaling/rate_controller.py)는 **ThrottlePolicy에 흡수되지 않는다.**
+
+두 컴포넌트는 알고리즘과 목적이 완전히 다르다:
+
+| | SlidingWindowThrottle (ThrottlePolicy 내부 엔진) | RateController |
+|---|---|---|
+| **알고리즘** | Sliding Window — 윈도우 내 요청 수 카운팅 (base.py L190-L222) | Token Bucket + AIMD 패턴 (rate_controller.py L53-L111, L250-L275) |
+| **Rate 조절** | 외부에서 `current_limit` setter로 변경 | 큐 크기 기반 자동 조절 (Multiplicative Decrease / Additive Increase) |
+| **목적** | 외부 API 호출 제한 (서비스 보호) | 내부 큐 과부하 방지 (backpressure) |
+| **입력** | 요청 key (`"user_123"`) | 큐 크기 (`queue_size_provider: Callable[[], int]`) |
+| **전략** | 단순 거부 | `REJECT` / `THROTTLE`(대기) / `DROP_OLDEST` / `QUEUE` (rate_controller.py L210-L240) |
+
+RateController는 별도의 **BackpressureGuard**로 변환하여 PolicyComposer에 등록한다:
+
+```python
+class BackpressureGuard:
+    """
+    RateController 기반 Backpressure Guard.
+
+    기존 코드:
+    - traffic_gate.py L205 RateController.should_process()
+    - rate_controller.py L196-L240 Token Bucket + 전략 분기
+
+    ThrottlePolicy와 독립. 큐 기반 backpressure를 담당.
+    """
+
+    @property
+    def name(self) -> str:
+        return "backpressure"
+
+    def __init__(self, rate_controller: RateController | None = None):
+        self._controller = rate_controller
+
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
+        if self._controller is None:
+            return GuardResult(allowed=True)
+
+        if not self._controller.should_process():
+            level = self._controller.get_state().level
+            return GuardResult(
+                allowed=False,
+                reason=f"backpressure:level={level.value}",
+            )
+        return GuardResult(allowed=True)
+```
+
+**전환 후 TrafficGate 완전 대체:**
+
+```python
+policy = compose(
+    bulkhead("database", max_concurrent=10),     # 228 BulkheadPolicy — 0단계
+    throttle("payment_api", initial_limit=100),  # 232 ThrottlePolicy — rate limit
+)
+policy.add_guard(LoadSheddingGuard())              # 1단계: 우선순위 필터링
+policy.add_guard(BackpressureGuard(rate_controller)) # 2단계: 큐 기반 backpressure
+```
+
+**네이밍 근거**: `BackpressureGuard` — 코드베이스에 0건 충돌 없음. `RateController`의 핵심 책임이 Backpressure이므로 적합.
+
 ## 5. Full Stop 로직 처리 방안
 
 ### 5.1 현재 Full Stop 3중 조건 (adaptive.py L1992-L2050)
@@ -435,7 +645,7 @@ class FullStopGuard:
         self._get_cb_state = cb_state_provider
         self._get_budget_remaining = budget_provider
 
-    def check(self) -> GuardResult:
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
         is_level_3 = self._get_emergency_level() >= 3
         db_cb_open = self._get_cb_state("database") == "open"
         budget_exhausted = self._get_budget_remaining() <= 0
@@ -443,6 +653,89 @@ class FullStopGuard:
         if is_level_3 and db_cb_open and budget_exhausted:
             return GuardResult(allowed=False, reason="full_stop:LEVEL_3+DB_CB_OPEN+BUDGET_EXHAUSTED")
         return GuardResult(allowed=True)
+```
+
+### 5.3 팩토리 함수 — `create_default_full_stop_guard()`
+
+소비자가 매번 `FullStopGuard(lambda: ..., lambda: ..., lambda: ...)`를 작성하는 것은 번거롭다.
+기존 코드가 adaptive.py L2001-L2057에서 lazy import + Fail-Open 패턴으로 동일 문제를 해결하고 있으므로,
+이 패턴을 팩토리 함수로 추출한다.
+
+**선례**: `_create_default_probes()` (177 문서 §3), `_create_default_service()` (227 문서 §6) — 동일 lazy import 팩토리 패턴.
+
+```python
+def create_default_full_stop_guard() -> FullStopGuard:
+    """
+    기본 FullStopGuard 생성.
+
+    내부에서 CircuitBreakerService, ErrorBudgetService, EmergencyMode를
+    lazy import하여 Guard를 조립한다.
+    각 provider가 import 실패 시 Fail-Open (Guard 미작동 = 통과 허용).
+
+    기존 코드 대응:
+    - _check_db_circuit_breaker_open()  adaptive.py L2001-L2028
+    - _check_error_budget_exhausted()   adaptive.py L2035-L2057
+    - EmergencyMode.get_current_level() adaptive.py L2202
+    """
+
+    def _get_emergency_level() -> int:
+        try:
+            from selfhealing.core.emergency_mode import EmergencyMode
+
+            return EmergencyMode.get_current_level()
+        except ImportError:
+            return 0  # Fail-Open: Emergency 모듈 없으면 NORMAL
+        except Exception:
+            return 0
+
+    def _get_cb_state(service: str) -> str:
+        try:
+            from selfhealing.services.circuit_breaker_service import (
+                get_circuit_breaker_service,
+            )
+
+            cb_service = get_circuit_breaker_service()
+            # 핵심 DB 서비스 목록 (adaptive.py L2017과 동일)
+            db_services = ["database", "db", "postgres", "mysql", "redis", "mongodb"]
+            for db_name in db_services:
+                try:
+                    state = cb_service.get_state(db_name)
+                    if state == "open":
+                        return "open"
+                except Exception:
+                    pass
+            return "closed"
+        except ImportError:
+            return "closed"  # Fail-Open
+        except Exception:
+            return "closed"
+
+    def _get_budget_remaining() -> float:
+        try:
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
+
+            service = get_error_budget_service()
+            return service.get_budget_status().budget_remaining_percent
+        except ImportError:
+            return 100.0  # Fail-Open: 예산 모듈 없으면 충분
+        except Exception:
+            return 100.0
+
+    return FullStopGuard(
+        emergency_provider=_get_emergency_level,
+        cb_state_provider=_get_cb_state,
+        budget_provider=_get_budget_remaining,
+    )
+```
+
+**소비자 사용:**
+
+```python
+from selfhealing.resilience.policies.guards.full_stop import create_default_full_stop_guard
+
+policy.add_guard(create_default_full_stop_guard())  # 람다 없이 한 줄
 ```
 
 ## 6. Recovery Dampening 처리 방안
@@ -467,7 +760,31 @@ class RecoveryDampeningManager:
     ):
 ```
 
-ThrottlePolicy에서는 `on_limit_change` 콜백을 통해 연결만 하면 된다. Recovery Dampening의 트리거(Emergency 복구, CB CLOSE 등)는 EventBus Hook에서 담당한다.
+ThrottlePolicy에서는 `on_limit_change` 콜백을 통해 연결만 하면 된다. Recovery Dampening의 트리거(Emergency 복구, CB CLOSE 등)는 `ThrottleLimitAdjuster`에서 담당한다.
+
+### 6.3 Dampening과 Gradient의 상호작용 — Limit Cap 규칙
+
+Recovery Dampening은 단순 Observer가 아니라 **limit을 직접 변경하는 Controller**이다:
+
+- `start_recovery()` (recovery_dampening.py L100-L150): 1단계 limit을 직접 계산하여 반환
+- `_on_phase_transition()` (recovery_dampening.py L170-L210): 타이머로 자동 단계 전이 후 `on_limit_change` 콜백으로 limit 직접 설정
+
+**문제**: Dampening이 활성 상태(80%→90%→100% 점진 복구)일 때, Gradient의 `_maybe_adjust_limit()`이 독립적으로 limit을 올릴 수 있다. 현재 코드에서 이를 막는 메커니즘은 `_gradient_frozen` 플래그뿐이며 (adaptive.py L1340-L1343), Dampening 상태와 직접 연동되지 않는다.
+
+**해결 규칙**: ThrottlePolicy의 `_maybe_adjust_limit()` 내부에서 limit **상향** 시 Dampening Cap을 적용한다:
+
+```
+Dampening 활성 시:
+  Gradient가 계산한 new_limit = min(gradient_limit, dampening_cap)
+  dampening_cap = RecoveryDampeningManager의 현재 단계별 target_limit
+
+Dampening 비활성 시:
+  Gradient가 계산한 new_limit = min(gradient_limit, config.max_limit)  # 기존 동작
+```
+
+**limit 감소는 억제하지 않는다**: RTT가 급등하면 Dampening 중이라도 limit을 낮춰야 서비스를 보호할 수 있다. Cap은 **상향**에만 적용된다.
+
+이 로직은 §3.1의 `_maybe_adjust_limit()` 코드에 반영되어 있다 (`gradient < -0.05` 분기 내 Dampening Cap 체크).
 
 ## 7. 하위 호환성 보장
 
@@ -493,15 +810,97 @@ def get_adaptive_throttle(config=None):
     # Phase 3 구현
     policy = ThrottlePolicy(config)
     governance_guard = ThrottleGovernanceGuard()
-    event_hook = ThrottleEventBusHook(policy)
+    limit_adjuster = ThrottleLimitAdjuster()
+    limit_adjuster.register(policy)
+    limit_adjuster.start()  # EventBus 구독 시작
     dlq_sink = ThrottleDLQSink()
 
     return AdaptiveThrottleFacade(
         policy=policy,
         guards=[governance_guard],
-        hooks=[event_hook],
+        limit_adjuster=limit_adjuster,
         sinks=[dlq_sink],
     )
+```
+
+### 7.3 AdaptiveThrottleFacade API — `check()` + `record_response()` 이중 API 유지
+
+기존 `AdaptiveThrottle`은 `check()` + `record_response()` 2단계 API를 제공한다:
+
+| 메서드 | 역할 | 소비자 호출처 |
+|--------|------|---------------|
+| `check(key)` | 허용/거부 판단 (실행 전) | `__init__.py` L22, throttle_adapter.py L139 |
+| `record_response(rtt_ms)` | RTT 기록 → Gradient 기반 limit 동적 조정 | `__init__.py` L24, throttle_adapter.py L139, throttle_simulation.py L320, load_tests controller L486 |
+
+**`record_response()`를 Facade에서 생략하면 최소 4곳의 소비자가 깨진다.**
+`ThrottlePolicy.execute()`는 RTT를 내부 측정하지만, 레거시 `check()` 경로에서는 함수 실행이 Policy 외부에서 수행되므로 별도 RTT 피드백이 필요하다.
+
+```python
+class AdaptiveThrottleFacade:
+    """
+    레거시 check()/record_response() API를 유지하는 과도기 Facade.
+
+    내부적으로 ThrottlePolicy에 위임한다.
+    기존 __init__.py 공식 Usage와 동일한 2단계 패턴을 보장한다:
+        result = throttle.check("user_123")
+        throttle.record_response(response_time_ms=45.2)
+    """
+
+    def __init__(
+        self,
+        policy: ThrottlePolicy,
+        guards: list | None = None,
+        limit_adjuster: ThrottleLimitAdjuster | None = None,
+        sinks: list | None = None,
+    ):
+        self._policy = policy
+        self._guards = guards or []
+        self._limit_adjuster = limit_adjuster
+        self._sinks = sinks or []
+
+    def check(
+        self,
+        key: str,
+        tier_id: str = "standard",
+        context: dict | None = None,
+        store_rejection: bool = True,
+    ) -> ThrottleResult:
+        """
+        기존 AdaptiveThrottle.check() API와 동일한 시그니처.
+
+        Guards → SlidingWindowThrottle.check() → DLQ Sink 순서로 실행.
+        """
+        # Guard 체크
+        for guard in self._guards:
+            result = guard.check()
+            if not result.allowed:
+                return ThrottleResult(
+                    allowed=False, current_count=0, limit=0,
+                    remaining=0, reset_at=0, reason=result.reason,
+                )
+
+        # 순수 rate limit 체크
+        throttle_result = self._policy._engine.check(key)
+
+        # 거부 시 DLQ Sink 처리
+        if not throttle_result.allowed and store_rejection and context:
+            for sink in self._sinks:
+                try:
+                    sink.handle_rejection(context, throttle_result.reason or "rate_limit_exceeded")
+                except Exception:
+                    pass  # Fail-Open
+
+        return throttle_result
+
+    def record_response(self, rtt_ms: float) -> None:
+        """
+        RTT 기록 + Gradient 기반 limit 동적 조정.
+
+        기존 AdaptiveThrottle.record_response() (adaptive.py L1257-L1340)과
+        동일한 동작을 ThrottlePolicy에 위임한다.
+        """
+        self._policy._gradient.add_sample(rtt_ms)
+        self._policy._maybe_adjust_limit(rtt_ms)
 ```
 
 ## 8. 기존 코드와의 대응 맵
@@ -511,10 +910,10 @@ def get_adaptive_throttle(config=None):
 | `SlidingWindowThrottle.check()` | `ThrottlePolicy._engine.check()` | 순수 rate limit |
 | `GradientCalculator + _maybe_adjust_limit()` | `ThrottlePolicy._maybe_adjust_limit()` | 순수 Gradient 기반 limit 조정 |
 | `GovernanceCheckMixin` (상속) | `ThrottleGovernanceGuard` (Guard) | Kill Switch/Emergency/ErrorBudget/BreakGlass |
-| `_subscribe_rate_limit_events()` | `ThrottleEventBusHook` (Hook) | 429 이벤트 반응 |
-| `_subscribe_error_budget_events()` | `ThrottleEventBusHook` (Hook) | Error Budget 이벤트 반응 |
-| `_subscribe_load_shedding_events()` | `ThrottleEventBusHook` (Hook) | Load Shedding 이벤트 반응 |
-| `_subscribe_kill_switch_events()` | `ThrottleEventBusHook` (Hook) | Kill Switch 이벤트 반응 |
+| `_subscribe_rate_limit_events()` | `ThrottleLimitAdjuster` (독립 컴포넌트) | 429 이벤트 → limit 감소 |
+| `_subscribe_error_budget_events()` | `ThrottleLimitAdjuster` (독립 컴포넌트) | Error Budget 이벤트 → limit 감소 |
+| `_subscribe_load_shedding_events()` | `ThrottleLimitAdjuster` (독립 컴포넌트) | Load Shedding → limit 조정 |
+| `_subscribe_kill_switch_events()` | `ThrottleLimitAdjuster` (독립 컴포넌트) | Kill Switch → Gradient Freeze |
 | `check_full_stop_conditions()` | `FullStopGuard` (Guard) | Full Stop 3중 조건 판단 |
 | `ThrottleDLQReplayMixin` (상속) | `ThrottleDLQSink` (Sink) | 거부 요청 DLQ 저장 |
 | `_record_throttle_metrics()` | `ThrottleMetricsHook` (Hook) | Prometheus 메트릭 |
@@ -534,8 +933,8 @@ Phase 2: Guard 분리
     - ThrottleGovernanceGuard (GovernanceCheckMixin → Guard 프로토콜)
     - FullStopGuard (CB + ErrorBudget 의존성 → 생성자 주입)
     ↓
-Phase 3: Hook 분리
-    - ThrottleEventBusHook (4개 EventBus 구독 통합)
+Phase 3: EventBus 연동 + Hook 분리
+    - ThrottleLimitAdjuster (4개 EventBus 구독 통합 — 독립 수명주기 컴포넌트)
     - ThrottleMetricsHook (25+ Prometheus 메트릭)
     - ThrottleAuditHook (감사 로깅)
     ↓
@@ -543,11 +942,11 @@ Phase 4: Sink 분리
     - ThrottleDLQSink (DLQ 저장 + Recovery Replay)
     ↓
 Phase 5: 하위 호환 퍼사드
-    - AdaptiveThrottleFacade: 기존 check() API 유지
+    - AdaptiveThrottleFacade: 기존 check() + record_response() 이중 API 유지
     - get_adaptive_throttle() 점진 전환
     ↓
 Phase 6: TrafficGate 대체
-    - TrafficGate 소비자를 compose(bulkhead(), throttle()) + LoadSheddingGuard로 마이그레이션
+    - TrafficGate 소비자를 compose(bulkhead(), throttle()) + LoadSheddingGuard + BackpressureGuard로 마이그레이션
     - TrafficGate 클래스 @deprecated 마킹
 ```
 
