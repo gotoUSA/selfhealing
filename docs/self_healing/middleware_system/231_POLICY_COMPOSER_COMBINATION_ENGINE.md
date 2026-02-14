@@ -1543,4 +1543,16 @@ class HedgingStrategy(FallbackStrategy):
 기존 integration 디렉토리(`tests/self_healing/integration/`, `packages/selfhealing-python/tests/integration/`)에
 PolicyComposer 관련 통합 테스트는 **0건**이다.
 기존 통합 테스트는 Circuit Breaker Redis 분산 테스트, 스토리지 복원력 등 인프라 레벨 테스트만 존재한다.
-단위 테스트는 사용자 요청에 따라 이번 구현에서 생성하지 않았다.
+
+### 15.4 단위 테스트 현황
+
+아래 5개 테스트 파일이 `packages/selfhealing-python/tests/unit/resilience/policies/` 에 작성되었다.
+전체 **183건** 통과 (pytest 9.0.1, Python 3.12).
+
+| 파일 | 테스트 수 | 검증 대상 |
+|------|-----------|-----------|
+| `test_composer.py` | 79 | `_FallbackApplied`, `PolicyComposer`, `AsyncPolicyComposer`, `compose()`, `compose_async()` — 계약/빌더/실행/Guard/Policy체인/Fallback/Hook/Sink |
+| `test_guards.py` | 14 | `KillSwitchGuard`, `ErrorBudgetGuard` — 계약/Fail-Open/context 전달/re-export |
+| `test_hooks.py` | 37 | `AuditHook`, `MetricsHook`, `EventBusHook` — 계약/로깅레벨/Prometheus lazy init/EventBus publish/Fail-Open/re-export |
+| `test_presets.py` | 14 | `standard_pipeline()`, `ha_pipeline()` — 구성요소 존재/순서/커스텀 파라미터 |
+| `test_policy_init.py` | 39 | `__init__.py` re-export 계약, `__getattr__` lazy import, `sinks` re-export |
