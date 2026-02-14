@@ -62,7 +62,7 @@ from selfhealing.core.hedging.exceptions import (
 )
 from selfhealing.core.hedging.executor import HedgingExecutor
 from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
-from selfhealing.core.hedging.strategy import HedgingStrategy
+from selfhealing.core.hedging.strategy import HedgingStrategy, HedgingStrategyCompat
 from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 from selfhealing.core.hedging.decorator import (
     hedged,
@@ -82,6 +82,11 @@ from selfhealing.core.hedging.metrics import (
     record_hedging_hedged,
     record_hedging_benefit,
     record_hedging_disabled,
+)
+from selfhealing.resilience.policies.hedging import (
+    AsyncHedgingPolicy,
+    HedgingConfigUpdateHook,
+    HedgingPolicy,
 )
 
 __all__ = [
@@ -104,8 +109,9 @@ __all__ = [
     # Executors
     "HedgingExecutor",
     "AsyncHedgingExecutor",
-    # Strategies
+    # Strategies (deprecated — HedgingPolicy/AsyncHedgingPolicy 사용 권장)
     "HedgingStrategy",
+    "HedgingStrategyCompat",
     "AsyncHedgingStrategy",
     # Decorators
     "hedged",
@@ -126,4 +132,8 @@ __all__ = [
     "record_hedging_hedged",
     "record_hedging_benefit",
     "record_hedging_disabled",
+    # Policies (ResiliencePolicy Protocol 구현)
+    "HedgingPolicy",
+    "AsyncHedgingPolicy",
+    "HedgingConfigUpdateHook",
 ]

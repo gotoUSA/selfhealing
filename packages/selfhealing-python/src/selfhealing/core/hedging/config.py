@@ -2,11 +2,16 @@
 Hedging Configuration - 헷징 전략 설정 및 후보 정의.
 
 헷징 모드(IMMEDIATE/DELAYED/ADAPTIVE), 타임아웃, 딜레이 등의 설정과
-실행할 후보 함수를 정의합니다. Bulkhead/Backpressure 연동 설정도 포함합니다.
+실행할 후보 함수를 정의합니다. Backpressure 연동 설정도 포함합니다.
+
+.. note::
+    bulkhead_name/acquire_bulkhead_per_candidate 필드는 deprecated 됩니다.
+    HedgingPolicy의 per_candidate_policy/overall_policy를 사용하세요.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, TypeVar
@@ -61,15 +66,29 @@ class HedgingConfig:
     """멱등 작업만 허용 (경고 표시용)."""
 
     # =========================================================================
-    # Bulkhead 연동 설정
+    # Bulkhead 연동 설정 (deprecated — HedgingPolicy의 per_candidate_policy/overall_policy 사용 권장)
     # =========================================================================
-    bulkhead_name: str | None = None
-    """헷징 요청이 사용할 격벽 이름. None이면 격벽 미사용."""
+    bulkhead_name: str | None = field(
+        default=None,
+        metadata={"deprecated": "Use per_candidate_policy or overall_policy instead"},
+    )
+    """
+    헷징 요청이 사용할 격벽 이름. None이면 격벽 미사용.
 
-    acquire_bulkhead_per_candidate: bool = False
+    .. deprecated:: 2.0
+        HedgingPolicy의 overall_policy=BulkheadPolicy(...)를 사용하세요.
+    """
+
+    acquire_bulkhead_per_candidate: bool = field(
+        default=False,
+        metadata={"deprecated": "Use per_candidate_policy instead"},
+    )
     """
     True: 각 후보마다 격벽 획득 (도메인별 격리 강화).
     False: 전체 헷징에 대해 1회만 격벽 획득 (기본값, 리소스 효율).
+
+    .. deprecated:: 2.0
+        HedgingPolicy의 per_candidate_policy=BulkheadPolicy(...)를 사용하세요.
     """
 
     # =========================================================================

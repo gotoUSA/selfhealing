@@ -1,5 +1,14 @@
 # 230. HedgingPolicy 전환 설계
 
+> **구현 완료**: 2026-02-14
+>
+> 구현 파일:
+> - `resilience/policies/hedging.py` — `HedgingPolicy`, `AsyncHedgingPolicy`, `HedgingConfigUpdateHook`
+> - `core/hedging/strategy.py` — `HedgingStrategyCompat` 추가, `HedgingStrategy` deprecated 경고
+> - `core/hedging/config.py` — `bulkhead_name`, `acquire_bulkhead_per_candidate` deprecated 메타데이터
+> - `core/hedging/__init__.py` — 신규 심볼 export
+> - `resilience/policies/__init__.py` — 신규 심볼 export
+
 ## 1. 개요
 
 HedgingPolicy는 전환 대상 중 **가장 복잡한 아키텍처 변경**을 요구하는 패턴이다.

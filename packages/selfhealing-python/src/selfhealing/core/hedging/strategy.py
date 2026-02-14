@@ -3,12 +3,19 @@ Hedging Strategy - FallbackStrategy 확장.
 
 기존 FallbackStrategy와 호환되면서 Hedging 기능을 추가합니다.
 Bulkhead/Backpressure 연동 및 동적 설정 변경을 지원합니다.
+
+.. deprecated:: 2.0
+    HedgingStrategy는 deprecated 됩니다.
+    HedgingPolicy(resilience/policies/hedging.py)를 사용하세요.
+    HedgingPolicy는 per_candidate_policy/overall_policy를 통한
+    Bulkhead/Timeout Policy 조합을 지원합니다.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Callable, TypeVar
+import warnings
+from typing import Any, Callable, TypeVar
 
 from selfhealing.core.fallback_strategy import (
     FallbackMode,
@@ -54,7 +61,13 @@ class HedgingStrategy(FallbackStrategy):
     FallbackStrategy를 상속하여 기존 코드와 호환되면서
     병렬 헷징 기능을 제공합니다.
 
-    Usage:
+    .. deprecated:: 2.0
+        HedgingPolicy를 대신 사용하세요.
+        HedgingPolicy는 per_candidate_policy와 overall_policy를 통한
+        Bulkhead/Timeout Policy 조합을 지원합니다.
+
+    Usage::
+
         strategy = HedgingStrategy(
             candidates=[
                 lambda: fetch_from_region_a(),
@@ -84,6 +97,13 @@ class HedgingStrategy(FallbackStrategy):
             config: 헷징 설정
             default_value: 모든 후보 실패 시 기본값
         """
+        warnings.warn(
+            "HedgingStrategy is deprecated. Use HedgingPolicy instead. "
+            "HedgingPolicy supports per_candidate_policy and overall_policy "
+            "for Bulkhead/Timeout composition.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._candidates = candidates or []
         self._candidate_names = candidate_names or []
         self._config = config or HedgingConfig()
@@ -386,3 +406,74 @@ class HedgingStrategy(FallbackStrategy):
         if index < len(self._candidate_names):
             return self._candidate_names[index]
         return default
+
+
+class HedgingStrategyCompat:
+    """
+    기존 HedgingStrategy와 호환되는 래퍼.
+
+    HedgingPolicy를 내부적으로 사용하면서 기존 HedgingStrategy의
+    execute(primary_fn, fallback_fn, default_value) → FallbackResult
+    시그니처를 유지한다.
+
+    .. deprecated:: 2.0
+        HedgingPolicy를 직접 사용하세요.
+    """
+
+    def __init__(self, policy: Any):
+        """
+        Args:
+            policy: HedgingPolicy 인스턴스.
+        """
+        self._policy = policy
+
+    def execute(
+        self,
+        primary_fn: Callable[[], Any],
+        fallback_fn: Callable[[], Any] | None = None,
+        default_value: Any | None = None,
+    ) -> FallbackResult:
+        """
+        기존 FallbackStrategy.execute() 시그니처 호환.
+
+        HedgingPolicy.execute()를 호출하고 결과를 FallbackResult로 변환한다.
+        """
+        warnings.warn(
+            "HedgingStrategyCompat is deprecated. Use HedgingPolicy instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from selfhealing.interfaces.resilience_policy import (
+            PolicyOutcome,
+            PolicyResult,
+        )
+
+        result = self._policy.execute(primary_fn)
+        return self._to_fallback_result(result)
+
+    @staticmethod
+    def _to_fallback_result(result: Any) -> FallbackResult:
+        """PolicyResult → FallbackResult 변환."""
+        from selfhealing.interfaces.resilience_policy import PolicyOutcome
+
+        if result.outcome == PolicyOutcome.SUCCESS:
+            hedged = result.metadata.get("hedged", False)
+            return FallbackResult(
+                value=result.value,
+                used_fallback=hedged,
+                fallback_mode=FallbackMode.HEDGE if hedged else None,
+            )
+        elif result.outcome == PolicyOutcome.SUCCESS_WITH_FALLBACK:
+            return FallbackResult(
+                value=result.value,
+                used_fallback=True,
+                fallback_mode=FallbackMode.USE_DEFAULT,
+                original_error=str(result.error) if result.error else None,
+            )
+        else:
+            return FallbackResult(
+                value=None,
+                used_fallback=True,
+                fallback_mode=FallbackMode.FAIL_FAST,
+                original_error=str(result.error) if result.error else None,
+            )
