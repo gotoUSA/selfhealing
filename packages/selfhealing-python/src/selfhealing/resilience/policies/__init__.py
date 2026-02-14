@@ -45,6 +45,11 @@ from selfhealing.resilience.policies.fallback import (
     partition_aware_chain,
 )
 
+# Policies — 외부 도메인 패키지 re-export
+from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
+from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
+from selfhealing.services.retry_handler.policy import RetryPolicy
+
 # Guards
 from selfhealing.resilience.policies.guards import (
     ErrorBudgetGuard,
@@ -98,9 +103,12 @@ __all__ = [
     # Policies
     "AsyncFallbackPolicy",
     "AsyncHedgingPolicy",
+    "BulkheadPolicy",
+    "CircuitBreakerPolicy",
     "FallbackPolicy",
     "HedgingConfigUpdateHook",
     "HedgingPolicy",
+    "RetryPolicy",
     "partition_aware_chain",
     # Guards
     "ErrorBudgetGuard",

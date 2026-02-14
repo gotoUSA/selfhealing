@@ -172,15 +172,15 @@ class PolicyComposer(Generic[T]):
         # Step 1: Guard 검증 — context를 전달하여 tier_id/region 기반 판정 지원
         for guard in self._guards:
             try:
-                result = guard.check(context=context)
-                if not result.allowed:
-                    self._notify_hooks_reject(guard.name, result.reason)
+                guard_result = guard.check(context=context)
+                if not guard_result.allowed:
+                    self._notify_hooks_reject(guard.name, guard_result.reason or "")
                     return PolicyResult(
                         value=None,
                         outcome=PolicyOutcome.REJECTED,
                         metadata={
                             "rejected_by": guard.name,
-                            "reason": result.reason,
+                            "reason": guard_result.reason,
                         },
                     )
             except Exception as e:
@@ -279,10 +279,10 @@ def _execute_policy_chain(
                     return value
                 except Exception as e:
                     # 실패 감지 → predicate 확인 → _apply_fallback 직접 호출
-                    result = PolicyResult(
+                    check_result = PolicyResult(
                         value=None, outcome=PolicyOutcome.FAILURE, error=e
                     )
-                    if fb._predicate(result):
+                    if fb._predicate(check_result):
                         fb_result = fb._apply_fallback(
                             original_error=e,
                             context=context,
@@ -483,15 +483,17 @@ class KillSwitchGuard(PolicyGuard):
     def check(self, context: PolicyContext | None = None) -> GuardResult:
         """Kill Switch는 전역 상태만 체크 — context 무시."""
         try:
-            from selfhealing.services.system_control import get_system_control_manager
-            mgr = get_system_control_manager()
+            from selfhealing.services.system_control import get_system_control
+            mgr = get_system_control()
             if not mgr.is_enabled():
                 return GuardResult(
                     allowed=False,
                     reason="System kill switch is disabled",
                 )
         except ImportError:
-            pass
+            logger.debug("SystemControlManager not available (fail-open)")
+        except Exception as e:
+            logger.warning("KillSwitchGuard check failed (fail-open): %s", e)
         return GuardResult(allowed=True)
 
 
@@ -509,11 +511,25 @@ class ErrorBudgetGuard(PolicyGuard):
         코드 근거: ErrorBudgetGate.check(tier_id=None) → 글로벌 캐시 키 사용 (gate.py L262)
         """
         try:
-            from selfhealing.services.error_budget_gate import check_automation_allowed
-            allowed, reason = check_automation_allowed()
-            return GuardResult(allowed=allowed, reason=reason)
+            from selfhealing.services.error_budget_gate.gate import (
+                check_automation_allowed,
+            )
+            tier_id = context.tier_id if context else None
+            region = context.region if context else None
+            gate_result = check_automation_allowed(
+                tier_id=tier_id,
+                region=region,
+            )
+            if not gate_result.allowed:
+                return GuardResult(
+                    allowed=False,
+                    reason=gate_result.reason or "Error budget exhausted",
+                )
         except ImportError:
-            return GuardResult(allowed=True)
+            logger.debug("ErrorBudgetGate not available (fail-open)")
+        except Exception as e:
+            logger.warning("ErrorBudgetGuard check failed (fail-open): %s", e)
+        return GuardResult(allowed=True)
 ```
 
 **현재 코드 근거**: `handler.py` L419 `_is_system_enabled()`, L428 `_check_error_budget_gate()`
@@ -522,29 +538,22 @@ class ErrorBudgetGuard(PolicyGuard):
 
 ```python
 class AuditHook(PolicyHook):
-    """감사 로깅 훅 — audit_helpers 래핑."""
+    """감사 로깅 훅 — Python logger 기반."""
 
     def on_success(self, policy_name: str, result: PolicyResult) -> None:
-        try:
-            from selfhealing.services import audit_helpers
-            audit_helpers.log_policy_success(
-                policy_name=policy_name,
-                attempts=result.total_attempts,
-                duration_ms=result.total_duration_ms,
-            )
-        except ImportError:
-            pass
+        logger.info(
+            "[AuditHook] Pipeline succeeded: policies=%s, attempts=%d, duration_ms=%.2f",
+            result.executed_policies,
+            result.total_attempts,
+            result.total_duration_ms,
+        )
 
     def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
-        try:
-            from selfhealing.services import audit_helpers
-            audit_helpers.log_policy_failure(
-                policy_name=policy_name,
-                error=str(error),
-                attempt=attempt,
-            )
-        except ImportError:
-            pass
+        logger.warning(
+            "[AuditHook] Pipeline failed: error=%s, attempts=%d",
+            error,
+            attempt,
+        )
 
 
 class MetricsHook(PolicyHook):
@@ -644,8 +653,6 @@ resilience4j / Polly의 권장 순서를 따르며, 현재 `RetryHandler.execute
 ├──────────────────────┤
 │  Policy: Bulkhead     │  ← 리소스 격리
 ├──────────────────────┤
-│  Policy: Timeout      │  ← 시간 제한
-├──────────────────────┤
 │  Policy: Hedging      │  ← 병렬 경쟁 (선택)
 ├──────────────────────┤
 │  func()               │  ← 비즈니스 로직
@@ -658,7 +665,7 @@ resilience4j / Polly의 권장 순서를 따르며, 현재 `RetryHandler.execute
 ```
 
 이 순서의 의미:
-- **Retry가 가장 바깥**: CB Open, Bulkhead Full, Timeout 모두 Retry 대상
+- **Retry가 가장 바깥**: CB Open, Bulkhead Full 모두 Retry 대상
 - **CB가 Retry 안쪽**: Retry 시도마다 CB 상태를 재체크
 - **Bulkhead가 CB 안쪽**: CB가 허용한 요청만 Bulkhead 슬롯 소비
 - **Fallback이 특수 처리**: 전체 파이프라인 실패 후 활성화
@@ -749,7 +756,7 @@ selfhealing을 **신규 도입**하는 외부 앱(비-Shopping)의 사용 패턴
 
 from selfhealing.resilience.policies import (
     compose, RetryPolicy, CircuitBreakerPolicy,
-    BulkheadPolicy, TimeoutPolicy, FallbackPolicy,
+    BulkheadPolicy, FallbackPolicy,
 )
 from selfhealing.resilience.bulkhead import SemaphoreBulkhead
 
@@ -758,14 +765,13 @@ inventory_pipeline = compose(
     RetryPolicy(max_retries=2, backoff="exponential"),
     CircuitBreakerPolicy(service_name="inventory_api"),
     BulkheadPolicy(bulkhead=SemaphoreBulkhead("inventory", max_concurrent=10)),
-    TimeoutPolicy(timeout_ms=3000),
     FallbackPolicy(default_value={"stock": 0, "available": False}),
 )
 
 # 2. 엔드포인트에서 사용
 @app.post("/orders")
 async def create_order(order: OrderRequest):
-    # inventory 조회 — Retry+CB+Bulkhead+Timeout+Fallback 자동 적용
+    # inventory 조회 — Retry+CB+Bulkhead+Fallback 자동 적용
     stock_result = await inventory_pipeline.execute_async(
         lambda: http_client.get(f"http://inventory-svc/stock/{order.product_id}")
     )
@@ -782,7 +788,7 @@ async def create_order(order: OrderRequest):
 ```
 
 **외부 앱이 신경 쓸 것**: Policy 조합 선언 + `execute()` 호출 + 결과 처리.
-**외부 앱이 신경 쓰지 않아도 되는 것**: CB 상태 관리, Retry 루프, Bulkhead 슬롯, Timeout 타이머.
+**외부 앱이 신경 쓰지 않아도 되는 것**: CB 상태 관리, Retry 루프, Bulkhead 슬롯 관리.
 
 ### 6.3 외부 앱 예시 — Django 배치 서비스
 
@@ -815,7 +821,7 @@ def generate_daily_report(date_str):
 # 어떤 앱이든 동일한 패턴으로 고가용성 파이프라인 구성 가능
 from selfhealing.resilience.policies import (
     compose, RetryPolicy, CircuitBreakerPolicy,
-    HedgingPolicy, FallbackPolicy, TimeoutPolicy,
+    HedgingPolicy, FallbackPolicy,
 )
 from selfhealing.core.hedging.config import HedgingConfig, HedgingMode
 
@@ -850,16 +856,19 @@ result = ha_pipeline.execute(lambda: fetch_from_region_a(product_id=123))
 def standard_pipeline(
     service_name: str,
     max_retries: int = 3,
-    timeout_ms: int = 5000,
+    domain: str = "default",
 ) -> PolicyComposer:
-    """표준 resilience 파이프라인."""
+    """표준 resilience 파이프라인 — Retry + Guard + Audit + DLQ."""
+    retry_config = RetryPolicyConfig(
+        max_attempts=max_retries,
+        domain=domain,
+    )
     return (
         compose(
-            RetryPolicy(max_retries=max_retries),
-            CircuitBreakerPolicy(service_name=service_name),
-            TimeoutPolicy(timeout_ms=timeout_ms),
+            RetryPolicy(config=retry_config),
         )
         .add_guard(KillSwitchGuard())
+        .add_guard(ErrorBudgetGuard())
         .add_hook(AuditHook())
         .add_sink(DLQSink())
     )
@@ -867,27 +876,33 @@ def standard_pipeline(
 
 def ha_pipeline(
     service_name: str,
-    candidates: list[Callable],
+    candidates: list[Callable[..., Any]],
     max_retries: int = 2,
-    timeout_ms: int = 3000,
     hedging_delay: float = 0.1,
+    max_concurrent: int = 20,
+    domain: str = "default",
 ) -> PolicyComposer:
-    """고가용성 파이프라인 (Hedging 포함)."""
+    """고가용성 파이프라인 — Retry + Bulkhead + Hedging + Guard + Audit + Metrics + DLQ."""
+    retry_config = RetryPolicyConfig(
+        max_attempts=max_retries,
+        domain=domain,
+    )
+    bp = bulkhead_policy(
+        name=f"{service_name}_bulkhead",
+        max_concurrent=max_concurrent,
+    )
+    hedging_config = HedgingConfig(
+        mode=HedgingMode.DELAYED,
+        delay=hedging_delay,
+    )
     return (
         compose(
-            RetryPolicy(max_retries=max_retries),
-            CircuitBreakerPolicy(service_name=service_name),
-            BulkheadPolicy(
-                bulkhead=SemaphoreBulkhead(f"{service_name}_bulkhead", max_concurrent=20),
-            ),
+            RetryPolicy(config=retry_config),
+            bp,
             HedgingPolicy(
                 candidates=candidates,
-                config=HedgingConfig(
-                    mode=HedgingMode.DELAYED,
-                    delay=hedging_delay,
-                ),
+                config=hedging_config,
             ),
-            TimeoutPolicy(timeout_ms=timeout_ms),
         )
         .add_guard(KillSwitchGuard())
         .add_guard(ErrorBudgetGuard())
@@ -918,10 +933,9 @@ result = compose(
     FallbackPolicy(default_value=cached_data),
 ).execute(func)
 
-# Bulkhead + Timeout만 (Retry/CB 없이)
+# Bulkhead만 (Retry/CB 없이)
 result = compose(
     BulkheadPolicy(bulkhead=semaphore),
-    TimeoutPolicy(timeout_ms=1000),
 ).execute(func)
 
 # Guard만 (Policy 없이) — 단순 게이트 체크
@@ -1044,14 +1058,9 @@ async def get_product(product_id: int):
 resilience/
 ├── policies/
 │   ├── __init__.py          # compose() + 모든 Policy re-export
-│   ├── base.py              # ResiliencePolicy, PolicyResult, PolicyOutcome (225번)
 │   ├── composer.py          # PolicyComposer, compose() ← 본 문서
-│   ├── retry.py             # RetryPolicy (226번)
-│   ├── circuit_breaker.py   # CircuitBreakerPolicy (227번)
-│   ├── bulkhead.py          # BulkheadPolicy (228번)
 │   ├── fallback.py          # FallbackPolicy (229번)
 │   ├── hedging.py           # HedgingPolicy, AsyncHedgingPolicy (230번)
-│   ├── timeout.py           # TimeoutPolicy (신규)
 │   ├── guards/
 │   │   ├── __init__.py
 │   │   ├── kill_switch.py   # KillSwitchGuard
@@ -1071,22 +1080,28 @@ resilience/
     └── ...
 ```
 
+> **Note**: `ResiliencePolicy`, `PolicyResult`, `PolicyOutcome` 등 인터페이스는 `interfaces/resilience_policy.py`에 정의되어 있다.
+> `RetryPolicy`(`services/retry_handler/policy.py`), `CircuitBreakerPolicy`(`services/circuit_breaker/policy.py`), `BulkheadPolicy`(`resilience/bulkhead/policy.py`)는
+> 각 도메인 패키지에 위치하며, `resilience/policies/__init__.py`에서 re-export한다.
+
 ### 9.2 re-export 구조
 
 ```python
 # resilience/policies/__init__.py
-from .base import ResiliencePolicy, PolicyResult, PolicyOutcome
-from .composer import PolicyComposer, compose
-from .retry import RetryPolicy
-from .circuit_breaker import CircuitBreakerPolicy
-from .bulkhead import BulkheadPolicy
-from .fallback import FallbackPolicy
-from .hedging import HedgingPolicy, AsyncHedgingPolicy
-from .timeout import TimeoutPolicy
+from selfhealing.interfaces.resilience_policy import (
+    AsyncResiliencePolicy, PolicyContext, PolicyOutcome,
+    PolicyRejectedException, PolicyResult, ResiliencePolicy,
+)
+from .composer import PolicyComposer, AsyncPolicyComposer, compose, compose_async
+from .fallback import FallbackPolicy, AsyncFallbackPolicy, partition_aware_chain
+from selfhealing.services.retry_handler.policy import RetryPolicy
+from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
+from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
 from .guards import KillSwitchGuard, ErrorBudgetGuard
-from .hooks import AuditHook, MetricsHook
+from .hooks import AuditHook, MetricsHook, EventBusHook
 from .sinks import DLQSink
 from .presets import standard_pipeline, ha_pipeline
+# HedgingPolicy, AsyncHedgingPolicy — __getattr__ lazy import (순환 참조 방지)
 ```
 
 ## 10. 내부 기능 안전성 — 분리 시 기존 연결 보장
@@ -1141,8 +1156,8 @@ class RetryHandler:
 def _default_kill_switch() -> bool:
     """기존 handler.py L419의 _is_system_enabled()과 동일."""
     try:
-        from selfhealing.services.system_control import get_system_control_manager
-        return get_system_control_manager().is_enabled()
+        from selfhealing.services.system_control import get_system_control
+        return get_system_control().is_enabled()
     except ImportError:
         return True  # Fail-Open
 
@@ -1514,7 +1529,7 @@ class HedgingStrategy(FallbackStrategy):
 
 | 파일 | 설명 |
 |------|------|
-| `interfaces/resilience_policy.py` | `PolicyRejectedException` 추가 (Guard 거부/Timeout 시 사용) |
+| `interfaces/resilience_policy.py` | `PolicyRejectedException` 추가 (Guard 거부 시 사용) |
 | `resilience/policies/composer.py` | PolicyComposer(동기), AsyncPolicyComposer(비동기), compose(), compose_async() |
 | `resilience/policies/guards/__init__.py` | Guard 패키지 re-export |
 | `resilience/policies/guards/kill_switch.py` | KillSwitchGuard — SystemControlManager 연동 |
@@ -1530,13 +1545,13 @@ class HedgingStrategy(FallbackStrategy):
 
 ### 15.2 설계 대비 변경 사항 (문서-코드 차이)
 
-| # | 문서 기술 | 실제 구현 | 사유 |
-|---|----------|----------|------|
-| 1 | `get_system_control_manager()` | `get_system_control()` | 실제 함수명 (core/coordinator.py) |
-| 2 | `check_automation_allowed()` → tuple 반환 | `GateCheckResult` dataclass 반환 | 실제 반환 타입 (regional_gate.py) |
-| 3 | `audit_helpers.log_policy_success/failure()` | Python logger 사용 | audit_helpers 모듈 미존재 — Fail-Open 원칙 |
-| 4 | `PolicyComposer.execute_async()` 단일 클래스 | `AsyncPolicyComposer` 별도 클래스 | §14.4 확정 결정 + 기존 코드베이스 3건 선례 |
-| 5 | FallbackPolicy outcome 직접 반환 | `_FallbackApplied` 내부 시그널 예외 | 체인 내 SUCCESS_WITH_FALLBACK outcome 전파 보장 |
+| # | 문서 기술 | 실제 구현 | 사유 | 상태 |
+|---|----------|----------|------|------|
+| 1 | `get_system_control_manager()` | `get_system_control()` | 실제 함수명 (core/coordinator.py) | ✅ §4.1 문서 수정 완료 |
+| 2 | `check_automation_allowed()` → tuple 반환 | `GateCheckResult` dataclass 반환 | 실제 반환 타입 (regional_gate.py) | ✅ §4.1 문서 수정 완료 |
+| 3 | `audit_helpers.log_policy_success/failure()` | Python logger 사용 | audit_helpers 모듈 미존재 — Fail-Open 원칙 | ✅ §4.2 문서 수정 완료 |
+| 4 | `PolicyComposer.execute_async()` 단일 클래스 | `AsyncPolicyComposer` 별도 클래스 | §14.4 확정 결정 + 기존 코드베이스 3건 선례 | 설계 변경 (§14.4) |
+| 5 | FallbackPolicy outcome 직접 반환 | `_FallbackApplied` 내부 시그널 예외 | 체인 내 SUCCESS_WITH_FALLBACK outcome 전파 보장 | 설계 변경 (§14.1) |
 
 ### 15.3 통합 테스트 현황
 
@@ -1552,7 +1567,7 @@ PolicyComposer 관련 통합 테스트는 **0건**이다.
 | 파일 | 테스트 수 | 검증 대상 |
 |------|-----------|-----------|
 | `test_composer.py` | 79 | `_FallbackApplied`, `PolicyComposer`, `AsyncPolicyComposer`, `compose()`, `compose_async()` — 계약/빌더/실행/Guard/Policy체인/Fallback/Hook/Sink |
-| `test_guards.py` | 14 | `KillSwitchGuard`, `ErrorBudgetGuard` — 계약/Fail-Open/context 전달/re-export |
-| `test_hooks.py` | 37 | `AuditHook`, `MetricsHook`, `EventBusHook` — 계약/로깅레벨/Prometheus lazy init/EventBus publish/Fail-Open/re-export |
-| `test_presets.py` | 14 | `standard_pipeline()`, `ha_pipeline()` — 구성요소 존재/순서/커스텀 파라미터 |
-| `test_policy_init.py` | 39 | `__init__.py` re-export 계약, `__getattr__` lazy import, `sinks` re-export |
+| `test_guards.py` | 15 | `KillSwitchGuard`, `ErrorBudgetGuard` — 계약/Fail-Open/context 전달/re-export |
+| `test_hooks.py` | 47 | `AuditHook`, `MetricsHook`, `EventBusHook` — 계약/로깅레벨/Prometheus lazy init/EventBus publish/Fail-Open/re-export |
+| `test_presets.py` | 15 | `standard_pipeline()`, `ha_pipeline()` — 구성요소 존재/순서/커스텀 파라미터 |
+| `test_policy_init.py` | 27 | `__init__.py` re-export 계약, `__getattr__` lazy import, `sinks` re-export |
