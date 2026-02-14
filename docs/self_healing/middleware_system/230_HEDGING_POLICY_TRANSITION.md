@@ -1262,3 +1262,67 @@ core/hedging/strategy.py (HedgingStrategyCompat)
 **레거시 격리 효과**:
 - `resilience/policies/hedging.py`: `FallbackResult`, `FallbackMode`, `FallbackStrategy` 무의존 (청정)
 - `core/hedging/strategy.py`: `FallbackResult` import이 이미 존재 (`strategy.py` L13-L16)
+
+## 9. 구현 완료 현황
+
+### 9.1 구현 파일
+
+| 파일 | 변경 유형 | 내용 |
+|------|----------|------|
+| `resilience/policies/hedging.py` | 신규 | `HedgingPolicy`, `AsyncHedgingPolicy`, `HedgingConfigUpdateHook` |
+| `core/hedging/strategy.py` | 수정 | `HedgingStrategy` deprecated 경고, `HedgingStrategyCompat` 추가 |
+| `core/hedging/config.py` | 수정 | `bulkhead_name`, `acquire_bulkhead_per_candidate` deprecated 메타데이터 |
+| `core/hedging/__init__.py` | 수정 | `HedgingPolicy`, `AsyncHedgingPolicy`, `HedgingConfigUpdateHook`, `HedgingStrategyCompat` export |
+| `resilience/policies/__init__.py` | 수정 | `HedgingPolicy`, `AsyncHedgingPolicy`, `HedgingConfigUpdateHook` export |
+
+### 9.2 변경 불필요 파일 (그대로 재사용)
+
+| 파일 | 이유 |
+|------|------|
+| `executor.py` (388줄) | 크로스 의존 0건. hedging 내부만 참조 |
+| `async_executor.py` | 크로스 의존 0건. hedging 내부만 참조 |
+| `latency_tracker.py` | ADAPTIVE 모드 전용 P50 추적기 — 독립 |
+| `result.py` | `HedgingResult` — Executor 결과 타입 |
+| `exceptions.py` | 전용 예외 계층 — 독립 |
+| `result_validator.py` | 결과 일관성 검증 — 독립 |
+| `otel.py` | OpenTelemetry 연동 — 독립 |
+| `metrics.py` | Prometheus 메트릭 — 독립 |
+
+### 9.3 단위 테스트
+
+| 파일 | 테스트 수 | 상태 |
+|------|----------|------|
+| `tests/unit/resilience/policies/test_hedging_policy.py` | 139건 | ✅ 전체 통과 |
+
+**테스트 구성** (24개 클래스):
+
+| 클래스 | 유형 | 대상 | 건수 |
+|--------|------|------|------|
+| `TestHedgingPolicyContract` | 계약 | name, outcome, executed_policies, metadata 구조 | 12 |
+| `TestLoadLevelOrderContract` | 계약 | `_LOAD_LEVEL_ORDER` 5개 매핑 + 단조증가 | 7 |
+| `TestAsyncHedgingPolicyContract` | 계약 | AsyncHedgingPolicy name, outcome, 반환 타입 | 5 |
+| `TestExportContract` | 계약 | `core/hedging/__init__.py`, `resilience/policies/__init__.py` export 및 `__all__` | 12 |
+| `TestHedgingConfigDeprecatedContract` | 계약 | bulkhead_name, acquire_bulkhead_per_candidate deprecated 메타데이터 | 4 |
+| `TestHedgingStrategyDeprecatedContract` | 계약 | HedgingStrategy DeprecationWarning 발생 + 메시지 | 2 |
+| `TestHedgingStrategyCompatContract` | 계약 | HedgingStrategyCompat PolicyResult→FallbackResult 변환 | 5 |
+| `TestHedgingPolicyExecuteBehavior` | 동작 | execute() 성공/실패, args/kwargs 전달, default_value | 6 |
+| `TestHedgingPolicyBackpressureBehavior` | 동작 | disable_on_load_level, effective delay, delay 복원 | 8 |
+| `TestHedgingPolicyBuildCandidatesBehavior` | 동작 | primary 순서, 이름 지정, max_candidates 제한, args 래핑 | 7 |
+| `TestHedgingPolicyExecuteSingleBehavior` | 동작 | _execute_single 성공/실패/default/metadata | 5 |
+| `TestHedgingPolicyOnConfigUpdatedBehavior` | 동작 | mode/delay/load_level 변경, 유효하지 않은 값 무시 | 6 |
+| `TestHedgingPolicyPerCandidateBehavior` | 동작 | per_candidate_policy 래핑, REJECTED/TIMEOUT/SUCCESS_WITH_FALLBACK/FAILURE | 7 |
+| `TestHedgingPolicyOverallPolicyBehavior` | 동작 | overall_policy Double Wrapping 방지, REJECTED 통과, HedgingError 처리 | 5 |
+| `TestShouldDisableHedgingBehavior` | 동작 | 임계값 경계값, 알 수 없는 레벨 기본값 | 4 |
+| `TestGetNameBehavior` | 동작 | 커스텀/기본/범위 초과 이름 결정 | 3 |
+| `TestAsyncHedgingPolicyExecuteBehavior` | 동작 | async execute() 성공, 전체 실패 + default, 부하 비활성화 | 3 |
+| `TestAsyncHedgingPolicyTypeCheckBehavior` | 동작 | 비Protocol 객체 TypeError, 유효 async 통과, runtime_checkable 구조적 타입 | 7 |
+| `TestAsyncHedgingPolicyOnConfigUpdatedBehavior` | 동작 | async mode/delay/load_level 변경 | 3 |
+| `TestHedgingConfigUpdateHookBehavior` | 동작 | register, dispatch, event.data, Fail-Open, EventBus 미존재, async policy | 9 |
+| `TestAsyncHedgingPolicyBackpressureBehavior` | 동작 | async _should_disable, _get_effective_delay | 5 |
+| `TestHedgingPolicyInitBehavior` | 동작 | 생성자 기본값 9건 (candidates, config, executor 등) | 9 |
+| `TestAsyncHedgingPolicyInitBehavior` | 동작 | async 생성자 기본값 (candidates, config, executor) | 4 |
+| `TestAsyncHedgingPolicyWrapCandidatesBehavior` | 동작 | async per_candidate REJECTED/TIMEOUT/SUCCESS | 3 |
+
+### 9.4 통합테스트
+
+통합테스트 불필요 — HedgingPolicy는 순수 인메모리 Policy. DB/Redis/Django 등 외부 시스템 무의존.
