@@ -1195,6 +1195,33 @@ result = compose(
 - `core/fallback_strategy.py`: FallbackStrategy ABC + 3개 구현체 유지 (Hedging 상속 등 기존 사용처 존재)
 - `services/circuit_breaker/service.py`: `should_allow_with_fallback()` deprecated 유지 (이전 구현에서 완료)
 
-### 9.4 통합테스트
+### 9.4 단위 테스트
+
+| 파일 | 테스트 수 | 상태 |
+|------|----------|------|
+| `tests/unit/resilience/policies/test_fallback_policy.py` | 112건 | ✅ 전체 통과 |
+
+**테스트 구성**:
+
+| 클래스 | 유형 | 대상 | 건수 |
+|--------|------|------|------|
+| `TestFallbackPolicyContract` | 계약 | name, outcome, executed_policies, metadata 구조 | 14 |
+| `TestFallbackModeToOutcomeMappingContract` | 계약 | `_FALLBACK_MODE_TO_OUTCOME` 6개 매핑 + 완전성 | 8 |
+| `TestAsyncFallbackPolicyContract` | 계약 | AsyncFallbackPolicy name, outcome, 반환 타입 | 5 |
+| `TestPoliciesPackageExportContract` | 계약 | `__init__.py` export 3건 + `__all__` 구성 | 5 |
+| `TestFallbackPolicyExecuteSuccessBehavior` | 동작 | execute() 성공 경로 (args, kwargs, None 반환) | 5 |
+| `TestFallbackPolicyExecuteFailureBehavior` | 동작 | execute() 실패 → chain/fn/default 순차 시도 | 10 |
+| `TestFallbackPolicyApplyFallbackBehavior` | 동작 | `_apply_fallback()` Composer 전용 경로 (func 미실행 검증) | 6 |
+| `TestFallbackPolicyPredicateBehavior` | 동작 | 기본/커스텀 predicate 활성화 조건 | 7 |
+| `TestFallbackPolicyStrategyShimBehavior` | 동작 | strategy Shim 과도기 + `_convert_fallback_result` | 11 |
+| `TestAsyncFallbackPolicyExecuteBehavior` | 동작 | async execute() 성공/실패/chain/default | 9 |
+| `TestAsyncFallbackPolicyApplyFallbackBehavior` | 동작 | async `_apply_fallback()` chain/fn/default/exhausted | 4 |
+| `TestAsyncFallbackPolicyPredicateBehavior` | 동작 | async 기본/커스텀 predicate | 3 |
+| `TestPartitionAwareChainBehavior` | 동작 | chain 생성, 가용성 체크, Stale State 방지, Policy 통합 | 14 |
+| `TestBulkheadDecoratorFallbackDeprecationBehavior` | 동작 | `@bulkhead(fallback=...)` DeprecationWarning 발생/미발생 | 3 |
+| `TestFallbackPolicyExceptionHandlingBehavior` | 동작 | 예외 흡수 컨트랙트 (다양한 예외 타입) | 3 |
+| `TestFallbackPolicyEdgeCaseBehavior` | 동작 | 빈 chain, None strategy, 0/False/"" default_value | 5 |
+
+### 9.5 통합테스트
 
 통합테스트 불필요 — FallbackPolicy는 순수 인메모리 Policy. DB/Redis/Django 등 외부 시스템 무의존.
