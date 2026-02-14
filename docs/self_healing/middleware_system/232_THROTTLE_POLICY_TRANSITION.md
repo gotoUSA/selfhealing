@@ -1047,3 +1047,46 @@ packages/selfhealing-python/src/selfhealing/
 | 기존 Policy 선례 | RetryPolicy, BulkheadPolicy, FallbackPolicy, HedgingPolicy 중 전용 통합 테스트 0건 |
 | 기존 Throttle 커버리지 | `test_throttle_eventbus_integration.py` 등 7건이 하위 인프라 연동 검증 |
 | 신규 코드 특성 | 기존 SlidingWindowThrottle/GradientCalculator 래핑 + lazy import Fail-Open 패턴 |
+
+## 12. 단위 테스트 결과 — 8개 컴포넌트 × 130 테스트
+
+### 12.1 테스트 파일 구조
+
+```
+packages/selfhealing-python/tests/unit/throttle/
+├── test_throttle_policy.py              # ThrottlePolicy 순수 rate limit        (51건)
+├── test_throttle_limit_adjuster.py      # ThrottleLimitAdjuster EventBus 반응    (18건)
+├── test_throttle_dlq_sink.py            # ThrottleDLQSink 거부 요청 DLQ          (6건)
+├── test_throttle_facade.py              # AdaptiveThrottleFacade 레거시 호환      (13건)
+├── test_throttle_governance_guard.py    # ThrottleGovernanceGuard 거버넌스 통합   (11건)
+├── test_throttle_full_stop_guard.py     # FullStopGuard 3중 조건                 (13건)
+├── test_throttle_load_shedding_guard.py # LoadSheddingGuard 우선순위 기반         (9건)
+└── test_throttle_backpressure_guard.py  # BackpressureGuard RateController 기반  (9건)
+```
+
+### 12.2 컴포넌트별 검증 범위
+
+| 테스트 파일 | 통과 | 검증 항목 |
+|------------|------|----------|
+| `test_throttle_policy.py` | 51/51 | execute(), check(), record_response(), SLA 임계값별 limit 조정, dampening, throttle key 해석, current_limit 클램프 |
+| `test_throttle_limit_adjuster.py` | 18/18 | 8개 EventBus 구독 핸들러, register/start 수명주기, Warning/Critical multiplier |
+| `test_throttle_dlq_sink.py` | 6/6 | handle_rejection() context 기본값, lazy import Fail-Open |
+| `test_throttle_facade.py` | 13/13 | Guards→Policy→DLQ 체인, get_stats(), record_response() 위임 |
+| `test_throttle_governance_guard.py` | 11/11 | Kill Switch, Emergency Level, Error Budget, Break Glass 우회, 각 모듈 Fail-Open |
+| `test_throttle_full_stop_guard.py` | 13/13 | 3중 조건 AND 로직, 개별 조건 미충족 시 통과, 팩토리 Fail-Open |
+| `test_throttle_load_shedding_guard.py` | 9/9 | priority 기반 should_accept(), lazy import 캐싱, Fail-Open |
+| `test_throttle_backpressure_guard.py` | 9/9 | should_process() 결과, metadata 포함, lazy import 캐싱, Fail-Open |
+| **합계** | **130/130** | |
+
+### 12.3 Lazy Import Fail-Open 검증 패턴
+
+모든 Guard/Sink 컴포넌트의 lazy import는 `patch.dict("sys.modules", {"source_module": None})`
+패턴으로 검증한다. `sys.modules`에 `None`을 설정하면 Python import 시스템이
+`ModuleNotFoundError`를 발생시켜 실제 모듈 미설치 환경을 정확히 재현한다.
+
+```python
+# 예시: Kill Switch 모듈 import 실패 → Fail-Open 통과
+with patch.dict("sys.modules", {"selfhealing.services.governance.checks": None}):
+    result = guard.check()
+    assert result.allowed is True
+```
