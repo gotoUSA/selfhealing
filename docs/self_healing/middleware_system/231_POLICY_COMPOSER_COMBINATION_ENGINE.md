@@ -1503,3 +1503,44 @@ class HedgingStrategy(FallbackStrategy):
 | **근거** | 기존 코드베이스 전체에서 `raise ... from` 패턴 0건. `except Exception as e` → 변수 저장 → `PolicyResult.error = e` 패턴이 표준 |
 | **코드 근거** | handler.py L510 `last_error = e`, policy.py L143 `last_error = e` — 모든 기존 구현이 단순 저장 방식. `sys.exc_info()` 캡처 0건 |
 | **디버깅 보존** | Python은 `except Exception as e`로 캡처된 예외 객체의 `__traceback__` 속성을 유지하므로, `traceback.print_exception(result.error)`로 원본 위치 확인 가능 |
+
+---
+
+## 15. 구현 현황
+
+> 이 섹션은 설계 문서에 대한 구현 결과를 기록한다.
+
+### 15.1 구현 완료 파일 목록
+
+| 파일 | 설명 |
+|------|------|
+| `interfaces/resilience_policy.py` | `PolicyRejectedException` 추가 (Guard 거부/Timeout 시 사용) |
+| `resilience/policies/composer.py` | PolicyComposer(동기), AsyncPolicyComposer(비동기), compose(), compose_async() |
+| `resilience/policies/guards/__init__.py` | Guard 패키지 re-export |
+| `resilience/policies/guards/kill_switch.py` | KillSwitchGuard — SystemControlManager 연동 |
+| `resilience/policies/guards/error_budget.py` | ErrorBudgetGuard — ErrorBudgetGate 연동 |
+| `resilience/policies/hooks/__init__.py` | Hook 패키지 re-export |
+| `resilience/policies/hooks/audit.py` | AuditHook — Python logger 기반 감사 로깅 |
+| `resilience/policies/hooks/metrics.py` | MetricsHook — Prometheus Counter/Histogram |
+| `resilience/policies/hooks/event_bus.py` | EventBusHook — EventBus 이벤트 발행 |
+| `resilience/policies/sinks/__init__.py` | Sink 패키지 re-export |
+| `resilience/policies/sinks/dlq.py` | DLQSink re-export (services/retry_handler/sinks.py) |
+| `resilience/policies/presets.py` | standard_pipeline(), ha_pipeline() 프리셋 팩토리 |
+| `resilience/policies/__init__.py` | 통합 re-export (__getattr__ lazy import for hedging) |
+
+### 15.2 설계 대비 변경 사항 (문서-코드 차이)
+
+| # | 문서 기술 | 실제 구현 | 사유 |
+|---|----------|----------|------|
+| 1 | `get_system_control_manager()` | `get_system_control()` | 실제 함수명 (core/coordinator.py) |
+| 2 | `check_automation_allowed()` → tuple 반환 | `GateCheckResult` dataclass 반환 | 실제 반환 타입 (regional_gate.py) |
+| 3 | `audit_helpers.log_policy_success/failure()` | Python logger 사용 | audit_helpers 모듈 미존재 — Fail-Open 원칙 |
+| 4 | `PolicyComposer.execute_async()` 단일 클래스 | `AsyncPolicyComposer` 별도 클래스 | §14.4 확정 결정 + 기존 코드베이스 3건 선례 |
+| 5 | FallbackPolicy outcome 직접 반환 | `_FallbackApplied` 내부 시그널 예외 | 체인 내 SUCCESS_WITH_FALLBACK outcome 전파 보장 |
+
+### 15.3 통합 테스트 현황
+
+기존 integration 디렉토리(`tests/self_healing/integration/`, `packages/selfhealing-python/tests/integration/`)에
+PolicyComposer 관련 통합 테스트는 **0건**이다.
+기존 통합 테스트는 Circuit Breaker Redis 분산 테스트, 스토리지 복원력 등 인프라 레벨 테스트만 존재한다.
+단위 테스트는 사용자 요청에 따라 이번 구현에서 생성하지 않았다.
