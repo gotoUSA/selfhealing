@@ -133,7 +133,13 @@ class PolicyComposer(Generic[T]):
 
     # === Execution ===
 
-    def execute(self, func: Callable[..., T], *args, **kwargs) -> PolicyResult[T]:
+    def execute(
+        self,
+        func: Callable[..., T],
+        *args: Any,
+        context: PolicyContext | None = None,
+        **kwargs: Any,
+    ) -> PolicyResult[T]:
         """
         조합된 Policy 파이프라인 실행.
 
@@ -141,14 +147,32 @@ class PolicyComposer(Generic[T]):
         1. Guard 검증 → 하나라도 거부 시 REJECTED
         2. Policy 체인 실행 (바깥→안쪽 중첩)
         3. Hook 호출 (on_success / on_failure / on_reject)
+           — **파이프라인 전체(End-to-End)** 결과만 관찰한다.
+             개별 Policy 내부 이벤트(예: Retry 각 시도)는 Policy 자체가 처리하며,
+             Composer Hook에는 전파하지 않는다. (2계층 Hook 구조)
         4. 실패 시 Sink 처리
+           — **동기적(Blocking)** 으로 수행한다.
+             기존 RetryHandler._move_to_dlq() (handler.py L567)가 동기 Blocking이었으며,
+             FailureSink Protocol (interfaces/resilience_policy.py L333)도 동기 시그니처이다.
+             DLQ 저장은 로컬 DB(Django ORM) write이므로 수 ms 수준으로 완료된다.
+
+        Args:
+            func: 실행할 함수
+            *args: 함수 위치 인자
+            context: 실행 컨텍스트 (Guard/Hook/Sink에 전파).
+                     PolicyContext(frozen=True)로 파이프라인 내 사이드 이펙트를 방지한다.
+                     None이면 Guard는 전역 상태만 체크하고, Sink는 비즈니스 식별자 없이 저장한다.
+            **kwargs: 함수 키워드 인자
+
+        Returns:
+            PolicyResult[T]: 통합 결과. 예외를 던지지 않는다.
         """
         start_time = time.monotonic()
 
-        # Step 1: Guard 검증
+        # Step 1: Guard 검증 — context를 전달하여 tier_id/region 기반 판정 지원
         for guard in self._guards:
             try:
-                result = guard.check()
+                result = guard.check(context=context)
                 if not result.allowed:
                     self._notify_hooks_reject(guard.name, result.reason)
                     return PolicyResult(
@@ -163,10 +187,10 @@ class PolicyComposer(Generic[T]):
                 # Fail-Open: Guard 실패 시 통과 허용
                 logger.warning(f"Guard '{guard.name}' failed (fail-open): {e}")
 
-        # Step 2: Policy 체인 구성 (중첩 실행)
-        result = self._execute_policy_chain(func, *args, **kwargs)
+        # Step 2: Policy 체인 구성 (중첩 실행) — context 전파
+        result = self._execute_policy_chain(func, *args, context=context, **kwargs)
 
-        # Step 3: Hook 호출
+        # Step 3: Hook 호출 — 파이프라인 전체 결과에 대해서만 호출 (2계층 구조)
         duration_ms = (time.monotonic() - start_time) * 1000
         result.total_duration_ms = duration_ms
 
@@ -175,9 +199,9 @@ class PolicyComposer(Generic[T]):
         else:
             self._notify_hooks_failure(result)
 
-            # Step 4: Sink 처리
+            # Step 4: Sink 처리 — 동기 Blocking (FailureSink Protocol 준수)
             if result.outcome == PolicyOutcome.FAILURE:
-                self._process_sinks(result, args, kwargs)
+                self._process_sinks(result, context, args, kwargs)
 
         return result
 ```
@@ -201,7 +225,11 @@ RetryPolicy.execute(
 
 ```python
 def _execute_policy_chain(
-    self, func: Callable[..., T], *args, **kwargs
+    self,
+    func: Callable[..., T],
+    *args: Any,
+    context: PolicyContext | None = None,
+    **kwargs: Any,
 ) -> PolicyResult[T]:
     """
     Policy 체인을 중첩 실행.
@@ -209,7 +237,15 @@ def _execute_policy_chain(
     policies = [P1, P2, P3]일 때:
     P1.execute(lambda: P2.execute(lambda: P3.execute(func)))
 
-    FallbackPolicy는 특별 처리: 이전 결과가 실패일 때만 활성화.
+    FallbackPolicy는 특별 처리:
+    - 이전 결과가 실패일 때 _apply_fallback(original_error)를 호출한다.
+    - execute()를 호출하지 않는다 (func 중복 실행 방지).
+    - _apply_fallback()은 PolicyComposer 전용 내부 API이며,
+      일반 소비자는 execute()를 통해 FallbackPolicy를 단독 사용한다.
+
+    229번 문서 §3.1-3.2 확정 사항:
+    - execute(): 단독 사용 — func 실행 후 실패 시 _apply_fallback 위임
+    - _apply_fallback(): Composer 전용 — func 재실행 없이 Fallback만 시도
     """
     if not self._policies:
         # Policy 없음 → 직접 실행
@@ -228,33 +264,46 @@ def _execute_policy_chain(
         current_policy = policy
 
         if isinstance(current_policy, FallbackPolicy):
-            # FallbackPolicy는 조건부 실행 래퍼
+            # FallbackPolicy는 _apply_fallback() 기반 조건부 래퍼
+            #
+            # 중복 실행 방지 (229번 문서 §3.2 확정):
+            # - AS-IS: fb.execute(lambda: inner()) → inner()를 2회 실행 (버그)
+            # - TO-BE: fb._apply_fallback(original_error=e) → func 미실행, 대체 값만 산출
+            #
+            # _apply_fallback()은 PolicyComposer 전용 내부 API이다.
+            # 일반 소비자(외부 앱)는 이 메서드를 직접 호출하지 않는다.
+            # 단독 사용 시에는 FallbackPolicy.execute(func)를 호출한다.
             def fallback_wrapper(inner=outer_fn, fb=current_policy):
-                result = PolicyResult(value=None, outcome=PolicyOutcome.FAILURE)
                 try:
-                    value = inner()
-                    result = PolicyResult(value=value, outcome=PolicyOutcome.SUCCESS)
+                    value = inner()  # 내부 체인 실행 (1회만)
+                    return value
                 except Exception as e:
+                    # 실패 감지 → predicate 확인 → _apply_fallback 직접 호출
                     result = PolicyResult(
                         value=None, outcome=PolicyOutcome.FAILURE, error=e
                     )
-
-                # FallbackPolicy의 predicate로 활성화 여부 결정
-                if fb._predicate(result):
-                    return fb.execute(lambda: inner()).value
-
-                if result.error:
-                    raise result.error
-                return result.value
+                    if fb._predicate(result):
+                        fb_result = fb._apply_fallback(
+                            original_error=e,
+                            context=context,
+                        )
+                        if fb_result.success:
+                            return fb_result.value
+                    # Fallback 미적용 또는 실패 → 원본 예외 전파
+                    raise e
 
             wrapped = fallback_wrapper
         else:
-            # 일반 Policy: execute()로 래핑
+            # 일반 Policy: execute()로 래핑 — context 전파
             def policy_wrapper(inner=outer_fn, p=current_policy):
-                result = p.execute(inner)
+                result = p.execute(inner, context=context)
                 if result.success:
                     return result.value
                 elif result.error:
+                    # raise result.error 패턴 유지 (리뷰 Q6 확정):
+                    # - 기존 코드베이스 전체 raise...from 0건
+                    # - except as e 캡처 시 __traceback__ 속성이 유지됨
+                    # - traceback.print_exception(result.error)로 원본 위치 확인 가능
                     raise result.error
                 else:
                     raise PolicyRejectedException(
@@ -288,6 +337,14 @@ def _execute_policy_chain(
             executed_policies=list(reversed(executed_policies)),
         )
 ```
+
+**FallbackPolicy 실행 흐름 비교** (229번 문서 §3.2 확정):
+
+| 사용 모드 | 호출 경로 | func 실행 횟수 |
+|-----------|---------|---------------|
+| 단독 사용 | `FallbackPolicy.execute(func)` → func() → 실패 시 `_apply_fallback()` | 1회 |
+| Composer 체인 | Composer → inner() 실행 → 실패 감지 → `_apply_fallback()` 직접 호출 | 1회 (내부 체인) |
+| ~~기존 설계 (삭제)~~ | ~~Composer → inner() 실행 → `execute(lambda: inner())` → inner() 재실행~~ | ~~2회 (중복)~~ |
 
 ### 3.3 `compose()` 편의 함수
 
@@ -402,6 +459,13 @@ class PolicyComposer:
 > **참고**: Mypy 정적 분석으로 컴파일 타임에 잡히는 것이 이상적이며,
 > 런타임 `isinstance` 체크는 타입 힌트를 무시하는 환경을 위한 추가 방어선이다.
 
+**확정 사항** (리뷰 Q4):
+
+- **어댑터 제공 없음**: 동기 → 비동기 자동 래핑 어댑터를 제공하지 않는다.
+- **엄격한 타입 분리**: 동기 `PolicyComposer`에 `AsyncResiliencePolicy`를 추가하면 Mypy 타입 에러 + 런타임 `TypeError`.
+- **소비자 책임**: 비동기 파이프라인에서 동기 함수를 사용하려면 소비자가 `asyncio.to_thread()`로 직접 래핑하여 주입한다.
+- **코드 근거**: 기존 코드베이스 3건 선례 — `SemaphoreBulkhead`/`AsyncSemaphoreBulkhead`, `BulkheadPolicy`/`AsyncBulkheadPolicy`, `HedgingStrategy`/`AsyncHedgingStrategy` 모두 어댑터 없이 별도 클래스로 완전 분리 (`bulkhead/base.py`, `bulkhead/async_semaphore.py`, `bulkhead/policy.py` L49/L174, `core/hedging/strategy.py`/`async_strategy.py`).
+
 ## 4. Guard / Hook / Sink 통합
 
 ### 4.1 Guard — 사전 검증
@@ -416,7 +480,8 @@ class KillSwitchGuard(PolicyGuard):
     def name(self) -> str:
         return "kill_switch"
 
-    def check(self) -> GuardResult:
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
+        """Kill Switch는 전역 상태만 체크 — context 무시."""
         try:
             from selfhealing.services.system_control import get_system_control_manager
             mgr = get_system_control_manager()
@@ -437,7 +502,12 @@ class ErrorBudgetGuard(PolicyGuard):
     def name(self) -> str:
         return "error_budget_gate"
 
-    def check(self) -> GuardResult:
+    def check(self, context: PolicyContext | None = None) -> GuardResult:
+        """
+        context.tier_id/region 기반 판정.
+        context=None이면 글로벌 판정 (tier_id=None → 전역 에러 버짓).
+        코드 근거: ErrorBudgetGate.check(tier_id=None) → 글로벌 캐시 키 사용 (gate.py L262)
+        """
         try:
             from selfhealing.services.error_budget_gate import check_automation_allowed
             allowed, reason = check_automation_allowed()
@@ -501,26 +571,53 @@ class MetricsHook(PolicyHook):
 
 ```python
 class DLQSink(FailureSink):
-    """DLQ 실패 처리 — dlq_service 래핑."""
+    """DLQ 실패 처리 — dlq_service 래핑.
+
+    FailureSink Protocol (interfaces/resilience_policy.py L333) 구현.
+    동기적(Blocking)으로 DLQ에 저장한다.
+    """
 
     def handle_failure(
         self,
         error: Exception,
-        context: dict[str, Any],
+        context: PolicyContext | None,
         policy_result: PolicyResult,
     ) -> str | None:
+        """
+        최종 실패를 DLQ에 저장.
+
+        Args:
+            error: 최종 실패 예외
+            context: PolicyContext (order_id, user_id 등 비즈니스 식별자).
+                     None이면 식별자 없이 저장한다.
+            policy_result: 파이프라인 전체 결과
+
+        Returns:
+            DLQ 레코드 ID 문자열, 또는 None
+        """
+        if not policy_result.metadata.get("should_dlq", False):
+            return None
+
         try:
-            from selfhealing.services.dlq_service import store_to_dlq
-            dlq_id = store_to_dlq(
-                operation_type=context.get("operation_type", "unknown"),
-                original_data=context.get("original_data", {}),
-                error_message=str(error),
+            from selfhealing.services.dlq import store_to_dlq
+
+            domain = policy_result.metadata.get("domain", "default")
+            order_id = context.order_id if context else None
+            user_id = context.extra.get("user_id") if context and context.extra else None
+
+            result = store_to_dlq(
+                domain=domain,
+                failure_type=f"MAX_RETRIES_{type(error).__name__.upper()}",
+                entity_id=order_id,
+                user_id=int(user_id) if user_id is not None else None,
+                error_code=type(error).__name__,
+                error_message=str(error)[:1000] if error else "",
                 metadata={
                     "executed_policies": policy_result.executed_policies,
                     "total_attempts": policy_result.total_attempts,
                 },
             )
-            return str(dlq_id)
+            return str(result) if result is not None else None
         except ImportError:
             logger.warning("DLQ service not available")
             return None
@@ -866,20 +963,27 @@ under_load = compose(
 ```python
 class PolicyComposer(Generic[T]):
     async def execute_async(
-        self, func: Callable[..., Awaitable[T]], *args, **kwargs
+        self,
+        func: Callable[..., Awaitable[T]],
+        *args: Any,
+        context: PolicyContext | None = None,
+        **kwargs: Any,
     ) -> PolicyResult[T]:
         """
         비동기 Policy 파이프라인 실행.
 
         각 Policy의 execute_async()를 호출한다.
         execute_async()가 없는 Policy는 execute()를 fallback 호출한다.
+
+        Guard/Hook: 동기 (Guard는 빠른 체크, Hook은 관찰 전용)
+        Sink: 동기 Blocking (FailureSink Protocol 준수)
         """
         start_time = time.monotonic()
 
-        # Guard 검증 (동기 — Guard는 빠른 체크)
+        # Guard 검증 (동기 — Guard는 빠른 체크) — context 전달
         for guard in self._guards:
             try:
-                result = guard.check()
+                result = guard.check(context=context)
                 if not result.allowed:
                     return PolicyResult(
                         value=None,
@@ -889,15 +993,16 @@ class PolicyComposer(Generic[T]):
             except Exception:
                 pass  # Fail-Open
 
-        # Async Policy 체인 실행
-        result = await self._execute_async_chain(func, *args, **kwargs)
+        # Async Policy 체인 실행 — context 전파
+        result = await self._execute_async_chain(func, *args, context=context, **kwargs)
 
-        # Hook/Sink 처리 (동기 — 비즈니스 로직 외부)
+        # Hook 호출 — 파이프라인 전체 결과에 대해서만 (2계층 구조)
         duration_ms = (time.monotonic() - start_time) * 1000
         result.total_duration_ms = duration_ms
 
+        # Sink 처리 — 동기 Blocking (FailureSink Protocol은 동기 시그니처)
         if not result.success:
-            self._process_sinks(result, args, kwargs)
+            self._process_sinks(result, context, args, kwargs)
 
         return result
 ```
@@ -1338,3 +1443,63 @@ class HedgingStrategy(FallbackStrategy):
 - **228번 문서**: `BulkheadPolicy` — 독립 래핑, `@bulkhead(fallback=...)` 분리
 - **229번 문서**: `FallbackPolicy` — 3곳 분산 Fallback 통합, CB 내장 Fallback 분리
 - **230번 문서**: `HedgingPolicy` — FallbackStrategy 상속 해체, Bulkhead 외부 주입
+
+## 14. 리뷰 결정 요약
+
+231번 문서에 대한 6가지 리뷰 질문과 확정 결과를 정리한다.
+
+### 14.1 [수정] FallbackPolicy 중복 실행 방지 — §3.2 전면 수정
+
+| 항목 | 내용 |
+|------|------|
+| **문제** | §3.2 `fallback_wrapper`에서 `fb.execute(lambda: inner())`를 호출하면 `inner()`가 2회 실행됨 |
+| **원인** | `FallbackPolicy.execute(func)`는 내부에서 `func()`를 실행하므로, Composer가 이미 실행한 `inner()`를 다시 실행함 |
+| **수정** | `fb.execute(lambda: inner())` → `fb._apply_fallback(original_error=e, context=context)` |
+| **코드 근거** | 229번 문서 §3.1-3.2에서 `_apply_fallback()` 메서드를 Composer 전용 내부 API로 확정. 구현 완료: `resilience/policies/fallback.py` L163 |
+| **API 구분** | 일반 소비자(외부 앱)는 `FallbackPolicy.execute(func)` 사용, Composer만 `_apply_fallback()` 호출 |
+
+### 14.2 [수정] PolicyContext 전파 — §3.1, §3.2, §4, §8 전면 보완
+
+| 항목 | 내용 |
+|------|------|
+| **문제** | §3.1 `execute()` 시그니처에 `context` 인자가 없어 Guard/Hook/Sink에 비즈니스 식별자 전달 불가 |
+| **수정** | `execute(func, *args, context: PolicyContext \| None = None, **kwargs)` 시그니처 통일 |
+| **전파 흐름** | `execute(context=)` → `guard.check(context=)` → `_execute_policy_chain(context=)` → `policy.execute(inner, context=)` → `_process_sinks(result, context, ...)` |
+| **코드 근거** | 225번 문서 §2.2-2.6 — `ResiliencePolicy.execute(context=)`, `PolicyGuard.check(context=)`, `FailureSink.handle_failure(context=)` 모두 context 인자 포함. 구현 완료: `interfaces/resilience_policy.py` L222, L269, L333 |
+| **context=None 동작** | Guard는 전역 상태만 체크, Sink는 식별자 없이 저장 (기존 `ErrorBudgetGate.check(tier_id=None)` 글로벌 판정과 일관) |
+
+### 14.3 [확정] Composer Hook 관찰 범위 — 2계층 구조
+
+| 항목 | 내용 |
+|------|------|
+| **결정** | Composer Hook은 **파이프라인 전체(End-to-End)** 결과만 관찰 |
+| **근거** | 개별 Policy 내부 이벤트(예: Retry 각 시도)는 Policy 자체가 처리하며, Composer Hook에 전파하지 않음 |
+| **코드 근거** | RetryPolicy (`services/retry_handler/policy.py` L49)는 내부에 Hook 호출이 없음. 기존 `RetryHandler._log_retry_audit()` (handler.py L145)는 Policy 분리 시 제거 대상이며 Composer의 `add_hook(AuditHook())`이 대체함 |
+| **구조** | Composer Hook = 전체 흐름 관찰 / Policy 내부 = 자체 로직 또는 없음 (2계층) |
+
+### 14.4 [확정] AsyncPolicyComposer 타입 분리 — 어댑터 미제공
+
+| 항목 | 내용 |
+|------|------|
+| **결정** | 동기/비동기 엄격 분리. 자동 래핑 어댑터 제공하지 않음 |
+| **근거** | 기존 코드베이스 3건 선례 — `SemaphoreBulkhead`/`AsyncSemaphoreBulkhead`, `BulkheadPolicy`/`AsyncBulkheadPolicy`, `HedgingStrategy`/`AsyncHedgingStrategy` 모두 별도 클래스, 상속 없음, 어댑터 없음 |
+| **코드 근거** | `bulkhead/policy.py` L49/L174, `bulkhead/base.py`/`async_semaphore.py`, `core/hedging/strategy.py`/`async_strategy.py` L49 |
+| **소비자 책임** | 비동기 파이프라인에서 동기 함수 사용 시 `asyncio.to_thread()`로 소비자가 직접 래핑 (`AsyncFallbackPolicy` docstring 선례: `resilience/policies/fallback.py` L335) |
+
+### 14.5 [확정] Sink 처리 — 동기 Blocking
+
+| 항목 | 내용 |
+|------|------|
+| **결정** | Sink 처리는 **동기적(Blocking)** 으로 수행 |
+| **근거** | 기존 `RetryHandler._move_to_dlq()` (handler.py L567)가 동기 Blocking이었으며, 반환된 `dlq_id`를 `RetryResult`에 포함하는 패턴 |
+| **코드 근거** | `FailureSink` Protocol (`interfaces/resilience_policy.py` L333)이 동기 시그니처 (`def handle_failure() -> str \| None`). 구현체 `DLQSink` (`services/retry_handler/sinks.py` L27)도 동기 |
+| **성능 근거** | DLQ 저장은 로컬 DB(Django ORM) write이므로 수 ms 수준. 비동기 분리의 복잡도 대비 이점 없음 |
+
+### 14.6 [확정] Exception Chaining — raise result.error 패턴 유지
+
+| 항목 | 내용 |
+|------|------|
+| **결정** | `raise result.error` 패턴 유지. `raise ... from ...` 또는 `with_traceback` 추가하지 않음 |
+| **근거** | 기존 코드베이스 전체에서 `raise ... from` 패턴 0건. `except Exception as e` → 변수 저장 → `PolicyResult.error = e` 패턴이 표준 |
+| **코드 근거** | handler.py L510 `last_error = e`, policy.py L143 `last_error = e` — 모든 기존 구현이 단순 저장 방식. `sys.exc_info()` 캡처 0건 |
+| **디버깅 보존** | Python은 `except Exception as e`로 캡처된 예외 객체의 `__traceback__` 속성을 유지하므로, `traceback.print_exception(result.error)`로 원본 위치 확인 가능 |
