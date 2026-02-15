@@ -15,7 +15,7 @@ Circuit Breaker는 현재 시스템에서 **가장 독립적인 패턴** 중 하
 
 ```
 services/circuit_breaker/
-├── service.py              # 메인 서비스 (907줄) — ManualControlMixin + ProtectionMixin 상속
+├── service.py              # 메인 서비스 (935줄) — ProtectionMixin, ManualControlMixin 상속
 ├── config.py               # CircuitBreakerConfig, CircuitBreakerResult, CircuitState
 ├── protection.py           # ProtectionMixin (rate limit cascade, self-DDoS)
 ├── manual_control.py       # ManualControlMixin (force_open/close)
@@ -44,14 +44,14 @@ else:
     return handle_fallback()
 ```
 
-`service.py` L228-L268의 `should_allow()`:
+`service.py` L216의 `should_allow()`:
 - `CircuitState.CLOSED` → True
 - `CircuitState.OPEN` → recovery_timeout 경과 시 HALF_OPEN 전환 후 True, 아니면 False
 - `CircuitState.HALF_OPEN` → True (제한된 요청 허용)
 
 ### 2.3 should_allow_with_fallback() — 내장 Fallback
 
-`service.py` L283에 `should_allow_with_fallback()` 메서드가 존재한다:
+`service.py` L293에 `should_allow_with_fallback()` 메서드가 존재한다:
 
 ```python
 def should_allow_with_fallback(
@@ -74,9 +74,9 @@ def should_allow_with_fallback(
 
 | 의존 대상 | 위치 | 방식 | 용도 |
 |-----------|------|------|------|
-| `ProviderRegistry` | L180 lazy import | Repository 획득 | 인프라 의존 (유지) |
-| `audit_helpers.log_cb_state_change_audit` | L253 lazy import | 상태 변경 감사 | Hook으로 분리 가능 |
-| `EventBus` | L270 lazy import | 상태 변경 이벤트 발행 | Hook으로 분리 가능 |
+| `ProviderRegistry` | L177 lazy import | Repository 획득 | 인프라 의존 (유지) |
+| `audit_helpers.log_cb_state_change_audit` | L247 lazy import | 상태 변경 감사 | Hook으로 분리 가능 |
+| `EventBus` | L269 lazy import | 상태 변경 이벤트 발행 | Hook으로 분리 가능 |
 
 **핵심 판단**: 2건의 lazy import(Audit, EventBus)가 있지만, 이미 try/except로 Fail-Open 처리되어 있으므로 Hook으로 분리하기 용이하다.
 
@@ -103,11 +103,32 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
         # 예외 필터링 (§8.2 확정)
         failure_exceptions: tuple[type[Exception], ...] = (Exception,),
         ignore_exceptions: tuple[type[Exception], ...] = (),
+        hooks: list | None = None,  # PolicyHook 목록 (§7.1 Audit+EventBus Hook)
     ):
         self._service_name = service_name
-        self._cb_service = cb_service or CircuitBreakerService(config=config)
+        self._cb_service = cb_service or self._create_default_service(config)
         self._failure_exceptions = failure_exceptions
         self._ignore_exceptions = ignore_exceptions
+        self._hooks = hooks if hooks is not None else build_default_hooks()
+
+    @staticmethod
+    def _create_default_service(config=None) -> CircuitBreakerService:
+        """LayeredRepository 기반 CircuitBreakerService 생성 (§7.4)."""
+        repository = None
+        try:
+            from selfhealing.factory import ProviderRegistry
+            repository = ProviderRegistry.get_circuit_breaker_repo(name="layered")
+        except (ValueError, ImportError):
+            pass  # ProviderRegistry 기본값 fallback
+        return CircuitBreakerService(config=config, repository=repository)
+
+    def _invoke_hooks(self, method: str, *args) -> None:
+        """모든 훅을 Fail-Open으로 호출한다."""
+        for hook in self._hooks:
+            try:
+                getattr(hook, method)(*args)
+            except Exception:
+                pass  # Fail-Open
 
     @property
     def name(self) -> str:
@@ -155,9 +176,12 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
             return PolicyResult(value=result, outcome=PolicyOutcome.SUCCESS,
                               executed_policies=["circuit_breaker"])
 
+        # Hook: 실행 시작
+        self._invoke_hooks("on_execute", self._service_name, 1)
+
         # 요청 허용 여부 확인
         if not self._cb_service.should_allow(self._service_name):
-            return PolicyResult(
+            reject_result = PolicyResult(
                 outcome=PolicyOutcome.REJECTED,
                 error=CircuitBreakerOpenError(self._service_name),
                 executed_policies=["circuit_breaker"],
@@ -166,16 +190,22 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
                     "state": self._cb_service.get_state(self._service_name),
                 },
             )
+            # Hook: CB OPEN 거부 (Audit + EventBus)
+            self._invoke_hooks("on_reject", self._service_name, "circuit_open")
+            return reject_result
 
         # 함수 실행
         try:
             result = func(*args, **kwargs)
             self._cb_service.record_success(self._service_name)
-            return PolicyResult(
+            success_result = PolicyResult(
                 value=result,
                 outcome=PolicyOutcome.SUCCESS,
                 executed_policies=["circuit_breaker"],
             )
+            # Hook: 실행 성공
+            self._invoke_hooks("on_success", self._service_name, success_result)
+            return success_result
         except Exception as e:
             # 예외 필터링: ignore_exceptions은 카운팅하지 않음
             if self._is_failure(e):
@@ -183,6 +213,8 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
                     self._service_name,
                     error_context={"error": str(e), "type": type(e).__name__},
                 )
+            # Hook: 실행 실패
+            self._invoke_hooks("on_failure", self._service_name, e, 1)
             raise  # 상위 Policy(Retry 등)에서 처리하도록 전파
 ```
 
@@ -210,7 +242,7 @@ result = policy.execute(call_api)
 
 **Before**:
 ```python
-# service.py L283 — Fallback이 CB 내부에 하드코딩
+# service.py L293 — Fallback이 CB 내부에 하드코딩
 result = cb_service.should_allow_with_fallback(
     "api",
     cache_key="api:cache",
@@ -237,18 +269,18 @@ result = policy.execute(call_api)
 
 **정정**: `CircuitBreakerService`에 `record_failure()`와 `record_success()`가 **이미 구현되어 있다**.
 
-- `service.py` L451: `record_failure(self, service_name: str, error_context: dict[str, Any] | None = None)`
+- `service.py` L463: `record_failure(self, service_name: str, error_context: dict[str, Any] | None = None)`
   — failure_count 증가 후 `_should_open_circuit()` 판단, 임계값 초과 시 자동 OPEN 전환
-- `service.py` L713: `record_success(self, service_name: str)`
+- `service.py` L742: `record_success(self, service_name: str)`
   — HALF_OPEN 상태에서 `success_threshold` 도달 시 자동 CLOSED 전환
-- `service.py` L523-L561: `_should_open_circuit()` — count-based (`failure_count >= failure_threshold`)
+- `service.py` L535-L591: `_should_open_circuit()` — count-based (`failure_count >= failure_threshold`)
   AND rate-based (`failure_rate_threshold > 0` 시 비율 계산) 양쪽 구현 완료
 
 Repository 레이어에도 대응 메서드가 존재한다:
-- `interfaces/repositories.py` L620: `record_failure(service_name) -> CircuitBreakerStateData` (ABC)
-- `interfaces/repositories.py` L625: `record_success(service_name) -> CircuitBreakerStateData` (ABC)
+- `interfaces/repositories.py` L614: `record_failure(service_name) -> CircuitBreakerStateData` (ABC)
+- `interfaces/repositories.py` L619: `record_success(service_name) -> CircuitBreakerStateData` (ABC)
 - `adapters/redis/circuit_breaker.py` L498: `RedisCircuitBreakerStateRepository.record_failure()`
-- `adapters/memory/circuit_breaker.py` L234: `InMemoryCircuitBreakerStateRepository.record_failure()`
+- `adapters/memory/circuit_breaker.py` L248: `InMemoryCircuitBreakerStateRepository.record_failure()`
 
 ### 4.2 Config에 이미 존재하는 자동 카운팅 설정
 
@@ -273,7 +305,7 @@ failure_rate_threshold: float = 0.0     # 0 = disabled, >0 = percentage
 | C. 하이브리드 | 수동 제어 + ProtectionMixin 활용 | ❌ 기각 — B안이 이미 하이브리드를 포함 |
 
 **B안이 실질적으로 하이브리드인 이유**:
-- `record_failure()` L468: `if state.manually_controlled: return` — 수동 제어 시 자동 카운팅 skip
+- `record_failure()` L480: `if state.manually_controlled: return` — 수동 제어 시 자동 카운팅 skip
 - `ProtectionMixin`의 429 cascade → `force_open()` 경로는 별개 유지
 - 즉, 자동 카운팅(record_failure)과 수동 제어(force_open/close)와 429 보호(ProtectionMixin)가 **3개 레이어로 공존**
 
@@ -332,7 +364,7 @@ self._cb_service.record_failure(
 - [x] **저장소 전환** — `ProviderRegistry`에 `"layered"` 등록 추가, `CircuitBreakerPolicy`가 기본으로 layered 사용 (§7.4)
 - [x] `CircuitBreakerPolicy`가 `LayeredRepository` 기반 `CircuitBreakerService`를 사용하도록 통합 (§7.4)
 - [x] `CircuitBreakerPolicy(ResiliencePolicy[T])` 명시적 Protocol 상속 — `isinstance()` 검증 통과
-- [x] **단위 테스트 89건 작성** — CircuitBreakerPolicy, Sliding Window, DeprecationWarning, export 검증 (§10)
+- [x] **단위 테스트 155건 작성** — CircuitBreakerPolicy, Sliding Window, DeprecationWarning, export 검증 (§10)
 
 ## 7. 설계 논의 확정 사항
 
@@ -346,15 +378,15 @@ self._cb_service.record_failure(
 **확정**: **이미 구현되어 있다.** 문서 §4의 초기 기술은 오류였으며, 정정 완료 (§4.1 참조).
 
 **코드 근거**:
-- `service.py` L451: `record_failure(self, service_name: str, error_context: dict[str, Any] | None = None)`
+- `service.py` L463: `record_failure(self, service_name: str, error_context: dict[str, Any] | None = None)`
   — `repository.record_failure()` 호출 후 `_should_open_circuit()` 판정
-- `service.py` L713: `record_success(self, service_name: str)`
+- `service.py` L742: `record_success(self, service_name: str)`
   — HALF_OPEN에서 `success_count >= config.success_threshold` 시 CLOSED 전환
-- `service.py` L473: `updated_state = self.repository.record_failure(service_name)` — Repository 위임
-- `service.py` L737: `updated_state = self.repository.record_success(service_name)` — Repository 위임
-- `interfaces/repositories.py` L620-625: `record_failure()`, `record_success()` ABC 메서드
+- `service.py` L485: `updated_state = self.repository.record_failure(service_name)` — Repository 위임
+- `service.py` L766: `updated_state = self.repository.record_success(service_name)` — Repository 위임
+- `interfaces/repositories.py` L614-619: `record_failure()`, `record_success()` ABC 메서드
 - `adapters/redis/circuit_breaker.py` L498: Redis 구현체
-- `adapters/memory/circuit_breaker.py` L234: InMemory 구현체
+- `adapters/memory/circuit_breaker.py` L248: InMemory 구현체
 
 **3.1 코드 수정**: `record_failure(name, e)` → `record_failure(name, error_context={...})` 변경 완료.
 
@@ -367,7 +399,7 @@ Policy가 함수를 래핑하면 "어떤 예외를 실패로 간주할 것인가
 Config(dataclass) 자체에는 추가하지 않고 **Policy 생성자 레벨**에서 처리한다.
 
 **코드 근거**:
-- `service.py` L451-497: `record_failure()`는 호출되면 **무조건** failure 카운팅.
+- `service.py` L463-497: `record_failure()`는 호출되면 **무조건** failure 카운팅.
   예외 판별 로직이 내부에 없음 → 호출자(Policy)가 판단해야 함
 - `models.py` L55-56: `RetryPolicyConfig`의 `retryable_exceptions` / `non_retryable_exceptions` 선례
   — Retry도 Config가 아닌 PolicyConfig 레벨에서 예외 필터링 보유
@@ -402,7 +434,7 @@ def _is_failure(self, error: Exception) -> bool:
 **확정**: **`record_success()`만 호출하면 된다.** `force_close()` 호출은 불필요.
 
 **코드 근거**:
-- `service.py` L727-750:
+- `service.py` L764-778:
   ```python
   if state.state == "half_open":
       updated_state = self.repository.record_success(service_name)
@@ -417,8 +449,8 @@ def _is_failure(self, error: Exception) -> bool:
           circuit_closed = True
   ```
   HALF_OPEN에서 `success_threshold` (기본값 2) 도달 시 **자동 CLOSED 전환**.
-- `service.py` L754-766: 전환 후 동기 콜백 → Audit → Metrics Push → 조건부 Replay 순차 실행
-- `service.py` L748-750: CLOSED 상태에서 `record_success()` 호출 시 `failure_count`를 0으로 리셋
+- `service.py` L788-828: 전환 후 동기 콜백 → Audit → Metrics Push → 조건부 Replay 순차 실행
+- `service.py` L779-786: CLOSED 상태에서 `record_success()` 호출 시 `failure_count`를 0으로 리셋
 
 **force_close()와의 차이**:
 | 속성 | `record_success()` | `force_close()` |
@@ -469,8 +501,8 @@ Redis 직접 사용 시 `execute()` 1회당 최소 2~3 Redis I/O:
       CircuitBreakerStateRepository,
   )
   ```
-- `adapters/memory/layered_repository/base.py` L73: `self._l1 = InMemoryCircuitBreakerStateRepository()`
-- `adapters/memory/layered_repository/base.py` L74: `self._l2 = l2_repo` (Redis 등 외부 저장소)
+- `adapters/memory/layered_repository/base.py` L75: `self._l1 = InMemoryCircuitBreakerStateRepository()`
+- `adapters/memory/layered_repository/base.py` L78: `self._l2 = l2_repo` (Redis 등 외부 저장소)
 - `adapters/memory/layered_repository/repository_operations.py` L173-177:
   ```python
   def record_failure(self, service_name: str) -> CircuitBreakerStateData:
@@ -480,7 +512,7 @@ Redis 직접 사용 시 `execute()` 1회당 최소 2~3 Redis I/O:
       return result
   ```
 - `adapters/memory/layered_repository/l2_sync.py`: L2 비동기 동기화 + 타임아웃 (Fail-Fast)
-- `adapters/memory/layered_repository/base.py` L89-99: DriftReconciler, Bulkhead, ShadowLogger 통합
+- `adapters/memory/layered_repository/base.py` L84: DriftReconciler, Bulkhead, ShadowLogger 통합
 - `services/factory/base.py` L193-220: `StorageMode.LAYERED` 선택 시 자동 생성:
   ```python
   def _create_layered_repository(self, repo_type: str):
@@ -508,8 +540,8 @@ execute() → should_allow() → L1 Memory (0.01ms)  ← hot path, Redis I/O 없
 | 저장소 | 구현 위치 | 판정 레이턴시 | 분산 동기화 | Redis 장애 내성 | 권장 시나리오 |
 |--------|----------|-------------|-----------|---------------|-------------|
 | `RedisCircuitBreakerStateRepository` | `adapters/redis/circuit_breaker.py` (745줄) | 2~5ms (HGETALL) | ✅ 즉시 일관 | ⚠️ `ResilientStorageBackend` WAL fallback | Redis 레이턴시 허용 가능한 서비스 |
-| `InMemoryCircuitBreakerStateRepository` | `adapters/memory/circuit_breaker.py` (459줄) | 0.01ms | ❌ 프로세스 격리 | ✅ 외부 의존 없음 | 단일 프로세스, 사이드카, 테스트 |
-| **`LayeredCircuitBreakerStateRepository`** | `adapters/memory/layered_repository/` (8파일) | **0.01ms (L1)** | **✅ L2 비동기** | **✅ L1 격리 + ShadowLog** | **프로덕션 권장** |
+| `InMemoryCircuitBreakerStateRepository` | `adapters/memory/circuit_breaker.py` (492줄) | 0.01ms | ❌ 프로세스 격리 | ✅ 외부 의존 없음 | 단일 프로세스, 사이드카, 테스트 |
+| **`LayeredCircuitBreakerStateRepository`** | `adapters/memory/layered_repository/` (9파일) | **0.01ms (L1)** | **✅ L2 비동기** | **✅ L1 격리 + ShadowLog** | **프로덕션 권장** |
 
 **ProviderRegistry 등록 상태**:
 - `factory.py` L614: `register_circuit_breaker_repo("memory", InMemoryCircuitBreakerStateRepository)` ✅
@@ -525,7 +557,7 @@ execute() → should_allow() → L1 Memory (0.01ms)  ← hot path, Redis I/O 없
 2. **`ResilientStorageBackend`의 WAL 보호**: L2(Redis) 자체가 장애 나도 Memory+WAL로 자동 전환
    (`adapters/resilient/backend.py` L427-441: `hset()` → Redis 실패 시 `_hset_degraded()` → WAL-First)
 3. **DriftReconciler 연동**: L1↔L2 불일치 자동 감지 및 보정
-   (`adapters/memory/layered_repository/base.py` L81: `self._drift_reconciler`)
+   (`adapters/memory/layered_repository/base.py` L84: `self._drift_reconciler`)
 
 **최종 권장 구성**:
 ```python
@@ -548,9 +580,9 @@ LayeredCircuitBreakerStateRepository(
 - `ManualControlMixin` (`force_open` / `force_close`) → 운영자 수동 제어 경로
 
 **코드 근거**:
-- `service.py` L468: `if state.manually_controlled: return` — `record_failure()`는 수동 제어 상태 skip
-- `protection.py` L80: `self.force_open(...)` — ProtectionMixin은 `force_open()` 호출 (수동 제어 플래그 설정)
-- `protection.py` L46-87: `record_rate_limit_response()` — 429 카운트 → cascade 임계값 → `force_open()`
+- `service.py` L480: `if state.manually_controlled: return` — `record_failure()`는 수동 제어 상태 skip
+- `protection.py` L74: `self.force_open(...)` — ProtectionMixin은 `force_open()` 호출 (수동 제어 플래그 설정)
+- `protection.py` L44: `record_rate_limit_response()` — 429 카운트 → cascade 임계값 → `force_open()`
 
 **3개 경로 비교**:
 | 경로 | 트리거 | 상태 전환 | manually_controlled |
@@ -697,7 +729,7 @@ sliding_window_size: int = 100  # Number of calls to track
 failure_rate_threshold: float = 0.0  # 0 = disabled, >0 = percentage
 ```
 
-그러나 `service.py` L523-561 `_should_open_circuit()`에서 **한 번도 참조하지 않는다**:
+그러나 `service.py` L535-591 `_should_open_circuit()`에서 **한 번도 참조하지 않는다**:
 ```python
 def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
     total_calls = state.failure_count + state.success_count  # ← 누적 카운터
@@ -722,7 +754,7 @@ def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
 
 Repository 레이어에도 window 로직이 없다:
 - `adapters/redis/circuit_breaker.py` L498-509: `record_failure()` → `increment_failure()` → 단순 `failure_count + 1`
-- `adapters/memory/circuit_breaker.py` L234-257: `record_failure()` → `new_count = entry.failure_count + 1`
+- `adapters/memory/circuit_breaker.py` L248: `record_failure()` → `new_count = entry.failure_count + 1`
 
 ### 9.2 왜 `failure_rate_threshold` 프로덕션 활성화가 필수인가
 
@@ -803,7 +835,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
 
 ### 9.4 `_should_open_circuit()` 수정
 
-현재 코드(`service.py` L536)에서 `total_calls = state.failure_count + state.success_count`는
+현재 코드(`service.py` L553)에서 `total_calls = state.failure_count + state.success_count`는
 ring buffer 도입 후 **자동으로 window 내 카운트**가 된다.
 
 InMemoryRepo(ring buffer)가 window-based count를 제공하므로 기본 동작은 동일하지만,
@@ -866,7 +898,7 @@ sliding_window_size=runtime_config.get("sliding_window_size", 100)
 | 3 | `record_failure()` / `record_success()`가 window 기반 count 반환 | 동일 파일 |
 | 4 | `reset()` / `clear()` 시 window도 초기화 | 동일 파일 |
 | 5 | `CircuitBreakerService` 또는 `CircuitBreakerPolicy`가 config.sliding_window_size를 Repository에 전달 | `service.py` 또는 Policy 생성 시 |
-| 6 | `LayeredRepositoryBase.__init__`에서 L1 생성 시 window_size 전달 | `layered_repository/base.py` L73 |
+| 6 | `LayeredRepositoryBase.__init__`에서 L1 생성 시 window_size 전달 | `layered_repository/base.py` L75 |
 | 7 | 기존 테스트 + window 관련 신규 테스트 | `tests/` |
 
 ### 9.8 `failure_rate_threshold` 프로덕션 활성화 가이드
