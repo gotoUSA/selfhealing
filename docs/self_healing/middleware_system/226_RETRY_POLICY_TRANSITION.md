@@ -12,37 +12,41 @@ RetryPolicy는 전환 대상 중 **가장 복잡한 패턴**이다.
 
 | 파일 | 역할 | 라인 수 |
 |------|------|---------|
-| `services/retry_handler/handler.py` | 핵심 재시도 로직 | 642줄 |
-| `services/retry_handler/models.py` | RetryConfig, RetryResult, RetryAction | 143줄 |
-| `services/retry_handler/decorators.py` | `@with_retry` 데코레이터 | 64줄 |
+| `services/retry_handler/handler.py` | 레거시 재시도 로직 (deprecated) | 655줄 |
+| `services/retry_handler/models.py` | RetryConfig, RetryPolicyConfig, RetryResult, RetryAction | 233줄 |
+| `services/retry_handler/decorators.py` | `@with_retry` 데코레이터 (RetryPolicy 사용) | 65줄 |
+| `services/retry_handler/policy.py` | RetryPolicy 순수 재시도 로직 | 224줄 |
+| `services/retry_handler/guards.py` | KillSwitchGuard, ErrorBudgetGuard | 101줄 |
+| `services/retry_handler/hooks.py` | AuditHook, MetricsHook | ~160줄 |
+| `services/retry_handler/sinks.py` | DLQSink | ~100줄 |
 | `services/retry_handler/__init__.py` | 패키지 퍼사드 | re-export |
 
 ### 2.2 handler.py의 execute() 실행 흐름 (고정 순서)
 
 ```
-handler.py L419: Kill Switch 체크 ← SystemControlManager lazy import (L29)
+handler.py L432: Kill Switch 체크 ← SystemControlManager lazy import (L30)
     ↓
-handler.py L428: ErrorBudgetGate 체크 ← check_automation_allowed lazy import (L157)
+handler.py L442: ErrorBudgetGate 체크 ← check_automation_allowed lazy import (L186)
     ↓
-handler.py L456: while attempt < effective_max_attempts
+handler.py L468: while attempt < effective_max_attempts
     │
-    ├─ L461: AdaptiveRetryBudget.record_request() ← 직접 생성 (L107)
-    ├─ L463: AdaptiveRetryBudget.should_allow_retry()
-    ├─ L468: RateLimit 대기 ← get_rate_limit_coordinator lazy import (L118)
-    ├─ L470: func(*args, **kwargs) 실행
+    ├─ L472: AdaptiveRetryBudget.record_request() ← 직접 생성 (L126)
+    ├─ L475: AdaptiveRetryBudget.should_allow_retry()
+    ├─ L480: RateLimit 대기 ← get_rate_limit_coordinator lazy import (L138)
+    ├─ L483: func(*args, **kwargs) 실행
     │
     │  [성공 시]
-    ├─ L474: RateLimitCoordinator.on_success()
-    ├─ L479: _log_retry_audit() ← audit_helpers lazy import (L138)
+    ├─ L487: RateLimitCoordinator.on_success()
+    ├─ L492: _log_retry_audit() ← audit_helpers lazy import (L161)
     │
     │  [실패 시]
-    ├─ L505: is_rate_limit_error() + _handle_rate_limit_error()
-    ├─ L510: get_combined_delay() ← ThrottleAwareBackoffCalculator (L89)
-    ├─ L515: Full Stop → break
-    ├─ L519: _log_retry_audit() (실패 기록)
-    └─ L535: should_retry() 판단
+    ├─ L519: is_rate_limit_error() + _handle_rate_limit_error()
+    ├─ L526: get_combined_delay() ← ThrottleAwareBackoffCalculator (L102)
+    ├─ L530: Full Stop → break
+    ├─ L538: _log_retry_audit() (실패 기록)
+    └─ L554: should_retry() 판단
 
-handler.py L552: _move_to_dlq() ← dlq_service.store_to_dlq lazy import (L587)
+handler.py L567: _move_to_dlq() ← dlq_service.store_to_dlq lazy import (L604)
 ```
 
 ### 2.3 하드코딩 의존성 12건 분류
@@ -51,35 +55,35 @@ handler.py L552: _move_to_dlq() ← dlq_service.store_to_dlq lazy import (L587)
 
 | # | 의존 대상 | 현재 위치 | 분리 후 |
 |---|-----------|-----------|---------|
-| 1 | `SystemControlManager.is_enabled()` | handler.py L29, L419 | `KillSwitchGuard.check()` |
-| 2 | `check_automation_allowed()` | handler.py L157, L428 | `ErrorBudgetGuard.check()` |
+| 1 | `SystemControlManager.is_enabled()` | handler.py L30, L432 | `KillSwitchGuard.check()` |
+| 2 | `check_automation_allowed()` | handler.py L186, L442 | `ErrorBudgetGuard.check()` |
 
 #### Hook으로 분리 (3건)
 
 | # | 의존 대상 | 현재 위치 | 분리 후 |
 |---|-----------|-----------|---------|
-| 4 | `audit_helpers.log_retry_audit()` | handler.py L138 | `PolicyHook.on_success()` / `.on_failure()` |
-| 5 | `retry_critical_tier_grace_retries_total` (Prometheus) | handler.py L290 | `PolicyHook.on_execute()` |
-| 6 | `RateLimitCoordinator.on_success()` | handler.py L474 | `PolicyHook.on_success()` 내부 |
+| 4 | `audit_helpers.log_retry_audit()` | handler.py L161 | `PolicyHook.on_success()` / `.on_failure()` |
+| 5 | `retry_critical_tier_grace_retries_total` (Prometheus) | handler.py L346 | `PolicyHook.on_execute()` |
+| 6 | `RateLimitCoordinator.on_success()` | handler.py L487 | `PolicyHook.on_success()` 내부 |
 
 #### Sink로 분리 (1건)
 
 | # | 의존 대상 | 현재 위치 | 분리 후 |
 |---|-----------|-----------|---------|
-| 7 | `dlq_service.store_to_dlq()` | handler.py L587 | `FailureSink.handle_failure()` |
+| 7 | `dlq_service.store_to_dlq()` | handler.py L604 | `FailureSink.handle_failure()` |
 
 #### 생성자 주입으로 변경 (4건)
 
 | # | 의존 대상 | 현재 위치 | 분리 후 |
 |---|-----------|-----------|---------|
-| 3 | `AdaptiveRetryBudget.should_allow_retry()` | handler.py L107, L463 | Collaborator로 주입 (`retry_budget: AdaptiveRetryBudget \| None`) |
-| 8 | `ThrottleAwareBackoffCalculator` | handler.py L89 | `BackoffStrategy(ABC)` 인터페이스 주입 (기존 `core/backoff.py` L13 재활용) |
-| 9 | `AdaptiveRetryBudget` | handler.py L107 | 생성자 파라미터 |
-| 10 | `RateLimitCoordinator` | handler.py L118 | 생성자 파라미터 (이미 optional) |
+| 3 | `AdaptiveRetryBudget.should_allow_retry()` | handler.py L126, L475 | Collaborator로 주입 (`retry_budget: AdaptiveRetryBudget \| None`) |
+| 8 | `ThrottleAwareBackoffCalculator` | handler.py L102 | `BackoffStrategy(ABC)` 인터페이스 주입 (기존 `core/backoff.py` L19 재활용) |
+| 9 | `AdaptiveRetryBudget` | handler.py L126 | 생성자 파라미터 |
+| 10 | `RateLimitCoordinator` | handler.py L138 | 생성자 파라미터 (이미 optional) |
 
 > **#3 재분류 사유**: `AdaptiveRetryBudget`은 `record_request()`, `should_allow_retry()`,
 > `adjust_budget_for_throttle_state()` 등 **매 시도(attempt)마다 상태를 변경**하는
-> stateful 객체이다 (`budget.py` L62-90). `PolicyGuard.check(context)` 서명은
+> stateful 객체이다 (`budget.py` L49-74). `PolicyGuard.check(context)` 서명은
 > stateless 진입 전 1회 체크를 상정하므로 Guard에 부적합하다.
 > RetryPolicy의 while 루프 내부에서 직접 호출하는 Collaborator로 재분류한다.
 
@@ -87,8 +91,8 @@ handler.py L552: _move_to_dlq() ← dlq_service.store_to_dlq lazy import (L587)
 
 | # | 의존 대상 | 현재 위치 | 판단 |
 |---|-----------|-----------|------|
-| 11 | `core.timezone.now` | handler.py L14 | 유틸리티, 커플링 경미. 유지 |
-| 12 | `BackoffConfig` (데이터 객체) | handler.py L16 | 데이터 전달용, 유지 |
+| 11 | `core.timezone.now` | handler.py L19 | 유틸리티, 커플링 경미. 유지 |
+| 12 | `BackoffConfig` (데이터 객체) | handler.py L21 | 데이터 전달용, 유지 |
 
 ## 3. 전환 설계
 
@@ -188,7 +192,7 @@ class RetryPolicy(ResiliencePolicy[T]):
 
                 # 429 감지 → RateLimitCoordinator에 쿨다운 요청
                 if self._rate_limit_coordinator:
-                    self._handle_rate_limit_error(e)
+                    self._notify_rate_limit_cooldown(e)
 
                 if not self._should_retry(e, attempt):
                     break
@@ -275,7 +279,7 @@ policy = PolicyComposer("simple").with_policy(retry(max_attempts=5)).build()
 현재 `RetryConfig`에 Rate Limit, Throttle, Critical Tier 설정이 포함되어 있다:
 
 ```python
-# 현재 (models.py L55-72)
+# 현재 (models.py L48-72)
 @dataclass
 class RetryConfig:
     max_attempts: int = 3
@@ -307,7 +311,7 @@ class RetryPolicyConfig:
     retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=lambda: (Exception,))
     non_retryable_exceptions: tuple[type[Exception], ...] = field(default_factory=tuple)
     domain: str = "default"
-    # enable_dlq → FailureSink에서 처리
+    enable_dlq: bool = True  # ← metadata["should_dlq"] 플래그용 (FailureSink가 참조)
     # rate_limit_* → RateLimitCoordinator 생성자 주입
     # throttle_* → BackoffStrategy 생성자 주입
     # critical_tier_* → PolicyComposer 레벨에서 처리
@@ -326,8 +330,6 @@ class RetryResult:
         """PolicyResult로 변환."""
         if self.success:
             outcome = PolicyOutcome.SUCCESS
-        elif self.action == RetryAction.DLQ:
-            outcome = PolicyOutcome.FAILURE
         else:
             outcome = PolicyOutcome.FAILURE
 
@@ -341,10 +343,10 @@ class RetryResult:
         )
 ```
 
-## 5. decorators.py 전환
+## 5. decorators.py 전환 (✅ 완료)
 
 ```python
-# 현재 (decorators.py)
+# 전환 전 (레거시)
 def with_retry(domain="default", max_attempts=None, ...):
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -352,12 +354,13 @@ def with_retry(domain="default", max_attempts=None, ...):
             result = handler.execute(func, *args, **kwargs)
             ...
 
-# 전환 후 — 내부적으로 RetryPolicy 사용
+# 전환 후 (현재 decorators.py L42-60) — 내부적으로 RetryPolicy 사용
 def with_retry(domain="default", max_attempts=None, ...):
     def decorator(func):
         def wrapper(*args, **kwargs):
-            policy = RetryPolicy(config=RetryPolicyConfig(...))
-            result = policy.execute(func, *args, **kwargs)
+            config = RetryPolicyConfig.from_settings(domain)  # L43
+            policy = RetryPolicy(config=config)                # L49
+            result = policy.execute(func, *args, **kwargs)     # L50
             if result.success:
                 return result.value
             else:
@@ -370,7 +373,7 @@ def with_retry(domain="default", max_attempts=None, ...):
 
 | 위치 | 사용 방식 |
 |------|-----------|
-| `services/retry_handler/decorators.py` L48 | `handler.execute()` |
+| `services/retry_handler/decorators.py` L50 | `policy.execute()` (RetryPolicy로 전환 완료) |
 | `services/retry_handler/__init__.py` | re-export |
 | `services/__init__.py` | public API 노출 없음 (v2.0에서 제거됨) |
 
@@ -383,7 +386,7 @@ def with_retry(domain="default", max_attempts=None, ...):
 
 ### 6.3 `RetryConfig.from_settings()` 사용처
 
-`models.py` L77에서 정의. `handler.py` L78에서 호출, `decorators.py` L49에서 호출.
+`models.py` L76에서 정의. `handler.py` L92에서 호출, `decorators.py` L43에서 호출.
 
 ## 7. 체크리스트
 
@@ -398,13 +401,13 @@ def with_retry(domain="default", max_attempts=None, ...):
 - [x] `MetricsHook` 구현 (Prometheus 메트릭 래핑) — ✅ 완료
 - [x] `DLQSink` 구현 (store_to_dlq 래핑, Dumb Sink — `should_dlq` 플래그만 확인) — ✅ 완료
 - [x] `@with_retry` 데코레이터가 RetryPolicy 사용하도록 전환 — ✅ 완료
-- [x] RetryHandler에 `@deprecated` 표시 — ✅ 완료
+- [x] RetryHandler에 `warnings.warn(DeprecationWarning)` 표시 — ✅ 완료 (`handler.py` L87-90)
 - [x] 기존 테스트 통과 확인 — ✅ 187 tests passed (retry_handler 30 + resilience_policy 79 + backoff 78)
-- [x] 단위 테스트 작성 — ✅ 110 tests passed (6개 파일 분리)
-  - `test_retry_policy.py` — RetryPolicy 핵심 실행 흐름, Collaborator(sleeper·budget·coordinator·backoff), rate_limit 감지, context (36 tests)
-  - `test_retry_policy_config.py` — RetryPolicyConfig 기본값·변환, RetryResult→PolicyResult 변환 (16 tests)
-  - `test_retry_guards.py` — KillSwitchGuard·ErrorBudgetGuard 계약·동작·Fail-Open (12 tests)
-  - `test_retry_hooks.py` — AuditHook·MetricsHook 계약·동작·Fail-Open, PolicyHook.on_retry Protocol (19 tests)
+- [x] 단위 테스트 작성 — ✅ 111 tests passed (6개 파일 분리)
+  - `test_retry_policy.py` — RetryPolicy 핵심 실행 흐름, Collaborator(sleeper·budget·coordinator·backoff), rate_limit 감지, context (38 tests)
+  - `test_retry_policy_config.py` — RetryPolicyConfig 기본값·변환, RetryResult→PolicyResult 변환 (18 tests)
+  - `test_retry_guards.py` — KillSwitchGuard·ErrorBudgetGuard 계약·동작·Fail-Open (13 tests)
+  - `test_retry_hooks.py` — AuditHook·MetricsHook 계약·동작·Fail-Open, PolicyHook.on_retry Protocol (21 tests)
   - `test_retry_sinks.py` — DLQSink handle_failure·should_dlq 플래그·Fail-Open (7 tests)
   - `test_retry_handler_exports.py` — 패키지 re-export 검증, with_retry 데코레이터 RetryPolicy 전환 (14 tests)
   - 기존 레거시 테스트(`test_retry_handler_unit.py` 30 tests) 미파손 확인
@@ -427,18 +430,18 @@ RetryPolicy의 내부 Collaborator(루프 내 매회 호출)로 정의할지.
 **확정**: **Collaborator**. `RetryPolicy.__init__`에 `retry_budget: AdaptiveRetryBudget | None` 파라미터 추가.
 
 **코드 근거**:
-- `handler.py` L459: `record_request(is_retry=(attempt > 1))` — 매 시도마다 상태 변경
-- `handler.py` L462: `should_allow_retry()` — 루프 내부에서 매회 확인
-- `handler.py` L523: `adjust_budget_for_throttle_state(throttle_reason)` — 루프 중간에 예산 동적 삭감
-- `budget.py` L62-70: `should_allow_retry()`는 윈도우 내 `current_retry_count / current_total_count` 비율 계산 (stateful)
-- `resilience_policy.py` L291-302: `PolicyGuard.check(context)` 서명은 stateless 진입 전 1회 체크 상정
+- `handler.py` L472: `record_request(is_retry=(attempt > 1))` — 매 시도마다 상태 변경
+- `handler.py` L475: `should_allow_retry()` — 루프 내부에서 매회 확인
+- `handler.py` L536: `adjust_budget_for_throttle_state(throttle_reason)` — 루프 중간에 예산 동적 삭감
+- `budget.py` L49-74: `should_allow_retry()`는 윈도우 내 `current_retry_count / current_total_count` 비율 계산 (stateful)
+- `resilience_policy.py` L287: `PolicyGuard.check(context)` 서명은 stateless 진입 전 1회 체크 상정
 
 **Guard에 부적합한 이유**:
 1. `record_request()`: Guard는 상태를 변경하지 않으나 RetryBudget은 매 호출마다 카운터 증가
 2. `adjust_budget_for_throttle_state()`: 루프 중간에 외부 상태(throttle reason)에 따라 내부 비율 변경
 3. `check(context)` 서명으로는 `is_retry` 파라미터를 전달할 수 없음
 
-**네이밍 검증**: `retry_budget` — 기존 `handler._retry_budget` (handler.py L115)과 동일 패턴. 충돌 없음.
+**네이밍 검증**: `retry_budget` — 기존 `handler._retry_budget` (handler.py L128)과 동일 패턴. 충돌 없음.
 
 ### 8.2 DLQ 저장 판단 — A안 (RetryPolicy가 마킹, Sink는 저장만)
 
@@ -449,10 +452,10 @@ RetryPolicy가 `config.enable_dlq` 값을 기반으로 마킹하고,
 `FailureSink`는 판단 로직 없는 Dumb Sink로 구현한다.
 
 **코드 근거**:
-- `handler.py` L553: `if self.config.enable_dlq:` — RetryHandler가 이미 DLQ 여부를 판정
-- `handler.py` L567-569: `RetryResult(action=RetryAction.DLQ if dlq_id else RetryAction.ABORT)` — 판정 결과를 결과에 표시하는 기존 패턴
-- `resilience_policy.py` L99: `metadata: dict[str, Any]` — 자유 형식 딕셔너리로 키 추가 가능
-- `models.py` L56: `enable_dlq: bool = True` — 기존 Config에 이미 존재하는 필드
+- `handler.py` L566: `if self.config.enable_dlq:` — RetryHandler가 이미 DLQ 여부를 판정
+- `handler.py` L579-580: `RetryResult(action=RetryAction.DLQ if dlq_id else RetryAction.ABORT)` — 판정 결과를 결과에 표시하는 기존 패턴
+- `resilience_policy.py` L112: `metadata: dict[str, Any]` — 자유 형식 딕셔너리로 키 추가 가능
+- `models.py` L57: `enable_dlq: bool = True` — 기존 Config에 이미 존재하는 필드
 
 **should_dlq 매핑 로직**:
 ```python
@@ -468,7 +471,7 @@ def handle_failure(self, error, context, policy_result) -> str | None:
 
 **B안 기각 이유**: FailureSink가 `RetryPolicyConfig`를 알아야 하므로 Retry-specific 판단이 Sink로 누출된다 (SRP 위반).
 
-**네이밍 검증**: `should_dlq` — 시스템에 `enable_dlq` (models.py L56)가 존재하나,
+**네이밍 검증**: `should_dlq` — 시스템에 `enable_dlq` (models.py L57)가 존재하나,
 `should_dlq`는 "config 판정 결과"를 표현하므로 의미상 구분됨. 충돌 없음.
 
 ### 8.3 RateLimitCoordinator — 현재 수준의 결합 허용
@@ -479,11 +482,11 @@ def handle_failure(self, error, context, policy_result) -> str | None:
 **확정**: **현재 수준의 생성자 주입 유지**. 추가 추상화하지 않는다.
 
 **코드 근거**:
-- `handler.py` L468: `_wait_for_rate_limit()` — 함수 실행 **직전** 대기
-- `handler.py` L474: `on_success(self._rate_limit_key)` — 성공 시 coordinator에 알림
-- `handler.py` L505-506: `is_rate_limit_error(e)` + `_handle_rate_limit_error(e)` — 실패 시 429 감지 → 글로벌 쿨다운 설정
-- `handler.py` L350-380: `get_combined_delay()` — 429 쿨다운 + throttle 백오프 중 `max()` 선택
-- `handler.py` L66: `rate_limit_coordinator: RateLimitCoordinator | None = None` — 이미 optional 주입 패턴
+- `handler.py` L480: `_wait_for_rate_limit()` — 함수 실행 **직전** 대기
+- `handler.py` L487: `on_success(self._rate_limit_key)` — 성공 시 coordinator에 알림
+- `handler.py` L519-520: `is_rate_limit_error(e)` + `_handle_rate_limit_error(e)` — 실패 시 429 감지 → 글로벌 쿨다운 설정
+- `handler.py` L354-390: `get_combined_delay()` — 429 쿨다운 + throttle 백오프 중 `max()` 선택
+- `handler.py` L73: `rate_limit_coordinator: RateLimitCoordinator | None = None` — 이미 optional 주입 패턴
 
 **추상화하지 않는 이유**:
 RateLimitCoordinator는 `wait_if_needed()`, `on_success()`, `on_rate_limited()` 3개 메서드를
@@ -501,9 +504,9 @@ RateLimitCoordinator는 `wait_if_needed()`, `on_success()`, `on_rate_limited()` 
 **코드 근거**:
 - `calculator.py` L101-155: `ThrottleAwareBackoffCalculator`는 `service_name`으로
   ThrottleRegistry에서 서비스별 throttle을 조회, Emergency Level에 따라 배율 적용
-- `handler.py` L286-321: `get_next_delay(attempt, is_critical_tier)` — `is_critical_tier` 파라미터가
+- `handler.py` L293-335: `get_next_delay(attempt, is_critical_tier)` — `is_critical_tier` 파라미터가
   CRITICAL 티어 grace retry 허용 판단에 사용. RetryPolicy에서는 `PolicyContext.tier_id`로 전달 필요
-- `handler.py` L303-318: CRITICAL 티어 Full Stop 시 `critical_tier_full_stop_max_delay` 반환 분기
+- `handler.py` L317-328: CRITICAL 티어 Full Stop 시 `critical_tier_full_stop_max_delay` 반환 분기
 
 **기존 BackoffStrategy와의 관계**:
 ```
@@ -530,7 +533,7 @@ class BackoffStrategy(ABC):
     @abstractmethod
     def calculate(self, attempt: int) -> float: ...
 
-# core/backoff.py (변경 후) — context=None 기본값으로 하위 호환 유지
+# core/backoff.py (변경 후 — L19-23) — context=None 기본값으로 하위 호환 유지
 class BackoffStrategy(ABC):
     @abstractmethod
     def calculate(self, attempt: int, context: PolicyContext | None = None) -> float: ...
@@ -539,7 +542,7 @@ class BackoffStrategy(ABC):
 기존 4개 구현체(`ExponentialBackoff`, `LinearBackoff`, `ConstantBackoff`, `DecorrelatedJitterBackoff`)는
 context를 무시하면 되므로 하위 호환성이 유지된다.
 
-**네이밍 검증**: `BackoffStrategy` — `core/backoff.py` L13에 이미 존재. **기존 ABC를 확장**하는 방식이므로
+**네이밍 검증**: `BackoffStrategy` — `core/backoff.py` L19에 이미 존재. **기존 ABC를 확장**하는 방식이므로
 새 이름을 만들 필요 없음. 충돌 해소.
 
 ### 8.5 Sleeper 함수 주입
@@ -549,14 +552,15 @@ context를 무시하면 되므로 하위 호환성이 유지된다.
 **확정**: `sleeper: Callable[[float], None] | None = None` 추가. 기본값 `None`은 sleep 미수행.
 
 **코드 근거**:
-- `handler.py` L541-544:
+- `handler.py` L554-557:
   ```python
+  logger.info(f"[RetryHandler] Will retry in {delay}s "
+              f"(attempt {attempt + 1}/{effective_max_attempts})")
   # For synchronous execution, we don't actually sleep
   # The caller (usually Celery) handles the delay
-  continue
   ```
   현재 `RetryHandler.execute()`는 **`time.sleep()`을 호출하지 않는다**.
-- `models.py` L121-124: `RetryResult.next_delay`는 결과에 포함되어 caller에게 전달
+- `models.py` L204: `RetryResult.next_delay`는 결과에 포함되어 caller에게 전달
 
 **동작 매트릭스**:
 | sleeper 값 | 동작 | 용도 |
@@ -575,14 +579,14 @@ context를 무시하면 되므로 하위 호환성이 유지된다.
 **확정**: `PolicyHook.on_retry(policy_name, attempt, delay)` 메서드를 **별도 추가**한다.
 
 **코드 근거**:
-- `handler.py` L540-542:
+- `handler.py` L554:
   ```python
   logger.info(f"[RetryHandler] Will retry in {delay}s "
               f"(attempt {attempt + 1}/{effective_max_attempts})")
   ```
   "재시도 예정" 시점에 별도 로그를 남기는 기존 패턴.
-- `handler.py` L502-503: `logger.warning(f"... Attempt {attempt}/{effective_max_attempts} failed: {e}")` — 이것이 on_failure에 해당
-- `handler.py` L289-292: `_record_critical_tier_grace_metric()` — grace retry 시 Prometheus 메트릭 기록. "재시도 결정 시점"의 이벤트.
+- `handler.py` L517: `logger.warning(f"... Attempt {attempt}/{effective_max_attempts} failed: {e}")` — 이것이 on_failure에 해당
+- `handler.py` L343-348: `_record_critical_tier_grace_metric()` — grace retry 시 Prometheus 메트릭 기록. "재시도 결정 시점"의 이벤트.
 
 **on_failure vs on_retry 의미론적 차이**:
 | 상황 | on_failure | on_retry |
@@ -594,7 +598,7 @@ context를 무시하면 되므로 하위 호환성이 유지된다.
 
 **on_failure에 정보를 합치지 않는 이유**:
 - `will_retry: bool` 같은 인자를 on_failure에 추가하면 on_failure의 책임 범위 확대
-- 기존 `resilience_policy.py` L350: `on_failure(policy_name, error, attempt)` 서명과 비호환
+- 기존 `resilience_policy.py` L321: `on_failure(policy_name, error, attempt)` 서명과 비호환
 
 **225 인터페이스 보완 필요**:
 ```python
@@ -617,11 +621,11 @@ class PolicyHook(Protocol):
 |---------|----------------|------|------|
 | `RetryPolicy` | `BatchRetryPolicy` (`utils/async_logger.py` L107) | ✅ 안전 | 완전히 다른 도메인 (비동기 로거 배치 재시도) |
 | `RetryPolicyConfig` | `PolicyConfigManager` (`load_tests/` L103) | ✅ 안전 | load_tests 전용, 패키지 외부 |
-| `retry_budget` | `handler._retry_budget` (handler.py L115) | ✅ 안전 | 동일 패턴 |
-| `should_dlq` | `enable_dlq` (models.py L56) | ✅ 안전 | config 설정 vs 판정 결과 |
+| `retry_budget` | `handler._retry_budget` (handler.py L128) | ✅ 안전 | 동일 패턴 |
+| `should_dlq` | `enable_dlq` (models.py L57) | ✅ 안전 | config 설정 vs 판정 결과 |
 | `sleeper` | 미존재 | ✅ 안전 | |
 | `on_retry` | 미존재 | ✅ 안전 | |
-| `BackoffStrategy` | `core/backoff.py` L13 (ABC) | ⚠️ **기존 재활용** | 새로 만들지 않고 기존 ABC 시그니처 확장 |
+| `BackoffStrategy` | `core/backoff.py` L19 (ABC) | ⚠️ **기존 재활용** | 새로 만들지 않고 기존 ABC 시그니처 확장 |
 | `KillSwitchGuard` | 테스트 Stub만 존재 (test_resilience_policy.py L605) | ✅ 안전 | |
 | `ErrorBudgetGuard` | 테스트 Stub만 존재 (test_resilience_policy.py L621) | ✅ 안전 | |
 | `DLQSink` | 테스트 Stub만 존재 (test_resilience_policy.py L755) | ✅ 안전 | |
