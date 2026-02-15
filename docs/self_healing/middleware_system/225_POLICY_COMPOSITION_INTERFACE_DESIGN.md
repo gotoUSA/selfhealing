@@ -29,11 +29,21 @@
 
 ```python
 from __future__ import annotations
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 T = TypeVar("T")
+
+
+class PolicyRejectedException(Exception):
+    """Policy에 의해 거부된 경우 발생하는 예외.
+
+    PolicyComposer가 Policy 체인 실행 중 REJECTED/TIMEOUT 결과를
+    예외로 변환할 때 사용한다. Composer 내부에서만 사용되며
+    최종 PolicyResult(outcome=REJECTED)로 변환되어 소비자에게 전달된다.
+    """
 
 
 class PolicyOutcome(str, Enum):
@@ -156,11 +166,7 @@ class PolicyContext:
 따라서 동기/비동기 Protocol을 **분리**한다:
 
 ```python
-from typing import Protocol, Callable, TypeVar, Any
-
-T = TypeVar("T")
-
-
+@runtime_checkable
 class ResiliencePolicy(Protocol[T]):
     """
     동기 resilience 패턴이 구현하는 핵심 Protocol.
@@ -207,6 +213,7 @@ class ResiliencePolicy(Protocol[T]):
         ...
 
 
+@runtime_checkable
 class AsyncResiliencePolicy(Protocol[T]):
     """
     비동기 resilience 패턴이 구현하는 Protocol.
@@ -253,6 +260,7 @@ class AsyncResiliencePolicy(Protocol[T]):
 이는 현재 코드의 미비점으로, `PolicyContext`를 통해 해소한다.
 
 ```python
+@runtime_checkable
 class PolicyGuard(Protocol):
     """
     Policy 실행 전 사전 검증.
@@ -327,6 +335,7 @@ class ErrorBudgetGuard:
 ### 2.5 PolicyHook — 실행 이벤트 옵저버
 
 ```python
+@runtime_checkable
 class PolicyHook(Protocol):
     """
     Policy 실행 중 이벤트를 관찰하는 훅.
@@ -368,6 +377,7 @@ class PolicyHook(Protocol):
 ### 2.6 FailureSink — 최종 실패 처리
 
 ```python
+@runtime_checkable
 class FailureSink(Protocol):
     """
     모든 Policy가 소진된 후 최종 실패를 처리하는 인터페이스.
@@ -456,9 +466,14 @@ class CircuitBreakerResult:
 
 ```
 interfaces/
+├── alert_adapter.py      # AlertAdapter
 ├── audit_adapter.py      # AuditLogAdapter
 ├── cache_provider.py     # CacheProviderInterface
+├── config_provider.py    # ConfigProviderInterface
+├── notification.py       # NotificationInterface
+├── rate_limit_storage.py # RateLimitStorageInterface
 ├── repositories.py       # FailedOperationRepository, CircuitBreakerStateRepository
+├── statistics.py         # StatisticsRepositoryInterface
 ├── task_queue.py         # TaskQueueInterface
 └── web_framework.py      # WebFrameworkInterface
 ```
@@ -469,19 +484,21 @@ interfaces/
 interfaces/
 ├── (기존 파일들 유지)
 └── resilience_policy.py  # NEW: 아래 타입 모두 포함
+    # - PolicyRejectedException (Composer 내부 거부 예외)
     # - PolicyContext (frozen=True, Immutable 실행 컨텍스트)
     # - PolicyOutcome, PolicyResult (통합 결과 타입)
-    # - ResiliencePolicy (동기 Protocol)
-    # - AsyncResiliencePolicy (비동기 Protocol)
-    # - PolicyGuard, GuardResult (사전 검증)
-    # - PolicyHook (실행 이벤트 옵저버)
-    # - FailureSink (최종 실패 처리)
+    # - ResiliencePolicy (동기 Protocol, @runtime_checkable)
+    # - AsyncResiliencePolicy (비동기 Protocol, @runtime_checkable)
+    # - PolicyGuard, GuardResult (사전 검증, @runtime_checkable)
+    # - PolicyHook (실행 이벤트 옵저버, @runtime_checkable)
+    # - FailureSink (최종 실패 처리, @runtime_checkable)
 ```
 
 **네이밍 충돌 검증**:
 
 | 새 이름 | 기존 시스템 존재 여부 | 판정 |
 |---------|---------------------|------|
+| `PolicyRejectedException` | 미존재 | ✅ 안전 — Composer 내부 전용, `resilience.policies.__init__`에서 re-export |
 | `PolicyContext` | 미존재 | ✅ 안전 — `*Context` 패턴 20건+ 존재 (`RequestContext`, `ActorContext` 등) |
 | `PolicyResult` | 미존재 | ✅ 안전 |
 | `PolicyOutcome` | 미존재 | ✅ 안전 |
@@ -607,14 +624,14 @@ class RetryPolicy:
 | `TestPolicyResultContract` | 계약 검증 | 필드 기본값 (value, outcome, error, executed_policies, total_attempts, total_duration_ms, metadata) | 7 |
 | `TestPolicyResultBehavior` | 동작 검증 | success/rejected 프로퍼티, 값 저장, mutable default 격리, Generic 타입 | 15 |
 | `TestPolicyContextContract` | 계약 검증 | 필드 기본값 8개, frozen=True | 9 |
-| `TestPolicyContextBehavior` | 동작 검증 | 불변성, with_updates Copy-on-Write, 필드 저장, extra 격리 | 11 |
+| `TestPolicyContextBehavior` | 동작 검증 | 불변성, with_updates Copy-on-Write, 필드 저장, extra 격리 | 10 |
 | `TestGuardResultContract` | 계약 검증 | 필드 기본값 (reason, metadata) | 2 |
 | `TestGuardResultBehavior` | 동작 검증 | allowed 판정, reason, metadata 격리 | 4 |
 | `TestResiliencePolicyContract` | 계약 검증 | runtime_checkable, 구조적 하위타입 isinstance, execute 동작 | 5 |
 | `TestAsyncResiliencePolicyContract` | 계약 검증 | runtime_checkable, 비동기 구조적 하위타입, async execute | 4 |
 | `TestPolicyGuardContract` | 계약 검증 | runtime_checkable, context=None/context 전달 Guard 동작 | 5 |
 | `TestPolicyHookContract` | 계약 검증 | runtime_checkable, 5개 메서드 호출 가능, on_retry delay 전달 | 5 |
-| `TestFailureSinkContract` | 계약 검증 | runtime_checkable, handle_failure 반환값 (DLQ ID / None) | 4 |
+| `TestFailureSinkContract` | 계약 검증 | runtime_checkable, handle_failure 반환값 (DLQ ID / None), context=None 처리 | 5 |
 | `TestPublicExportsContract` | 계약 검증 | interfaces/__init__.py import 가능, __all__ 포함 | 2 |
 
 ### 8.2 가이드라인 준수
