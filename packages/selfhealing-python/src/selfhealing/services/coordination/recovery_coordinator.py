@@ -896,7 +896,7 @@ class RecoveryCoordinator:
         try:
             # EmergencyModeTracker가 있으면 사용
             try:
-                from selfhealing.governance import get_emergency_mode_tracker
+                from selfhealing.governance import get_emergency_mode_tracker  # type: ignore[import-not-found]
 
                 tracker = get_emergency_mode_tracker()
                 tracker.deactivate(
@@ -1224,7 +1224,7 @@ class RecoveryCoordinator:
     def _get_current_emergency_level(self, namespace: str) -> str:
         """현재 Emergency 레벨 조회."""
         try:
-            from selfhealing.services.graceful_degradation import (
+            from selfhealing.services.graceful_degradation import (  # type: ignore[import-not-found]
                 get_graceful_degradation_manager,
             )
 
@@ -1244,7 +1244,7 @@ class RecoveryCoordinator:
         """안정화 조건 확인."""
         try:
             # MetricsCollector가 있으면 사용
-            from selfhealing.core.metrics import get_metrics_collector
+            from selfhealing.core.metrics import get_metrics_collector  # type: ignore[import-not-found]
 
             collector = get_metrics_collector()
             metrics = collector.get_error_rate(
