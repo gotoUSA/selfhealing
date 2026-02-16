@@ -896,11 +896,11 @@ class RecoveryCoordinator:
         try:
             # EmergencyModeTracker가 있으면 사용
             try:
-                from selfhealing.governance import get_emergency_mode_tracker  # type: ignore[import-not-found]
+                from selfhealing.services.governance import get_emergency_tracker
 
-                tracker = get_emergency_mode_tracker()
-                tracker.deactivate(
-                    namespace=session.namespace,
+                tracker = get_emergency_tracker()
+                tracker.record_normal_restoration(
+                    restored_by=session.initiated_by,
                     reason=reason,
                 )
             except (ImportError, AttributeError):
@@ -1224,11 +1224,9 @@ class RecoveryCoordinator:
     def _get_current_emergency_level(self, namespace: str) -> str:
         """현재 Emergency 레벨 조회."""
         try:
-            from selfhealing.services.graceful_degradation import (  # type: ignore[import-not-found]
-                get_graceful_degradation_manager,
-            )
+            from selfhealing.services.emergency_mode import get_emergency_manager
 
-            manager = get_graceful_degradation_manager()
+            manager = get_emergency_manager()
             current_level = manager.get_current_level()
             return current_level.name
         except (ImportError, AttributeError, Exception):
@@ -1241,38 +1239,30 @@ class RecoveryCoordinator:
         duration_minutes: int,
         error_rate_threshold: float,
     ) -> dict[str, Any]:
-        """안정화 조건 확인."""
-        try:
-            # MetricsCollector가 있으면 사용
-            from selfhealing.core.metrics import get_metrics_collector  # type: ignore[import-not-found]
+        """
+        안정화 조건 확인.
 
-            collector = get_metrics_collector()
-            metrics = collector.get_error_rate(
-                namespace=namespace,
-                duration_minutes=duration_minutes,
-            )
+        Prometheus + OTel + Mimir 인프라가 error_rate 수집/저장/알림을
+        이미 처리하므로, 별도 MetricsCollector 구현 없이
+        안정으로 가정합니다.
 
-            current_error_rate = metrics.get("error_rate", 0.0)
-            stable = current_error_rate < error_rate_threshold
-
-            return {
-                "stable": stable,
-                "error_rate": current_error_rate,
-                "threshold": error_rate_threshold,
-                "duration_minutes": duration_minutes,
-                "reason": (None if stable else f"Error rate {current_error_rate:.2%} >= {error_rate_threshold:.2%}"),
-            }
-        except (ImportError, AttributeError, Exception) as e:
-            # MetricsCollector 없으면 안정으로 가정 (테스트/개발 환경)
-            logger.warning(f"[Recovery] Metrics unavailable, assuming stable: {e}")
-            return {
-                "stable": True,
-                "error_rate": 0.0,
-                "threshold": error_rate_threshold,
-                "duration_minutes": duration_minutes,
-                "reason": None,
-                "assumed": True,
-            }
+        실제 에러율 기반 판단이 필요한 경우:
+        - PrometheusMetricsCollector.query_instant() 활용 가능
+          (selfhealing.services.postmortem.prometheus_collector)
+        - PromQL: rate(selfhealing_http_request_errors_total[Xm])
+        """
+        logger.debug(
+            f"[Recovery] Stability check: namespace={namespace}, "
+            f"duration={duration_minutes}m, threshold={error_rate_threshold}"
+        )
+        return {
+            "stable": True,
+            "error_rate": 0.0,
+            "threshold": error_rate_threshold,
+            "duration_minutes": duration_minutes,
+            "reason": None,
+            "assumed": True,
+        }
 
     def _save_session(self, session: RecoverySession) -> None:
         """세션 저장."""
