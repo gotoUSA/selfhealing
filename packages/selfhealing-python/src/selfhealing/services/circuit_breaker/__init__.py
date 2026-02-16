@@ -174,7 +174,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "canary_record_success": (".canary_recovery", "canary_record_success"),
     "canary_record_failure": (".canary_recovery", "canary_record_failure"),
     "get_canary_recovery_state": (".canary_recovery", "get_canary_recovery_state"),
-    # stale_cache_integration (12개)
+    # stale_cache_integration (13개)
     "CanaryWithStaleCacheConfig": (
         ".stale_cache_integration",
         "CanaryWithStaleCacheConfig",
@@ -201,6 +201,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "update_stale_cache": (".stale_cache_integration", "update_stale_cache"),
     "record_canary_success": (".stale_cache_integration", "record_canary_success"),
     "record_canary_failure": (".stale_cache_integration", "record_canary_failure"),
+    "build_stale_cache_key": (".stale_cache_integration", "build_stale_cache_key"),
     # recovery_strategy (12개)
     "RecoveryStrategySelection": (".recovery_strategy", "RecoveryStrategySelection"),
     "RecoveryDecision": (".recovery_strategy", "RecoveryDecision"),
@@ -396,6 +397,7 @@ if TYPE_CHECKING:
         CanaryWithStaleDecision,
         StaleCacheEntry,
         StaleCacheStore,
+        build_stale_cache_key,
         get_canary_stale_cache_service,
         record_canary_failure,
         record_canary_success,
@@ -530,6 +532,8 @@ __all__ = [
     "update_stale_cache",
     "record_canary_success",
     "record_canary_failure",
+    # Stale Cache Key Helper
+    "build_stale_cache_key",
     # Recovery Strategy Selector
     "RecoveryStrategySelection",
     "RecoveryDecision",

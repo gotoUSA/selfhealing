@@ -517,6 +517,35 @@ def partition_aware_chain(
             ),
             default_value={"status": "degraded"},
         )
+
+    CB 독립 캐시 조회 패턴::
+
+        FallbackPolicy는 CircuitBreaker 상태와 독립적으로 모든 예외에서 작동한다.
+        (fallback.py execute()는 try/except Exception으로 모든 예외를 잡아
+        _apply_fallback()에 위임하며, CB 상태를 확인하지 않는다.)
+
+        반면 StaleCacheStore의 should_allow_with_fallback()은 cb_state를 필수로 받아
+        CLOSED 상태에서는 캐시를 사용하지 않는다.
+
+        partition_aware_chain()의 cache_fn으로 StaleCacheStore 조회를 넣으면
+        CB CLOSED 상태에서의 일시적 실패에도 캐시 조회가 가능하다:
+
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            CanaryWithStaleCacheService,
+            get_canary_stale_cache_service,
+        )
+
+        stale_service = get_canary_stale_cache_service()
+        cache_key = CanaryWithStaleCacheService.build_stale_cache_key("product", "123")
+
+        FallbackPolicy(
+            fallback_chain=partition_aware_chain(
+                state_provider=lambda: health_monitor.get_state(),
+                cache_fn=lambda: stale_service._cache.get(cache_key).value,
+                db_fn=lambda: Product.objects.get(id=123),
+            ),
+            default_value={"status": "degraded"},
+        )
     """
     chain: list[Callable[[], T]] = []
 

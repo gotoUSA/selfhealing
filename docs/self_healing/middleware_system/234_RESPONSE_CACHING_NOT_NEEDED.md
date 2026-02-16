@@ -434,12 +434,17 @@ if cache_key is not None and response_data is not None:
 
 ## 7) 최종 구현 대상 요약 (리뷰 반영)
 
-| 항목 | 구현 필요 | 대상 파일 | 작업 내용 |
-|------|-----------|-----------|-----------|
-| A. Preset에 FallbackPolicy 통합 | **예** | `resilience/policies/presets.py` | `fallback_chain`, `fallback_fn`, `fallback_default` 3단계 파라미터 추가 (R1, R2) |
-| B. record_success() 캐시 자동 저장 | **예** | `services/circuit_breaker/stale_cache_integration.py` | `cache_key`, `response_data` 선택적 파라미터 + suppress 패턴 (R3, R7) |
-| B+. StaleCacheStore.set() docstring 경고 | **예** | `services/circuit_breaker/stale_cache_integration.py` | Mutable Reference 오염 경고 docstring 추가 (R4) |
-| B++. build_stale_cache_key() 헬퍼 | **예** | `services/circuit_breaker/stale_cache_integration.py` | 정적 메서드 + 모듈 편의 함수 추가 (R5) |
-| C. partition_aware_chain() 사용 패턴 문서화 | **예** | `resilience/policies/fallback.py` | CB 독립 캐시 조회 + StaleCacheStore 연결 예시 docstring 추가 (R6) |
-| D. PolicyComposer 통합 | **아니오** | — | 이미 완전 구현됨 |
-| E. 캐시 가용성 체크 | **아니오** | — | 의도된 안전장치, 변경 불필요 |
+| 항목 | 구현 필요 | 대상 파일 | 작업 내용 | 구현 상태 |
+|------|-----------|-----------|-----------|-----------|
+| A. Preset에 FallbackPolicy 통합 | **예** | `resilience/policies/presets.py` | `fallback_chain`, `fallback_fn`, `fallback_default` 3단계 파라미터 추가 (R1, R2) | **완료** |
+| B. record_success() 캐시 자동 저장 | **예** | `services/circuit_breaker/stale_cache_integration.py` | `cache_key`, `response_data` 선택적 파라미터 + suppress 패턴 (R3, R7) | **완료** |
+| B+. StaleCacheStore.set() docstring 경고 | **예** | `services/circuit_breaker/stale_cache_integration.py` | Mutable Reference 오염 경고 docstring 추가 (R4) | **완료** |
+| B++. build_stale_cache_key() 헬퍼 | **예** | `services/circuit_breaker/stale_cache_integration.py` | 정적 메서드 + 모듈 편의 함수 추가 (R5) | **완료** |
+| C. partition_aware_chain() 사용 패턴 문서화 | **예** | `resilience/policies/fallback.py` | CB 독립 캐시 조회 + StaleCacheStore 연결 예시 docstring 추가 (R6) | **완료** |
+| D. PolicyComposer 통합 | **아니오** | — | 이미 완전 구현됨 | — |
+| E. 캐시 가용성 체크 | **아니오** | — | 의도된 안전장치, 변경 불필요 | — |
+
+### 통합 테스트 판정
+
+모든 변경이 하위 호환(선택적 파라미터 추가 / docstring 추가 / 새 함수 추가)이므로
+신규 통합 테스트 작성은 불필요하다. 기존 통합 테스트가 변경 없이 통과한다.

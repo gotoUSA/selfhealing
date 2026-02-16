@@ -251,6 +251,13 @@ class StaleCacheStore:
 
         Returns:
             생성된 StaleCacheEntry
+
+        Warning:
+            인메모리 캐시이므로 value의 참조(Reference)가 그대로 저장된다.
+            저장 후 원본 객체를 수정하면 캐시 데이터도 오염된다.
+            호출자는 다음 중 하나를 준수해야 한다:
+            1. 저장할 객체를 불변(Immutable)으로 취급
+            2. 저장 전 copy.copy() 또는 copy.deepcopy()로 사본 전달
         """
         with self._lock:
             # 용량 초과 시 오래된 항목 제거
@@ -342,6 +349,23 @@ class CanaryWithStaleCacheService:
 
     _instance: CanaryWithStaleCacheService | None = None
     _lock: threading.Lock = threading.Lock()
+
+    @staticmethod
+    def build_stale_cache_key(domain: str, identifier: str) -> str:
+        """
+        Stale Cache Key 생성 규칙 중앙화.
+
+        should_allow_with_fallback(), update_cache(), FallbackPolicy cache_fn에서
+        동일한 키를 사용하도록 보장한다.
+
+        Args:
+            domain: 서비스 도메인 (예: "payment", "product")
+            identifier: 리소스 식별자 (예: "user123", "order456")
+
+        Returns:
+            정규화된 캐시 키 (예: "payment:user123")
+        """
+        return f"{domain}:{identifier}"
 
     def __new__(cls) -> CanaryWithStaleCacheService:
         """싱글톤 패턴."""
@@ -625,18 +649,36 @@ class CanaryWithStaleCacheService:
     # Metrics Recording (Canary 연동)
     # =========================================================================
 
-    def record_success(self, service_id: str) -> None:
+    def record_success(
+        self,
+        service_id: str,
+        cache_key: str | None = None,
+        response_data: Any = None,
+    ) -> None:
         """
         백엔드 호출 성공 기록.
 
+        cache_key와 response_data가 모두 전달되면 update_cache()를 자동 호출하여
+        Stale Cache를 갱신한다. 캐시 저장 실패는 suppress하여 원본 성공 결과에
+        영향을 주지 않는다.
+
         Args:
             service_id: 서비스 ID
+            cache_key: Stale Cache 키 (전달 시 자동 캐시 저장)
+            response_data: 캐시에 저장할 응답 데이터 (cache_key와 함께 전달)
         """
         with self._stats_lock:
             self._stats["backend_success"] += 1
 
         # Canary 매니저에도 성공 기록
         self._canary_manager.record_success(service_id)
+
+        # 캐시 자동 저장 — 누락 방지
+        if cache_key is not None and response_data is not None:
+            try:
+                self.update_cache(cache_key, response_data, service_id=service_id)
+            except Exception as e:
+                logger.warning("Auto cache update failed (suppressed): %s", e)
 
     def record_failure(self, service_id: str) -> None:
         """
@@ -776,3 +818,8 @@ def record_canary_success(service_id: str) -> None:
 def record_canary_failure(service_id: str) -> None:
     """Canary 실패 기록."""
     get_canary_stale_cache_service().record_failure(service_id)
+
+
+def build_stale_cache_key(domain: str, identifier: str) -> str:
+    """Stale Cache Key 생성."""
+    return CanaryWithStaleCacheService.build_stale_cache_key(domain, identifier)
