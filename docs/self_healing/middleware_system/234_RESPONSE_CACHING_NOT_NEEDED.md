@@ -434,15 +434,26 @@ if cache_key is not None and response_data is not None:
 
 ## 7) 최종 구현 대상 요약 (리뷰 반영)
 
-| 항목 | 구현 필요 | 대상 파일 | 작업 내용 | 구현 상태 |
-|------|-----------|-----------|-----------|-----------|
-| A. Preset에 FallbackPolicy 통합 | **예** | `resilience/policies/presets.py` | `fallback_chain`, `fallback_fn`, `fallback_default` 3단계 파라미터 추가 (R1, R2) | **완료** |
-| B. record_success() 캐시 자동 저장 | **예** | `services/circuit_breaker/stale_cache_integration.py` | `cache_key`, `response_data` 선택적 파라미터 + suppress 패턴 (R3, R7) | **완료** |
-| B+. StaleCacheStore.set() docstring 경고 | **예** | `services/circuit_breaker/stale_cache_integration.py` | Mutable Reference 오염 경고 docstring 추가 (R4) | **완료** |
-| B++. build_stale_cache_key() 헬퍼 | **예** | `services/circuit_breaker/stale_cache_integration.py` | 정적 메서드 + 모듈 편의 함수 추가 (R5) | **완료** |
-| C. partition_aware_chain() 사용 패턴 문서화 | **예** | `resilience/policies/fallback.py` | CB 독립 캐시 조회 + StaleCacheStore 연결 예시 docstring 추가 (R6) | **완료** |
-| D. PolicyComposer 통합 | **아니오** | — | 이미 완전 구현됨 | — |
-| E. 캐시 가용성 체크 | **아니오** | — | 의도된 안전장치, 변경 불필요 | — |
+| 항목 | 구현 필요 | 대상 파일 | 작업 내용 | 구현 상태 | 단위 테스트 |
+|------|-----------|-----------|-----------|-----------|-------------|
+| A. Preset에 FallbackPolicy 통합 | **예** | `resilience/policies/presets.py` | `fallback_chain`, `fallback_fn`, `fallback_default` 3단계 파라미터 추가 (R1, R2) | **완료** | **완료** — `TestBuildFallbackPolicyBehavior` (6), `TestStandardPipelineFallbackBehavior` (10), `TestHaPipelineFallbackBehavior` (7) |
+| B. record_success() 캐시 자동 저장 | **예** | `services/circuit_breaker/stale_cache_integration.py` | `cache_key`, `response_data` 선택적 파라미터 + suppress 패턴 (R3, R7) | **완료** | **완료** — `TestRecordSuccessAutoCacheBehavior` (8) |
+| B+. StaleCacheStore.set() docstring 경고 | **예** | `services/circuit_breaker/stale_cache_integration.py` | Mutable Reference 오염 경고 docstring 추가 (R4) | **완료** | — (docstring만 추가) |
+| B++. build_stale_cache_key() 헬퍼 | **예** | `services/circuit_breaker/stale_cache_integration.py` | 정적 메서드 + 모듈 편의 함수 추가 (R5) | **완료** | **완료** — `TestBuildStaleCacheKeyBehavior` (6) |
+| C. partition_aware_chain() 사용 패턴 문서화 | **예** | `resilience/policies/fallback.py` | CB 독립 캐시 조회 + StaleCacheStore 연결 예시 docstring 추가 (R6) | **완료** | — (docstring만 추가) |
+| D. PolicyComposer 통합 | **아니오** | — | 이미 완전 구현됨 | — | — |
+| E. 캐시 가용성 체크 | **아니오** | — | 의도된 안전장치, 변경 불필요 | — | — |
+
+### 단위 테스트 요약
+
+| 테스트 파일 | 테스트 클래스 | 테스트 수 | 검증 유형 |
+|-------------|-------------|-----------|-----------|
+| `tests/unit/resilience/policies/test_presets.py` | `TestBuildFallbackPolicyBehavior` | 6 | 동작 검증 — `_build_fallback_policy()` 3단계 파라미터 조합 |
+| `tests/unit/resilience/policies/test_presets.py` | `TestStandardPipelineFallbackBehavior` | 10 | 동작 검증 — standard_pipeline Fallback 주입/배치/호환 |
+| `tests/unit/resilience/policies/test_presets.py` | `TestHaPipelineFallbackBehavior` | 7 | 동작 검증 — ha_pipeline Fallback 주입/배치/호환 |
+| `tests/services/circuit_breaker/test_stale_cache_integration.py` | `TestBuildStaleCacheKeyBehavior` | 6 | 동작 검증 — 키 생성 형식, 정적 메서드/모듈 함수 일관성 |
+| `tests/services/circuit_breaker/test_stale_cache_integration.py` | `TestRecordSuccessAutoCacheBehavior` | 8 | 동작 검증 — 자동 캐시 저장, suppress 패턴, 하위 호환 |
+| | **합계** | **37** | |
 
 ### 통합 테스트 판정
 
