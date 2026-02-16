@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 class RepositoryOperationsMixin:
     """Mixin providing repository interface operations."""
 
-    def get_by_service_name(
-        self, service_name: str
-    ) -> CircuitBreakerStateData | None:
+    def get_by_service_name(self, service_name: str) -> CircuitBreakerStateData | None:
         """L1에서 조회. L1에 없으면 L2 확인 후 L1에 캐시."""
         result = self._l1.get_by_service_name(service_name)
 
@@ -205,9 +203,7 @@ class RepositoryOperationsMixin:
         ttl_minutes: int = 90,
     ) -> tuple:
         """L1에서 강제 open 후 L2 동기화."""
-        result = self._l1.atomic_force_open(
-            service_name, reason, controlled_by_id, ttl_minutes
-        )
+        result = self._l1.atomic_force_open(service_name, reason, controlled_by_id, ttl_minutes)
 
         if result[0]:
             updated = self._l1.get_by_service_name(service_name)
@@ -251,14 +247,13 @@ class RepositoryOperationsMixin:
     def set_manual_control(
         self,
         service_name: str,
+        state: str,
         controlled_by_id: int | None = None,
         reason: str = "",
-        ttl_minutes: int = 90,
+        expires_at: datetime | None = None,
     ) -> bool:
         """L1에서 수동 제어 설정 후 L2 동기화."""
-        result = self._l1.set_manual_control(
-            service_name, controlled_by_id, reason, ttl_minutes
-        )
+        result = self._l1.set_manual_control(service_name, state, controlled_by_id, reason, expires_at)
 
         if result:
             updated = self._l1.get_by_service_name(service_name)
@@ -267,9 +262,9 @@ class RepositoryOperationsMixin:
 
         return result
 
-    def clear_manual_control(self, service_name: str, reason: str = "") -> bool:
+    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
         """L1에서 수동 제어 해제 후 L2 동기화."""
-        result = self._l1.clear_manual_control(service_name, reason)
+        result = self._l1.clear_manual_control(service_name, preserve_reason)
 
         if result:
             updated = self._l1.get_by_service_name(service_name)

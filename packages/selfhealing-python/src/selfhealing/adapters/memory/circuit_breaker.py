@@ -205,7 +205,11 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             return True
 
     def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
-        """Clear manual control override."""
+        """Clear manual control override.
+
+        수동 제어 플래그만 해제한다. 상태(state)와 카운터(failure_count, success_count)는
+        변경하지 않는다. 상태 전이가 필요하면 호출 측에서 update_state를 먼저 수행해야 한다.
+        """
         with self._lock:
             entry = self._storage.get(service_name)
             if entry is None:
@@ -216,16 +220,16 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             updated = CircuitBreakerStateData(
                 id=entry.id,
                 service_name=service_name,
-                state=CircuitBreakerStateEnum.CLOSED.value,
-                failure_count=0,
-                success_count=0,
+                state=entry.state,
+                failure_count=entry.failure_count,
+                success_count=entry.success_count,
                 last_failure_at=entry.last_failure_at,
-                opened_at=None,
+                opened_at=entry.opened_at,
                 manually_controlled=False,
                 controlled_by_id=None,
                 control_reason=entry.control_reason if preserve_reason else "",
                 manual_override_expires_at=None,
-                half_open_request_count=0,
+                half_open_request_count=entry.half_open_request_count,
                 created_at=entry.created_at,
                 updated_at=_now(),
             )

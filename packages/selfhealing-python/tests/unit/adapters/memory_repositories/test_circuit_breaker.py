@@ -15,12 +15,13 @@ class TestInMemoryCircuitBreakerStateRepository:
     def repo(self):
         """Create a fresh repository for each test."""
         from selfhealing.adapters.memory import InMemoryCircuitBreakerStateRepository
+
         return InMemoryCircuitBreakerStateRepository()
 
     def test_get_or_create_new(self, repo):
         """Test creating a new circuit breaker state."""
         from selfhealing.interfaces.repositories import CircuitBreakerStateEnum
-        
+
         state = repo.get_or_create("toss_payment")
 
         assert state.id == 1
@@ -52,7 +53,7 @@ class TestInMemoryCircuitBreakerStateRepository:
     def test_update_state(self, repo):
         """Test updating circuit breaker state."""
         from selfhealing.interfaces.repositories import CircuitBreakerStateEnum
-        
+
         repo.get_or_create("test_service")
 
         now = datetime.now(timezone.utc)
@@ -100,7 +101,7 @@ class TestInMemoryCircuitBreakerStateRepository:
     def test_set_manual_control(self, repo):
         """Test setting manual control override."""
         from selfhealing.interfaces.repositories import CircuitBreakerStateEnum
-        
+
         repo.get_or_create("test_service")
 
         expires = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -122,9 +123,9 @@ class TestInMemoryCircuitBreakerStateRepository:
         assert state.manual_override_expires_at == expires
 
     def test_clear_manual_control(self, repo):
-        """Test clearing manual control override."""
+        """clear_manual_control은 수동 제어 플래그만 해제하고 상태/카운터는 유지한다."""
         from selfhealing.interfaces.repositories import CircuitBreakerStateEnum
-        
+
         repo.get_or_create("test_service")
         repo.set_manual_control(
             service_name="test_service",
@@ -137,7 +138,8 @@ class TestInMemoryCircuitBreakerStateRepository:
         assert result is True
 
         state = repo.get_by_service_name("test_service")
-        assert state.state == CircuitBreakerStateEnum.CLOSED.value
+        # 상태는 set_manual_control에서 설정한 OPEN이 유지된다
+        assert state.state == CircuitBreakerStateEnum.OPEN.value
         assert state.manually_controlled is False
         assert state.controlled_by_id is None
 

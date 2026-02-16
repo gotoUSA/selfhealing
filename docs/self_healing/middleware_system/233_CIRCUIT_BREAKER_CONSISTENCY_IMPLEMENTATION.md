@@ -143,3 +143,56 @@
 - 운영 파라미터 변경
 
 본 문서는 정합성 위반 해소를 위한 구현 범위만 다룬다.
+
+---
+
+## 8) 구현 완료 기록
+
+구현일: 2026-02-17
+
+### 이슈 A 수정 내용
+
+- `services/circuit_breaker/service.py` `manual_control(action="auto")` 경로에서
+  `update_state(manually_controlled=False)` 호출을 제거하고
+  `clear_manual_control(service_name, preserve_reason=True)` 호출로 교체하였다.
+- 인터페이스 계약에 없는 `manually_controlled` 인자 전달이 제거되었다.
+
+### 이슈 B+C 수정 내용
+
+- `adapters/memory/layered_repository/repository_operations.py`의
+  `set_manual_control` 시그니처를 인터페이스와 동일하게 변경하였다:
+  - 변경 전: `(service_name, controlled_by_id, reason, ttl_minutes)`
+  - 변경 후: `(service_name, state, controlled_by_id, reason, expires_at)`
+- `clear_manual_control` 시그니처를 인터페이스와 동일하게 변경하였다:
+  - 변경 전: `(service_name, reason="")`
+  - 변경 후: `(service_name, preserve_reason=False)`
+- L1 호출 인자가 `state` 위치를 포함하여 인터페이스 시그니처와 일치하도록 수정하였다.
+
+### 이슈 D 수정 내용
+
+- `adapters/memory/circuit_breaker.py`의 `clear_manual_control`에서
+  상태를 CLOSED로 강제 전환하고 카운터를 0으로 리셋하는 동작을 제거하였다.
+- 수정 후 동작: 수동 제어 플래그(`manually_controlled`, `controlled_by_id`,
+  `manual_override_expires_at`)만 해제하고, 상태(state)·카운터·opened_at는 유지한다.
+- 이로써 `check_and_expire_manual_overrides()` 만료 흐름에서
+  Memory/Redis 어댑터 모두 동일하게 HALF_OPEN 상태가 보존된다.
+
+### 이슈 E 수정 내용
+
+- `services/circuit_breaker/service.py`의 `_log_circuit_open_audit`에서
+  snapshot 최상위 키(`snapshot.get('failure_count')`, `snapshot.get('threshold')`)를
+  실제 구조 경로로 수정하였다:
+  - `snapshot["circuit_breaker"]["failure_count"]`
+  - `snapshot["circuit_breaker"]["threshold_config"]["failure_threshold"]`
+- 감사 reason 문자열에 `N/A` 대신 실제 값이 기록된다.
+
+### 기존 테스트 정합성 수정
+
+- `tests/unit/adapters/memory_repositories/test_circuit_breaker.py`의
+  `test_clear_manual_control`에서 `clear_manual_control` 후 상태 검증을
+  `CLOSED` → `OPEN`(수동 제어 설정 시 지정한 상태 유지)으로 변경하였다.
+
+### 통합 테스트 판단
+
+- 이번 수정은 내부 계약 정합성에 한정되며 외부 시스템 연동이 필요하지 않으므로
+  통합 테스트 추가는 불필요하다.

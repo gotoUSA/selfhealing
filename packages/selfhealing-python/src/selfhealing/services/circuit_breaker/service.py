@@ -683,9 +683,12 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         try:
             from selfhealing.services.audit_helpers import log_cb_state_change_audit
 
-            # Build reason with snapshot context
+            # snapshot 실제 구조에서 값을 참조한다
+            cb_data = snapshot.get("circuit_breaker", {})
+            threshold_data = cb_data.get("threshold_config", {})
             reason = (
-                f"auto_trigger|failures={snapshot.get('failure_count', 'N/A')}|threshold={snapshot.get('threshold', 'N/A')}"
+                f"auto_trigger|failures={cb_data.get('failure_count', 'N/A')}"
+                f"|threshold={threshold_data.get('failure_threshold', 'N/A')}"
             )
 
             log_cb_state_change_audit(
@@ -920,11 +923,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 controlled_by=controlled_by,
             )
         else:  # auto
-            # Clear manual control flag
-            self.repository.update_state(
-                service_name=service_name,
-                manually_controlled=False,
-            )
+            # 수동 제어 해제 — 상태/카운터는 유지하고 수동 제어 플래그만 해제
+            self.repository.clear_manual_control(service_name, preserve_reason=True)
             logger.info(f"[CircuitBreaker] '{service_name}' switched to auto mode")
             return CircuitBreakerResult(
                 success=True,
