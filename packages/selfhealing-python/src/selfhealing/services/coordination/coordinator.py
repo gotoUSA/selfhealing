@@ -83,10 +83,7 @@ class DryRunAuditLogger:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        logger.info(
-            f"[DryRun] Would execute {action.type.value} on {namespace}: "
-            f"params={action.params}"
-        )
+        logger.info(f"[DryRun] Would execute {action.type.value} on {namespace}: " f"params={action.params}")
 
         # 실제 audit 시스템 연동 시 여기서 기록
         # from selfhealing.services.audit_helpers import log_config_change
@@ -154,9 +151,7 @@ class EmergencyCoordinator:
             해당 네임스페이스의 Emergency 상태
         """
         if namespace not in self._namespace_states:
-            self._namespace_states[namespace] = ScopedEmergencyState(
-                namespace=namespace
-            )
+            self._namespace_states[namespace] = ScopedEmergencyState(namespace=namespace)
         return self._namespace_states[namespace]
 
     def on_emergency_level_changed(
@@ -193,15 +188,9 @@ class EmergencyCoordinator:
         if not force:
             # 쿨다운 확인
             last_at = self._last_transition_at.get(namespace)
-            cooldown_ok, cooldown_reason = (
-                self._anti_flapping_guard.check_cooldown_elapsed(
-                    last_transition_at=last_at
-                )
-            )
+            cooldown_ok, cooldown_reason = self._anti_flapping_guard.check_cooldown_elapsed(last_transition_at=last_at)
             if not cooldown_ok:
-                logger.warning(
-                    f"[Coordinator] Level change blocked by cooldown: {cooldown_reason}"
-                )
+                logger.warning(f"[Coordinator] Level change blocked by cooldown: {cooldown_reason}")
                 return CoordinationResult(
                     success=False,
                     cascade_event_id=cascade_event_id,
@@ -213,9 +202,7 @@ class EmergencyCoordinator:
             # 플래핑 확인
             flap_ok, flap_reason = self._anti_flapping_guard.check_transition_allowed()
             if not flap_ok:
-                logger.warning(
-                    f"[Coordinator] Level change blocked by flapping guard: {flap_reason}"
-                )
+                logger.warning(f"[Coordinator] Level change blocked by flapping guard: {flap_reason}")
                 return CoordinationResult(
                     success=False,
                     cascade_event_id=cascade_event_id,
@@ -234,10 +221,7 @@ class EmergencyCoordinator:
         state.emergency_level = new_level
         state.activated_at = now
 
-        logger.info(
-            f"[Coordinator] Level changed: {old_level.name} -> {new_level.name} "
-            f"on namespace={namespace}"
-        )
+        logger.info(f"[Coordinator] Level changed: {old_level.name} -> {new_level.name} " f"on namespace={namespace}")
 
         # 4. 액션이 없으면 빈 결과 반환 (Cascade 기록 없음)
         if not actions:
@@ -257,11 +241,28 @@ class EmergencyCoordinator:
                 namespace=namespace,
             )
 
-        # 5. 액션 실행
+        # 5. 액션 실행 (부분 실패 시 명시적 로깅 + immediate 액션 fail-fast)
         results = []
         for action in actions:
             result = self._execute_action(action, namespace, trigger_event_id)
             results.append(result)
+
+            if not result.success:
+                # 부분 실패 시 이미 실행된 액션 상태를 명시적으로 로깅
+                succeeded = [r for r in results if r.success]
+                failed = [r for r in results if not r.success]
+                logger.warning(
+                    f"[Coordinator] Partial failure during level change: "
+                    f"namespace={namespace}, "
+                    f"succeeded=[{', '.join(r.action_type.value for r in succeeded)}], "
+                    f"failed=[{', '.join(r.action_type.value for r in failed)}], "
+                    f"remaining={len(actions) - len(results)} actions skipped"
+                )
+
+                # immediate 액션 실패 시 나머지 액션 중단 (안전 우선)
+                if action.immediate:
+                    logger.error(f"[Coordinator] Immediate action failed, " f"aborting remaining actions: {action.type.value}")
+                    break
 
         # 6. Cascade Event 기록 (Phase 7)
         self._record_cascade_event(
@@ -349,8 +350,7 @@ class EmergencyCoordinator:
                 )
 
             logger.debug(
-                f"[Coordinator] Cascade event recorded: "
-                f"{old_level.name} -> {new_level.name}, effects={len(effects)}"
+                f"[Coordinator] Cascade event recorded: " f"{old_level.name} -> {new_level.name}, effects={len(effects)}"
             )
         except Exception as e:
             # Cascade 기록 실패는 Emergency 처리를 중단시키면 안 됨
@@ -426,10 +426,7 @@ class EmergencyCoordinator:
         try:
             self._execute_action_impl(action, namespace, effective_ttl)
 
-            logger.info(
-                f"[Coordinator] Action executed: {action.type.value} "
-                f"on {namespace}, ttl={effective_ttl}min"
-            )
+            logger.info(f"[Coordinator] Action executed: {action.type.value} " f"on {namespace}, ttl={effective_ttl}min")
 
             return CoordinationActionResult(
                 success=True,
@@ -440,10 +437,7 @@ class EmergencyCoordinator:
                 details={"effective_ttl_minutes": effective_ttl},
             )
         except Exception as e:
-            logger.error(
-                f"[Coordinator] Action failed: {action.type.value} "
-                f"on {namespace}: {e}"
-            )
+            logger.error(f"[Coordinator] Action failed: {action.type.value} " f"on {namespace}: {e}")
             return CoordinationActionResult(
                 success=False,
                 action_type=action.type,
@@ -466,8 +460,7 @@ class EmergencyCoordinator:
         """
         # Phase 1: 로깅만 수행
         logger.info(
-            f"[Coordinator] Executing {action.type.value} on {namespace}: "
-            f"params={action.params}, ttl={effective_ttl}min"
+            f"[Coordinator] Executing {action.type.value} on {namespace}: " f"params={action.params}, ttl={effective_ttl}min"
         )
 
         # 상태 업데이트

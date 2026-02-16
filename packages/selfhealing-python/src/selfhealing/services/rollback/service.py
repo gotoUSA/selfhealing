@@ -266,7 +266,10 @@ class RollbackService:
             result.affected_components = affected
             result.errors = errors
 
-            if errors:
+            if errors and affected:
+                result.state = RollbackState.PARTIALLY_COMPLETED
+                result.message = f"Rollback partially completed: " f"{len(affected)} succeeded, {len(errors)} failed"
+            elif errors:
                 result.state = RollbackState.FAILED
                 result.message = f"Rollback failed with {len(errors)} errors"
             else:

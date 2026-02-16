@@ -556,6 +556,68 @@ class RecoveryCoordinator:
             self._save_session(session)
             return step
 
+    def resume_recovery(
+        self,
+        namespace: str,
+        initiated_by: str = "system",
+    ) -> RecoverySession:
+        """
+        실패한 복구 세션을 마지막 실패 지점부터 재개.
+
+        IdempotentStepHandlers가 이미 완료된 단계를 자동 스킵하므로,
+        실패 지점의 단계만 재실행된다.
+
+        활용하는 기존 컴포넌트:
+        - IdempotentStepHandlerRegistry: 완료된 단계 캐시 결과 반환
+        - RecoverySession.current_step_index: 실패 지점 위치
+        - _check_already_applied(): 비즈니스 레벨 중복 실행 방지
+
+        Args:
+            namespace: 네임스페이스
+            initiated_by: 재개 주체
+
+        Returns:
+            새로 생성된 RecoverySession (실패 지점부터 시작)
+
+        Raises:
+            ValueError: 재개할 실패 세션이 없는 경우
+        """
+        with self._lock:
+            # 1. 마지막 실패 세션 조회
+            last_session = self.get_active_session(namespace)
+            if not last_session or last_session.status != RecoveryStatus.FAILED:
+                raise ValueError(f"No failed recovery session to resume for namespace={namespace}")
+
+            # 2. 실패 지점 정보 추출
+            failed_step_index = last_session.current_step_index
+            trigger_level = last_session.trigger_level
+
+            logger.info(
+                f"[Recovery] Resuming from step {failed_step_index}: " f"session={last_session.id}, level={trigger_level}"
+            )
+
+            # 3. 이전 실패 세션 참조 제거
+            # start_recovery()의 중복 체크(L393-L398)에서
+            # FAILED 세션은 차단하지 않으므로 참조만 제거하면 됨
+            self._clear_active_session(namespace)
+
+        # 4. 새 세션 시작 — IdempotentStepHandlers가 완료된 단계 자동 스킵
+        new_session = self.start_recovery(
+            namespace=namespace,
+            trigger_level=trigger_level,
+            initiated_by=initiated_by,
+        )
+
+        # 5. 메타데이터에 재개 정보 기록
+        new_session.metadata = new_session.metadata or {}
+        new_session.metadata["resumed_from"] = last_session.id
+        new_session.metadata["resumed_from_step"] = failed_step_index
+        self._save_session(new_session)
+
+        logger.info(f"[Recovery] Resumed: new_session={new_session.id}, " f"from={last_session.id}, step={failed_step_index}")
+
+        return new_session
+
     def abort_recovery(
         self,
         namespace: str,

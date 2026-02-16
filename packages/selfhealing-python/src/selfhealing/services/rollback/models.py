@@ -24,6 +24,7 @@ class RollbackState(str, Enum):
     PENDING = "pending"  # 대기 중
     IN_PROGRESS = "in_progress"  # 진행 중
     COMPLETED = "completed"  # 완료
+    PARTIALLY_COMPLETED = "partially_completed"  # 부분 완료 (일부 성공 + 일부 실패)
     FAILED = "failed"  # 실패
     CANCELLED = "cancelled"  # 취소됨
 
