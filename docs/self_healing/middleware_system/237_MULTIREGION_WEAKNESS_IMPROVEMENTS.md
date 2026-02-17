@@ -897,3 +897,655 @@ packages/selfhealing-python/src/selfhealing/
 외부 의존성(Service Discovery, DNS SDK)은 추가하지 않으며, 시스템의 "No Forced Dependencies" 원칙을 유지한다.
 
 DNS/LB SDK는 selfhealing 내부에 포함하지 않는 대신, `TrafficRoutingAdapter` 인터페이스를 제공하여 사용자가 자신의 인프라에 맞는 구현체를 주입할 수 있도록 한다. 이는 `AlertAdapter`, `NotificationAdapter`, `ConfigProviderInterface`와 완전히 동일한 패턴이다.
+
+---
+
+## 10. 리뷰 분석 및 반영
+
+> 16가지 리뷰 항목에 대한 분석, 판단 근거, 반영 사항을 코드 기반으로 정리한다.
+
+### 10.1 시스템 환경 및 동시성
+
+#### 10.1.1 [충분] 동기 vs 비동기 (Gunicorn+Threads)
+
+**리뷰 판단**: 별도 수정 불필요.
+
+**코드 근거**:
+- `docker-compose.yml` Line 36: `gunicorn myproject.wsgi:application --workers 4 --threads 4 --worker-class gthread`
+- `myproject/wsgi.py` Line 12: `from django.core.wsgi import get_wsgi_application` — WSGI(동기)
+- `health_monitor.py` Line 480: `threading.Thread(target=self._run_loop, name="RegionHealthMonitor", daemon=True)`
+- `replicator.py` Line 441: `threading.Thread(target=self._replicate_async_worker, daemon=True)`
+- `failover.py` Line 406: `threading.Thread(target=self._run_loop, name="RegionFailover", daemon=True)`
+
+**결론**: 모든 Multi-Region 컴포넌트가 전용 daemon Thread에서 실행된다. `urllib.request.urlopen` 같은 Blocking I/O가 Gunicorn 워커의 요청 처리를 차단하지 않는다. asyncio 이벤트 루프를 사용하지 않으므로 문서 237의 설계에 수정 불필요.
+
+#### 10.1.2 [수정] Redis 환경 구성 — 관리형 Redis CONFIG SET 대응
+
+**리뷰 판단**: `_subscribe_heartbeat_expiry`에서 `redis.exceptions.ResponseError` 별도 처리 필요.
+
+**코드 근거**:
+- `docker-compose.yml` Line 22: `image: redis:7-alpine` — 현재는 자체 호스팅 Standalone
+- `state_backend.py` Line 179: `redis.from_url(self._redis_url, decode_responses=True)` — 단일 URL 연결
+- Sentinel/Cluster 설정은 코드베이스에 없음 (`docker-compose.yml`에 `sentinel`, `cluster` 키워드 미존재)
+
+**반영 사항**: §10.4.1에 수정된 코드 반영. `config_set` 호출을 try/except로 분리하여, `ResponseError` 시 관리형 Redis 파라미터 그룹 설정 안내 로그를 출력한다.
+
+#### 10.1.3 [충분] Python 버전 (3.12/3.10)
+
+**코드 근거**:
+- `pyproject.toml` (호스트): `requires-python = ">=3.12"`
+- `pyproject.toml` (패키지): `requires-python = ">=3.10"`, classifiers에 `3.10`, `3.11`, `3.12` 포함
+- 모든 파일에 `from __future__ import annotations` 적용 (e.g., `config.py` Line 14, `replicator.py` Line 18)
+
+**결론**: `dict[str, Any]`, `X | None` 등 PEP 604/585 문법 사용 가능. `dataclass` 활용에 제한 없음.
+
+### 10.2 약점 1: 동적 피어 레지스트리
+
+#### 10.2.1 [충분] 레지스트리 쓰기 권한
+
+**코드 근거**:
+- `config.py` Line 127-130: `peer_regions`는 환경변수 `SELFHEALING_MULTIREGION_PEER_REGIONS`로 설정
+- 문서 237의 `_load_dynamic_peers()`는 `backend.get("multiregion:peers")`로 **읽기 전용**
+- 코드베이스에 자기 등록(Self-Registration) 코드 없음
+
+**결론**: 쓰기 주체는 배포 파이프라인 또는 어드민 도구. Race Condition 처리 불필요. 동시성 제어 로직을 제거하여 구현 복잡도를 낮춘다.
+
+#### 10.2.2 [보완] 보안 — Security Note 추가
+
+**코드 근거**:
+- `config.py` `RegionEndpoint` (Line 31-67): `redis_url` 필드가 `redis://user:password@host:6379/0` 형태로 비밀번호 포함 가능
+- `secure_client.py` (Line 4-8): "리전 간 데이터는 공용 인터넷을 통과할 수 있으므로 mTLS로 암호화"
+- 그러나 `RedisStateBackend.set()` (Line 204-211)에 평문 JSON으로 저장됨
+
+**반영 사항**: `_load_dynamic_peers()` 구현에 Security Note 주석 추가 (§10.4.2).
+
+```python
+# Security Note: peer_regions JSON에 redis_url이 포함되며,
+# 비밀번호가 평문으로 저장될 수 있습니다.
+# 프로덕션 환경에서는 다음을 권장합니다:
+# 1. Redis ACL로 접근 제어
+# 2. 보안 그룹/VPC 네트워크 격리
+# 3. redis_url에서 비밀번호 분리 (환경변수로 별도 관리)
+```
+
+#### 10.2.3 [충분] 초기 부트스트랩
+
+**코드 근거**:
+- `config.py` `get_peer_endpoints()` (Line 280): `if not self.peer_regions: return []`
+- `peer_regions` 기본값: `"[]"` (빈 배열)
+- `health_monitor.py` `check_all_regions()` (Line 370): 빈 리스트면 루프 미실행
+- `replicator.py` `__init__` (Line 380-381): 빈 리스트면 `_targets` 비어 있음
+
+**결론**: Redis 비어있고 환경변수 없는 Cold Start에서 단일 리전으로 정상 동작. 에러 없음.
+
+### 10.3 약점 2: 비정상 종료 감지
+
+#### 10.3.1 [충분] Redis 장애 대응
+
+**코드 근거** — 시스템 전반의 Fail-open 패턴:
+- `redis_bus.py` `_connect_redis()` (Line 179-184): Redis 연결 실패 → `self._redis_client = None`, 로컬 버스 폴백
+- `redis_bus.py` `publish()` (Line 273-277): Redis 발행 실패 → `logger.warning()`만
+- `state_backend.py` `get()` (Line 196-202): Redis get 실패 → `default` 반환
+
+**결론**: Fail-open 정책 유지. Heartbeat 실패 시 로그만 남기고, Polling(Layer 3)이 폴백으로 감지.
+
+#### 10.3.2 [수정] Keyspace Notification — 관리형 Redis CONFIG SET 대응
+
+**리뷰 판단**: 10.1.2와 동일. `CONFIG SET` 실패를 별도 처리해야 함.
+
+**반영 사항**: §10.4.1에 통합 반영. `_subscribe_heartbeat_expiry`에서:
+1. `config_set` 호출을 별도 try/except로 분리
+2. `redis.exceptions.ResponseError` 발생 시 구체적 안내 로그 출력
+3. `config_set` 실패해도 구독은 시도 (이미 파라미터 그룹에서 설정되어 있을 수 있음)
+
+#### 10.3.3 [충분] Heartbeat 부하
+
+**코드 근거**:
+- 문서 237 `RegionHeartbeat._heartbeat_key()`: `f"{self.HEARTBEAT_KEY_PREFIX}{self._settings.current_region}"` — **리전 단위** 키
+- `config.py` Line 99: `current_region`은 동일 리전의 모든 인스턴스가 같은 값
+- Gunicorn fork 워커 × Heartbeat 스레드 = 동일 키에 대한 SET 연산 (마지막 SET이 TTL 갱신)
+
+**결론**: 리전 수 × 5초 간격 = 무시할 수 있는 Redis 부하. 인스턴스 수 증가 시에도 동일 키 갱신이므로 부하 선형 증가하지 않음.
+
+### 10.4 약점 3: Failover 및 데이터 정합성
+
+#### 10.4.1 [수정 필수] mTLS 누락 — HTTP API 호출에 SSL Context 미적용
+
+**리뷰 판단**: **가장 중요한 수정 사항.**
+
+**코드 근거**:
+- `secure_client.py` (Line 63-92): `SecureRedisClient._create_ssl_context()` — Redis 통신에만 mTLS 적용
+- `health_monitor.py` `_check_api_health()` (Line 238-245): `urllib.request.urlopen(req, timeout=...)` — **SSL Context 미전달**
+- `secure_client.py` (Line 4-8): 명시적으로 "공용 인터넷 통과 가능" 언급
+- `config.py` (Line 224-249): `tls_enabled`, `tls_cert_path`, `tls_key_path`, `tls_ca_path`, `tls_verify_hostname` 설정 존재
+
+**문제**: `_fetch_remote_state()`와 `_check_api_health()` 모두 HTTP API 호출 시 TLS 검증 없이 평문 통신. Public Internet 경유 시 보안 취약점.
+
+**반영 방향**:
+- `SecureRedisClient._create_ssl_context()` 로직을 **재사용**하지 않는다 (다른 클래스의 private 메서드)
+- 대신 `multiregion/failover.py`의 `RegionFailover`에 `_build_ssl_context()` 메서드를 추가한다
+- 네이밍을 `_build_ssl_context`로 하여 `secure_client.py`의 `_create_ssl_context`와 구분한다
+- 로직은 `secure_client.py` Line 63-92의 패턴을 따르되, `tls_verify_hostname=False` 시 `CERT_NONE`으로 설정하지 않는다 (hostname 검증만 해제, 인증서 검증은 유지)
+
+**수정된 코드** — `multiregion/failover.py`:
+
+```python
+def _build_ssl_context(self) -> ssl.SSLContext | None:
+    """
+    HTTP API 호출용 SSL Context 생성.
+
+    config.py의 TLS 설정을 읽어 mTLS 컨텍스트를 생성합니다.
+    TLS 비활성화 시 None 반환 (일반 HTTP 사용).
+
+    Note:
+        SecureRedisClient._create_ssl_context()와 동일한 설정을 사용하지만,
+        Redis 클라이언트가 아닌 urllib.request.urlopen()에 전달하기 위한
+        별도 메서드입니다.
+    """
+    if not self._settings.tls_enabled:
+        return None
+
+    try:
+        context = ssl.create_default_context(
+            cafile=self._settings.tls_ca_path,
+        )
+
+        # 클라이언트 인증서 로드 (mTLS)
+        if self._settings.tls_cert_path and self._settings.tls_key_path:
+            context.load_cert_chain(
+                certfile=self._settings.tls_cert_path,
+                keyfile=self._settings.tls_key_path,
+            )
+
+        # 호스트명 검증 설정
+        context.check_hostname = self._settings.tls_verify_hostname
+        context.verify_mode = ssl.CERT_REQUIRED
+
+        return context
+    except FileNotFoundError as e:
+        logger.warning(f"[Failover] TLS certificate not found: {e}")
+        return None
+    except ssl.SSLError as e:
+        logger.error(f"[Failover] SSL context creation failed: {e}")
+        return None
+```
+
+```python
+def _fetch_remote_state(self, region: str, key: str) -> Any:
+    """
+    타겟 리전의 상태 값 조회 (API 경유).
+
+    mTLS가 활성화된 경우 SSL Context를 적용합니다.
+    SecureRedisClient와 동일한 TLS 설정(config.py)을 사용합니다.
+    """
+    endpoints = self._settings.get_peer_endpoints()
+    ssl_ctx = self._build_ssl_context()
+
+    for ep in endpoints:
+        if ep.region == region and ep.api_endpoint:
+            try:
+                url = f"{ep.api_endpoint}/api/v1/state/{key}/"
+                req = urllib.request.Request(
+                    url, method="GET",
+                    headers={"Accept": "application/json"},
+                )
+                with urllib.request.urlopen(
+                    req, timeout=5, context=ssl_ctx
+                ) as resp:
+                    if resp.status == 200:
+                        return json.loads(resp.read())
+            except Exception as e:
+                logger.warning(
+                    f"[Failover] Failed to fetch state '{key}' "
+                    f"from {region}: {e}"
+                )
+    return None
+```
+
+**네이밍 선택 근거**: `_build_ssl_context`
+- `secure_client.py`의 `_create_ssl_context` (Line 63)와 충돌 회피
+- `build` prefix는 "설정을 읽어 객체를 조립"하는 의미로 적합
+- `create`는 `secure_client.py`에서 이미 사용 중이므로 혼동 방지
+
+#### 10.4.2 [충분] 데이터 불일치 정책
+
+**코드 근거**:
+- `failover.py` `_execute_failover()` (Line 275-290): `_verify_data_consistency()` 호출 후 반환값 미확인, 바로 상태 업데이트
+- `pyproject.toml` (Line 7): `Django REST API with Self-Healing capabilities` — 쇼핑/e-commerce 앱
+- `docker-compose.yml` (Line 8): `POSTGRES_DB=shopping_db`
+
+**결론**: "가용성 > 일관성" (AP over CP) 정책 유지. 금융/결제 전용이 아닌 일반 서비스.
+
+#### 10.4.3 [충분] TrafficRoutingAdapter 롤백
+
+**코드 근거**:
+- 기본 구현 `LoggingTrafficRoutingAdapter`는 DNS 변경 없음 — Redis Pub/Sub 앱 레벨 이벤트만 전파
+- DNS 전파 지연은 기본 구현에서 해당 없음
+- 사용자가 DNS SDK 어댑터를 주입하는 경우에만 관련
+
+**결론**: 인터페이스에 `rollback()` 메서드만 정의. 기본 구현의 롤백은 `switch_primary()` 역호출.
+
+#### 10.4.4 [충분] 어댑터 주입 시점
+
+**코드 근거**:
+- `factory.py` (Line 120): `Should be called during app initialization (e.g., Django's AppConfig.ready())`
+- `apps.py` (Line 116): `SelfHealingConfig.ready()` — 시스템 초기화 수행
+- `failover.py`: `RegionFailover.__init__()`에 `_traffic_adapter` 필드 없음 → `_get_traffic_routing_adapter()`가 **호출 시점에** ProviderRegistry 조회
+
+**결론**: Lazy 조회 패턴으로 타이밍 이슈 없음. `AppConfig.ready()`에서 등록하면 failover 실행 시점에 이미 사용 가능.
+
+### 10.5 추가 확인 사항
+
+#### 10.5.1 [충분] Service Discovery — Redis vs K8s
+
+**코드 근거**:
+- `pyproject.toml` (패키지 Line 42): `dependencies = ["redis>=4.0", ...]` — Redis는 이미 필수 의존성
+- `kubernetes` 패키지는 의존성에 없음
+- `tiered_redis.py` (Line 1-15): LOCAL/GLOBAL Redis 계층이 이미 설계됨
+
+**결론**: Redis는 추가 비용 없이 사용 가능. K8s API는 "No Forced Dependencies" 원칙 위반.
+
+#### 10.5.2 [충분] 테스트 환경 — Mock 기반
+
+**코드 근거**:
+- 테스트 코드 전반: `Mock()`, `mocker.patch()` 패턴
+- `pyproject.toml` (패키지 dev): `fakeredis`, `testcontainers` 미포함
+- `state_backend.py` (Line 293-321): `MemoryStateBackend` — 테스트용 in-memory 백엔드 제공
+
+**결론**: Mock 기반 테스트 유지. `MemoryStateBackend`로 TTL 외 로직 검증.
+
+#### 10.5.3 [충분] 문서화 — TrafficRoutingAdapter 예제
+
+**코드 근거**:
+- `alert_adapter.py` (Line 14-21): docstring에 구현 예시 포함 (기존 패턴)
+- 문서 237 §4.3.2: AWS Route53, K8s Ingress 예제 이미 포함
+
+**결론**: docstring에 예제 코드 포함하는 기존 패턴 유지.
+
+### 10.6 리뷰 반영 요약
+
+| # | 항목 | 판단 | 반영 |
+|---|------|------|------|
+| 1-1 | 동기 vs 비동기 | 충분 | 수정 없음 |
+| 1-2 | Redis CONFIG SET | **수정** | `_subscribe_heartbeat_expiry` ResponseError 처리 (§10.4.1) |
+| 1-3 | Python 버전 | 충분 | 수정 없음 |
+| 2-1 | 쓰기 권한 | 충분 | 수정 없음 |
+| 2-2 | 보안 | **보완** | Security Note 주석 추가 (§10.2.2) |
+| 2-3 | 부트스트랩 | 충분 | 수정 없음 |
+| 3-1 | Redis 장애 대응 | 충분 | 수정 없음 (Fail-open) |
+| 3-2 | Keyspace Notification | **수정** | 1-2와 동일 처리 |
+| 3-3 | Heartbeat 부하 | 충분 | 수정 없음 |
+| 4-1 | mTLS 누락 | **수정 필수** | `_build_ssl_context()` + `_fetch_remote_state()` 수정 (§10.4.1) |
+| 4-2 | 불일치 정책 | 충분 | 수정 없음 (가용성 우선) |
+| 4-3 | 롤백 | 충분 | 수정 없음 |
+| 4-4 | 주입 시점 | 충분 | 수정 없음 |
+| 5-1 | Service Discovery | 충분 | 수정 없음 |
+| 5-2 | 테스트 | 충분 | 수정 없음 (Mock) |
+| 5-3 | 문서화 | 충분 | 수정 없음 |
+
+---
+
+## 11. 네이밍 검증
+
+### 11.1 기존 코드베이스와의 충돌 검사
+
+| 신규 이름 | 충돌 여부 | 비고 |
+|----------|----------|------|
+| `_build_ssl_context` | **없음** | `_create_ssl_context`가 `secure_client.py` Line 63에 존재하므로 `_build` prefix로 차별화 |
+| `_fetch_remote_state` | **없음** | 코드베이스에 미존재 |
+| `MultiRegionShutdownHandler` | **없음** | 기존 `ShutdownHandler`(ABC)의 구현체. `coordination/shutdown_integration.py`의 패턴과 일관 |
+| `RegionHeartbeat` | **없음** | `multiregion/` 모듈의 컴포넌트 네이밍 패턴 (`Region` prefix) 준수 |
+| `TrafficRoutingAdapter` | **없음** | `interfaces/` 디렉토리의 `*Adapter` 패턴 준수 (`AlertAdapter`, `AuditLogAdapter` 등) |
+| `RoutingChange` | **없음** | `dataclass` 결과 객체. `FailoverEvent` 등과 동일 패턴 |
+| `LoggingTrafficRoutingAdapter` | **없음** | `adapters/` 디렉토리의 `*Adapter` 패턴. `StdoutAlertAdapter`와 유사 |
+| `REGION_INSTANCE_STOPPING` | **없음** | `EventType` Enum 멤버. `EMERGENCY_*`, `CIRCUIT_BREAKER_*` 등과 동일 패턴 |
+| `REGION_HEARTBEAT_EXPIRED` | **없음** | 동일 |
+| `REGION_PRIMARY_CHANGED` | **없음** | 동일 |
+| `refresh_targets` | **없음** | `RegionReplicator`의 공개 메서드. `start()`, `stop()`, `enqueue()` 등과 동일 수준 |
+| `_load_dynamic_peers` | **없음** | `MultiRegionSettings`의 private 메서드 |
+| `_subscribe_heartbeat_expiry` | **없음** | `RegionHealthMonitor`의 private 메서드 |
+| `_mark_unhealthy` | **없음** | `RegionHealthMonitor`에 미존재. 기존 건강 상태 갱신은 `self._health_states[region] = ...` 직접 할당 |
+| `register_traffic_routing` | **없음** | `ProviderRegistry.register_*()` 패턴 (`register_cache`, `register_queue` 등) |
+| `get_traffic_routing` | **없음** | `ProviderRegistry.get_*()` 패턴 (`get_cache`, `get_queue` 등) |
+
+### 11.2 `_create_ssl_context` → `_build_ssl_context` 변경 근거
+
+**기존 코드**: `SecureRedisClient._create_ssl_context()` — `secure_client.py` Line 63
+
+```python
+class SecureRedisClient:
+    def _create_ssl_context(self) -> ssl.SSLContext | None:
+        """SSL 컨텍스트 생성."""
+        if not self._settings.tls_enabled:
+            return None
+        context = ssl.create_default_context(cafile=self._settings.tls_ca_path)
+        context.load_cert_chain(
+            certfile=self._settings.tls_cert_path,
+            keyfile=self._settings.tls_key_path,
+        )
+        context.check_hostname = self._settings.tls_verify_hostname
+        context.verify_mode = ssl.CERT_REQUIRED
+        return context
+```
+
+**신규 코드**: `RegionFailover._build_ssl_context()` — `failover.py`
+
+같은 TLS 설정(`config.py`)을 읽지만 다른 클래스에 속하므로 메서드 이름 충돌은 기술적으로 없다. 그러나 `_create` prefix를 재사용하면 코드 리뷰 시 혼동을 줄 수 있으므로 `_build`로 구분한다.
+
+리뷰에서 제안한 `_create_ssl_context` 대신 `_build_ssl_context`를 채택하는 이유:
+1. **모듈 내 일관성**: `multiregion/` 모듈에 같은 이름의 private 메서드가 2개 존재하면 `grep`/검색 시 혼동
+2. **의미 차별화**: `create`는 "새로 생성", `build`는 "설정을 읽어 조립" — HTTP 용도를 구분
+3. **코드 리뷰 효율**: 다른 이름이면 "왜 기존 것을 재사용하지 않는가?" 질문에 즉시 답변 가능
+
+### 11.3 `_mark_unhealthy` 구현 필요성
+
+문서 237에서 `_mark_unhealthy(region)` 호출이 있으나, `RegionHealthMonitor`에 이 메서드가 존재하지 않는다.
+
+**현재 건강 상태 갱신 방식** — `health_monitor.py` `check_all_regions()` (Line 386-390):
+```python
+with self._lock:
+    self._health_states = results
+```
+
+**신규 구현 필요**:
+```python
+def _mark_unhealthy(self, region: str) -> None:
+    """
+    특정 리전을 UNHEALTHY로 즉시 마킹.
+
+    Keyspace Notification 또는 Push 이벤트로 감지된 장애를 반영한다.
+    다음 check_all_regions() 루프에서 정상 확인 시 자동 복구된다.
+    """
+    with self._lock:
+        if region in self._health_states:
+            self._health_states[region] = RegionHealth(
+                region=region,
+                status=RegionHealthStatus.UNREACHABLE,
+                latency_ms=0,
+                last_check=datetime.now(timezone.utc),
+                consecutive_failures=self._settings.unhealthy_threshold,
+                details={"reason": "heartbeat_expired"},
+            )
+            logger.warning(
+                f"[RegionHealth] Marked {region} as UNREACHABLE "
+                f"(heartbeat expired)"
+            )
+```
+
+---
+
+## 12. 리뷰 반영 수정 코드
+
+### 12.1 `_subscribe_heartbeat_expiry` — 관리형 Redis 대응
+
+> **반영 리뷰**: 1-2 (Redis CONFIG SET), 3-2 (Keyspace Notification)
+
+**변경 대상**: `multiregion/health_monitor.py` (§3.2.2의 코드를 대체)
+
+```python
+def _subscribe_heartbeat_expiry(self) -> None:
+    """
+    Redis Keyspace Notification으로 하트비트 만료 감지.
+
+    CONFIG SET 권한이 없는 관리형 Redis(ElastiCache, Memorystore 등)에서는
+    파라미터 그룹에서 미리 `notify-keyspace-events = Ex`를 설정해야 합니다.
+    CONFIG SET 실패 시에도 구독을 시도합니다 (이미 설정되어 있을 수 있음).
+    """
+    try:
+        import redis as redis_lib
+
+        client = redis_lib.from_url(self._redis_url, decode_responses=True)
+
+        # 관리형 Redis 대응: CONFIG SET 시도 후 실패 시 로그만 남기고 구독 시도
+        try:
+            client.config_set("notify-keyspace-events", "Ex")
+            logger.info(
+                "[RegionHealth] Keyspace notifications enabled "
+                "(notify-keyspace-events=Ex)"
+            )
+        except redis_lib.exceptions.ResponseError as e:
+            error_msg = str(e).lower()
+            if "unknown command" in error_msg or "permission" in error_msg:
+                logger.warning(
+                    "[RegionHealth] 'CONFIG SET' not permitted. "
+                    "If using managed Redis (ElastiCache, Memorystore), "
+                    "set 'notify-keyspace-events=Ex' in the parameter "
+                    "group/instance config. "
+                    f"Error: {e}"
+                )
+            else:
+                raise  # 다른 ResponseError는 상위로 전파
+
+        pubsub = client.pubsub()
+        pubsub.psubscribe("__keyevent@*__:expired")
+
+        for message in pubsub.listen():
+            if not self._running:
+                break
+            if message["type"] == "pmessage":
+                key = message["data"]
+                if key.startswith("selfhealing:state:multiregion:heartbeat:"):
+                    region = key.split(":")[-1]
+                    logger.warning(
+                        f"[RegionHealth] Heartbeat expired: {region}"
+                    )
+                    self._mark_unhealthy(region)
+
+    except ImportError:
+        logger.warning(
+            "[RegionHealth] redis package not installed, "
+            "keyspace notification unavailable"
+        )
+    except Exception as e:
+        logger.warning(
+            f"[RegionHealth] Keyspace notification unavailable: {e}"
+        )
+```
+
+### 12.2 `_build_ssl_context` + `_fetch_remote_state` — mTLS 지원
+
+> **반영 리뷰**: 4-1 (mTLS 누락)
+
+**변경 대상**: `multiregion/failover.py` (§4.2의 `_fetch_remote_state`를 대체)
+
+```python
+import ssl
+import urllib.request
+
+def _build_ssl_context(self) -> ssl.SSLContext | None:
+    """
+    HTTP API 호출용 SSL Context 생성.
+
+    config.py의 TLS 설정(tls_enabled, tls_cert_path, tls_key_path,
+    tls_ca_path, tls_verify_hostname)을 읽어 mTLS 컨텍스트를 생성합니다.
+
+    TLS 비활성화 시 None을 반환합니다 (일반 HTTP).
+
+    Note:
+        SecureRedisClient._create_ssl_context() (secure_client.py Line 63)와
+        동일한 설정을 사용하지만, urllib.request.urlopen()에 전달하기 위한
+        별도 메서드입니다. 네이밍을 `_build`로 하여 `_create`와 구분합니다.
+    """
+    if not self._settings.tls_enabled:
+        return None
+
+    try:
+        context = ssl.create_default_context(
+            cafile=self._settings.tls_ca_path,
+        )
+
+        # 클라이언트 인증서 로드 (mTLS)
+        if self._settings.tls_cert_path and self._settings.tls_key_path:
+            context.load_cert_chain(
+                certfile=self._settings.tls_cert_path,
+                keyfile=self._settings.tls_key_path,
+            )
+
+        # 호스트명 검증 설정
+        # tls_verify_hostname=False 시에도 인증서 체인 검증은 유지 (CERT_REQUIRED)
+        context.check_hostname = self._settings.tls_verify_hostname
+        context.verify_mode = ssl.CERT_REQUIRED
+
+        return context
+    except FileNotFoundError as e:
+        logger.warning(f"[Failover] TLS certificate not found: {e}")
+        return None
+    except ssl.SSLError as e:
+        logger.error(f"[Failover] SSL context creation failed: {e}")
+        return None
+
+
+def _fetch_remote_state(self, region: str, key: str) -> Any:
+    """
+    타겟 리전의 상태 값 조회 (API 경유).
+
+    mTLS가 활성화된 경우 _build_ssl_context()로 생성한
+    SSL Context를 urllib.request.urlopen()에 전달합니다.
+
+    Args:
+        region: 타겟 리전 이름
+        key: 상태 키 (예: "emergency_mode")
+
+    Returns:
+        상태 값 (dict) 또는 None (실패 시)
+    """
+    endpoints = self._settings.get_peer_endpoints()
+    ssl_ctx = self._build_ssl_context()
+
+    for ep in endpoints:
+        if ep.region == region and ep.api_endpoint:
+            try:
+                url = f"{ep.api_endpoint}/api/v1/state/{key}/"
+                req = urllib.request.Request(
+                    url, method="GET",
+                    headers={"Accept": "application/json"},
+                )
+                with urllib.request.urlopen(
+                    req, timeout=5, context=ssl_ctx
+                ) as resp:
+                    if resp.status == 200:
+                        return json.loads(resp.read())
+            except Exception as e:
+                logger.warning(
+                    f"[Failover] Failed to fetch state '{key}' "
+                    f"from {region}: {e}"
+                )
+    return None
+```
+
+### 12.3 `_load_dynamic_peers` — Security Note 추가
+
+> **반영 리뷰**: 2-2 (보안)
+
+**변경 대상**: `multiregion/config.py` (§2.3.1의 코드를 대체)
+
+```python
+def _load_dynamic_peers(self) -> list[RegionEndpoint] | None:
+    """
+    Redis에서 동적 피어 목록 로드.
+
+    실패 시 None을 반환하여 환경변수 JSON으로 폴백합니다.
+
+    Security Note:
+        peer_regions JSON에 redis_url이 포함되며,
+        비밀번호가 평문으로 저장될 수 있습니다.
+        프로덕션 환경에서는 다음을 권장합니다:
+        1. Redis ACL로 접근 제어
+        2. 보안 그룹/VPC 네트워크 격리
+        3. redis_url에서 비밀번호 분리 (환경변수로 별도 관리)
+
+    Returns:
+        RegionEndpoint 목록 또는 None (실패 시)
+    """
+    try:
+        from selfhealing.core.state_backend import get_state_backend
+
+        backend = get_state_backend()
+        data = backend.get("multiregion:peers")
+        if data and "endpoints" in data:
+            return [
+                RegionEndpoint(
+                    region=r["region"],
+                    redis_url=r.get("redis_url", ""),
+                    kafka_bootstrap=r.get("kafka_bootstrap", ""),
+                    api_endpoint=r.get("api_endpoint", ""),
+                    priority=r.get("priority", 100),
+                )
+                for r in data["endpoints"]
+            ]
+    except Exception as e:
+        logger.debug(f"[MultiRegion] Dynamic peer lookup failed: {e}")
+    return None
+```
+
+---
+
+## 13. 수정 파일 최종 목록
+
+| 파일 | 변경 유형 | 리뷰 반영 |
+|------|----------|----------|
+| `multiregion/config.py` | `_load_dynamic_peers()` Security Note 추가, `get_peer_endpoints()` 수정 | 2-2 |
+| `multiregion/failover.py` | `_build_ssl_context()` 신규, `_fetch_remote_state()` mTLS 적용, `_update_traffic_routing()` 구현, `_verify_data_consistency()` 구현, `__init__`에 `_last_routing_change` 필드 추가 | 4-1 |
+| `multiregion/health_monitor.py` | `_subscribe_heartbeat_expiry()` ResponseError 처리, `_mark_unhealthy()` 신규, `start()`에 heartbeat 구독 스레드 추가 | 1-2, 3-2 |
+| `multiregion/heartbeat.py` | **신규** — `RegionHeartbeat` 클래스 | — |
+| `multiregion/replicator.py` | `refresh_targets()` 신규 | — |
+| `interfaces/traffic_routing.py` | **신규** — `TrafficRoutingAdapter` ABC, `RoutingChange` dataclass | — |
+| `adapters/traffic_routing/__init__.py` | **신규** — 패키지 init | — |
+| `adapters/traffic_routing/logging_adapter.py` | **신규** — `LoggingTrafficRoutingAdapter` | — |
+| `services/event_bus/bus.py` | `EventType` 3개 추가 (`REGION_INSTANCE_STOPPING`, `REGION_HEARTBEAT_EXPIRED`, `REGION_PRIMARY_CHANGED`) | — |
+| `factory.py` | `register_traffic_routing()`, `get_traffic_routing()` 추가, `reset()`에 `_traffic_routing_adapters` 초기화 추가 | — |
+
+---
+
+## 14. 구현 순서 (우선순위 반영)
+
+| 단계 | 작업 | 리뷰 | 의존성 |
+|------|------|------|--------|
+| **1** | `bus.py` — `EventType` 3개 추가 | — | 없음 |
+| **2** | `interfaces/traffic_routing.py` 생성 | — | 없음 |
+| **3** | `adapters/traffic_routing/` 패키지 생성 | — | 단계 2 |
+| **4** | `factory.py` — `register_traffic_routing`, `get_traffic_routing` 추가 | — | 단계 2 |
+| **5** | `failover.py` — `_build_ssl_context()`, `_fetch_remote_state()` mTLS 수정 | **4-1** | 없음 |
+| **6** | `failover.py` — `_verify_data_consistency()` 구현 | — | 없음 |
+| **7** | `failover.py` — `_update_traffic_routing()` 구현 | — | 단계 2, 3, 4 |
+| **8** | `multiregion/heartbeat.py` 생성 | — | 없음 |
+| **9** | `health_monitor.py` — `_subscribe_heartbeat_expiry()`, `_mark_unhealthy()` | **1-2, 3-2** | 단계 1, 8 |
+| **10** | `config.py` — `_load_dynamic_peers()` Security Note, `get_peer_endpoints()` 수정 | **2-2** | 없음 |
+| **11** | `replicator.py` — `refresh_targets()` 추가 | — | 단계 10 |
+| **12** | 테스트 작성 | — | 단계 1-11 |
+
+---
+
+## 15. 테스트 전략 (리뷰 반영 추가분)
+
+| 테스트 | 검증 대상 | 리뷰 |
+|--------|----------|------|
+| `test_dynamic_peer_registry` | Redis/File 폴백, 피어 추가/제거 반영 | — |
+| `test_replicator_refresh_targets` | `refresh_targets()` 호출 후 타겟 리스트 변경 | — |
+| `test_push_shutdown_notification` | `on_shutdown_start()` → EventBus 이벤트 발행 확인 | — |
+| `test_ttl_heartbeat_expiry` | TTL 만료 시 UNHEALTHY 판정 | — |
+| `test_verify_data_consistency` | 큐 잔량 검사, 핵심 키 비교 | — |
+| `test_traffic_routing_adapter_fallback` | 어댑터 미등록 시 LoggingAdapter 사용 | — |
+| `test_traffic_routing_adapter_injection` | ProviderRegistry 통한 커스텀 어댑터 주입 | — |
+| **`test_fetch_remote_state_with_mtls`** | `_build_ssl_context()` 호출 확인, `urlopen(context=...)` 전달 검증 | **4-1** |
+| **`test_subscribe_heartbeat_config_set_failure`** | `CONFIG SET` `ResponseError` 시 로그 출력 후 구독 계속 | **1-2, 3-2** |
+| **`test_mark_unhealthy`** | `_mark_unhealthy(region)` 호출 후 `UNREACHABLE` 상태 확인 | — |
+| **`test_load_dynamic_peers_security_note`** | 문서화 확인 (docstring 존재 여부) | **2-2** |
+
+---
+
+## 16. 결론
+
+3가지 약점 모두 **기존 컴포넌트의 조합과 확장**으로 해결 가능하다.
+외부 의존성(Service Discovery, DNS SDK)은 추가하지 않으며, 시스템의 "No Forced Dependencies" 원칙을 유지한다.
+
+16개 리뷰 항목 중 **4건의 수정 사항**을 반영했다:
+
+1. **[4-1] mTLS 누락** — `_build_ssl_context()` + `_fetch_remote_state()` SSL Context 적용 (가장 중요)
+2. **[1-2] 관리형 Redis CONFIG SET** — `ResponseError` 분리 처리 + 구체적 안내 로그
+3. **[3-2] Keyspace Notification** — 1-2와 동일 처리, `config_set` 실패 시에도 구독 시도
+4. **[2-2] 보안** — `_load_dynamic_peers()` Security Note docstring 추가
+
+나머지 12건은 기존 설계가 코드 근거에 부합하여 변경 불필요로 확인되었다.
+
+네이밍은 기존 코드베이스와 충돌이 없으며, `_build_ssl_context`는 `secure_client.py`의 `_create_ssl_context`와 의도적으로 구분하여 모듈 내 검색 혼동을 방지한다.
