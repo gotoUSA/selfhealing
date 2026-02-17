@@ -39,13 +39,13 @@ class CircuitBreakerConfig:
     # If total calls < minimum_calls, CB will not open even if failure_threshold is met
     minimum_calls: int = 10  # At least 10 calls before CB can trigger
 
-    # Sliding window for rate-based threshold (optional, used when failure_rate_threshold > 0)
+    # Sliding window for rate-based threshold (used when failure_rate_threshold > 0)
     sliding_window_size: int = 100  # Number of calls to track
-    failure_rate_threshold: float = 0.0  # 0 = disabled, >0 = percentage (e.g., 50.0 = 50%)
+    failure_rate_threshold: float = 50.0  # percentage — 50% 에러율 초과 시 CB Open (count-based와 OR)
 
     # Fallback strategy when CB is open
-    # Options: "block" (default), "cache", "dlq", "default_response"
-    fallback_strategy: str = "block"
+    # Options: "cache" (default), "block", "dlq", "default_response"
+    fallback_strategy: str = "cache"
     fallback_cache_ttl_seconds: int = 300  # 5 minutes cache TTL for stale data
 
     # Error Budget integration - burn rate multiplier when CB is open
@@ -85,8 +85,8 @@ class CircuitBreakerConfig:
                 success_threshold=runtime_config.get("success_threshold", 2),
                 minimum_calls=runtime_config.get("minimum_calls", 10),
                 sliding_window_size=runtime_config.get("sliding_window_size", 100),
-                failure_rate_threshold=runtime_config.get("failure_rate_threshold", 0.0),
-                fallback_strategy=runtime_config.get("fallback_strategy", "block"),
+                failure_rate_threshold=runtime_config.get("failure_rate_threshold", 50.0),
+                fallback_strategy=runtime_config.get("fallback_strategy", "cache"),
                 fallback_cache_ttl_seconds=runtime_config.get("fallback_cache_ttl_seconds", 300),
                 cb_open_burn_rate_multiplier=runtime_config.get("cb_open_burn_rate_multiplier", 10.0),
                 manual_override_ttl_minutes=runtime_config.get("manual_override_ttl_minutes", 90),
@@ -112,8 +112,8 @@ class CircuitBreakerConfig:
             success_threshold=cb_settings.success_threshold,
             minimum_calls=getattr(cb_settings, "minimum_calls", 10),
             sliding_window_size=getattr(cb_settings, "sliding_window_size", 100),
-            failure_rate_threshold=getattr(cb_settings, "failure_rate_threshold", 0.0),
-            fallback_strategy=getattr(cb_settings, "fallback_strategy", "block"),
+            failure_rate_threshold=getattr(cb_settings, "failure_rate_threshold", 50.0),
+            fallback_strategy=getattr(cb_settings, "fallback_strategy", "cache"),
             fallback_cache_ttl_seconds=getattr(cb_settings, "fallback_cache_ttl_seconds", 300),
             cb_open_burn_rate_multiplier=getattr(cb_settings, "cb_open_burn_rate_multiplier", 10.0),
             manual_override_ttl_minutes=getattr(cb_settings, "manual_override_ttl_minutes", 90),
