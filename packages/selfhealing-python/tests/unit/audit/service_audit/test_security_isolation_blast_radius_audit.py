@@ -362,7 +362,13 @@ class TestSecurityViolationServiceAuditIntegration:
                 cache=mock_cache,
             )
 
-            service._invalidate_user_sessions(user_id=42)
+            # Django DB 세션 삭제의 DB 연결 시도를 방지 (테스트 대상이 아님)
+            with patch.object(
+                SecurityViolationService,
+                "_invalidate_django_db_sessions",
+                return_value=[],
+            ):
+                service._invalidate_user_sessions(user_id=42)
 
             mock_audit.assert_called_once()
             call_kwargs = mock_audit.call_args[1]

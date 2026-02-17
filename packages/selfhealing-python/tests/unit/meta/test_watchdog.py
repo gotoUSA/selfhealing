@@ -101,31 +101,30 @@ class TestSelfHealerWatchdog:
 
     def test_start_stop(self, watchdog):
         """시작/중지 테스트."""
-        watchdog.start()
-        assert watchdog.is_running() is True
+        with _MOCK_STATE_STORE:
+            watchdog.start()
+            assert watchdog.is_running() is True
 
-        watchdog.stop()
-        # 스레드가 종료되기까지 잠시 대기
-        time.sleep(0.1)
-        assert watchdog.is_running() is False
+            watchdog.stop()
+            assert watchdog.is_running() is False
 
     def test_double_start(self, watchdog):
         """이중 시작 테스트 (예외 없음)."""
-        watchdog.start()
-        watchdog.start()  # 두 번째 호출도 문제 없어야 함
+        with _MOCK_STATE_STORE:
+            watchdog.start()
+            watchdog.start()  # 두 번째 호출도 문제 없어야 함
 
-        assert watchdog.is_running() is True
-        watchdog.stop()
-        time.sleep(0.1)
+            assert watchdog.is_running() is True
+            watchdog.stop()
 
     def test_double_stop(self, watchdog):
         """이중 중지 테스트 (예외 없음)."""
-        watchdog.start()
-        watchdog.stop()
-        time.sleep(0.1)
-        watchdog.stop()  # 두 번째 호출도 문제 없어야 함
+        with _MOCK_STATE_STORE:
+            watchdog.start()
+            watchdog.stop()
+            watchdog.stop()  # 두 번째 호출도 문제 없어야 함
 
-        assert watchdog.is_running() is False
+            assert watchdog.is_running() is False
 
     def test_get_state_initial(self, watchdog):
         """초기 상태 조회."""

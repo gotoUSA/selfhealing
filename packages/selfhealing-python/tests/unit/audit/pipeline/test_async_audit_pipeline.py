@@ -261,9 +261,11 @@ class TestAsyncHealingLoggerGracefulShutdown:
         for i in range(5):
             AsyncHealingLogger.log({"idx": i}, EventSeverity.INFO)
 
-        # 플러시
+        # stop(): _running=False → worker 종료 → 로컬 batch 잔여분 flush → join()
+        # flush(): worker가 꺼내지 못한 _priority_queue 잔여 이벤트 drain + flush
+        # 두 단계 모두 필요: worker의 로컬 batch + 큐 잔여분 = 전체 이벤트
+        AsyncHealingLogger.stop()
         AsyncHealingLogger.flush()
-        time.sleep(0.1)
 
         stats = AsyncHealingLogger.get_stats()
         assert stats["events_logged"] == 5

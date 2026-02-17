@@ -75,6 +75,16 @@ class TestDeadCodeRemovalContract:
 class TestUserSessionRegistryIntegrationBehavior:
     """UserSessionRegistry.invalidate_all() 호출 동작 검증."""
 
+    @pytest.fixture(autouse=True)
+    def _skip_django_db_sessions(self):
+        """Django DB 세션 삭제의 DB 연결 시도를 방지 (테스트 대상 아님)."""
+        with patch.object(
+            SecurityViolationService,
+            "_invalidate_django_db_sessions",
+            return_value=[],
+        ):
+            yield
+
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     @patch("selfhealing.services.security.session_registry.get_user_session_registry")
     def test_registry_invalidate_all_called(self, mock_get_registry, mock_audit, service):
@@ -131,6 +141,16 @@ class TestSessionEngineCheckBehavior:
 
 class TestHooksStillExecutedBehavior:
     """기존 hooks 동작이 유지되는지 검증."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_django_db_sessions(self):
+        """Django DB 세션 삭제의 DB 연결 시도를 방지 (테스트 대상 아님)."""
+        with patch.object(
+            SecurityViolationService,
+            "_invalidate_django_db_sessions",
+            return_value=[],
+        ):
+            yield
 
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_hooks_called_after_rewrite(self, mock_audit, service):

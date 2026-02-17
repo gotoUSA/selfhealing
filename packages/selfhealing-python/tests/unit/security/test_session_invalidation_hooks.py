@@ -49,6 +49,16 @@ def service(mock_cache):
 class TestInvalidateUserSessionsWithHooksBehavior:
     """_invalidate_user_sessions() 콜백 호출 동작 검증."""
 
+    @pytest.fixture(autouse=True)
+    def _skip_django_db_sessions(self):
+        """Django DB 세션 삭제의 DB 연결 시도를 방지 (테스트 대상 아님)."""
+        with patch.object(
+            SecurityViolationService,
+            "_invalidate_django_db_sessions",
+            return_value=[],
+        ):
+            yield
+
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_hook_called_on_invalidation(self, mock_audit, service):
         """_invalidate_user_sessions() 호출 시 등록된 콜백이 실행되는지 확인."""

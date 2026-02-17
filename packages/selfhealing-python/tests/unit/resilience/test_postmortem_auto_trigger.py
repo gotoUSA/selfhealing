@@ -243,11 +243,14 @@ class TestEventTriggeredPostmortem:
             handler_called.append(event)
             # 원래 핸들러는 호출하지 않음 (mock 환경이므로)
 
-        # 핸들러 교체 (테스트용) - _subscriptions 사용
+        # 모든 CB CLOSED 핸들러를 no-op으로 교체하되, postmortem 핸들러만 추적용으로 교체
+        # (다른 핸들러가 Celery .delay() → Redis 연결을 시도하여 123초 타임아웃 발생 방지)
         subscriptions = self.bus._subscriptions.get(EventType.CIRCUIT_BREAKER_CLOSED, [])
         for sub in subscriptions:
             if sub.handler == original_handler:
                 sub.handler = tracking_handler
+            else:
+                sub.handler = lambda event: None  # no-op으로 교체
 
         # 이벤트 발행
         event = SelfHealingEvent(
