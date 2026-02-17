@@ -870,8 +870,11 @@ class TierRegistry:
 class AdmissionControlMiddleware:
     def __call__(self, request):
         # ... tier 분류 후
-        request._selfhealing_tier_id = tier_result.tier_id         # str
-        request._selfhealing_tier_priority = tier_result.priority   # int (TierDefinition.priority)
+        tier_id = tier_result.tier_id
+        request._selfhealing_tier_id = tier_id                                    # str
+        # TierDefinition에서 priority 조회 (TierResult에는 priority 필드 없음)
+        tier_def = self._registry.get_tier(tier_id)
+        request._selfhealing_tier_priority = tier_def.priority if tier_def else 0  # int (방어적 None 가드)
         # ... TrafficGate 호출 등
 ```
 
