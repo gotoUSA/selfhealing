@@ -4,10 +4,12 @@ Multi-Region 설정 테스트.
 테스트 대상:
 - RegionEndpoint: 리전 엔드포인트
 - MultiRegionSettings: Multi-Region 설정
+- _load_dynamic_peers: Redis 동적 피어 레지스트리 (237 약점 1)
 """
 
 import os
 from unittest import mock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -221,3 +223,121 @@ class TestMultiRegionSettings:
 
         assert settings.clock_skew_tolerance_ms == 10
         assert settings.clock_skew_fallback_seconds == 2.0
+
+
+# =============================================================================
+# 동적 피어 레지스트리 동작 검증 (237 약점 1)
+# =============================================================================
+
+
+class TestDynamicPeerRegistryBehavior:
+    """_load_dynamic_peers() 및 get_peer_endpoints() Redis-first 폴백 검증."""
+
+    def setup_method(self) -> None:
+        reset_multiregion_settings()
+
+    def teardown_method(self) -> None:
+        reset_multiregion_settings()
+
+    @patch("selfhealing.core.state_backend.get_state_backend")
+    def test_get_peer_endpoints_redis_first(self, mock_get_backend: MagicMock) -> None:
+        """Redis에 동적 피어가 있으면 환경변수 JSON보다 우선한다."""
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = {
+            "endpoints": [
+                {
+                    "region": "redis-region-1",
+                    "redis_url": "redis://redis1:6379",
+                    "api_endpoint": "http://redis1:8000",
+                }
+            ]
+        }
+        mock_get_backend.return_value = mock_backend
+
+        # 환경변수에도 설정되어 있지만 Redis가 우선
+        env_json = '[{"region": "env-region-1", "redis_url": "redis://env:6379"}]'
+        settings = MultiRegionSettings(peer_regions=env_json)
+        endpoints = settings.get_peer_endpoints()
+
+        assert len(endpoints) == 1
+        assert endpoints[0].region == "redis-region-1"
+
+    @patch("selfhealing.core.state_backend.get_state_backend")
+    def test_get_peer_endpoints_fallback_to_env(self, mock_get_backend: MagicMock) -> None:
+        """Redis에 데이터가 없으면 환경변수 JSON으로 폴백한다."""
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = None
+        mock_get_backend.return_value = mock_backend
+
+        env_json = '[{"region": "env-region-1", "redis_url": "redis://env:6379", "api_endpoint": "http://env:8000"}]'
+        settings = MultiRegionSettings(peer_regions=env_json)
+        endpoints = settings.get_peer_endpoints()
+
+        assert len(endpoints) == 1
+        assert endpoints[0].region == "env-region-1"
+
+    @patch("selfhealing.core.state_backend.get_state_backend")
+    def test_get_peer_endpoints_redis_exception_fallback(self, mock_get_backend: MagicMock) -> None:
+        """Redis 연결 실패 시 환경변수 JSON으로 폴백한다."""
+        mock_get_backend.side_effect = Exception("Redis connection refused")
+
+        env_json = '[{"region": "env-region-1", "redis_url": "redis://env:6379", "api_endpoint": "http://env:8000"}]'
+        settings = MultiRegionSettings(peer_regions=env_json)
+        endpoints = settings.get_peer_endpoints()
+
+        assert len(endpoints) == 1
+        assert endpoints[0].region == "env-region-1"
+
+    @patch("selfhealing.core.state_backend.get_state_backend")
+    def test_load_dynamic_peers_returns_none_on_empty_data(self, mock_get_backend: MagicMock) -> None:
+        """Redis에 endpoints 키가 없으면 None을 반환한다."""
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = {"other_key": "value"}
+        mock_get_backend.return_value = mock_backend
+
+        settings = MultiRegionSettings()
+        result = settings._load_dynamic_peers()
+
+        assert result is None
+
+    @patch("selfhealing.core.state_backend.get_state_backend")
+    def test_load_dynamic_peers_parses_priority(self, mock_get_backend: MagicMock) -> None:
+        """동적 피어의 priority 필드가 파싱된다."""
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = {
+            "endpoints": [
+                {
+                    "region": "us-east-1",
+                    "redis_url": "redis://us:6379",
+                    "api_endpoint": "http://us:8000",
+                    "priority": 50,
+                }
+            ]
+        }
+        mock_get_backend.return_value = mock_backend
+
+        settings = MultiRegionSettings()
+        result = settings._load_dynamic_peers()
+
+        assert result is not None
+        assert result[0].priority == 50
+
+    @patch("selfhealing.core.state_backend.get_state_backend")
+    def test_load_dynamic_peers_default_priority(self, mock_get_backend: MagicMock) -> None:
+        """priority가 없으면 기본값 100을 사용한다."""
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = {
+            "endpoints": [
+                {
+                    "region": "us-east-1",
+                    "redis_url": "redis://us:6379",
+                }
+            ]
+        }
+        mock_get_backend.return_value = mock_backend
+
+        settings = MultiRegionSettings()
+        result = settings._load_dynamic_peers()
+
+        assert result is not None
+        assert result[0].priority == 100

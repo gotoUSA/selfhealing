@@ -160,3 +160,83 @@ class TestRegionReplicator:
         assert "replicated" in stats
         assert "filtered" in stats
         assert "failed" in stats
+
+    # =========================================================================
+    # refresh_targets() 테스트 (237 약점 1)
+    # =========================================================================
+
+    def test_refresh_targets_adds_new_region(self) -> None:
+        """refresh_targets()는 새 리전을 _targets에 추가한다."""
+        peer_json = '[{"region": "us-east-1", "redis_url": "redis://us:6379", "api_endpoint": "http://us:8000"}]'
+        settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions=peer_json)
+        replicator = RegionReplicator(settings=settings)
+
+        # 초기 타겟 확인
+        assert len(replicator._targets) == 1
+        assert replicator._targets[0].endpoint.region == "us-east-1"
+
+        # 피어 추가 (settings 변경 시뮬레이션)
+        new_peer_json = (
+            '[{"region": "us-east-1", "redis_url": "redis://us:6379", "api_endpoint": "http://us:8000"},'
+            '{"region": "eu-west-1", "redis_url": "redis://eu:6379", "api_endpoint": "http://eu:8000"}]'
+        )
+        replicator._settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions=new_peer_json)
+
+        result = replicator.refresh_targets()
+
+        assert result == 2
+        regions = {t.endpoint.region for t in replicator._targets}
+        assert "us-east-1" in regions
+        assert "eu-west-1" in regions
+
+    def test_refresh_targets_removes_old_region(self) -> None:
+        """refresh_targets()는 제거된 리전을 _targets에서 제거한다."""
+        peer_json = (
+            '[{"region": "us-east-1", "redis_url": "redis://us:6379", "api_endpoint": "http://us:8000"},'
+            '{"region": "eu-west-1", "redis_url": "redis://eu:6379", "api_endpoint": "http://eu:8000"}]'
+        )
+        settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions=peer_json)
+        replicator = RegionReplicator(settings=settings)
+        assert len(replicator._targets) == 2
+
+        # eu-west-1 제거
+        new_peer_json = '[{"region": "us-east-1", "redis_url": "redis://us:6379", "api_endpoint": "http://us:8000"}]'
+        replicator._settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions=new_peer_json)
+
+        result = replicator.refresh_targets()
+
+        assert result == 1
+        assert replicator._targets[0].endpoint.region == "us-east-1"
+
+    def test_refresh_targets_no_change(self) -> None:
+        """피어 목록이 변경되지 않으면 _targets는 그대로 유지된다."""
+        peer_json = '[{"region": "us-east-1", "redis_url": "redis://us:6379", "api_endpoint": "http://us:8000"}]'
+        settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions=peer_json)
+        replicator = RegionReplicator(settings=settings)
+
+        result = replicator.refresh_targets()
+
+        assert result == 1
+
+    def test_refresh_targets_empty_peers(self) -> None:
+        """피어 목록이 비어있으면 모든 타겟이 제거된다."""
+        peer_json = '[{"region": "us-east-1", "redis_url": "redis://us:6379", "api_endpoint": "http://us:8000"}]'
+        settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions=peer_json)
+        replicator = RegionReplicator(settings=settings)
+        assert len(replicator._targets) == 1
+
+        replicator._settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions="[]")
+
+        result = replicator.refresh_targets()
+
+        assert result == 0
+        assert len(replicator._targets) == 0
+
+    def test_refresh_targets_returns_count(self) -> None:
+        """refresh_targets()는 갱신 후 타겟 수를 반환한다."""
+        settings = MultiRegionSettings(current_region="ap-northeast-2", peer_regions="[]")
+        replicator = RegionReplicator(settings=settings)
+
+        result = replicator.refresh_targets()
+
+        assert result == len(replicator._targets)

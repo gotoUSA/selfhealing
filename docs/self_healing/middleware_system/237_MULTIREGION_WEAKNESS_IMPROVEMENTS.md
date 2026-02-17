@@ -24,9 +24,9 @@
 >
 > **리뷰 반영 4건**: 4-1 (mTLS), 1-2/3-2 (CONFIG SET ResponseError), 2-2 (Security Note)
 >
-> **기존 단위 테스트**: 48개 전부 통과 (regression 없음)
+> **단위 테스트**: 199개 전부 통과 (기존 48개 + 신규 151개, regression 없음)
 >
-> **통합 테스트 필요**: heartbeat TTL → health_monitor 체인은 실제 Redis keyspace notification 필요 (향후 작성)
+> **통합 테스트**: 4개 전부 통과 (heartbeat TTL → keyspace notification → health_monitor 체인, 실제 Redis 검증 완료)
 
 ---
 
@@ -902,15 +902,27 @@ packages/selfhealing-python/src/selfhealing/
 
 ## 8. 테스트 전략
 
+### 8.1 단위 테스트 (199개 PASS)
+
+| 테스트 파일 | 테스트 수 | 검증 대상 |
+|------------|----------|----------|
+| `test_heartbeat.py` (신규) | 17 | RegionHeartbeat 계약값(TTL=15, INTERVAL=5), `_beat()` 동작, start/stop, MultiRegionShutdownHandler 이벤트 발행 |
+| `test_traffic_routing.py` (신규) | 15 | RoutingChange/TrafficRoutingAdapter 계약, LoggingTrafficRoutingAdapter switch/rollback/이벤트 발행 |
+| `test_factory_traffic_routing.py` (신규) | 7 | ProviderRegistry traffic_routing 등록/조회/리셋, 커스텀 어댑터 우선순위 |
+| `test_event_types_multiregion.py` (신규) | 5 | 3개 신규 EventType 계약값, Enum 멤버십 |
+| `test_config.py` (업데이트) | 24 | Redis-first 폴백, `_load_dynamic_peers()` 파싱/기본값/예외 처리 |
+| `test_failover.py` (업데이트) | 21 | `_get_traffic_routing_adapter()` 우선순위, `_update_traffic_routing()` 성공/실패, `_verify_data_consistency()` 큐검사/핵심키비교, `_build_ssl_context()` TLS 설정, `_fetch_remote_state()` HTTP/SSL |
+| `test_health_monitor.py` (업데이트) | 17 | `_mark_unhealthy()` UNREACHABLE 마킹, `_subscribe_heartbeat_expiry()` 관리형 Redis CONFIG SET 실패 대응, `start()` heartbeat 구독 스레드 생성 |
+| `test_replicator.py` (업데이트) | 15 | `refresh_targets()` 추가/제거/멱등성/빈 설정/예외 처리 |
+
+### 8.2 통합 테스트 (4개 PASS, 실제 Redis)
+
 | 테스트 | 검증 대상 |
 |--------|----------|
-| `test_dynamic_peer_registry` | Redis/File 폴백, 피어 추가/제거 반영 |
-| `test_replicator_refresh_targets` | `refresh_targets()` 호출 후 타겟 리스트 변경 |
-| `test_push_shutdown_notification` | `on_shutdown_start()` → EventBus 이벤트 발행 확인 |
-| `test_ttl_heartbeat_expiry` | TTL 만료 시 UNHEALTHY 판정 |
-| `test_verify_data_consistency` | 큐 잔량 검사, 핵심 키 비교 |
-| `test_traffic_routing_adapter_fallback` | 어댑터 미등록 시 LoggingAdapter 사용 |
-| `test_traffic_routing_adapter_injection` | ProviderRegistry 통한 커스텀 어댑터 주입 |
+| `test_beat_sets_redis_key_with_ttl` | `_beat()`가 Redis에 TTL 키 생성 |
+| `test_heartbeat_key_expires` | TTL 만료 후 키 자동 삭제 |
+| `test_keyspace_notification_on_expiry` | 키 만료 시 Redis Keyspace Notification 수신 |
+| `test_full_chain_heartbeat_to_unhealthy` | TTL 만료 → Keyspace Notification → `_mark_unhealthy()` → UNREACHABLE 전체 체인 |
 
 ---
 
