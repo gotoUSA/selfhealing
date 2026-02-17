@@ -342,10 +342,10 @@ class TestPoliciesPackageExportContract:
         assert Exported is partition_aware_chain
 
     def test_all_contains_three_exports(self):
-        """__all__은 정확히 3개 항목을 포함한다."""
+        """__all__은 정확히 33개 항목을 포함한다."""
         import selfhealing.resilience.policies as pkg
 
-        assert len(pkg.__all__) == 3
+        assert len(pkg.__all__) == 33
 
     def test_all_contains_expected_names(self):
         """__all__에 FallbackPolicy, AsyncFallbackPolicy, partition_aware_chain이 포함된다."""

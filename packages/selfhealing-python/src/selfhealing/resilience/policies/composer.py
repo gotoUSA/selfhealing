@@ -148,7 +148,7 @@ class PolicyComposer(Generic[T]):
         Returns:
             PolicyResult[T]: 통합 결과. 예외를 던지지 않는다.
         """
-        start_time = time.monotonic()
+        start_time = time.perf_counter()
 
         # Step 1: Guard 검증
         for guard in self._guards:
@@ -172,7 +172,7 @@ class PolicyComposer(Generic[T]):
         result = self._execute_policy_chain(func, *args, context=context, **kwargs)
 
         # Step 3: Hook 호출 — 파이프라인 전체 결과만 관찰
-        duration_ms = (time.monotonic() - start_time) * 1000
+        duration_ms = (time.perf_counter() - start_time) * 1000
         result.total_duration_ms = duration_ms
 
         if result.success:
@@ -418,7 +418,7 @@ class AsyncPolicyComposer(Generic[T]):
         Returns:
             PolicyResult[T]: 통합 결과. 예외를 던지지 않는다.
         """
-        start_time = time.monotonic()
+        start_time = time.perf_counter()
 
         # Guard 검증 (동기)
         for guard in self._guards:
@@ -441,7 +441,7 @@ class AsyncPolicyComposer(Generic[T]):
         result = await self._execute_async_chain(func, *args, context=context, **kwargs)
 
         # Hook 호출 — 파이프라인 전체 결과만 관찰
-        duration_ms = (time.monotonic() - start_time) * 1000
+        duration_ms = (time.perf_counter() - start_time) * 1000
         result.total_duration_ms = duration_ms
 
         if result.success:

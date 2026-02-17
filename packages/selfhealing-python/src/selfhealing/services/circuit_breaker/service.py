@@ -683,13 +683,12 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         try:
             from selfhealing.services.audit_helpers import log_cb_state_change_audit
 
-            # snapshot 실제 구조에서 값을 참조한다
+            # snapshot에서 값을 참조한다 (flat / nested 구조 모두 지원)
             cb_data = snapshot.get("circuit_breaker", {})
+            failure_count = cb_data.get("failure_count") or snapshot.get("failure_count", "N/A")
             threshold_data = cb_data.get("threshold_config", {})
-            reason = (
-                f"auto_trigger|failures={cb_data.get('failure_count', 'N/A')}"
-                f"|threshold={threshold_data.get('failure_threshold', 'N/A')}"
-            )
+            threshold_value = threshold_data.get("failure_threshold") or snapshot.get("threshold", "N/A")
+            reason = f"auto_trigger|failures={failure_count}" f"|threshold={threshold_value}"
 
             log_cb_state_change_audit(
                 cb_name=service_name,
