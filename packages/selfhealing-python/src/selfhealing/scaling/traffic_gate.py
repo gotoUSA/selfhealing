@@ -29,6 +29,31 @@ from selfhealing.scaling.rate_controller import (
 logger = logging.getLogger(__name__)
 
 
+# TrafficGate priority int를 RateController priority tier 문자열로 변환하기 위한 임계치.
+# TrafficGate 규약: 낮을수록 높은 우선순위.
+# AdmissionControlMiddleware에서 critical=0, standard=50, non_essential=100으로 전달된다.
+_PRIORITY_TIER_THRESHOLDS: list[tuple[int, str]] = [
+    (25, "critical"),  # priority <= 25 → critical
+    (75, "standard"),  # priority <= 75 → standard
+]
+_PRIORITY_TIER_DEFAULT = "non_essential"  # priority > 75
+
+
+def _map_priority_int_to_tier(priority: int) -> str:
+    """priority int를 tier 문자열로 변환.
+
+    Args:
+        priority: 요청 우선순위 (낮을수록 높은 우선순위)
+
+    Returns:
+        "critical" | "standard" | "non_essential"
+    """
+    for threshold, tier in _PRIORITY_TIER_THRESHOLDS:
+        if priority <= threshold:
+            return tier
+    return _PRIORITY_TIER_DEFAULT
+
+
 @dataclass
 class TrafficDecision:
     """Traffic Gate 결정 결과."""
@@ -201,16 +226,17 @@ class TrafficGate:
                 self._release_bulkhead_internal(bulkhead_name)
             return load_shedding_decision
 
-        # 2단계: RateController 확인
-        if not self._rate_controller.should_process():
+        # 2단계: RateController 확인 (priority 기반 watermark 적용)
+        tier_str = _map_priority_int_to_tier(priority)
+        if not self._rate_controller.should_process(priority=tier_str):
             if bulkhead_acquired and bulkhead_name:
                 self._release_bulkhead_internal(bulkhead_name)
             return TrafficDecision(
                 allowed=False,
-                reason=f"Rate limit exceeded at level={current_level.value}",
+                reason=(f"Rate limit exceeded: priority={tier_str}, " f"level={current_level.value}"),
                 level=current_level,
                 gate="RateController",
-                metadata=metadata,
+                metadata={**(metadata or {}), "priority": tier_str},
             )
 
         return TrafficDecision(

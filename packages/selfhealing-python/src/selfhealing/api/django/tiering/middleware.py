@@ -81,6 +81,9 @@ class TieringMiddleware:
         """
         Process the request.
 
+        Emergency Mode와 Backpressure Level의 tier별 배율 중
+        더 낮은 값을 적용하는 Most Restrictive Wins 병합 전략.
+
         Args:
             request: Django HttpRequest
 
@@ -96,15 +99,19 @@ class TieringMiddleware:
                 EMERGENCY_LEVEL_RULES,
                 EmergencyLevel,
             )
+            from selfhealing.scaling.rate_controller import get_rate_controller
+            from selfhealing.scaling.config import BackpressureLevel
+            from selfhealing.api.django.tiering.defaults import BACKPRESSURE_TIER_RULES
 
             manager = get_emergency_manager()
+            controller = get_rate_controller()
 
-            if not manager.is_active():
-                return self.get_response(request)
+            emergency_active = manager.is_active()
+            emergency_level = manager.get_current_level() if emergency_active else EmergencyLevel.NORMAL
+            bp_level = controller.get_state().level
 
-            current_level = manager.get_current_level()
-
-            if current_level == EmergencyLevel.NORMAL:
+            # Emergency와 Backpressure 모두 정상이면 통과
+            if emergency_level == EmergencyLevel.NORMAL and bp_level == BackpressureLevel.NONE:
                 return self.get_response(request)
 
             path = request.path
@@ -117,15 +124,25 @@ class TieringMiddleware:
                 user_id=str(user_id) if user_id else None,
             )
 
-            level_rules = EMERGENCY_LEVEL_RULES.get(current_level, {})
-            multiplier = level_rules.get(tier_result.tier_id, 0.0)
+            # Most Restrictive Wins: 두 규칙 중 더 낮은 multiplier 적용
+            emergency_multiplier = EMERGENCY_LEVEL_RULES.get(
+                emergency_level,
+                {},
+            ).get(tier_result.tier_id, 1.0)
 
-            if not self._should_allow_request(multiplier):
+            backpressure_multiplier = BACKPRESSURE_TIER_RULES.get(
+                bp_level,
+                {},
+            ).get(tier_result.tier_id, 1.0)
+
+            final_multiplier = min(emergency_multiplier, backpressure_multiplier)
+
+            if not self._should_allow_request(final_multiplier):
                 return self._create_load_shedding_response(
                     request=request,
                     tier_id=tier_result.tier_id,
-                    multiplier=multiplier,
-                    emergency_level=current_level,
+                    multiplier=final_multiplier,
+                    emergency_level=emergency_level,
                 )
 
             return self.get_response(request)
@@ -188,10 +205,7 @@ class TieringMiddleware:
             {
                 "error": "Service Temporarily Unavailable",
                 "code": "LOAD_SHEDDING",
-                "message": (
-                    "시스템 부하 관리를 위해 요청이 일시적으로 제한되었습니다. "
-                    "잠시 후 다시 시도해주세요."
-                ),
+                "message": ("시스템 부하 관리를 위해 요청이 일시적으로 제한되었습니다. " "잠시 후 다시 시도해주세요."),
                 "tier": tier_id,
                 "emergency_level": emergency_level.name,
                 "retry_after": 30,

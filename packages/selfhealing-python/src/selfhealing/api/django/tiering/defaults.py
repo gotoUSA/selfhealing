@@ -2,9 +2,12 @@
 Default Tiering Configuration Templates.
 
 Best practice defaults for tier definitions, mappings, and overrides.
+Backpressure Level별 tier 배율 규칙도 포함.
 """
 
 from __future__ import annotations
+
+from selfhealing.scaling.config import BackpressureLevel
 
 from .enums import OverrideIdentifierType, TierMatchType
 from .models import TierDefinition, TierMapping, TierOverride
@@ -166,3 +169,19 @@ DEFAULT_TIER_OVERRIDES: list[TierOverride] = [
         reason="Internal network",
     ),
 ]
+
+
+# =============================================================================
+# Backpressure Level별 Tier 트래픽 배율 규칙
+# =============================================================================
+# Emergency Mode의 EMERGENCY_LEVEL_RULES(services/emergency_mode/enums.py)와
+# 동일한 패턴. TieringMiddleware에서 Most Restrictive Wins 병합에 사용.
+# 값이 클수록 더 많은 트래픽 허용 (1.0=전부 허용, 0.0=전부 차단).
+
+BACKPRESSURE_TIER_RULES: dict[BackpressureLevel, dict[str, float]] = {
+    BackpressureLevel.NONE: {"critical": 1.0, "standard": 1.0, "non_essential": 1.0},
+    BackpressureLevel.LOW: {"critical": 1.0, "standard": 1.0, "non_essential": 0.5},
+    BackpressureLevel.MEDIUM: {"critical": 1.0, "standard": 0.8, "non_essential": 0.2},
+    BackpressureLevel.HIGH: {"critical": 1.0, "standard": 0.5, "non_essential": 0.0},
+    BackpressureLevel.CRITICAL: {"critical": 0.8, "standard": 0.1, "non_essential": 0.0},
+}

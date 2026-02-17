@@ -57,6 +57,10 @@ class TierRegistry:
         # Before Mutation Snapshot: 롤백용 이전 상태 저장 (최대 10개)
         self._previous_configs: list[dict[str, Any]] = []
 
+        # Path → TierDefinition 조회 결과 캐시 (O(n) 선형 탐색 회피)
+        self._path_tier_cache: dict[str, TierDefinition | None] = {}
+        self._PATH_CACHE_MAX_SIZE = 1024
+
         # Load defaults
         self._load_defaults()
 
@@ -148,6 +152,7 @@ class TierRegistry:
             self._tiers = {t.id: t for t in tiers}
             self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
             self._overrides = overrides
+            self._invalidate_path_cache()
 
             return TierValidationResult(is_valid=True, errors=[], warnings=["Rolled back"])
 
@@ -184,6 +189,7 @@ class TierRegistry:
             self._save_previous_config("set_tiers")
 
             self._tiers = {t.id: t for t in tiers}
+            self._invalidate_path_cache()
             self._log_change("tiers", [t.to_dict() for t in tiers])
 
         return result
@@ -219,6 +225,7 @@ class TierRegistry:
             self._save_previous_config("set_mappings")
 
             self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
+            self._invalidate_path_cache()
             self._log_change("mappings", [m.to_dict() for m in mappings])
 
         return result
@@ -227,6 +234,8 @@ class TierRegistry:
         """
         Get the tier for an API path.
 
+        결과를 dict 캐시에 저장하여 반복 호출 시 O(n) 순회를 회피한다.
+
         Args:
             path: API path (e.g., "/api/self-healing/control/")
 
@@ -234,10 +243,22 @@ class TierRegistry:
             TierDefinition or None if no mapping matches
         """
         with self._data_lock:
+            if path in self._path_tier_cache:
+                return self._path_tier_cache[path]
+
+            result = None
             for mapping in self._mappings:
                 if mapping.matches(path):
-                    return self._tiers.get(mapping.tier_id)
-        return None
+                    result = self._tiers.get(mapping.tier_id)
+                    break
+
+            if len(self._path_tier_cache) < self._PATH_CACHE_MAX_SIZE:
+                self._path_tier_cache[path] = result
+            return result
+
+    def _invalidate_path_cache(self) -> None:
+        """매핑/tier 변경 시 path 조회 캐시를 무효화한다."""
+        self._path_tier_cache.clear()
 
     # -------------------------------------------------------------------------
     # Tier Override Methods
@@ -646,6 +667,7 @@ class TierRegistry:
             self._tiers = {t.id: t for t in tiers}
             self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
             self._overrides = overrides
+            self._invalidate_path_cache()
             self._log_change("full_config", config)
 
         return result
@@ -657,6 +679,7 @@ class TierRegistry:
             self._save_previous_config("reset_to_defaults")
 
             self._load_defaults()
+            self._invalidate_path_cache()
             self._log_change("reset", {"action": "reset_to_defaults"})
 
 

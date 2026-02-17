@@ -1110,3 +1110,31 @@ if not self._rate_controller.should_process(priority=tier_str):
 - 유휴 자원 낭비 원천 해결 (공유 풀)
 - 전체 Rate Limit 초과 위험 제거 (단일 버킷에서 `consume`)
 - `BackpressureMiddleware` 하위 호환 (`should_process("standard")` 기본값)
+
+---
+
+## 17) 구현 완료 기록
+
+구현일: 2026-02-17
+
+### 구현 완료 파일 목록
+
+| # | 파일 | 변경 유형 | 작업 | 내용 |
+|---|------|-----------|------|------|
+| 1 | `scaling/rate_controller.py` | 수정 | 작업 3 | `PRIORITY_WATERMARKS` 상수, `TokenBucket.get_token_ratio()`, `should_process(priority: str)` Watermark 분기, 거부 사유 로그 |
+| 2 | `scaling/traffic_gate.py` | 수정 | 작업 3 | `_PRIORITY_TIER_THRESHOLDS`, `_map_priority_int_to_tier()`, `should_allow()` 내 priority→tier 매핑 + `should_process(priority=tier_str)` 호출, 거부 시 metadata에 priority 포함 |
+| 3 | `settings/admission_control.py` | 신규 | 작업 2 | `AdmissionControlSettings` (Pydantic v2), tier별 Bulkhead max_concurrent 환경변수 바인딩 |
+| 4 | `api/django/admission_control.py` | 신규 | 작업 2 | `AdmissionControlMiddleware`, `TIER_PRIORITY_MAP`, request 객체에 `_selfhealing_tier_id`/`_selfhealing_tier_priority` 주입, tier별 Bulkhead 자동 등록 |
+| 5 | `api/django/tiering/registry.py` | 수정 | 작업 2 | `_path_tier_cache` dict 캐시 (최대 1024 엔트리), `_invalidate_path_cache()` 메서드, 모든 mutation 메서드에 캐시 무효화 호출 추가 |
+| 6 | `api/django/tiering/defaults.py` | 수정 | 작업 1 | `BACKPRESSURE_TIER_RULES` 상수 (BackpressureLevel별 tier 트래픽 배율) |
+| 7 | `api/django/tiering/middleware.py` | 수정 | 작업 1 | `__call__()` Most Restrictive Wins 병합: `min(emergency_multiplier, backpressure_multiplier)`, Emergency와 Backpressure 모두 정상이면 통과 |
+
+### 하위 호환성 검증
+
+- `should_process()` 기본값 `priority="standard"` → 기존 호출부 (BackpressureMiddleware, BackpressureGuard, backpressure_mixin 등) 무변경 동작 확인
+- 기존 단위 테스트 1121개 전체 통과 (scaling + throttle)
+- tiering/middleware 관련 테스트 38개 전체 통과
+
+### 통합 테스트
+
+AdmissionControlMiddleware → TieringMiddleware → Application 미들웨어 체인과 RateController ↔ TrafficGate priority 전파에 대한 통합 테스트가 필요하다. 기존 통합 테스트에는 해당 시나리오가 없으므로 별도 작성이 필요하다.

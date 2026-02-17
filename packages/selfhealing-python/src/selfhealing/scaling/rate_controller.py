@@ -27,6 +27,18 @@ from selfhealing.scaling.config import (
 logger = logging.getLogger(__name__)
 
 
+# Priority별 토큰 비율 임계치 (Watermark).
+# 현재 토큰 잔량 비율이 이 값 미만이면 해당 priority의 요청을 거부한다.
+# critical: 토큰이 0% 이상이면 허용 (항상 시도 가능)
+# standard: 토큰이 30% 이상일 때만 허용
+# non_essential: 토큰이 60% 이상일 때만 허용
+PRIORITY_WATERMARKS: dict[str, float] = {
+    "critical": 0.0,
+    "standard": 0.3,
+    "non_essential": 0.6,
+}
+
+
 @dataclass
 class RateControllerState:
     """Rate Controller 현재 상태."""
@@ -111,6 +123,17 @@ class TokenBucket:
                 return True
             return False
 
+    def get_token_ratio(self) -> float:
+        """현재 토큰 잔량 비율 반환 (0.0 ~ 1.0).
+
+        충전량을 반영하되 _last_update는 갱신하지 않는다 (읽기 전용).
+        """
+        with self._lock:
+            now = time.time()
+            elapsed = now - self._last_update
+            current = min(self._capacity, self._tokens + elapsed * self._rate)
+            return current / self._capacity if self._capacity > 0 else 0.0
+
     def wait_for_token(self, timeout: float = 1.0) -> bool:
         """
         토큰을 대기하며 획득 시도.
@@ -193,9 +216,18 @@ class RateController:
                 dropped_count=self._dropped_count,
             )
 
-    def should_process(self) -> bool:
+    def should_process(self, priority: str = "standard") -> bool:
         """
-        처리 여부 결정.
+        처리 여부 결정 (priority 기반 Watermark 적용).
+
+        현재 토큰 잔량 비율이 priority별 watermark 미만이면
+        토큰 소비를 시도하지 않고 즉시 거부한다.
+        이를 통해 토큰이 적을 때 critical 요청을 우선 보호한다.
+
+        Args:
+            priority: 요청 priority tier.
+                "critical" | "standard" | "non_essential".
+                기본값 "standard"는 기존 호출부와 하위 호환.
 
         Returns:
             True면 처리, False면 Backpressure로 거부
@@ -203,13 +235,33 @@ class RateController:
         if not self._settings.backpressure_enabled:
             return True
 
-        # Token Bucket에서 토큰 소비 시도
+        # Watermark 확인: 토큰 잔량 비율이 priority별 임계치 미만이면 거부
+        watermark = PRIORITY_WATERMARKS.get(priority, 0.3)
+        token_ratio = self._token_bucket.get_token_ratio()
+
+        if token_ratio < watermark:
+            with self._lock:
+                self._dropped_count += 1
+            logger.info(
+                "[RateController] Rejected: priority=%s, " "reason=watermark_exceeded, " "token_ratio=%.2f, watermark=%.2f",
+                priority,
+                token_ratio,
+                watermark,
+            )
+            return False
+
+        # Token Bucket에서 토큰 소비 시도 (단일 버킷)
         if self._token_bucket.consume():
             with self._lock:
                 self._processed_count += 1
             return True
 
         # 토큰 부족 시 전략에 따른 처리
+        logger.info(
+            "[RateController] Rejected: priority=%s, " "reason=token_exhausted, " "token_ratio=%.2f",
+            priority,
+            token_ratio,
+        )
         strategy = self._settings.default_strategy
 
         if strategy == BackpressureStrategy.REJECT:
