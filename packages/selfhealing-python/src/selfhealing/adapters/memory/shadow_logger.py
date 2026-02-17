@@ -171,10 +171,7 @@ class ShadowLogger:
         recovery_time = datetime.now(timezone.utc)
         with self._lock:
             for record in self._failure_log:
-                if (
-                    record.service_name == service_name
-                    and not record.synced_after_recovery
-                ):
+                if record.service_name == service_name and not record.synced_after_recovery:
                     record.synced_after_recovery = True
                     record.recovery_time = recovery_time
                     count += 1
@@ -193,9 +190,7 @@ class ShadowLogger:
                     "recovery_time": recovery_time.isoformat(),
                 },
             )
-            logger.info(
-                f"[ShadowLog] Marked {count} records as synced for {service_name}"
-            )
+            logger.info(f"[ShadowLog] Marked {count} records as synced for {service_name}")
         return count
 
     def mark_all_as_synced(self) -> int:
@@ -256,22 +251,15 @@ class ShadowLogger:
                 "unsynced_count": len(unsynced),
                 "affected_services": list(services),
                 "max_entries": self._max_entries,
-                "oldest_record": (
-                    self._failure_log[0].failure_time.isoformat()
-                    if self._failure_log
-                    else None
-                ),
-                "newest_record": (
-                    self._failure_log[-1].failure_time.isoformat()
-                    if self._failure_log
-                    else None
-                ),
+                "oldest_record": (self._failure_log[0].failure_time.isoformat() if self._failure_log else None),
+                "newest_record": (self._failure_log[-1].failure_time.isoformat() if self._failure_log else None),
             }
 
     def clear(self) -> None:
         """Clear all records (for testing)."""
         with self._lock:
             self._failure_log.clear()
+            self._max_entries = 1000
 
     def analyze_l2_failures(self) -> dict[str, Any]:
         """
@@ -332,9 +320,7 @@ class ShadowLogger:
             time_range = {
                 "start": sorted_records[0].failure_time.isoformat(),
                 "end": sorted_records[-1].failure_time.isoformat(),
-                "duration_seconds": (
-                    sorted_records[-1].failure_time - sorted_records[0].failure_time
-                ).total_seconds(),
+                "duration_seconds": (sorted_records[-1].failure_time - sorted_records[0].failure_time).total_seconds(),
             }
 
         # 권장 조치 생성
@@ -367,28 +353,24 @@ class ShadowLogger:
 
         if unsynced_count > 0:
             recommendations.append(
-                f"Sync {unsynced_count} unsynced records to L2 using "
-                f"POST /api/self-healing/l2-storage/sync/to-l2"
+                f"Sync {unsynced_count} unsynced records to L2 using " f"POST /api/self-healing/l2-storage/sync/to-l2"
             )
 
         if len(affected_services) > 3:
             recommendations.append(
-                f"Multiple services affected ({len(affected_services)}). "
-                f"Consider checking L2 infrastructure health."
+                f"Multiple services affected ({len(affected_services)}). " f"Consider checking L2 infrastructure health."
             )
 
         if total_records > 100:
             recommendations.append(
-                "High failure count detected. Consider increasing L2 timeout "
-                "or optimizing L2 storage performance."
+                "High failure count detected. Consider increasing L2 timeout " "or optimizing L2 storage performance."
             )
 
         # 어댑터별 권장사항
         for adapter, count in by_adapter.items():
             if count > 50:
                 recommendations.append(
-                    f"Adapter '{adapter}' has {count} failures. "
-                    f"Check {adapter} connectivity and performance."
+                    f"Adapter '{adapter}' has {count} failures. " f"Check {adapter} connectivity and performance."
                 )
 
         if not recommendations:
@@ -408,9 +390,7 @@ class ShadowLogger:
     ) -> list[L2SyncFailureRecord]:
         """시간 범위 내 실패 기록 조회."""
         with self._lock:
-            return [
-                r for r in self._failure_log if start_time <= r.failure_time <= end_time
-            ]
+            return [r for r in self._failure_log if start_time <= r.failure_time <= end_time]
 
     def _record_audit_event(
         self,
@@ -439,9 +419,7 @@ class ShadowLogger:
             # 자동으로 actor_id, actor_roles, trace_id가 포함됨
         except ImportError:
             # _write_to_wal 미사용 환경: 로거로 폴백
-            logger.debug(
-                "[ShadowLogger] Audit recording skipped: _write_to_wal not available"
-            )
+            logger.debug("[ShadowLogger] Audit recording skipped: _write_to_wal not available")
         except Exception as e:
             # Audit 실패가 메인 로직을 방해하면 안됨
             logger.debug(f"[ShadowLogger] Audit recording failed: {e}")

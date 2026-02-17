@@ -8,6 +8,7 @@ Phase 5: Recovery Dampening 기능 테스트
 """
 
 import pytest
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -220,10 +221,12 @@ class TestRecoveryDampeningManager:
 
     def test_phase_transition_callback(self):
         """단계 전이 시 콜백 호출 테스트."""
+        callback_event = threading.Event()
         callback_calls = []
 
         def on_limit_change(service_name: str, new_limit: int):
             callback_calls.append((service_name, new_limit))
+            callback_event.set()
 
         config = RecoveryDampeningConfig(
             phase_1_ratio=0.8,
@@ -242,8 +245,8 @@ class TestRecoveryDampeningManager:
             current_limit=10,
         )
 
-        # 짧은 대기 후 전이 확인
-        time.sleep(0.3)
+        # Event 기반 대기 (최대 5초, 시스템 부하에도 안정적)
+        callback_event.wait(timeout=5.0)
 
         # 콜백 호출 확인
         assert len(callback_calls) >= 1

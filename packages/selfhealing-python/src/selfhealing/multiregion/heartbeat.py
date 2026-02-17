@@ -108,8 +108,11 @@ class RegionHeartbeat:
     def _run(self) -> None:
         """하트비트 루프."""
         while self._running:
-            self._beat()
-            time.sleep(self.HEARTBEAT_INTERVAL)
+            try:
+                self._beat()
+                time.sleep(self.HEARTBEAT_INTERVAL)
+            except (InterruptedError, OSError):
+                break
 
     def stop(self) -> None:
         """하트비트 중지."""
