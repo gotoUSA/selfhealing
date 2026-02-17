@@ -144,6 +144,7 @@ class RegionHealthMonitor:
         self._health_states: dict[str, RegionHealth] = {}
         self._running = False
         self._worker: threading.Thread | None = None
+        self._heartbeat_worker: threading.Thread | None = None
         self._stop_event = threading.Event()
 
         # 초기 상태 설정
@@ -461,11 +462,85 @@ class RegionHealthMonitor:
             if self._stop_event.is_set():
                 break
 
+    def _mark_unhealthy(self, region: str) -> None:
+        """
+        특정 리전을 UNREACHABLE로 즉시 마킹.
+
+        Keyspace Notification 또는 Push 이벤트로 감지된 장애를 반영합니다.
+        다음 check_all_regions() 루프에서 정상 확인 시 자동 복구됩니다.
+
+        Args:
+            region: UNREACHABLE로 마킹할 리전 이름
+        """
+        with self._lock:
+            if region in self._health_states:
+                self._health_states[region] = RegionHealth(
+                    region=region,
+                    status=RegionHealthStatus.UNREACHABLE,
+                    latency_ms=0,
+                    last_check=datetime.now(timezone.utc),
+                    consecutive_failures=self._settings.unhealthy_threshold,
+                    details={"reason": "heartbeat_expired"},
+                )
+                logger.warning(f"[RegionHealth] Marked {region} as UNREACHABLE " f"(heartbeat expired)")
+
+    def _subscribe_heartbeat_expiry(self) -> None:
+        """
+        Redis Keyspace Notification으로 하트비트 만료 감지.
+
+        CONFIG SET 권한이 없는 관리형 Redis(ElastiCache, Memorystore 등)에서는
+        파라미터 그룹에서 미리 notify-keyspace-events = Ex 를 설정해야 합니다.
+        CONFIG SET 실패 시에도 구독을 시도합니다 (이미 설정되어 있을 수 있음).
+        """
+        try:
+            import redis as redis_lib
+
+            from selfhealing.core.state_backend import _get_config
+
+            redis_url = _get_config("SELFHEALING_REDIS_URL", "redis://localhost:6379/0")
+            client = redis_lib.from_url(redis_url, decode_responses=True)
+
+            # 관리형 Redis 대응: CONFIG SET 시도 후 실패 시 로그만 남기고 구독 시도
+            try:
+                client.config_set("notify-keyspace-events", "Ex")
+                logger.info("[RegionHealth] Keyspace notifications enabled " "(notify-keyspace-events=Ex)")
+            except redis_lib.exceptions.ResponseError as e:
+                error_msg = str(e).lower()
+                if "unknown command" in error_msg or "permission" in error_msg:
+                    logger.warning(
+                        "[RegionHealth] 'CONFIG SET' not permitted. "
+                        "If using managed Redis (ElastiCache, Memorystore), "
+                        "set 'notify-keyspace-events=Ex' in the parameter "
+                        "group/instance config. "
+                        f"Error: {e}"
+                    )
+                else:
+                    raise  # 다른 ResponseError는 상위로 전파
+
+            pubsub = client.pubsub()
+            pubsub.psubscribe("__keyevent@*__:expired")
+
+            for message in pubsub.listen():
+                if not self._running:
+                    break
+                if message["type"] == "pmessage":
+                    key = message["data"]
+                    if key.startswith("selfhealing:state:multiregion:heartbeat:"):
+                        region = key.split(":")[-1]
+                        logger.warning(f"[RegionHealth] Heartbeat expired: {region}")
+                        self._mark_unhealthy(region)
+
+        except ImportError:
+            logger.warning("[RegionHealth] redis package not installed, " "keyspace notification unavailable")
+        except Exception as e:
+            logger.warning(f"[RegionHealth] Keyspace notification unavailable: {e}")
+
     def start(self) -> None:
         """
         모니터링 시작.
 
         백그라운드 스레드에서 주기적으로 건강 체크를 실행합니다.
+        Redis 백엔드 사용 시 하트비트 만료 Keyspace Notification도 구독합니다.
         """
         if self._running:
             return
@@ -478,6 +553,15 @@ class RegionHealthMonitor:
             daemon=True,
         )
         self._worker.start()
+
+        # 하트비트 만료 구독 스레드 시작 (Redis 백엔드 사용 시)
+        self._heartbeat_worker = threading.Thread(
+            target=self._subscribe_heartbeat_expiry,
+            name="RegionHeartbeatSubscriber",
+            daemon=True,
+        )
+        self._heartbeat_worker.start()
+
         logger.info("[RegionHealth] Started")
 
     def stop(self) -> None:

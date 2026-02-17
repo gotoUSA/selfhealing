@@ -3,7 +3,30 @@
 > **문서 번호**: 237
 > **관련 모듈**: `selfhealing.multiregion.*`, `selfhealing.core.*`, `selfhealing.services.event_bus.*`
 > **선행 문서**: 178_MULTI_REGION_ACTIVE_ACTIVE.md
-> **상태**: 구현 계획
+> **상태**: ✅ 구현 완료
+>
+> ### 구현 완료 내역
+>
+> | # | 파일 | 변경 유형 |
+> |---|------|----------|
+> | 1 | `services/event_bus/bus.py` | EventType 3개 추가 (`REGION_INSTANCE_STOPPING`, `REGION_HEARTBEAT_EXPIRED`, `REGION_PRIMARY_CHANGED`) |
+> | 2 | `interfaces/traffic_routing.py` | **신규** — `TrafficRoutingAdapter` ABC + `RoutingChange` dataclass |
+> | 3 | `adapters/traffic_routing/__init__.py` | **신규** — 패키지 init |
+> | 4 | `adapters/traffic_routing/logging_adapter.py` | **신규** — `LoggingTrafficRoutingAdapter` |
+> | 5 | `factory.py` | `register_traffic_routing()`, `get_traffic_routing()` 추가 |
+> | 6 | `multiregion/failover.py` | `_update_traffic_routing()`, `_verify_data_consistency()`, `_build_ssl_context()`, `_fetch_remote_state()` 구현 |
+> | 7 | `multiregion/heartbeat.py` | **신규** — `RegionHeartbeat` (TTL) + `MultiRegionShutdownHandler` (Push) |
+> | 8 | `multiregion/health_monitor.py` | `_subscribe_heartbeat_expiry()`, `_mark_unhealthy()` 추가, `start()` 수정 |
+> | 9 | `multiregion/config.py` | `get_peer_endpoints()` Redis-first 폴백, `_load_dynamic_peers()` Security Note |
+> | 10 | `multiregion/replicator.py` | `refresh_targets()` 메서드 추가 |
+> | 11 | `multiregion/__init__.py` | heartbeat 모듈 export 추가 |
+> | 12 | `interfaces/__init__.py` | traffic_routing export 추가 |
+>
+> **리뷰 반영 4건**: 4-1 (mTLS), 1-2/3-2 (CONFIG SET ResponseError), 2-2 (Security Note)
+>
+> **기존 단위 테스트**: 48개 전부 통과 (regression 없음)
+>
+> **통합 테스트 필요**: heartbeat TTL → health_monitor 체인은 실제 Redis keyspace notification 필요 (향후 작성)
 
 ---
 

@@ -270,9 +270,19 @@ class MultiRegionSettings(BaseSettings):
         """
         피어 리전 엔드포인트 목록 반환.
 
+        조회 순서:
+        1. Redis 동적 레지스트리 (key: multiregion:peers)
+        2. 환경변수 JSON 폴백 (SELFHEALING_MULTIREGION_PEER_REGIONS)
+
         Returns:
             RegionEndpoint 목록
         """
+        # 1차: Redis 동적 레지스트리 시도
+        dynamic = self._load_dynamic_peers()
+        if dynamic is not None:
+            return dynamic
+
+        # 2차: 환경변수 JSON 폴백 (기존 동작 유지)
         if not self.peer_regions:
             return []
 
@@ -291,6 +301,43 @@ class MultiRegionSettings(BaseSettings):
         except Exception as e:
             logger.warning(f"[MultiRegion] Failed to parse peer_regions: {e}")
             return []
+
+    def _load_dynamic_peers(self) -> list[RegionEndpoint] | None:
+        """
+        Redis에서 동적 피어 목록 로드.
+
+        실패 시 None을 반환하여 환경변수 JSON으로 폴백합니다.
+
+        Security Note:
+            peer_regions JSON에 redis_url이 포함되며,
+            비밀번호가 평문으로 저장될 수 있습니다.
+            프로덕션 환경에서는 다음을 권장합니다:
+            1. Redis ACL로 접근 제어
+            2. 보안 그룹/VPC 네트워크 격리
+            3. redis_url에서 비밀번호 분리 (환경변수로 별도 관리)
+
+        Returns:
+            RegionEndpoint 목록 또는 None (실패 시)
+        """
+        try:
+            from selfhealing.core.state_backend import get_state_backend
+
+            backend = get_state_backend()
+            data = backend.get("multiregion:peers")
+            if data and "endpoints" in data:
+                return [
+                    RegionEndpoint(
+                        region=r["region"],
+                        redis_url=r.get("redis_url", ""),
+                        kafka_bootstrap=r.get("kafka_bootstrap", ""),
+                        api_endpoint=r.get("api_endpoint", ""),
+                        priority=r.get("priority", 100),
+                    )
+                    for r in data["endpoints"]
+                ]
+        except Exception as e:
+            logger.debug(f"[MultiRegion] Dynamic peer lookup failed: {e}")
+        return None
 
     def is_primary(self) -> bool:
         """현재 리전이 Primary인지 확인."""

@@ -140,6 +140,18 @@ class EventType(str, Enum):
     """Throttle Recovery DLQ Replay 실패 (error 포함)."""
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # Multi-Region Events
+    # ═══════════════════════════════════════════════════════════════════════════
+    REGION_INSTANCE_STOPPING = "region_instance_stopping"
+    """리전 인스턴스 정상 종료 시작 (region, reason, timestamp 포함)."""
+
+    REGION_HEARTBEAT_EXPIRED = "region_heartbeat_expired"
+    """리전 하트비트 TTL 만료 — 비정상 종료 감지 (region 포함)."""
+
+    REGION_PRIMARY_CHANGED = "region_primary_changed"
+    """Primary 리전 변경됨 (from_region, to_region 포함)."""
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # Load Shedding Events
     # ═══════════════════════════════════════════════════════════════════════════
     LOAD_SHEDDING_LEVEL_CHANGED = "load_shedding_level_changed"

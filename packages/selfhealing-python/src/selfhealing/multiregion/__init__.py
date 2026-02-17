@@ -11,6 +11,8 @@ Multi-Region Active-Active 아키텍처 구현 패키지.
 - RegionFailover: 자동 페일오버
 - ServiceLocalityRouter: 크로스 리전 라우팅
 - QuorumWitness: Split-brain 방지
+- RegionHeartbeat: TTL 기반 리전 생존 신호
+- MultiRegionShutdownHandler: 정상 종료 시 피어 리전 통보
 """
 
 from __future__ import annotations
@@ -41,6 +43,10 @@ from selfhealing.multiregion.health_monitor import (
     RegionHealth,
     RegionHealthMonitor,
     RegionHealthStatus,
+)
+from selfhealing.multiregion.heartbeat import (
+    MultiRegionShutdownHandler,
+    RegionHeartbeat,
 )
 from selfhealing.multiregion.quorum import QuorumLease, QuorumWitness
 from selfhealing.multiregion.replicator import (
@@ -93,6 +99,9 @@ __all__ = [
     "FailoverState",
     "FailoverEvent",
     "RegionFailover",
+    # heartbeat
+    "RegionHeartbeat",
+    "MultiRegionShutdownHandler",
     # quorum
     "QuorumLease",
     "QuorumWitness",

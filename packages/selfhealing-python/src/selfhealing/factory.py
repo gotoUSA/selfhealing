@@ -53,6 +53,7 @@ class ProviderRegistry:
     _circuit_breaker_repos: dict[str, type] = {}
     _security_repos: dict[str, type] = {}
     _audit_adapters: dict[str, type] = {}  # Audit adapters
+    _traffic_routing_adapters: dict[str, type] = {}  # Traffic routing adapters
 
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
@@ -65,6 +66,7 @@ class ProviderRegistry:
     _default_queue: str = "sync"
     _default_repo: str = "redis"
     _default_audit: str = "file"  # Default audit adapter
+    _default_traffic_routing: str = "logging"  # Default traffic routing adapter
 
     # Singleton instances (for reuse)
     _instances: dict[str, object] = {}
@@ -108,6 +110,12 @@ class ProviderRegistry:
         """Register an audit log adapter."""
         cls._audit_adapters[name] = adapter_class
         logger.debug(f"[Registry] Registered audit adapter: {name}")
+
+    @classmethod
+    def register_traffic_routing(cls, name: str, adapter_class: type) -> None:
+        """Register a traffic routing adapter."""
+        cls._traffic_routing_adapters[name] = adapter_class
+        logger.debug(f"[Registry] Registered traffic routing: {name}")
 
     @classmethod
     def register_statistics_adapter(
@@ -429,6 +437,66 @@ class ProviderRegistry:
         except ImportError:
             pass
 
+    @classmethod
+    def get_traffic_routing(
+        cls,
+        name: str | None = None,
+        singleton: bool = True,
+    ) -> "TrafficRoutingAdapter":
+        """
+        Get traffic routing adapter instance.
+
+        Args:
+            name: Adapter name (e.g., 'logging')
+            singleton: If True, return cached instance
+
+        Returns:
+            TrafficRoutingAdapter instance
+
+        Raises:
+            ValueError: If no adapter registered with the given name
+        """
+        from selfhealing.interfaces.traffic_routing import TrafficRoutingAdapter
+
+        name = name or cls._default_traffic_routing
+
+        if singleton:
+            key = f"traffic_routing:{name}"
+            if key in cls._instances:
+                return cls._instances[key]
+
+        if name not in cls._traffic_routing_adapters:
+            # Auto-register default
+            cls._auto_register_traffic_routing_adapters()
+
+        if name not in cls._traffic_routing_adapters:
+            raise ValueError(
+                f"Unknown traffic routing adapter: {name}. "
+                f"Available: {list(cls._traffic_routing_adapters.keys())}"
+            )
+
+        instance = cls._traffic_routing_adapters[name]()
+
+        if singleton:
+            cls._instances[key] = instance
+
+        return instance
+
+    @classmethod
+    def _auto_register_traffic_routing_adapters(cls) -> None:
+        """Auto-register default traffic routing adapters."""
+        try:
+            from selfhealing.adapters.traffic_routing.logging_adapter import (
+                LoggingTrafficRoutingAdapter,
+            )
+
+            if "logging" not in cls._traffic_routing_adapters:
+                cls.register_traffic_routing(
+                    "logging", LoggingTrafficRoutingAdapter
+                )
+        except ImportError:
+            pass
+
     # =========================================================================
     # Configuration Methods
     # =========================================================================
@@ -480,6 +548,7 @@ class ProviderRegistry:
             "circuit_breaker_repo": list(cls._circuit_breaker_repos.keys()),
             "security_repo": list(cls._security_repos.keys()),
             "audit_adapter": list(cls._audit_adapters.keys()),
+            "traffic_routing": list(cls._traffic_routing_adapters.keys()),
             "statistics_adapter": (type(cls._statistics_adapter).__name__ if cls._statistics_adapter else None),
         }
 
@@ -507,12 +576,14 @@ class ProviderRegistry:
         cls._circuit_breaker_repos.clear()
         cls._security_repos.clear()
         cls._audit_adapters.clear()
+        cls._traffic_routing_adapters.clear()
         cls._statistics_adapter = None  # Reset statistics adapter
         cls._postmortem_model = None  # Reset postmortem model
         cls._default_cache = "memory"
         cls._default_queue = "sync"
         cls._default_repo = "redis"  # Changed from "django" to "redis"
         cls._default_audit = "file"
+        cls._default_traffic_routing = "logging"
         logger.debug("[Registry] Reset to initial state")
 
     # =========================================================================

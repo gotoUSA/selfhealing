@@ -14,9 +14,12 @@ Region Failover - 리전 장애 시 자동 페일오버.
 
 from __future__ import annotations
 
+import json
 import logging
+import ssl
 import threading
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -157,6 +160,11 @@ class RegionFailover:
         self._running = False
         self._worker: threading.Thread | None = None
         self._stop_event = threading.Event()
+
+        # 트래픽 라우팅 어댑터 (외부 주입 또는 ProviderRegistry 조회)
+        self._traffic_adapter: Any | None = None
+        # 마지막 라우팅 변경 결과 (롤백용)
+        self._last_routing_change: Any | None = None
 
         # 페일오버 히스토리
         self._history: list[FailoverEvent] = []
@@ -313,21 +321,184 @@ class RegionFailover:
         """
         트래픽 라우팅 업데이트.
 
+        TrafficRoutingAdapter를 통해 DNS/LB 전환을 실행합니다.
+        어댑터 미등록 시 LoggingTrafficRoutingAdapter(앱 레벨만)를 사용합니다.
+
         Args:
             target_region: 대상 리전
+
+        Raises:
+            RuntimeError: 라우팅 전환 실패 시
         """
-        # TODO: Route53 / GCP Global LB API 호출
-        logger.info(f"[Failover] Updating traffic routing to {target_region}")
+        adapter = self._get_traffic_routing_adapter()
+        result = adapter.switch_primary(self._current_primary, target_region)
+
+        if not result.success:
+            raise RuntimeError(f"Traffic routing switch failed: {result.details}")
+
+        # 롤백 정보 저장 (복구 시 사용)
+        self._last_routing_change = result
+
+        logger.info(
+            f"[Failover] Traffic routing updated: " f"{self._current_primary} → {target_region} " f"(details={result.details})"
+        )
+
+    def _get_traffic_routing_adapter(self) -> Any:
+        """
+        TrafficRoutingAdapter 인스턴스 반환.
+
+        조회 순서:
+        1. 외부 주입된 어댑터 (_traffic_adapter)
+        2. ProviderRegistry 등록 어댑터
+        3. LoggingTrafficRoutingAdapter (기본)
+        """
+        if self._traffic_adapter is not None:
+            return self._traffic_adapter
+
+        # ProviderRegistry에서 조회 시도
+        try:
+            from selfhealing.factory import ProviderRegistry
+
+            adapter = ProviderRegistry.get_traffic_routing()
+            return adapter
+        except (ValueError, AttributeError):
+            pass
+
+        # 기본 어댑터 사용
+        from selfhealing.adapters.traffic_routing.logging_adapter import (
+            LoggingTrafficRoutingAdapter,
+        )
+
+        return LoggingTrafficRoutingAdapter()
 
     def _verify_data_consistency(self, target_region: str) -> None:
         """
         데이터 정합성 확인.
 
+        확인 항목:
+        1. 복제 큐 잔량 (미복제 이벤트 존재 여부)
+        2. 핵심 키 정합성 (Emergency 모드, 시스템 제어 상태)
+
+        이슈가 있어도 failover는 계속 진행합니다 (가용성 우선).
+        이슈 정보는 경고 로그로 기록됩니다.
+
         Args:
             target_region: 대상 리전
         """
-        # TODO: 마지막 복제 오프셋 확인
-        logger.info(f"[Failover] Verifying data consistency for {target_region}")
+        issues: list[str] = []
+
+        # 1. 복제 큐 잔량 확인
+        try:
+            from selfhealing.multiregion.replicator import RegionReplicator
+
+            replicator = RegionReplicator(settings=self._settings)
+            queue_size = replicator.get_queue_size()
+            if queue_size > 0:
+                issues.append(f"Replication queue not empty: {queue_size} pending")
+                logger.warning(f"[Failover] {queue_size} events pending replication " f"to {target_region}")
+        except Exception as e:
+            logger.warning(f"[Failover] Cannot check replication queue: {e}")
+
+        # 2. 핵심 키 정합성 — 로컬 vs 타겟 리전
+        try:
+            from selfhealing.core.state_backend import get_state_backend
+
+            local_backend = get_state_backend()
+
+            critical_keys = [
+                "emergency_mode",
+                "system_control",
+            ]
+
+            for key in critical_keys:
+                local_val = local_backend.get(key)
+                # 타겟 리전 값은 API를 통해 조회
+                remote_val = self._fetch_remote_state(target_region, key)
+                if local_val != remote_val:
+                    issues.append(f"Key '{key}' mismatch: " f"local={local_val}, remote={remote_val}")
+        except Exception as e:
+            logger.warning(f"[Failover] Consistency check partial: {e}")
+
+        # 3. 결과 로깅
+        if issues:
+            logger.warning(f"[Failover] Data consistency issues for {target_region}: " f"{'; '.join(issues)}")
+        else:
+            logger.info(f"[Failover] Data consistency verified for {target_region}")
+
+    def _build_ssl_context(self) -> ssl.SSLContext | None:
+        """
+        HTTP API 호출용 SSL Context 생성.
+
+        config.py의 TLS 설정(tls_enabled, tls_cert_path, tls_key_path,
+        tls_ca_path, tls_verify_hostname)을 읽어 mTLS 컨텍스트를 생성합니다.
+
+        TLS 비활성화 시 None을 반환합니다 (일반 HTTP).
+
+        Note:
+            SecureRedisClient._create_ssl_context()와 동일한 설정을 사용하지만,
+            urllib.request.urlopen()에 전달하기 위한 별도 메서드입니다.
+            네이밍을 _build로 하여 _create와 구분합니다.
+        """
+        if not self._settings.tls_enabled:
+            return None
+
+        try:
+            context = ssl.create_default_context(
+                cafile=self._settings.tls_ca_path,
+            )
+
+            # 클라이언트 인증서 로드 (mTLS)
+            if self._settings.tls_cert_path and self._settings.tls_key_path:
+                context.load_cert_chain(
+                    certfile=self._settings.tls_cert_path,
+                    keyfile=self._settings.tls_key_path,
+                )
+
+            # 호스트명 검증 설정
+            # tls_verify_hostname=False 시에도 인증서 체인 검증은 유지 (CERT_REQUIRED)
+            context.check_hostname = self._settings.tls_verify_hostname
+            context.verify_mode = ssl.CERT_REQUIRED
+
+            return context
+        except FileNotFoundError as e:
+            logger.warning(f"[Failover] TLS certificate not found: {e}")
+            return None
+        except ssl.SSLError as e:
+            logger.error(f"[Failover] SSL context creation failed: {e}")
+            return None
+
+    def _fetch_remote_state(self, region: str, key: str) -> Any:
+        """
+        타겟 리전의 상태 값 조회 (API 경유).
+
+        mTLS가 활성화된 경우 _build_ssl_context()로 생성한
+        SSL Context를 urllib.request.urlopen()에 전달합니다.
+
+        Args:
+            region: 타겟 리전 이름
+            key: 상태 키 (예: "emergency_mode")
+
+        Returns:
+            상태 값 (dict) 또는 None (실패 시)
+        """
+        endpoints = self._settings.get_peer_endpoints()
+        ssl_ctx = self._build_ssl_context()
+
+        for ep in endpoints:
+            if ep.region == region and ep.api_endpoint:
+                try:
+                    url = f"{ep.api_endpoint}/api/v1/state/{key}/"
+                    req = urllib.request.Request(
+                        url,
+                        method="GET",
+                        headers={"Accept": "application/json"},
+                    )
+                    with urllib.request.urlopen(req, timeout=5, context=ssl_ctx) as resp:
+                        if resp.status == 200:
+                            return json.loads(resp.read())
+                except Exception as e:
+                    logger.warning(f"[Failover] Failed to fetch state '{key}' " f"from {region}: {e}")
+        return None
 
     def _send_alert(self, event: FailoverEvent) -> None:
         """

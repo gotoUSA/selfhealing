@@ -48,6 +48,14 @@ from selfhealing.interfaces.audit_adapter import (  # Enums; Data Classes; Inter
 )
 
 # =============================================================================
+# Traffic Routing Adapter Interface (Multi-Region Failover)
+# =============================================================================
+from selfhealing.interfaces.traffic_routing import (  # Data Classes; Interface
+    RoutingChange,
+    TrafficRoutingAdapter,
+)
+
+# =============================================================================
 # Cache Provider Interface
 # =============================================================================
 from selfhealing.interfaces.cache_provider import (  # Lock interface; Exceptions; Interface
@@ -262,6 +270,13 @@ __all__ = [
     "Alert",
     # Interface
     "AlertAdapter",
+    # =========================================================================
+    # Traffic Routing Adapter Interface (Multi-Region Failover)
+    # =========================================================================
+    # Data Classes
+    "RoutingChange",
+    # Interface
+    "TrafficRoutingAdapter",
     # =========================================================================
     # Statistics Repository Interface (Hybrid Storage - v2.3.0)
     # =========================================================================

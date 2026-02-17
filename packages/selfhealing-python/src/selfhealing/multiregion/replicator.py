@@ -562,6 +562,36 @@ class RegionReplicator:
         """큐 크기 반환."""
         return self._queue.qsize()
 
+    def refresh_targets(self) -> int:
+        """
+        피어 엔드포인트 목록 갱신.
+
+        동적 피어 레지스트리(Redis) 또는 환경변수에서
+        최신 엔드포인트 목록을 다시 로드하고,
+        추가/제거된 리전을 _targets에 반영합니다.
+
+        Returns:
+            갱신 후 타겟 수
+        """
+        new_endpoints = self._settings.get_peer_endpoints()
+        current_regions = {t.endpoint.region for t in self._targets}
+        new_regions = {e.region for e in new_endpoints}
+
+        # 추가된 리전
+        for endpoint in new_endpoints:
+            if endpoint.region not in current_regions:
+                self._targets.append(RedisReplicationTarget(endpoint))
+                logger.info(f"[Replicator] Added target: {endpoint.region}")
+
+        # 제거된 리전
+        removed = current_regions - new_regions
+        if removed:
+            self._targets = [t for t in self._targets if t.endpoint.region in new_regions]
+            for region in removed:
+                logger.info(f"[Replicator] Removed target: {region}")
+
+        return len(self._targets)
+
     def get_stats(self) -> dict[str, int]:
         """통계 반환."""
         with self._stats_lock:
