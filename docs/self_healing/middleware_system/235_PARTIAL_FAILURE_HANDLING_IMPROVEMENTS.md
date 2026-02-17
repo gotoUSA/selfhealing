@@ -1,8 +1,10 @@
 # 235. 분산 복구 부분 실패 처리 개선 — Saga 미도입, 기존 시스템 조합 해결
 
 작성일: 2026-02-17
+구현일: 2026-02-17
 범위: `packages/selfhealing-python/src/selfhealing`
 근거 기준: 코드 본문(추측 없음)
+상태: **구현 완료**
 
 ---
 
@@ -1301,3 +1303,24 @@ def resume_recovery(
 **2차 리뷰에서 발견된 보완점 1건**:
 리뷰어의 축약 코드 (`return self.start_recovery(...)`)에 메타데이터 기록 누락.
 `resumed_from`, `resumed_from_step`, `resume_count`, `original_initiated_by` 기록은 감사 추적에 필수이므로, 섹션 12-2의 최종 코드처럼 `start_recovery()` 호출 후 메타데이터 기록 후 반환해야 함.
+
+---
+
+## 17) 구현 완료 기록
+
+구현일: 2026-02-17
+
+### 구현 결과
+
+| # | 파일 | 변경 내용 | 상태 |
+|---|------|-----------|------|
+| 1 | `recovery_coordinator.py` `_fail_session()` | `_clear_active_session()` 호출 제거, ACTIVE_SESSION_KEY 유지 | ✅ 완료 |
+| 2 | `settings/recovery_coordinator.py` | `max_resume_count` 필드 추가 (기본값 3, 범위 1~10) | ✅ 완료 |
+| 3 | `recovery_coordinator.py` `resume_recovery()` | 전체 `with self._lock:` 내 배치, `_clear_active_session()` 제거, `resume_count` 검사, `original_initiated_by` 기록 | ✅ 완료 |
+| 4 | `coordinator.py` 부분 실패 로깅 | `extra` 메타데이터 추가 (`alert_type`, `namespace`, `succeeded_actions`, `failed_actions`, `remaining_count`) | ✅ 완료 |
+| 5 | `rollback/models.py` `PARTIALLY_COMPLETED` | 구현 시점에 이미 존재 확인 — 변경 불필요 | ✅ 이미 구현 |
+| 6 | `rollback/service.py` 부분 성공 판정 | 구현 시점에 이미 존재 확인 — 변경 불필요 | ✅ 이미 구현 |
+
+### 통합 테스트 판정
+
+**불필요** — 모든 변경이 인메모리 상태 관리 로직이며 외부 시스템(Redis, Celery) 의존 없음. 단위 테스트로 충분.

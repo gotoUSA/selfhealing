@@ -256,7 +256,14 @@ class EmergencyCoordinator:
                     f"namespace={namespace}, "
                     f"succeeded=[{', '.join(r.action_type.value for r in succeeded)}], "
                     f"failed=[{', '.join(r.action_type.value for r in failed)}], "
-                    f"remaining={len(actions) - len(results)} actions skipped"
+                    f"remaining={len(actions) - len(results)} actions skipped",
+                    extra={
+                        "alert_type": "partial_failure",
+                        "namespace": namespace,
+                        "succeeded_actions": [r.action_type.value for r in succeeded],
+                        "failed_actions": [r.action_type.value for r in failed],
+                        "remaining_count": len(actions) - len(results),
+                    },
                 )
 
                 # immediate 액션 실패 시 나머지 액션 중단 (안전 우선)

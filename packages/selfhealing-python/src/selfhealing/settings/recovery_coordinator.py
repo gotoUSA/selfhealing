@@ -202,6 +202,12 @@ class RecoveryCoordinatorSettings(BaseSettings):
         le=1800,
         description="단일 복구 단계 실행 타임아웃 (초)",
     )
+    max_resume_count: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="실패한 복구 세션의 최대 재개 횟수. 초과 시 수동 개입 필요",
+    )
 
     @field_validator(
         "level3_health_check_success_threshold",
@@ -222,20 +228,10 @@ class RecoveryCoordinatorSettings(BaseSettings):
     def validate_level_consistency(self) -> "RecoveryCoordinatorSettings":
         """레벨별 설정 일관성 검증 (LEVEL_3 > LEVEL_2 > LEVEL_1)."""
         # LEVEL_3가 가장 엄격해야 함
-        if (
-            self.level3_health_check_success_threshold
-            < self.level2_health_check_success_threshold
-        ):
-            logger.warning(
-                "[RecoveryCoordinatorSettings] LEVEL_3 success_threshold should be >= LEVEL_2"
-            )
-        if (
-            self.level3_health_check_error_rate_threshold
-            > self.level2_health_check_error_rate_threshold
-        ):
-            logger.warning(
-                "[RecoveryCoordinatorSettings] LEVEL_3 error_rate_threshold should be <= LEVEL_2"
-            )
+        if self.level3_health_check_success_threshold < self.level2_health_check_success_threshold:
+            logger.warning("[RecoveryCoordinatorSettings] LEVEL_3 success_threshold should be >= LEVEL_2")
+        if self.level3_health_check_error_rate_threshold > self.level2_health_check_error_rate_threshold:
+            logger.warning("[RecoveryCoordinatorSettings] LEVEL_3 error_rate_threshold should be <= LEVEL_2")
         return self
 
 

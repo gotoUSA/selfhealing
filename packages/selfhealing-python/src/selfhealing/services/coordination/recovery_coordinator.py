@@ -567,6 +567,11 @@ class RecoveryCoordinator:
         IdempotentStepHandlers가 이미 완료된 단계를 자동 스킵하므로,
         실패 지점의 단계만 재실행된다.
 
+        새 세션은 현재 시점의 설정(Config)으로 복구 단계를 재구성합니다.
+        이전 세션의 IdempotencyRecord 캐시와 session_id가 다르므로,
+        _check_already_applied()의 비즈니스 레벨 체크에 의존합니다.
+        설정 변경 후 resume하는 경우에도 안전합니다 (이미 적용된 단계 자동 스킵).
+
         활용하는 기존 컴포넌트:
         - IdempotentStepHandlerRegistry: 완료된 단계 캐시 결과 반환
         - RecoverySession.current_step_index: 실패 지점 위치
@@ -580,7 +585,7 @@ class RecoveryCoordinator:
             새로 생성된 RecoverySession (실패 지점부터 시작)
 
         Raises:
-            ValueError: 재개할 실패 세션이 없는 경우
+            ValueError: 재개할 실패 세션이 없거나, 최대 재개 횟수 초과 시
         """
         with self._lock:
             # 1. 마지막 실패 세션 조회
@@ -588,35 +593,48 @@ class RecoveryCoordinator:
             if not last_session or last_session.status != RecoveryStatus.FAILED:
                 raise ValueError(f"No failed recovery session to resume for namespace={namespace}")
 
-            # 2. 실패 지점 정보 추출
+            # 2. 최대 재개 횟수 검사 (무한 루프 방지)
+            settings = get_recovery_coordinator_settings()
+            resume_count = (last_session.metadata or {}).get("resume_count", 0)
+            if resume_count >= settings.max_resume_count:
+                raise ValueError(
+                    f"Max resume count ({settings.max_resume_count}) exceeded "
+                    f"for namespace={namespace}. Manual intervention required."
+                )
+
+            # 3. 실패 지점 정보 추출
             failed_step_index = last_session.current_step_index
             trigger_level = last_session.trigger_level
 
             logger.info(
-                f"[Recovery] Resuming from step {failed_step_index}: " f"session={last_session.id}, level={trigger_level}"
+                f"[Recovery] Resuming from step {failed_step_index}: "
+                f"session={last_session.id}, level={trigger_level}, "
+                f"resume_attempt={resume_count + 1}/{settings.max_resume_count}"
             )
 
-            # 3. 이전 실패 세션 참조 제거
-            # start_recovery()의 중복 체크(L393-L398)에서
-            # FAILED 세션은 차단하지 않으므로 참조만 제거하면 됨
-            self._clear_active_session(namespace)
+            # 4. 새 세션 시작 (RLock 재진입으로 데드락 없음)
+            # _clear_active_session() 불필요:
+            #   - start_recovery()의 중복 체크가 FAILED 상태를 차단하지 않음
+            #   - start_recovery()의 _set_active_session()이 기존 키를 덮어씀
+            new_session = self.start_recovery(
+                namespace=namespace,
+                trigger_level=trigger_level,
+                initiated_by=initiated_by,
+            )
 
-        # 4. 새 세션 시작 — IdempotentStepHandlers가 완료된 단계 자동 스킵
-        new_session = self.start_recovery(
-            namespace=namespace,
-            trigger_level=trigger_level,
-            initiated_by=initiated_by,
-        )
+            # 5. 메타데이터에 재개 정보 기록
+            new_session.metadata = new_session.metadata or {}
+            new_session.metadata["resumed_from"] = last_session.id
+            new_session.metadata["resumed_from_step"] = failed_step_index
+            new_session.metadata["resume_count"] = resume_count + 1
+            new_session.metadata["original_initiated_by"] = last_session.initiated_by
+            self._save_session(new_session)
 
-        # 5. 메타데이터에 재개 정보 기록
-        new_session.metadata = new_session.metadata or {}
-        new_session.metadata["resumed_from"] = last_session.id
-        new_session.metadata["resumed_from_step"] = failed_step_index
-        self._save_session(new_session)
+            logger.info(
+                f"[Recovery] Resumed: new_session={new_session.id}, " f"from={last_session.id}, step={failed_step_index}"
+            )
 
-        logger.info(f"[Recovery] Resumed: new_session={new_session.id}, " f"from={last_session.id}, step={failed_step_index}")
-
-        return new_session
+            return new_session
 
     def abort_recovery(
         self,
@@ -1313,15 +1331,21 @@ class RecoveryCoordinator:
         session: RecoverySession,
         error: str,
     ) -> None:
-        """세션 실패 처리."""
+        """세션 실패 처리.
+
+        ACTIVE_SESSION_KEY를 유지하여 resume_recovery()가
+        실패 세션을 조회할 수 있도록 한다.
+        start_recovery()의 중복 체크에서 FAILED 상태는
+        차단 대상이 아니므로 새 복구 시작에 영향 없음.
+        """
         session.status = RecoveryStatus.FAILED
         session.abort_reason = error
         session.completed_at = datetime.now(timezone.utc).isoformat()
 
-        # Phase 5.3: 복구 실패 감사 기록 (CascadeEvent는 _record_step_executed에서 기록)
-
         self._save_session(session)
-        self._clear_active_session(session.namespace)
+        # ACTIVE_SESSION_KEY 유지: resume_recovery()가 실패 세션을 조회할 수 있도록
+        # start_recovery()가 _set_active_session()으로 기존 키를 덮어쓰므로
+        # 새 복구 시작 시 자연스럽게 교체됨
 
         # 락 해제
         self._recovery_lock.release(session.namespace, session.id)
