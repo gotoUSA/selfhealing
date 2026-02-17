@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from selfhealing.multiregion.config import MultiRegionSettings
 
+from selfhealing.core.shutdown_coordinator import ShutdownHandler
+
 logger = logging.getLogger(__name__)
 
 
@@ -121,7 +123,7 @@ class RegionHeartbeat:
         return self._running
 
 
-class MultiRegionShutdownHandler:
+class MultiRegionShutdownHandler(ShutdownHandler):
     """
     정상 종료 시 피어 리전에 즉시 통보 (Layer 1 Push).
 

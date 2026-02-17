@@ -197,7 +197,10 @@ class TestMultiRegionShutdownHandlerBehavior:
 
     def test_implements_shutdown_handler_interface(self, settings: MultiRegionSettings) -> None:
         """ShutdownHandler ABC의 3개 메서드를 모두 구현한다."""
+        from selfhealing.core.shutdown_coordinator import ShutdownHandler
+
         handler = MultiRegionShutdownHandler(settings)
+        assert isinstance(handler, ShutdownHandler)
         assert hasattr(handler, "on_shutdown_start")
         assert hasattr(handler, "on_drain_complete")
         assert hasattr(handler, "on_force_shutdown")
