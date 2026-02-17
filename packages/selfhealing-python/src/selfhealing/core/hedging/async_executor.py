@@ -274,6 +274,43 @@ class AsyncHedgingExecutor:
 
             return None, False, succeeded, failed + 1, primary_latency_ms, error_msg
 
+    def _handle_completed_async_tasks(
+        self,
+        done: set[asyncio.Task],
+        tasks: dict[asyncio.Task, HedgingCandidate],
+        pending: set[asyncio.Task],
+        start_time: float,
+        primary_candidate: HedgingCandidate,
+        primary_latency_ms: float | None,
+        hedged: bool,
+        succeeded: int,
+        failed: int,
+        errors: list[str],
+    ) -> tuple[HedgingResult[T] | None, int, int, float | None]:
+        """완료된 비동기 태스크들을 처리. 첫 성공 시 HedgingResult 반환."""
+        for task in done:
+            candidate = tasks[task]
+            latency_ms = (time.perf_counter() - start_time) * 1000
+
+            result, success, succeeded, failed, primary_latency_ms, error = self._process_completed_task(
+                task, candidate, latency_ms, primary_candidate, primary_latency_ms, hedged, len(tasks), succeeded, failed
+            )
+
+            if success and result:
+                if self._config.cancel_on_success:
+                    for p in pending:
+                        p.cancel()
+                return result, succeeded, failed, primary_latency_ms
+
+            if error:
+                if error.startswith("non_retryable:"):
+                    for p in pending:
+                        p.cancel()
+                    raise NonRetryableHedgingError(error[14:])
+                errors.append(error)
+
+        return None, succeeded, failed, primary_latency_ms
+
     async def _wait_for_first_success(
         self,
         tasks: dict[asyncio.Task, HedgingCandidate],
@@ -307,26 +344,20 @@ class AsyncHedgingExecutor:
                     p.cancel()
                 raise
 
-            for task in done:
-                candidate = tasks[task]
-                latency_ms = (time.perf_counter() - start_time) * 1000
-
-                result, success, succeeded, failed, primary_latency_ms, error = self._process_completed_task(
-                    task, candidate, latency_ms, primary_candidate, primary_latency_ms, hedged, len(tasks), succeeded, failed
-                )
-
-                if success and result:
-                    if self._config.cancel_on_success:
-                        for p in pending:
-                            p.cancel()
-                    return result
-
-                if error:
-                    if error.startswith("non_retryable:"):
-                        for p in pending:
-                            p.cancel()
-                        raise NonRetryableHedgingError(error[14:])
-                    errors.append(error)
+            result, succeeded, failed, primary_latency_ms = self._handle_completed_async_tasks(
+                done,
+                tasks,
+                pending,
+                start_time,
+                primary_candidate,
+                primary_latency_ms,
+                hedged,
+                succeeded,
+                failed,
+                errors,
+            )
+            if result is not None:
+                return result
 
             remaining_timeout = self._config.timeout - (time.perf_counter() - start_time)
 

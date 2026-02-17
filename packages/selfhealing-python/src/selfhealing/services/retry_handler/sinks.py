@@ -46,6 +46,32 @@ class DLQSink:
 
         return self._store_to_dlq(error, context, policy_result)
 
+    @staticmethod
+    def _build_dlq_metadata(policy_result: PolicyResult) -> tuple[dict[str, Any], str]:
+        """DLQ 저장을 위한 메타데이터와 도메인을 구성."""
+        domain = policy_result.metadata.get("domain", "default")
+        metadata: dict[str, Any] = {
+            "retry_history": policy_result.metadata.get("retry_history", []),
+            "max_attempts": policy_result.metadata.get("max_attempts"),
+            "domain": domain,
+            "final_attempt": policy_result.total_attempts,
+            "executed_policies": policy_result.executed_policies,
+        }
+        return metadata, domain
+
+    @staticmethod
+    def _extract_context_fields(context: PolicyContext | None) -> dict[str, Any]:
+        """Context에서 비즈니스 식별자와 데이터를 추출."""
+        extra = context.extra if context and context.extra else {}
+        user_id_raw = extra.get("user_id")
+        return {
+            "entity_id": context.order_id if context else None,
+            "user_id": int(user_id_raw) if user_id_raw is not None else None,
+            "snapshot_data": extra.get("snapshot_data", {}),
+            "request_data": extra.get("request_data", {}),
+            "response_data": extra.get("response_data", {}),
+        }
+
     def _store_to_dlq(
         self,
         error: Exception,
@@ -57,30 +83,19 @@ class DLQSink:
             from selfhealing.services.dlq import store_to_dlq
 
             error_type = type(error).__name__ if error else "Unknown"
-            domain = policy_result.metadata.get("domain", "default")
-
-            metadata: dict[str, Any] = {
-                "retry_history": policy_result.metadata.get("retry_history", []),
-                "max_attempts": policy_result.metadata.get("max_attempts"),
-                "domain": domain,
-                "final_attempt": policy_result.total_attempts,
-                "executed_policies": policy_result.executed_policies,
-            }
-
-            # Context에서 비즈니스 식별자 추출
-            order_id = context.order_id if context else None
-            user_id = context.extra.get("user_id") if context and context.extra else None
+            metadata, domain = self._build_dlq_metadata(policy_result)
+            ctx_fields = self._extract_context_fields(context)
 
             result = store_to_dlq(
                 domain=domain,
                 failure_type=f"MAX_RETRIES_{error_type.upper()}",
-                entity_id=order_id,
-                user_id=int(user_id) if user_id is not None else None,
+                entity_id=ctx_fields["entity_id"],
+                user_id=ctx_fields["user_id"],
                 error_code=error_type,
                 error_message=str(error)[:1000] if error else "",
-                snapshot_data=context.extra.get("snapshot_data", {}) if context and context.extra else {},
-                request_data=context.extra.get("request_data", {}) if context and context.extra else {},
-                response_data=context.extra.get("response_data", {}) if context and context.extra else {},
+                snapshot_data=ctx_fields["snapshot_data"],
+                request_data=ctx_fields["request_data"],
+                response_data=ctx_fields["response_data"],
                 metadata=metadata,
                 next_action_hint="Review error and retry if transient",
                 recommended_action="manual_check",

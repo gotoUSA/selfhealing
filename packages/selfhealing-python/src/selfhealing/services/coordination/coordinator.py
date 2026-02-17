@@ -154,6 +154,79 @@ class EmergencyCoordinator:
             self._namespace_states[namespace] = ScopedEmergencyState(namespace=namespace)
         return self._namespace_states[namespace]
 
+    def _check_transition_guards(
+        self,
+        namespace: str,
+        force: bool,
+        cascade_event_id: str,
+    ) -> CoordinationResult | None:
+        """플래핑 가드(쿨다운+플래핑) 확인. 차단 시 CoordinationResult 반환."""
+        if force:
+            return None
+
+        # 쿨다운 확인
+        last_at = self._last_transition_at.get(namespace)
+        cooldown_ok, cooldown_reason = self._anti_flapping_guard.check_cooldown_elapsed(last_transition_at=last_at)
+        if not cooldown_ok:
+            logger.warning(f"[Coordinator] Level change blocked by cooldown: {cooldown_reason}")
+            return CoordinationResult(
+                success=False,
+                cascade_event_id=cascade_event_id,
+                executed_actions=[],
+                trigger_type="EMERGENCY_LEVEL_CHANGED",
+                namespace=namespace,
+            )
+
+        # 플래핑 확인
+        flap_ok, flap_reason = self._anti_flapping_guard.check_transition_allowed()
+        if not flap_ok:
+            logger.warning(f"[Coordinator] Level change blocked by flapping guard: {flap_reason}")
+            return CoordinationResult(
+                success=False,
+                cascade_event_id=cascade_event_id,
+                executed_actions=[],
+                trigger_type="EMERGENCY_LEVEL_CHANGED",
+                namespace=namespace,
+            )
+
+        return None
+
+    def _execute_actions_with_partial_failure(
+        self,
+        actions: list[CoordinationAction],
+        namespace: str,
+        trigger_event_id: str,
+    ) -> list[CoordinationActionResult]:
+        """액션 실행 (부분 실패 시 명시적 로깅 + immediate 액션 fail-fast)."""
+        results = []
+        for action in actions:
+            result = self._execute_action(action, namespace, trigger_event_id)
+            results.append(result)
+
+            if not result.success:
+                succeeded = [r for r in results if r.success]
+                failed = [r for r in results if not r.success]
+                logger.warning(
+                    f"[Coordinator] Partial failure during level change: "
+                    f"namespace={namespace}, "
+                    f"succeeded=[{', '.join(r.action_type.value for r in succeeded)}], "
+                    f"failed=[{', '.join(r.action_type.value for r in failed)}], "
+                    f"remaining={len(actions) - len(results)} actions skipped",
+                    extra={
+                        "alert_type": "partial_failure",
+                        "namespace": namespace,
+                        "succeeded_actions": [r.action_type.value for r in succeeded],
+                        "failed_actions": [r.action_type.value for r in failed],
+                        "remaining_count": len(actions) - len(results),
+                    },
+                )
+
+                if action.immediate:
+                    logger.error(f"[Coordinator] Immediate action failed, " f"aborting remaining actions: {action.type.value}")
+                    break
+
+        return results
+
     def on_emergency_level_changed(
         self,
         old_level: EmergencyLevel,
@@ -185,31 +258,9 @@ class EmergencyCoordinator:
         cascade_event_id = f"cascade-{uuid.uuid4().hex[:12]}"
 
         # 1. 플래핑 가드 확인 (force=True면 건너뜀)
-        if not force:
-            # 쿨다운 확인
-            last_at = self._last_transition_at.get(namespace)
-            cooldown_ok, cooldown_reason = self._anti_flapping_guard.check_cooldown_elapsed(last_transition_at=last_at)
-            if not cooldown_ok:
-                logger.warning(f"[Coordinator] Level change blocked by cooldown: {cooldown_reason}")
-                return CoordinationResult(
-                    success=False,
-                    cascade_event_id=cascade_event_id,
-                    executed_actions=[],
-                    trigger_type="EMERGENCY_LEVEL_CHANGED",
-                    namespace=namespace,
-                )
-
-            # 플래핑 확인
-            flap_ok, flap_reason = self._anti_flapping_guard.check_transition_allowed()
-            if not flap_ok:
-                logger.warning(f"[Coordinator] Level change blocked by flapping guard: {flap_reason}")
-                return CoordinationResult(
-                    success=False,
-                    cascade_event_id=cascade_event_id,
-                    executed_actions=[],
-                    trigger_type="EMERGENCY_LEVEL_CHANGED",
-                    namespace=namespace,
-                )
+        guard_result = self._check_transition_guards(namespace, force, cascade_event_id)
+        if guard_result is not None:
+            return guard_result
 
         # 2. 전환 기록
         now = datetime.now(timezone.utc)
@@ -223,9 +274,8 @@ class EmergencyCoordinator:
 
         logger.info(f"[Coordinator] Level changed: {old_level.name} -> {new_level.name} " f"on namespace={namespace}")
 
-        # 4. 액션이 없으면 빈 결과 반환 (Cascade 기록 없음)
+        # 4. 액션이 없으면 빈 결과 반환 (Cascade 기록만)
         if not actions:
-            # Cascade Event 기록: 액션 없이 레벨 변경만 기록
             self._record_cascade_event(
                 old_level=old_level,
                 new_level=new_level,
@@ -241,35 +291,8 @@ class EmergencyCoordinator:
                 namespace=namespace,
             )
 
-        # 5. 액션 실행 (부분 실패 시 명시적 로깅 + immediate 액션 fail-fast)
-        results = []
-        for action in actions:
-            result = self._execute_action(action, namespace, trigger_event_id)
-            results.append(result)
-
-            if not result.success:
-                # 부분 실패 시 이미 실행된 액션 상태를 명시적으로 로깅
-                succeeded = [r for r in results if r.success]
-                failed = [r for r in results if not r.success]
-                logger.warning(
-                    f"[Coordinator] Partial failure during level change: "
-                    f"namespace={namespace}, "
-                    f"succeeded=[{', '.join(r.action_type.value for r in succeeded)}], "
-                    f"failed=[{', '.join(r.action_type.value for r in failed)}], "
-                    f"remaining={len(actions) - len(results)} actions skipped",
-                    extra={
-                        "alert_type": "partial_failure",
-                        "namespace": namespace,
-                        "succeeded_actions": [r.action_type.value for r in succeeded],
-                        "failed_actions": [r.action_type.value for r in failed],
-                        "remaining_count": len(actions) - len(results),
-                    },
-                )
-
-                # immediate 액션 실패 시 나머지 액션 중단 (안전 우선)
-                if action.immediate:
-                    logger.error(f"[Coordinator] Immediate action failed, " f"aborting remaining actions: {action.type.value}")
-                    break
+        # 5. 액션 실행
+        results = self._execute_actions_with_partial_failure(actions, namespace, trigger_event_id)
 
         # 6. Cascade Event 기록 (Phase 7)
         self._record_cascade_event(

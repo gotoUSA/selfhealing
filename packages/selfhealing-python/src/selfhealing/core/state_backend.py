@@ -87,7 +87,30 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
         self._directory = Path(directory)
         self._directory.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._recover_orphan_tmp_files()
         logger.info(f"[StateBackend] File backend initialized: {self._directory}")
+
+    def _recover_orphan_tmp_files(self) -> None:
+        """
+        Recover orphan .tmp files left by interrupted atomic writes.
+
+        On startup, find .tmp files whose corresponding .json does not exist
+        and rename them to .json to recover the data. If .json already exists,
+        the .tmp is stale and should be removed.
+        """
+        for tmp_path in self._directory.glob("*.tmp"):
+            json_path = tmp_path.with_suffix(".json")
+            try:
+                if not json_path.exists():
+                    # .json missing → .tmp has the latest data, recover it
+                    tmp_path.replace(json_path)
+                    logger.info(f"[StateBackend] Recovered orphan tmp: {tmp_path.name} → {json_path.name}")
+                else:
+                    # .json exists → .tmp is stale, remove it
+                    tmp_path.unlink()
+                    logger.debug(f"[StateBackend] Removed stale tmp: {tmp_path.name}")
+            except Exception as e:
+                logger.warning(f"[StateBackend] Failed to recover {tmp_path.name}: {e}")
 
     def _get_file_path(self, key: str) -> Path:
         # Sanitize key for filename
@@ -101,6 +124,16 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                 if file_path.exists():
                     with open(file_path, encoding="utf-8") as f:
                         return json.load(f)
+                # Fallback: check for orphan .tmp if .json is missing
+                tmp_path = file_path.with_suffix(".tmp")
+                if tmp_path.exists():
+                    try:
+                        tmp_path.replace(file_path)
+                        logger.info(f"[StateBackend] Recovered orphan tmp on read: {tmp_path.name}")
+                        with open(file_path, encoding="utf-8") as f:
+                            return json.load(f)
+                    except Exception as recover_err:
+                        logger.warning(f"[StateBackend] Failed to recover tmp for {key}: {recover_err}")
             except Exception as e:
                 logger.warning(f"[StateBackend] Error reading {key}: {e}")
         return default
@@ -108,14 +141,20 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
     def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
         file_path = self._get_file_path(key)
         with self._lock:
+            temp_file = file_path.with_suffix(".tmp")
             try:
                 # Atomic write
-                temp_file = file_path.with_suffix(".tmp")
                 with open(temp_file, "w", encoding="utf-8") as f:
                     json.dump(value, f, indent=2, default=str)
                 temp_file.replace(file_path)
             except Exception as e:
                 logger.error(f"[StateBackend] Error writing {key}: {e}")
+                # Clean up orphan .tmp to avoid stale data on next read
+                try:
+                    if temp_file.exists():
+                        temp_file.unlink()
+                except OSError:
+                    pass
                 raise
 
     def delete(self, key: str) -> bool:

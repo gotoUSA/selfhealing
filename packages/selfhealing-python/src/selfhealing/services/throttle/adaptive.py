@@ -162,6 +162,152 @@ except ImportError:
     pass
 
 
+def _record_core_metrics(
+    service: str,
+    limit: int | None,
+    rtt_ms: float | None,
+    gradient: float | None,
+    exemplar: dict | None,
+) -> None:
+    """Core 메트릭 기록 (limit, rtt, gradient)."""
+    if limit is not None:
+        _throttle_current_limit.labels(service=service).set(limit)
+
+    if rtt_ms is not None:
+        try:
+            _throttle_rtt_histogram.labels(service=service).observe(rtt_ms, exemplar=exemplar)
+        except TypeError:
+            _throttle_rtt_histogram.labels(service=service).observe(rtt_ms)
+
+    if gradient is not None:
+        _throttle_gradient_gauge.labels(service=service).set(gradient)
+
+
+def _record_request_metrics(
+    service: str,
+    request_result: str | None,
+    denied_reason: str | None,
+    exemplar: dict | None,
+) -> None:
+    """Request 허용/거부 메트릭 기록."""
+    if request_result is None:
+        return
+
+    _throttle_requests_total.labels(service=service, result=request_result).inc()
+    if request_result == "allowed":
+        try:
+            _throttle_allowed_total.labels(service=service).inc(exemplar=exemplar)
+        except TypeError:
+            _throttle_allowed_total.labels(service=service).inc()
+    elif request_result == "denied" and denied_reason:
+        _throttle_denied_total.labels(service=service, reason=denied_reason).inc()
+
+
+def _record_sla_metrics(service: str, sla_event: str | None) -> None:
+    """SLA 경고/위험 메트릭 기록."""
+    if sla_event == "warning":
+        _throttle_sla_warnings_total.labels(service=service).inc()
+    elif sla_event == "critical":
+        _throttle_sla_criticals_total.labels(service=service).inc()
+
+
+def _record_emergency_cb_metrics(
+    service: str,
+    emergency_level: int | None,
+    gradient_frozen: bool | None,
+    cb_state: str | None,
+) -> None:
+    """Emergency / Circuit Breaker 메트릭 기록."""
+    if emergency_level is not None:
+        _throttle_emergency_level_gauge.labels(service=service).set(emergency_level)
+        _throttle_emergency_adjustments_total.labels(level=str(emergency_level)).inc()
+
+    if gradient_frozen is not None:
+        _throttle_gradient_frozen_gauge.labels(service=service).set(1 if gradient_frozen else 0)
+
+    if cb_state is not None:
+        _throttle_cb_adjustments_total.labels(service=service, cb_state=cb_state).inc()
+
+
+def _record_recovery_full_stop_metrics(
+    service: str,
+    recovery_dampening_active: bool | None,
+    recovery_dampening_step: int | None,
+    full_stop_active: bool | None,
+    full_stop_reason: str | None,
+) -> None:
+    """Recovery 및 Full Stop 메트릭 기록."""
+    if recovery_dampening_active is not None:
+        _recovery_active_gauge.labels(service=service).set(1 if recovery_dampening_active else 0)
+
+    if recovery_dampening_step is not None:
+        _recovery_step_gauge.labels(service=service).set(recovery_dampening_step)
+
+    if full_stop_active is not None:
+        _full_stop_gauge.labels(service=service).set(1 if full_stop_active else 0)
+
+    if full_stop_reason is not None:
+        _throttle_full_stop_activations_total.labels(service=service, reason=full_stop_reason).inc()
+
+
+def _record_limit_change_metrics(
+    service: str,
+    limit_change_direction: str | None,
+    limit_change_trigger: str | None,
+    limit_change_percent: float | None,
+) -> None:
+    """Limit 변경 메트릭 기록."""
+    if not (limit_change_direction and limit_change_trigger):
+        return
+
+    _throttle_limit_changes_total.labels(
+        service=service,
+        direction=limit_change_direction,
+        trigger=limit_change_trigger,
+    ).inc()
+
+    if limit_change_percent is not None:
+        _throttle_limit_change_magnitude.labels(
+            service=service,
+            direction=limit_change_direction,
+        ).observe(abs(limit_change_percent))
+
+
+def _record_saturation_metrics(service: str, limit: int | None, max_limit: int | None) -> None:
+    """Saturation 비율 메트릭 기록."""
+    if limit is not None and max_limit is not None and max_limit > 0:
+        saturation = limit / max_limit
+        _throttle_saturation_ratio.labels(service=service).set(saturation)
+        _throttle_max_limit_gauge.labels(service=service).set(max_limit)
+
+
+def _record_error_budget_metrics(
+    service: str,
+    error_budget_status: str | None,
+    error_budget_multiplier: float | None,
+    error_budget_reduction_active: bool | None,
+    error_budget_preemptive_risk_level: str | None,
+) -> None:
+    """Error Budget 연동 메트릭 기록."""
+    if error_budget_status is not None and _throttle_error_budget_adjustments_total:
+        _throttle_error_budget_adjustments_total.labels(
+            service=service,
+            budget_status=error_budget_status,
+        ).inc()
+
+    if error_budget_multiplier is not None and _throttle_error_budget_multiplier_gauge:
+        _throttle_error_budget_multiplier_gauge.labels(service=service).set(error_budget_multiplier)
+
+    if error_budget_reduction_active is not None and _throttle_error_budget_reduction_active_gauge:
+        _throttle_error_budget_reduction_active_gauge.labels(service=service).set(1 if error_budget_reduction_active else 0)
+
+    if error_budget_preemptive_risk_level is not None and _throttle_error_budget_preemptive_total:
+        _throttle_error_budget_preemptive_total.labels(
+            service=service,
+            risk_level=error_budget_preemptive_risk_level,
+        ).inc()
+
+
 def _record_throttle_metrics(
     service: str,
     # 기존 파라미터 (하위호환)
@@ -200,108 +346,51 @@ def _record_throttle_metrics(
         return
 
     try:
-        exemplar = None
-        if trace_id:
-            exemplar = {"trace_id": trace_id}
+        exemplar = {"trace_id": trace_id} if trace_id else None
 
-        # --- Core metrics ---
-        if limit is not None:
-            _throttle_current_limit.labels(service=service).set(limit)
-
-        if rtt_ms is not None:
-            try:
-                _throttle_rtt_histogram.labels(service=service).observe(rtt_ms, exemplar=exemplar)
-            except TypeError:
-                _throttle_rtt_histogram.labels(service=service).observe(rtt_ms)
-
-        if gradient is not None:
-            _throttle_gradient_gauge.labels(service=service).set(gradient)
-
-        # --- Request metrics ---
-        if request_result is not None:
-            _throttle_requests_total.labels(service=service, result=request_result).inc()
-            if request_result == "allowed":
-                try:
-                    _throttle_allowed_total.labels(service=service).inc(exemplar=exemplar)
-                except TypeError:
-                    _throttle_allowed_total.labels(service=service).inc()
-            elif request_result == "denied" and denied_reason:
-                _throttle_denied_total.labels(service=service, reason=denied_reason).inc()
-
-        # --- SLA metrics ---
-        if sla_event == "warning":
-            _throttle_sla_warnings_total.labels(service=service).inc()
-        elif sla_event == "critical":
-            _throttle_sla_criticals_total.labels(service=service).inc()
-
-        # --- Emergency metrics ---
-        if emergency_level is not None:
-            _throttle_emergency_level_gauge.labels(service=service).set(emergency_level)
-            _throttle_emergency_adjustments_total.labels(level=str(emergency_level)).inc()
-
-        if gradient_frozen is not None:
-            _throttle_gradient_frozen_gauge.labels(service=service).set(1 if gradient_frozen else 0)
-
-        if cb_state is not None:
-            _throttle_cb_adjustments_total.labels(service=service, cb_state=cb_state).inc()
-
-        # --- Recovery metrics ---
-        if recovery_dampening_active is not None:
-            _recovery_active_gauge.labels(service=service).set(1 if recovery_dampening_active else 0)
-
-        if recovery_dampening_step is not None:
-            _recovery_step_gauge.labels(service=service).set(recovery_dampening_step)
-
-        # --- Full Stop metrics ---
-        if full_stop_active is not None:
-            _full_stop_gauge.labels(service=service).set(1 if full_stop_active else 0)
-
-        if full_stop_reason is not None:
-            _throttle_full_stop_activations_total.labels(service=service, reason=full_stop_reason).inc()
-
-        # --- Limit change metrics ---
-        if limit_change_direction and limit_change_trigger:
-            _throttle_limit_changes_total.labels(
-                service=service,
-                direction=limit_change_direction,
-                trigger=limit_change_trigger,
-            ).inc()
-
-            if limit_change_percent is not None:
-                _throttle_limit_change_magnitude.labels(
-                    service=service,
-                    direction=limit_change_direction,
-                ).observe(abs(limit_change_percent))
-
-        # --- Saturation metrics ---
-        if limit is not None and max_limit is not None and max_limit > 0:
-            saturation = limit / max_limit
-            _throttle_saturation_ratio.labels(service=service).set(saturation)
-            _throttle_max_limit_gauge.labels(service=service).set(max_limit)
-
-        # --- Error Budget metrics ---
-        if error_budget_status is not None and _throttle_error_budget_adjustments_total:
-            _throttle_error_budget_adjustments_total.labels(
-                service=service,
-                budget_status=error_budget_status,
-            ).inc()
-
-        if error_budget_multiplier is not None and _throttle_error_budget_multiplier_gauge:
-            _throttle_error_budget_multiplier_gauge.labels(service=service).set(error_budget_multiplier)
-
-        if error_budget_reduction_active is not None and _throttle_error_budget_reduction_active_gauge:
-            _throttle_error_budget_reduction_active_gauge.labels(service=service).set(
-                1 if error_budget_reduction_active else 0
-            )
-
-        if error_budget_preemptive_risk_level is not None and _throttle_error_budget_preemptive_total:
-            _throttle_error_budget_preemptive_total.labels(
-                service=service,
-                risk_level=error_budget_preemptive_risk_level,
-            ).inc()
+        _record_core_metrics(service, limit, rtt_ms, gradient, exemplar)
+        _record_request_metrics(service, request_result, denied_reason, exemplar)
+        _record_sla_metrics(service, sla_event)
+        _record_emergency_cb_metrics(service, emergency_level, gradient_frozen, cb_state)
+        _record_recovery_full_stop_metrics(
+            service,
+            recovery_dampening_active,
+            recovery_dampening_step,
+            full_stop_active,
+            full_stop_reason,
+        )
+        _record_limit_change_metrics(
+            service,
+            limit_change_direction,
+            limit_change_trigger,
+            limit_change_percent,
+        )
+        _record_saturation_metrics(service, limit, max_limit)
+        _record_error_budget_metrics(
+            service,
+            error_budget_status,
+            error_budget_multiplier,
+            error_budget_reduction_active,
+            error_budget_preemptive_risk_level,
+        )
 
     except Exception as e:
         logger.debug(f"[AdaptiveThrottle] Failed to record metrics: {e}")
+
+
+# =============================================================================
+# Trace ID Helper (Fail-Open)
+# =============================================================================
+
+
+def _get_trace_id_safe() -> str | None:
+    """현재 Trace ID를 안전하게 가져옵니다. 실패 시 None 반환."""
+    try:
+        from selfhealing.observability import get_current_trace_id_from_otel
+
+        return get_current_trace_id_from_otel()
+    except Exception:
+        return None
 
 
 # =============================================================================
@@ -1563,6 +1652,69 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
                         gradient=gradient,
                     )
 
+    def _check_error_budget_block(
+        self,
+        tier_id: str,
+        store_rejection: bool,
+        context: dict | None,
+    ) -> ThrottleResult | None:
+        """Error Budget Critical 상태에서 non_essential 티어 거부 판정."""
+        if not self._error_budget_limit_reduction_active:
+            return None
+        if tier_id != "non_essential" or self._error_budget_multiplier > 0.5:
+            return None
+
+        trace_id = _get_trace_id_safe()
+        _record_throttle_metrics(
+            service=self._service_name,
+            request_result="denied",
+            denied_reason="error_budget_critical_non_essential_blocked",
+            trace_id=trace_id,
+        )
+
+        result = ThrottleResult(
+            allowed=False,
+            current_count=0,
+            limit=self._current_limit,
+            remaining=0,
+            reset_at=0,
+            reason="error_budget_critical_non_essential_blocked",
+        )
+
+        if store_rejection and context:
+            self._auto_store_rejection_to_dlq(context, result.reason)
+
+        return result
+
+    def _execute_tiered_check(
+        self,
+        key: str,
+        tier_id: str,
+        context: dict | None,
+    ) -> ThrottleResult:
+        """티어/429/Load Shedding 상태를 반영한 limit 검사 실행."""
+        if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
+            original_limit = self._current_limit
+            self._current_limit = self._limit_before_429
+            logger.debug(f"[AdaptiveThrottle] CRITICAL tier protected: " f"using pre-429 limit {self._limit_before_429}")
+            result = super().check(key)
+            self._current_limit = original_limit
+            return result
+
+        effective_service_id = (context.get("service_id") if context else None) or self._service_name
+        if (
+            effective_service_id
+            and self._shedding_affected_services
+            and effective_service_id in self._shedding_affected_services
+        ):
+            original_limit = self._current_limit
+            self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
+            result = super().check(key)
+            self._current_limit = original_limit
+            return result
+
+        return super().check(key)
+
     def check(
         self,
         key: str,
@@ -1602,78 +1754,19 @@ class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWind
             self.advance_recovery_dampening()
 
         # Error Budget Critical 상태에서 non_essential 티어 거부
-        if self._error_budget_limit_reduction_active:
-            if tier_id == "non_essential" and self._error_budget_multiplier <= 0.5:
-                # Exemplar 취득 (Fail-Open)
-                trace_id = None
-                try:
-                    from selfhealing.observability import get_current_trace_id_from_otel
+        budget_block = self._check_error_budget_block(tier_id, store_rejection, context)
+        if budget_block is not None:
+            return budget_block
 
-                    trace_id = get_current_trace_id_from_otel()
-                except Exception:
-                    pass
-
-                # 메트릭 기록
-                _record_throttle_metrics(
-                    service=self._service_name,
-                    request_result="denied",
-                    denied_reason="error_budget_critical_non_essential_blocked",
-                    trace_id=trace_id,
-                )
-
-                result = ThrottleResult(
-                    allowed=False,
-                    current_count=0,
-                    limit=self._current_limit,
-                    remaining=0,
-                    reset_at=0,
-                    reason="error_budget_critical_non_essential_blocked",
-                )
-
-                # 거부 시 DLQ 자동 저장
-                if store_rejection and context:
-                    self._auto_store_rejection_to_dlq(context, result.reason)
-
-                return result
-
-        # 429 감소 상태에서 CRITICAL 티어 보호
-        if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
-            # CRITICAL 요청은 429 감소 전 limit 기준으로 검사
-            original_limit = self._current_limit
-            self._current_limit = self._limit_before_429
-            logger.debug(f"[AdaptiveThrottle] CRITICAL tier protected: " f"using pre-429 limit {self._limit_before_429}")
-            result = super().check(key)
-            self._current_limit = original_limit
-        else:
-            # Load Shedding 대상 서비스의 요청에만 제한적 limit 적용
-            # ThrottleRegistry 경로: self._service_name fallback (208 섹션 3-6-2)
-            effective_service_id = (context.get("service_id") if context else None) or self._service_name
-            if (
-                effective_service_id
-                and self._shedding_affected_services
-                and effective_service_id in self._shedding_affected_services
-            ):
-                original_limit = self._current_limit
-                self._current_limit = min(self._current_limit, self._shedding_suggested_limit)
-                result = super().check(key)
-                self._current_limit = original_limit
-            else:
-                result = super().check(key)
+        # 티어/429/Load Shedding 반영 검사
+        result = self._execute_tiered_check(key, tier_id, context)
 
         # Add adaptive info to result
         result.current_rtt_ms = self._gradient_calculator.get_current_rtt()
         result.rtt_gradient = self._gradient_calculator.get_gradient()
 
-        # Exemplar 취득 (Fail-Open)
-        trace_id = None
-        try:
-            from selfhealing.observability import get_current_trace_id_from_otel
-
-            trace_id = get_current_trace_id_from_otel()
-        except Exception:
-            pass
-
-        # 메트릭 기록 — 동적 service 라벨 + 허용/거부 결과
+        # Exemplar 취득 (Fail-Open) + 메트릭 기록
+        trace_id = _get_trace_id_safe()
         _record_throttle_metrics(
             service=self._service_name,
             request_result="allowed" if result.allowed else "denied",

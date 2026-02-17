@@ -318,6 +318,51 @@ class HedgingExecutor:
 
             return None, False, succeeded, failed + 1, primary_latency_ms, error_msg
 
+    def _handle_completed_future(
+        self,
+        future: Future,
+        future_to_candidate: dict[Future, HedgingCandidate],
+        start_time: float,
+        primary_candidate: HedgingCandidate,
+        primary_latency_ms: float | None,
+        hedged: bool,
+        succeeded: int,
+        failed: int,
+        errors: list[str],
+    ) -> tuple[HedgingResult[T] | None, int, int, float | None]:
+        """단일 완료된 Future 처리. 성공 시 HedgingResult 반환."""
+        candidate = future_to_candidate[future]
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
+        result, success, succeeded, failed, primary_latency_ms, error = self._process_completed_future(
+            future,
+            candidate,
+            latency_ms,
+            primary_candidate,
+            primary_latency_ms,
+            hedged,
+            len(future_to_candidate),
+            succeeded,
+            failed,
+        )
+
+        if success and result:
+            if self._config.cancel_on_success:
+                for f in future_to_candidate:
+                    if f != future and not f.done():
+                        f.cancel()
+            return result, succeeded, failed, primary_latency_ms
+
+        if error:
+            if error.startswith("non_retryable:"):
+                for f in future_to_candidate:
+                    if not f.done():
+                        f.cancel()
+                raise NonRetryableHedgingError(error[14:])
+            errors.append(error)
+
+        return None, succeeded, failed, primary_latency_ms
+
     def _wait_for_first_success(
         self,
         future_to_candidate: dict[Future, HedgingCandidate],
@@ -343,35 +388,19 @@ class HedgingExecutor:
                 future_to_candidate.keys(),
                 timeout=max(0.001, remaining_timeout),
             ):
-                candidate = future_to_candidate[future]
-                latency_ms = (time.perf_counter() - start_time) * 1000
-
-                result, success, succeeded, failed, primary_latency_ms, error = self._process_completed_future(
+                hedging_result, succeeded, failed, primary_latency_ms = self._handle_completed_future(
                     future,
-                    candidate,
-                    latency_ms,
+                    future_to_candidate,
+                    start_time,
                     primary_candidate,
                     primary_latency_ms,
                     hedged,
-                    len(future_to_candidate),
                     succeeded,
                     failed,
+                    errors,
                 )
-
-                if success and result:
-                    if self._config.cancel_on_success:
-                        for f in future_to_candidate:
-                            if f != future and not f.done():
-                                f.cancel()
-                    return result
-
-                if error:
-                    if error.startswith("non_retryable:"):
-                        for f in future_to_candidate:
-                            if not f.done():
-                                f.cancel()
-                        raise NonRetryableHedgingError(error[14:])
-                    errors.append(error)
+                if hedging_result is not None:
+                    return hedging_result
 
         except FuturesTimeoutError:
             # 전체 타임아웃

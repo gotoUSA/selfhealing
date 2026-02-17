@@ -301,6 +301,35 @@ def _inject_cluster_identity(audit_data: dict[str, Any]) -> dict[str, Any]:
 # =============================================================================
 
 
+def _collect_extension_fields(
+    *,
+    smoothed_rtt_ms: float | None = None,
+    gradient: float | None = None,
+    long_rtt_ms: float | None = None,
+    consecutive_429s: int | None = None,
+    cooldown_seconds: float | None = None,
+    recovery_step: int | None = None,
+    full_stop_reason: str | None = None,
+) -> dict[str, Any]:
+    """확장 필드(RTT/429/Recovery/Full Stop)를 딕셔너리로 수집."""
+    fields: dict[str, Any] = {}
+    if smoothed_rtt_ms is not None:
+        fields["smoothed_rtt_ms"] = smoothed_rtt_ms
+    if gradient is not None:
+        fields["gradient"] = round(gradient, 6)
+    if long_rtt_ms is not None:
+        fields["long_rtt_ms"] = long_rtt_ms
+    if consecutive_429s is not None:
+        fields["consecutive_429s"] = consecutive_429s
+    if cooldown_seconds is not None:
+        fields["cooldown_seconds"] = cooldown_seconds
+    if recovery_step is not None:
+        fields["recovery_step"] = recovery_step
+    if full_stop_reason:
+        fields["full_stop_reason"] = full_stop_reason
+    return fields
+
+
 def _build_audit_data(
     action: str,
     *,
@@ -349,7 +378,7 @@ def _build_audit_data(
     }
 
     # 기본 필드
-    optional_fields = {
+    optional_fields: dict[str, Any] = {
         "old_limit": old_limit,
         "new_limit": new_limit,
         "reason": reason,
@@ -361,27 +390,18 @@ def _build_audit_data(
         "threshold_ms": threshold_ms,
     }
 
-    # 확장 필드: RTT 추세 데이터
-    if smoothed_rtt_ms is not None:
-        optional_fields["smoothed_rtt_ms"] = smoothed_rtt_ms
-    if gradient is not None:
-        optional_fields["gradient"] = round(gradient, 6)
-    if long_rtt_ms is not None:
-        optional_fields["long_rtt_ms"] = long_rtt_ms
-
-    # 확장 필드: 429 연동
-    if consecutive_429s is not None:
-        optional_fields["consecutive_429s"] = consecutive_429s
-    if cooldown_seconds is not None:
-        optional_fields["cooldown_seconds"] = cooldown_seconds
-
-    # 확장 필드: Recovery
-    if recovery_step is not None:
-        optional_fields["recovery_step"] = recovery_step
-
-    # 확장 필드: Full Stop
-    if full_stop_reason:
-        optional_fields["full_stop_reason"] = full_stop_reason
+    # 확장 필드 수집
+    optional_fields.update(
+        _collect_extension_fields(
+            smoothed_rtt_ms=smoothed_rtt_ms,
+            gradient=gradient,
+            long_rtt_ms=long_rtt_ms,
+            consecutive_429s=consecutive_429s,
+            cooldown_seconds=cooldown_seconds,
+            recovery_step=recovery_step,
+            full_stop_reason=full_stop_reason,
+        )
+    )
 
     for key, value in optional_fields.items():
         if value is not None:

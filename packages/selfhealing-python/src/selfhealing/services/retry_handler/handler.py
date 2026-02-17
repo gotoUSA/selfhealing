@@ -393,6 +393,115 @@ class RetryHandler:
 
         return throttle_delay
 
+    def _check_preconditions(self, context: dict[str, Any] | None) -> RetryResult | None:
+        """Kill Switch 및 ErrorBudgetGate 사전 조건 확인. 차단 시 RetryResult 반환."""
+        # Kill Switch 체크
+        if not _is_system_enabled():
+            logger.warning(f"[RetryHandler] execute blocked: Kill Switch is active. " f"domain={self.config.domain}")
+            return RetryResult(
+                success=False,
+                action=RetryAction.ABORT,
+                attempt=0,
+                error=Exception("Kill Switch is active: self-healing system is disabled"),
+            )
+
+        # ErrorBudgetGate 체크
+        gate_result = self._check_error_budget_gate()
+        if gate_result is not None and not gate_result.allowed:
+            logger.warning(
+                f"[RetryHandler] execute blocked by ErrorBudgetGate: "
+                f"budget={gate_result.error_budget_percent}%, "
+                f"threshold={gate_result.threshold_percent}%"
+            )
+            return RetryResult(
+                success=False,
+                action=RetryAction.ABORT,
+                attempt=0,
+                error=Exception(
+                    f"Error budget critically low ({gate_result.error_budget_percent:.1f}%): "
+                    "retry blocked to prevent further errors"
+                ),
+            )
+
+        return None
+
+    def _handle_attempt_failure(
+        self,
+        e: Exception,
+        attempt: int,
+        effective_max_attempts: int,
+        context: dict[str, Any] | None,
+        retry_history: list[dict[str, Any]],
+        is_critical_tier: bool,
+    ) -> bool:
+        """
+        단일 시도 실패 처리. 계속 재시도해야 하면 True, 중단이면 False 반환.
+        """
+        retry_history.append(
+            {
+                "attempt": attempt,
+                "error_type": type(e).__name__,
+                "error_message": str(e)[:500],
+                "timestamp": now().isoformat(),
+            }
+        )
+
+        logger.warning(f"[RetryHandler] Attempt {attempt}/{effective_max_attempts} failed: {e}")
+
+        # Self-DDoS prevention: Handle rate limit errors
+        rate_limited, _ = self.is_rate_limit_error(e)
+        self._handle_rate_limit_error(e)
+
+        # Throttle-aware delay 계산 (Full Stop 감지 포함)
+        next_delay = None
+        throttle_reason = None
+        if self.should_retry(e, attempt, effective_max_attempts):
+            next_delay = self.get_combined_delay(attempt, is_critical_tier)
+
+            # Full Stop 신호 처리 (-1)
+            if next_delay < 0:
+                logger.warning("[RetryHandler] Full Stop triggered, moving to DLQ immediately")
+                self._log_retry_audit(
+                    attempt=attempt,
+                    success=False,
+                    error_type=type(e).__name__,
+                    error_message=str(e)[:500],
+                    wait_time=None,
+                    rate_limited=rate_limited,
+                    context={
+                        **(context or {}),
+                        "throttle_aware_backoff": self._throttle_aware,
+                        "throttle_reason": "full_stop",
+                    },
+                )
+                return False  # 중단
+
+            # Throttle 상태에 따라 예산 조정
+            if self._last_backoff_info:
+                throttle_reason = self._last_backoff_info.get("reason")
+                self._retry_budget.adjust_budget_for_throttle_state(throttle_reason or "normal")
+
+        self._log_retry_audit(
+            attempt=attempt,
+            success=False,
+            error_type=type(e).__name__,
+            error_message=str(e)[:500],
+            wait_time=next_delay if next_delay and next_delay > 0 else None,
+            rate_limited=rate_limited,
+            context={
+                **(context or {}),
+                "throttle_aware_backoff": self._throttle_aware,
+                "throttle_reason": throttle_reason,
+            },
+        )
+
+        if self.should_retry(e, attempt, effective_max_attempts) and next_delay is not None and next_delay >= 0:
+            delay = next_delay
+            logger.info(f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{effective_max_attempts})")
+            return True  # 계속
+
+        return False  # 중단
+
     def execute(
         self,
         func: Callable[..., T],
@@ -428,33 +537,10 @@ class RetryHandler:
         Returns:
             RetryResult with the outcome
         """
-        # Kill Switch 체크: 시스템이 비활성화되면 재시도 없이 즉시 실패 반환
-        if not _is_system_enabled():
-            logger.warning(f"[RetryHandler] execute blocked: Kill Switch is active. " f"domain={self.config.domain}")
-            return RetryResult(
-                success=False,
-                action=RetryAction.ABORT,
-                attempt=0,
-                error=Exception("Kill Switch is active: self-healing system is disabled"),
-            )
-
-        # ErrorBudgetGate 체크: 에러 예산이 임계치 이하면 재시도 차단
-        gate_result = self._check_error_budget_gate()
-        if gate_result is not None and not gate_result.allowed:
-            logger.warning(
-                f"[RetryHandler] execute blocked by ErrorBudgetGate: "
-                f"budget={gate_result.error_budget_percent}%, "
-                f"threshold={gate_result.threshold_percent}%"
-            )
-            return RetryResult(
-                success=False,
-                action=RetryAction.ABORT,
-                attempt=0,
-                error=Exception(
-                    f"Error budget critically low ({gate_result.error_budget_percent:.1f}%): "
-                    "retry blocked to prevent further errors"
-                ),
-            )
+        # 사전 조건 확인 (Kill Switch, ErrorBudgetGate)
+        precondition_result = self._check_preconditions(context)
+        if precondition_result is not None:
+            return precondition_result
 
         attempt = 0
         last_error: Exception | None = None
@@ -504,56 +590,16 @@ class RetryHandler:
 
             except Exception as e:
                 last_error = e
-                retry_history.append(
-                    {
-                        "attempt": attempt,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e)[:500],
-                        "timestamp": now().isoformat(),
-                    }
+
+                should_continue = self._handle_attempt_failure(
+                    e,
+                    attempt,
+                    effective_max_attempts,
+                    context,
+                    retry_history,
+                    is_critical_tier,
                 )
-
-                logger.warning(f"[RetryHandler] Attempt {attempt}/{effective_max_attempts} failed: {e}")
-
-                # Self-DDoS prevention: Handle rate limit errors
-                rate_limited, _ = self.is_rate_limit_error(e)
-                self._handle_rate_limit_error(e)
-
-                # Throttle-aware delay 계산 (Full Stop 감지 포함)
-                next_delay = None
-                throttle_reason = None
-                if self.should_retry(e, attempt, effective_max_attempts):
-                    next_delay = self.get_combined_delay(attempt, is_critical_tier)
-
-                    # Full Stop 신호 처리 (-1)
-                    if next_delay < 0:
-                        logger.warning("[RetryHandler] Full Stop triggered, moving to DLQ immediately")
-                        break  # while 루프 탈출 → DLQ 이동
-
-                    # Throttle 상태에 따라 예산 조정
-                    if self._last_backoff_info:
-                        throttle_reason = self._last_backoff_info.get("reason")
-                        self._retry_budget.adjust_budget_for_throttle_state(throttle_reason or "normal")
-
-                self._log_retry_audit(
-                    attempt=attempt,
-                    success=False,
-                    error_type=type(e).__name__,
-                    error_message=str(e)[:500],
-                    wait_time=next_delay if next_delay and next_delay > 0 else None,
-                    rate_limited=rate_limited,
-                    context={
-                        **(context or {}),
-                        "throttle_aware_backoff": self._throttle_aware,
-                        "throttle_reason": throttle_reason,
-                    },
-                )
-
-                if self.should_retry(e, attempt, effective_max_attempts) and next_delay is not None and next_delay >= 0:
-                    delay = next_delay
-                    logger.info(f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{effective_max_attempts})")
-                    # For synchronous execution, we don't actually sleep
-                    # The caller (usually Celery) handles the delay
+                if should_continue:
                     continue
                 else:
                     break

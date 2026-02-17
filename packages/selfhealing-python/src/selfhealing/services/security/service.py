@@ -319,6 +319,80 @@ class SecurityViolationService:
 
         return action_taken
 
+    @staticmethod
+    def _invalidate_registry_sessions(user_id: int) -> list[str]:
+        """UserSessionRegistry를 통한 Redis 세션 무효화."""
+        items = []
+        try:
+            from selfhealing.services.security.session_registry import (
+                get_user_session_registry,
+            )
+
+            registry = get_user_session_registry()
+            deleted_count = registry.invalidate_all(user_id)
+            if deleted_count > 0:
+                items.append(f"redis_sessions({deleted_count})")
+            else:
+                items.append("redis_sessions(0:no_registered_keys)")
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"[Security] UserSessionRegistry cleanup failed: {e}")
+        return items
+
+    @staticmethod
+    def _invalidate_django_db_sessions(user_id: int) -> list[str]:
+        """Django DB 세션 삭제 (SESSION_ENGINE이 DB 백엔드일 때만)."""
+        items = []
+        try:
+            from django.conf import settings as django_settings
+
+            session_engine = getattr(
+                django_settings,
+                "SESSION_ENGINE",
+                "django.contrib.sessions.backends.db",
+            )
+            if "db" in session_engine or "cached_db" in session_engine:
+                from django.contrib.sessions.models import Session
+                from django.utils import timezone as dj_timezone
+
+                active_sessions = Session.objects.filter(expire_date__gte=dj_timezone.now())
+                deleted_count = 0
+                for session in active_sessions:
+                    data = session.get_decoded()
+                    if str(data.get("_auth_user_id")) == str(user_id):
+                        session.delete()
+                        deleted_count += 1
+                if deleted_count > 0:
+                    items.append(f"django_sessions({deleted_count})")
+            else:
+                logger.debug(f"[Security] Skipping DB session scan: " f"SESSION_ENGINE={session_engine}")
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"[Security] Django session cleanup skipped: {e}")
+        return items
+
+    @staticmethod
+    def _run_invalidation_hooks(user_id: int) -> list[str]:
+        """등록된 세션 무효화 콜백 실행 (JWT 블랙리스트 등)."""
+        items = []
+        try:
+            from selfhealing.services.security.hooks import (
+                get_session_invalidation_hooks,
+            )
+
+            for hook in get_session_invalidation_hooks():
+                try:
+                    result = hook(user_id)
+                    if result:
+                        items.append(result)
+                except Exception as hook_err:
+                    logger.warning(f"[Security] Session invalidation hook failed: {hook_err}")
+        except ImportError:
+            pass
+        return items
+
     def _invalidate_user_sessions(self, user_id: int) -> str:
         """
         Invalidate all sessions for a user.
@@ -327,72 +401,11 @@ class SecurityViolationService:
         2. SESSION_ENGINE이 DB 백엔드일 때만 django_session 테이블 스캔
         3. 등록된 콜백(JWT 블랙리스트 등) 실행
         """
-        invalidated_items = []
-
         try:
-            # 1. UserSessionRegistry를 통한 세션 무효화 (역방향 조회)
-            try:
-                from selfhealing.services.security.session_registry import (
-                    get_user_session_registry,
-                )
-
-                registry = get_user_session_registry()
-                deleted_count = registry.invalidate_all(user_id)
-                if deleted_count > 0:
-                    invalidated_items.append(f"redis_sessions({deleted_count})")
-                else:
-                    invalidated_items.append("redis_sessions(0:no_registered_keys)")
-            except ImportError:
-                pass
-            except Exception as e:
-                logger.debug(f"[Security] UserSessionRegistry cleanup failed: {e}")
-
-            # 2. Django DB 세션 삭제 (SESSION_ENGINE이 DB 백엔드일 때만)
-            # django.contrib.sessions가 INSTALLED_APPS에 있으면 Session import는
-            # 항상 성공하므로, SESSION_ENGINE을 명시적으로 체크해야 한다.
-            try:
-                from django.conf import settings as django_settings
-
-                session_engine = getattr(
-                    django_settings,
-                    "SESSION_ENGINE",
-                    "django.contrib.sessions.backends.db",
-                )
-                if "db" in session_engine or "cached_db" in session_engine:
-                    from django.contrib.sessions.models import Session
-                    from django.utils import timezone as dj_timezone
-
-                    active_sessions = Session.objects.filter(expire_date__gte=dj_timezone.now())
-                    deleted_count = 0
-                    for session in active_sessions:
-                        data = session.get_decoded()
-                        if str(data.get("_auth_user_id")) == str(user_id):
-                            session.delete()
-                            deleted_count += 1
-                    if deleted_count > 0:
-                        invalidated_items.append(f"django_sessions({deleted_count})")
-                else:
-                    logger.debug(f"[Security] Skipping DB session scan: " f"SESSION_ENGINE={session_engine}")
-            except ImportError:
-                pass
-            except Exception as e:
-                logger.debug(f"[Security] Django session cleanup skipped: {e}")
-
-            # 3. 등록된 세션 무효화 콜백 실행 (JWT 블랙리스트 등)
-            try:
-                from selfhealing.services.security.hooks import (
-                    get_session_invalidation_hooks,
-                )
-
-                for hook in get_session_invalidation_hooks():
-                    try:
-                        result = hook(user_id)
-                        if result:
-                            invalidated_items.append(result)
-                    except Exception as hook_err:
-                        logger.warning(f"[Security] Session invalidation hook failed: {hook_err}")
-            except ImportError:
-                pass
+            invalidated_items = []
+            invalidated_items.extend(self._invalidate_registry_sessions(user_id))
+            invalidated_items.extend(self._invalidate_django_db_sessions(user_id))
+            invalidated_items.extend(self._run_invalidation_hooks(user_id))
 
             logger.info(f"[Security] Invalidated sessions for user {user_id}: " f"{', '.join(invalidated_items)}")
 
