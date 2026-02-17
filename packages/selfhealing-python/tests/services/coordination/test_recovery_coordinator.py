@@ -294,9 +294,11 @@ class TestExecuteNextStep:
         assert step.status == RecoveryStatus.FAILED
         assert step.error_message == "Test error"
 
-        # 세션도 실패 상태
+        # _fail_session()이 ACTIVE_SESSION_KEY를 유지하므로
+        # 실패 세션이 조회 가능 (resume_recovery 지원)
         active = coordinator.get_active_session("global")
-        assert active is None  # 실패 후 클리어됨
+        assert active is not None
+        assert active.status == RecoveryStatus.FAILED
 
     def test_execute_step_handler_exception(self):
         """핸들러 예외 시 세션 실패."""
@@ -992,3 +994,437 @@ class TestRecoveryCoordinatorCascadeEventIntegration:
         # 1회 (start) + 4회 (steps) + 1회 (complete) = 6회
         # 단, _handle_all_steps_completed가 어떻게 구현되어 있는지에 따라 다름
         assert mock_cascade_auditor.record.call_count >= 5  # 최소 start + 4 steps
+
+
+# =============================================================================
+# _fail_session 동작 검증 (ACTIVE_SESSION_KEY 유지)
+# =============================================================================
+
+
+class TestFailSessionBehavior:
+    """_fail_session() 동작 검증.
+
+    _fail_session()이 ACTIVE_SESSION_KEY를 유지하여
+    실패 세션이 get_active_session()으로 조회 가능한지 검증.
+    """
+
+    @pytest.fixture
+    def coordinator(self):
+        """실패 핸들러가 등록된 코디네이터."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coord = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
+        coord.register_step_handler(
+            RecoveryStepType.BUDGET_RESET,
+            lambda s, st: {"success": False, "error": "step failure"},
+        )
+        return coord
+
+    def test_failed_session_remains_active(self, coordinator):
+        """실패 후 get_active_session()이 FAILED 세션을 반환해야 한다."""
+        session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        active = coordinator.get_active_session("global")
+        assert active is not None
+        assert active.status == RecoveryStatus.FAILED
+        assert active.id == session.id
+
+    def test_failed_session_has_abort_reason(self, coordinator):
+        """실패 세션에 abort_reason이 기록되어야 한다."""
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        active = coordinator.get_active_session("global")
+        assert active.abort_reason == "step failure"
+
+    def test_failed_session_has_completed_at(self, coordinator):
+        """실패 세션에 completed_at이 기록되어야 한다."""
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        active = coordinator.get_active_session("global")
+        assert active.completed_at is not None
+
+    def test_failed_session_lock_released(self, coordinator):
+        """실패 후 분산 락이 해제되어야 한다."""
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        # 락이 해제되었므로 새 복구 시작 가능
+        coordinator.register_step_handler(
+            RecoveryStepType.BUDGET_RESET,
+            lambda s, st: {"success": True},
+        )
+        new_session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        assert new_session is not None
+        assert new_session.status == RecoveryStatus.IN_PROGRESS
+
+    def test_new_recovery_overwrites_failed_active_key(self, coordinator):
+        """새 복구 시작 시 실패 세션의 ACTIVE_SESSION_KEY가 덮어써져야 한다."""
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        # 새 복구 시작 (FAILED 세션은 start_recovery 차단 대상이 아님)
+        coordinator.register_step_handler(
+            RecoveryStepType.BUDGET_RESET,
+            lambda s, st: {"success": True},
+        )
+        new_session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+
+        active = coordinator.get_active_session("global")
+        assert active.id == new_session.id
+        assert active.status == RecoveryStatus.IN_PROGRESS
+
+
+# =============================================================================
+# resume_recovery 동작 검증
+# =============================================================================
+
+
+class TestResumeRecoveryBehavior:
+    """resume_recovery() 동작 검증.
+
+    실패한 복구 세션의 재개 기능을 검증.
+    멱등성 인프라, 메타데이터 기록, 무한 루프 방지 등.
+    """
+
+    @pytest.fixture(autouse=True)
+    def reset_settings(self):
+        """테스트마다 설정 캐시 초기화."""
+        from selfhealing.settings.recovery_coordinator import (
+            reset_recovery_coordinator_settings,
+        )
+
+        reset_recovery_coordinator_settings()
+        yield
+        reset_recovery_coordinator_settings()
+
+    def _make_coordinator_with_failing_step(
+        self,
+        fail_step_type: RecoveryStepType = RecoveryStepType.CANARY_RESUME,
+    ) -> RecoveryCoordinator:
+        """특정 단계에서 실패하는 코디네이터 생성."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coord = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
+        for step_type in RecoveryStepType:
+            if step_type == fail_step_type:
+                coord.register_step_handler(
+                    step_type,
+                    lambda s, st: {"success": False, "error": f"{fail_step_type.value} failed"},
+                )
+            else:
+                coord.register_step_handler(
+                    step_type,
+                    lambda s, st: {"success": True},
+                )
+        return coord
+
+    def test_resume_no_failed_session_raises(self):
+        """실패 세션이 없으면 ValueError."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
+
+        with pytest.raises(ValueError, match="No failed recovery session"):
+            coordinator.resume_recovery(namespace="global")
+
+    def test_resume_in_progress_session_raises(self):
+        """IN_PROGRESS 세션에서는 ValueError."""
+        backend = MemoryStateBackend()
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+
+        with pytest.raises(ValueError, match="No failed recovery session"):
+            coordinator.resume_recovery(namespace="global")
+
+    def test_resume_creates_new_session(self):
+        """실패 세션 재개 시 새 세션이 생성되어야 한다."""
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.CANARY_RESUME,
+        )
+        session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+            initiated_by="operator",
+        )
+
+        # BUDGET_RESET 성공 → HEALTH_CHECK 성공 → CANARY_RESUME 실패
+        coordinator.execute_next_step("global")
+        coordinator.execute_next_step("global")
+        coordinator.execute_next_step("global")
+
+        failed_session = coordinator.get_active_session("global")
+        assert failed_session.status == RecoveryStatus.FAILED
+
+        # 재개 시 모든 핸들러를 성공으로 교체
+        for step_type in RecoveryStepType:
+            coordinator.register_step_handler(
+                step_type,
+                lambda s, st: {"success": True},
+            )
+
+        new_session = coordinator.resume_recovery(
+            namespace="global",
+            initiated_by="admin",
+        )
+
+        assert new_session.id != session.id
+        assert new_session.status == RecoveryStatus.IN_PROGRESS
+        assert new_session.trigger_level == session.trigger_level
+
+    def test_resume_metadata_resumed_from(self):
+        """재개 세션의 metadata에 원본 세션 ID가 기록되어야 한다."""
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.BUDGET_RESET,
+        )
+        session = coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+            initiated_by="operator",
+        )
+        coordinator.execute_next_step("global")
+
+        # 핸들러 성공으로 교체 후 재개
+        for step_type in RecoveryStepType:
+            coordinator.register_step_handler(
+                step_type,
+                lambda s, st: {"success": True},
+            )
+
+        new_session = coordinator.resume_recovery(
+            namespace="global",
+            initiated_by="admin",
+        )
+
+        assert new_session.metadata["resumed_from"] == session.id
+
+    def test_resume_metadata_resumed_from_step(self):
+        """재개 세션의 metadata에 실패 지점 인덱스가 기록되어야 한다."""
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.CANARY_RESUME,
+        )
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        # BUDGET_RESET(0) 성공 → HEALTH_CHECK(1) 성공 → CANARY_RESUME(2) 실패
+        coordinator.execute_next_step("global")
+        coordinator.execute_next_step("global")
+        coordinator.execute_next_step("global")
+
+        failed_session = coordinator.get_active_session("global")
+        expected_step_index = failed_session.current_step_index
+
+        for step_type in RecoveryStepType:
+            coordinator.register_step_handler(
+                step_type,
+                lambda s, st: {"success": True},
+            )
+
+        new_session = coordinator.resume_recovery(namespace="global")
+
+        assert new_session.metadata["resumed_from_step"] == expected_step_index
+
+    def test_resume_metadata_resume_count_increments(self):
+        """재개할 때마다 resume_count가 1씩 증가해야 한다."""
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.BUDGET_RESET,
+        )
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        # 1차 재개 (실패 핸들러 유지로 다시 실패)
+        new1 = coordinator.resume_recovery(namespace="global")
+        assert new1.metadata["resume_count"] == 1
+
+        # 새 세션에서 다시 실패
+        coordinator.execute_next_step("global")
+
+        # 2차 재개
+        new2 = coordinator.resume_recovery(namespace="global")
+        assert new2.metadata["resume_count"] == 2
+
+    def test_resume_metadata_original_initiated_by(self):
+        """재개 세션의 metadata에 원본 initiated_by가 기록되어야 한다."""
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.BUDGET_RESET,
+        )
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+            initiated_by="original_operator",
+        )
+        coordinator.execute_next_step("global")
+
+        for step_type in RecoveryStepType:
+            coordinator.register_step_handler(
+                step_type,
+                lambda s, st: {"success": True},
+            )
+
+        new_session = coordinator.resume_recovery(
+            namespace="global",
+            initiated_by="resume_admin",
+        )
+
+        assert new_session.initiated_by == "resume_admin"
+        assert new_session.metadata["original_initiated_by"] == "original_operator"
+
+    def test_resume_max_count_exceeded_raises(self):
+        """max_resume_count 초과 시 ValueError."""
+        from selfhealing.settings.recovery_coordinator import (
+            get_recovery_coordinator_settings,
+        )
+
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.BUDGET_RESET,
+        )
+        settings = get_recovery_coordinator_settings()
+        max_count = settings.max_resume_count
+
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_3",
+        )
+        coordinator.execute_next_step("global")
+
+        # max_resume_count번 재개
+        for i in range(max_count):
+            coordinator.resume_recovery(namespace="global")
+            coordinator.execute_next_step("global")
+
+        # max_resume_count + 1번째 재개 시도 → ValueError
+        with pytest.raises(ValueError, match="Max resume count"):
+            coordinator.resume_recovery(namespace="global")
+
+    def test_resume_preserves_trigger_level(self):
+        """재개 세션이 원본 세션의 trigger_level을 유지해야 한다."""
+        coordinator = self._make_coordinator_with_failing_step(
+            RecoveryStepType.BUDGET_RESET,
+        )
+        coordinator.start_recovery(
+            namespace="global",
+            trigger_level="LEVEL_2",
+        )
+        coordinator.execute_next_step("global")
+
+        for step_type in RecoveryStepType:
+            coordinator.register_step_handler(
+                step_type,
+                lambda s, st: {"success": True},
+            )
+
+        new_session = coordinator.resume_recovery(namespace="global")
+        assert new_session.trigger_level == "LEVEL_2"
+
+
+# =============================================================================
+# max_resume_count 설정 계약 검증
+# =============================================================================
+
+
+class TestMaxResumeCountContract:
+    """max_resume_count 설정 필드 계약 검증.
+
+    RecoveryCoordinatorSettings.max_resume_count의
+    기본값, 범위 제한이 설계대로 구현되었는지 검증.
+    """
+
+    @pytest.fixture(autouse=True)
+    def reset_settings(self):
+        """테스트마다 설정 캐시 초기화."""
+        from selfhealing.settings.recovery_coordinator import (
+            reset_recovery_coordinator_settings,
+        )
+
+        reset_recovery_coordinator_settings()
+        yield
+        reset_recovery_coordinator_settings()
+
+    def test_default_value(self):
+        """max_resume_count 기본값은 3이어야 한다."""
+        from selfhealing.settings.recovery_coordinator import (
+            RecoveryCoordinatorSettings,
+        )
+
+        settings = RecoveryCoordinatorSettings()
+        assert settings.max_resume_count == 3
+
+    def test_min_bound(self):
+        """max_resume_count 최솟값은 1이어야 한다."""
+        from selfhealing.settings.recovery_coordinator import (
+            RecoveryCoordinatorSettings,
+        )
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RecoveryCoordinatorSettings(max_resume_count=0)
+
+    def test_max_bound(self):
+        """max_resume_count 최댓값은 10이어야 한다."""
+        from selfhealing.settings.recovery_coordinator import (
+            RecoveryCoordinatorSettings,
+        )
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RecoveryCoordinatorSettings(max_resume_count=11)
+
+    def test_valid_range(self):
+        """유효 범위(1~10) 내 값은 설정 가능해야 한다."""
+        from selfhealing.settings.recovery_coordinator import (
+            RecoveryCoordinatorSettings,
+        )
+
+        settings = RecoveryCoordinatorSettings(max_resume_count=5)
+        assert settings.max_resume_count == 5

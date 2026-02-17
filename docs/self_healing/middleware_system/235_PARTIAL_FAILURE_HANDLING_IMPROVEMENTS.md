@@ -1321,6 +1321,22 @@ def resume_recovery(
 | 5 | `rollback/models.py` `PARTIALLY_COMPLETED` | 구현 시점에 이미 존재 확인 — 변경 불필요 | ✅ 이미 구현 |
 | 6 | `rollback/service.py` 부분 성공 판정 | 구현 시점에 이미 존재 확인 — 변경 불필요 | ✅ 이미 구현 |
 
+### 단위 테스트
+
+테스트 작성일: 2026-02-17
+
+| # | 테스트 파일 | 테스트 클래스 | 테스트 수 | 결과 |
+|---|------------|-------------|----------|------|
+| 1 | `test_recovery_coordinator.py` | `TestFailSessionBehavior` | 5 | ✅ PASSED |
+| 2 | `test_recovery_coordinator.py` | `TestResumeRecoveryBehavior` | 9 | ✅ PASSED |
+| 3 | `test_recovery_coordinator.py` | `TestMaxResumeCountContract` | 4 | ✅ PASSED |
+| 4 | `test_coordinator.py` | `TestPartialFailureLoggingBehavior` | 4 | ✅ PASSED |
+
+**총 22개 테스트 PASSED** (기존 테스트 62개 포함 전체 84/84 통과, 회귀 없음)
+
+기존 테스트 수정 1건:
+- `TestExecuteNextStep::test_execute_step_failed_handler` — `_fail_session()` 변경으로 `assert active is None` → `assert active.status == RecoveryStatus.FAILED`로 수정
+
 ### 통합 테스트 판정
 
 **불필요** — 모든 변경이 인메모리 상태 관리 로직이며 외부 시스템(Redis, Celery) 의존 없음. 단위 테스트로 충분.
