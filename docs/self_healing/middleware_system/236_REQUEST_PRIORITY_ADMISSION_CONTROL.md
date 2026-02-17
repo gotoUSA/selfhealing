@@ -1135,6 +1135,27 @@ if not self._rate_controller.should_process(priority=tier_str):
 - 기존 단위 테스트 1121개 전체 통과 (scaling + throttle)
 - tiering/middleware 관련 테스트 38개 전체 통과
 
-### 통합 테스트
+### 단위 테스트 (93개)
 
-AdmissionControlMiddleware → TieringMiddleware → Application 미들웨어 체인과 RateController ↔ TrafficGate priority 전파에 대한 통합 테스트가 필요하다. 기존 통합 테스트에는 해당 시나리오가 없으므로 별도 작성이 필요하다.
+| # | 파일 | 테스트 수 | 검증 대상 |
+|---|------|-----------|-----------|
+| 1 | `packages/selfhealing-python/tests/unit/scaling/test_rate_controller_priority.py` | 20 | `PRIORITY_WATERMARKS` Contract, `get_token_ratio()`, `should_process(priority)` Watermark 분기 |
+| 2 | `packages/selfhealing-python/tests/unit/scaling/test_traffic_gate_priority.py` | 17 | `_PRIORITY_TIER_THRESHOLDS` Contract, `_map_priority_int_to_tier()`, `should_allow()` priority 전파 |
+| 3 | `packages/selfhealing-python/tests/unit/settings/test_admission_control_settings.py` | 12 | `AdmissionControlSettings` 기본값, 환경변수 오버라이드, `reset_admission_control_settings()` |
+| 4 | `packages/selfhealing-python/tests/unit/api/test_admission_control_middleware.py` | 16 | `TIER_PRIORITY_MAP` Contract, `AdmissionControlMiddleware` request 속성 주입, tier별 bulkhead 등록, 503 응답 |
+| 5 | `packages/selfhealing-python/tests/unit/api/test_tier_registry_cache.py` | 10 | `_path_tier_cache` 캐시 적중/미스, `_PATH_CACHE_MAX_SIZE` LRU 축출, `_invalidate_path_cache()` 무효화 |
+| 6 | `packages/selfhealing-python/tests/unit/api/test_tiering_middleware_merge.py` | 18 | `BACKPRESSURE_TIER_RULES` Contract, Most Restrictive Wins `min()` 병합, `_should_allow_request()` 확률 |
+
+### 통합 테스트 (26개)
+
+| # | 파일 | 테스트 수 | 검증 대상 |
+|---|------|-----------|-----------|
+| 1 | `tests/self_healing/integration/test_request_priority_admission_control.py` | 26 | RateController↔TrafficGate priority 전파 파이프라인, Emergency+Backpressure merge multiplier 조합, AdmissionControlMiddleware→TierRegistry 경로 분류 체인 |
+
+### 테스트 실행 결과
+
+```
+단위 테스트:  93 passed (6 파일, packages/selfhealing-python/ 에서 실행)
+통합 테스트:  26 passed (1 파일, 프로젝트 루트에서 실행)
+총합:        119 passed
+```
