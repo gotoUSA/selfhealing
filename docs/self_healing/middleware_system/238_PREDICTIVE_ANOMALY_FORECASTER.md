@@ -2,8 +2,8 @@
 
 > **문서 번호**: 238
 > **작성일**: 2026-02-18
-> **최종 수정일**: 2026-02-18 (Phase 1 구현 완료 v3)
-> **상태**: Phase 1 구현 완료
+> **최종 수정일**: 2026-02-18 (Phase 1-4 구현 완료 v4)
+> **상태**: Phase 1-4 구현 완료 (프로덕션 검증 제외)
 > **관련 문서**: 36_RUNTIME_FEEDBACK_IMPLEMENTATION.md, 38_AUTO_TUNING_API.md, 12_ERROR_BUDGET.md
 
 ---
@@ -15,6 +15,7 @@
 | v1 | 2026-02-18 | 초안 작성 |
 | v2 | 2026-02-19 | 리뷰 8건 반영: (1) sensitivity_multiplier 주입, (2) Phase 1 기본 예측기 EWMA→HoltLinear 승격, (3) SpikeClassifier/SpikeType 추가, (4) StateBackend 기반 Cold Start 영속성, (5) warmup_samples Cold Start 보호, (6) has_adjustment Self-Fulfilling Prophecy 태깅, (7) LearningService 연동 설계, (8) 설정 인터페이스 확장 |
 | v3 | 2026-02-18 | Phase 1 구현 완료: (1) time_series.py — HoltLinearForecaster/EWMAForecaster/HoltWintersForecaster/ForecastDataPoint + StateBackend 영속성, (2) anomaly_detector.py — ZScoreDetector/IQRDetector, (3) proactive_action.py — SpikeClassifier/SpikeType/ProactiveActionTrigger + LearningService 블랙리스트 연동, (4) service.py — PredictiveForecasterService + LearningService 연동(패턴학습/정확도기록/반복오판블랙리스트), (5) settings/predictive_forecaster.py — 15개 설정 필드 + env_prefix, (6) 통합 테스트 작성 |
+| v4 | 2026-02-18 | Phase 2-4 구현 완료: (1) Phase 2 — PoolMonitor/DecisionEngine/AutoRollback Settings 기반 히스토리 확장 + 환경변수 문서화, (2) Phase 3 — DecisionEngine 예측 컨텍스트 주입, PoolMonitor HoltLinear 예측, CgroupResourceMonitor OOM 예측, BudgetDepletionForecaster EWMA smoothing, has_adjustment Option A 쿨다운, LearningService 연동 완료, (3) Phase 4 — HoltWinters 계절성 자동 감지(detect_season_length), (4) 단위 테스트 128건 전체 통과 |
 
 ---
 
@@ -1347,35 +1348,35 @@ def _handle_repeated_misprediction(
 - [x] `services/predictive_forecaster/proactive_action.py` — SpikeClassifier, SpikeType
 - [x] `services/predictive_forecaster/service.py` — PredictiveForecasterService
 - [x] Settings: `settings/predictive_forecaster.py` — Pydantic v2 기반 (sensitivity_multiplier, holt_beta, warmup_samples 포함)
-- [ ] Synthetic Time Series Generator (테스트 데이터 생성기)
-- [ ] 단위 테스트: HoltLinear 트렌드 예측 정확도, warmup_samples 동작 검증
-- [ ] 단위 테스트: SpikeClassifier HEALTHY_SURGE vs ANOMALOUS_SPIKE 분류 정확도
-- [ ] 단위 테스트: StateBackend save/load 왕복 검증
-- [ ] 단위 테스트: has_adjustment 태깅 기록 검증
+- [x] Synthetic Time Series Generator (테스트 데이터 생성기) — `services/predictive_forecaster/scenario_generator.py`
+- [x] 단위 테스트: HoltLinear 트렌드 예측 정확도, warmup_samples 동작 검증
+- [x] 단위 테스트: SpikeClassifier HEALTHY_SURGE vs ANOMALOUS_SPIKE 분류 정확도
+- [x] 단위 테스트: StateBackend save/load 왕복 검증
+- [x] 단위 테스트: has_adjustment 태깅 기록 검증
 - [x] DRY_RUN 모드 통합 테스트
 
 ### Phase 2: 히스토리 크기 확장 + StateBackend 연동
-- [ ] `PoolMonitorSettings.max_history` 기본값 5,000 / 상한 10,000
-- [ ] `DecisionEngine._history` Settings 전환 + 기본값 5,000
-- [ ] `AutoRollbackGuard._health_history` Settings 전환 + 기본값 10,000
-- [ ] `get_trend()` 분석 윈도우 100개로 확대
-- [ ] 각 Settings 환경변수 문서화
-- [ ] StateBackend 저장 주기 설정 (forecaster_save_interval)
+- [x] `PoolMonitorSettings.max_history` 기본값 5,000 / 상한 10,000
+- [x] `DecisionEngine._history` Settings 전환 + 기본값 5,000
+- [x] `AutoRollbackGuard._health_history` Settings 전환 + 기본값 10,000
+- [x] `get_trend()` 분석 윈도우 100개로 확대
+- [x] 각 Settings 환경변수 문서화
+- [x] StateBackend 저장 주기 설정 (forecaster_save_interval) — `settings/predictive_forecaster.py`의 `state_save_interval` 필드
 
 ### Phase 3: 기존 시스템 연동 + LearningService 연동
-- [ ] DecisionEngine.`_calculate_confidence()` 예측 컨텍스트 주입
-- [ ] PoolMonitor.`get_trend()` HoltLinear 기반 예측 대체
-- [ ] CgroupResourceMonitor OOM 예측 추가
-- [ ] BudgetDepletionForecaster 선형 외삽 입력에 EWMAForecaster smoothing 적용 (옵션)
-- [ ] LearningService 연동: 예측 이상 패턴 → learn_pattern(PatternType.ANOMALY)
-- [ ] LearningService 연동: 사전 조치 전 is_parameter_blocked() 확인
-- [ ] LearningService 연동: 예측 정확도 → record_metric()
-- [ ] LearningService 연동: 반복 오판 → register_dangerous_parameter()
-- [ ] has_adjustment 가중치 차등 적용 검토 (운영 데이터 기반 결정)
+- [x] DecisionEngine.`_calculate_confidence()` 예측 컨텍스트 주입 — `prediction_context` 파라미터로 trend_slope/prediction_confidence 주입
+- [x] PoolMonitor.`get_trend()` HoltLinear 기반 예측 대체 — predicted_usage_5min/15min, estimated_exhaustion_minutes 추가
+- [x] CgroupResourceMonitor OOM 예측 추가 — `predict_oom_minutes()` classmethod
+- [x] BudgetDepletionForecaster 선형 외삽 입력에 EWMAForecaster smoothing 적용 (옵션) — `use_ewma_smoothing` 파라미터
+- [x] LearningService 연동: 예측 이상 패턴 → learn_pattern(PatternType.ANOMALY) — `service.py`
+- [x] LearningService 연동: 사전 조치 전 is_parameter_blocked() 확인 — `proactive_action.py`
+- [x] LearningService 연동: 예측 정확도 → record_metric() — `service.py`
+- [x] LearningService 연동: 반복 오판 → register_dangerous_parameter() — `service.py`
+- [x] has_adjustment 가중치 차등 적용 검토 — Option A 쿨다운 메커니즘 구현 (alpha × 0.5, 3스텝 쿨다운)
 
 ### Phase 4: Holt-Winters (계절성)
 - [x] `time_series.py`에 HoltWintersForecaster 추가
-- [ ] 계절성 자동 감지 (auto-detect season_length)
+- [x] 계절성 자동 감지 (auto-detect season_length) — `detect_season_length()` 정적 메서드 (자기상관 기반)
 - [ ] 프로덕션 메트릭 기반 검증
 
 ---

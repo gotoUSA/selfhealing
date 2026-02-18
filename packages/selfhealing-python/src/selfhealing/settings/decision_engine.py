@@ -5,6 +5,7 @@ DecisionEngine Settings - Pydantic v2.
 최소 변경 비율, 샘플 수 기반 신뢰도, 변동성 기반 안정성 계수 설정.
 
 Environment Variables:
+    SELFHEALING_DECISION_MAX_HISTORY=5000
     SELFHEALING_DECISION_MIN_CHANGE_RATIO=0.05
     SELFHEALING_DECISION_CONFIDENCE_SAMPLES_VERY_LOW=5
     SELFHEALING_DECISION_CONFIDENCE_SAMPLES_LOW=20
@@ -43,6 +44,16 @@ class DecisionEngineSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         validate_default=True,
+    )
+
+    # ==========================================================================
+    # 히스토리 크기 (Phase 2: 238_PREDICTIVE_ANOMALY_FORECASTER)
+    # ==========================================================================
+    max_history: int = Field(
+        default=5000,
+        ge=100,
+        le=10000,
+        description="분석 이력 최대 개수. 72시간 커버를 위해 5,000 기본값.",
     )
 
     # ==========================================================================
@@ -165,10 +176,7 @@ class DecisionEngineSettings(BaseSettings):
             < self.confidence_samples_medium
             < self.confidence_samples_high
         ):
-            raise ValueError(
-                "Sample thresholds must be in ascending order: "
-                "very_low < low < medium < high"
-            )
+            raise ValueError("Sample thresholds must be in ascending order: " "very_low < low < medium < high")
 
         # 신뢰도 값 순서 검증
         if not (
@@ -178,21 +186,11 @@ class DecisionEngineSettings(BaseSettings):
             < self.confidence_value_high
             < self.confidence_value_very_high
         ):
-            raise ValueError(
-                "Confidence values must be in ascending order: "
-                "very_low < low < medium < high < very_high"
-            )
+            raise ValueError("Confidence values must be in ascending order: " "very_low < low < medium < high < very_high")
 
         # 안정성 계수 순서 검증
-        if not (
-            self.stability_factor_unstable
-            < self.stability_factor_moderate
-            < self.stability_factor_stable
-        ):
-            raise ValueError(
-                "Stability factors must be in ascending order: "
-                "unstable < moderate < stable"
-            )
+        if not (self.stability_factor_unstable < self.stability_factor_moderate < self.stability_factor_stable):
+            raise ValueError("Stability factors must be in ascending order: " "unstable < moderate < stable")
 
         # CV 임계값 순서 검증
         if self.stability_cv_medium >= self.stability_cv_high:
@@ -259,10 +257,7 @@ def get_decision_engine_settings() -> DecisionEngineSettings:
     global _settings
     if _settings is None:
         _settings = DecisionEngineSettings()
-        logger.debug(
-            "[DecisionEngineSettings] Loaded: "
-            f"min_change_ratio={_settings.min_change_ratio}"
-        )
+        logger.debug("[DecisionEngineSettings] Loaded: " f"min_change_ratio={_settings.min_change_ratio}")
     return _settings
 
 

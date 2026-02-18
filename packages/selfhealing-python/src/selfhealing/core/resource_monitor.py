@@ -187,10 +187,7 @@ class CgroupResourceMonitor:
 
         if available is None:
             # cgroup 감지 불가 - 제한 없이 허용
-            logger.warning(
-                "[CgroupResourceMonitor] Cannot detect cgroup limits, "
-                "allowing full requested amount"
-            )
+            logger.warning("[CgroupResourceMonitor] Cannot detect cgroup limits, " "allowing full requested amount")
             return True, requested_bytes
 
         if requested_bytes <= available:
@@ -202,6 +199,89 @@ class CgroupResourceMonitor:
             f"exceeds safe limit {available / 1024 / 1024:.0f}MB, capping"
         )
         return False, available
+
+    # =========================================================================
+    # Phase 3 (238_PREDICTIVE_ANOMALY_FORECASTER): OOM 예측
+    # =========================================================================
+
+    @classmethod
+    def predict_oom_minutes(
+        cls,
+        memory_samples: list[int],
+        max_memory_bytes: int | None = None,
+        safety_margin: float | None = None,
+    ) -> float | None:
+        """
+        HoltLinear 기반 OOM 발생까지 예상 시간(분) 예측.
+
+        메모리 사용량 시계열 데이터를 분석하여 현재 증가 추세를 기반으로
+        메모리 한도(max_memory_bytes)에 도달하기까지의 시간을 예측한다.
+
+        Args:
+            memory_samples: 메모리 사용량 시계열 (bytes). 60초 간격 가정.
+            max_memory_bytes: 메모리 한도. None이면 cgroup에서 자동 감지.
+            safety_margin: 안전 마진. None이면 기본값 사용.
+
+        Returns:
+            예상 OOM까지 시간(분). None = 데이터 부족 또는 쓰레드 정체/감소 중.
+
+        코드 근거:
+            기존 get_available_memory_bytes()는 현재 스냅샷만 확인.
+            HoltLinear 트렌드 분석으로 메모리 누수 패턴을 사전 감지하여
+            OOM Killer 발동 전에 선제적 조치를 가능하게 함.
+        """
+        if len(memory_samples) < 5:
+            return None
+
+        if max_memory_bytes is None:
+            max_memory_bytes = cls.get_memory_max_bytes()
+        if max_memory_bytes is None:
+            return None
+
+        if safety_margin is None:
+            safety_margin = cls._get_default_safety_margin()
+
+        # 안전 한도 = max * (1 - margin)
+        safe_limit = int(max_memory_bytes * (1.0 - safety_margin))
+
+        try:
+            from selfhealing.services.predictive_forecaster.time_series import (
+                HoltLinearForecaster,
+            )
+
+            forecaster = HoltLinearForecaster(alpha=0.3, beta=0.1, warmup_samples=min(5, len(memory_samples)))
+            for sample in memory_samples:
+                forecaster.update(float(sample))
+
+            if not forecaster.is_warmed_up:
+                return None
+
+            trend_slope = forecaster.get_trend_slope()
+
+            # 트렌드가 0 이하이면 메모리 증가 없음 → OOM 위험 없음
+            if trend_slope <= 0:
+                return None
+
+            current_level = forecaster._level
+            if current_level is None or current_level >= safe_limit:
+                return 0.0  # 이미 한도 초과
+
+            # 남은 메모리 / 분당 증가량 = OOM까지 분
+            remaining = safe_limit - current_level
+            minutes_to_oom = remaining / trend_slope
+
+            logger.debug(
+                f"[CgroupResourceMonitor] OOM Prediction: "
+                f"current={current_level / 1024 / 1024:.0f}MB, "
+                f"limit={safe_limit / 1024 / 1024:.0f}MB, "
+                f"slope={trend_slope / 1024 / 1024:.2f}MB/step, "
+                f"est_minutes={minutes_to_oom:.1f}"
+            )
+
+            return max(0.0, minutes_to_oom)
+        except Exception as e:
+            logger.debug(f"[CgroupResourceMonitor] OOM prediction failed: {e}")
+            return None
 
 
 # Backward compatibility alias

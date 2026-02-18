@@ -11,7 +11,7 @@ Environment Variables:
     SELFHEALING_POOL_MONITOR_WARNING_THRESHOLD=70.0
     SELFHEALING_POOL_MONITOR_CRITICAL_THRESHOLD=90.0
     SELFHEALING_POOL_MONITOR_LEAK_THRESHOLD_SECONDS=300.0
-    SELFHEALING_POOL_MONITOR_MAX_HISTORY=100
+    SELFHEALING_POOL_MONITOR_MAX_HISTORY=5000
     SELFHEALING_POOL_MONITOR_CONNECTION_FAILURE_THRESHOLD=3
 """
 
@@ -68,10 +68,10 @@ class PoolMonitorSettings(BaseSettings):
     # History Settings (from core/pool_monitor.py line 116)
     # ==========================================================================
     max_history: int = Field(
-        default=100,
+        default=5000,
         ge=10,
-        le=1000,
-        description="트렌드 분석용 통계 히스토리 최대 개수",
+        le=10000,
+        description="트렌드 분석용 통계 히스토리 최대 개수. " "72시간 커버를 위해 5,000 기본값 (60초 간격 기준).",
     )
 
     # ==========================================================================

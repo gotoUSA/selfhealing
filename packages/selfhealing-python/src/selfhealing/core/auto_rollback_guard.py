@@ -269,10 +269,11 @@ class AutoRollbackGuard:
             throughput_rps=throughput,
         )
 
-        # 이력 저장
+        # 이력 저장 (Phase 2: Settings 기반 히스토리 제한)
         self._health_history.append(result)
-        if len(self._health_history) > 100:
-            self._health_history = self._health_history[-100:]
+        max_health_history = get_auto_rollback_settings().max_health_history
+        if len(self._health_history) > max_health_history:
+            self._health_history = self._health_history[-max_health_history:]
 
         # 상태 업데이트 및 조치
         self._handle_health_result(result)

@@ -48,12 +48,19 @@ class BudgetDepletionForecaster:
     Burn Rate를 기반으로 예산 소진 시점을 예측하고
     사전 경고를 제공합니다.
 
+    Phase 3 (238_PREDICTIVE_ANOMALY_FORECASTER):
+    선택적으로 EWMAForecaster를 사용하여 burn_rate 입력을
+    smoothing한 후 예측 정확도를 향상시킬 수 있습니다.
+
     사용 예시:
         forecaster = BudgetDepletionForecaster()
         forecast = forecaster.forecast(status)
         if forecast.risk_level == "critical":
             # 즉시 조치 필요
             pass
+
+        # EWMA smoothing 활성화
+        forecaster = BudgetDepletionForecaster(use_ewma_smoothing=True)
     """
 
     # 위험 수준 임계치 (예상 소진 시간 기준, 시간 단위)
@@ -69,6 +76,26 @@ class BudgetDepletionForecaster:
     # SLO 에러 예산 비율 (99.9% SLO 가정 = 0.1% 에러 허용)
     DEFAULT_SLO_ERROR_BUDGET_PERCENT = 0.1
 
+    def __init__(self, use_ewma_smoothing: bool = False, ewma_alpha: float = 0.3):
+        """
+        Args:
+            use_ewma_smoothing: True면 burn_rate_1h를 EWMA로 smoothing.
+                노이즈가 많은 환경에서 예측 안정성을 향상시킴.
+            ewma_alpha: EWMA 평활 계수 (0 < α ≤ 1).
+        """
+        self._use_ewma_smoothing = use_ewma_smoothing
+        self._burn_rate_smoother = None
+        if use_ewma_smoothing:
+            try:
+                from selfhealing.services.predictive_forecaster.time_series import (
+                    EWMAForecaster,
+                )
+
+                self._burn_rate_smoother = EWMAForecaster(alpha=ewma_alpha)
+            except ImportError:
+                logger.debug("[BudgetDepletionForecaster] EWMAForecaster not available, " "falling back to raw burn rate")
+                self._use_ewma_smoothing = False
+
     def forecast(self, status: ErrorBudgetStatus) -> DepletionForecast:
         """
         예산 소진 예측.
@@ -82,6 +109,10 @@ class BudgetDepletionForecaster:
         burn_rate_1h = status.burn_rate_1h
         burn_rate_6h = status.burn_rate_6h
         remaining_percent = status.budget_remaining_percent
+
+        # Phase 3: EWMA smoothing (선택적)
+        if self._use_ewma_smoothing and self._burn_rate_smoother is not None:
+            burn_rate_1h = self._burn_rate_smoother.update(burn_rate_1h)
 
         # Burn Rate 가속 여부 (단기 burn rate가 장기보다 20% 이상 높음)
         is_accelerating = burn_rate_1h > burn_rate_6h * self.ACCELERATION_THRESHOLD

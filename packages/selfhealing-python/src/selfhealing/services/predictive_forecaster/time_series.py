@@ -119,6 +119,13 @@ class HoltLinearForecaster:
 
         self._history: collections.deque[ForecastDataPoint] = collections.deque(maxlen=max_history)
 
+        # Phase 3: has_adjustment 가중치 차등 적용 (Option A)
+        # 셀프힐링 개입 직후 3~5 스텝 동안 alpha를 일시적으로 낮춤
+        # 인위적 변동의 영향을 줄여 트렌드 왜곡을 방지
+        self._adjustment_cooldown: int = 0
+        self._adjustment_cooldown_steps: int = 3  # 개입 후 보수적 스텝 수
+        self._adjustment_alpha_ratio: float = 0.5  # 쿨다운 중 alpha 감소 비율
+
     @property
     def is_warmed_up(self) -> bool:
         """warmup_samples 이상 데이터가 축적되었는지 여부."""
@@ -136,7 +143,8 @@ class HoltLinearForecaster:
         Args:
             value: 관측값.
             has_adjustment: 이 관측 직전에 셀프힐링 개입이 발생했는지 여부.
-                Self-Fulfilling Prophecy 태깅용으로 현재는 기록만 수행.
+                Phase 3 (Option A): True이면 이후 3스텝 동안 alpha를 낮춰서
+                인위적 변동의 영향을 줄인다.
 
         Returns:
             현재 smoothed level.
@@ -144,12 +152,23 @@ class HoltLinearForecaster:
         self._count += 1
         self._history.append(ForecastDataPoint(value=value, has_adjustment=has_adjustment))
 
+        # Phase 3: has_adjustment → 쿨다운 시작
+        if has_adjustment:
+            self._adjustment_cooldown = self._adjustment_cooldown_steps
+
+        # 쿨다운 중이면 alpha를 일시적으로 낮춤 (Option A)
+        if self._adjustment_cooldown > 0:
+            effective_alpha = self._alpha * self._adjustment_alpha_ratio
+            self._adjustment_cooldown -= 1
+        else:
+            effective_alpha = self._alpha
+
         if self._level is None:
             self._level = value
             self._trend = 0.0
         else:
             prev_level = self._level
-            self._level = self._alpha * value + (1 - self._alpha) * (prev_level + self._trend)
+            self._level = effective_alpha * value + (1 - effective_alpha) * (prev_level + self._trend)
             self._trend = self._beta * (self._level - prev_level) + (1 - self._beta) * self._trend
 
         return self._level
@@ -502,3 +521,84 @@ class HoltWintersForecaster:
     def get_trend_slope(self) -> float:
         """현재 트렌드 기울기 반환."""
         return self._trend
+
+    # =========================================================================
+    # Phase 4: 계절성 자동 감지 (auto-detect season_length)
+    # =========================================================================
+
+    @staticmethod
+    def detect_season_length(
+        values: list[float],
+        min_period: int = 2,
+        max_period: int | None = None,
+    ) -> int | None:
+        """
+        자기상관(autocorrelation) 기반 계절성 주기 자동 감지.
+
+        시계열 데이터의 자기상관 함수를 계산하여 가장 강한
+        주기적 패턴의 길이를 반환한다.
+
+        외부 의존성 없이 표준 라이브러리만으로 구현 (0 dependency 원칙).
+
+        알고리즘:
+        1. 데이터 평균 제거 (centering)
+        2. 각 lag에 대해 자기상관 계수 계산
+        3. 첫 번째 유의미한 피크(peak)의 lag를 season_length로 반환
+
+        Args:
+            values: 시계열 데이터 (최소 2*max_period 권장).
+            min_period: 탐색할 최소 주기 (기본 2).
+            max_period: 탐색할 최대 주기 (기본: len(values)//3).
+
+        Returns:
+            감지된 계절성 주기. None = 유의미한 계절성 없음.
+
+        사용 예시::
+
+            values = TimeSeriesScenarioGenerator.seasonal_pattern(period=24, steps=240)
+            detected = HoltWintersForecaster.detect_season_length(values)
+            # detected ≈ 24
+        """
+        n = len(values)
+        if n < min_period * 4:
+            return None
+
+        if max_period is None:
+            max_period = n // 3
+
+        max_period = min(max_period, n // 2)
+        if max_period < min_period:
+            return None
+
+        # 평균 제거
+        mean = sum(values) / n
+        centered = [v - mean for v in values]
+
+        # 분산 (lag=0 자기상관 = 1.0의 분모)
+        variance = sum(c * c for c in centered)
+        if variance == 0:
+            return None
+
+        # 각 lag에 대해 자기상관 계산
+        autocorrelations: list[float] = []
+        for lag in range(min_period, max_period + 1):
+            acf = sum(centered[i] * centered[i + lag] for i in range(n - lag))
+            autocorrelations.append(acf / variance)
+
+        if not autocorrelations:
+            return None
+
+        # 첫 번째 유의미한 피크 찾기
+        # 피크: 이전 값보다 크고 다음 값보다 큰 지점
+        # 유의미: 자기상관 > 0.3 (노이즈 제거)
+        best_lag = None
+        best_acf = 0.3  # 최소 임계값
+
+        for i in range(1, len(autocorrelations) - 1):
+            acf = autocorrelations[i]
+            if acf > best_acf and acf > autocorrelations[i - 1] and acf > autocorrelations[i + 1]:
+                best_acf = acf
+                best_lag = min_period + i
+                break  # 첫 번째 의미 있는 피크를 선택
+
+        return best_lag

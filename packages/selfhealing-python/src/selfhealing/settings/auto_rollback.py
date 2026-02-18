@@ -9,6 +9,7 @@ Environment Variables:
     SELFHEALING_ROLLBACK_ERROR_RATE_CRITICAL=0.3
     SELFHEALING_ROLLBACK_LATENCY_MAJOR_MS=5000
     SELFHEALING_ROLLBACK_LATENCY_CRITICAL_MS=10000
+    SELFHEALING_ROLLBACK_MAX_HEALTH_HISTORY=10000
     SELFHEALING_ROLLBACK_FAILURES_ALERT=3
     SELFHEALING_ROLLBACK_FAILURES_EMERGENCY=5
 """
@@ -69,6 +70,16 @@ class AutoRollbackSettings(BaseSettings):
     )
 
     # ==========================================================================
+    # 헬스체크 히스토리 크기 (Phase 2: 238_PREDICTIVE_ANOMALY_FORECASTER)
+    # ==========================================================================
+    max_health_history: int = Field(
+        default=10000,
+        ge=100,
+        le=10000,
+        description="헬스체크 이력 최대 개수. 30초 간격 기준 약 83시간 커버.",
+    )
+
+    # ==========================================================================
     # 연속 실패 임계값
     # ==========================================================================
     failures_alert: int = Field(
@@ -99,8 +110,7 @@ class AutoRollbackSettings(BaseSettings):
             )
         if self.failures_alert >= self.failures_emergency:
             raise ValueError(
-                f"failures_alert ({self.failures_alert}) must be less than "
-                f"failures_emergency ({self.failures_emergency})"
+                f"failures_alert ({self.failures_alert}) must be less than " f"failures_emergency ({self.failures_emergency})"
             )
         return self
 

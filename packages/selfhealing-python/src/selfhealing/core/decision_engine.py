@@ -54,12 +54,8 @@ class AdjustmentRule:
 
     parameter: str
     metric: str
-    condition: Callable[
-        [float, float], bool
-    ]  # (current_value, metric_value) -> should_adjust
-    adjustment: Callable[
-        [float, float], float
-    ]  # (current_value, metric_value) -> new_value
+    condition: Callable[[float, float], bool]  # (current_value, metric_value) -> should_adjust
+    adjustment: Callable[[float, float], float]  # (current_value, metric_value) -> new_value
     reason: str
     priority: AdjustmentPriority = AdjustmentPriority.MEDIUM
     min_confidence: float = 0.5
@@ -123,8 +119,7 @@ class DecisionEngine:
         AdjustmentRule(
             parameter="rate_limit_rps",
             metric="throttle_rate",
-            condition=lambda current, metric: metric < 0.01
-            and current < 5000,  # 거의 스로틀링 없음
+            condition=lambda current, metric: metric < 0.01 and current < 5000,  # 거의 스로틀링 없음
             adjustment=lambda current, metric: current * 1.1,
             reason="스로틀링 발생 낮음 → Rate Limit 상향 가능",
             priority=AdjustmentPriority.LOW,
@@ -181,9 +176,7 @@ class DecisionEngine:
 
         return decisions
 
-    def _evaluate_rule(
-        self, rule: AdjustmentRule, metrics: dict[str, float]
-    ) -> AdjustmentDecision | None:
+    def _evaluate_rule(self, rule: AdjustmentRule, metrics: dict[str, float]) -> AdjustmentDecision | None:
         """단일 규칙 평가"""
         metric_value = metrics.get(rule.metric)
 
@@ -198,9 +191,7 @@ class DecisionEngine:
 
             current_value = float(current_value)
         except (TypeError, ValueError) as e:
-            logger.warning(
-                f"[DecisionEngine] Invalid current value for {rule.parameter}: {e}"
-            )
+            logger.warning(f"[DecisionEngine] Invalid current value for {rule.parameter}: {e}")
             return None
 
         # 조건 평가
@@ -230,9 +221,7 @@ class DecisionEngine:
         confidence = self._calculate_confidence(metrics, rule)
 
         if confidence < rule.min_confidence:
-            logger.debug(
-                f"[DecisionEngine] Low confidence ({confidence:.2f}) for {rule.parameter}"
-            )
+            logger.debug(f"[DecisionEngine] Low confidence ({confidence:.2f}) for {rule.parameter}")
             return None
 
         return AdjustmentDecision(
@@ -246,13 +235,28 @@ class DecisionEngine:
         )
 
     def _calculate_confidence(
-        self, metrics: dict[str, float], rule: AdjustmentRule
+        self,
+        metrics: dict[str, float],
+        rule: AdjustmentRule,
+        prediction_context: dict[str, float] | None = None,
     ) -> float:
         """
         신뢰도 계산
 
         샘플 수, 메트릭 변동성 등을 고려.
         DecisionEngineSettings에서 임계값 및 계수 로드.
+
+        Phase 3 (238_PREDICTIVE_ANOMALY_FORECASTER):
+        prediction_context가 제공되면 예측 트렌드 기울기를 신뢰도에 반영.
+        트렌드 기울기가 rule 방향과 일치하면 신뢰도 부스트,
+        반대 방향이면 안정성 계수를 낮춤.
+
+        Args:
+            metrics: 수집된 메트릭
+            rule: 평가 중인 규칙
+            prediction_context: 예측 컨텍스트 (선택적)
+                - "trend_slope": HoltLinear 트렌드 기울기
+                - "prediction_confidence": 예측 신뢰도 (0~1)
         """
         settings = get_decision_engine_settings()
 
@@ -270,6 +274,18 @@ class DecisionEngine:
             # 변동성 정보 없으면 기본값 유지
             stability_factor = settings.stability_factor_stable
 
+        # Phase 3: 예측 컨텍스트 반영
+        if prediction_context:
+            trend_slope = prediction_context.get("trend_slope", 0.0)
+            pred_confidence = prediction_context.get("prediction_confidence", 0.0)
+
+            if pred_confidence > 0 and trend_slope != 0:
+                # 트렌드 기울기와 예측 신뢰도를 안정성 계수에 보정
+                # 양의 기울기(상승 추세)가 있으면 stability_factor 미세 부스트
+                # 보정 범위: ±10% (pred_confidence 비례)
+                trend_boost = min(0.1, abs(trend_slope) * 0.01) * pred_confidence
+                stability_factor = min(1.0, stability_factor + trend_boost)
+
         confidence = sample_confidence * stability_factor
         return min(1.0, max(0.0, confidence))
 
@@ -283,9 +299,7 @@ class DecisionEngine:
         }
         return order.get(priority, 0)
 
-    def _record_analysis(
-        self, metrics: dict[str, float], decisions: list[AdjustmentDecision]
-    ):
+    def _record_analysis(self, metrics: dict[str, float], decisions: list[AdjustmentDecision]):
         """분석 이력 기록"""
         self._history.append(
             {
@@ -304,9 +318,10 @@ class DecisionEngine:
             }
         )
 
-        # 최근 100개만 유지
-        if len(self._history) > 100:
-            self._history = self._history[-100:]
+        # Settings 기반 히스토리 제한 (Phase 2: 238_PREDICTIVE_ANOMALY_FORECASTER)
+        max_history = get_decision_engine_settings().max_history
+        if len(self._history) > max_history:
+            self._history = self._history[-max_history:]
 
     def add_rule(self, rule: AdjustmentRule) -> None:
         """규칙 추가"""

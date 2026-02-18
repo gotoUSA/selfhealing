@@ -162,12 +162,8 @@ class ConnectionPoolMonitor:
         return cls(
             stats_provider=stats_provider,
             warning_threshold=overrides.get("warning_threshold", s.warning_threshold),
-            critical_threshold=overrides.get(
-                "critical_threshold", s.critical_threshold
-            ),
-            leak_threshold_seconds=overrides.get(
-                "leak_threshold_seconds", s.leak_threshold_seconds
-            ),
+            critical_threshold=overrides.get("critical_threshold", s.critical_threshold),
+            leak_threshold_seconds=overrides.get("leak_threshold_seconds", s.leak_threshold_seconds),
             max_history=overrides.get("max_history", s.max_history),
         )
 
@@ -203,15 +199,12 @@ class ConnectionPoolMonitor:
                 import logging
 
                 logging.getLogger(__name__).info(
-                    f"[PoolMonitor] Simulation override set: {health_status.value} "
-                    f"(experiment_id={experiment_id})"
+                    f"[PoolMonitor] Simulation override set: {health_status.value} " f"(experiment_id={experiment_id})"
                 )
             else:
                 import logging
 
-                logging.getLogger(__name__).info(
-                    "[PoolMonitor] Simulation override cleared"
-                )
+                logging.getLogger(__name__).info("[PoolMonitor] Simulation override cleared")
 
     def clear_simulation_override(self) -> None:
         """시뮬레이션 오버라이드 해제."""
@@ -276,9 +269,7 @@ class ConnectionPoolMonitor:
         if self._simulation_override is not None:
             import logging
 
-            logging.getLogger(__name__).debug(
-                f"[PoolMonitor] Returning simulated status: {self._simulation_override.value}"
-            )
+            logging.getLogger(__name__).debug(f"[PoolMonitor] Returning simulated status: {self._simulation_override.value}")
             stats = self._simulation_stats or self._get_default_simulated_stats()
             return self._simulation_override, stats
 
@@ -354,21 +345,59 @@ class ConnectionPoolMonitor:
         )
 
     def get_trend(self) -> dict[str, Any]:
-        """Analyze pool usage trend"""
+        """
+        Analyze pool usage trend.
+
+        Phase 2 (238_PREDICTIVE_ANOMALY_FORECASTER): 분석 윈도우 10→100으로 확대.
+        Phase 3: HoltLinearForecaster 기반 풀 고갈 예측 추가.
+        """
         if len(self._stats_history) < 2:
             return {"trend": "insufficient_data"}
 
-        recent = self._stats_history[-10:]
+        # Phase 2: 분석 윈도우 100개로 확대 (통계적 유의성 향상)
+        window_size = min(100, len(self._stats_history))
+        recent = self._stats_history[-window_size:]
         avg_usage = sum(s.usage_percent for s in recent) / len(recent)
 
-        # Compare with older data
-        if len(self._stats_history) > 20:
-            older = self._stats_history[-20:-10]
+        result: dict[str, Any] = {"trend": "stable", "avg_usage": avg_usage}
+
+        # Compare with older data (Phase 2: 100 vs 100 window)
+        if len(self._stats_history) > window_size * 2:
+            older = self._stats_history[-(window_size * 2) : -window_size]
             older_avg = sum(s.usage_percent for s in older) / len(older)
 
             if avg_usage > older_avg + 10:
-                return {"trend": "increasing", "avg_usage": avg_usage}
+                result["trend"] = "increasing"
             elif avg_usage < older_avg - 10:
-                return {"trend": "decreasing", "avg_usage": avg_usage}
+                result["trend"] = "decreasing"
 
-        return {"trend": "stable", "avg_usage": avg_usage}
+        # Phase 3: HoltLinearForecaster 기반 풀 고갈 예측
+        try:
+            from selfhealing.services.predictive_forecaster.time_series import (
+                HoltLinearForecaster,
+            )
+
+            forecaster = HoltLinearForecaster(alpha=0.3, beta=0.1, warmup_samples=min(30, window_size))
+            for s in recent:
+                forecaster.update(s.usage_percent)
+
+            if forecaster.is_warmed_up:
+                predicted_5 = forecaster.predict(steps_ahead=5)
+                predicted_15 = forecaster.predict(steps_ahead=15)
+                trend_slope = forecaster.get_trend_slope()
+                confidence = forecaster.get_confidence()
+
+                result["predicted_usage_5min"] = predicted_5
+                result["predicted_usage_15min"] = predicted_15
+                result["trend_slope"] = trend_slope
+                result["prediction_confidence"] = confidence
+
+                # 풀 고갈 예측 시간 (분)
+                if trend_slope > 0 and avg_usage < 100:
+                    remaining = 100.0 - avg_usage
+                    minutes_to_exhaustion = remaining / trend_slope
+                    result["estimated_exhaustion_minutes"] = minutes_to_exhaustion
+        except Exception:
+            pass  # Forecaster 미설치 시 기존 로직만 사용
+
+        return result
