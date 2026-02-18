@@ -619,63 +619,159 @@ import 경로만 변경되며, 인스턴스 생성/사용 방식은 동일합니
 
 ## 6. 테스트 전략
 
-### 6.1 단위 테스트
+### 6.1 단위 테스트 (47개 — 구현 완료 ✅)
+
+**실행**: `pytest packages/selfhealing-python/tests/unit/{throttle,scaling,api}/ -k "gradient_extracted or deadline_fast_fail or traffic_gate_dynamic or admission_control_rtt"`
 
 ```
-tests/unit/services/throttle/test_gradient_extracted.py
-├── TestGradientCalculatorExtraction
-│   ├── test_import_from_new_module        # gradient.py에서 import 가능
-│   ├── test_import_from_adaptive_compat    # adaptive.py에서도 여전히 import 가능
-│   ├── test_singleton_registry             # get_gradient_calculator() 동일 인스턴스
-│   ├── test_singleton_by_tier              # tier별 인스턴스 분리
-│   └── test_reset_clears_all              # reset_gradient_calculators()
+tests/unit/throttle/test_gradient_extracted.py — 12개
+├── TestGradientCalculatorExtractionContract (4)
+│   ├── test_import_gradient_calculator_from_gradient_module
+│   ├── test_import_rtt_sample_from_gradient_module
+│   ├── test_import_gradient_calculator_from_adaptive_compat
+│   └── test_import_rtt_sample_from_adaptive_compat
+├── TestGradientCalculatorExtractionBehavior (3)
+│   ├── test_extracted_module_gradient_calculator_works
+│   ├── test_adaptive_compat_same_class
+│   └── test_adaptive_throttle_uses_gradient_calculator
+└── TestGradientCalculatorSingletonBehavior (5)
+    ├── test_singleton_returns_same_instance
+    ├── test_different_names_return_different_instances
+    ├── test_singleton_by_tier_separate_instances
+    ├── test_reset_clears_all_instances
+    └── test_singleton_data_persists
 
-tests/unit/scaling/test_deadline_fast_fail.py
-├── TestDynamicFastFail
-│   ├── test_estimated_with_rtt_data       # smoothed_rtt=200, margin=1.5 → 300ms
-│   ├── test_cold_start_returns_tier_default  # 데이터 없음 → critical=50ms
-│   ├── test_cold_start_standard_default   # 데이터 없음 → standard=200ms
-│   ├── test_cold_start_non_essential_default  # 데이터 없음 → non_essential=500ms
-│   ├── test_gradient_increases_margin     # gradient=0.5 → margin=1.5×1.5=2.25
-│   ├── test_should_fast_fail_integration  # remaining=400, estimated=500 → True
-│   └── test_import_error_returns_tier_default  # ImportError → Tier별 기본값
+tests/unit/scaling/test_deadline_fast_fail.py — 16개
+├── TestTierDefaultEstimatedMsContract (3)
+│   ├── test_critical_default_50ms
+│   ├── test_standard_default_200ms
+│   └── test_non_essential_default_500ms
+├── TestTierDefaultEstimatedMsBehavior (5)
+│   ├── test_critical_tier_returns_critical_default
+│   ├── test_standard_tier_returns_standard_default
+│   ├── test_non_essential_tier_returns_non_essential_default
+│   ├── test_unknown_tier_returns_standard_default
+│   └── test_default_parameter_returns_standard
+└── TestGetEstimatedProcessingMsBehavior (8)
+    ├── test_with_rtt_data_applies_safety_margin
+    ├── test_cold_start_returns_tier_default_critical
+    ├── test_cold_start_returns_tier_default_standard
+    ├── test_cold_start_returns_tier_default_non_essential
+    ├── test_positive_gradient_increases_margin
+    ├── test_stable_gradient_keeps_margin
+    ├── test_import_error_returns_tier_default
+    ├── test_should_fast_fail_with_estimated_ms
+    ├── test_should_fast_fail_with_enough_time
+    ├── test_no_deadline_no_fast_fail
+    └── test_return_type_always_float
 
-tests/unit/scaling/test_traffic_gate_deadline.py
-├── TestTrafficGateDeadline
-│   ├── test_expired_deadline_rejected     # deadline 만료 → allowed=False
-│   ├── test_fast_fail_rejected            # estimated > remaining → allowed=False
-│   ├── test_fast_fail_with_tier_metadata  # metadata["tier_id"]로 Tier별 계산기 조회
-│   ├── test_no_deadline_passthrough       # deadline 없음 → 기존 동작
-│   └── test_import_error_passthrough      # ImportError → 기존 동작
+tests/unit/scaling/test_traffic_gate_dynamic_fast_fail.py — 8개
+└── TestTrafficGateDynamicFastFailBehavior (8)
+    ├── test_expired_deadline_rejected
+    ├── test_fast_fail_when_estimated_exceeds_remaining
+    ├── test_fast_fail_with_tier_metadata
+    ├── test_no_deadline_allows_through
+    ├── test_plenty_deadline_allows_through
+    ├── test_fast_fail_metadata_contains_estimated_ms
+    ├── test_default_tier_used_when_metadata_missing
+    └── test_cold_start_with_short_deadline_fast_fails
 
-tests/unit/api/test_admission_control_rtt.py
-├── TestRTTSampling
-│   ├── test_2xx_response_sampled          # 200 OK → add_sample 호출 가능
-│   ├── test_4xx_response_not_sampled      # 400 Bad Request → add_sample 미호출
-│   ├── test_5xx_response_not_sampled      # 500 Error → add_sample 미호출
-│   ├── test_below_min_threshold_not_sampled  # 3ms 응답 → add_sample 미호출
-│   ├── test_sampling_rate_respected       # 10% 확률로만 호출
-│   ├── test_tier_separated_calculator     # critical/standard 분리 확인
-│   └── test_rtt_collection_fail_open      # 수집 실패 시 요청 처리 무영향
+tests/unit/api/test_admission_control_rtt.py — 11개
+├── TestAdmissionControlRttSamplingContract (2)
+│   ├── test_rtt_min_sample_ms_default
+│   └── test_rtt_sample_rate_default
+└── TestAdmissionControlRttSamplingBehavior (9)
+    ├── test_metadata_tier_id_passed_to_traffic_gate
+    ├── test_2xx_response_triggers_rtt_sampling
+    ├── test_4xx_response_not_sampled
+    ├── test_5xx_response_not_sampled
+    ├── test_below_min_threshold_not_sampled
+    ├── test_sampling_rate_respected
+    ├── test_tier_separated_calculator_name
+    ├── test_rtt_collection_fail_open
+    └── test_metadata_tier_id_critical_passed
 ```
 
-### 6.2 통합 테스트
+### 6.2 통합 테스트 (30개 — 구현 완료 ✅)
+
+**위치**: `packages/selfhealing-python/tests/integration/test_cascading_timeout.py`
+**실행**: `pytest packages/selfhealing-python/tests/integration/test_cascading_timeout.py -v`
+
+Django 의존 없이 순수 selfhealing 패키지 내부 컴포넌트 간 상호작용을 검증합니다.
+(`tests/integration/selfhealing/`은 Django REST API + Docker Redis 풀스택 테스트 전용)
 
 ```
-tests/integration/test_cascading_timeout.py
-├── test_full_chain_fast_fail
-│   # A → B → C 시뮬레이션
-│   # C에서 Fast-Fail → 전체 체인 조기 종료 확인
-├── test_deadline_propagation_accuracy
-│   # 전파된 deadline이 실제 경과 시간만큼 감소했는지 확인
-├── test_rtt_feedback_loop
-│   # 응답 시간 증가 → GradientCalculator → Fast-Fail 임계치 자동 조정
-├── test_cold_start_fast_fail
-│   # 서비스 재시작 직후 → Tier별 기본값으로 Fast-Fail 작동 확인
-├── test_data_pollution_prevention
-│   # Fast-Fail 거절 후 → smoothed_rtt 불변 확인
-└── test_tier_rtt_isolation
-    # critical 요청 RTT가 non_essential 계산기에 영향 없음 확인
+tests/integration/test_cascading_timeout.py — 30개
+├── TestFullChainFastFail (3)
+│   ├── test_full_chain_service_c_fast_fails
+│   │   # A(3s) → B(2.5s 소요) → C: remaining < estimated → Fast-Fail
+│   ├── test_full_chain_service_b_passes_when_enough_time
+│   │   # A(10s) → B: RTT 100ms, estimated 150ms → 통과
+│   └── test_chain_propagation_reduces_remaining
+│       # 호출 체인마다 네트워크 buffer 차감 확인
+│
+├── TestDeadlinePropagationAccuracy (4)
+│   ├── test_propagation_header_reflects_elapsed_time
+│   │   # time.sleep(10ms) 후 전파 헤더 감소 확인
+│   ├── test_network_buffer_deducted_on_set
+│   │   # set_deadline(1000) → remaining ≈ 950ms
+│   ├── test_expired_deadline_produces_no_propagation_header
+│   │   # 만료 시 전파 헤더 None
+│   └── test_deadline_scope_restores_previous
+│       # deadline_scope 종료 후 외부 deadline 복원
+│
+├── TestRttFeedbackLoop (4)
+│   ├── test_rtt_increase_raises_estimated
+│   │   # RTT 100→500ms: estimated 자동 상승
+│   ├── test_rtt_increase_triggers_fast_fail
+│   │   # RTT 급증 시 동일 deadline에서 Fast-Fail 전환
+│   ├── test_rtt_recovery_allows_traffic_again
+│   │   # RTT 600→50ms: Fast-Fail → 다시 허용
+│   └── test_gradient_positive_increases_safety_margin
+│       # gradient > 0.1 → safety_margin 증가 확인
+│
+├── TestColdStartFastFail (5)
+│   ├── test_cold_start_critical_fast_fails_short_deadline
+│   │   # GradientCalculator 데이터 없음 + critical 기본값 50ms
+│   ├── test_cold_start_standard_fast_fails_short_deadline
+│   │   # standard 기본값 200ms vs deadline 100ms → Fast-Fail
+│   ├── test_cold_start_non_essential_fast_fails_short_deadline
+│   │   # non_essential 기본값 500ms vs deadline 350ms → Fast-Fail
+│   ├── test_cold_start_long_deadline_allows_through
+│   │   # 10초 deadline → 모든 tier 통과
+│   └── test_cold_start_tier_defaults_match_constants
+│       # critical=50, standard=200, non_essential=500
+│
+├── TestDataPollutionPrevention (3)
+│   ├── test_smoothed_rtt_unchanged_after_no_new_samples
+│   │   # add_sample 미호출 시 rtt 불변
+│   ├── test_near_zero_sample_pollutes_rtt
+│   │   # ~0ms 샘플 주입 → rtt 급락 (오염 시연)
+│   └── test_filter_prevents_pollution_in_estimated
+│       # 정상 샘플만 수집 시 estimated 안정
+│
+├── TestTierRttIsolation (6)
+│   ├── test_critical_rtt_does_not_affect_standard
+│   │   # critical에 5000ms 주입 → standard estimated 불변
+│   ├── test_non_essential_rtt_does_not_affect_critical
+│   │   # non_essential에 10000ms 주입 → critical estimated 불변
+│   ├── test_all_three_tiers_independent_in_traffic_gate
+│   │   # 500ms deadline: critical(30ms)=허용, non_essential(2000ms)=거부
+│   ├── test_singleton_registry_returns_same_instance
+│   ├── test_different_names_return_different_instances
+│   └── test_reset_clears_all_instances
+│
+└── TestEndToEndIntegration (5)
+    ├── test_no_deadline_skips_all_deadline_checks
+    │   # deadline 미설정 → 높은 RTT 있어도 허용
+    ├── test_expired_deadline_rejected_before_fast_fail
+    │   # 만료된 deadline은 Fast-Fail 이전에 거부
+    ├── test_rtt_data_transitions_from_cold_start_to_measured
+    │   # Cold Start 기본값 → RTT 축적 → 측정값 전환
+    ├── test_traffic_gate_pipeline_order_deadline_before_rate_limit
+    │   # deadline 체크가 rate limit보다 먼저 실행 (순서 검증)
+    └── test_fast_fail_metadata_contains_diagnostic_info
+        # metadata에 estimated_ms, fast_fail 포함 확인
 ```
 
 ---
