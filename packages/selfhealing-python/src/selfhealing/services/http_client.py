@@ -145,6 +145,19 @@ class SelfHealingHttpClient:
             if self._experiment_id:
                 headers[CHAOS_EXPERIMENT_ID_HEADER] = self._experiment_id
 
+        # Deadline 헤더 전파 (상위 서비스 → 하위 서비스)
+        try:
+            from selfhealing.scaling.deadline_context import (
+                DEADLINE_HEADER,
+                get_propagation_header_value,
+            )
+
+            deadline_value = get_propagation_header_value()
+            if deadline_value is not None:
+                headers[DEADLINE_HEADER] = deadline_value
+        except ImportError:
+            pass
+
         return headers
 
     def _execute_request(
@@ -170,6 +183,18 @@ class SelfHealingHttpClient:
 
         headers = self._get_headers(kwargs.pop("headers", None))
         timeout = kwargs.pop("timeout", self.default_timeout)
+
+        # Deadline 기반 timeout 자동 조정: 남은 시간이 기본 timeout보다 짧으면 축소
+        try:
+            from selfhealing.scaling.deadline_context import get_remaining_ms
+
+            remaining = get_remaining_ms()
+            if remaining is not None:
+                deadline_timeout = remaining / 1000.0  # ms → seconds
+                if timeout is None or deadline_timeout < timeout:
+                    timeout = deadline_timeout
+        except ImportError:
+            pass
 
         request_func = getattr(req_lib, method.lower())
 

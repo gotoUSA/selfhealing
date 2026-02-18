@@ -121,8 +121,34 @@ class AdmissionControlMiddleware:
             return self.get_response(request)
 
     def _process_request(self, request):
-        """요청 분류 → TrafficGate 판정 → 허용/거부."""
-        # 1. TierRegistry로 tier 분류
+        """Deadline 체크 → 요청 분류 → TrafficGate 판정 → 허용/거부."""
+        # 0단계: Deadline Context 설정 및 Fast-Fail 체크
+        try:
+            from selfhealing.scaling.deadline_context import (
+                DEADLINE_META_KEY,
+                DEFAULT_MINIMUM_USEFUL_TIME_MS,
+                parse_deadline_header,
+                set_deadline,
+            )
+
+            deadline_header = request.META.get(DEADLINE_META_KEY)
+            if deadline_header:
+                remaining_ms = parse_deadline_header(deadline_header)
+                if remaining_ms is not None:
+                    set_deadline(remaining_ms)
+                    # 최소 유효 시간 미만이면 즉시 거절
+                    if remaining_ms < DEFAULT_MINIMUM_USEFUL_TIME_MS:
+                        logger.info(
+                            "[AdmissionControlMiddleware] Deadline Fast-Fail: " "remaining=%.0fms < minimum=%.0fms, path=%s",
+                            remaining_ms,
+                            DEFAULT_MINIMUM_USEFUL_TIME_MS,
+                            request.path,
+                        )
+                        return self._create_deadline_rejection_response(request, remaining_ms)
+        except ImportError:
+            pass
+
+        # 1단계: TierRegistry로 tier 분류
         path = request.path
         client_ip = self._get_client_ip(request)
         user_id = self._get_user_id(request)
@@ -204,4 +230,21 @@ class AdmissionControlMiddleware:
             status=503,
         )
         response["Retry-After"] = "30"
+        return response
+
+    def _create_deadline_rejection_response(self, request, remaining_ms):
+        """503 Service Unavailable 응답 — deadline 만료 근접."""
+        from django.http import JsonResponse
+
+        response = JsonResponse(
+            {
+                "error": "Deadline Exceeded",
+                "code": "DEADLINE_FAST_FAIL",
+                "message": ("상위 서비스의 deadline이 만료에 근접하여 " "요청이 즉시 거절되었습니다."),
+                "remaining_ms": remaining_ms,
+                "retry_after": 0,
+            },
+            status=503,
+        )
+        response["Retry-After"] = "0"
         return response

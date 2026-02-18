@@ -50,6 +50,21 @@ from selfhealing.scaling.config import (
     get_backpressure_settings,
     reset_backpressure_settings,
 )
+from selfhealing.scaling.deadline_context import (
+    DEADLINE_HEADER,
+    DEADLINE_META_KEY,
+    DEFAULT_MINIMUM_USEFUL_TIME_MS,
+    DEFAULT_NETWORK_LATENCY_BUFFER_MS,
+    clear_deadline,
+    deadline_scope,
+    get_deadline_aware_statement_timeout,
+    get_propagation_header_value,
+    get_remaining_ms,
+    is_expired,
+    parse_deadline_header,
+    set_deadline,
+    should_fast_fail,
+)
 from selfhealing.scaling.graceful_degradation import (
     Feature,
     FeaturePriority,
@@ -91,6 +106,20 @@ __all__ = [
     "LEVEL_RATE_MULTIPLIERS",
     "get_backpressure_settings",
     "reset_backpressure_settings",
+    # Deadline Context
+    "DEADLINE_HEADER",
+    "DEADLINE_META_KEY",
+    "DEFAULT_MINIMUM_USEFUL_TIME_MS",
+    "DEFAULT_NETWORK_LATENCY_BUFFER_MS",
+    "clear_deadline",
+    "deadline_scope",
+    "get_deadline_aware_statement_timeout",
+    "get_propagation_header_value",
+    "get_remaining_ms",
+    "is_expired",
+    "parse_deadline_header",
+    "set_deadline",
+    "should_fast_fail",
     # Rate Controller
     "RateController",
     "RateControllerState",

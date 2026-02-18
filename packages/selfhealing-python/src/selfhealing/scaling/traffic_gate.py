@@ -212,21 +212,36 @@ class TrafficGate:
         current_level = self._rate_controller.get_state().level
         bulkhead_acquired = False
 
-        # 0단계: Bulkhead 확인 (도메인별 격리)
+        # 0단계: Deadline 만료 확인
+        try:
+            from selfhealing.scaling.deadline_context import is_expired
+
+            if is_expired():
+                return TrafficDecision(
+                    allowed=False,
+                    reason="Deadline expired",
+                    level=current_level,
+                    gate="DeadlineContext",
+                    metadata=metadata,
+                )
+        except ImportError:
+            pass
+
+        # 1단계: Bulkhead 확인 (도메인별 격리)
         if bulkhead_name is not None:
             acquired, decision = self._check_bulkhead(bulkhead_name, current_level, metadata)
             if decision is not None:
                 return decision
             bulkhead_acquired = acquired
 
-        # 1단계: CascadeLoadShedding 확인
+        # 2단계: CascadeLoadShedding 확인
         load_shedding_decision = self._check_load_shedding(priority, current_level, metadata)
         if load_shedding_decision is not None:
             if bulkhead_acquired and bulkhead_name:
                 self._release_bulkhead_internal(bulkhead_name)
             return load_shedding_decision
 
-        # 2단계: RateController 확인 (priority 기반 watermark 적용)
+        # 3단계: RateController 확인 (priority 기반 watermark 적용)
         tier_str = _map_priority_int_to_tier(priority)
         if not self._rate_controller.should_process(priority=tier_str):
             if bulkhead_acquired and bulkhead_name:
