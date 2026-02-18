@@ -356,11 +356,20 @@ class TestAnalysisHistory:
         assert len(history) >= 1
 
     def test_history_limit(self, decision_engine):
-        """이력은 최근 100개만 유지."""
+        """이력은 settings.max_history 개수만 유지."""
+        from unittest.mock import patch
+        from selfhealing.settings.decision_engine import DecisionEngineSettings
+
+        small_settings = DecisionEngineSettings(max_history=100)
+
         metrics = {"error_rate": 0.5, "sample_count": 100}
 
-        for _ in range(110):
-            decision_engine.analyze(metrics)
+        with patch(
+            "selfhealing.core.decision_engine.get_decision_engine_settings",
+            return_value=small_settings,
+        ):
+            for _ in range(110):
+                decision_engine.analyze(metrics)
 
         history = decision_engine.get_history(limit=200)
         assert len(history) <= 100
