@@ -183,6 +183,32 @@ class AdmissionControlMiddleware:
         tier_def = self._registry.get_tier(tier_id)
         request._selfhealing_tier_priority = tier_def.priority if tier_def else 0
 
+        # 2.5단계: Degraded tier 강제 Deadline 주입
+        # HIGH 이상 backpressure + non_essential → 1초 deadline으로
+        # Heavy Query가 critical/standard tier 자원을 점유하는 것을 방지
+        _DEGRADED_TIER_DEADLINE_MS = 1000
+        if tier_id == "non_essential" and self._traffic_gate is not None:
+            try:
+                from selfhealing.scaling.deadline_context import (
+                    get_remaining_ms,
+                    set_deadline,
+                )
+                from selfhealing.settings.backpressure import BackpressureLevel
+
+                bp_level = self._traffic_gate.get_level()
+                if bp_level in (BackpressureLevel.HIGH, BackpressureLevel.CRITICAL):
+                    remaining = get_remaining_ms()
+                    if remaining is None or remaining > _DEGRADED_TIER_DEADLINE_MS:
+                        set_deadline(_DEGRADED_TIER_DEADLINE_MS)
+                        logger.info(
+                            "[AdmissionControlMiddleware] Forced deadline: " "tier=%s, bp_level=%s, deadline_ms=%d",
+                            tier_id,
+                            bp_level.name,
+                            _DEGRADED_TIER_DEADLINE_MS,
+                        )
+            except ImportError:
+                pass
+
         # 3. TrafficGate 판정
         traffic_priority = TIER_PRIORITY_MAP.get(tier_id, 50)
         bulkhead_name = f"tier:{tier_id}"

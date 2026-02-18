@@ -218,6 +218,7 @@ def sample_services():
             service_id="recommend-api",
             criticality="low",
             shed_priority=10,
+            min_traffic_percentage=0.0,  # 배치/통계 서비스: 과부하 시 완전 중단 허용
         ),
     ]
 

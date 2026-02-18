@@ -46,7 +46,7 @@ class ServiceConfig:
     shed_priority: int = 0
 
     # 최소 보장 트래픽 (0~100%)
-    min_traffic_percentage: float = 0.0
+    min_traffic_percentage: float = 5.0
 
     # 서비스별 Recovery 전략 오버라이드
     recovery_strategy: RecoveryStrategy | None = None
@@ -59,19 +59,11 @@ class ServiceConfig:
         """Validate criticality value."""
         valid_levels = {"critical", "high", "medium", "low"}
         if self.criticality not in valid_levels:
-            raise ValueError(
-                f"Invalid criticality: {self.criticality}. "
-                f"Valid values: {valid_levels}"
-            )
+            raise ValueError(f"Invalid criticality: {self.criticality}. " f"Valid values: {valid_levels}")
         if not (0.0 <= self.min_traffic_percentage <= 100.0):
-            raise ValueError(
-                f"min_traffic_percentage must be between 0 and 100, "
-                f"got {self.min_traffic_percentage}"
-            )
+            raise ValueError(f"min_traffic_percentage must be between 0 and 100, " f"got {self.min_traffic_percentage}")
         if self.shed_priority < 0:
-            raise ValueError(
-                f"shed_priority must be non-negative, got {self.shed_priority}"
-            )
+            raise ValueError(f"shed_priority must be non-negative, got {self.shed_priority}")
 
 
 # =============================================================================
@@ -99,13 +91,9 @@ class SheddingLevel:
     def __post_init__(self) -> None:
         """Validate shedding level values."""
         if not (0.0 <= self.error_rate <= 100.0):
-            raise ValueError(
-                f"error_rate must be between 0 and 100, got {self.error_rate}"
-            )
+            raise ValueError(f"error_rate must be between 0 and 100, got {self.error_rate}")
         if not (0.0 <= self.traffic_limit <= 100.0):
-            raise ValueError(
-                f"traffic_limit must be between 0 and 100, got {self.traffic_limit}"
-            )
+            raise ValueError(f"traffic_limit must be between 0 and 100, got {self.traffic_limit}")
         # critical은 절대 차단 대상에 포함될 수 없음
         if "critical" in self.shed_criticality:
             raise ValueError("'critical' cannot be included in shed_criticality")
@@ -180,18 +168,11 @@ class CanaryRecoveryStageConfig:
     def __post_init__(self) -> None:
         """Validate canary stage values."""
         if not (0.0 <= self.traffic_percent <= 100.0):
-            raise ValueError(
-                f"traffic_percent must be between 0 and 100, got {self.traffic_percent}"
-            )
+            raise ValueError(f"traffic_percent must be between 0 and 100, got {self.traffic_percent}")
         if self.duration_seconds < 0:
-            raise ValueError(
-                f"duration_seconds must be non-negative, got {self.duration_seconds}"
-            )
+            raise ValueError(f"duration_seconds must be non-negative, got {self.duration_seconds}")
         if not (0.0 <= self.required_success_rate <= 100.0):
-            raise ValueError(
-                f"required_success_rate must be between 0 and 100, "
-                f"got {self.required_success_rate}"
-            )
+            raise ValueError(f"required_success_rate must be between 0 and 100, " f"got {self.required_success_rate}")
 
 
 @dataclass
@@ -256,10 +237,7 @@ class RecoveryStrategy:
 
         valid_failure_actions = {"restart", "abort"}
         if self.on_stage_failure not in valid_failure_actions:
-            raise ValueError(
-                f"Invalid on_stage_failure: {self.on_stage_failure}. "
-                f"Valid values: {valid_failure_actions}"
-            )
+            raise ValueError(f"Invalid on_stage_failure: {self.on_stage_failure}. " f"Valid values: {valid_failure_actions}")
 
 
 # =============================================================================
@@ -285,13 +263,9 @@ class ThresholdMultiplier:
     def __post_init__(self) -> None:
         """Validate multiplier values."""
         if self.failure < 0:
-            raise ValueError(
-                f"failure multiplier must be non-negative, got {self.failure}"
-            )
+            raise ValueError(f"failure multiplier must be non-negative, got {self.failure}")
         if self.window < 0:
-            raise ValueError(
-                f"window multiplier must be non-negative, got {self.window}"
-            )
+            raise ValueError(f"window multiplier must be non-negative, got {self.window}")
 
 
 @dataclass
@@ -318,18 +292,10 @@ class AdaptiveThresholdPolicy:
     # Emergency Level별 배율
     level_multipliers: dict[str, ThresholdMultiplier] = field(
         default_factory=lambda: {
-            "NORMAL": ThresholdMultiplier(
-                failure=1.0, window=1.0, description="정상: 5회/60초"
-            ),
-            "ELEVATED": ThresholdMultiplier(
-                failure=1.5, window=1.5, description="주의: 7.5회/90초"
-            ),
-            "HIGH": ThresholdMultiplier(
-                failure=2.0, window=2.0, description="경고: 10회/120초"
-            ),
-            "CRITICAL": ThresholdMultiplier(
-                failure=3.0, window=3.0, description="위험: 15회/180초"
-            ),
+            "NORMAL": ThresholdMultiplier(failure=1.0, window=1.0, description="정상: 5회/60초"),
+            "ELEVATED": ThresholdMultiplier(failure=1.5, window=1.5, description="주의: 7.5회/90초"),
+            "HIGH": ThresholdMultiplier(failure=2.0, window=2.0, description="경고: 10회/120초"),
+            "CRITICAL": ThresholdMultiplier(failure=3.0, window=3.0, description="위험: 15회/180초"),
             "LOCKDOWN": ThresholdMultiplier(
                 failure=float("inf"),  # 사실상 OPEN 금지
                 window=float("inf"),
@@ -348,9 +314,7 @@ class AdaptiveThresholdPolicy:
         Returns:
             tuple[float, float]: (조정된 실패 임계값, 조정된 윈도우 초)
         """
-        multiplier = self.level_multipliers.get(
-            emergency_level, self.level_multipliers["NORMAL"]
-        )
+        multiplier = self.level_multipliers.get(emergency_level, self.level_multipliers["NORMAL"])
         return (
             self.base_failure_threshold * multiplier.failure,
             self.base_window_seconds * multiplier.window,
@@ -392,10 +356,7 @@ class OpenStrategy:
         if self.type not in valid_types:
             raise ValueError(f"Invalid type: {self.type}. Valid values: {valid_types}")
         if self.drain_timeout_seconds < 0:
-            raise ValueError(
-                f"drain_timeout_seconds must be non-negative, "
-                f"got {self.drain_timeout_seconds}"
-            )
+            raise ValueError(f"drain_timeout_seconds must be non-negative, " f"got {self.drain_timeout_seconds}")
 
 
 # =============================================================================
@@ -429,9 +390,7 @@ class CircuitBreakerAdvancedConfig:
     load_shedding: LoadSheddingPolicy = field(default_factory=LoadSheddingPolicy)
 
     # Adaptive Threshold 정책
-    adaptive_threshold: AdaptiveThresholdPolicy = field(
-        default_factory=AdaptiveThresholdPolicy
-    )
+    adaptive_threshold: AdaptiveThresholdPolicy = field(default_factory=AdaptiveThresholdPolicy)
 
     # 기본 Recovery 전략
     default_recovery: RecoveryStrategy = field(default_factory=RecoveryStrategy)
@@ -484,11 +443,7 @@ class CircuitBreakerAdvancedConfig:
         Returns:
             차단 대상 서비스 목록 (shed_priority 순 정렬)
         """
-        targets = [
-            s
-            for s in self.services
-            if s.criticality in shed_criticality and s.shed_priority > 0
-        ]
+        targets = [s for s in self.services if s.criticality in shed_criticality and s.shed_priority > 0]
         return sorted(targets, key=lambda s: s.shed_priority, reverse=True)
 
 
@@ -518,15 +473,10 @@ class PanicThresholdConfig:
     def __post_init__(self) -> None:
         """Validate panic threshold values."""
         if not (0.0 <= self.threshold_percent <= 100.0):
-            raise ValueError(
-                f"threshold_percent must be between 0 and 100, "
-                f"got {self.threshold_percent}"
-            )
+            raise ValueError(f"threshold_percent must be between 0 and 100, " f"got {self.threshold_percent}")
         valid_actions = {"freeze", "alert_only"}
         if self.action not in valid_actions:
-            raise ValueError(
-                f"Invalid action: {self.action}. Valid values: {valid_actions}"
-            )
+            raise ValueError(f"Invalid action: {self.action}. Valid values: {valid_actions}")
 
 
 # =============================================================================

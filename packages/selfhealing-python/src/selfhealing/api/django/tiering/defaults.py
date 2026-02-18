@@ -215,6 +215,6 @@ BACKPRESSURE_TIER_RULES: dict[BackpressureLevel, dict[str, float]] = {
     BackpressureLevel.NONE: {"critical": 1.0, "standard": 1.0, "non_essential": 1.0},
     BackpressureLevel.LOW: {"critical": 1.0, "standard": 1.0, "non_essential": 0.5},
     BackpressureLevel.MEDIUM: {"critical": 1.0, "standard": 0.8, "non_essential": 0.2},
-    BackpressureLevel.HIGH: {"critical": 1.0, "standard": 0.5, "non_essential": 0.0},
-    BackpressureLevel.CRITICAL: {"critical": 0.8, "standard": 0.1, "non_essential": 0.0},
+    BackpressureLevel.HIGH: {"critical": 1.0, "standard": 0.5, "non_essential": 0.05},
+    BackpressureLevel.CRITICAL: {"critical": 0.8, "standard": 0.1, "non_essential": 0.02},
 }

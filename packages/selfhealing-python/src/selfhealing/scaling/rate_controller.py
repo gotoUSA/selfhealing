@@ -63,6 +63,9 @@ class RateControllerState:
     dropped_by_tier: dict[str, int] | None = None
     """Tier별 거부 항목 수 (critical / standard / non_essential)."""
 
+    processed_by_tier: dict[str, int] | None = None
+    """Tier별 처리 항목 수 (critical / standard / non_essential)."""
+
 
 class TokenBucket:
     """
@@ -158,6 +161,14 @@ class TokenBucket:
         return False
 
 
+# Starvation Relief 설정 상수
+STARVATION_RELIEF_SECONDS = 300.0
+"""연속 거부 시간(초) 초과 시 watermark 완화. 기본 5분."""
+
+STARVATION_RELIEF_WATERMARK = 0.3
+"""완화 시 적용할 watermark (standard tier와 동일 수준)."""
+
+
 class RateController:
     """
     Rate-aware Backpressure Controller.
@@ -206,10 +217,22 @@ class RateController:
             "standard": 0,
             "non_essential": 0,
         }
+        self._processed_by_tier: dict[str, int] = {
+            "critical": 0,
+            "standard": 0,
+            "non_essential": 0,
+        }
 
         # 백그라운드 조절 스레드
         self._running = False
         self._worker: threading.Thread | None = None
+
+        # Starvation Relief: tier별 마지막 허용 시각 (monotonic)
+        self._tier_last_allowed: dict[str, float] = {
+            "critical": time.monotonic(),
+            "standard": time.monotonic(),
+            "non_essential": time.monotonic(),
+        }
 
     def get_state(self) -> RateControllerState:
         """현재 상태 반환."""
@@ -222,6 +245,7 @@ class RateController:
                 processed_count=self._processed_count,
                 dropped_count=self._dropped_count,
                 dropped_by_tier=dict(self._dropped_by_tier),
+                processed_by_tier=dict(self._processed_by_tier),
             )
 
     def should_process(self, priority: str = "standard") -> bool:
@@ -249,22 +273,44 @@ class RateController:
         token_ratio = self._token_bucket.get_token_ratio()
 
         if token_ratio < watermark:
-            with self._lock:
-                self._dropped_count += 1
-                if priority in self._dropped_by_tier:
-                    self._dropped_by_tier[priority] += 1
-            logger.info(
-                "[RateController] Rejected: priority=%s, " "reason=watermark_exceeded, " "token_ratio=%.2f, watermark=%.2f",
-                priority,
-                token_ratio,
-                watermark,
-            )
-            return False
+            # Starvation Relief: N분간 연속 거부된 tier는 watermark 임시 완화
+            relief_applied = False
+            if priority in self._tier_last_allowed:
+                elapsed = time.monotonic() - self._tier_last_allowed[priority]
+                if elapsed > STARVATION_RELIEF_SECONDS:
+                    if self._check_starvation_relief_allowed():
+                        watermark = min(watermark, STARVATION_RELIEF_WATERMARK)
+                        logger.warning(
+                            "[RateController] Starvation relief: tier=%s, " "elapsed=%.0fs, relaxed_watermark=%.2f",
+                            priority,
+                            elapsed,
+                            watermark,
+                        )
+                        relief_applied = True
+
+            if not relief_applied or token_ratio < watermark:
+                if not relief_applied:
+                    with self._lock:
+                        self._dropped_count += 1
+                        if priority in self._dropped_by_tier:
+                            self._dropped_by_tier[priority] += 1
+                    logger.info(
+                        "[RateController] Rejected: priority=%s, "
+                        "reason=watermark_exceeded, "
+                        "token_ratio=%.2f, watermark=%.2f",
+                        priority,
+                        token_ratio,
+                        watermark,
+                    )
+                    return False
 
         # Token Bucket에서 토큰 소비 시도 (단일 버킷)
         if self._token_bucket.consume():
             with self._lock:
                 self._processed_count += 1
+                if priority in self._processed_by_tier:
+                    self._processed_by_tier[priority] += 1
+                self._tier_last_allowed[priority] = time.monotonic()
             return True
 
         # 토큰 부족 시 전략에 따른 처리
@@ -287,6 +333,9 @@ class RateController:
             if self._token_bucket.wait_for_token(timeout=0.1):
                 with self._lock:
                     self._processed_count += 1
+                    if priority in self._processed_by_tier:
+                        self._processed_by_tier[priority] += 1
+                    self._tier_last_allowed[priority] = time.monotonic()
                 return True
             with self._lock:
                 self._dropped_count += 1
@@ -303,6 +352,29 @@ class RateController:
             return True
 
         return True
+
+    def _check_starvation_relief_allowed(self) -> bool:
+        """Starvation Relief 활성화 전 시스템 안정성 확인.
+
+        RecoveryGate와 동일한 기준(CPU < 80%, error_rate < 5%)을 사용하여
+        과부하 상태에서 Relief가 트래픽을 증가시키는 것을 방지한다.
+
+        Returns:
+            True면 Relief 허용, False면 차단
+        """
+        try:
+            from selfhealing.services.emergency_mode.recovery_gate import (
+                RecoveryGate,
+            )
+
+            gate = RecoveryGate()
+            allowed, reason = gate.check_recovery_allowed()
+            if not allowed:
+                logger.info("[RateController] Starvation relief blocked: %s", reason)
+            return allowed
+        except Exception:
+            # RecoveryGate 사용 불가 시 안전하게 Relief 차단
+            return False
 
     def _get_resource_pressure_multiplier(self) -> float:
         """CPU 사용률 기반 Rate 감쇠 배율.

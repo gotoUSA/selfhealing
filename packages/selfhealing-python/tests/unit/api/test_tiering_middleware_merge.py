@@ -57,18 +57,18 @@ class TestBackpressureTierRulesContract:
         assert rules["non_essential"] == 0.2
 
     def test_high_level_values(self):
-        """HIGH 레벨: critical=1.0, standard=0.5, non_essential=0.0."""
+        """HIGH 레벨: critical=1.0, standard=0.5, non_essential=0.05."""
         rules = BACKPRESSURE_TIER_RULES[BackpressureLevel.HIGH]
         assert rules["critical"] == 1.0
         assert rules["standard"] == 0.5
-        assert rules["non_essential"] == 0.0
+        assert rules["non_essential"] == 0.05
 
     def test_critical_level_values(self):
-        """CRITICAL 레벨: critical=0.8, standard=0.1, non_essential=0.0."""
+        """CRITICAL 레벨: critical=0.8, standard=0.1, non_essential=0.02."""
         rules = BACKPRESSURE_TIER_RULES[BackpressureLevel.CRITICAL]
         assert rules["critical"] == 0.8
         assert rules["standard"] == 0.1
-        assert rules["non_essential"] == 0.0
+        assert rules["non_essential"] == 0.02
 
     def test_critical_tier_never_fully_blocked(self):
         """어떤 레벨에서도 critical tier는 0.0이 아니다."""

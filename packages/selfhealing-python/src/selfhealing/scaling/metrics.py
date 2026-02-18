@@ -95,6 +95,13 @@ class BackpressureMetrics:
             ["tier"],
         )
 
+        # Counter: Tier별 처리 항목 (Starvation Alert 분모용)
+        self.processed_by_tier_total = Counter(
+            f"{self._prefix}rate_controller_processed_total",
+            "Total processed items per tier for starvation monitoring",
+            ["tier"],
+        )
+
         # Histogram: 처리 시간
         self.processing_duration = Histogram(
             f"{self._prefix}processing_duration_seconds",
@@ -138,6 +145,11 @@ class BackpressureMetrics:
         """Tier별 거부 카운터 증가 (Starvation 감지용)."""
         if HAS_PROMETHEUS and self._settings.metrics_enabled:
             self.dropped_by_tier_total.labels(tier=tier).inc()
+
+    def inc_processed_by_tier(self, tier: str) -> None:
+        """Tier별 처리 카운터 증가 (Starvation Alert 분모용)."""
+        if HAS_PROMETHEUS and self._settings.metrics_enabled:
+            self.processed_by_tier_total.labels(tier=tier).inc()
 
     def observe_duration(
         self,
