@@ -89,6 +89,33 @@ groups:
           summary: "Recovery dampening taking too long"
           description: "Recovery dampening has been active for more than 10 minutes"
 
+      # ── Starvation 알람 ────────────────────────────────────────
+
+      # Tier별 Starvation 감지 (non_essential 99% 이상 거부 10분 지속)
+      - alert: TierStarvation
+        expr: |
+          (
+            rate(selfhealing_rate_controller_dropped_total{tier="non_essential"}[5m])
+            /
+            (rate(selfhealing_rate_controller_dropped_total{tier="non_essential"}[5m])
+             + rate(selfhealing_rate_controller_processed_total{tier="non_essential"}[5m]))
+            > 0.99
+          )
+          and
+          (
+            (rate(selfhealing_rate_controller_dropped_total{tier="non_essential"}[5m])
+             + rate(selfhealing_rate_controller_processed_total{tier="non_essential"}[5m]))
+            > 10
+          )
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "non_essential tier 99% 이상 거부 — starvation 의심"
+          description: >-
+            5분간 non_essential 총 요청 > 10건 중 99% 이상이 거부됨.
+            processed_by_tier_total이 0에 가까우면 완전 starvation 상태.
+
       # ── Saturation 알람 ─────────────────────────────────────────
 
       # Throttle Saturation 위험 수준 알람

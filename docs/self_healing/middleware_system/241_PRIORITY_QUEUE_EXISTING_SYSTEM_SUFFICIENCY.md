@@ -232,9 +232,9 @@ def __init__(
 
 ~~현재 Watermark는 하드코딩 (`rate_controller.py` L34-39)입니다.~~ → **✅ 8.5절에서 구현 완료.** `BackpressureSettings`에 `watermark_critical`, `watermark_standard`, `watermark_non_essential` 필드가 추가되어 환경변수/RuntimeConfigManager로 운영 중 튜닝이 가능합니다. `should_process()` 내부에서 `self._settings.get_priority_watermarks()`로 매번 동적 읽기합니다. 모듈 레벨 `PRIORITY_WATERMARKS` 상수는 하위 호환용으로 유지됩니다.
 
-### 5.3 통합 메트릭 (242번 문서 선행 필수)
+### 5.3 통합 메트릭 ~~(242번 문서 선행 필수)~~ → ✅ 구현 완료
 
-tier별 허용/거부 비율을 Prometheus 메트릭으로 노출하면 Watermark 임계치 튜닝의 근거 데이터를 확보할 수 있습니다. **Priority Queue 부재로 인해 거부가 즉시 발생하므로, tier별 Starvation 감지를 위한 Per-Tier Dropped Counter 구현이 선행되어야 합니다.** **✅ `_dropped_by_tier: dict[str, int]` 카운터는 8.4절에서 구현 완료.** Prometheus `tier` 레이블 추가는 242번 문서에서 설계가 완료되어 있으며, 별도 구현이 필요합니다.
+tier별 허용/거부 비율을 Prometheus 메트릭으로 노출하면 Watermark 임계치 튜닝의 근거 데이터를 확보할 수 있습니다. **Priority Queue 부재로 인해 거부가 즉시 발생하므로, tier별 Starvation 감지를 위한 Per-Tier Dropped Counter 구현이 선행되어야 합니다.** **✅ `_dropped_by_tier: dict[str, int]` 카운터는 8.4절에서 구현 완료.** ~~Prometheus `tier` 레이블 추가는 242번 문서에서 설계가 완료되어 있으며, 별도 구현이 필요합니다.~~ → **✅ Prometheus tier 레이블 wiring 구현 완료.** `RateController.__init__()`에 `metrics: BackpressureMetrics | None` 파라미터를 추가하고, `should_process()` 내 5개 분기점(watermark 거부, REJECT 전략, THROTTLE 타임아웃, 토큰 소비 성공, THROTTLE 성공)에서 `BackpressureMetrics.inc_dropped_by_tier()` / `inc_processed_by_tier()`를 호출합니다. 싱글턴 `get_rate_controller()`에서 `get_backpressure_metrics()`를 자동 주입합니다.
 
 ---
 
@@ -404,7 +404,7 @@ Zero-Wait + 고정 슬롯(critical=100, standard=50, non_essential=20)이므로,
 
 ### Q4. Starvation(기아 현상) 모니터링
 
-**결론: 현재 Per-Tier Starvation 모니터링과 알람은 미구현 상태입니다. 242번 문서(Starvation Guard)에서 설계가 완료되어 구현만 남아 있습니다.**
+~~**결론: 현재 Per-Tier Starvation 모니터링과 알람은 미구현 상태입니다. 242번 문서(Starvation Guard)에서 설계가 완료되어 구현만 남아 있습니다.**~~ → **✅ 구현 완료.** Per-Tier Prometheus 메트릭 wiring(C)과 TierStarvation Alert(D)가 모두 구현되었습니다. 상세: 8.4절 참조.
 
 #### 코드 근거
 
@@ -440,15 +440,15 @@ BackpressureLevel.CRITICAL: {"critical": 0.8, "standard": 0.1, "non_essential": 
 
 HIGH/CRITICAL 레벨에서 `non_essential`은 **0.0 = 완전 차단**입니다. 장기간 과부하 시 non_essential 트래픽은 영원히 처리되지 않습니다.
 
-**242번 문서의 해결 방안 (설계 완료, 미구현)**
+**242번 문서의 해결 방안 (설계 완료 → 구현 상태 반영)**
 
 | 작업 | 내용 | 상태 |
 |------|------|------|
-| A. 최소값 보장 | `non_essential: 0.0` → `0.05` / `0.02` | 미구현 |
-| B. `min_traffic_percentage` | `0.0` → `5.0` | 미구현 |
-| C. Per-Tier Dropped Counter | `_dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 | ✅ 카운터 구현 완료 (8.4절). Prometheus 레이블은 242번 문서 |
-| D. Starvation Alert | `selfhealing_rate_controller_dropped_total{tier="non_essential"}` 99% 초과 10분 지속 시 warning | 미구현 |
-| E. 시간 기반 완화 (선택) | 5분 연속 100% 거부 시 watermark 임시 완화 | 미구현 |
+| A. 최소값 보장 | `non_essential: 0.0` → `0.05` / `0.02` | ✅ 242번 문서에서 구현 완료 |
+| B. `min_traffic_percentage` | `0.0` → `5.0` | ✅ 242번 문서에서 구현 완료 |
+| C. Per-Tier Dropped Counter | `_dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 | ✅ 카운터 구현 완료 (8.4절) + **Prometheus tier 레이블 wiring 구현 완료** (`RateController` → `BackpressureMetrics` 직접 호출) |
+| D. Starvation Alert | `selfhealing_rate_controller_dropped_total{tier="non_essential"}` 99% 초과 10분 지속 시 warning | ✅ **구현 완료** — `alerting_rules.py`에 `TierStarvationNonEssential` 등록, `throttle_alerts.yml`에 `TierStarvation` YAML rule 추가 |
+| E. 시간 기반 완화 (선택) | 5분 연속 100% 거부 시 watermark 임시 완화 | ✅ 242번 문서에서 구현 완료 (RecoveryGate) |
 
 #### 질문자의 시나리오 평가
 
@@ -460,7 +460,7 @@ HIGH/CRITICAL 레벨에서 `non_essential`은 **0.0 = 완전 차단**입니다. 
 3. `BACKPRESSURE_TIER_RULES`의 `non_essential=0.0`에 의해 추가 차단
 4. **모니터링 알람 없음** → 감지 불가
 
-이 gap은 242번 문서 구현으로 해결됩니다.
+~~이 gap은 242번 문서 구현으로 해결됩니다.~~ → **✅ 242번 문서 구현 완료 후, Prometheus tier wiring + TierStarvation Alert 구현으로 gap 해소.**
 
 ---
 
@@ -838,12 +838,12 @@ def try_acquire(self, timeout: float | None = None) -> bool:
 
 | # | 작업 | 상태 |
 |---|------|------|
-| A | `BACKPRESSURE_TIER_RULES`에서 `non_essential: 0.0` → `0.05` | 미구현 |
-| B | `ServiceConfig.min_traffic_percentage: 0.0` → `5.0` | 미구현 |
-| C | `RateController._dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 | 미구현 |
-| D | Starvation Alert: `dropped_total{tier="non_essential"}` 99% 초과 10분 시 warning | 미구현 |
+| A | `BACKPRESSURE_TIER_RULES`에서 `non_essential: 0.0` → `0.05` | ✅ 242번 문서에서 구현 완료 |
+| B | `ServiceConfig.min_traffic_percentage: 0.0` → `5.0` | ✅ 242번 문서에서 구현 완료 |
+| C | `RateController._dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 | ✅ 카운터(8.4절) + **Prometheus wiring 구현 완료** |
+| D | Starvation Alert: `dropped_total{tier="non_essential"}` 99% 초과 10분 시 warning | ✅ **구현 완료** (`alerting_rules.py` + `throttle_alerts.yml`) |
 
-242번 문서의 작업 C(Per-Tier Dropped Counter)는 8.2(CPU 피드백), 8.5(Watermark 동적 변경), 8.6(동적 Retry-After)의 효과를 **계측**하기 위한 기반이므로, 다른 작업보다 선행되어야 합니다.
+~~242번 문서의 작업 C(Per-Tier Dropped Counter)는 8.2(CPU 피드백), 8.5(Watermark 동적 변경), 8.6(동적 Retry-After)의 효과를 **계측**하기 위한 기반이므로, 다른 작업보다 선행되어야 합니다.~~ → **✅ 모두 구현 완료.** 242번 문서의 A-E 항목 구현이 선행 완료된 후, 본 문서의 242번 의존 항목(Prometheus tier wiring, TierStarvation Alert)도 구현 완료되었습니다.
 
 ---
 

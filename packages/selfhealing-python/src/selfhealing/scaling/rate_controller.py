@@ -15,7 +15,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from selfhealing.scaling.config import (
     BackpressureLevel,
@@ -23,6 +23,9 @@ from selfhealing.scaling.config import (
     BackpressureStrategy,
     get_backpressure_settings,
 )
+
+if TYPE_CHECKING:
+    from selfhealing.scaling.metrics import BackpressureMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -195,14 +198,17 @@ class RateController:
         self,
         settings: BackpressureSettings | None = None,
         queue_size_provider: Callable[[], int] | None = None,
+        metrics: BackpressureMetrics | None = None,
     ):
         """
         Args:
             settings: Backpressure 설정
             queue_size_provider: 큐 크기 제공 함수
+            metrics: Prometheus per-tier 메트릭 인스턴스 (None이면 Prometheus 미발행)
         """
         self._settings = settings or get_backpressure_settings()
         self._queue_size_provider = queue_size_provider or (lambda: 0)
+        self._metrics = metrics
 
         self._lock = threading.RLock()
         self._current_rate = self._settings.max_rate_per_second
@@ -294,6 +300,8 @@ class RateController:
                         self._dropped_count += 1
                         if priority in self._dropped_by_tier:
                             self._dropped_by_tier[priority] += 1
+                    if self._metrics is not None:
+                        self._metrics.inc_dropped_by_tier(priority)
                     logger.info(
                         "[RateController] Rejected: priority=%s, "
                         "reason=watermark_exceeded, "
@@ -311,6 +319,8 @@ class RateController:
                 if priority in self._processed_by_tier:
                     self._processed_by_tier[priority] += 1
                 self._tier_last_allowed[priority] = time.monotonic()
+            if self._metrics is not None:
+                self._metrics.inc_processed_by_tier(priority)
             return True
 
         # 토큰 부족 시 전략에 따른 처리
@@ -326,6 +336,8 @@ class RateController:
                 self._dropped_count += 1
                 if priority in self._dropped_by_tier:
                     self._dropped_by_tier[priority] += 1
+            if self._metrics is not None:
+                self._metrics.inc_dropped_by_tier(priority)
             return False
 
         if strategy == BackpressureStrategy.THROTTLE:
@@ -336,11 +348,15 @@ class RateController:
                     if priority in self._processed_by_tier:
                         self._processed_by_tier[priority] += 1
                     self._tier_last_allowed[priority] = time.monotonic()
+                if self._metrics is not None:
+                    self._metrics.inc_processed_by_tier(priority)
                 return True
             with self._lock:
                 self._dropped_count += 1
                 if priority in self._dropped_by_tier:
                     self._dropped_by_tier[priority] += 1
+            if self._metrics is not None:
+                self._metrics.inc_dropped_by_tier(priority)
             return False
 
         if strategy == BackpressureStrategy.DROP_OLDEST:
@@ -493,7 +509,11 @@ def get_rate_controller() -> RateController:
     if _controller is None:
         with _controller_lock:
             if _controller is None:
-                _controller = RateController()
+                from selfhealing.scaling.metrics import get_backpressure_metrics
+
+                _controller = RateController(
+                    metrics=get_backpressure_metrics(),
+                )
     return _controller
 
 

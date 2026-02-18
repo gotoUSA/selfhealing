@@ -281,4 +281,40 @@ ALERTING_RULES: dict = {
         ),
         "runbook_url": "https://docs.internal/runbooks/xtest-cross-region-repeated",
     },
+    # =========================================================================
+    # Tier Starvation Alerting Rules (Per-Tier 기아 감지)
+    # =========================================================================
+    "TierStarvationNonEssential": {
+        "expr": (
+            "("
+            'rate(selfhealing_rate_controller_dropped_total{tier="non_essential"}[5m])'
+            " / "
+            "("
+            'rate(selfhealing_rate_controller_dropped_total{tier="non_essential"}[5m])'
+            " + "
+            'rate(selfhealing_rate_controller_processed_total{tier="non_essential"}[5m])'
+            ")"
+            " > 0.99"
+            ")"
+            " and "
+            "("
+            "("
+            'rate(selfhealing_rate_controller_dropped_total{tier="non_essential"}[5m])'
+            " + "
+            'rate(selfhealing_rate_controller_processed_total{tier="non_essential"}[5m])'
+            ")"
+            " > 10"
+            ")"
+        ),
+        "for": "10m",
+        "severity": "warning",
+        "team": "ops",
+        "summary": "non_essential tier 99% 이상 거부 — starvation 의심",
+        "description": (
+            "5분간 non_essential 총 요청 > 10건 중 99% 이상이 거부됨. "
+            "processed_by_tier_total이 0에 가까우면 완전 starvation 상태. "
+            "Backpressure 레벨과 Watermark 설정을 확인하십시오."
+        ),
+        "runbook_url": "https://docs.internal/runbooks/tier-starvation",
+    },
 }
