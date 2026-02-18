@@ -66,6 +66,39 @@ DEFAULT_TIER_DEFINITIONS: list[TierDefinition] = [
 
 
 DEFAULT_TIER_MAPPINGS: list[TierMapping] = [
+    # =========================================================================
+    # Method-Specific Mappings (method+path 조합이 path-only보다 우선)
+    # =========================================================================
+    # POST/PUT/PATCH/DELETE /config/* → critical (설정 변경은 치유 동작)
+    TierMapping(
+        pattern="/api/self-healing/config/*",
+        tier_id="critical",
+        pattern_type=TierMatchType.WILDCARD,
+        priority=70,
+        description="설정 변경 API (쓰기)",
+        methods=frozenset({"POST", "PUT", "PATCH", "DELETE"}),
+    ),
+    # POST/PUT/DELETE /dlq/* → critical (DLQ 재처리는 치유 동작)
+    TierMapping(
+        pattern="/api/self-healing/dlq/*",
+        tier_id="critical",
+        pattern_type=TierMatchType.WILDCARD,
+        priority=70,
+        description="DLQ 재처리 (쓰기)",
+        methods=frozenset({"POST", "PUT", "DELETE"}),
+    ),
+    # GET/HEAD /config/* → non_essential (설정 조회는 비필수)
+    TierMapping(
+        pattern="/api/self-healing/config/*",
+        tier_id="non_essential",
+        pattern_type=TierMatchType.WILDCARD,
+        priority=55,
+        description="설정 조회 API (읽기)",
+        methods=frozenset({"GET", "HEAD"}),
+    ),
+    # =========================================================================
+    # Path-Only Mappings (모든 HTTP 메서드에 적용)
+    # =========================================================================
     # Critical (Tier 1) - Self-healing control actions
     TierMapping(
         pattern="/api/self-healing/control/",

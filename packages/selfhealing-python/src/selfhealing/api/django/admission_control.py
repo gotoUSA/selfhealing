@@ -122,6 +122,12 @@ class AdmissionControlMiddleware:
 
     def _process_request(self, request):
         """Deadline 체크 → 요청 분류 → TrafficGate 판정 → 허용/거부."""
+        # CORS Preflight는 Tier 분류 대상에서 제외 (Always Allow)
+        # - OPTIONS는 body 없이 부하 무시 수준
+        # - 거부 시 후속 POST/DELETE도 CORS 에러로 전송 불가
+        if request.method == "OPTIONS":
+            return self.get_response(request)
+
         # 0단계: Deadline Context 설정 및 Fast-Fail 체크
         try:
             from selfhealing.scaling.deadline_context import (
@@ -160,11 +166,13 @@ class AdmissionControlMiddleware:
         path = request.path
         client_ip = self._get_client_ip(request)
         user_id = self._get_user_id(request)
+        method = request.method
 
         tier_result = self._registry.resolve_tier_with_fallback(
             path=path,
             client_ip=client_ip,
             user_id=str(user_id) if user_id else None,
+            method=method,
         )
 
         tier_id = tier_result.tier_id

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import OrderedDict
 from typing import Any
 
 from .circuit_breaker import get_tiering_circuit_breaker
@@ -57,8 +58,8 @@ class TierRegistry:
         # Before Mutation Snapshot: 롤백용 이전 상태 저장 (최대 10개)
         self._previous_configs: list[dict[str, Any]] = []
 
-        # Path → TierDefinition 조회 결과 캐시 (O(n) 선형 탐색 회피)
-        self._path_tier_cache: dict[str, TierDefinition | None] = {}
+        # (path, method) → TierDefinition 조회 결과 캐시 (LRU Eviction)
+        self._path_tier_cache: OrderedDict[tuple[str, str | None], TierDefinition | None] = OrderedDict()
         self._PATH_CACHE_MAX_SIZE = 1024
 
         # Load defaults
@@ -73,8 +74,11 @@ class TierRegistry:
         self._mappings = list(DEFAULT_TIER_MAPPINGS)
         self._overrides = list(DEFAULT_TIER_OVERRIDES)
 
-        # Sort mappings by priority (descending)
-        self._mappings.sort(key=lambda m: m.priority, reverse=True)
+        # Sort mappings: priority desc → method-specific first
+        self._mappings.sort(
+            key=lambda m: (m.priority, 1 if m.methods is not None else 0),
+            reverse=True,
+        )
 
     # -------------------------------------------------------------------------
     # Before Mutation Snapshot (롤백 지원)
@@ -150,7 +154,11 @@ class TierRegistry:
             overrides = [TierOverride.from_dict(o) for o in old_config.get("overrides", [])]
 
             self._tiers = {t.id: t for t in tiers}
-            self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
+            self._mappings = sorted(
+                mappings,
+                key=lambda m: (m.priority, 1 if m.methods is not None else 0),
+                reverse=True,
+            )
             self._overrides = overrides
             self._invalidate_path_cache()
 
@@ -224,17 +232,59 @@ class TierRegistry:
             # Before Mutation Snapshot: 변경 전 상태 저장
             self._save_previous_config("set_mappings")
 
-            self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
+            self._mappings = sorted(
+                mappings,
+                key=lambda m: (m.priority, 1 if m.methods is not None else 0),
+                reverse=True,
+            )
             self._invalidate_path_cache()
             self._log_change("mappings", [m.to_dict() for m in mappings])
 
         return result
 
+    def get_tier_for_request(
+        self,
+        path: str,
+        method: str | None = None,
+    ) -> TierDefinition | None:
+        """
+        Get the tier for an API request (path + optional HTTP method).
+
+        LRU 캐시를 사용하여 반복 호출 시 O(n) 순회를 회피한다.
+        method-specific 매핑이 path-only 매핑보다 우선 매칭된다.
+
+        Args:
+            path: API path (e.g., "/api/self-healing/control/")
+            method: HTTP method (e.g., "GET", "POST"). None이면 path-only 매칭.
+
+        Returns:
+            TierDefinition or None if no mapping matches
+        """
+        cache_key = (path, method.upper() if method else None)
+
+        with self._data_lock:
+            # Cache Hit → LRU 갱신 (가장 최근 접근으로 이동)
+            if cache_key in self._path_tier_cache:
+                self._path_tier_cache.move_to_end(cache_key)
+                return self._path_tier_cache[cache_key]
+
+            # Cache Miss → 매핑 순회
+            result = None
+            for mapping in self._mappings:
+                if mapping.matches(path, method):
+                    result = self._tiers.get(mapping.tier_id)
+                    break
+
+            # Cache Update + LRU Eviction
+            self._path_tier_cache[cache_key] = result
+            if len(self._path_tier_cache) > self._PATH_CACHE_MAX_SIZE:
+                self._path_tier_cache.popitem(last=False)
+
+            return result
+
     def get_tier_for_path(self, path: str) -> TierDefinition | None:
         """
-        Get the tier for an API path.
-
-        결과를 dict 캐시에 저장하여 반복 호출 시 O(n) 순회를 회피한다.
+        Get the tier for an API path (path-only, backward compatible).
 
         Args:
             path: API path (e.g., "/api/self-healing/control/")
@@ -242,19 +292,7 @@ class TierRegistry:
         Returns:
             TierDefinition or None if no mapping matches
         """
-        with self._data_lock:
-            if path in self._path_tier_cache:
-                return self._path_tier_cache[path]
-
-            result = None
-            for mapping in self._mappings:
-                if mapping.matches(path):
-                    result = self._tiers.get(mapping.tier_id)
-                    break
-
-            if len(self._path_tier_cache) < self._PATH_CACHE_MAX_SIZE:
-                self._path_tier_cache[path] = result
-            return result
+        return self.get_tier_for_request(path, method=None)
 
     def _invalidate_path_cache(self) -> None:
         """매핑/tier 변경 시 path 조회 캐시를 무효화한다."""
@@ -338,6 +376,7 @@ class TierRegistry:
         client_ip: str | None = None,
         user_id: str | None = None,
         api_key: str | None = None,
+        method: str | None = None,
     ) -> TierDefinition | None:
         """
         Resolve the effective tier for a request.
@@ -349,6 +388,7 @@ class TierRegistry:
             client_ip: Client IP address
             user_id: User ID
             api_key: API key
+            method: HTTP method (GET, POST, etc.) — None이면 path-only 매칭
 
         Returns:
             TierDefinition or None
@@ -361,7 +401,7 @@ class TierRegistry:
         if override_tier:
             return override_tier
 
-        return self.get_tier_for_path(path)
+        return self.get_tier_for_request(path, method=method)
 
     def _is_static_critical(self, path: str) -> bool:
         """
@@ -402,11 +442,19 @@ class TierRegistry:
         client_ip: str | None = None,
         user_id: str | None = None,
         api_key: str | None = None,
+        method: str | None = None,
     ) -> TierResult:
         """
         Resolve tier with Defense-in-Depth fallback chain.
 
         This is the RECOMMENDED method for production use.
+
+        Args:
+            path: API path
+            client_ip: Client IP address
+            user_id: User ID
+            api_key: API key
+            method: HTTP method (GET, POST, etc.) — None이면 path-only 매칭
         """
         start_time = time.perf_counter()
         circuit_breaker = get_tiering_circuit_breaker()
@@ -426,6 +474,7 @@ class TierRegistry:
                 client_ip=client_ip,
                 user_id=user_id,
                 api_key=api_key,
+                method=method,
             )
 
             latency_ms = (time.perf_counter() - start_time) * 1000
@@ -559,7 +608,11 @@ class TierRegistry:
                 "validation": result.to_dict(),
             }
 
-        sorted_mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
+        sorted_mappings = sorted(
+            mappings,
+            key=lambda m: (m.priority, 1 if m.methods is not None else 0),
+            reverse=True,
+        )
         tier_dict = {t.id: t for t in tiers}
 
         if not test_paths:
@@ -665,7 +718,11 @@ class TierRegistry:
             self._save_previous_config("import_config")
 
             self._tiers = {t.id: t for t in tiers}
-            self._mappings = sorted(mappings, key=lambda m: m.priority, reverse=True)
+            self._mappings = sorted(
+                mappings,
+                key=lambda m: (m.priority, 1 if m.methods is not None else 0),
+                reverse=True,
+            )
             self._overrides = overrides
             self._invalidate_path_cache()
             self._log_change("full_config", config)

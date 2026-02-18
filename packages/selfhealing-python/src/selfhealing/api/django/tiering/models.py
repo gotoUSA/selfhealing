@@ -51,9 +51,7 @@ class TierDefinition:
     def __post_init__(self):
         """Validate tier definition."""
         if self.multiplier < 0 or self.multiplier > 1:
-            raise ValueError(
-                f"Multiplier must be between 0 and 1, got {self.multiplier}"
-            )
+            raise ValueError(f"Multiplier must be between 0 and 1, got {self.multiplier}")
         if not self.id:
             raise ValueError("Tier ID is required")
 
@@ -92,6 +90,7 @@ class TierMapping:
         pattern_type: Type of pattern matching
         priority: Mapping priority (higher = matched first)
         description: Description of the mapping
+        methods: HTTP methods this mapping applies to (None = all methods)
     """
 
     pattern: str
@@ -99,30 +98,46 @@ class TierMapping:
     pattern_type: TierMatchType = TierMatchType.EXACT
     priority: int = 0
     description: str = ""
+    methods: frozenset[str] | None = None
 
     # Compiled regex cache
-    _compiled_pattern: re.Pattern | None = field(
-        default=None, repr=False, compare=False
-    )
+    _compiled_pattern: re.Pattern | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
-        """Compile regex pattern if needed."""
+        """Compile regex pattern and normalize methods to uppercase frozenset."""
         if self.pattern_type == TierMatchType.REGEX:
             try:
                 self._compiled_pattern = re.compile(self.pattern)
             except re.error as e:
                 raise ValueError(f"Invalid regex pattern '{self.pattern}': {e}")
 
-    def matches(self, path: str) -> bool:
+        # methods 정규화: list/tuple/set → frozenset, 대소문자 → UPPER
+        if self.methods is not None:
+            if not isinstance(self.methods, frozenset):
+                self.methods = frozenset(m.upper() for m in self.methods)
+            else:
+                normalized = frozenset(m.upper() for m in self.methods)
+                if normalized != self.methods:
+                    self.methods = normalized
+
+    def matches(self, path: str, method: str | None = None) -> bool:
         """
-        Check if the path matches this mapping.
+        Check if the path (and optionally method) matches this mapping.
 
         Args:
             path: API path to check
+            method: HTTP method (GET, POST, etc.) — None이면 method 무시
 
         Returns:
-            True if path matches
+            True if path matches and method is compatible
         """
+        # Method 필터: mapping에 methods가 지정되어 있고,
+        # 요청 method가 해당 set에 없으면 불일치
+        if self.methods is not None and method is not None:
+            if method.upper() not in self.methods:
+                return False
+
+        # 기존 path 매칭 로직
         if self.pattern_type == TierMatchType.EXACT:
             return path == self.pattern
         elif self.pattern_type == TierMatchType.WILDCARD:
@@ -135,23 +150,31 @@ class TierMapping:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result = {
             "pattern": self.pattern,
             "tier_id": self.tier_id,
             "pattern_type": self.pattern_type.value,
             "priority": self.priority,
             "description": self.description,
         }
+        if self.methods is not None:
+            result["methods"] = sorted(self.methods)
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TierMapping:
         """Create from dictionary."""
+        methods = None
+        if "methods" in data and data["methods"] is not None:
+            methods = frozenset(data["methods"])
+
         return cls(
             pattern=data["pattern"],
             tier_id=data["tier_id"],
             pattern_type=TierMatchType(data.get("pattern_type", "exact")),
             priority=data.get("priority", 0),
             description=data.get("description", ""),
+            methods=methods,
         )
 
 

@@ -38,7 +38,7 @@ class TestTierRegistryCacheBehavior:
         registry.get_tier_for_path("/api/self-healing/control/")
 
         assert len(registry._path_tier_cache) == 1
-        assert "/api/self-healing/control/" in registry._path_tier_cache
+        assert ("/api/self-healing/control/", None) in registry._path_tier_cache
 
     def test_cache_hit_returns_same_result(self, registry):
         """캐시 히트 시 동일한 결과를 반환한다."""
@@ -52,8 +52,8 @@ class TestTierRegistryCacheBehavior:
         result = registry.get_tier_for_path("/unknown/path/")
 
         assert result is None
-        assert "/unknown/path/" in registry._path_tier_cache
-        assert registry._path_tier_cache["/unknown/path/"] is None
+        assert ("/unknown/path/", None) in registry._path_tier_cache
+        assert registry._path_tier_cache[("/unknown/path/", None)] is None
 
     def test_invalidate_clears_cache(self, registry):
         """_invalidate_path_cache() 호출 시 캐시가 초기화된다."""

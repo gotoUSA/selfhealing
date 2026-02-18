@@ -93,6 +93,10 @@ class TieringMiddleware:
         if not self._enabled:
             return self.get_response(request)
 
+        # CORS Preflight Bypass — OPTIONS는 Load Shedding 대상 제외
+        if request.method == "OPTIONS":
+            return self.get_response(request)
+
         try:
             from selfhealing.services.emergency_mode import get_emergency_manager
             from selfhealing.services.emergency_mode.enums import (
@@ -117,11 +121,13 @@ class TieringMiddleware:
             path = request.path
             client_ip = self._get_client_ip(request)
             user_id = self._get_user_id(request)
+            method = request.method
 
             tier_result = self._registry.resolve_tier_with_fallback(
                 path=path,
                 client_ip=client_ip,
                 user_id=str(user_id) if user_id else None,
+                method=method,
             )
 
             # Most Restrictive Wins: 두 규칙 중 더 낮은 multiplier 적용
