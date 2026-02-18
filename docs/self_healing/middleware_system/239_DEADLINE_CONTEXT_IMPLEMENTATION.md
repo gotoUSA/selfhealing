@@ -104,6 +104,115 @@ X-Deadline-Remaining: 2500ms
 - 값: 양의 정수 또는 부동소수점
 - 부재 시: deadline 미적용 (기존 동작 유지)
 
+### 2.5 Network Latency Buffer (수신 측 보정)
+
+상위 서비스가 "남은 시간 2000ms"를 헤더에 담아 보냈을 때, 수신 시점에는 이미 네트워크 전송 시간이 경과했습니다. 이를 보정하기 위해 **수신 측에서 고정 Buffer를 차감**합니다.
+
+```python
+# scaling/deadline_context.py
+
+# 네트워크 레이턴시 보정 버퍼 (환경변수: SELFHEALING_DEADLINE_NETWORK_BUFFER_MS)
+DEFAULT_NETWORK_LATENCY_BUFFER_MS: float = 50.0
+
+
+def set_deadline(remaining_ms: float) -> None:
+    """
+    현재 컨텍스트에 deadline 설정.
+    네트워크 레이턴시 Buffer를 차감하여 보수적으로 계산합니다.
+    """
+    adjusted = remaining_ms - DEFAULT_NETWORK_LATENCY_BUFFER_MS
+
+    if adjusted <= 0:
+        # 도착 시점에 이미 만료 — 네트워크 혼잡 의심
+        logger.warning(
+            "[DeadlineContext] Deadline exhausted on arrival: "
+            "remaining=%.0fms, buffer=%.0fms — possible network congestion",
+            remaining_ms,
+            DEFAULT_NETWORK_LATENCY_BUFFER_MS,
+        )
+        adjusted = 0
+
+    deadline = time.monotonic() + (adjusted / 1000.0)
+    _request_deadline.set(deadline)
+```
+
+**Buffer 값 50ms 산정 근거**:
+
+| 구간 | 예상 레이턴시 |
+|------|---------------|
+| 같은 AZ 내 Pod 간 | 1~5ms |
+| Cross-AZ (같은 Region) | 10~30ms |
+| Nginx → Gunicorn 로컬 | ~1ms (`nginx.conf` upstream keepalive 16) |
+| **안전 마진 (2× Cross-AZ)** | **50ms** |
+
+Nginx의 `proxy_connect_timeout 3s` (`nginx.conf` L82)와 Gunicorn gthread 워커 간 통신(`docker-compose.yml` L36)을 고려하면, 내부 서비스 간 50ms는 충분히 보수적입니다.
+
+**Congestion 모니터링**: `adjusted <= 0` 상황은 단순 만료가 아니라 **네트워크/큐 대기 시간이 비정상적으로 긴 상태(Congestion)**를 의미합니다. 이를 `selfhealing_deadline_exhausted_on_arrival_total` Counter로 추적하여 네트워크 인프라 팀과의 소통 근거로 활용합니다 (6.2절 참조).
+
+### 2.6 Remaining Duration 방식 선택 근거
+
+절대 시간(Absolute Timestamp) 대신 **Remaining Duration(남은 시간)** 방식을 선택합니다.
+
+**이유**: 시스템이 내부적으로 `time.monotonic()`을 사용하며, 이는 각 노드의 로컬 단조 시계로 노드 간 동기화가 불가능합니다. 기존 hedging executor도 동일한 패턴입니다:
+
+```python
+# core/hedging/async_executor.py L337
+remaining_timeout = self._config.timeout - (time.perf_counter() - start_time)
+```
+
+| 비교 항목 | Remaining Duration | Absolute Timestamp |
+|---|---|---|
+| NTP 의존성 | 없음 | 필수 (±1~50ms drift) |
+| K8s Pod 재시작 시 | 영향 없음 | drift 누적 위험 |
+| gRPC 표준 | `grpc-timeout` 헤더와 동일 | 비표준 |
+| 네트워크 전송 중 시간 경과 | 2.5절 Buffer로 보정 | NTP 정확도에 의존 |
+
+Docker 컨테이너 환경(`docker-compose.yml`)에서 Pod 간 시계 동기화를 보장하기 어려우므로, 업계 표준(gRPC `grpc-timeout`)을 따릅니다.
+
+### 2.7 실행 환경 및 ContextVar 안전성
+
+#### WSGI + gthread 환경
+
+현재 시스템은 **WSGI (Gunicorn gthread)** 기반입니다:
+
+```bash
+# docker-compose.yml L36
+gunicorn myproject.wsgi:application --bind 0.0.0.0:8000 \
+    --workers 4 --threads 4 --timeout 60 --worker-class gthread
+```
+
+`gthread` 워커 클래스에서 Python `ContextVar`는 스레드별로 독립된 컨텍스트를 유지하므로 요청 간 격리가 보장됩니다. `async_to_sync` 문제는 WSGI 전용 환경이므로 해당하지 않습니다.
+
+#### Thread Pool에서의 ContextVar 전파
+
+별도 스레드를 사용하는 로직(Bulkhead ThreadPool, Hedging Executor)이 존재하며, 이미 `contextvars.copy_context().run()` 패턴이 구현되어 있습니다:
+
+```python
+# resilience/bulkhead/threadpool.py L170
+ctx = contextvars.copy_context()
+def wrapped() -> T:
+    return ctx.run(fn, *args, **kwargs)
+return self._executor.submit(wrapped)
+
+# core/hedging/executor.py L104
+ctx = contextvars.copy_context()
+def wrapper():
+    return ctx.run(fn)
+return executor.submit(wrapper)
+```
+
+`_request_deadline` ContextVar는 이 기존 인프라를 통해 **자동으로 워커 스레드에 전파**됩니다. 추가 작업이 필요하지 않습니다.
+
+#### Celery Task와의 관계
+
+HTTP Deadline을 Celery Task에 **전파하지 않습니다**. Celery Task는 독립 라이프사이클을 가집니다.
+
+**이유**:
+1. 기존 Celery 전파 시스템(`context/celery_propagation.py`)은 **CausationContext**(인과관계 추적)만 전파
+2. Celery Task는 자체 `time_limit`/`soft_time_limit`을 보유 (예: `adapters/celery/tasks/postmortem.py` L36-37: `time_limit=120, soft_time_limit=110`)
+3. Task 발행(publish)과 실행(execution) 사이 큐 대기 시간이 존재하여 HTTP 남은 시간이 무의미
+4. HTTP 요청의 3초 deadline이 전파되면 대부분의 비동기 Task가 실패
+
 ---
 
 ## 3. 구현 상세
@@ -174,14 +283,30 @@ def parse_deadline_header(header_value: str) -> float | None:
     return None
 
 
+# 네트워크 레이턴시 보정 버퍼 (환경변수: SELFHEALING_DEADLINE_NETWORK_BUFFER_MS)
+DEFAULT_NETWORK_LATENCY_BUFFER_MS: float = 50.0
+
+
 def set_deadline(remaining_ms: float) -> None:
     """
     현재 컨텍스트에 deadline 설정.
+    네트워크 레이턴시 Buffer를 차감하여 보수적으로 계산합니다.
 
     Args:
         remaining_ms: 남은 시간 (밀리초)
     """
-    deadline = time.monotonic() + (remaining_ms / 1000.0)
+    adjusted = remaining_ms - DEFAULT_NETWORK_LATENCY_BUFFER_MS
+
+    if adjusted <= 0:
+        logger.warning(
+            "[DeadlineContext] Deadline exhausted on arrival: "
+            "remaining=%.0fms, buffer=%.0fms — possible network congestion",
+            remaining_ms,
+            DEFAULT_NETWORK_LATENCY_BUFFER_MS,
+        )
+        adjusted = 0
+
+    deadline = time.monotonic() + (adjusted / 1000.0)
     _request_deadline.set(deadline)
 
 
@@ -378,12 +503,26 @@ def _execute_request(self, method, url, **kwargs):
 
 **AdmissionControlMiddleware에 추가**:
 
+Deadline 초과 시 **503 Service Unavailable + `Retry-After: 0`**을 반환합니다.
+
+**408을 사용하지 않는 이유**:
+1. RFC 7231에 따르면 408은 "서버가 클라이언트의 요청을 기다리다 타임아웃"을 의미하며, deadline 초과와 의미가 다름
+2. 많은 HTTP 클라이언트/LB(AWS ALB, Envoy proxy 등)가 408을 **자동 재시도**하도록 설정됨
+3. 이미 시간이 부족한 요청을 재시도하면 **Cascading Failure** 발생
+
+기존 시스템의 거부 응답 패턴과 동일하게 503을 사용합니다:
+- `_create_rejection_response()` → `status=503`, `Retry-After: 30` (`admission_control.py` L204-206)
+- `_create_overload_response()` → `status=503`, `Retry-After` 동적 (`middleware/backpressure.py` L88-100)
+- `_create_load_shedding_response()` → `status=503` (`tiering/middleware.py` L184)
+
+`code: "DEADLINE_FAST_FAIL"`로 일반 503(과부하)과 구분하고, `Retry-After: 0`으로 재시도를 금지합니다.
+
 ```python
 def _create_deadline_rejection_response(self, request, remaining_ms):
-    """408 Request Timeout 응답 — deadline 만료."""
+    """503 Service Unavailable 응답 — deadline 만료 근접."""
     from django.http import JsonResponse
 
-    return JsonResponse(
+    response = JsonResponse(
         {
             "error": "Deadline Exceeded",
             "code": "DEADLINE_FAST_FAIL",
@@ -392,10 +531,63 @@ def _create_deadline_rejection_response(self, request, remaining_ms):
                 "요청이 즉시 거절되었습니다."
             ),
             "remaining_ms": remaining_ms,
+            "retry_after": 0,
         },
-        status=408,
+        status=503,
     )
+    response["Retry-After"] = "0"
+    return response
 ```
+
+**기존 패턴과의 일관성**: `_create_rejection_response()`와 동일하게 body에 `retry_after` 필드를 포함하고 HTTP 헤더 `Retry-After`도 설정합니다. `retryable` 필드는 기존 거부 응답에 없으므로 추가하지 않습니다.
+
+### 3.5 DB Query Timeout 연동
+
+`DeadlineContext`의 남은 시간을 PostgreSQL `statement_timeout`에 동적으로 주입합니다.
+
+**기존 인프라**: `adapters/postgres/repository.py`에 이미 `timeout_context()` 컨텍스트 매니저가 존재합니다:
+
+```python
+# adapters/postgres/repository.py L417-436
+@contextmanager
+def timeout_context(self, lock_timeout_ms=0, statement_timeout_ms=0):
+    try:
+        if statement_timeout_ms > 0:
+            self.set_statement_timeout(statement_timeout_ms)
+        yield
+    finally:
+        self.reset_timeouts()
+```
+
+**불필요한 SET 명령 스킵 최적화**: Production 기본 `statement_timeout=30000`(`settings/production.py` L58)이므로, deadline 남은 시간이 기본 DB timeout 이상이면 `SET statement_timeout` 쿼리를 생략하여 불필요한 DB Round Trip을 방지합니다.
+
+```python
+def get_deadline_aware_statement_timeout(
+    default_db_timeout_ms: int = 30_000,
+) -> int | None:
+    """
+    DeadlineContext 남은 시간과 기본 DB timeout 중 작은 값 반환.
+    deadline 미설정이거나 기본 DB timeout보다 넉넉하면 None (SET 불필요).
+
+    Args:
+        default_db_timeout_ms: DB 기본 statement_timeout (production.py와 동기화)
+
+    Returns:
+        설정할 timeout(ms) 또는 None(SET 불필요)
+    """
+    from selfhealing.scaling.deadline_context import get_remaining_ms
+
+    remaining = get_remaining_ms()
+    if remaining is None:
+        return None  # deadline 미설정
+
+    if remaining >= default_db_timeout_ms:
+        return None  # 넉넉하면 SET 스킵
+
+    return max(1, int(remaining))  # 최소 1ms
+```
+
+**고정 임계값(예: 10초)을 사용하지 않는 이유**: DB timeout이 5초인 환경에서는 10초 임계값이 무의미합니다. `default_db_timeout_ms`와 비교하는 것이 환경에 무관하게 정확합니다.
 
 ---
 
@@ -444,6 +636,7 @@ def should_allow(self, priority=0, bulkhead_name=None, metadata=None):
 | `api/django/admission_control.py` | `_process_request()` 수정 | ~20줄 추가 |
 | `services/http_client.py` | `_get_headers()`, `_execute_request()` 수정 | ~15줄 추가 |
 | `scaling/traffic_gate.py` | `should_allow()` 선택적 수정 | ~8줄 추가 |
+| `nginx/nginx.conf` | 헤더 Sanitization 추가 | ~2줄 추가 |
 
 ---
 
@@ -460,24 +653,34 @@ tests/unit/scaling/test_deadline_context.py
 │   ├── test_invalid_format           # "abc" → None
 │   └── test_empty_string             # "" → None
 ├── TestDeadlineContext
-│   ├── test_set_and_get_remaining    # set 후 get 검증
+│   ├── test_set_and_get_remaining    # set 후 get 검증 (buffer 차감 반영)
 │   ├── test_is_expired               # 0ms 설정 시 expired
 │   ├── test_should_fast_fail         # 남은 500ms, 예상 2000ms → True
 │   ├── test_no_deadline_no_fast_fail # 미설정 시 False
-│   └── test_deadline_scope           # context manager 정상 복원
+│   ├── test_deadline_scope           # context manager 정상 복원
+│   └── test_network_buffer_deduction # 2000ms 설정 → 1950ms 반환 (50ms 차감)
+├── TestNetworkCongestionDetection
+│   ├── test_exhausted_on_arrival     # 30ms 설정 시 adjusted <= 0, WARNING 로그
+│   └── test_buffer_equals_remaining  # 50ms 설정 시 adjusted == 0
 ├── TestDeadlinePropagation
 │   ├── test_propagation_header_value # 남은 시간 → "1234ms"
 │   └── test_propagation_when_expired # 만료 시 None
+├── TestDbTimeoutIntegration
+│   ├── test_deadline_aware_timeout_shorter  # 남은 1000ms → timeout=1000
+│   ├── test_deadline_aware_timeout_skip     # 남은 35000ms → None (SET 불필요)
+│   └── test_deadline_aware_timeout_none     # deadline 미설정 → None
 ```
 
 ### 5.2 통합 테스트
 
 ```
 tests/unit/api/test_admission_control_deadline.py
-├── test_deadline_header_fast_fail    # 남은 30ms → 408 응답
+├── test_deadline_header_fast_fail    # 남은 30ms → 503 응답 (DEADLINE_FAST_FAIL)
 ├── test_deadline_header_allowed      # 남은 5000ms → 정상 통과
 ├── test_no_deadline_header           # 헤더 없음 → 기존 동작 유지
 ├── test_invalid_deadline_header      # 잘못된 형식 → 무시, 기존 동작
+├── test_deadline_response_retry_after # 503 응답에 Retry-After: 0 포함
+├── test_deadline_response_code       # body.code == "DEADLINE_FAST_FAIL"
 
 tests/unit/services/test_http_client_deadline.py
 ├── test_deadline_header_propagation  # 헤더 자동 주입 확인
@@ -494,13 +697,20 @@ tests/unit/services/test_http_client_deadline.py
 |------|--------|------|
 | `SELFHEALING_DEADLINE_ENABLED` | `true` | Deadline Context 활성화 여부 |
 | `SELFHEALING_DEADLINE_MINIMUM_USEFUL_MS` | `50` | 최소 유효 시간 (ms) |
+| `SELFHEALING_DEADLINE_NETWORK_BUFFER_MS` | `50` | 네트워크 레이턴시 보정 Buffer (ms) |
 
 ### 6.2 Prometheus 메트릭
+
+기존 메트릭 네이밍 규약(`selfhealing_` 접두사 + `_total`/`_ms` 접미사)을 따릅니다.
+참조: `scaling/metrics.py`의 `BackpressureMetrics`, `resilience/bulkhead/metrics.py`의 `selfhealing_bulkhead_*`.
 
 | 메트릭 | 타입 | 라벨 | 설명 |
 |--------|------|------|------|
 | `selfhealing_deadline_fast_fail_total` | Counter | `tier`, `path_prefix` | Fast-Fail 거절 횟수 |
 | `selfhealing_deadline_remaining_ms` | Histogram | `tier` | 수신 시점의 남은 시간 분포 |
+| `selfhealing_deadline_exhausted_on_arrival_total` | Counter | `path_prefix` | 도착 시점에 이미 만료된 요청 수 (Buffer 차감 후 ≤0) |
+
+**`exhausted_on_arrival` 네이밍 근거**: 리뷰에서 `exhausted_by_buffer`가 제안되었으나, Buffer가 원인이 아니라 "도착 시점에 이미 만료"가 정확한 의미이므로 `on_arrival`로 명명합니다. 기존 `BUDGET_EXHAUSTED_BY_SLO_KEY`(`services/error_budget_gate/redis_flag.py` L19)와 도메인이 완전히 다르므로 혼동 없습니다.
 
 ---
 
@@ -523,3 +733,79 @@ def __call__(self, request):
         logger.error("[AdmissionControlMiddleware] Error: %s, allowing request", e)
         return self.get_response(request)
 ```
+
+---
+
+## 8. 보안: 헤더 Sanitization
+
+### 8.1 문제
+
+클라이언트가 `X-Deadline-Remaining: 1ms`를 보내면 모든 요청이 Fast-Fail 되어 **DoS 공격**이 됩니다.
+
+현재 Nginx 설정(`nginx.conf` L67-78)에는 `X-Deadline-Remaining` 처리가 **전혀 없습니다**:
+
+```properties
+location / {
+    proxy_pass http://django_app;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $host;
+    proxy_redirect off;
+    # X-Deadline-Remaining에 대한 처리 없음
+}
+```
+
+### 8.2 Nginx 설정 수정
+
+Trusted Boundary(외부 진입점)에서 클라이언트 헤더를 **제거**합니다.
+
+```nginx
+# nginx/nginx.conf — location / 블록에 추가
+proxy_set_header X-Deadline-Remaining "";
+
+# nginx/nginx.conf — location /api/ 블록에 추가
+proxy_set_header X-Deadline-Remaining "";
+```
+
+이렇게 하면:
+- **외부 유입**: 클라이언트가 보낸 `X-Deadline-Remaining` 헤더가 제거됨
+- **내부 서비스 간**: `SelfHealingHttpClient._get_headers()`가 자동 전파하므로 영향 없음
+
+### 8.3 Initial Emitter
+
+최초 `X-Deadline-Remaining` 헤더는 **맨 앞단 Django 서버(또는 API Gateway)**에서 생성합니다.
+
+| 생성 방식 | 적용 시점 | 비고 |
+|---|---|---|
+| Nginx에서 초기 deadline 설정 | `proxy_set_header X-Deadline-Remaining "30000ms"` | `proxy_read_timeout=30s`와 동기화 |
+| Django 미들웨어에서 설정 | AdmissionControlMiddleware 0단계 | 헤더 없을 때 기본값 설정 가능 |
+| 하위 서비스 호출 시 자동 전파 | `SelfHealingHttpClient._get_headers()` | 기존 `_is_chaos_request` 전파 패턴과 동일 |
+
+클라이언트(앱/웹)에서 **절대 생성하지 않습니다**.
+
+### 8.4 헤더 네이밍 일관성
+
+| 용도 | 헤더 패턴 | 예시 |
+|---|---|---|
+| **요청 헤더** (서비스 간 전파) | `X-{도메인명}` | `X-Deadline-Remaining`, `X-Self-Healing-Synthetic` |
+| **응답 헤더** (시스템 상태 노출) | `X-SelfHealing-{속성}` | `X-SelfHealing-Backpressure-Level`, `X-SelfHealing-Degraded-Features` |
+
+`X-Deadline-Remaining`은 **요청 헤더**이므로 `X-SelfHealing-` 접두사를 사용하지 않습니다. gRPC 업계 관례(`grpc-timeout`)와 일관성을 유지합니다.
+
+---
+
+## 9. 설계 결정 요약
+
+논의를 통해 확정된 10가지 설계 결정을 정리합니다.
+
+| # | 항목 | 결정 | 근거 코드 |
+|---|------|------|-----------|
+| 1 | Network Latency Buffer | 50ms 차감 + `exhausted_on_arrival` 메트릭 | `nginx.conf` L82 (proxy_connect_timeout 3s) |
+| 2 | Duration 방식 | Remaining Duration (절대 시간 아님) | `core/hedging/async_executor.py` L337 (time.perf_counter) |
+| 3 | 실행 환경 | WSGI gthread, ContextVar 안전 | `docker-compose.yml` L36 (--worker-class gthread) |
+| 4 | Thread 전파 | 기존 `copy_context()` 인프라 활용 | `resilience/bulkhead/threadpool.py` L170 |
+| 5 | DB Timeout 연동 | `min(remaining, db_default)`, 넉넉하면 스킵 | `settings/production.py` L58 (statement_timeout=30000) |
+| 6 | Transaction 안전 | Fast-Fail은 DB 접근 전이므로 안전 | `admission_control.py` L120 (_process_request 0단계) |
+| 7 | Celery 비전파 | 독립 라이프사이클 유지 | `context/celery_propagation.py` (CausationContext만 전파) |
+| 8 | Nginx Sanitization | 외부 헤더 제거 필수 | `nginx.conf` L67-78 (현재 처리 없음) |
+| 9 | estimated_ms 출처 | 1단계 Hardcoded → 2단계 Metrics 기반 | `core/hedging/latency_tracker.py` (ADAPTIVE P50 패턴) |
+| 10 | 응답 코드 | 503 + Retry-After: 0 (408 사용 안 함) | `admission_control.py` L204 (기존 503 패턴) |
