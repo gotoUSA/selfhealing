@@ -1,19 +1,26 @@
 """
-Predictive Anomaly Forecaster 단위 테스트.
+예측 엔진 핵심 컴포넌트 단위 테스트.
 
-테스트 대상:
-    - time_series.py: HoltLinearForecaster, EWMAForecaster, HoltWintersForecaster, ForecastDataPoint
-    - anomaly_detector.py: ZScoreDetector, IQRDetector
-    - proactive_action.py: SpikeClassifier, SpikeType, ProactiveActionTrigger
-    - service.py: PredictiveForecasterService
-    - settings/predictive_forecaster.py: PredictiveForecasterSettings
-    - scenario_generator.py: TimeSeriesScenarioGenerator
-    - StateBackend save/load 왕복 검증
-    - has_adjustment 태깅 기록 검증
+시계열 예측, 이상 탐지, 트래픽 분류, 사전 조치 트리거 등
+Predictive Forecaster 엔진 내부 컴포넌트의 계약값과 동작을 검증한다.
 
-단위 테스트 가이드라인:
-    - 계약 검증: Test*Contract 클래스, 하드코딩 기대값
-    - 동작 검증: Test*Behavior 클래스, 소스 참조
+검증 대상:
+    - PredictiveForecasterSettings: 15개 설정 필드 기본값/범위
+    - HoltLinearForecaster: 이중지수평활 트렌드 예측, warmup, confidence
+    - EWMAForecaster: 지수가중이동평균 smoothing
+    - HoltWintersForecaster: 삼중지수평활 계절성 예측
+    - ForecastDataPoint: has_adjustment 셀프힐링 개입 태깅
+    - ZScoreDetector: Z-Score 기반 이상 탐지 (99.7% 신뢰구간)
+    - IQRDetector: 사분위수 범위 기반 이상 탐지
+    - SpikeClassifier: Flash Sale vs DDoS 급증 유형 분류
+    - ProactiveActionTrigger: 신뢰도/블랙리스트 기반 사전 조치 생성
+    - StateBackend save/load 왕복 영속성
+    - PredictiveForecasterService: 메트릭 수집→예측→탐지→조치 통합 흐름
+    - TimeSeriesScenarioGenerator: 합성 시계열 데이터 생성
+
+테스트 구조:
+    - Test*Contract: 설계 계약값 (기본값, enum 멤버 등) 하드코딩 검증
+    - Test*Behavior: 입출력 동작 (예측 정확도, 이상 탐지 등) 기능 검증
 """
 
 from __future__ import annotations

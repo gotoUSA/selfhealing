@@ -1,9 +1,14 @@
 """
-Predictive Anomaly Forecaster Phase 2-4 단위 테스트.
+기존 시스템 컨포넌트의 Forecaster 적용 단위 테스트.
 
-Phase 2: 히스토리 크기 확장 + Settings 전환
-Phase 3: 기존 시스템 연동 (DecisionEngine, PoolMonitor, ResourceMonitor, ErrorBudget)
-Phase 4: HoltWinters 계절성 자동 감지
+검증 대상:
+    - 히스토리 Settings 확장: PoolMonitor, DecisionEngine, AutoRollbackGuard
+    - 트렌드 예측 확장: PoolMonitor.get_trend() + HoltLinear 예측
+    - 신뢰도 예측 컨텍스트: DecisionEngine._calculate_confidence() 트렌드 기울기 반영
+    - OOM 시간 예측: CgroupResourceMonitor.predict_oom_minutes()
+    - EWMA smoothing: BudgetDepletionForecaster burn_rate 평활
+    - 개입 쿨다운: HoltLinearForecaster has_adjustment alpha 감소
+    - 계절성 자동 감지: HoltWintersForecaster.detect_season_length()
 """
 
 from __future__ import annotations
@@ -15,22 +20,22 @@ import pytest
 
 
 # =============================================================================
-# Phase 2: Settings 변경 계약 검증
+# 히스토리 Settings 기본값 계약 검증
 # =============================================================================
 
 
-class TestPoolMonitorSettingsPhase2Contract:
-    """PoolMonitorSettings Phase 2 변경사항 계약 검증."""
+class TestPoolMonitorHistorySettingsContract:
+    """PoolMonitorSettings max_history 기본값/상한 계약 검증."""
 
     def test_max_history_default_is_5000(self):
-        """max_history 기본값은 5000이다 (Phase 2: 100→5000)."""
+        """max_history 기본값은 5000이다."""
         from selfhealing.settings.pool_monitor import PoolMonitorSettings
 
         settings = PoolMonitorSettings()
         assert settings.max_history == 5000
 
     def test_max_history_upper_bound_is_10000(self):
-        """max_history 상한은 10000이다 (Phase 2: 1000→10000)."""
+        """max_history 상한은 10000이다."""
         from selfhealing.settings.pool_monitor import PoolMonitorSettings
 
         settings = PoolMonitorSettings(max_history=10000)
@@ -44,8 +49,8 @@ class TestPoolMonitorSettingsPhase2Contract:
             PoolMonitorSettings(max_history=10001)
 
 
-class TestDecisionEngineSettingsPhase2Contract:
-    """DecisionEngineSettings Phase 2 변경사항 계약 검증."""
+class TestDecisionEngineHistorySettingsContract:
+    """DecisionEngineSettings max_history 기본값/상한 계약 검증."""
 
     def test_max_history_field_exists(self):
         """max_history 필드가 존재한다."""
@@ -69,8 +74,8 @@ class TestDecisionEngineSettingsPhase2Contract:
         assert settings.max_history == 10000
 
 
-class TestAutoRollbackSettingsPhase2Contract:
-    """AutoRollbackSettings Phase 2 변경사항 계약 검증."""
+class TestAutoRollbackHistorySettingsContract:
+    """AutoRollbackSettings max_health_history 기본값/상한 계약 검증."""
 
     def test_max_health_history_field_exists(self):
         """max_health_history 필드가 존재한다."""
@@ -95,12 +100,12 @@ class TestAutoRollbackSettingsPhase2Contract:
 
 
 # =============================================================================
-# Phase 2: Core 히스토리 확장 동작 검증
+# 히스토리 크기 제한 동작 검증
 # =============================================================================
 
 
-class TestDecisionEnginePhase2Behavior:
-    """DecisionEngine Phase 2: Settings 기반 히스토리 제한 검증."""
+class TestDecisionEngineHistoryLimitBehavior:
+    """DecisionEngine._record_analysis() Settings 기반 히스토리 크기 제한 검증."""
 
     def test_history_uses_settings_max_history(self):
         """DecisionEngine이 Settings.max_history를 사용한다."""
@@ -118,8 +123,8 @@ class TestDecisionEnginePhase2Behavior:
         assert len(engine._history) == 200
 
 
-class TestAutoRollbackGuardPhase2Behavior:
-    """AutoRollbackGuard Phase 2: Settings 기반 히스토리 제한 검증."""
+class TestAutoRollbackGuardHistoryLimitBehavior:
+    """AutoRollbackGuard Settings 기반 헬스체크 히스토리 크기 제한 검증."""
 
     def test_health_history_uses_settings_limit(self):
         """AutoRollbackGuard가 Settings.max_health_history를 사용한다."""
@@ -158,12 +163,12 @@ class TestAutoRollbackGuardPhase2Behavior:
 
 
 # =============================================================================
-# Phase 2: PoolMonitor get_trend 확장 동작 검증
+# PoolMonitor 트렌드 예측 동작 검증
 # =============================================================================
 
 
-class TestPoolMonitorGetTrendPhase2Behavior:
-    """PoolMonitor.get_trend() Phase 2/3 확장 검증."""
+class TestPoolMonitorTrendPredictionBehavior:
+    """PoolMonitor.get_trend() 확장 윈도우 및 HoltLinear 예측 검증."""
 
     def test_trend_analysis_with_larger_window(self):
         """get_trend()이 확장된 윈도우로 트렌드를 분석한다."""
@@ -186,7 +191,7 @@ class TestPoolMonitorGetTrendPhase2Behavior:
         assert "avg_usage" in result
 
     def test_trend_includes_prediction_fields(self):
-        """get_trend()이 Phase 3 예측 필드를 포함한다."""
+        """get_trend()이 HoltLinear 기반 예측 필드를 포함한다."""
         from selfhealing.core.pool_monitor import ConnectionPoolMonitor, PoolStats
 
         monitor = ConnectionPoolMonitor(max_history=5000)
@@ -207,12 +212,12 @@ class TestPoolMonitorGetTrendPhase2Behavior:
 
 
 # =============================================================================
-# Phase 3: DecisionEngine 예측 컨텍스트 주입 검증
+# DecisionEngine 예측 컨텍스트 신뢰도 검증
 # =============================================================================
 
 
-class TestDecisionEnginePhase3Behavior:
-    """DecisionEngine._calculate_confidence() Phase 3 예측 컨텍스트 검증."""
+class TestDecisionEngineConfidenceWithPredictionBehavior:
+    """DecisionEngine._calculate_confidence() 예측 트렌드 기울기 반영 검증."""
 
     def test_prediction_context_boosts_confidence(self):
         """prediction_context가 제공되면 신뢰도가 부스트된다."""
@@ -276,12 +281,12 @@ class TestDecisionEnginePhase3Behavior:
 
 
 # =============================================================================
-# Phase 3: CgroupResourceMonitor OOM 예측 검증
+# CgroupResourceMonitor OOM 시간 예측 검증
 # =============================================================================
 
 
-class TestCgroupResourceMonitorPhase3Behavior:
-    """CgroupResourceMonitor.predict_oom_minutes() Phase 3 검증."""
+class TestCgroupResourceMonitorOomPredictionBehavior:
+    """CgroupResourceMonitor.predict_oom_minutes() HoltLinear 기반 OOM 예측 검증."""
 
     def test_predict_oom_with_increasing_trend(self):
         """증가 추세에서 OOM 예측 시간이 유한한 양수이다."""
@@ -355,12 +360,12 @@ class TestCgroupResourceMonitorPhase3Behavior:
 
 
 # =============================================================================
-# Phase 3: BudgetDepletionForecaster EWMA smoothing 검증
+# BudgetDepletionForecaster EWMA 평활 검증
 # =============================================================================
 
 
-class TestBudgetDepletionForecasterPhase3Behavior:
-    """BudgetDepletionForecaster Phase 3: EWMA smoothing 옵션 검증."""
+class TestBudgetDepletionEwmaSmoothingBehavior:
+    """BudgetDepletionForecaster EWMA smoothing 옵션 검증."""
 
     def test_default_no_smoothing(self):
         """기본적으로 EWMA smoothing이 비활성화되어 있다."""
@@ -415,12 +420,12 @@ class TestBudgetDepletionForecasterPhase3Behavior:
 
 
 # =============================================================================
-# Phase 3: has_adjustment Option A 검증
+# HoltLinear 셀프힐링 개입 쿨다운 검증
 # =============================================================================
 
 
-class TestHasAdjustmentOptionABehavior:
-    """HoltLinearForecaster has_adjustment Option A 검증."""
+class TestHoltLinearAdjustmentCooldownBehavior:
+    """HoltLinearForecaster has_adjustment 쿨다운 메커니즘 검증."""
 
     def test_adjustment_triggers_cooldown(self):
         """has_adjustment=True가 쿨다운을 시작한다."""
@@ -474,12 +479,12 @@ class TestHasAdjustmentOptionABehavior:
 
 
 # =============================================================================
-# Phase 4: HoltWinters 계절성 자동 감지 검증
+# HoltWinters 계절성 주기 자동 감지 검증
 # =============================================================================
 
 
-class TestHoltWintersAutoDetectBehavior:
-    """HoltWintersForecaster.detect_season_length() Phase 4 검증."""
+class TestHoltWintersSeasonAutoDetectBehavior:
+    """HoltWintersForecaster.detect_season_length() 자기상관 기반 계절성 감지 검증."""
 
     def test_detect_known_seasonal_period(self):
         """알려진 계절성 주기가 정확히 감지된다."""

@@ -278,7 +278,7 @@ PROFILE_DEFAULTS = {
 환경변수 오버라이드:
 - `SELFHEALING_POOL_MONITOR_MAX_HISTORY=5000`
 - `SELFHEALING_DECISION_MAX_HISTORY=5000` (신규)
-- `SELFHEALING_ROLLBACK_MAX_HISTORY=10000` (신규)
+- `SELFHEALING_ROLLBACK_MAX_HEALTH_HISTORY=10000` (신규)
 
 ---
 
@@ -817,7 +817,7 @@ class HoltLinearForecaster:
                 ],
             }
 
-            backend.set(key, state, ttl=259_200)  # 72시간 TTL
+            backend.set(key, state, ttl_seconds=settings.state_ttl)  # 72시간 TTL (설정값)
             logger.info(
                 f"[HoltLinearForecaster] Saved state for '{metric_name}' "
                 f"({self._count} points, level={self._level:.4f})"
