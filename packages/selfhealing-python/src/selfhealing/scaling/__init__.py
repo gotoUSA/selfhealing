@@ -51,6 +51,7 @@ from selfhealing.scaling.config import (
     reset_backpressure_settings,
 )
 from selfhealing.scaling.deadline_context import (
+    DEADLINE_ENABLED,
     DEADLINE_HEADER,
     DEADLINE_META_KEY,
     DEFAULT_MINIMUM_USEFUL_TIME_MS,
@@ -62,6 +63,9 @@ from selfhealing.scaling.deadline_context import (
     get_remaining_ms,
     is_expired,
     parse_deadline_header,
+    record_exhausted_on_arrival,
+    record_fast_fail,
+    record_remaining_ms,
     set_deadline,
     should_fast_fail,
 )
@@ -107,6 +111,7 @@ __all__ = [
     "get_backpressure_settings",
     "reset_backpressure_settings",
     # Deadline Context
+    "DEADLINE_ENABLED",
     "DEADLINE_HEADER",
     "DEADLINE_META_KEY",
     "DEFAULT_MINIMUM_USEFUL_TIME_MS",
@@ -118,6 +123,9 @@ __all__ = [
     "get_remaining_ms",
     "is_expired",
     "parse_deadline_header",
+    "record_exhausted_on_arrival",
+    "record_fast_fail",
+    "record_remaining_ms",
     "set_deadline",
     "should_fast_fail",
     # Rate Controller

@@ -223,17 +223,15 @@ HTTP Deadline을 Celery Task에 **전파하지 않습니다**. Celery Task는 �
 """
 Deadline Context — gRPC Deadline Propagation 패턴.
 
-상위 서비스의 deadline을 하위 서비스에 ContextVar + HTTP 헤더로 전파합니다.
+상위 서비스의 deadline을 하위 서비스에 ContextVar + HTTP 헤더로 전파한다.
 남은 시간이 예상 처리시간 미만이면 즉시 거절(Fast-Fail)하여
-무의미한 작업을 방지합니다.
-
-패턴 참조: core/hedging/async_executor.py L333 (remaining_timeout 패턴)
-헤더 전파 참조: services/http_client.py L25 (_is_chaos_request ContextVar)
+무의미한 작업을 방지한다.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from contextlib import contextmanager
@@ -242,19 +240,28 @@ from typing import Generator
 
 logger = logging.getLogger(__name__)
 
+# Deadline 기능 활성화 여부 (환경변수: SELFHEALING_DEADLINE_ENABLED)
+DEADLINE_ENABLED: bool = os.environ.get("SELFHEALING_DEADLINE_ENABLED", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 # HTTP 헤더 이름
 DEADLINE_HEADER = "X-Deadline-Remaining"
 
 # Django META 키 (HTTP_X_DEADLINE_REMAINING)
 DEADLINE_META_KEY = "HTTP_X_DEADLINE_REMAINING"
 
-# ContextVar: 요청 deadline (Unix timestamp, monotonic clock)
+# ContextVar: 요청 deadline (monotonic clock 기준 절대 시각)
 _request_deadline: ContextVar[float | None] = ContextVar(
     "request_deadline", default=None
 )
 
 # 최소 유효 시간 (ms) — 이보다 적으면 Fast-Fail
-DEFAULT_MINIMUM_USEFUL_TIME_MS: float = 50.0
+DEFAULT_MINIMUM_USEFUL_TIME_MS: float = float(
+    os.environ.get("SELFHEALING_DEADLINE_MINIMUM_USEFUL_MS", "50")
+)
 
 # 헤더 파싱용 정규식
 _DEADLINE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:ms)?\s*$", re.IGNORECASE)
@@ -284,13 +291,15 @@ def parse_deadline_header(header_value: str) -> float | None:
 
 
 # 네트워크 레이턴시 보정 버퍼 (환경변수: SELFHEALING_DEADLINE_NETWORK_BUFFER_MS)
-DEFAULT_NETWORK_LATENCY_BUFFER_MS: float = 50.0
+DEFAULT_NETWORK_LATENCY_BUFFER_MS: float = float(
+    os.environ.get("SELFHEALING_DEADLINE_NETWORK_BUFFER_MS", "50")
+)
 
 
 def set_deadline(remaining_ms: float) -> None:
     """
     현재 컨텍스트에 deadline 설정.
-    네트워크 레이턴시 Buffer를 차감하여 보수적으로 계산합니다.
+    네트워크 레이턴시 Buffer를 차감하여 보수적으로 계산한다.
 
     Args:
         remaining_ms: 남은 시간 (밀리초)
@@ -304,6 +313,7 @@ def set_deadline(remaining_ms: float) -> None:
             remaining_ms,
             DEFAULT_NETWORK_LATENCY_BUFFER_MS,
         )
+        record_exhausted_on_arrival()
         adjusted = 0
 
     deadline = time.monotonic() + (adjusted / 1000.0)
@@ -410,34 +420,40 @@ def deadline_scope(remaining_ms: float) -> Generator[None, None, None]:
 
 ```python
 def _process_request(self, request):
-    """요청 분류 → Deadline 체크 → TrafficGate 판정 → 허용/거부."""
+    """Deadline 체크 → 요청 분류 → TrafficGate 판정 → 허용/거부."""
 
     # 0단계: Deadline Context 설정 (신규)
     from selfhealing.scaling.deadline_context import (
+        DEADLINE_ENABLED,
         DEADLINE_META_KEY,
-        parse_deadline_header,
-        set_deadline,
-        should_fast_fail,
         DEFAULT_MINIMUM_USEFUL_TIME_MS,
+        parse_deadline_header,
+        record_fast_fail,
+        record_remaining_ms,
+        set_deadline,
     )
 
-    deadline_header = request.META.get(DEADLINE_META_KEY)
-    if deadline_header:
-        remaining_ms = parse_deadline_header(deadline_header)
-        if remaining_ms is not None:
-            set_deadline(remaining_ms)
-            # 최소 유효 시간 미만이면 즉시 거절
-            if remaining_ms < DEFAULT_MINIMUM_USEFUL_TIME_MS:
-                logger.info(
-                    "[AdmissionControlMiddleware] Deadline Fast-Fail: "
-                    "remaining=%.0fms < minimum=%.0fms, path=%s",
-                    remaining_ms,
-                    DEFAULT_MINIMUM_USEFUL_TIME_MS,
-                    request.path,
-                )
-                return self._create_deadline_rejection_response(
-                    request, remaining_ms
-                )
+    if DEADLINE_ENABLED:
+        deadline_header = request.META.get(DEADLINE_META_KEY)
+        if deadline_header:
+            remaining_ms = parse_deadline_header(deadline_header)
+            if remaining_ms is not None:
+                set_deadline(remaining_ms)
+                record_remaining_ms(remaining_ms)
+                # 최소 유효 시간 미만이면 즉시 거절
+                if remaining_ms < DEFAULT_MINIMUM_USEFUL_TIME_MS:
+                    path_prefix = request.path.split("/")[1] if "/" in request.path else request.path
+                    record_fast_fail(path_prefix=path_prefix)
+                    logger.info(
+                        "[AdmissionControlMiddleware] Deadline Fast-Fail: "
+                        "remaining=%.0fms < minimum=%.0fms, path=%s",
+                        remaining_ms,
+                        DEFAULT_MINIMUM_USEFUL_TIME_MS,
+                        request.path,
+                    )
+                    return self._create_deadline_rejection_response(
+                        request, remaining_ms
+                    )
 
     # 1단계: TierRegistry로 tier 분류 (기존 코드)
     path = request.path
@@ -589,6 +605,22 @@ def get_deadline_aware_statement_timeout(
 
 **고정 임계값(예: 10초)을 사용하지 않는 이유**: DB timeout이 5초인 환경에서는 10초 임계값이 무의미합니다. `default_db_timeout_ms`와 비교하는 것이 환경에 무관하게 정확합니다.
 
+**`timeout_context()` 내부 자동 연동**: `adapters/postgres/repository.py`의 `timeout_context()`에서 `get_deadline_aware_statement_timeout()`를 자동 호출하여, DeadlineContext 남은 시간이 `statement_timeout_ms`보다 짧으면 자동 축소합니다:
+
+```python
+# adapters/postgres/repository.py — timeout_context() 내부
+try:
+    from selfhealing.scaling.deadline_context import get_deadline_aware_statement_timeout
+
+    deadline_timeout = get_deadline_aware_statement_timeout(
+        default_db_timeout_ms=statement_timeout_ms if statement_timeout_ms > 0 else 30_000,
+    )
+    if deadline_timeout is not None:
+        statement_timeout_ms = deadline_timeout
+except ImportError:
+    pass
+```
+
 ---
 
 ## 4. 통합 지점
@@ -632,10 +664,12 @@ def should_allow(self, priority=0, bulkhead_name=None, metadata=None):
 
 | 파일 | 변경 유형 | 규모 |
 |------|-----------|------|
-| `scaling/deadline_context.py` | 신규 생성 | ~150줄 |
-| `api/django/admission_control.py` | `_process_request()` 수정 | ~20줄 추가 |
+| `scaling/deadline_context.py` | 신규 생성 | ~250줄 |
+| `scaling/__init__.py` | re-export 추가 | ~10줄 추가 |
+| `api/django/admission_control.py` | `_process_request()` 수정 | ~25줄 추가 |
 | `services/http_client.py` | `_get_headers()`, `_execute_request()` 수정 | ~15줄 추가 |
-| `scaling/traffic_gate.py` | `should_allow()` 선택적 수정 | ~8줄 추가 |
+| `scaling/traffic_gate.py` | `should_allow()` 수정 | ~8줄 추가 |
+| `adapters/postgres/repository.py` | `timeout_context()` deadline 연동 | ~10줄 추가 |
 | `nginx/nginx.conf` | 헤더 Sanitization 추가 | ~2줄 추가 |
 
 ---
@@ -646,45 +680,79 @@ def should_allow(self, priority=0, bulkhead_name=None, metadata=None):
 
 ```
 tests/unit/scaling/test_deadline_context.py
-├── TestParseDeadlineHeader
-│   ├── test_valid_ms_suffix          # "2500ms" → 2500.0
-│   ├── test_valid_no_suffix          # "2500" → 2500.0
-│   ├── test_valid_float              # "1500.5ms" → 1500.5
-│   ├── test_invalid_format           # "abc" → None
-│   └── test_empty_string             # "" → None
-├── TestDeadlineContext
-│   ├── test_set_and_get_remaining    # set 후 get 검증 (buffer 차감 반영)
-│   ├── test_is_expired               # 0ms 설정 시 expired
-│   ├── test_should_fast_fail         # 남은 500ms, 예상 2000ms → True
-│   ├── test_no_deadline_no_fast_fail # 미설정 시 False
-│   ├── test_deadline_scope           # context manager 정상 복원
-│   └── test_network_buffer_deduction # 2000ms 설정 → 1950ms 반환 (50ms 차감)
-├── TestNetworkCongestionDetection
-│   ├── test_exhausted_on_arrival     # 30ms 설정 시 adjusted <= 0, WARNING 로그
-│   └── test_buffer_equals_remaining  # 50ms 설정 시 adjusted == 0
-├── TestDeadlinePropagation
-│   ├── test_propagation_header_value # 남은 시간 → "1234ms"
-│   └── test_propagation_when_expired # 만료 시 None
-├── TestDbTimeoutIntegration
-│   ├── test_deadline_aware_timeout_shorter  # 남은 1000ms → timeout=1000
-│   ├── test_deadline_aware_timeout_skip     # 남은 35000ms → None (SET 불필요)
-│   └── test_deadline_aware_timeout_none     # deadline 미설정 → None
+├── TestParseDeadlineHeaderContract       # 헤더 파싱 계약값 검증
+│   ├── test_valid_ms_suffix              # "2500ms" → 2500.0
+│   ├── test_valid_no_suffix              # "2500" → 2500.0
+│   ├── test_valid_float                  # "1500.5ms" → 1500.5
+│   ├── test_valid_with_whitespace        # " 2500ms " → 2500.0
+│   ├── test_invalid_format               # "abc" → None
+│   ├── test_empty_string                 # "" → None
+│   ├── test_negative_not_matched         # "-100ms" → None
+│   └── test_case_insensitive_suffix      # "2500MS" → 2500.0
+├── TestDeadlineHeaderConstantsContract    # 헤더 상수 계약값 검증
+│   ├── test_header_name                  # DEADLINE_HEADER == "X-Deadline-Remaining"
+│   └── test_meta_key                     # DEADLINE_META_KEY == "HTTP_X_DEADLINE_REMAINING"
+├── TestDeadlineContextBehavior            # ContextVar 설정/조회 동작 검증
+│   ├── test_set_and_get_remaining        # set 후 get 검증 (buffer 차감 반영)
+│   ├── test_no_deadline_returns_none     # 미설정 시 None
+│   ├── test_is_expired_with_zero_remaining  # 0ms 설정 시 expired
+│   ├── test_is_expired_with_plenty_remaining  # 충분한 시간 남아있으면 not expired
+│   ├── test_is_expired_without_deadline  # 미설정 시 False (Fail-Open)
+│   ├── test_clear_deadline               # clear 후 None
+│   └── test_network_buffer_deduction     # 2000ms 설정 → ~1950ms 반환 (50ms 차감)
+├── TestNetworkCongestionDetectionBehavior # 네트워크 혼잡 감지 동작 검증
+│   ├── test_exhausted_on_arrival         # 30ms 설정 시 adjusted ≤ 0, 즉시 만료
+│   ├── test_buffer_equals_remaining      # 50ms 설정 시 adjusted == 0
+│   └── test_just_above_buffer            # buffer + 100ms → 만료되지 않음
+├── TestShouldFastFailBehavior             # Fast-Fail 판정 동작 검증
+│   ├── test_remaining_less_than_estimated  # 남은 500ms, 예상 2000ms → True
+│   ├── test_remaining_more_than_estimated # 남은 5000ms, 예상 2000ms → False
+│   ├── test_no_deadline_no_fast_fail     # 미설정 시 False (Fail-Open)
+│   └── test_below_minimum_useful_time    # 최소 유효 시간 미만 → True
+├── TestDeadlinePropagationBehavior        # 하위 서비스 전파 헤더 생성 동작 검증
+│   ├── test_propagation_header_value     # 남은 시간 → "NNNms"
+│   ├── test_propagation_when_no_deadline # 미설정 시 None
+│   └── test_propagation_when_expired     # 만료 시 None
+├── TestDeadlineAwareStatementTimeoutBehavior  # DB timeout 연동 동작 검증
+│   ├── test_deadline_shorter_than_db_default  # 남은 1000ms → timeout=1000
+│   ├── test_deadline_longer_than_db_default   # 남은 35000ms → None (SET 불필요)
+│   ├── test_no_deadline_returns_none     # deadline 미설정 → None
+│   └── test_minimum_timeout_is_one_ms    # 극도로 짧아도 최소 1ms
+└── TestDeadlineScopeBehavior              # deadline_scope 컨텍스트 매니저 동작 검증
+    ├── test_scope_sets_and_restores      # 블록 내 활성, 블록 후 복원
+    ├── test_scope_restores_previous_deadline  # 기존 deadline 복원
+    └── test_scope_restores_on_exception  # 예외 발생 시에도 복원
 ```
 
 ### 5.2 통합 테스트
 
 ```
 tests/unit/api/test_admission_control_deadline.py
-├── test_deadline_header_fast_fail    # 남은 30ms → 503 응답 (DEADLINE_FAST_FAIL)
-├── test_deadline_header_allowed      # 남은 5000ms → 정상 통과
-├── test_no_deadline_header           # 헤더 없음 → 기존 동작 유지
-├── test_invalid_deadline_header      # 잘못된 형식 → 무시, 기존 동작
-├── test_deadline_response_retry_after # 503 응답에 Retry-After: 0 포함
-├── test_deadline_response_code       # body.code == "DEADLINE_FAST_FAIL"
+├── TestAdmissionControlDeadlineBehavior
+│   ├── test_deadline_header_fast_fail      # 남은 30ms → 503 응답 (DEADLINE_FAST_FAIL)
+│   ├── test_deadline_header_allowed        # 남은 5000ms → 정상 통과
+│   ├── test_no_deadline_header             # 헤더 없음 → 기존 동작 유지
+│   ├── test_invalid_deadline_header        # 잘못된 형식 → 무시, 기존 동작
+│   ├── test_deadline_response_retry_after  # 503 응답에 Retry-After: 0 포함
+│   ├── test_deadline_response_body_structure  # body 필수 필드 검증
+│   ├── test_deadline_at_exact_minimum      # 최소 유효 시간과 동일한 값 → 통과
+│   └── test_deadline_disabled_bypasses_check  # DEADLINE_ENABLED=false 시 Fast-Fail 건너뜀
 
 tests/unit/services/test_http_client_deadline.py
-├── test_deadline_header_propagation  # 헤더 자동 주입 확인
-├── test_timeout_adjustment           # deadline < default_timeout 시 조정
+├── TestHttpClientDeadlinePropagationBehavior
+│   ├── test_deadline_header_propagation    # 헤더 자동 주입 확인
+│   ├── test_no_deadline_no_header          # 미설정 시 헤더 미포함
+│   └── test_expired_deadline_no_header     # 만료 시 헤더 미포함
+├── TestHttpClientTimeoutAdjustmentBehavior
+│   ├── test_timeout_adjusted_to_deadline   # deadline < default_timeout 시 조정
+│   ├── test_timeout_not_adjusted_when_no_deadline  # 미설정 시 기본 timeout 유지
+│   └── test_explicit_shorter_timeout_preserved  # 명시적 timeout < deadline 시 유지
+
+tests/unit/scaling/test_traffic_gate_deadline.py
+├── TestTrafficGateDeadlineBehavior
+│   ├── test_expired_deadline_rejected      # deadline 만료 시 거부
+│   ├── test_no_deadline_allows_through     # 미설정 시 기존 파이프라인 동작
+│   └── test_plenty_deadline_allows_through # deadline 넓넕 시 허용
 ```
 
 ---

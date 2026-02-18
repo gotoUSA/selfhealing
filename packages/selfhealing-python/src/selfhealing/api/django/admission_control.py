@@ -125,26 +125,34 @@ class AdmissionControlMiddleware:
         # 0단계: Deadline Context 설정 및 Fast-Fail 체크
         try:
             from selfhealing.scaling.deadline_context import (
+                DEADLINE_ENABLED,
                 DEADLINE_META_KEY,
                 DEFAULT_MINIMUM_USEFUL_TIME_MS,
                 parse_deadline_header,
+                record_fast_fail,
+                record_remaining_ms,
                 set_deadline,
             )
 
-            deadline_header = request.META.get(DEADLINE_META_KEY)
-            if deadline_header:
-                remaining_ms = parse_deadline_header(deadline_header)
-                if remaining_ms is not None:
-                    set_deadline(remaining_ms)
-                    # 최소 유효 시간 미만이면 즉시 거절
-                    if remaining_ms < DEFAULT_MINIMUM_USEFUL_TIME_MS:
-                        logger.info(
-                            "[AdmissionControlMiddleware] Deadline Fast-Fail: " "remaining=%.0fms < minimum=%.0fms, path=%s",
-                            remaining_ms,
-                            DEFAULT_MINIMUM_USEFUL_TIME_MS,
-                            request.path,
-                        )
-                        return self._create_deadline_rejection_response(request, remaining_ms)
+            if DEADLINE_ENABLED:
+                deadline_header = request.META.get(DEADLINE_META_KEY)
+                if deadline_header:
+                    remaining_ms = parse_deadline_header(deadline_header)
+                    if remaining_ms is not None:
+                        set_deadline(remaining_ms)
+                        record_remaining_ms(remaining_ms)
+                        # 최소 유효 시간 미만이면 즉시 거절
+                        if remaining_ms < DEFAULT_MINIMUM_USEFUL_TIME_MS:
+                            path_prefix = request.path.split("/")[1] if "/" in request.path else request.path
+                            record_fast_fail(path_prefix=path_prefix)
+                            logger.info(
+                                "[AdmissionControlMiddleware] Deadline Fast-Fail: "
+                                "remaining=%.0fms < minimum=%.0fms, path=%s",
+                                remaining_ms,
+                                DEFAULT_MINIMUM_USEFUL_TIME_MS,
+                                request.path,
+                            )
+                            return self._create_deadline_rejection_response(request, remaining_ms)
         except ImportError:
             pass
 

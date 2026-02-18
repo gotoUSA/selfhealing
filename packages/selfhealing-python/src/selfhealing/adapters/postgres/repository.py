@@ -118,9 +118,7 @@ class PostgresRepository:
             int: 활성 연결 수
         """
         with self._get_connection().cursor() as cursor:
-            cursor.execute(
-                "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
-            )
+            cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
             result = cursor.fetchone()
         return result[0] if result else 0
 
@@ -291,9 +289,7 @@ class PostgresRepository:
     # Stress Test용 특수 쿼리
     # =========================================================================
 
-    def execute_aggregate_query(
-        self, table_name: str
-    ) -> tuple[int, float, float, float]:
+    def execute_aggregate_query(self, table_name: str) -> tuple[int, float, float, float]:
         """
         테이블에 대한 집계 쿼리 실행.
 
@@ -331,9 +327,7 @@ class PostgresRepository:
         with connection.cursor() as cursor:
             cursor.execute("SELECT * FROM __nonexistent_table_for_cb_test__")
 
-    def execute_timeout_query(
-        self, timeout_ms: int = 1, sleep_seconds: int = 1
-    ) -> None:
+    def execute_timeout_query(self, timeout_ms: int = 1, sleep_seconds: int = 1) -> None:
         """
         타임아웃 에러를 발생시키는 쿼리 (CB 테스트용).
 
@@ -350,9 +344,7 @@ class PostgresRepository:
     # =========================================================================
 
     @contextmanager
-    def advisory_lock_context(
-        self, lock_id: int, exclusive: bool = True, wait: bool = True
-    ) -> Generator[bool, None, None]:
+    def advisory_lock_context(self, lock_id: int, exclusive: bool = True, wait: bool = True) -> Generator[bool, None, None]:
         """
         Advisory Lock을 컨텍스트 매니저로 관리.
 
@@ -399,13 +391,9 @@ class PostgresRepository:
                     if exclusive:
                         cursor.execute("SELECT pg_advisory_unlock(%s)", [lock_id])
                     else:
-                        cursor.execute(
-                            "SELECT pg_advisory_unlock_shared(%s)", [lock_id]
-                        )
+                        cursor.execute("SELECT pg_advisory_unlock_shared(%s)", [lock_id])
                 except Exception as e:
-                    logger.warning(
-                        f"[PostgresRepository] Failed to release lock {lock_id}: {e}"
-                    )
+                    logger.warning(f"[PostgresRepository] Failed to release lock {lock_id}: {e}")
             if cursor:
                 try:
                     cursor.close()
@@ -413,11 +401,12 @@ class PostgresRepository:
                     pass
 
     @contextmanager
-    def timeout_context(
-        self, lock_timeout_ms: int = 0, statement_timeout_ms: int = 0
-    ) -> Generator[None, None, None]:
+    def timeout_context(self, lock_timeout_ms: int = 0, statement_timeout_ms: int = 0) -> Generator[None, None, None]:
         """
         타임아웃 설정을 컨텍스트 매니저로 관리.
+
+        DeadlineContext가 활성화된 경우, 남은 시간이 statement_timeout_ms보다
+        짧으면 자동으로 축소하여 deadline 초과를 방지한다.
 
         사용 예:
             with repo.timeout_context(lock_timeout_ms=100, statement_timeout_ms=1000):
@@ -429,6 +418,18 @@ class PostgresRepository:
             lock_timeout_ms: lock_timeout (밀리초)
             statement_timeout_ms: statement_timeout (밀리초)
         """
+        # DeadlineContext 남은 시간이 statement_timeout보다 짧으면 자동 축소
+        try:
+            from selfhealing.scaling.deadline_context import get_deadline_aware_statement_timeout
+
+            deadline_timeout = get_deadline_aware_statement_timeout(
+                default_db_timeout_ms=statement_timeout_ms if statement_timeout_ms > 0 else 30_000,
+            )
+            if deadline_timeout is not None:
+                statement_timeout_ms = deadline_timeout
+        except ImportError:
+            pass
+
         try:
             if lock_timeout_ms > 0:
                 self.set_lock_timeout(lock_timeout_ms)

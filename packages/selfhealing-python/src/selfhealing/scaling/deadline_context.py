@@ -32,6 +32,13 @@ from typing import Generator
 
 logger = logging.getLogger(__name__)
 
+# Deadline 기능 활성화 여부 (환경변수: SELFHEALING_DEADLINE_ENABLED)
+DEADLINE_ENABLED: bool = os.environ.get("SELFHEALING_DEADLINE_ENABLED", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 # HTTP 헤더 이름
 DEADLINE_HEADER = "X-Deadline-Remaining"
 
@@ -50,6 +57,56 @@ DEFAULT_NETWORK_LATENCY_BUFFER_MS: float = float(os.environ.get("SELFHEALING_DEA
 
 # 헤더 파싱용 정규식: "2500ms", "2500", "1500.5ms" 등
 _DEADLINE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:ms)?\s*$", re.IGNORECASE)
+
+# ---------------------------------------------------------------------------
+# Prometheus 메트릭
+# ---------------------------------------------------------------------------
+try:
+    from prometheus_client import Counter, Histogram
+
+    _HAS_PROMETHEUS = True
+except ImportError:
+    _HAS_PROMETHEUS = False
+
+if _HAS_PROMETHEUS:
+    _fast_fail_counter = Counter(
+        "selfhealing_deadline_fast_fail_total",
+        "Fast-Fail 거절 횟수",
+        ["tier", "path_prefix"],
+    )
+    _remaining_histogram = Histogram(
+        "selfhealing_deadline_remaining_ms",
+        "수신 시점의 남은 시간 분포 (ms)",
+        ["tier"],
+        buckets=[10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+    )
+    _exhausted_on_arrival_counter = Counter(
+        "selfhealing_deadline_exhausted_on_arrival_total",
+        "도착 시점에 이미 만료된 요청 수",
+        ["path_prefix"],
+    )
+else:
+    _fast_fail_counter = None  # type: ignore[assignment]
+    _remaining_histogram = None  # type: ignore[assignment]
+    _exhausted_on_arrival_counter = None  # type: ignore[assignment]
+
+
+def record_fast_fail(tier: str = "unknown", path_prefix: str = "unknown") -> None:
+    """Fast-Fail 거절 메트릭 기록."""
+    if _HAS_PROMETHEUS and _fast_fail_counter is not None:
+        _fast_fail_counter.labels(tier=tier, path_prefix=path_prefix).inc()
+
+
+def record_remaining_ms(remaining: float, tier: str = "unknown") -> None:
+    """수신 시점의 남은 시간 히스토그램 기록."""
+    if _HAS_PROMETHEUS and _remaining_histogram is not None:
+        _remaining_histogram.labels(tier=tier).observe(remaining)
+
+
+def record_exhausted_on_arrival(path_prefix: str = "unknown") -> None:
+    """도착 시점에 이미 만료된 요청 카운터 기록."""
+    if _HAS_PROMETHEUS and _exhausted_on_arrival_counter is not None:
+        _exhausted_on_arrival_counter.labels(path_prefix=path_prefix).inc()
 
 
 def parse_deadline_header(header_value: str) -> float | None:
@@ -90,6 +147,7 @@ def set_deadline(remaining_ms: float) -> None:
             remaining_ms,
             DEFAULT_NETWORK_LATENCY_BUFFER_MS,
         )
+        record_exhausted_on_arrival()
         adjusted = 0
 
     deadline = time.monotonic() + (adjusted / 1000.0)

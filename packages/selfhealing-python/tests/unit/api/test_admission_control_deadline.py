@@ -189,3 +189,20 @@ class TestAdmissionControlDeadlineBehavior:
 
         # 50ms == 50ms 이므로 미만이 아님 → 통과
         get_response.assert_called_once_with(request)
+
+    def test_deadline_disabled_bypasses_check(self, mock_settings, mock_registry, mock_traffic_gate):
+        """DEADLINE_ENABLED=false 시 deadline 헤더가 있어도 Fast-Fail 하지 않는다."""
+        middleware, get_response, mock_response = self._create_middleware(mock_settings, mock_registry, mock_traffic_gate)
+        request = self._create_request("10ms")  # 정상이면 Fast-Fail 대상
+
+        import selfhealing.scaling.deadline_context as dc_mod
+
+        original = dc_mod.DEADLINE_ENABLED
+        dc_mod.DEADLINE_ENABLED = False
+        try:
+            response = middleware(request)
+        finally:
+            dc_mod.DEADLINE_ENABLED = original
+
+        # Fast-Fail 없이 정상 통과
+        get_response.assert_called_once_with(request)
