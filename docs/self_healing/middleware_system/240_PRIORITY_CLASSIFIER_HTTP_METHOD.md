@@ -401,22 +401,72 @@ def from_dict(cls, data: dict[str, Any]) -> TierMapping:
 ### 5.1 단위 테스트
 
 ```
-tests/unit/api/tiering/test_tier_mapping_method.py
-├── TestTierMappingMethods
+tests/unit/api/test_tier_mapping_http_method.py
+├── TestTierMappingMethodsContract               # TierMapping.methods 필드 및 __post_init__ 정규화
+│   ├── test_methods_default_is_none             # methods 기본값 None
+│   ├── test_post_init_normalizes_list_to_frozenset # list → frozenset
+│   ├── test_post_init_normalizes_tuple_to_frozenset # tuple → frozenset
+│   ├── test_post_init_normalizes_lowercase_to_upper # 소문자 → 대문자
+│   ├── test_post_init_normalizes_mixed_case_list # 혼합 대소문자 list → UPPER frozenset
+│   ├── test_post_init_none_methods_unchanged    # methods=None 변경 없음
+│   └── test_post_init_already_uppercase_frozenset_unchanged # 이미 대문자면 유지
+├── TestTierMappingMatchesBehavior               # matches() method 필터 동작
 │   ├── test_matches_method_specific_hit         # POST + path 일치 → True
 │   ├── test_matches_method_specific_miss        # GET + POST-only 매핑 → False
-│   ├── test_matches_method_none_accepts_all     # methods=None → 모든 method 통과
+│   ├── test_matches_methods_none_accepts_all    # methods=None → 모든 method 통과
 │   ├── test_matches_method_arg_none_skips_filter # method 미전달 → method 필터 스킵
-│   └── test_to_from_dict_with_methods           # 직렬화/역직렬화 왕복
-├── TestTierRegistryMethodResolution
-│   ├── test_method_specific_higher_priority     # POST /config → critical
-│   ├── test_method_fallback_to_path_only        # DELETE /status (매핑 없음) → path-only 매핑
-│   ├── test_cache_key_includes_method           # GET과 POST 다른 결과 캐시
-│   └── test_legacy_get_tier_for_path            # 기존 API 호환성
-├── TestAdmissionControlWithMethod
-│   ├── test_post_config_critical_tier           # POST /config → critical tier
-│   ├── test_get_config_non_essential_tier       # GET /config → non_essential tier
-│   └── test_method_propagation                  # request.method가 resolve 체인에 전달
+│   ├── test_matches_method_case_insensitive     # method 대소문자 무시
+│   ├── test_matches_path_mismatch_with_method_match # path 불일치 시 False
+│   ├── test_matches_backward_compatible_no_method_arg # method 인자 없이 호출 호환
+│   └── test_matches_regex_with_method           # regex 패턴 + method 필터
+├── TestTierMappingSerializationBehavior         # to_dict()/from_dict() 직렬화
+│   ├── test_to_dict_with_methods                # methods 포함 시 sorted list
+│   ├── test_to_dict_without_methods             # methods=None → 키 없음
+│   ├── test_from_dict_with_methods              # methods 복원
+│   ├── test_from_dict_without_methods_key       # 키 부재 → None
+│   ├── test_from_dict_with_methods_null         # null → None
+│   ├── test_roundtrip_with_methods              # 직렬화 왕복 (methods 있음)
+│   └── test_roundtrip_without_methods           # 직렬화 왕복 (methods 없음)
+├── TestTierRegistryMethodResolutionBehavior     # method 기반 tier 분류
+│   ├── test_post_config_resolves_to_critical    # POST /config → critical
+│   ├── test_get_config_resolves_to_non_essential # GET /config → non_essential
+│   ├── test_delete_config_resolves_to_critical  # DELETE /config → critical
+│   ├── test_post_dlq_resolves_to_critical       # POST /dlq → critical
+│   ├── test_get_dlq_resolves_to_standard        # GET /dlq → standard (path-only fallback)
+│   ├── test_method_none_falls_back_to_path_only # method=None → path-only fallback
+│   ├── test_method_specific_higher_priority_than_path_only # method-specific 우선
+│   ├── test_legacy_get_tier_for_path_still_works # 기존 API 호환성
+│   └── test_control_path_unaffected_by_method   # /control/ → method 무관 critical
+├── TestTierRegistryCacheLRUBehavior             # LRU 캐시 동작
+│   ├── test_cache_key_includes_method           # GET과 POST 독립 캐시
+│   ├── test_cache_is_ordered_dict               # OrderedDict 타입 확인
+│   ├── test_lru_eviction_on_cache_full          # 캐시 초과 시 LRU eviction
+│   ├── test_lru_move_to_end_on_hit              # 캐시 히트 시 LRU 갱신
+│   └── test_cache_invalidation_clears_ordered_dict # 캐시 무효화
+├── TestResolveChainMethodBehavior               # resolve 체인 method 전달
+│   ├── test_resolve_tier_with_method            # resolve_tier() method 전달
+│   ├── test_resolve_tier_without_method         # resolve_tier() method 없이 호출
+│   ├── test_resolve_tier_with_fallback_method_propagation # fallback에 method 전파
+│   └── test_resolve_tier_with_fallback_get_config # GET /config → non_essential
+├── TestMappingSortOrderBehavior                 # set_mappings() 정렬 규칙
+│   ├── test_method_specific_before_path_only_at_same_priority # 동일 priority 시 method-specific 우선
+│   └── test_higher_priority_still_wins_over_method_specific # priority > method 구체성
+├── TestDefaultTierMappingsMethodContract        # DEFAULT_TIER_MAPPINGS 계약값
+│   ├── test_config_write_mapping_exists         # config 쓰기 매핑 존재
+│   ├── test_dlq_write_mapping_exists            # dlq 쓰기 매핑 존재
+│   ├── test_config_read_mapping_exists          # config 읽기 매핑 존재
+│   ├── test_path_only_config_mapping_still_exists # config path-only 유지
+│   ├── test_path_only_dlq_mapping_still_exists  # dlq path-only 유지
+│   └── test_method_specific_mappings_count      # method-specific 매핑 3개
+├── TestAdmissionControlOptionsBypassBehavior    # AdmissionControl OPTIONS bypass
+│   ├── test_options_request_bypasses_tier_classification # OPTIONS → bypass
+│   ├── test_post_request_passes_method_to_registry # POST → method 전달
+│   └── test_get_request_passes_method_to_registry # GET → method 전달
+├── TestTieringMiddlewareOptionsBypassBehavior   # TieringMiddleware OPTIONS bypass
+│   └── test_options_request_bypasses_load_shedding # OPTIONS → Load Shedding 스킵
+└── TestTieringMiddlewareMethodPropagationBehavior # TieringMiddleware method 전파
+    ├── test_method_passed_to_resolve_tier_with_fallback # 정상 모드 method 전달
+    └── test_method_propagation_during_emergency  # 비상 모드 method 전달
 ```
 
 ### 5.2 회귀 테스트
@@ -851,23 +901,20 @@ key=lambda m: (m.priority, 1 if m.methods is not None else 0)
 
 ### 15.1 추가 테스트 케이스
 
-5.1절의 테스트에 다음 케이스를 추가합니다:
+5.1절의 테스트 트리에 이미 §9~§11 리뷰 반영 케이스를 포함하여 정리하였습니다.
 
-```
-tests/unit/api/tiering/test_tier_mapping_method.py
-├── TestTierMappingMethods
-│   ├── ... (기존 5개)
-│   └── test_post_init_normalizes_methods_case    # methods=["post"] → frozenset({"POST"})
-│   └── test_post_init_normalizes_list_to_frozenset # methods=["GET"] → frozenset({"GET"})
-├── TestTierRegistryMethodResolution
-│   ├── ... (기존 4개)
-│   └── test_lru_eviction_on_cache_full           # 캐시 초과 시 LRU eviction 동작
-│   └── test_lru_move_to_end_on_hit               # 캐시 히트 시 LRU 갱신
-├── TestOptionsPreflightBypass
-│   ├── test_admission_control_options_bypass      # OPTIONS → bypass (tier 분류 스킵)
-│   ├── test_tiering_middleware_options_bypass      # OPTIONS → bypass (load shedding 스킵)
-│   └── test_options_not_cached                    # OPTIONS bypass 시 캐시 미사용
-```
+리뷰 반영으로 추가된 주요 케이스:
+
+| 클래스 | 메서드 | 검증 대상 |
+|--------|--------|-----------|
+| `TestTierMappingMethodsContract` | `test_post_init_normalizes_lowercase_to_upper` | §11 `__post_init__` 소문자 → UPPER 정규화 |
+| `TestTierMappingMethodsContract` | `test_post_init_normalizes_list_to_frozenset` | §11 list → frozenset 정규화 |
+| `TestTierRegistryCacheLRUBehavior` | `test_lru_eviction_on_cache_full` | §10 LRU eviction 동작 |
+| `TestTierRegistryCacheLRUBehavior` | `test_lru_move_to_end_on_hit` | §10 캐시 히트 시 LRU 갱신 |
+| `TestAdmissionControlOptionsBypassBehavior` | `test_options_request_bypasses_tier_classification` | §9 OPTIONS bypass (tier 분류 스킵) |
+| `TestTieringMiddlewareOptionsBypassBehavior` | `test_options_request_bypasses_load_shedding` | §9 OPTIONS bypass (Load Shedding 스킵) |
+
+**`test_options_not_cached` 미구현 사유**: OPTIONS bypass는 `resolve_tier_with_fallback()` 호출 **이전에** 조기 반환하므로 캐시(`get_tier_for_request()`)에 도달할 수 없습니다. `test_options_request_bypasses_tier_classification`에서 `mock_registry.resolve_tier_with_fallback.assert_not_called()`로 이미 검증되어 별도 테스트 불필요.
 
 ### 15.2 기존 테스트 회귀 수정
 
