@@ -57,15 +57,19 @@ PRIORITY_WATERMARKS: dict[str, float] = {
 }
 ```
 
-**동작** (`rate_controller.py` L228-247):
+**동작** (`rate_controller.py` L227-270):
 ```python
 def should_process(self, priority: str = "standard") -> bool:
-    watermark = PRIORITY_WATERMARKS.get(priority, 0.3)
+    # Watermark 확인: settings에서 동적으로 읽어 런타임 변경 반영
+    watermarks = self._settings.get_priority_watermarks()
+    watermark = watermarks.get(priority, 0.3)
     token_ratio = self._token_bucket.get_token_ratio()
 
     if token_ratio < watermark:
         with self._lock:
             self._dropped_count += 1
+            if priority in self._dropped_by_tier:
+                self._dropped_by_tier[priority] += 1
         return False
 
     if self._token_bucket.consume():
@@ -100,7 +104,7 @@ def get_tier_max_concurrent(self, tier_id: str) -> int:
 **파일**: `scaling/traffic_gate.py` L195-248
 
 ```python
-def should_allow(self, priority=0, bulkhead_name=None, metadata=None):
+def should_allow(self, priority=0, bulkhead_name=None, metadata=None, bulkhead_timeout=None):
     # 0단계: Bulkhead (도메인별 격리)
     if bulkhead_name is not None:
         acquired, decision = self._check_bulkhead(...)
@@ -226,17 +230,18 @@ def __init__(
 
 ### 5.2 Watermark 동적 조정
 
-현재 Watermark는 하드코딩 (`rate_controller.py` L34-39)입니다. 환경변수 또는 BackpressureSettings에 통합하면 운영 중 튜닝이 가능합니다.
+~~현재 Watermark는 하드코딩 (`rate_controller.py` L34-39)입니다.~~ → **✅ 8.5절에서 구현 완료.** `BackpressureSettings`에 `watermark_critical`, `watermark_standard`, `watermark_non_essential` 필드가 추가되어 환경변수/RuntimeConfigManager로 운영 중 튜닝이 가능합니다. `should_process()` 내부에서 `self._settings.get_priority_watermarks()`로 매번 동적 읽기합니다. 모듈 레벨 `PRIORITY_WATERMARKS` 상수는 하위 호환용으로 유지됩니다.
 
 ### 5.3 통합 메트릭 (242번 문서 선행 필수)
 
-tier별 허용/거부 비율을 Prometheus 메트릭으로 노출하면 Watermark 임계치 튜닝의 근거 데이터를 확보할 수 있습니다. **Priority Queue 부재로 인해 거부가 즉시 발생하므로, tier별 Starvation 감지를 위한 Per-Tier Dropped Counter 구현이 선행되어야 합니다.** 이는 242번 문서(Starvation Guard)에서 설계가 완료되어 있으며, `_dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 추가로 구현됩니다.
+tier별 허용/거부 비율을 Prometheus 메트릭으로 노출하면 Watermark 임계치 튜닝의 근거 데이터를 확보할 수 있습니다. **Priority Queue 부재로 인해 거부가 즉시 발생하므로, tier별 Starvation 감지를 위한 Per-Tier Dropped Counter 구현이 선행되어야 합니다.** **✅ `_dropped_by_tier: dict[str, int]` 카운터는 8.4절에서 구현 완료.** Prometheus `tier` 레이블 추가는 242번 문서에서 설계가 완료되어 있으며, 별도 구현이 필요합니다.
 
 ---
 
 ## 6. Q&A — 코드 근거 기반 답변
 
 > 아래 답변은 모두 코드베이스의 실제 구현을 근거로 작성되었습니다.
+> **⚠️ 아래 Q2\~Q6는 섹션 8 구현 전 상태를 기술합니다. 구현 후 코드는 섹션 8를 참조하십시오.**
 
 ---
 
@@ -324,7 +329,9 @@ self._tokens = min(
 | 1000+ | HIGH | 0.8 |
 | 5000+ | CRITICAL | 0.5 |
 
-**시스템 메트릭(CPU/Memory)과의 연동: 없음**
+**시스템 메트릭(CPU/Memory)과의 연동: ~~없음~~ → ✅ 8.2절에서 구현 완료**
+
+`_get_resource_pressure_multiplier()`가 `_adjust_rate()` 내부에서 CPU 사용률 기반 Rate 감쇠를 적용합니다 (CPU ≥ 80% → 0.5배, CPU ≥ 90% → 0.1배). 아래는 구현 전 분석입니다:
 
 - `BackpressureSettings`에 CPU/Memory/Latency 관련 필드 없음
 - `BackpressureMetrics` (`scaling/metrics.py`)도 큐 깊이, 처리율, 레벨만 추적
@@ -363,7 +370,9 @@ else:
 | `acquire()` / `acquire(timeout=None)` | `blocking=False` → **즉시 성공/실패** |
 | `acquire(timeout=1.0)` | `blocking=True, timeout=1.0` → **최대 1초 대기 후 실패** |
 
-**AdmissionControlMiddleware는 timeout을 전달하지 않습니다.**
+**~~AdmissionControlMiddleware는 timeout을 전달하지 않습니다.~~ → ✅ 8.3절에서 구현 완료**
+
+Tier별 차등 timeout이 적용되었습니다 (`critical=0.05초`, `standard=0.03초`, `non_essential=0초`). 아래는 구현 전 분석입니다:
 
 `api/django/admission_control.py`에서 TrafficGate → Bulkhead 호출 시 `timeout` 파라미터를 지정하지 않으므로, 기본값 `None` → Zero-Wait으로 동작합니다. 즉, 슬롯이 꽉 차면 **즉시 `BulkheadFullError` → 503 반환**합니다.
 
@@ -387,7 +396,7 @@ Zero-Wait + 고정 슬롯(critical=100, standard=50, non_essential=20)이므로,
 
 1. **Tier Bulkhead 슬롯 수**: `critical=100`으로 가장 넓은 대역폭 확보
 2. **AIMD**: 과부하 시 rate를 자동 감소 → 유입 자체를 줄임
-3. **503 + Retry-After: 30**: 클라이언트에 재시도 간격 힌트 제공
+3. **503 + Retry-After: 동적** (✅ 8.6절에서 BackpressureLevel별 동적 값으로 개선 완료): 클라이언트에 재시도 간격 힌트 제공
 
 추가 고려 사항: Short-Wait(`timeout=0.05` 등 50ms) 옵션을 AdmissionControlMiddleware에 도입하면 micro-burst 흡수력을 높일 수 있습니다. 그러나 tail latency 증가와 트레이드오프가 있습니다.
 
@@ -408,9 +417,11 @@ Zero-Wait + 고정 슬롯(critical=100, standard=50, non_essential=20)이므로,
 | `selfhealing_processed_total` | `component, status` | **tier 없음** |
 | `selfhealing_dropped_total` | `component, reason` | **tier 없음** |
 
-`rate_controller.py`에도 단일 카운터만 존재:
+~~`rate_controller.py`에도 단일 카운터만 존재:~~
 - `self._dropped_count = 0` (모든 tier 합산)
 - `self._processed_count = 0` (모든 tier 합산)
+
+**✅ 8.4절에서 Per-Tier 카운터 구현 완료:** `self._dropped_by_tier: dict[str, int] = {"critical": 0, "standard": 0, "non_essential": 0}` 추가. `should_process()` 거부 시 tier별로 컬운트를 증가시킵니다.
 
 **Starvation Alert: 없음**
 
@@ -435,7 +446,7 @@ HIGH/CRITICAL 레벨에서 `non_essential`은 **0.0 = 완전 차단**입니다. 
 |------|------|------|
 | A. 최소값 보장 | `non_essential: 0.0` → `0.05` / `0.02` | 미구현 |
 | B. `min_traffic_percentage` | `0.0` → `5.0` | 미구현 |
-| C. Per-Tier Dropped Counter | `_dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 | 미구현 |
+| C. Per-Tier Dropped Counter | `_dropped_by_tier: dict[str, int]` + Prometheus `tier` 레이블 | ✅ 카운터 구현 완료 (8.4절). Prometheus 레이블은 242번 문서 |
 | D. Starvation Alert | `selfhealing_rate_controller_dropped_total{tier="non_essential"}` 99% 초과 10분 지속 시 warning | 미구현 |
 | E. 시간 기반 완화 (선택) | 5분 연속 100% 거부 시 watermark 임시 완화 | 미구현 |
 
@@ -455,7 +466,7 @@ HIGH/CRITICAL 레벨에서 `non_essential`은 **0.0 = 완전 차단**입니다. 
 
 ### Q5. Watermark 임계치 동적 변경
 
-**결론: 현재 Watermark는 모듈 레벨 상수로 하드코딩되어 있어 배포 없이 변경 불가합니다. RuntimeConfigManager라는 동적 설정 시스템이 존재하지만, Watermark/BackpressureSettings는 이 시스템에 등록되어 있지 않습니다.**
+**결론: ~~현재 Watermark는 모듈 레벨 상수로 하드코딩되어 있어 배포 없이 변경 불가합니다.~~ → ✅ 8.5절에서 구현 완료. `BackpressureSettings`에 `watermark_*` 필드가 추가되어 환경변수(`SELFHEALING_BACKPRESSURE_WATERMARK_*`)로 변경 가능하며, RuntimeConfigManager에 `backpressure` 키가 등록되었습니다. 아래는 구현 전 분석입니다.**
 
 #### 코드 근거
 
@@ -481,7 +492,7 @@ PRIORITY_WATERMARKS: dict[str, float] = {
 - 3가지 적용 전략: `IMMEDIATE` / `DELAYED` / `GRACEFUL`
 - 서버 재시작 없이 설정 변경 가능
 
-그러나 `services/runtime_config/constants.py`의 `STORAGE_KEYS`와 `CONFIG_CLASSES`에 **`backpressure` 키가 등록되어 있지 않습니다.** BackpressureSettings는 RuntimeConfigManager의 동적 변경 대상이 아닙니다.
+그러나 `services/runtime_config/constants.py`의 `STORAGE_KEYS`와 `CONFIG_CLASSES`에 ~~**`backpressure` 키가 등록되어 있지 않습니다.**~~ → **✅ 8.5절에서 등록 완료** (`"backpressure": "runtime_config:backpressure"` + `"backpressure": BackpressureSettings`). `admission_control` 키도 함께 등록되었습니다.
 
 **LayeredProvider: 존재하나 미활용**
 
@@ -504,31 +515,39 @@ Hard-coded defaults < Static ENV < Dynamic DB/Redis < Request-scoped override
 
 ### Q6. Client Side Retry 정책과의 관계
 
-**결론: 503 응답에 `Retry-After: 30` 헤더가 포함되어 있으나, 값이 부하 상태와 무관하게 고정 30초입니다. 서버 측 Retry Storm 방지 메커니즘(`AdaptiveRetryBudget`)은 존재하지만, 클라이언트 측 Exponential Backoff를 강제하는 메커니즘은 없습니다.**
+**결론: ~~503 응답에 `Retry-After: 30` 헤더가 포함되어 있으나, 값이 부하 상태와 무관하게 고정 30초입니다.~~ → ✅ 8.6절에서 구현 완료. `BackpressureLevel`별 동적 `Retry-After` 값을 반환합니다 (base=5초, NONE=5s, LOW=5s, MEDIUM=10s, HIGH=20s, CRITICAL=40s). 아래는 구현 전 분석입니다.** 서버 측 Retry Storm 방지 메커니즘(`AdaptiveRetryBudget`)은 존재하지만, 클라이언트 측 Exponential Backoff를 강제하는 메커니즘은 없습니다.
 
 #### 코드 근거
 
-**503 응답에 `Retry-After` 헤더 포함**
+**503 응답에 `Retry-After` 헤더 포함 (✅ 현재는 동적 값)**
 
 `api/django/admission_control.py` `_create_rejection_response`:
 ```python
+# 현재 코드 (8.6절 구현 후)
+bp_settings = get_backpressure_settings()
+current_level = self._traffic_gate.get_level() if self._traffic_gate else None
+if current_level is not None:
+    retry_after = bp_settings.get_retry_after_for_level(current_level)
+else:
+    retry_after = bp_settings.reject_retry_after_seconds
+
 response = JsonResponse(
     {
         "error": "Service Temporarily Unavailable",
         "code": "ADMISSION_CONTROL_REJECTED",
-        "retry_after": 30,
+        "retry_after": retry_after,
         ...
     },
     status=503,
 )
-response["Retry-After"] = "30"
+response["Retry-After"] = str(retry_after)
 ```
 
 Deadline 만료 시에는 `Retry-After: 0` (즉시 재시도 가능) 반환.
 
-**`Retry-After` 값이 고정 30초 — 설정값 미사용**
+**~~`Retry-After` 값이 고정 30초 — 설정값 미사용~~ → ✅ 8.6절에서 수정 완료**
 
-`settings/backpressure.py` L178-182:
+`settings/backpressure.py`:
 ```python
 reject_retry_after_seconds: int = Field(
     default=5,
@@ -538,7 +557,7 @@ reject_retry_after_seconds: int = Field(
 )
 ```
 
-이 설정이 존재하지만 **`admission_control.py`에서 참조하지 않고 30을 직접 하드코딩**하고 있습니다. 설정값(`default=5`)과 실제 헤더값(`30`)이 불일치합니다.
+~~이 설정이 존재하지만 **`admission_control.py`에서 참조하지 않고 30을 직접 하드코딩**하고 있습니다. 설정값(`default=5`)과 실제 헤더값(`30`)이 불일치합니다.~~ → ✅ 현재 `admission_control.py`는 `bp_settings.get_retry_after_for_level(current_level)`로 `BackpressureLevel`별 동적 값을 사용합니다.
 
 **서버 측 Retry Storm 방지: AdaptiveRetryBudget 존재**
 
@@ -566,8 +585,8 @@ reject_retry_after_seconds: int = Field(
 
 | 항목 | 현재 | 개선 방향 |
 |------|------|-----------|
-| `Retry-After` 값 | 고정 30초 | `BackpressureLevel`에 비례한 동적 값 (`BackpressureSettings.reject_retry_after_seconds` 활용) |
-| 설정 불일치 | 설정=5초, 실제=30초 | `admission_control.py`에서 설정값 참조 |
+| `Retry-After` 값 | ~~고정 30초~~ ✅ 동적 (BackpressureLevel별) | `BackpressureLevel`에 비례한 동적 값 (`BackpressureSettings.reject_retry_after_seconds` 활용) |
+| 설정 불일치 | ~~설정=5초, 실제=30초~~ ✅ 해결 | `admission_control.py`에서 `get_retry_after_for_level()` 참조 |
 | 클라이언트 강제 | 없음 | 반복 거절 IP/Client에 대한 증가하는 `Retry-After` 또는 429 에스컬레이션 |
 
 ---
@@ -685,26 +704,39 @@ self._tokens = min(
 ```python
 # rate_controller.py — _adjust_rate() 내부
 def _get_resource_pressure_multiplier(self) -> float:
-    """CPU 사용률 기반 Rate 감쇠 배율."""
-    try:
-        from selfhealing.services.system_metrics_cache import get_system_metrics_cache
-        cache = get_system_metrics_cache()
-        if not cache.is_running():
-            return 1.0
-        cpu = cache.get_cpu_percent()
-    except Exception:
-        return 1.0
+    """CPU 사용률 기반 Rate 감쇠 배율.
 
-    if cpu > self._settings.resource_cpu_critical_threshold:   # default 90
-        return 0.1
-    elif cpu > self._settings.resource_cpu_high_threshold:     # default 80
-        return 0.5
+    SystemMetricsCache에서 캐시된 CPU 사용률을 읽어
+    임계치에 따라 Rate 배율을 결정한다.
+    캐시 읽기는 ~0ms (Lock-free, GIL atomic 참조 교체).
+
+    Returns:
+        1.0 (정상), 0.5 (CPU >= high_threshold), 0.1 (CPU >= critical_threshold)
+    """
+    try:
+        from selfhealing.services.system_metrics_cache import (
+            get_cached_cpu_percent,
+        )
+
+        cpu = get_cached_cpu_percent()
+        if cpu >= self._settings.resource_cpu_critical_threshold:
+            return 0.1
+        if cpu >= self._settings.resource_cpu_high_threshold:
+            return 0.5
+    except Exception:
+        pass
     return 1.0
 
 # _adjust_rate() 기존 코드 수정:
 #   new_rate = ... (기존 AIMD 계산)
-#   new_rate *= self._get_resource_pressure_multiplier()  # 추가
+#   resource_multiplier = self._get_resource_pressure_multiplier()
+#   new_rate *= resource_multiplier  # 추가
 ```
+
+> **참고**: 문서 초안에서는 `get_system_metrics_cache().get_cpu_percent()`와 `>` 연산자를 사용했으나,
+> 실제 구현에서는 `get_cached_cpu_percent()` 편의 함수와 `>=` 연산자를 채택했습니다.
+> - `get_cached_cpu_percent()`: 3-call chain(`get_cache → is_running → get_cpu`)을 단일 함수로 단순화
+> - `>=`: 임계치 **도달** 시점에 즉시 반응 (boundary-inclusive, 산업 표준)
 
 ---
 
@@ -851,9 +883,11 @@ def try_acquire(self, timeout: float | None = None) -> bool:
 ```python
 # constants.py — STORAGE_KEYS 추가
 "backpressure": "runtime_config:backpressure",
+"admission_control": "runtime_config:admission_control",   # 추가
 
 # constants.py — CONFIG_CLASSES 추가
 "backpressure": BackpressureSettings,
+"admission_control": AdmissionControlSettings,              # 추가
 ```
 
 `get_backpressure_settings()`의 `@lru_cache(maxsize=1)`는 유지하되, `RuntimeConfigManager`의 변경 콜백에서 `reset_backpressure_settings()`를 호출하여 캐시를 무효화합니다. 이 패턴은 기존 `reset_backpressure_settings()` 함수(`settings/backpressure.py` L228-230)가 이미 존재하므로 재활용 가능합니다.
@@ -872,30 +906,26 @@ def try_acquire(self, timeout: float | None = None) -> bool:
 마이그레이션 방안:
 
 ```python
-# rate_controller.py — 하위 호환 래퍼
-def _get_priority_watermarks() -> dict[str, float]:
-    """BackpressureSettings에서 Watermark 로드 (하위 호환)."""
-    settings = get_backpressure_settings()
-    return {
-        "critical": settings.watermark_critical,
-        "standard": settings.watermark_standard,
-        "non_essential": settings.watermark_non_essential,
-    }
-
-# 모듈 레벨 상수 (기존 import 호환)
-PRIORITY_WATERMARKS = _get_priority_watermarks()
+# rate_controller.py — 하위 호환 유지
+# 모듈 레벨 상수 (tests에서 import 하는 코드와의 호환을 위해 유지)
+PRIORITY_WATERMARKS: dict[str, float] = {
+    "critical": 0.1,
+    "standard": 0.3,
+    "non_essential": 0.7,
+}
 ```
 
-`should_process()` 내부에서는 매번 settings를 읽도록 변경하여 동적 변경을 반영합니다:
+> **참고**: 문서 초안에서는 `_get_priority_watermarks()` 래퍼 함수로 모듈 레벨 상수를 동적으로 교체하는 방안을 제시했으나,
+> 실제 구현에서는 `PRIORITY_WATERMARKS` 상수를 backward-compat 용도로 유지하고
+> `should_process()` 내부에서 `self._settings.get_priority_watermarks()`를 직접 호출하는 방식을 채택했습니다.
+> 이는 생성자 DI로 주입된 `self._settings`를 재활용하여 전역 함수 호출을 피하고,
+> 테스트에서 mock 주입이 용이한 장점이 있습니다.
+
+`should_process()` 내부에서는 생성자로 주입된 settings 인스턴스를 사용하여 동적 변경을 반영합니다:
 
 ```python
 def should_process(self, priority: str = "standard") -> bool:
-    settings = get_backpressure_settings()
-    watermarks = {
-        "critical": settings.watermark_critical,
-        "standard": settings.watermark_standard,
-        "non_essential": settings.watermark_non_essential,
-    }
+    watermarks = self._settings.get_priority_watermarks()
     watermark = watermarks.get(priority, 0.3)
     # ... 기존 로직
 ```
@@ -904,10 +934,10 @@ def should_process(self, priority: str = "standard") -> bool:
 
 | 파일 | 변경 | 규모 |
 |------|------|------|
-| `settings/backpressure.py` | `watermark_*` 필드 3개 추가 | ~15줄 |
-| `scaling/rate_controller.py` | `PRIORITY_WATERMARKS` 상수 → settings 참조로 변경 | ~10줄 |
-| `services/runtime_config/constants.py` | `backpressure` 키 등록 | 2줄 |
-| 테스트 2개 | `PRIORITY_WATERMARKS` import 유지 (하위 호환 래퍼로 동작) | 0줄 |
+| `settings/backpressure.py` | `watermark_*` 필드 3개 중 `get_priority_watermarks()` 메서드 추가 | ~15줄 |
+| `scaling/rate_controller.py` | `should_process()` 내 `self._settings.get_priority_watermarks()` 참조 | ~5줄 |
+| `services/runtime_config/constants.py` | `backpressure` + `admission_control` 키 등록 | 4줄 |
+| 테스트 2개 | `PRIORITY_WATERMARKS` import 유지 (모듈 레벨 상수 유지로 backward-compat) | 0줄 |
 
 ---
 
@@ -940,17 +970,23 @@ response["Retry-After"] = str(settings.reject_retry_after_seconds)
 ```python
 # settings/backpressure.py — 신규 메서드
 def get_retry_after_for_level(self, level: BackpressureLevel) -> int:
-    """BackpressureLevel별 Retry-After 값 반환."""
+    """부하가 높을수록 클라이언트 재시도 간격을 늘려
+    Retry Storm을 방지한다."""
     base = self.reject_retry_after_seconds
     multiplier = {
         BackpressureLevel.NONE: 1,       # 5초
-        BackpressureLevel.LOW: 2,        # 10초
-        BackpressureLevel.MEDIUM: 4,     # 20초
-        BackpressureLevel.HIGH: 6,       # 30초
-        BackpressureLevel.CRITICAL: 12,  # 60초
+        BackpressureLevel.LOW: 1,        # 5초 (NONE과 동일 — LEVEL_RATE_MULTIPLIERS와 대칭)
+        BackpressureLevel.MEDIUM: 2,     # 10초
+        BackpressureLevel.HIGH: 4,       # 20초
+        BackpressureLevel.CRITICAL: 8,   # 40초
     }
     return base * multiplier.get(level, 1)
 ```
+
+> **참고**: 문서 초안에서는 `{NONE:1, LOW:2, MEDIUM:4, HIGH:6, CRITICAL:12}` 배율을 제시했으나,
+> 실제 구현에서는 `{1, 1, 2, 4, 8}` 배율을 채택했습니다.
+> - `LOW=1`: `LEVEL_RATE_MULTIPLIERS`에서 LOW와 NONE이 동일(1.0)한 패턴과 대칭
+> - `CRITICAL=8`: 최대 40초로 운영 환경에서 더 실용적인 범위
 
 **이 방식을 채택한 이유:**
 
@@ -972,10 +1008,15 @@ def get_retry_after_for_level(self, level: BackpressureLevel) -> int:
 ```python
 # admission_control.py — _create_rejection_response() 수정
 def _create_rejection_response(self, request, tier_id, gate, reason):
-    from selfhealing.scaling.config import get_backpressure_settings
-    settings = get_backpressure_settings()
-    level = self._traffic_gate.get_level()
-    retry_after = settings.get_retry_after_for_level(level)
+    from selfhealing.settings.backpressure import get_backpressure_settings
+    bp_settings = get_backpressure_settings()
+
+    # 현재 BackpressureLevel 조회 → 레벨별 동적 Retry-After
+    current_level = self._traffic_gate.get_level() if self._traffic_gate else None
+    if current_level is not None:
+        retry_after = bp_settings.get_retry_after_for_level(current_level)
+    else:
+        retry_after = bp_settings.reject_retry_after_seconds
 
     response = JsonResponse({
         ...
@@ -984,6 +1025,14 @@ def _create_rejection_response(self, request, tier_id, gate, reason):
     response["Retry-After"] = str(retry_after)
     return response
 ```
+
+> **참고**: 문서 초안에서는 `from selfhealing.scaling.config import ...`와 변수명 `settings`/`level`을 사용했으나,
+> 실제 구현에서는 `from selfhealing.settings.backpressure import ...` 직접 import와
+> `bp_settings`/`current_level` 네이밍을 채택했습니다.
+> - 직접 import: `scaling.config` 중간 레이어 우회 제거
+> - `bp_` 접두어: 해당 메서드 내 다른 settings 객체와 구분
+> - `current_level`: 스냅샷임을 명확히 표현
+> - `if self._traffic_gate else None` 가드: `_traffic_gate`가 초기화 전인 경우 안전 처리
 
 #### 변경 대상
 
