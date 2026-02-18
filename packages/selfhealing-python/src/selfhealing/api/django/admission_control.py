@@ -187,9 +187,14 @@ class AdmissionControlMiddleware:
         traffic_priority = TIER_PRIORITY_MAP.get(tier_id, 50)
         bulkhead_name = f"tier:{tier_id}"
 
+        # Tier별 Bulkhead timeout: critical/standard는 짧은 대기, non_essential은 즉시 실패
+        settings = self._settings
+        bulkhead_timeout = settings.get_tier_bulkhead_timeout(tier_id) if settings else None
+
         decision = self._traffic_gate.should_allow(
             priority=traffic_priority,
             bulkhead_name=bulkhead_name,
+            bulkhead_timeout=bulkhead_timeout,
         )
 
         if not decision.allowed:
@@ -231,8 +236,23 @@ class AdmissionControlMiddleware:
         return None
 
     def _create_rejection_response(self, request, tier_id, gate, reason):
-        """503 Service Unavailable 응답 생성."""
+        """503 Service Unavailable 응답 생성.
+
+        현재 BackpressureLevel에 따라 Retry-After 값을 동적으로 조절한다.
+        부하가 높을수록 재시도 간격을 늘려 Retry Storm을 방지.
+        """
         from django.http import JsonResponse
+
+        from selfhealing.settings.backpressure import get_backpressure_settings
+
+        bp_settings = get_backpressure_settings()
+
+        # 현재 BackpressureLevel 조회 → 레벨별 동적 Retry-After
+        current_level = self._traffic_gate.get_level() if self._traffic_gate else None
+        if current_level is not None:
+            retry_after = bp_settings.get_retry_after_for_level(current_level)
+        else:
+            retry_after = bp_settings.reject_retry_after_seconds
 
         response = JsonResponse(
             {
@@ -241,11 +261,11 @@ class AdmissionControlMiddleware:
                 "message": ("시스템 부하 관리를 위해 요청이 일시적으로 제한되었습니다. " "잠시 후 다시 시도해주세요."),
                 "tier": tier_id,
                 "gate": gate,
-                "retry_after": 30,
+                "retry_after": retry_after,
             },
             status=503,
         )
-        response["Retry-After"] = "30"
+        response["Retry-After"] = str(retry_after)
         return response
 
     def _create_deadline_rejection_response(self, request, remaining_ms):

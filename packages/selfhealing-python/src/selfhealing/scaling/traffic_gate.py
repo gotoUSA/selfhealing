@@ -132,15 +132,23 @@ class TrafficGate:
         bulkhead_name: str,
         current_level: BackpressureLevel,
         metadata: dict[str, Any] | None,
+        timeout: float | None = None,
     ) -> tuple[bool, TrafficDecision | None]:
-        """Bulkhead 확인. 획득 여부와 거부 시 결정을 반환."""
+        """Bulkhead 확인. 획득 여부와 거부 시 결정을 반환.
+
+        Args:
+            bulkhead_name: 격벽 이름
+            current_level: 현재 Backpressure 레벨
+            metadata: 추가 메타데이터
+            timeout: Bulkhead 획득 대기 시간 (초). None이면 즉시 실패.
+        """
         try:
             from selfhealing.resilience.bulkhead import get_bulkhead_registry
 
             registry = get_bulkhead_registry()
             bulkhead = registry.get(bulkhead_name)
 
-            if not bulkhead.try_acquire():
+            if not bulkhead.try_acquire(timeout=timeout):
                 return False, TrafficDecision(
                     allowed=False,
                     reason=f"Bulkhead '{bulkhead_name}' is full",
@@ -188,6 +196,7 @@ class TrafficGate:
         priority: int = 0,
         bulkhead_name: str | None = None,
         metadata: dict[str, Any] | None = None,
+        bulkhead_timeout: float | None = None,
     ) -> TrafficDecision:
         """
         트래픽 허용 여부 결정.
@@ -201,6 +210,7 @@ class TrafficGate:
             priority: 요청 우선순위 (낮을수록 높은 우선순위)
             bulkhead_name: 격벽 이름 (ConnectionType.value 또는 커스텀)
             metadata: 결정에 사용할 추가 메타데이터
+            bulkhead_timeout: Bulkhead 획득 대기 시간 (초). None이면 즉시 실패.
 
         Returns:
             TrafficDecision 결과
@@ -229,7 +239,12 @@ class TrafficGate:
 
         # 1단계: Bulkhead 확인 (도메인별 격리)
         if bulkhead_name is not None:
-            acquired, decision = self._check_bulkhead(bulkhead_name, current_level, metadata)
+            acquired, decision = self._check_bulkhead(
+                bulkhead_name,
+                current_level,
+                metadata,
+                timeout=bulkhead_timeout,
+            )
             if decision is not None:
                 return decision
             bulkhead_acquired = acquired

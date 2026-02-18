@@ -62,6 +62,33 @@ class AdmissionControlSettings(BaseSettings):
         description="non_essential tier 격벽 최대 동시 실행 수",
     )
 
+    # =========================================================================
+    # Tier별 Bulkhead 획득 대기 Timeout (초)
+    # 0이면 즉시 실패 (Zero-Wait). Micro-burst 흡수를 위해
+    # critical/standard에만 짧은 대기를 부여하고,
+    # non_essential은 부하 시 가장 먼저 차단되므로 Zero-Wait 유지.
+    # =========================================================================
+    tier_critical_bulkhead_timeout_seconds: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="critical tier Bulkhead 획득 대기 시간 (초). 0이면 즉시 실패.",
+    )
+
+    tier_standard_bulkhead_timeout_seconds: float = Field(
+        default=0.03,
+        ge=0.0,
+        le=1.0,
+        description="standard tier Bulkhead 획득 대기 시간 (초). 0이면 즉시 실패.",
+    )
+
+    tier_non_essential_bulkhead_timeout_seconds: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="non_essential tier Bulkhead 획득 대기 시간 (초). 기본 Zero-Wait.",
+    )
+
     def get_tier_max_concurrent(self, tier_id: str) -> int:
         """tier_id에 대응하는 Bulkhead 최대 동시 실행 수 반환."""
         tier_map = {
@@ -70,6 +97,16 @@ class AdmissionControlSettings(BaseSettings):
             "non_essential": self.tier_non_essential_max_concurrent,
         }
         return tier_map.get(tier_id, self.tier_standard_max_concurrent)
+
+    def get_tier_bulkhead_timeout(self, tier_id: str) -> float | None:
+        """tier별 Bulkhead 대기 timeout 반환. 0이면 None(즉시 실패)."""
+        tier_map = {
+            "critical": self.tier_critical_bulkhead_timeout_seconds,
+            "standard": self.tier_standard_bulkhead_timeout_seconds,
+            "non_essential": self.tier_non_essential_bulkhead_timeout_seconds,
+        }
+        value = tier_map.get(tier_id, 0.0)
+        return value if value > 0 else None
 
 
 # =============================================================================

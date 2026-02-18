@@ -590,15 +590,15 @@ reject_retry_after_seconds: int = Field(
 
 ### 8.0 구현 우선순위 총괄
 
-| 순위 | 리뷰 # | 항목 | 유형 | 규모 |
-|------|--------|------|------|------|
-| **P0** | #6-A | Retry-After 하드코딩 버그 수정 | 버그 수정 | ~5줄 |
-| **P1** | #4 | Per-Tier Dropped Counter (242번 문서) | 코드 추가 | ~10줄 |
-| **P1** | #2 | RateController CPU 피드백 | 코드 추가 | ~15줄 |
-| **P2** | #3 | Bulkhead Tier별 차등 Timeout | 코드 추가 | ~20줄 |
-| **P2** | #5 | Watermark RuntimeConfigManager 등록 | 리팩토링 | 중간 규모 |
-| **P2** | #6-B | 레벨별 동적 Retry-After | 코드 추가 | ~15줄 |
-| **P3** | #1 | 적용 범위 명시 | 문서 수정 | 1줄 |
+| 순위 | 리뷰 # | 항목 | 유형 | 규모 | 상태 |
+|------|--------|------|------|------|------|
+| **P0** | #6-A | Retry-After 하드코딩 버그 수정 | 버그 수정 | ~5줄 | ✅ 구현 완료 |
+| **P1** | #4 | Per-Tier Dropped Counter (242번 문서) | 코드 추가 | ~10줄 | ✅ 구현 완료 |
+| **P1** | #2 | RateController CPU 피드백 | 코드 추가 | ~15줄 | ✅ 구현 완료 |
+| **P2** | #3 | Bulkhead Tier별 차등 Timeout | 코드 추가 | ~20줄 | ✅ 구현 완료 |
+| **P2** | #5 | Watermark RuntimeConfigManager 등록 | 리팩토링 | 중간 규모 | ✅ 구현 완료 |
+| **P2** | #6-B | 레벨별 동적 Retry-After | 코드 추가 | ~15줄 | ✅ 구현 완료 |
+| **P3** | #1 | 적용 범위 명시 | 문서 수정 | 1줄 | — |
 
 ---
 

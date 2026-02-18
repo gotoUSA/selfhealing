@@ -88,6 +88,13 @@ class BackpressureMetrics:
             ["component", "reason"],
         )
 
+        # Counter: Tier별 거부 항목 (Starvation 감지용)
+        self.dropped_by_tier_total = Counter(
+            f"{self._prefix}rate_controller_dropped_total",
+            "Total dropped items per tier for starvation monitoring",
+            ["tier"],
+        )
+
         # Histogram: 처리 시간
         self.processing_duration = Histogram(
             f"{self._prefix}processing_duration_seconds",
@@ -126,6 +133,11 @@ class BackpressureMetrics:
         """드롭 카운터 증가."""
         if HAS_PROMETHEUS and self._settings.metrics_enabled:
             self.dropped_total.labels(component=component, reason=reason).inc()
+
+    def inc_dropped_by_tier(self, tier: str) -> None:
+        """Tier별 거부 카운터 증가 (Starvation 감지용)."""
+        if HAS_PROMETHEUS and self._settings.metrics_enabled:
+            self.dropped_by_tier_total.labels(tier=tier).inc()
 
     def observe_duration(
         self,

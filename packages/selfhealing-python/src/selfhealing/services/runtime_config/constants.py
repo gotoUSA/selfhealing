@@ -5,10 +5,12 @@ Storage keys and config class mappings for all configuration types.
 """
 
 from selfhealing.settings import (  # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md); Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md); Week 3 MEDIUM Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md); Week 4 LOW Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
+    AdmissionControlSettings,
     AntiFlappingSettings,
     ApiViewSettings,
     AuditIntegritySettings,
     AuditSettings,
+    BackpressureSettings,
     BatchSettings,
     CascadeRetentionSettings,
     CeleryTaskSettings,
@@ -143,6 +145,9 @@ STORAGE_KEYS = {
     "slack_channel": "runtime_config:slack_channel",
     "audit_integrity": "runtime_config:audit_integrity",
     "regional_recovery_policy": "runtime_config:regional_recovery_policy",
+    # Admission Control & Backpressure
+    "backpressure": "runtime_config:backpressure",
+    "admission_control": "runtime_config:admission_control",
 }
 
 # Default config classes
@@ -194,6 +199,9 @@ CONFIG_CLASSES = {
     "slack_channel": SlackChannelConfig,
     "audit_integrity": AuditIntegrityConfig,
     "regional_recovery_policy": RegionalRecoveryPolicyConfig,
+    # Admission Control & Backpressure
+    "backpressure": BackpressureSettings,
+    "admission_control": AdmissionControlSettings,
 }
 
 # Default SLO configuration

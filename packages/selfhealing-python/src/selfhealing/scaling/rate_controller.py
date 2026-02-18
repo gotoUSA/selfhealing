@@ -29,9 +29,8 @@ logger = logging.getLogger(__name__)
 
 # Priority별 토큰 비율 임계치 (Watermark).
 # 현재 토큰 잔량 비율이 이 값 미만이면 해당 priority의 요청을 거부한다.
-# critical: 토큰이 0% 이상이면 허용 (항상 시도 가능)
-# standard: 토큰이 30% 이상일 때만 허용
-# non_essential: 토큰이 60% 이상일 때만 허용
+# 하위 호환: 기존 import 유지. 동적 변경은 BackpressureSettings 필드를 통해 수행.
+# should_process() 내부에서는 settings에서 매번 읽어 동적 변경을 반영한다.
 PRIORITY_WATERMARKS: dict[str, float] = {
     "critical": 0.0,
     "standard": 0.3,
@@ -60,6 +59,9 @@ class RateControllerState:
 
     dropped_count: int
     """버려진 항목 수."""
+
+    dropped_by_tier: dict[str, int] | None = None
+    """Tier별 거부 항목 수 (critical / standard / non_essential)."""
 
 
 class TokenBucket:
@@ -199,6 +201,11 @@ class RateController:
         # 통계
         self._processed_count = 0
         self._dropped_count = 0
+        self._dropped_by_tier: dict[str, int] = {
+            "critical": 0,
+            "standard": 0,
+            "non_essential": 0,
+        }
 
         # 백그라운드 조절 스레드
         self._running = False
@@ -214,6 +221,7 @@ class RateController:
                 queue_size=self._queue_size_provider(),
                 processed_count=self._processed_count,
                 dropped_count=self._dropped_count,
+                dropped_by_tier=dict(self._dropped_by_tier),
             )
 
     def should_process(self, priority: str = "standard") -> bool:
@@ -235,13 +243,16 @@ class RateController:
         if not self._settings.backpressure_enabled:
             return True
 
-        # Watermark 확인: 토큰 잔량 비율이 priority별 임계치 미만이면 거부
-        watermark = PRIORITY_WATERMARKS.get(priority, 0.3)
+        # Watermark 확인: settings에서 동적으로 읽어 런타임 변경 반영
+        watermarks = self._settings.get_priority_watermarks()
+        watermark = watermarks.get(priority, 0.3)
         token_ratio = self._token_bucket.get_token_ratio()
 
         if token_ratio < watermark:
             with self._lock:
                 self._dropped_count += 1
+                if priority in self._dropped_by_tier:
+                    self._dropped_by_tier[priority] += 1
             logger.info(
                 "[RateController] Rejected: priority=%s, " "reason=watermark_exceeded, " "token_ratio=%.2f, watermark=%.2f",
                 priority,
@@ -267,6 +278,8 @@ class RateController:
         if strategy == BackpressureStrategy.REJECT:
             with self._lock:
                 self._dropped_count += 1
+                if priority in self._dropped_by_tier:
+                    self._dropped_by_tier[priority] += 1
             return False
 
         if strategy == BackpressureStrategy.THROTTLE:
@@ -277,6 +290,8 @@ class RateController:
                 return True
             with self._lock:
                 self._dropped_count += 1
+                if priority in self._dropped_by_tier:
+                    self._dropped_by_tier[priority] += 1
             return False
 
         if strategy == BackpressureStrategy.DROP_OLDEST:
@@ -288,6 +303,30 @@ class RateController:
             return True
 
         return True
+
+    def _get_resource_pressure_multiplier(self) -> float:
+        """CPU 사용률 기반 Rate 감쇠 배율.
+
+        SystemMetricsCache에서 캐시된 CPU 사용률을 읽어
+        임계치에 따라 Rate 배율을 결정한다.
+        캐시 읽기는 ~0ms (Lock-free, GIL atomic 참조 교체).
+
+        Returns:
+            1.0 (정상), 0.5 (CPU >= high_threshold), 0.1 (CPU >= critical_threshold)
+        """
+        try:
+            from selfhealing.services.system_metrics_cache import (
+                get_cached_cpu_percent,
+            )
+
+            cpu = get_cached_cpu_percent()
+            if cpu >= self._settings.resource_cpu_critical_threshold:
+                return 0.1
+            if cpu >= self._settings.resource_cpu_high_threshold:
+                return 0.5
+        except Exception:
+            pass
+        return 1.0
 
     def _adjust_rate(self) -> None:
         """
@@ -311,6 +350,10 @@ class RateController:
             # 과부하: 레벨별 차등 감소 (Multiplicative Decrease)
             multiplier = self._settings.get_rate_multiplier(new_level)
             new_rate = self._settings.max_rate_per_second * multiplier
+
+        # CPU 사용률 기반 추가 감쇠 적용
+        resource_multiplier = self._get_resource_pressure_multiplier()
+        new_rate *= resource_multiplier
 
         # 범위 제한
         new_rate = max(

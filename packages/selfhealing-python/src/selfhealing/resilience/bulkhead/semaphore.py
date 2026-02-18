@@ -123,14 +123,20 @@ class SemaphoreBulkhead(Bulkhead):
                 with self._lock:
                     self._active_count -= 1
 
-    def try_acquire(self) -> bool:
+    def try_acquire(self, timeout: float | None = None) -> bool:
         """
-        논블로킹 획득 시도.
+        획득 시도. timeout이 None이면 논블로킹, 지정 시 해당 시간까지 대기.
+
+        Args:
+            timeout: 대기 타임아웃 (초). None이면 즉시 성공/실패.
 
         Returns:
             획득 성공 시 True, 실패 시 False
         """
-        acquired = self._semaphore.acquire(blocking=False)
+        if timeout is None:
+            acquired = self._semaphore.acquire(blocking=False)
+        else:
+            acquired = self._semaphore.acquire(blocking=True, timeout=timeout)
         if acquired:
             with self._lock:
                 self._active_count += 1

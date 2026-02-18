@@ -173,6 +173,20 @@ class BackpressureSettings(BaseSettings):
         description="Graceful Degradation 활성화",
     )
 
+    # CPU 사용률 기반 Rate 감쇠 임계치
+    resource_cpu_high_threshold: float = Field(
+        default=80.0,
+        ge=0.0,
+        le=100.0,
+        description="CPU 사용률이 이 값 이상이면 Rate를 50%로 감쇠",
+    )
+    resource_cpu_critical_threshold: float = Field(
+        default=90.0,
+        ge=0.0,
+        le=100.0,
+        description="CPU 사용률이 이 값 이상이면 Rate를 10%로 감쇠",
+    )
+
     # 503 응답 커스터마이징
     reject_message: str = Field(
         default="Service temporarily unavailable due to high load",
@@ -183,6 +197,30 @@ class BackpressureSettings(BaseSettings):
         ge=1,
         le=60,
         description="Retry-After 헤더 값 (초)",
+    )
+
+    # =========================================================================
+    # Priority Watermark — 토큰 잔량 비율 임계치
+    # 현재 토큰 비율이 이 값 미만이면 해당 tier 요청을 거부한다.
+    # 환경변수 예: SELFHEALING_BACKPRESSURE_WATERMARK_STANDARD=0.4
+    # =========================================================================
+    watermark_critical: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="critical tier Watermark 임계치. 토큰 비율이 이 값 미만이면 거부.",
+    )
+    watermark_standard: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="standard tier Watermark 임계치. 토큰 비율이 이 값 미만이면 거부.",
+    )
+    watermark_non_essential: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="non_essential tier Watermark 임계치. 토큰 비율이 이 값 미만이면 거부.",
     )
 
     def get_level_for_queue_size(self, queue_size: int) -> BackpressureLevel:
@@ -217,6 +255,37 @@ class BackpressureSettings(BaseSettings):
             float: Rate 배율 (0.0 ~ 1.0)
         """
         return LEVEL_RATE_MULTIPLIERS.get(level, 1.0)
+
+    def get_priority_watermarks(self) -> dict[str, float]:
+        """Tier별 Watermark 임계치 딕셔너리 반환."""
+        return {
+            "critical": self.watermark_critical,
+            "standard": self.watermark_standard,
+            "non_essential": self.watermark_non_essential,
+        }
+
+    def get_retry_after_for_level(self, level: BackpressureLevel) -> int:
+        """BackpressureLevel별 Retry-After 값 반환.
+
+        부하가 높을수록 클라이언트 재시도 간격을 늘려
+        Retry Storm을 방지한다.
+        base * 배율로 계산하며 단일 설정 노브로 전체 스케일 조절 가능.
+
+        Args:
+            level: 현재 Backpressure 레벨
+
+        Returns:
+            Retry-After 값 (초)
+        """
+        base = self.reject_retry_after_seconds
+        multiplier = {
+            BackpressureLevel.NONE: 1,
+            BackpressureLevel.LOW: 1,
+            BackpressureLevel.MEDIUM: 2,
+            BackpressureLevel.HIGH: 4,
+            BackpressureLevel.CRITICAL: 8,
+        }
+        return base * multiplier.get(level, 1)
 
 
 @lru_cache(maxsize=1)

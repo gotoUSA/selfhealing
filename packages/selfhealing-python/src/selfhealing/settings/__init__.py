@@ -12,6 +12,11 @@ Replaces:
 - core/safe_defaults.py (SAFE_DEFAULTS, VALIDATION_RULES)
 """
 
+from selfhealing.settings.admission_control import (
+    AdmissionControlSettings,
+    get_admission_control_settings,
+    reset_admission_control_settings,
+)
 from selfhealing.settings.anti_flapping import (
     AntiFlappingSettings,
     get_anti_flapping_settings,
@@ -690,6 +695,10 @@ __all__ = [
     "BackpressureSettings",
     "get_backpressure_settings",
     "reset_backpressure_settings",
+    # Admission Control (HTTP 유입 제어)
+    "AdmissionControlSettings",
+    "get_admission_control_settings",
+    "reset_admission_control_settings",
     # 207 위치통일: Leader Election (coordination/config.py → settings/leader_election.py)
     "LeaderElectionSettings",
     "get_leader_election_settings",

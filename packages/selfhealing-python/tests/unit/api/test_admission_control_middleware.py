@@ -97,6 +97,10 @@ class TestAdmissionControlMiddlewareBehavior:
             "standard": 50,
             "non_essential": 20,
         }.get(tid, 50)
+        settings.get_tier_bulkhead_timeout.side_effect = lambda tid: {
+            "critical": 0.05,
+            "standard": 0.03,
+        }.get(tid)
         return settings
 
     @pytest.fixture
@@ -209,6 +213,7 @@ class TestAdmissionControlMiddlewareBehavior:
         mock_traffic_gate.should_allow.assert_called_once_with(
             priority=expected_priority,
             bulkhead_name="tier:standard",
+            bulkhead_timeout=0.03,
         )
 
     def test_rejected_request_returns_503(
@@ -259,7 +264,7 @@ class TestAdmissionControlMiddlewareBehavior:
 
         response = middleware(mock_request)
 
-        assert response["Retry-After"] == "30"
+        assert response["Retry-After"] == "5"
 
     def test_disabled_middleware_passes_through(
         self,
@@ -379,4 +384,5 @@ class TestAdmissionControlMiddlewareBehavior:
         mock_traffic_gate.should_allow.assert_called_once_with(
             priority=TIER_PRIORITY_MAP["critical"],
             bulkhead_name="tier:critical",
+            bulkhead_timeout=0.05,
         )
