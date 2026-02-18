@@ -170,20 +170,27 @@ def should_process(self, priority: str = "standard") -> bool:
         with self._lock:
             self._dropped_count += 1
             # 신규: tier별 카운팅 (1줄 추가)
-            self._dropped_by_tier[priority] = self._dropped_by_tier.get(priority, 0) + 1
+            if priority in self._dropped_by_tier:
+                self._dropped_by_tier[priority] += 1
         logger.info(...)
         return False
 
     if self._token_bucket.consume():
         with self._lock:
             self._processed_count += 1
+            # 신규: tier별 처리 카운팅
+            if priority in self._processed_by_tier:
+                self._processed_by_tier[priority] += 1
+            # Starvation Relief: 마지막 허용 시각 갱신
+            self._tier_last_allowed[priority] = time.monotonic()
         return True
 
     # 토큰 부족 시 (기존 전략 분기 내)
     # ... 거부 경로에서도 동일하게 tier별 카운팅 추가:
     with self._lock:
         self._dropped_count += 1
-        self._dropped_by_tier[priority] = self._dropped_by_tier.get(priority, 0) + 1
+        if priority in self._dropped_by_tier:
+            self._dropped_by_tier[priority] += 1
 ```
 
 #### 변경 3: RateControllerState에 tier별 카운터 노출
@@ -197,7 +204,8 @@ class RateControllerState:
     queue_size: int
     processed_count: int
     dropped_count: int
-    dropped_by_tier: dict[str, int] = field(default_factory=dict)  # 신규
+    dropped_by_tier: dict[str, int] | None = None   # 신규
+    processed_by_tier: dict[str, int] | None = None  # 신규
 
 def get_state(self) -> RateControllerState:
     with self._lock:
@@ -208,7 +216,8 @@ def get_state(self) -> RateControllerState:
             queue_size=self._queue_size_provider(),
             processed_count=self._processed_count,
             dropped_count=self._dropped_count,
-            dropped_by_tier=dict(self._dropped_by_tier),  # 신규: 복사본 반환
+            dropped_by_tier=dict(self._dropped_by_tier),    # 신규: 복사본 반환
+            processed_by_tier=dict(self._processed_by_tier), # 신규: 복사본 반환
         )
 ```
 
@@ -243,14 +252,17 @@ def get_state(self) -> RateControllerState:
 # 3단계(신규): Degraded tier에 강제 Deadline 주입
 _DEGRADED_TIER_DEADLINE_MS = 1000  # 1초 상한
 
-if tier_id == "non_essential":
-    from selfhealing.scaling.deadline_context import (
-        get_remaining_ms,
-        set_deadline,
-    )
-    # 현재 backpressure 레벨 확인
-    bp_level = self._traffic_gate.get_current_level()
-    if bp_level >= BackpressureLevel.HIGH:
+if tier_id == "non_essential" and self._traffic_gate is not None:
+    try:
+        from selfhealing.scaling.deadline_context import (
+            get_remaining_ms,
+            set_deadline,
+        )
+        from selfhealing.settings.backpressure import BackpressureLevel
+
+        # 현재 backpressure 레벨 확인
+        bp_level = self._traffic_gate.get_level()
+        if bp_level in (BackpressureLevel.HIGH, BackpressureLevel.CRITICAL):
         remaining = get_remaining_ms()
         # 기존 deadline이 없거나, 기존 deadline > 강제 deadline이면 덮어쓰기
         if remaining is None or remaining > _DEGRADED_TIER_DEADLINE_MS:
@@ -260,6 +272,8 @@ if tier_id == "non_essential":
                 "tier=%s, bp_level=%s, deadline_ms=%d",
                 tier_id, bp_level.name, _DEGRADED_TIER_DEADLINE_MS,
             )
+    except ImportError:
+        pass
 ```
 
 #### 전파 경로
@@ -281,7 +295,7 @@ AdmissionControlMiddleware
 |------|----|------|
 | `_DEGRADED_TIER_DEADLINE_MS` | 1000 | 대시보드 API p99 < 500ms, 2× 마진 |
 | `DEFAULT_NETWORK_LATENCY_BUFFER_MS` | 50 | 기존 값 유지 (Cross-AZ 2× 마진) |
-| 적용 조건 | `bp_level >= HIGH` | HIGH 미만은 기존 watermark만으로 충분 |
+| 적용 조건 | `bp_level in (HIGH, CRITICAL)` | HIGH 미만은 기존 watermark만으로 충분 |
 
 ---
 
@@ -292,20 +306,22 @@ AdmissionControlMiddleware
 Per-tier dropped counter를 활용한 메트릭:
 
 ```python
-# scaling/metrics.py에 추가
+# scaling/metrics.py에 추가 (기존 BackpressureMetrics 클래스 내부)
 
-from prometheus_client import Counter
-
-rate_controller_dropped_total = Counter(
-    "selfhealing_rate_controller_dropped_total",
-    "RateController tier별 거부 횟수",
+# Counter: Tier별 거부 항목 (Starvation 감지용)
+self.dropped_by_tier_total = Counter(
+    f"{self._prefix}rate_controller_dropped_total",
+    "Total dropped items per tier for starvation monitoring",
     ["tier"],  # "critical", "standard", "non_essential"
 )
 ```
 
-`should_process()` 거부 시:
+Helper 메서드:
 ```python
-rate_controller_dropped_total.labels(tier=priority).inc()
+def inc_dropped_by_tier(self, tier: str) -> None:
+    """Tier별 거부 카운터 증가 (Starvation 감지용)."""
+    if HAS_PROMETHEUS and self._settings.metrics_enabled:
+        self.dropped_by_tier_total.labels(tier=tier).inc()
 ```
 
 ### 4.2 Per-Tier Processed Counter (신규)
@@ -349,7 +365,9 @@ self._processed_by_tier: dict[str, int] = {
 if self._token_bucket.consume():
     with self._lock:
         self._processed_count += 1
-        self._processed_by_tier[priority] = self._processed_by_tier.get(priority, 0) + 1
+        if priority in self._processed_by_tier:
+            self._processed_by_tier[priority] += 1
+        self._tier_last_allowed[priority] = time.monotonic()
     return True
 ```
 
@@ -448,40 +466,52 @@ RecoveryGateConfig 기본값: `cpu_threshold_percent=80.0`, `error_rate_threshol
 ```python
 # rate_controller.py에 추가 (~20줄)
 
-from selfhealing.services.emergency_mode.recovery_gate import RecoveryGate
+# 모듈 레벨 상수 (public: 테스트에서 import 해서 검증)
+STARVATION_RELIEF_SECONDS = 300.0     # 5분 연속 거부 시 완화
+STARVATION_RELIEF_WATERMARK = 0.3     # 완화 시 watermark (standard와 동일)
 
-# 연속 거부 시간 추적
-_tier_last_allowed: dict[str, float]  # tier → 마지막 허용 시각 (monotonic)
-_STARVATION_RELIEF_SECONDS = 300.0    # 5분 연속 거부 시 완화
-_STARVATION_RELIEF_WATERMARK = 0.3    # 완화 시 watermark (standard와 동일)
-_recovery_gate = RecoveryGate()       # 싱글톤 또는 DI로 주입
+# 인스턴스 변수 (__init__ 내)
+self._tier_last_allowed: dict[str, float] = {
+    "critical": time.monotonic(),
+    "standard": time.monotonic(),
+    "non_essential": time.monotonic(),
+}
 
-def _check_relief_allowed(self) -> bool:
+def _check_starvation_relief_allowed(self) -> bool:
     """Starvation Relief 활성화 전 시스템 안정성 확인.
 
     RecoveryGate와 동일한 기준(CPU < 80%, error_rate < 5%)을 사용하여
     과부하 상태에서 Relief가 트래픽을 증가시키는 것을 방지한다.
     """
-    allowed, reason = self._recovery_gate.check_recovery_allowed()
-    if not allowed:
-        logger.info(
-            "[RateController] Starvation relief blocked: %s", reason
+    try:
+        from selfhealing.services.emergency_mode.recovery_gate import (
+            RecoveryGate,
         )
-    return allowed
+
+        gate = RecoveryGate()
+        allowed, reason = gate.check_recovery_allowed()
+        if not allowed:
+            logger.info(
+                "[RateController] Starvation relief blocked: %s", reason
+            )
+        return allowed
+    except Exception:
+        # RecoveryGate 사용 불가 시 안전하게 Relief 차단
+        return False
 
 def should_process(self, priority: str = "standard") -> bool:
     # ... 기존 watermark 확인 ...
 
     # Starvation Relief: N분간 한 번도 허용 안 되었으면 watermark 임시 완화
     if token_ratio < watermark and priority in self._tier_last_allowed:
-        elapsed = time.time() - self._tier_last_allowed[priority]
-        if elapsed > self._STARVATION_RELIEF_SECONDS:
+        elapsed = time.monotonic() - self._tier_last_allowed[priority]
+        if elapsed > STARVATION_RELIEF_SECONDS:
             # ★ 안전 전제조건: RecoveryGate 통과 시에만 Relief 활성화
-            if not self._check_relief_allowed():
+            if not self._check_starvation_relief_allowed():
                 # 시스템 과부하 → Relief 차단, 기존 watermark 유지
                 return False
 
-            watermark = min(watermark, _STARVATION_RELIEF_WATERMARK)
+            watermark = min(watermark, STARVATION_RELIEF_WATERMARK)
             logger.warning(
                 "[RateController] Starvation relief: tier=%s, "
                 "elapsed=%.0fs, relaxed_watermark=%.2f",
@@ -494,7 +524,7 @@ def should_process(self, priority: str = "standard") -> bool:
 ```
 tier가 5분간 100% 거부됨
     ↓
-_check_relief_allowed() 호출
+_check_starvation_relief_allowed() 호출
     ↓
 RecoveryGate.check_recovery_allowed()
     ├─ CPU > 80% → Relief 차단 (기존 watermark 유지)
@@ -512,31 +542,48 @@ RecoveryGate.check_recovery_allowed()
 
 ```
 tests/unit/scaling/test_starvation_guard.py
-├── TestPerTierDroppedCounter
+├── TestMinTrafficPercentageContract
+│   ├── test_default_value_5_percent         # 기본값 5.0 확인
+│   └── test_explicit_zero_overrides_default # 명시적 0.0이 기본값 덮어쓰기
+├── TestMinTrafficPercentageBehavior
+│   ├── test_evaluate_shedding_minimum_guarantee # traffic_limit=0 + min=5 → ≥5
+│   └── test_critical_services_unaffected    # critical 서비스는 100% 유지
+├── TestPerTierDroppedCounterBehavior
 │   ├── test_dropped_by_tier_increments      # non_essential 거부 시 카운터 증가
 │   ├── test_dropped_by_tier_isolation       # critical 거부 시 non_essential 카운터 불변
 │   ├── test_get_state_includes_tier_counts  # RateControllerState에 포함 확인
 │   └── test_counter_thread_safety           # 멀티스레드 동시 접근
-├── TestBackpressureTierRules
-│   ├── test_high_level_non_essential_minimum # HIGH에서 non_essential ≥ 0.05
-│   ├── test_critical_level_all_tiers        # CRITICAL에서 각 tier 최소값 확인
-│   └── test_none_level_all_allowed          # NONE에서 모든 tier 1.0
-├── TestMinTrafficPercentage
-│   ├── test_default_value_5_percent         # 기본값 5.0 확인
-│   ├── test_evaluate_shedding_minimum       # traffic_limit=0 + min=5 → 5
-│   └── test_critical_services_unaffected    # critical 서비스는 100% 유지
-├── TestDegradedTierDeadline                 # 신규 (리뷰 1)
-│   ├── test_forced_deadline_on_high_level   # HIGH + non_essential → 1000ms deadline
-│   ├── test_no_deadline_below_high          # MEDIUM + non_essential → deadline 미설정
-│   ├── test_existing_shorter_deadline_kept  # 기존 500ms < 1000ms → 기존 유지
-│   └── test_db_statement_timeout_propagated # set_deadline → statement_timeout 자동 전파
-├── TestPerTierProcessedCounter              # 신규 (리뷰 4)
+├── TestPerTierProcessedCounterBehavior
 │   ├── test_processed_by_tier_increments    # 허용 시 tier별 카운터 증가
-│   └── test_processed_by_tier_isolation     # critical 허용 시 non_essential 카운터 불변
-├── TestStarvationReliefSafety               # 신규 (리뷰 5)
+│   ├── test_processed_by_tier_isolation     # critical 허용 시 non_essential 카운터 불변
+│   ├── test_get_state_includes_processed_by_tier # RateControllerState에 포함 확인
+│   └── test_initial_processed_counts_are_zero    # 초기값 0 확인
+├── TestStarvationReliefSafetyBehavior
 │   ├── test_relief_blocked_on_high_cpu      # CPU > 80% → Relief 차단
-│   ├── test_relief_blocked_on_high_error    # error_rate > 5% → Relief 차단
-│   └── test_relief_allowed_on_stable_system # CPU < 80% + error_rate < 5% → Relief 허용
+│   ├── test_relief_blocked_on_high_error_rate # error_rate > 5% → Relief 차단
+│   ├── test_relief_allowed_on_stable_system # CPU < 80% + error_rate < 5% → Relief 허용
+│   ├── test_relief_constants                # 상수 계약값 확인
+│   ├── test_check_starvation_relief_calls_recovery_gate # RecoveryGate 호출 확인
+│   ├── test_check_starvation_relief_returns_false_on_gate_denial # 차단 시 False
+│   └── test_check_starvation_relief_returns_false_on_exception   # 예외 시 False
+└── TestProcessedByTierMetricBehavior
+    ├── test_processed_by_tier_total_metric_exists     # Prometheus Counter 존재
+    ├── test_inc_processed_by_tier_method_exists       # Helper 메서드 존재
+    └── test_inc_processed_by_tier_increments_counter  # 카운터 증가 확인
+
+tests/unit/api/test_tiering_middleware_merge.py
+├── TestBackpressureTierRulesContract
+│   ├── test_high_level_values               # HIGH에서 non_essential=0.05 확인
+│   ├── test_critical_level_values           # CRITICAL에서 non_essential=0.02 확인
+│   └── test_none_level_all_tiers_full       # NONE에서 모든 tier 1.0
+│   (... 기타 기존 테스트)
+
+tests/unit/api/test_degraded_tier_deadline.py
+├── TestDegradedTierDeadlineBehavior
+│   ├── test_forced_deadline_on_high_level   # HIGH + non_essential → 1000ms deadline
+│   ├── test_forced_deadline_on_critical_level # CRITICAL + non_essential → 1000ms deadline
+│   ├── test_no_deadline_below_high          # MEDIUM + non_essential → deadline 미설정
+│   └── test_existing_shorter_deadline_kept  # 기존 500ms < 1000ms → 기존 유지
 ```
 
 ### 6.2 회귀 테스트
