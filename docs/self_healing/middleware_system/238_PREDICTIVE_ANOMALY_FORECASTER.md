@@ -2,8 +2,8 @@
 
 > **문서 번호**: 238
 > **작성일**: 2026-02-18
-> **최종 수정일**: 2026-02-19 (리뷰 반영 v2)
-> **상태**: 설계 확정 (구현 대기)
+> **최종 수정일**: 2026-02-18 (Phase 1 구현 완료 v3)
+> **상태**: Phase 1 구현 완료
 > **관련 문서**: 36_RUNTIME_FEEDBACK_IMPLEMENTATION.md, 38_AUTO_TUNING_API.md, 12_ERROR_BUDGET.md
 
 ---
@@ -14,6 +14,7 @@
 |------|------|----------|
 | v1 | 2026-02-18 | 초안 작성 |
 | v2 | 2026-02-19 | 리뷰 8건 반영: (1) sensitivity_multiplier 주입, (2) Phase 1 기본 예측기 EWMA→HoltLinear 승격, (3) SpikeClassifier/SpikeType 추가, (4) StateBackend 기반 Cold Start 영속성, (5) warmup_samples Cold Start 보호, (6) has_adjustment Self-Fulfilling Prophecy 태깅, (7) LearningService 연동 설계, (8) 설정 인터페이스 확장 |
+| v3 | 2026-02-18 | Phase 1 구현 완료: (1) time_series.py — HoltLinearForecaster/EWMAForecaster/HoltWintersForecaster/ForecastDataPoint + StateBackend 영속성, (2) anomaly_detector.py — ZScoreDetector/IQRDetector, (3) proactive_action.py — SpikeClassifier/SpikeType/ProactiveActionTrigger + LearningService 블랙리스트 연동, (4) service.py — PredictiveForecasterService + LearningService 연동(패턴학습/정확도기록/반복오판블랙리스트), (5) settings/predictive_forecaster.py — 15개 설정 필드 + env_prefix, (6) 통합 테스트 작성 |
 
 ---
 
@@ -1337,21 +1338,21 @@ def _handle_repeated_misprediction(
 4. **기존 인프라 100% 재사용**: 새로운 모델/인터페이스 추가 없이 기존 `PatternType`, `BlacklistReason`, `Suggestion` 등을 그대로 활용
 
 ### Phase 1: 핵심 엔진 (HoltLinear + SpikeClassifier + Z-Score/IQR)
-- [ ] `services/predictive_forecaster/__init__.py`
-- [ ] `services/predictive_forecaster/time_series.py` — HoltLinearForecaster (기본), EWMAForecaster (smoothing 유틸)
-- [ ] `services/predictive_forecaster/time_series.py` — ForecastDataPoint (has_adjustment 태깅)
-- [ ] `services/predictive_forecaster/time_series.py` — save_state() / load_state() (StateBackend 영속성)
-- [ ] `services/predictive_forecaster/anomaly_detector.py` — ZScoreDetector, IQRDetector
-- [ ] `services/predictive_forecaster/proactive_action.py` — ProactiveActionTrigger
-- [ ] `services/predictive_forecaster/proactive_action.py` — SpikeClassifier, SpikeType
-- [ ] `services/predictive_forecaster/service.py` — PredictiveForecasterService
-- [ ] Settings: `settings/predictive_forecaster.py` — Pydantic v2 기반 (sensitivity_multiplier, holt_beta, warmup_samples 포함)
+- [x] `services/predictive_forecaster/__init__.py`
+- [x] `services/predictive_forecaster/time_series.py` — HoltLinearForecaster (기본), EWMAForecaster (smoothing 유틸)
+- [x] `services/predictive_forecaster/time_series.py` — ForecastDataPoint (has_adjustment 태깅)
+- [x] `services/predictive_forecaster/time_series.py` — save_state() / load_state() (StateBackend 영속성)
+- [x] `services/predictive_forecaster/anomaly_detector.py` — ZScoreDetector, IQRDetector
+- [x] `services/predictive_forecaster/proactive_action.py` — ProactiveActionTrigger
+- [x] `services/predictive_forecaster/proactive_action.py` — SpikeClassifier, SpikeType
+- [x] `services/predictive_forecaster/service.py` — PredictiveForecasterService
+- [x] Settings: `settings/predictive_forecaster.py` — Pydantic v2 기반 (sensitivity_multiplier, holt_beta, warmup_samples 포함)
 - [ ] Synthetic Time Series Generator (테스트 데이터 생성기)
 - [ ] 단위 테스트: HoltLinear 트렌드 예측 정확도, warmup_samples 동작 검증
 - [ ] 단위 테스트: SpikeClassifier HEALTHY_SURGE vs ANOMALOUS_SPIKE 분류 정확도
 - [ ] 단위 테스트: StateBackend save/load 왕복 검증
 - [ ] 단위 테스트: has_adjustment 태깅 기록 검증
-- [ ] DRY_RUN 모드 통합 테스트
+- [x] DRY_RUN 모드 통합 테스트
 
 ### Phase 2: 히스토리 크기 확장 + StateBackend 연동
 - [ ] `PoolMonitorSettings.max_history` 기본값 5,000 / 상한 10,000
@@ -1373,7 +1374,7 @@ def _handle_repeated_misprediction(
 - [ ] has_adjustment 가중치 차등 적용 검토 (운영 데이터 기반 결정)
 
 ### Phase 4: Holt-Winters (계절성)
-- [ ] `time_series.py`에 HoltWintersForecaster 추가
+- [x] `time_series.py`에 HoltWintersForecaster 추가
 - [ ] 계절성 자동 감지 (auto-detect season_length)
 - [ ] 프로덕션 메트릭 기반 검증
 
