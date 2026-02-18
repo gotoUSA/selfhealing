@@ -12,6 +12,7 @@ Dynamic Fast-Fail 판정에도 사용할 수 있습니다.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections import deque
@@ -150,10 +151,13 @@ class GradientCalculator:
 _calculators: dict[str, GradientCalculator] = {}
 _calculators_lock = threading.Lock()
 
+# GradientCalculator EMA 가중치 (환경변수로 조정 가능)
+_DEFAULT_SMOOTHING_FACTOR: float = float(os.environ.get("SELFHEALING_DEADLINE_RTT_SMOOTHING_FACTOR", "0.5"))
+
 
 def get_gradient_calculator(
     name: str = "default",
-    smoothing_factor: float = 0.5,
+    smoothing_factor: float = _DEFAULT_SMOOTHING_FACTOR,
     sample_window_seconds: float = 10.0,
 ) -> GradientCalculator:
     """

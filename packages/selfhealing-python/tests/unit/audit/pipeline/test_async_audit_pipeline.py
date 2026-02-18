@@ -625,9 +625,10 @@ class TestAsyncAuditMonitoringMetrics:
         for i in range(5):
             AsyncHealingLogger.log({"idx": i}, EventSeverity.INFO)
 
-        # 플러시
+        # 워커 종료 → 워커의 로컬 배치 플러시 보장 (worker exit flushes local batch)
+        AsyncHealingLogger.stop()
+        # 큐에 아직 남아있는 이벤트 추가 드레인
         AsyncHealingLogger.flush()
-        time.sleep(0.1)
 
         # 메트릭 조회
         metrics = get_async_audit_metrics()

@@ -260,3 +260,22 @@ class TestAdmissionControlRttSamplingBehavior:
 
         assert response == mock_response
         get_response.assert_called_once_with(request)
+
+    def test_metadata_tier_id_critical_passed(self, mock_settings, mock_registry, mock_traffic_gate):
+        """critical tier 요청 시 metadata={"tier_id": "critical"}가 전달된다."""
+        # critical tier 설정
+        mock_tier_result = MagicMock()
+        mock_tier_result.tier_id = "critical"
+        mock_registry.resolve_tier_with_fallback.return_value = mock_tier_result
+        mock_tier_def = MagicMock()
+        mock_tier_def.priority = 10
+        mock_registry.get_tier.return_value = mock_tier_def
+
+        middleware, _, _ = self._create_middleware(mock_settings, mock_registry, mock_traffic_gate)
+        request = self._create_request()
+
+        middleware(request)
+
+        mock_traffic_gate.should_allow.assert_called_once()
+        call_kwargs = mock_traffic_gate.should_allow.call_args
+        assert call_kwargs.kwargs.get("metadata") == {"tier_id": "critical"}

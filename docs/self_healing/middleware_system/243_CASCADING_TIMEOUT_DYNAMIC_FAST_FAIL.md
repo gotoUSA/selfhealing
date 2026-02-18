@@ -33,10 +33,10 @@ A (timeout=3s) → B (소요 2.5s) → C (남은 0.5s, 예상 처리 2s)
 **SelfHealingHttpClient** (`services/http_client.py`)에 ContextVar 기반 헤더 전파 패턴이 존재합니다:
 
 ```python
-# L25
+# L24
 _is_chaos_request: ContextVar[bool] = ContextVar("is_chaos_request", default=False)
 
-# L250-261 (_get_headers)
+# L141-147 (_get_headers)
 if _is_chaos_request.get():
     headers[SYNTHETIC_HEADER] = "chaos-experiment"
     if self._experiment_id:
@@ -72,12 +72,11 @@ class GradientCalculator:
 GradientCalculator는 `AdaptiveThrottle` 클래스 내부에 종속되어 있습니다:
 
 ```python
-# services/throttle/adaptive.py L590+
+# services/throttle/adaptive.py L501+
 class AdaptiveThrottle(GovernanceCheckMixin, ThrottleDLQReplayMixin, SlidingWindowThrottle):
-    def __init__(self, ...):
+    def __init__(self, config=None):
         self._gradient_calculator = GradientCalculator(
-            smoothing_factor=self._config.gradient_smoothing_factor,
-            ...
+            smoothing_factor=self.config.smoothing_factor,
         )
 ```
 
@@ -147,7 +146,7 @@ from dataclasses import dataclass
 
 @dataclass
 class RTTSample:
-    """RTT 샘플 데이터포인트."""
+    """Single RTT sample."""
     timestamp: float
     rtt_ms: float
 
@@ -312,10 +311,11 @@ def get_estimated_processing_ms(
             return get_tier_default_estimated_ms(tier_id)
 
         # RTT 증가 추세이면 안전 계수 상향
+        effective_margin = safety_margin
         if gradient > 0.1:  # 10% 이상 증가
-            safety_margin *= 1.0 + gradient  # gradient 비례 증가
+            effective_margin *= 1.0 + gradient  # gradient 비례 증가
 
-        return rtt * safety_margin
+        return rtt * effective_margin
     except ImportError:
         return get_tier_default_estimated_ms(tier_id)
 ```
@@ -342,12 +342,12 @@ def should_allow(self, priority=0, bulkhead_name=None, metadata=None):
     current_level = self._rate_controller.get_state().level
     bulkhead_acquired = False
 
-    # -1단계: Deadline Fast-Fail (신규)
+    # 0단계: Deadline 만료 확인 + Dynamic Fast-Fail
     try:
         from selfhealing.scaling.deadline_context import (
+            get_estimated_processing_ms,
             is_expired,
             should_fast_fail,
-            get_estimated_processing_ms,
         )
 
         if is_expired():
@@ -385,7 +385,7 @@ def should_allow(self, priority=0, bulkhead_name=None, metadata=None):
     except ImportError:
         pass
 
-    # 0단계: Bulkhead (기존)
+    # 1단계: Bulkhead (기존)
     if bulkhead_name is not None:
         # ... 이하 기존 로직
 ```
@@ -607,9 +607,7 @@ from selfhealing.services.throttle.gradient import (  # noqa: F401
 ```python
 # AdaptiveThrottle.__init__() — 변경 없음
 self._gradient_calculator = GradientCalculator(
-    smoothing_factor=self._config.gradient_smoothing_factor,
-    sample_window_seconds=self._config.gradient_sample_window,
-    min_samples=self._config.gradient_min_samples,
+    smoothing_factor=self.config.smoothing_factor,
 )
 ```
 
@@ -619,29 +617,26 @@ import 경로만 변경되며, 인스턴스 생성/사용 방식은 동일합니
 
 ## 6. 테스트 전략
 
-### 6.1 단위 테스트 (47개 — 구현 완료 ✅)
+### 6.1 단위 테스트 (48개 — 구현 완료 ✅)
 
 **실행**: `pytest packages/selfhealing-python/tests/unit/{throttle,scaling,api}/ -k "gradient_extracted or deadline_fast_fail or traffic_gate_dynamic or admission_control_rtt"`
 
 ```
-tests/unit/throttle/test_gradient_extracted.py — 12개
-├── TestGradientCalculatorExtractionContract (4)
-│   ├── test_import_gradient_calculator_from_gradient_module
+tests/unit/throttle/test_gradient_extracted.py — 10개
+├── TestGradientCalculatorExtractionBehavior (4)
+│   ├── test_import_from_gradient_module
 │   ├── test_import_rtt_sample_from_gradient_module
-│   ├── test_import_gradient_calculator_from_adaptive_compat
-│   └── test_import_rtt_sample_from_adaptive_compat
-├── TestGradientCalculatorExtractionBehavior (3)
-│   ├── test_extracted_module_gradient_calculator_works
-│   ├── test_adaptive_compat_same_class
-│   └── test_adaptive_throttle_uses_gradient_calculator
-└── TestGradientCalculatorSingletonBehavior (5)
-    ├── test_singleton_returns_same_instance
-    ├── test_different_names_return_different_instances
-    ├── test_singleton_by_tier_separate_instances
-    ├── test_reset_clears_all_instances
-    └── test_singleton_data_persists
+│   ├── test_import_from_adaptive_backward_compatible
+│   └── test_gradient_calculator_add_sample_and_snapshot
+└── TestGradientCalculatorRegistryBehavior (6)
+    ├── test_singleton_same_name_returns_same_instance
+    ├── test_singleton_different_name_returns_different_instance
+    ├── test_singleton_by_tier_three_instances
+    ├── test_reset_clears_all_calculators
+    ├── test_default_name_calculator
+    └── test_tier_data_isolation
 
-tests/unit/scaling/test_deadline_fast_fail.py — 16개
+tests/unit/scaling/test_deadline_fast_fail.py — 19개
 ├── TestTierDefaultEstimatedMsContract (3)
 │   ├── test_critical_default_50ms
 │   ├── test_standard_default_200ms
@@ -652,7 +647,7 @@ tests/unit/scaling/test_deadline_fast_fail.py — 16개
 │   ├── test_non_essential_tier_returns_non_essential_default
 │   ├── test_unknown_tier_returns_standard_default
 │   └── test_default_parameter_returns_standard
-└── TestGetEstimatedProcessingMsBehavior (8)
+└── TestGetEstimatedProcessingMsBehavior (11)
     ├── test_with_rtt_data_applies_safety_margin
     ├── test_cold_start_returns_tier_default_critical
     ├── test_cold_start_returns_tier_default_standard
@@ -782,9 +777,8 @@ tests/integration/test_cascading_timeout.py — 30개
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| `SELFHEALING_DEADLINE_FAST_FAIL_ENABLED` | `true` | Dynamic Fast-Fail 활성화 |
-| `SELFHEALING_DEADLINE_SAFETY_MARGIN` | `1.5` | 예상 처리시간 안전 계수 |
-| `SELFHEALING_DEADLINE_RTT_SMOOTHING_FACTOR` | `0.5` | GradientCalculator EMA 가중치 |
+| `SELFHEALING_DEADLINE_SAFETY_MARGIN` | `1.5` | 예상 처리시간 안전 계수 (`get_estimated_processing_ms()` 기본값) |
+| `SELFHEALING_DEADLINE_RTT_SMOOTHING_FACTOR` | `0.5` | GradientCalculator EMA 가중치 (`get_gradient_calculator()` 기본값) |
 | `SELFHEALING_DEADLINE_RTT_MIN_SAMPLE_MS` | `5` | RTT 샘플 최소 임계치 (ms). 이 미만은 노이즈로 간주하여 수집 제외 |
 | `SELFHEALING_DEADLINE_RTT_SAMPLE_RATE` | `0.1` | RTT 수집 확률 샘플링 비율 (0.1 = 10%). Lock 경합 감소용 |
 | `SELFHEALING_DEADLINE_DEFAULT_ESTIMATED_MS_CRITICAL` | `50` | Cold Start 시 critical tier 기본 예상 처리시간 (ms) |
@@ -795,7 +789,7 @@ tests/integration/test_cascading_timeout.py — 30개
 
 | 메트릭 | 타입 | 라벨 | 설명 |
 |--------|------|------|------|
-| `selfhealing_deadline_fast_fail_total` | Counter | `gate`, `tier` | Fast-Fail 거절 횟수 |
+| `selfhealing_deadline_fast_fail_total` | Counter | `tier`, `path_prefix` | Fast-Fail 거절 횟수 |
 | `selfhealing_deadline_estimated_ms` | Histogram | `calculator` | 예상 처리시간 분포 |
 | `selfhealing_gradient_rtt_ms` | Gauge | `calculator` | 현재 smoothed RTT |
 | `selfhealing_gradient_value` | Gauge | `calculator` | 현재 gradient 값 |
@@ -812,7 +806,7 @@ tests/integration/test_cascading_timeout.py — 30개
 | Static Fast-Fail | `should_fast_fail(estimated_ms)` | — (239번 사용) |
 | **Dynamic estimated_ms** | — | `get_estimated_processing_ms()` |
 | **GradientCalculator 추출** | — | `gradient.py` |
-| **RTT 피드백 루프** | — | `AdmissionControlMiddleware.finally` |
+| **RTT 피드백 루프** | — | `AdmissionControlMiddleware._process_request()` 내 |
 
 239번은 **인프라**(ContextVar, 헤더 파싱, 전파)를 제공하고, 243번은 **지능**(RTT 기반 동적 임계치)을 추가합니다.
 

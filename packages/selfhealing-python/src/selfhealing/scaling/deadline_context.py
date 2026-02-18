@@ -62,7 +62,7 @@ _DEADLINE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:ms)?\s*$", re.IGNORECA
 # Prometheus 메트릭
 # ---------------------------------------------------------------------------
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import Counter, Gauge, Histogram
 
     _HAS_PROMETHEUS = True
 except ImportError:
@@ -85,10 +85,29 @@ if _HAS_PROMETHEUS:
         "도착 시점에 이미 만료된 요청 수",
         ["path_prefix"],
     )
+    _estimated_ms_histogram = Histogram(
+        "selfhealing_deadline_estimated_ms",
+        "예상 처리시간 분포 (ms)",
+        ["calculator"],
+        buckets=[10, 25, 50, 100, 200, 500, 1000, 2500, 5000],
+    )
+    _gradient_rtt_gauge = Gauge(
+        "selfhealing_gradient_rtt_ms",
+        "현재 smoothed RTT (ms)",
+        ["calculator"],
+    )
+    _gradient_value_gauge = Gauge(
+        "selfhealing_gradient_value",
+        "현재 gradient 값",
+        ["calculator"],
+    )
 else:
     _fast_fail_counter = None  # type: ignore[assignment]
     _remaining_histogram = None  # type: ignore[assignment]
     _exhausted_on_arrival_counter = None  # type: ignore[assignment]
+    _estimated_ms_histogram = None  # type: ignore[assignment]
+    _gradient_rtt_gauge = None  # type: ignore[assignment]
+    _gradient_value_gauge = None  # type: ignore[assignment]
 
 
 def record_fast_fail(tier: str = "unknown", path_prefix: str = "unknown") -> None:
@@ -284,6 +303,9 @@ DEFAULT_ESTIMATED_MS_NON_ESSENTIAL: float = float(
     os.environ.get("SELFHEALING_DEADLINE_DEFAULT_ESTIMATED_MS_NON_ESSENTIAL", "500")
 )
 
+# 예상 처리시간 안전 계수 (기본 1.5 = 50% 여유)
+DEFAULT_SAFETY_MARGIN: float = float(os.environ.get("SELFHEALING_DEADLINE_SAFETY_MARGIN", "1.5"))
+
 _TIER_DEFAULT_ESTIMATED_MS: dict[str, float] = {
     "critical": DEFAULT_ESTIMATED_MS_CRITICAL,
     "standard": DEFAULT_ESTIMATED_MS_STANDARD,
@@ -308,7 +330,7 @@ def get_tier_default_estimated_ms(tier_id: str = "standard") -> float:
 
 def get_estimated_processing_ms(
     calculator_name: str = "default",
-    safety_margin: float = 1.5,
+    safety_margin: float = DEFAULT_SAFETY_MARGIN,
     tier_id: str = "standard",
 ) -> float:
     """
@@ -320,7 +342,7 @@ def get_estimated_processing_ms(
 
     Args:
         calculator_name: GradientCalculator 이름
-        safety_margin: 안전 계수 (기본 1.5 = 50% 여유)
+        safety_margin: 안전 계수 (기본값: SELFHEALING_DEADLINE_SAFETY_MARGIN 환경변수, 미설정 시 1.5)
         tier_id: Tier 식별자 (Cold Start fallback에 사용)
 
     Returns:
@@ -342,6 +364,17 @@ def get_estimated_processing_ms(
         if gradient > 0.1:  # 10% 이상 증가
             effective_margin *= 1.0 + gradient  # gradient 비례 증가
 
-        return rtt * effective_margin
+        estimated = rtt * effective_margin
+
+        # Prometheus 메트릭 기록
+        if _HAS_PROMETHEUS:
+            if _estimated_ms_histogram is not None:
+                _estimated_ms_histogram.labels(calculator=calculator_name).observe(estimated)
+            if _gradient_rtt_gauge is not None:
+                _gradient_rtt_gauge.labels(calculator=calculator_name).set(rtt)
+            if _gradient_value_gauge is not None:
+                _gradient_value_gauge.labels(calculator=calculator_name).set(gradient)
+
+        return estimated
     except ImportError:
         return get_tier_default_estimated_ms(tier_id)

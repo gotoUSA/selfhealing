@@ -210,7 +210,9 @@ class TestDeadlinePropagationAccuracy:
         assert propagated is not None
 
         # 전파 값은 초기 remaining보다 적어야 함 (최소 10ms 차이)
-        assert propagated < initial_remaining
+        # get_propagation_header_value()는 f"{remaining:.0f}ms" 포맷팅으로
+        # 반올림이 발생하므로 +1ms 허용 (4949.5 → "4950ms")
+        assert propagated < initial_remaining + 1.0
         assert propagated == pytest.approx(initial_remaining - 10.0, abs=20.0)
 
     def test_network_buffer_deducted_on_set(self):

@@ -11,6 +11,7 @@ Unit tests for TokenBucket and RateController.
 
 import threading
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -246,8 +247,9 @@ class TestRateControllerAIMD:
             queue_size_provider=lambda: queue_size,
         )
 
-        # 수동으로 Rate 조절 호출
-        controller._adjust_rate()
+        # CPU 부하로 인한 resource_multiplier 간섭 제거
+        with patch.object(controller, "_get_resource_pressure_multiplier", return_value=1.0):
+            controller._adjust_rate()
 
         state = controller.get_state()
         assert state.level == BackpressureLevel.HIGH
@@ -269,7 +271,8 @@ class TestRateControllerAIMD:
             queue_size_provider=lambda: queue_size,
         )
 
-        controller._adjust_rate()
+        with patch.object(controller, "_get_resource_pressure_multiplier", return_value=1.0):
+            controller._adjust_rate()
 
         state = controller.get_state()
         assert state.level == BackpressureLevel.CRITICAL
@@ -294,7 +297,8 @@ class TestRateControllerAIMD:
         controller._current_rate = 500.0
         controller._token_bucket.set_rate(500.0)
 
-        controller._adjust_rate()
+        with patch.object(controller, "_get_resource_pressure_multiplier", return_value=1.0):
+            controller._adjust_rate()
 
         state = controller.get_state()
         assert state.level == BackpressureLevel.NONE
