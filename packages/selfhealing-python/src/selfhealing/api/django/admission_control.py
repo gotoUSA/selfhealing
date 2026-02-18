@@ -27,8 +27,21 @@ Configuration:
 from __future__ import annotations
 
 import logging
+import os
+import random
+import time
 
 logger = logging.getLogger(__name__)
+
+# RTT 샘플 수집 — 3중 필터링 상수
+# 최소 임계치 미만의 초단기 요청(Health Check 등)은 노이즈로 간주하여 수집 제외
+_RTT_MIN_SAMPLE_MS: float = float(
+    os.environ.get("SELFHEALING_DEADLINE_RTT_MIN_SAMPLE_MS", "5")
+)
+# 확률 샘플링 비율 (0.1 = 10%). Lock 경합 감소용. EMA 특성상 10% 샘플로 추세 파악 충분.
+_RTT_SAMPLE_RATE: float = float(
+    os.environ.get("SELFHEALING_DEADLINE_RTT_SAMPLE_RATE", "0.1")
+)
 
 
 # Tier ID → TrafficGate priority int 매핑.
@@ -221,6 +234,7 @@ class AdmissionControlMiddleware:
             priority=traffic_priority,
             bulkhead_name=bulkhead_name,
             bulkhead_timeout=bulkhead_timeout,
+            metadata={"tier_id": tier_id},
         )
 
         if not decision.allowed:
@@ -239,12 +253,32 @@ class AdmissionControlMiddleware:
             )
 
         # 4. 허용 시 다음 미들웨어로 전달
+        start_time = time.perf_counter()
         try:
             response = self.get_response(request)
         finally:
             # Bulkhead 리소스 반환
             if decision.bulkhead_acquired and decision.bulkhead_name:
                 self._traffic_gate.release_bulkhead(decision.bulkhead_name)
+
+        # 5. RTT 샘플 수집 — 3중 필터링
+        # 필터 1: HTTP 2xx 성공 응답만 (실제 비즈니스 로직을 수행한 요청)
+        # 필터 2: 최소 임계치 이상 (Health Check 등 노이즈 제거)
+        # 필터 3: 확률 샘플링 (Lock 경합 감소)
+        try:
+            if 200 <= response.status_code < 300:
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                if elapsed_ms >= _RTT_MIN_SAMPLE_MS:
+                    if random.random() < _RTT_SAMPLE_RATE:
+                        from selfhealing.services.throttle.gradient import (
+                            get_gradient_calculator,
+                        )
+
+                        get_gradient_calculator(
+                            f"admission_control:{tier_id}"
+                        ).add_sample(elapsed_ms)
+        except Exception:
+            pass  # Fail-Open: RTT 수집 실패가 요청 처리에 영향 없음
 
         return response
 

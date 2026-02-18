@@ -214,6 +214,7 @@ class TestAdmissionControlMiddlewareBehavior:
             priority=expected_priority,
             bulkhead_name="tier:standard",
             bulkhead_timeout=0.03,
+            metadata={"tier_id": "standard"},
         )
 
     def test_rejected_request_returns_503(
@@ -385,4 +386,5 @@ class TestAdmissionControlMiddlewareBehavior:
             priority=TIER_PRIORITY_MAP["critical"],
             bulkhead_name="tier:critical",
             bulkhead_timeout=0.05,
+            metadata={"tier_id": "critical"},
         )

@@ -222,9 +222,13 @@ class TrafficGate:
         current_level = self._rate_controller.get_state().level
         bulkhead_acquired = False
 
-        # 0단계: Deadline 만료 확인
+        # 0단계: Deadline 만료 확인 + Dynamic Fast-Fail
         try:
-            from selfhealing.scaling.deadline_context import is_expired
+            from selfhealing.scaling.deadline_context import (
+                get_estimated_processing_ms,
+                is_expired,
+                should_fast_fail,
+            )
 
             if is_expired():
                 return TrafficDecision(
@@ -233,6 +237,27 @@ class TrafficGate:
                     level=current_level,
                     gate="DeadlineContext",
                     metadata=metadata,
+                )
+
+            # Dynamic Fast-Fail: RTT 기반 예상 처리시간 vs 남은 시간
+            # metadata에서 tier_id를 꺼내 Tier별 GradientCalculator 조회
+            tier_id = (metadata or {}).get("tier_id", "standard")
+            calculator_name = f"admission_control:{tier_id}"
+            estimated = get_estimated_processing_ms(
+                calculator_name=calculator_name,
+                tier_id=tier_id,
+            )
+            if should_fast_fail(estimated):
+                return TrafficDecision(
+                    allowed=False,
+                    reason=(f"Deadline Fast-Fail: estimated={estimated:.0f}ms " f"exceeds remaining time"),
+                    level=current_level,
+                    gate="DeadlineContext",
+                    metadata={
+                        **(metadata or {}),
+                        "estimated_ms": estimated,
+                        "fast_fail": True,
+                    },
                 )
         except ImportError:
             pass

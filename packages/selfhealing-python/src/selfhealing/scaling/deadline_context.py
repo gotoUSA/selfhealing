@@ -268,3 +268,80 @@ def deadline_scope(remaining_ms: float) -> Generator[None, None, None]:
         yield
     finally:
         _request_deadline.set(previous)
+
+
+# =============================================================================
+# Tier별 Cold Start 기본 예상 처리시간 (ms)
+# RTT 데이터가 충분히 쌓이기 전까지 사용하는 Conservative Estimate.
+# critical: 빠른 경로 (인증, 결제 확인 등)
+# standard: 일반 CRUD 작업
+# non_essential: 무거운 쿼리 (통계, 리포트 등)
+# =============================================================================
+
+DEFAULT_ESTIMATED_MS_CRITICAL: float = float(os.environ.get("SELFHEALING_DEADLINE_DEFAULT_ESTIMATED_MS_CRITICAL", "50"))
+DEFAULT_ESTIMATED_MS_STANDARD: float = float(os.environ.get("SELFHEALING_DEADLINE_DEFAULT_ESTIMATED_MS_STANDARD", "200"))
+DEFAULT_ESTIMATED_MS_NON_ESSENTIAL: float = float(
+    os.environ.get("SELFHEALING_DEADLINE_DEFAULT_ESTIMATED_MS_NON_ESSENTIAL", "500")
+)
+
+_TIER_DEFAULT_ESTIMATED_MS: dict[str, float] = {
+    "critical": DEFAULT_ESTIMATED_MS_CRITICAL,
+    "standard": DEFAULT_ESTIMATED_MS_STANDARD,
+    "non_essential": DEFAULT_ESTIMATED_MS_NON_ESSENTIAL,
+}
+
+
+def get_tier_default_estimated_ms(tier_id: str = "standard") -> float:
+    """
+    Tier별 Cold Start 기본 예상 처리시간 반환.
+
+    GradientCalculator에 RTT 데이터가 없을 때 (Cold Start) Fallback으로 사용.
+
+    Args:
+        tier_id: Tier 식별자 (critical, standard, non_essential)
+
+    Returns:
+        기본 예상 처리시간 (ms)
+    """
+    return _TIER_DEFAULT_ESTIMATED_MS.get(tier_id, DEFAULT_ESTIMATED_MS_STANDARD)
+
+
+def get_estimated_processing_ms(
+    calculator_name: str = "default",
+    safety_margin: float = 1.5,
+    tier_id: str = "standard",
+) -> float:
+    """
+    GradientCalculator 기반 예상 처리시간 반환.
+
+    현재 smoothed RTT × 안전 계수로 산출합니다.
+    gradient가 양수(RTT 증가 추세)이면 안전 계수를 더 높입니다.
+    RTT 데이터가 없으면(Cold Start) Tier별 기본값을 반환합니다.
+
+    Args:
+        calculator_name: GradientCalculator 이름
+        safety_margin: 안전 계수 (기본 1.5 = 50% 여유)
+        tier_id: Tier 식별자 (Cold Start fallback에 사용)
+
+    Returns:
+        예상 처리시간 (ms). Cold Start 시에도 기본값을 반환하므로
+        None을 반환하지 않습니다.
+    """
+    try:
+        from selfhealing.services.throttle.gradient import get_gradient_calculator
+
+        calc = get_gradient_calculator(calculator_name)
+        rtt, gradient = calc.get_snapshot()
+
+        if rtt is None:
+            # Cold Start: Tier별 기본값 반환
+            return get_tier_default_estimated_ms(tier_id)
+
+        # RTT 증가 추세이면 안전 계수 상향
+        effective_margin = safety_margin
+        if gradient > 0.1:  # 10% 이상 증가
+            effective_margin *= 1.0 + gradient  # gradient 비례 증가
+
+        return rtt * effective_margin
+    except ImportError:
+        return get_tier_default_estimated_ms(tier_id)

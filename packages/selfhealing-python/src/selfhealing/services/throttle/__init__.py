@@ -31,6 +31,11 @@ from selfhealing.services.throttle.adaptive import (
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.base import BaseThrottle, SlidingWindowThrottle
+from selfhealing.services.throttle.gradient import (
+    RTTSample,
+    get_gradient_calculator,
+    reset_gradient_calculators,
+)
 from selfhealing.services.throttle.dlq_sink import ThrottleDLQSink
 from selfhealing.services.throttle.facade import AdaptiveThrottleFacade
 from selfhealing.services.throttle.limit_adjuster import ThrottleLimitAdjuster
@@ -91,6 +96,9 @@ __all__ = [
     "SlidingWindowThrottle",
     "AdaptiveThrottle",
     "GradientCalculator",
+    "RTTSample",
+    "get_gradient_calculator",
+    "reset_gradient_calculators",
     "get_adaptive_throttle",
     "reset_adaptive_throttle",
     # Registry

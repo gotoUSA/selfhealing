@@ -31,8 +31,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections import deque
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from selfhealing.services.governance.checks import GovernanceCheckMixin
@@ -452,125 +450,12 @@ def _emit_throttle_event(
         logger.warning(f"[AdaptiveThrottle] Failed to emit {event_type_name}: {e}")
 
 
-@dataclass
-class RTTSample:
-    """Single RTT sample."""
-
-    timestamp: float
-    rtt_ms: float
-
-
-class GradientCalculator:
-    """
-    Calculates RTT gradient using exponential smoothing.
-
-    Positive gradient = response times increasing (slow down)
-    Negative gradient = response times decreasing (speed up)
-    Zero gradient = stable
-    """
-
-    def __init__(
-        self,
-        smoothing_factor: float = 0.5,
-        sample_window_seconds: float = 10.0,
-        min_samples: int = 3,
-    ):
-        """
-        Args:
-            smoothing_factor: Weight for new samples (0-1, higher = more reactive)
-            sample_window_seconds: How far back to look for samples
-            min_samples: Minimum samples needed for gradient calculation
-        """
-        self.smoothing_factor = smoothing_factor
-        self.sample_window_seconds = sample_window_seconds
-        self.min_samples = min_samples
-
-        self._samples: deque[RTTSample] = deque(maxlen=100)
-        self._smoothed_rtt: float | None = None
-        self._previous_smoothed_rtt: float | None = None
-        self._lock = threading.Lock()
-
-    def add_sample(self, rtt_ms: float) -> None:
-        """Add a new RTT sample."""
-        now = time.time()
-
-        with self._lock:
-            self._samples.append(RTTSample(timestamp=now, rtt_ms=rtt_ms))
-
-            # Update smoothed RTT using exponential moving average
-            if self._smoothed_rtt is None:
-                self._smoothed_rtt = rtt_ms
-            else:
-                self._previous_smoothed_rtt = self._smoothed_rtt
-                self._smoothed_rtt = self.smoothing_factor * rtt_ms + (1 - self.smoothing_factor) * self._smoothed_rtt
-
-    def get_gradient(self) -> float:
-        """
-        Calculate current RTT gradient.
-
-        Returns:
-            Gradient value:
-            - > 0: RTT increasing (should decrease limit)
-            - < 0: RTT decreasing (can increase limit)
-            - 0: Stable or insufficient data
-        """
-        with self._lock:
-            if self._smoothed_rtt is None or self._previous_smoothed_rtt is None:
-                return 0.0
-
-            # Gradient = (current - previous) / previous
-            if self._previous_smoothed_rtt == 0:
-                return 0.0
-
-            return (self._smoothed_rtt - self._previous_smoothed_rtt) / self._previous_smoothed_rtt
-
-    def get_current_rtt(self) -> float | None:
-        """Get current smoothed RTT."""
-        with self._lock:
-            return self._smoothed_rtt
-
-    def get_snapshot(self) -> tuple[float | None, float]:
-        """
-        현재 RTT + gradient를 단일 Lock 내에서 반환.
-
-        Lock을 2회 → 1회로 줄여 핫 패스 성능을 개선합니다.
-
-        Returns:
-            (current_rtt_ms, gradient) 튜플
-        """
-        with self._lock:
-            rtt = self._smoothed_rtt
-            if self._smoothed_rtt is None or self._previous_smoothed_rtt is None:
-                return rtt, 0.0
-            if self._previous_smoothed_rtt == 0:
-                return rtt, 0.0
-            grad = (self._smoothed_rtt - self._previous_smoothed_rtt) / self._previous_smoothed_rtt
-            return rtt, grad
-
-    def get_stats(self) -> dict:
-        """Get calculator statistics."""
-        with self._lock:
-            recent_samples = [s for s in self._samples if s.timestamp > time.time() - self.sample_window_seconds]
-
-            # Calculate gradient inline to avoid deadlock (self.get_gradient also uses self._lock)
-            gradient = 0.0
-            if self._smoothed_rtt is not None and self._previous_smoothed_rtt is not None:
-                if self._previous_smoothed_rtt != 0:
-                    gradient = (self._smoothed_rtt - self._previous_smoothed_rtt) / self._previous_smoothed_rtt
-
-            return {
-                "sample_count": len(self._samples),
-                "recent_sample_count": len(recent_samples),
-                "smoothed_rtt_ms": self._smoothed_rtt,
-                "gradient": gradient,
-            }
-
-    def reset(self) -> None:
-        """Reset calculator state."""
-        with self._lock:
-            self._samples.clear()
-            self._smoothed_rtt = None
-            self._previous_smoothed_rtt = None
+# GradientCalculator, RTTSample은 gradient.py로 추출됨.
+# 하위 호환을 위해 re-export 유지.
+from selfhealing.services.throttle.gradient import (  # noqa: F401
+    GradientCalculator,
+    RTTSample,
+)
 
 
 # =============================================================================

@@ -179,4 +179,5 @@ class TestBulkheadTimeoutInjectionBehavior:
             priority=TIER_PRIORITY_MAP["critical"],
             bulkhead_name="tier:critical",
             bulkhead_timeout=0.05,
+            metadata={"tier_id": "critical"},
         )
