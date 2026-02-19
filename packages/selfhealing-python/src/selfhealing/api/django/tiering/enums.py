@@ -34,3 +34,7 @@ class OverrideIdentifierType(str, Enum):
     IP = "ip"
     USER_ID = "user_id"
     API_KEY = "api_key"
+
+
+# PatternType은 TierMatchType의 별칭 (tiering views에서 사용)
+PatternType = TierMatchType

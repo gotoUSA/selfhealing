@@ -31,13 +31,13 @@ Usage:
             db_table = "failed_operations"
 """
 
-
 from __future__ import annotations
 
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 try:
+    from django.conf import settings
     from django.db import models
     from django.utils import timezone
 
@@ -70,7 +70,6 @@ __all__ = [
     "SecurityIncident",
     "DJANGO_AVAILABLE",
 ]
-
 
 
 # =============================================================================
@@ -126,7 +125,7 @@ class FailedOperation(AbstractFailedOperation):
     )
 
     user = models.ForeignKey(
-        "auth.User",
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -135,7 +134,7 @@ class FailedOperation(AbstractFailedOperation):
     )
 
     resolved_by = models.ForeignKey(
-        "auth.User",
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

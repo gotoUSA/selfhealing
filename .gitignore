@@ -70,3 +70,4 @@ logs/selfhealing_state/*.json
 *.csv
 *.jsonl
 
+gunicorn.ctl

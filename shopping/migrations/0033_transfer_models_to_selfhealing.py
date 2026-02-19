@@ -41,10 +41,4 @@ class Migration(migrations.Migration):
             ],
             database_operations=[],
         ),
-        migrations.SeparateDatabaseAndState(
-            state_operations=[
-                migrations.DeleteModel(name="PostmortemRecord"),
-            ],
-            database_operations=[],
-        ),
     ]

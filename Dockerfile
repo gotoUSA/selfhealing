@@ -34,12 +34,19 @@ COPY packages/ /code/packages/
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
+# selfhealing 패키지 editable 설치
+RUN pip install --no-cache-dir -e /code/packages/selfhealing-python
+
+# crontab 패키지 충돌 해결: crontab(1.0.5)이 python-crontab(django-celery-beat 의존성)을 shadow함
+RUN pip uninstall -y crontab 2>/dev/null || true
+
 # 프로젝트 파일 복사
 COPY . /code/
 
 # 환경변수 설정
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/code:/code/packages/selfhealing-python/src
 
 # 포트 노출
 EXPOSE 8000
