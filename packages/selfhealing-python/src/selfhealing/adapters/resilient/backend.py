@@ -23,6 +23,28 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Windows 한국어 로케일에서 OS 에러 메시지가 cp949로 나와 로그가 깨지는 문제 방지.
+# errno 기반 영어 메시지로 통일.
+_ERRNO_MESSAGES: dict[int, str] = {
+    10061: "Connection refused",  # WSAECONNREFUSED
+    10060: "Connection timed out",  # WSAETIMEDOUT
+    10065: "No route to host",  # WSAEHOSTUNREACH
+    111: "Connection refused",  # ECONNREFUSED (Linux)
+    110: "Connection timed out",  # ETIMEDOUT (Linux)
+}
+
+
+def _safe_error_message(e: Exception) -> str:
+    """Return an ASCII-safe error description (avoids cp949 garbled text on Windows)."""
+    if isinstance(e, OSError) and e.errno in _ERRNO_MESSAGES:
+        return f"{type(e).__name__}: {_ERRNO_MESSAGES[e.errno]} (errno={e.errno})"
+    try:
+        msg = str(e)
+        msg.encode("ascii")
+        return msg
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return f"{type(e).__name__}(errno={getattr(e, 'errno', 'N/A')})"
+
 
 class ResilientStorageMode(str, Enum):
     """Storage operation mode."""
@@ -150,7 +172,8 @@ class ResilientStorageBackend:
             logger.info("[ResilientStorage] Redis connected successfully")
 
         except Exception as e:
-            logger.warning(f"[ResilientStorage] Redis init failed: {e}")
+            err_msg = _safe_error_message(e)
+            logger.warning("[ResilientStorage] Redis init failed: %s", err_msg)
             self._mode = ResilientStorageMode.DEGRADED
 
             if self._shadow:
@@ -183,7 +206,7 @@ class ResilientStorageBackend:
             logger.debug("[ResilientStorage] WAL initialized")
 
         except Exception as e:
-            logger.error(f"[ResilientStorage] WAL init failed: {e}")
+            logger.error("[ResilientStorage] WAL init failed: %s", _safe_error_message(e))
             # WAL failure is serious but we continue with memory-only
             self._wal_initialized = False
 
@@ -238,7 +261,7 @@ class ResilientStorageBackend:
                     self._last_processed_wal_seq = entry.sequence
                     recovered_count += 1
                 except Exception as e:
-                    logger.error(f"[ResilientStorage] WAL replay failed for seq {entry.sequence}: {e}")
+                    logger.error("[ResilientStorage] WAL replay failed for seq %s: %s", entry.sequence, _safe_error_message(e))
                     # Continue with next entry
 
             if recovered_count > 0:
@@ -248,7 +271,7 @@ class ResilientStorageBackend:
                 self._wal.cleanup_processed(self._last_processed_wal_seq)
 
         except Exception as e:
-            logger.error(f"[ResilientStorage] WAL recovery error: {e}")
+            logger.error("[ResilientStorage] WAL recovery error: %s", _safe_error_message(e))
             # Recovery failure doesn't prevent server from starting
 
     def _replay_wal_entry(self, entry: Any) -> None:
@@ -725,7 +748,7 @@ class ResilientStorageBackend:
                         self._replay_wal_entry(entry)
                         self._last_processed_wal_seq = entry.sequence
                     except Exception as e:
-                        logger.error(f"[ResilientStorage] WAL replay error: {e}")
+                        logger.error("[ResilientStorage] WAL replay error: %s", _safe_error_message(e))
 
             # 2. Sync remaining memory to Redis (with conflict resolution)
             self._sync_memory_to_redis()
@@ -742,7 +765,7 @@ class ResilientStorageBackend:
             return True
 
         except Exception as e:
-            logger.error(f"[ResilientStorage] Recovery failed: {e}")
+            logger.error("[ResilientStorage] Recovery failed: %s", _safe_error_message(e))
             with self._lock:
                 self._mode = ResilientStorageMode.DEGRADED
             return False
@@ -788,7 +811,7 @@ class ResilientStorageBackend:
                     self._redis.set(full_key, value)
 
             except Exception as e:
-                logger.error(f"[ResilientStorage] Sync error for key {key}: {e}")
+                logger.error("[ResilientStorage] Sync error for key %s: %s", key, _safe_error_message(e))
 
     # =========================================================================
     # Utility Methods

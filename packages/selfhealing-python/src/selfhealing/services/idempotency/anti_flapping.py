@@ -79,7 +79,9 @@ class AntiFlappingWindow:
             else:
                 logger.info("[AntiFlappingWindow] File backend detected, using memory mode")
         except Exception as e:
-            logger.warning(f"[AntiFlappingWindow] Redis init failed, using memory: {e}")
+            from selfhealing.adapters.resilient.backend import _safe_error_message
+
+            logger.warning("[AntiFlappingWindow] Redis init failed, using memory: %s", _safe_error_message(e))
 
     def check_and_record(
         self,

@@ -211,7 +211,9 @@ class NotificationAggregator:
             else:
                 logger.info("[NotificationAggregator] File backend, using memory mode")
         except Exception as e:
-            logger.warning(f"[NotificationAggregator] Redis init failed: {e}")
+            from selfhealing.adapters.resilient.backend import _safe_error_message
+
+            logger.warning("[NotificationAggregator] Redis init failed: %s", _safe_error_message(e))
 
     def _compute_hash(self, incident_id: str) -> str:
         """중복 방지용 해시 계산."""

@@ -260,7 +260,9 @@ class IncidentGroupManager:
             else:
                 logger.info("[IncidentGroupManager] File backend, using memory mode")
         except Exception as e:
-            logger.warning(f"[IncidentGroupManager] Redis init failed: {e}")
+            from selfhealing.adapters.resilient.backend import _safe_error_message
+
+            logger.warning("[IncidentGroupManager] Redis init failed: %s", _safe_error_message(e))
 
     def _generate_group_id(self) -> str:
         """그룹 ID 생성."""
