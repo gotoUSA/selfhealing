@@ -193,6 +193,11 @@ class TestPredictiveForecasterSettingsContract:
         field_count = len(PredictiveForecasterSettings.model_fields)
         assert field_count == 15
 
+    def test_env_prefix_is_selfhealing_forecaster(self):
+        """환경변수 접두사는 SELFHEALING_FORECASTER_이다."""
+        config = PredictiveForecasterSettings.model_config
+        assert config["env_prefix"] == "SELFHEALING_FORECASTER_"
+
 
 class TestPredictiveForecasterSettingsBehavior:
     """PredictiveForecasterSettings 동작 검증."""
@@ -201,11 +206,6 @@ class TestPredictiveForecasterSettingsBehavior:
         """warmup_samples가 prediction_steps보다 작으면 ValidationError."""
         with pytest.raises(ValueError, match="warmup_samples"):
             PredictiveForecasterSettings(warmup_samples=2, prediction_steps=5)
-
-    def test_env_prefix_is_selfhealing_forecaster(self):
-        """환경변수 접두사는 SELFHEALING_FORECASTER_이다."""
-        config = PredictiveForecasterSettings.model_config
-        assert config["env_prefix"] == "SELFHEALING_FORECASTER_"
 
 
 # =============================================================================
@@ -967,6 +967,10 @@ class TestPredictiveForecasterServiceBehavior:
         service._last_predictions["p99_latency_ms"] = 9999.0
         service.ingest_metric("p99_latency_ms", 100.0)
         assert service._misprediction_counts["p99_latency_ms"] >= 1
+
+
+class TestPredictiveForecasterServiceContract:
+    """PredictiveForecasterService 설계 계약값 검증."""
 
     def test_misprediction_blacklist_threshold_contract(self):
         """MISPREDICTION_BLACKLIST_THRESHOLD는 3이다."""

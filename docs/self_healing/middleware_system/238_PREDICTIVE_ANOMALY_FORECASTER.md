@@ -16,6 +16,7 @@
 | v2 | 2026-02-19 | 리뷰 8건 반영: (1) sensitivity_multiplier 주입, (2) Phase 1 기본 예측기 EWMA→HoltLinear 승격, (3) SpikeClassifier/SpikeType 추가, (4) StateBackend 기반 Cold Start 영속성, (5) warmup_samples Cold Start 보호, (6) has_adjustment Self-Fulfilling Prophecy 태깅, (7) LearningService 연동 설계, (8) 설정 인터페이스 확장 |
 | v3 | 2026-02-18 | Phase 1 구현 완료: (1) time_series.py — HoltLinearForecaster/EWMAForecaster/HoltWintersForecaster/ForecastDataPoint + StateBackend 영속성, (2) anomaly_detector.py — ZScoreDetector/IQRDetector, (3) proactive_action.py — SpikeClassifier/SpikeType/ProactiveActionTrigger + LearningService 블랙리스트 연동, (4) service.py — PredictiveForecasterService + LearningService 연동(패턴학습/정확도기록/반복오판블랙리스트), (5) settings/predictive_forecaster.py — 15개 설정 필드 + env_prefix, (6) 통합 테스트 작성 |
 | v4 | 2026-02-18 | Phase 2-4 구현 완료: (1) Phase 2 — PoolMonitor/DecisionEngine/AutoRollback Settings 기반 히스토리 확장 + 환경변수 문서화, (2) Phase 3 — DecisionEngine 예측 컨텍스트 주입, PoolMonitor HoltLinear 예측, CgroupResourceMonitor OOM 예측, BudgetDepletionForecaster EWMA smoothing, has_adjustment Option A 쿨다운, LearningService 연동 완료, (3) Phase 4 — HoltWinters 계절성 자동 감지(detect_season_length), (4) 단위 테스트 128건 전체 통과 |
+| v5 | 2026-02-19 | UNIT_TEST_GUIDELINES 준수 수정: (1) test_env_prefix_is_selfhealing_forecaster를 Behavior→Contract 클래스로 이동, (2) test_misprediction_blacklist_threshold_contract를 Behavior에서 신규 TestPredictiveForecasterServiceContract 클래스로 분리 — 128건 전체 통과 유지 |
 
 ---
 
