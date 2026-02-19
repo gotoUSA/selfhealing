@@ -118,11 +118,15 @@ class RecoveryStep:
     Forward 핸들러 실행 결과 데이터.
 
     핸들러가 반환하는 dict를 저장하여 compensate 시 참조 가능하게 함.
-    "무엇을 했는지 알아야 되돌릴 수 있다."
+    Saga 패턴의 기본 원칙: "무엇을 했는지 알아야 되돌릴 수 있다."
 
     예시:
     - BUDGET_RESET: {"success": True, "multiplier": 1.0}
     - CANARY_RESUME: {"success": True, "resumed_count": 3, "staggered": True}
+
+    네이밍 근거:
+    - 248번 Saga Core Models의 StepResult.data 필드와 의미적 통일.
+    - execution_context는 248번 SagaContext(Step 간 공유 데이터)와 혼동 우려.
     """
 
     compensation_status: CompensationStatus = CompensationStatus.NOT_REQUIRED
@@ -130,7 +134,11 @@ class RecoveryStep:
     보상 상태.
 
     서버 재시작 시 어디까지 보상했는지 추적.
-    Forward 성공 시 PENDING → 보상 성공 시 COMPENSATED → 실패 시 COMPENSATE_FAILED.
+    _attempt_compensation 루프에서 보상 성공 시 즉시 COMPENSATED로 업데이트 + Redis 저장.
+
+    네이밍 근거:
+    - CompensationStatus Enum으로 별도 정의 (RecoveryStatus와 분리).
+    - 248번 SagaStepStatus의 COMPENSATED/COMPENSATE_FAILED와 값 통일.
     """
 
     def to_dict(self) -> dict[str, Any]:
@@ -171,6 +179,7 @@ class CompensationResult:
     보상 실행 결과.
 
     _attempt_compensation()의 반환값으로, 보상 성공/실패/건너뜀 Step 목록을 구조화.
+    Phase 3 DLQ 연동 시 failed_steps를 DLQ로 전송.
     """
 
     compensated_steps: list[RecoveryStep] = field(default_factory=list)

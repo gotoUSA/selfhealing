@@ -369,6 +369,9 @@ class RecoveryCoordinator:
             compensate 핸들러는 반드시 멱등성(Idempotency)을 보장해야 합니다.
             동일한 Step에 대해 compensate가 여러 번 호출되어도 동일한 결과를 보장해야 합니다.
             (서버 재시작, 네트워크 재시도 등으로 인해 중복 호출될 수 있음)
+
+            Reference:
+                docs/self_healing/middleware_system/248_SAGA_CORE_MODELS.md §2.4 SagaStep
         """
         self._step_handlers[step_type] = handler
         if compensate is not None:
@@ -1377,6 +1380,7 @@ class RecoveryCoordinator:
                 f"failed={len(comp_result.failed_steps)}, "
                 f"skipped={len(comp_result.skipped_steps)}"
             )
+            # Phase 3 (245번 문서): comp_result.failed_steps → DLQ 전송
 
         # 최종 실패 상태 설정
         session.status = RecoveryStatus.FAILED
@@ -1408,6 +1412,11 @@ class RecoveryCoordinator:
 
         Returns:
             CompensationResult — 보상 성공/실패/건너뜀 Step 목록.
+            Phase 3 DLQ 연동 시 failed_steps를 DLQ로 전송.
+
+        Reference:
+            docs/self_healing/middleware_system/248_SAGA_CORE_MODELS.md §2.3 SagaContext
+            docs/self_healing/middleware_system/248_SAGA_CORE_MODELS.md §2.4 SagaStep
         """
         result = CompensationResult()
 

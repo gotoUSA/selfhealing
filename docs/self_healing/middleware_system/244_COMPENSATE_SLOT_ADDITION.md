@@ -388,7 +388,7 @@ def _register_default_handlers(self) -> None:
         RecoveryStepType.CANARY_RESUME: self._handle_canary_resume,
         RecoveryStepType.GOVERNANCE_NORMAL: self._handle_governance_normal,
     }
-    # Compensate 핸들러: 현재는 빈 dict (Phase 2에서 필요 시 등록)
+    # 보상 핸들러: 현재는 빈 dict (필요 시 등록)
     self._compensate_handlers = {}
 ```
 
@@ -588,7 +588,10 @@ def _attempt_compensation(
 | `recovery_coordinator.py` | `__init__`, `_register_default_handlers`, `register_step_handler`, `execute_next_step`, `_fail_session`, `_attempt_compensation` (신규) |
 | `recovery_state.py` | `RecoveryStep`에 `result_data`, `compensation_status` 필드 추가. `CompensationResult` 신규. `to_dict()`/`from_dict()` 업데이트 |
 | `enums.py` | `CompensationStatus` 신규 Enum. `RecoveryStatus.COMPENSATING` 추가 |
+| `coordination/__init__.py` | `CompensationStatus` export 추가 |
 | `idempotent_step_handlers.py` | 변경 없음 |
+| `test_compensate_slot.py` | **신규** — 27개 단위 테스트 (Contract 10 + Behavior 17) |
+| `test_recovery_state.py` | `test_recovery_status_count` 기대값 10→11 수정 |
 
 ### 3.2 하위 호환성
 

@@ -136,6 +136,10 @@ class RecoveryStatus(str, Enum):
 
     _fail_session() 진입 시 COMPENSATING으로 전환 → 보상 루프 실행 → 최종 FAILED.
     모니터링 대시보드에서 "복구 진행 중"과 "보상 롤백 중"을 구분할 수 있게 함.
+
+    네이밍 근거:
+    - 248번 SagaStatus.COMPENSATING = "compensating"과 동일한 값.
+    - 향후 Saga Orchestrator 통합 시 자연스러운 매핑.
     """
 
     ABORTED = "aborted"
@@ -146,7 +150,8 @@ class CompensationStatus(str, Enum):
     """
     개별 Step의 보상 상태.
 
-    Forward 핸들러 실행 후 보상(역전) 처리의 진행 상황을 추적.
+    248번 Saga Core Models의 SagaStepStatus 네이밍과 정렬.
+    (SagaStepStatus: COMPENSATING, COMPENSATED, COMPENSATE_FAILED)
     """
 
     NOT_REQUIRED = "not_required"
