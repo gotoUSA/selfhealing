@@ -1,0 +1,78 @@
+# =============================================================================
+# .dockerignore - Docker 빌드 컨텍스트에서 제외할 파일/폴더
+# =============================================================================
+# 빌드 컨텍스트 크기를 줄여 이미지 빌드 속도를 향상시킵니다.
+
+# --- Git ---
+.git
+.gitignore
+
+# --- Python 캐시 ---
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+*.egg
+.mypy_cache
+.ruff_cache
+.hypothesis
+.pytest_cache
+
+# --- 가상환경 ---
+venv
+.venv
+env
+
+# --- IDE/에디터 ---
+.vscode
+.idea
+*.swp
+*.swo
+
+# --- 테스트/커버리지 리포트 ---
+htmlcov
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# --- 로그/미디어/정적파일 (런타임 볼륨 마운트됨) ---
+logs
+media
+staticfiles
+
+# --- Docker 관련 (재귀 방지) ---
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# --- 문서/리포트 ---
+docs
+README.md
+LICENSE
+*.md
+
+# --- CI/CD ---
+.github
+.pre-commit-config.yaml
+
+# --- 부하 테스트 ---
+load_tests
+
+# --- Postman ---
+postman
+
+# --- K8s 매니페스트 ---
+k8s
+
+# --- Nginx 설정 (별도 컨테이너) ---
+nginx
+
+# --- 빌드 아티팩트 ---
+myproject.egg-info
+code_stats.xml
+
+# --- 기타 불필요 ---
+tests;C
+packagesselfhealing-pythontestsunitcore

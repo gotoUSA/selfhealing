@@ -6,6 +6,7 @@
 
 # Common base for all test services: build context, volumes, working directory
 x-base-test: &base-test
+  image: myproject-test:latest
   build: .
   volumes:
     - .:/code
@@ -237,6 +238,7 @@ services:
   # Celery Worker - Integration Tests용 백그라운드 작업 처리
   # ---------------------------------------------------------------------------
   celery-worker:
+    image: myproject-test:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -306,6 +308,7 @@ services:
   # Django Web 서비스 (Grafana Webhook 테스트용)
   # ---------------------------------------------------------------------------
   web:
+    image: myproject-test:latest
     build: .
     command: >
       sh -c "python manage.py migrate --noinput &&

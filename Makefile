@@ -111,3 +111,35 @@ clean: docker-down
 	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	@rm -rf htmlcov/ .coverage 2>/dev/null || true
 	@echo "✅ 정리 완료"
+
+# =============================================================================
+# Docker 이미지 정리
+# =============================================================================
+
+# 기존 테스트 이미지 제거 (myproject-test-* 패턴)
+# 동일 Dockerfile에서 빌드된 중복 이미지들을 일괄 삭제합니다.
+docker-clean-test-images:
+	@echo "🧹 테스트 이미지 정리 중..."
+	@docker images --format '{{.Repository}}:{{.Tag}}' | grep '^myproject-test-' | grep -v '^myproject-test:latest' | xargs -r docker rmi 2>/dev/null || true
+	@echo "✅ 테스트 이미지 정리 완료"
+
+# dangling 이미지 제거 (<none> 태그 이미지)
+docker-clean-dangling:
+	@echo "🧹 dangling 이미지 정리 중..."
+	@docker image prune -f
+	@echo "✅ dangling 이미지 정리 완료"
+
+# Docker 볼륨 정리 (사용하지 않는 테스트 볼륨)
+docker-clean-volumes:
+	@echo "🧹 미사용 볼륨 정리 중..."
+	@docker volume prune -f
+	@echo "✅ 볼륨 정리 완료"
+
+# 전체 Docker 정리 (이미지 + dangling + 볼륨 + 컨테이너)
+docker-clean-all: docker-down docker-clean-test-images docker-clean-dangling docker-clean-volumes
+	@echo "🧹 중지된 컨테이너 정리 중..."
+	@docker container prune -f
+	@echo "✅ 전체 Docker 정리 완료"
+	@echo ""
+	@echo "📊 현재 Docker 디스크 사용량:"
+	@docker system df
