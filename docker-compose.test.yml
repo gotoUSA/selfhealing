@@ -747,6 +747,21 @@ services:
     depends_on:
       <<: *depends-db-redis
 
+  # ---------------------------------------------------------------------------
+  # 249. Saga Orchestrator Engine 통합 테스트
+  # Redis OCC, Celery Task 디스패치 체인, 동시성 충돌 시나리오
+  # ---------------------------------------------------------------------------
+  test-saga-orchestrator:
+    <<: *base-test
+    command: >
+      sh -c "pip uninstall -y crontab 2>/dev/null;
+             python -m pytest tests/integration/selfhealing/test_saga_orchestrator_integration.py -v --tb=short --no-cov -p no:xdist --override-ini='addopts='"
+    environment:
+      <<: [*django-env, *redis-env]
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      <<: *depends-db-redis
+
 volumes:
   postgres_test_data:
   otel_buffer_test:

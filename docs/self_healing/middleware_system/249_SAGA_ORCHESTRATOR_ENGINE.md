@@ -1,8 +1,8 @@
 # 249. Saga Orchestrator 엔진
 
-> **Version**: 1.1.0
+> **Version**: 1.2.0
 > **Created**: 2026-02-19
-> **Updated**: 2026-02-19 (v1.1.0 — 6가지 리뷰 반영)
+> **Updated**: 2026-02-19 (v1.2.0 — Docker Compose 통합 테스트 추가)
 > **Status**: Approved
 > **Parent**: [247_SAGA_ORCHESTRATOR_OVERVIEW.md](247_SAGA_ORCHESTRATOR_OVERVIEW.md)
 > **Depends**: [248_SAGA_CORE_MODELS.md](248_SAGA_CORE_MODELS.md)
@@ -1593,3 +1593,100 @@ services/saga/
 | `HEARTBEAT_INTERVAL` | 없음 | ✅ |
 | `EXTEND_SECONDS` | 없음 | ✅ |
 | `MAX_RESUME_COUNT` | 없음 | ✅ |
+
+---
+
+## 13. Docker Compose 통합 테스트 (v1.2.0)
+
+> §9의 단위·통합 테스트는 **Mock 기반**이다.
+> 본 절은 **Real Redis + Docker Compose** 환경에서 실제 Lua 스크립트·OCC·동시성 충돌을 검증하는 통합 테스트를 정의한다.
+
+### 13.1 실행 방법
+
+```bash
+docker-compose -f docker-compose.test.yml run --rm test-saga-orchestrator
+```
+
+- **서비스**: `test-saga-orchestrator` (`docker-compose.test.yml`에 정의)
+- **의존**: `db` (PostgreSQL 15), `redis` (Redis 7)
+- **테스트 파일**: `tests/integration/selfhealing/test_saga_orchestrator_integration.py`
+
+### 13.2 테스트 클래스 총괄 (10개 클래스, 31개 테스트)
+
+| # | 클래스 | 테스트 수 | 검증 대상 |
+|---|---|---|---|
+| 1 | `TestRedisOCC` | 5 | `SAGA_INSTANCE_CAS_SCRIPT` — 신규 키, 버전 일치/불일치, 순차 증가, 복잡 데이터 |
+| 2 | `TestRedisTransitionScript` | 4 | `SAGA_TRANSITION_SCRIPT` — 상태 CAS 일치/불일치, 존재하지 않는 키, 전체 라이프사이클 |
+| 3 | `TestConcurrencyConflict` | 3 | 멀티스레드 동시 저장 (1 성공/1 `SessionVersionConflictError`), 순차 증가, Stale 거부 |
+| 4 | `TestSagaLifecycleRedis` | 6 | Forward 성공, Forward 실패 → COMPENSATED, 3-step 실패, 부분 실행, DLQ 저장, 버전 카운트 |
+| 5 | `TestCeleryTaskDispatch` | 4 | RETRY_SCHEDULED → Celery dispatch, resume 재개, MAX_RESUME_COUNT 초과, 락 실패 |
+| 6 | `TestOrphanSagaScan` | 3 | Stale RUNNING 감지, SUSPENDED 감지, 종료 상태 무시 |
+| 7 | `TestLockHeartbeat` | 2 | 느린 Step 중 TTL 연장, Compensation 루프 중 TTL 연장 |
+| 8 | `TestEventDispatchChain` | 2 | 성공 이벤트 순서, 실패 이벤트 순서 |
+| 9 | `TestGovernanceBlockIntegration` | 1 | BlastRadius 차단 → GOVERNANCE_BLOCKED |
+| 10 | `TestCircuitBreakerIntegration` | 1 | CircuitBreaker OPEN → SUSPENDED 전환 |
+
+### 13.3 핵심 검증 포인트
+
+#### Redis OCC (Lua CAS)
+
+```
+✔ SAGA_INSTANCE_CAS_SCRIPT — 신규 키: version=0이면 SET 성공
+✔ SAGA_INSTANCE_CAS_SCRIPT — 버전 일치: 기대 version과 저장 version 동일 시 UPDATE + version+1
+✔ SAGA_INSTANCE_CAS_SCRIPT — 버전 불일치: 기대 version ≠ 저장 version이면 nil 반환 (충돌 감지)
+✔ SAGA_TRANSITION_SCRIPT — status CAS: 현재 status == expected 시에만 전환 허용
+```
+
+#### 동시성 충돌
+
+```
+✔ 동시 _save_instance 호출 → 1 성공 / 1 SessionVersionConflictError
+✔ 순차 _save_instance → version 0→1→2 단조 증가
+✔ Stale version write → SessionVersionConflictError 발생 확인
+```
+
+#### Celery Task 디스패치 체인
+
+```
+✔ RETRY_SCHEDULED 상태 → resume_saga_instance_task.apply_async 호출 확인
+✔ resume_saga_instance_task → orchestrator.resume_saga 호출 확인
+✔ MAX_RESUME_COUNT 초과 → DLQ 저장 + COMPENSATION_FAILED
+✔ 락 획득 실패 → resume 중단
+```
+
+### 13.4 테스트 인프라 구성
+
+```python
+class RedisTestBackend:
+    """Real Redis 기반 StateBackend (테스트 전용)."""
+    PREFIX = "selfhealing:state:"
+
+    def __init__(self, redis_client):
+        self._client = redis_client
+
+    def _make_key(self, key: str) -> str:
+        return f"{self.PREFIX}{key}"
+
+    def get(self, key: str) -> dict | None: ...
+    def set(self, key: str, value: dict) -> None: ...
+    def scan(self, match: str) -> list[str]: ...
+```
+
+- **Mock 대상**: `DistributedRecoveryLock`, `IdempotencyService`, `DLQService`, `EventBus`, `RecoveryCircuitBreaker`, `BlastRadiusService`
+- **Real 대상**: Redis (Lua 스크립트 실행, 키-값 저장, OCC 검증)
+
+### 13.5 실행 결과
+
+```
+31 passed in 6.15s
+```
+
+| 지표 | 값 |
+|---|---|
+| 총 테스트 | 31 |
+| 성공 | 31 |
+| 실패 | 0 |
+| 실행 시간 | 6.15s |
+| Python | 3.12.12 |
+| pytest | 9.0.2 |
+| Redis | 7-alpine |
