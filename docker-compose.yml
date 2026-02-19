@@ -101,7 +101,6 @@ services:
   # Celery Worker (백그라운드 작업 처리)
   celery_worker:
     image: myproject-app:latest
-    build: .
     command: celery -A myproject worker -l info --concurrency=8 -Q default,payment_critical,order_processing,external_api,points,notifications --prefetch-multiplier=1
     volumes:
       - .:/code
@@ -136,7 +135,6 @@ services:
   # Celery Beat (주기적 작업 스케줄러)
   celery_beat:
     image: myproject-app:latest
-    build: .
     command: celery -A myproject beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - .:/code
@@ -151,7 +149,6 @@ services:
   # Flower (Celery 모니터링 도구 - 선택사항)
   flower:
     image: myproject-app:latest
-    build: .
     command: celery -A myproject flower
     volumes:
       - .:/code
