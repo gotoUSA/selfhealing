@@ -227,6 +227,10 @@ class TestSagaStepStatusContract:
         """EXECUTE_FAILED 값은 'execute_failed'."""
         assert SagaStepStatus.EXECUTE_FAILED == "execute_failed"
 
+    def test_retry_scheduled_value(self):
+        """RETRY_SCHEDULED 값은 'retry_scheduled'."""
+        assert SagaStepStatus.RETRY_SCHEDULED == "retry_scheduled"
+
     def test_compensating_value(self):
         """COMPENSATING 값은 'compensating'."""
         assert SagaStepStatus.COMPENSATING == "compensating"
@@ -240,8 +244,8 @@ class TestSagaStepStatusContract:
         assert SagaStepStatus.COMPENSATE_FAILED == "compensate_failed"
 
     def test_step_status_count(self):
-        """SagaStepStatus는 7개의 값을 가진다."""
-        assert len(SagaStepStatus) == 7
+        """SagaStepStatus는 8개의 값을 가진다."""
+        assert len(SagaStepStatus) == 8
 
 
 # =============================================================================

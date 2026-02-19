@@ -96,6 +96,7 @@ _SCHEDULE_MODULES = [
     ("governance", "selfhealing.tasks.governance", "get_governance_beat_schedule", "governance (emergency mode expiry)"),
     ("xtest_cleanup", "selfhealing.tasks.xtest_cleanup_tasks", "get_xtest_cleanup_beat_schedule", "X-Test cleanup"),
     ("audit_flush", "selfhealing.tasks.audit_flush", "get_audit_flush_beat_schedule", "Redis Audit flush"),
+    ("saga", "selfhealing.services.saga.tasks", "get_saga_beat_schedule", "Saga orchestrator"),
 ]
 
 
@@ -129,6 +130,7 @@ def get_selfhealing_beat_schedule(
     include_governance: bool = True,
     include_xtest_cleanup: bool = True,
     include_audit_flush: bool = True,
+    include_saga: bool = True,
     include_legacy: bool = True,
 ) -> dict[str, Any]:
     """
@@ -143,6 +145,7 @@ def get_selfhealing_beat_schedule(
         include_governance: Include 🛡️ Governance tasks (emergency mode expiry)
         include_xtest_cleanup: Include 🧪 X-Test Artifact Cleanup tasks
         include_audit_flush: Include 📝 Redis Audit 버퍼 플러시 tasks
+        include_saga: Include 🔄 Saga Orchestrator tasks (orphan saga scan)
         include_legacy: Include legacy tasks from adapters/celery/tasks.py
 
     Returns:
@@ -166,6 +169,7 @@ def get_selfhealing_beat_schedule(
         "governance": include_governance,
         "xtest_cleanup": include_xtest_cleanup,
         "audit_flush": include_audit_flush,
+        "saga": include_saga,
     }
 
     schedule: dict[str, Any] = {}

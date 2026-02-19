@@ -612,3 +612,26 @@ throttle_dlq_fallback_total = get_or_create_counter(
     "Total DLQ fallback writes by channel",
     ["channel"],
 )
+
+
+# =============================================================================
+# Saga Orchestrator Metrics
+# =============================================================================
+
+saga_executions_total = get_or_create_counter(
+    "selfhealing_saga_executions_total",
+    "Total saga execution count by saga name and final status",
+    ["saga_name", "status"],
+)
+
+saga_step_duration_seconds = get_or_create_histogram(
+    "selfhealing_saga_step_duration_seconds",
+    "Step execution duration in seconds by saga name, step name and phase",
+    ["saga_name", "step_name", "phase"],
+)
+
+saga_compensation_steps_total = get_or_create_counter(
+    "selfhealing_saga_compensation_steps_total",
+    "Total compensation step count by saga name, step name and status",
+    ["saga_name", "step_name", "status"],
+)
