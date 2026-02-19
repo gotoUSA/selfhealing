@@ -983,6 +983,7 @@ def list_saga_definitions() -> list[str]:
 | **보상 맥락** | `RecoverySession.abort_reason` | `SagaContext.abort_reason` + `failed_step_name` + `abort_error_code` |
 | **부분 실패** | 미지원 (COMPLETED만 보상 대상) | `StepResult.partial_execution` + `get_compensation_targets()` |
 | **백오프** | 미지원 (자체 없음) | `SagaDefinition.retry_backoff_strategy` → `core/backoff.py` 재사용 |
+| **레지스트리 생명주기** | `SelfHealingConfig.ready()`에서 handler 등록 | `AppConfig.ready()` 동일 패턴 + 버전 재등록(덮어쓰기) + 미등록 시 SUSPENDED Fail-Safe |
 
 ---
 
