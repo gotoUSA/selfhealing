@@ -91,6 +91,7 @@ class SagaStepStatus(str, Enum):
     EXECUTING = "executing"
     EXECUTED = "executed"
     EXECUTE_FAILED = "execute_failed"
+    RETRY_SCHEDULED = "retry_scheduled"
     COMPENSATING = "compensating"
     COMPENSATED = "compensated"
     COMPENSATE_FAILED = "compensate_failed"

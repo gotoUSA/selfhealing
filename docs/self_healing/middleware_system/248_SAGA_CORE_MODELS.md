@@ -1,8 +1,8 @@
 # 248. Saga 코어 모델 설계
 
-> **Version**: 1.1.0
+> **Version**: 1.2.0
 > **Created**: 2026-02-19
-> **Updated**: 2026-02-19 (v1.1.0 — 6가지 리뷰 반영)
+> **Updated**: 2026-02-19 (v1.2.0 — 249번 엔진 리뷰 R3 반영: RETRY_SCHEDULED 상태 추가)
 > **Status**: Implemented
 > **Parent**: [247_SAGA_ORCHESTRATOR_OVERVIEW.md](247_SAGA_ORCHESTRATOR_OVERVIEW.md)
 > **Priority**: P1 — Saga 엔진의 기반 자료구조
@@ -537,6 +537,7 @@ class SagaStepStatus(str, Enum):
     EXECUTING = "executing"
     EXECUTED = "executed"            # Forward 성공
     EXECUTE_FAILED = "execute_failed"  # Forward 실패
+    RETRY_SCHEDULED = "retry_scheduled"  # v1.2.0: 재시도 대기 (§ 아래 설명)
     COMPENSATING = "compensating"
     COMPENSATED = "compensated"      # Compensate 성공
     COMPENSATE_FAILED = "compensate_failed"  # Compensate 실패
@@ -1235,3 +1236,70 @@ if definition is None:
 | `StepResult.partial_execution` | 없음 | ✅ |
 | `StepResult.failed_with_side_effect()` | 없음 | ✅ |
 | `SagaInstance.get_compensation_targets()` | 없음 | ✅ |
+| `SagaStepStatus.RETRY_SCHEDULED` | 없음 (v1.2.0 신규) | ✅ |
+
+---
+
+## 8. v1.2.0 변경 사항 — 249번 엔진 리뷰 R3 반영
+
+### 8.1 SagaStepStatus.RETRY_SCHEDULED 추가
+
+**리뷰 배경**: 249번 문서의 ForwardLoop에서 Step 실패 후 재시도 대기 시,
+`status = NOT_STARTED`로 되돌리면 "초기 대기"와 "재시도 대기"를 대시보드에서 구분할 수 없음.
+
+**변경 내용**: `SagaStepStatus` enum에 `RETRY_SCHEDULED = "retry_scheduled"` 추가.
+
+**네이밍 결정 과정**:
+
+| 후보 | 기존 enum 패턴 부합 | 의미 정확성 | 최종 |
+|------|-------------------|-----------|------|
+| `PENDING_RETRY` | ❌ `형용사_명사` 형식 | △ "대기 중"이지만 어디서 대기하는지 불명확 | 미채택 |
+| `AWAITING_RETRY` | ❌ `분사_명사` 형식 | △ 수동적 뉘앙스 | 미채택 |
+| `RETRY_SCHEDULED` | ✅ `명사_과거분사` 형식 | ✅ "Celery에 스케줄됨" — 실제 동작과 1:1 대응 | **채택** |
+
+기존 enum의 패턴 분석:
+- 동작 진행중: `EXECUTING`, `COMPENSATING` (-ing 접미어)
+- 동작 완료: `EXECUTED`, `COMPENSATED` (-ed 접미어)
+- 동작 실패: `EXECUTE_FAILED`, `COMPENSATE_FAILED` (_FAILED 접미어)
+- 기타: `NOT_STARTED`
+
+`RETRY_SCHEDULED`는 "_SCHEDULED 접미어"로 "미래 시점에 예약된 동작"을 명확히 표현.
+
+**상태 전이 다이어그램 업데이트**:
+
+```
+NOT_STARTED → EXECUTING → EXECUTED
+                       → EXECUTE_FAILED → RETRY_SCHEDULED → EXECUTING (재진입)
+                                        → (COMPENSATING으로 전환)
+```
+
+**보상 대상 필터에서의 처리**:
+- `get_compensation_targets()`에서 `RETRY_SCHEDULED`는 **제외**
+- 재시도 대기 중이므로 execute도 compensate도 아닌 중간 상태
+- 재시도 횟수 초과 시 `EXECUTE_FAILED` + `partial_execution` 전파 → 보상 대상 포함 가능
+
+**코드 변경** (`services/saga/models.py`):
+
+```python
+class SagaStepStatus(str, Enum):
+    """개별 Step의 실행 상태."""
+    NOT_STARTED = "not_started"
+    EXECUTING = "executing"
+    EXECUTED = "executed"
+    EXECUTE_FAILED = "execute_failed"
+    RETRY_SCHEDULED = "retry_scheduled"  # v1.2.0 추가
+    COMPENSATING = "compensating"
+    COMPENSATED = "compensated"
+    COMPENSATE_FAILED = "compensate_failed"
+```
+
+**영향 범위**:
+
+| 코드 위치 | 영향 | 조치 |
+|-----------|------|------|
+| `SagaStepInstance.from_dict()` | `SagaStepStatus(data.get("status"))` — enum 역직렬화 자동 지원 | 변경 불필요 |
+| `SagaInstance.get_compensation_targets()` | `RETRY_SCHEDULED` 미포함 — 기존 조건(`EXECUTED ∥ EXECUTE_FAILED+partial`) 유지 | 변경 불필요 |
+| `SagaInstance.get_executed_steps()` | `EXECUTED`만 필터 — `RETRY_SCHEDULED` 자동 제외 | 변경 불필요 |
+| `SagaInstance.get_progress()` | `EXECUTED` 카운트에 미포함 — 정확 | 변경 불필요 |
+| `_execute_forward()` (249번 §3.2) | `RETRY_SCHEDULED` 상태 할당 + Celery countdown | 249번 문서에서 구현 |
+| `resume_saga()` (249번 §3.7) | `RETRY_SCHEDULED` → `EXECUTING` 재진입 시 Step 재실행 | 249번 문서에서 구현 |
