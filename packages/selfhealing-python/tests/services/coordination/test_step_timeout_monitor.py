@@ -508,6 +508,39 @@ class TestSessionVersionOccBehavior:
         coordinator._save_session(session)
         assert session.version == v1 + 1
 
+    def test_session_version_conflict_rejected(self):
+        """Redis CAS에서 version 불일치 시 SessionVersionConflictError 발생."""
+        # Mock Redis 백엔드: _client.eval이 0 반환 → version 충돌
+        mock_client = MagicMock()
+        mock_client.eval.return_value = 0  # CAS 거부
+
+        mock_backend = MagicMock()
+        mock_backend._client = mock_client
+        mock_backend._make_key = lambda k: f"prefix:{k}"
+
+        lock = InMemoryRecoveryLock()
+        coordinator = RecoveryCoordinator(
+            backend=mock_backend,
+            recovery_lock=lock,
+            use_idempotent_handlers=False,
+            use_regional_policy=False,
+        )
+
+        session = RecoverySession(
+            id="test-conflict",
+            namespace="conflict-ns",
+            trigger_level="LEVEL_3",
+            version=5,
+        )
+
+        with pytest.raises(SessionVersionConflictError) as exc_info:
+            coordinator._save_session(session)
+
+        assert exc_info.value.session_id == "test-conflict"
+        assert exc_info.value.expected_version == 5
+        # version이 롤백되어야 한다
+        assert session.version == 5
+
 
 class TestExecuteNextStepTimeoutBehavior:
     """execute_next_step()의 타임아웃 통합 동작 검증."""

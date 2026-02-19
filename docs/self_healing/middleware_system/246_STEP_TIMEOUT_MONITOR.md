@@ -396,7 +396,7 @@ def from_dict(cls, data: dict[str, Any]) -> RecoveryStep:
 
 **파일**: `recovery_coordinator.py` L942-1040
 
-Step 생성 시 `timeout_seconds=0` (Settings 기본값 사용):
+Step 생성 시 `timeout_seconds`를 생략하여 dataclass 기본값(0)을 사용한다:
 
 ```python
 # Step 1: BUDGET_RESET
@@ -404,7 +404,6 @@ steps.append(RecoveryStep(
     step_type=RecoveryStepType.BUDGET_RESET,
     order=order,
     wait_after_seconds=0,
-    timeout_seconds=0,  # → settings.budget_reset_timeout_seconds (60s)
     params={"target_multiplier": 1.0},
 ))
 
@@ -413,12 +412,13 @@ steps.append(RecoveryStep(
     step_type=RecoveryStepType.HEALTH_CHECK,
     order=order,
     wait_after_seconds=params.get("health_check_wait", 0),
-    timeout_seconds=0,  # → settings.health_check_timeout_seconds (600s)
     params={...},
 ))
 ```
 
-`timeout_seconds=0`으로 두면 `_get_step_timeout()`이 Settings에서 Step 유형별 기본값을 가져온다.
+`timeout_seconds` 기본값이 0이므로, 생략 시 `_get_step_timeout()`이 Settings에서 Step 유형별 기본값을 가져온다.
+프로젝트 전체의 `RecoveryStep` 생성 패턴(`DEFAULT_RECOVERY_STEPS`, `_get_recovery_steps()`)과 동일하게
+dataclass 기본값과 동일한 인자는 명시하지 않는다.
 커스텀 Step은 개별 값 지정 가능:
 
 ```python
