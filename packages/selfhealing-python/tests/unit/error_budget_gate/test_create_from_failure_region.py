@@ -24,7 +24,7 @@ import pytest
 
 # 소스 파일 경로
 _PACKAGE_SRC = Path(__file__).resolve().parent.parent.parent.parent / "src" / "selfhealing"
-_ADAPTERS_MODELS_PATH = _PACKAGE_SRC / "adapters" / "django" / "models.py"
+_ADAPTERS_MODELS_PATH = _PACKAGE_SRC / "adapters" / "django" / "models" / "_abstract_failed_operation.py"
 
 
 class TestAbstractFailedOperationRegionInjectionContract:
@@ -172,7 +172,7 @@ class TestRegionInjectionLogicBehavior:
 # =============================================================================
 
 _PACKAGE_SRC = Path(__file__).resolve().parent.parent.parent.parent / "src"
-_MODELS_PATH = _PACKAGE_SRC / "selfhealing" / "adapters" / "django" / "models.py"
+_MODELS_PATH = _PACKAGE_SRC / "selfhealing" / "adapters" / "django" / "models" / "_abstract_failed_operation.py"
 
 
 class TestShoppingFailedOperationRegionInjectionContract:
