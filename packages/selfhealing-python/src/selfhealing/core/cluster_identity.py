@@ -147,7 +147,7 @@ class ClusterIdentity(BaseSettings):
         # 검증 실패 처리
         if errors:
             error_msg = (
-                "❌ [FATAL] ClusterIdentity validation failed:\n"
+                "[FATAL] ClusterIdentity validation failed:\n"
                 + "\n".join(f"  - {e}" for e in errors)
                 + "\n\nRefusing to start to prevent namespace collision."
             )
@@ -160,9 +160,9 @@ class ClusterIdentity(BaseSettings):
                 return False
 
         logger.info(
-            f"✅ [ClusterIdentity] Validated: "
-            f"cluster={self.cluster_id}, region={self.region}, "
-            f"env={self.environment}, pod={self.pod_id}"
+            "[ClusterIdentity] Validated: "
+            "cluster=%s, region=%s, env=%s, pod=%s",
+            self.cluster_id, self.region, self.environment, self.pod_id,
         )
         return True
 
@@ -200,7 +200,7 @@ def get_cluster_identity(skip_validation: bool = False) -> ClusterIdentity:
             if not is_valid:
                 _quarantine_mode = True
                 logger.warning(
-                    "⚠️ [QuarantineMode] System running in Quarantine Mode. " "Cross-cluster operations will be disabled."
+                    "[QuarantineMode] System running in Quarantine Mode. " "Cross-cluster operations will be disabled."
                 )
     return _identity
 
@@ -231,9 +231,9 @@ def set_quarantine_mode(enabled: bool) -> None:
     global _quarantine_mode
     _quarantine_mode = enabled
     if enabled:
-        logger.warning("⚠️ [QuarantineMode] Manually enabled by administrator")
+        logger.warning("[QuarantineMode] Manually enabled by administrator")
     else:
-        logger.info("✅ [QuarantineMode] Disabled by administrator")
+        logger.info("[QuarantineMode] Disabled by administrator")
 
 
 def reset_cluster_identity() -> None:
