@@ -200,8 +200,43 @@ class RecoveryCoordinatorSettings(BaseSettings):
         default=300,
         ge=30,
         le=1800,
-        description="단일 복구 단계 실행 타임아웃 (초)",
+        description="단일 복구 단계 실행 타임아웃 (초). Step에 timeout_seconds 미설정 시 전역 기본값",
     )
+
+    # ==========================================================================
+    # Step 유형별 타임아웃 설정
+    # ==========================================================================
+    budget_reset_timeout_seconds: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="BUDGET_RESET Step 타임아웃 (초)",
+    )
+    health_check_timeout_seconds: int = Field(
+        default=600,
+        ge=30,
+        le=3600,
+        description="HEALTH_CHECK Step 타임아웃 (초). 안정화 검증이므로 길게 설정",
+    )
+    canary_resume_timeout_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=1800,
+        description="CANARY_RESUME Step 타임아웃 (초)",
+    )
+    governance_normal_timeout_seconds: int = Field(
+        default=120,
+        ge=10,
+        le=600,
+        description="GOVERNANCE_NORMAL Step 타임아웃 (초)",
+    )
+    compensation_step_timeout_seconds: int = Field(
+        default=120,
+        ge=10,
+        le=600,
+        description="개별 보상 핸들러 실행 타임아웃 (초). Forward보다 짧게 설정 권장",
+    )
+
     max_resume_count: int = Field(
         default=3,
         ge=1,

@@ -93,6 +93,9 @@ class RecoveryStep:
     wait_after_seconds: int = 0
     """완료 후 대기 시간 (초). 다음 단계 실행 전 안정화 대기."""
 
+    timeout_seconds: int = 0
+    """Step 실행 최대 허용 시간 (초). 0이면 Settings 기본값 사용."""
+
     params: dict[str, Any] = field(default_factory=dict)
     """
     추가 파라미터.
@@ -148,6 +151,7 @@ class RecoveryStep:
             "order": self.order,
             "status": self.status.value,
             "wait_after_seconds": self.wait_after_seconds,
+            "timeout_seconds": self.timeout_seconds,
             "params": self.params,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
@@ -164,6 +168,7 @@ class RecoveryStep:
             order=data["order"],
             status=RecoveryStatus(data.get("status", "not_started")),
             wait_after_seconds=data.get("wait_after_seconds", 0),
+            timeout_seconds=data.get("timeout_seconds", 0),
             params=data.get("params", {}),
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
@@ -230,6 +235,9 @@ class RecoverySession:
 
     status: RecoveryStatus = RecoveryStatus.NOT_STARTED
     """전체 복구 상태."""
+
+    version: int = 0
+    """OCC(Optimistic Concurrency Control)용 버전 카운터. 저장 시마다 +1 증가."""
 
     steps: list[RecoveryStep] = field(default_factory=list)
     """복구 단계 목록."""
@@ -306,6 +314,7 @@ class RecoverySession:
             "namespace": self.namespace,
             "trigger_level": self.trigger_level,
             "status": self.status.value,
+            "version": self.version,
             "steps": [step.to_dict() for step in self.steps],
             "current_step_index": self.current_step_index,
             "started_at": self.started_at,
@@ -326,6 +335,7 @@ class RecoverySession:
             namespace=data["namespace"],
             trigger_level=data["trigger_level"],
             status=RecoveryStatus(data.get("status", "not_started")),
+            version=data.get("version", 0),
             steps=steps,
             current_step_index=data.get("current_step_index", 0),
             started_at=data.get("started_at"),

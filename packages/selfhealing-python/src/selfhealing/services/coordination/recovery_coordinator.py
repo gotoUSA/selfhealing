@@ -26,6 +26,8 @@ Reference:
 
 from __future__ import annotations
 
+import concurrent.futures
+import json
 import logging
 import threading
 import uuid
@@ -60,6 +62,59 @@ if TYPE_CHECKING:
     from .regional_recovery_policy import RegionalRecoveryPolicyEngine
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Step-Level Timeout 관련 예외 및 상수
+# =============================================================================
+
+LOCK_HEARTBEAT_INTERVAL_SECONDS = 60
+"""Lock 하트비트 간격 (초). _execute_with_timeout() Polling 루프 주기."""
+
+
+class StepTimeoutError(Exception):
+    """Step 실행 시간 초과.
+
+    _execute_with_timeout()에서 핸들러가 timeout_seconds 내에
+    완료되지 않을 때 발생한다.
+    """
+
+    def __init__(self, step_type: str, timeout_seconds: int):
+        self.step_type = step_type
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"Step '{step_type}' timed out after {timeout_seconds}s")
+
+
+class SessionVersionConflictError(Exception):
+    """세션 저장 시 버전 충돌.
+
+    좀비 스레드의 뒤늦은 저장을 차단하기 위한 OCC 예외.
+    canary/versioning.py의 VersionConflictError와 패턴 통일.
+    """
+
+    def __init__(self, session_id: str, expected: int, actual: int):
+        self.session_id = session_id
+        self.expected_version = expected
+        self.actual_version = actual
+        super().__init__(f"Session version conflict: {session_id}, " f"expected v{expected}, actual v{actual}")
+
+
+# Redis Lua 스크립트: version 기반 CAS (Compare-And-Set)
+SESSION_CAS_SCRIPT = """
+local current = redis.call("GET", KEYS[1])
+if current == false then
+    redis.call("SET", KEYS[1], ARGV[1])
+    return 1
+end
+local data = cjson.decode(current)
+local expected_version = tonumber(ARGV[2])
+if data["version"] == nil or data["version"] == expected_version then
+    redis.call("SET", KEYS[1], ARGV[1])
+    return 1
+else
+    return 0
+end
+"""
 
 
 class RecoveryCoordinator:
@@ -370,8 +425,14 @@ class RecoveryCoordinator:
             동일한 Step에 대해 compensate가 여러 번 호출되어도 동일한 결과를 보장해야 합니다.
             (서버 재시작, 네트워크 재시도 등으로 인해 중복 호출될 수 있음)
 
-            Reference:
-                docs/self_healing/middleware_system/248_SAGA_CORE_MODELS.md §2.4 SagaStep
+        Warning:
+            1. handler 내부에서 RecoveryCoordinator의 public API를 직접 호출하면
+               데드락이 발생할 수 있습니다. (self._lock이 RLock이지만
+               ThreadPoolExecutor의 별도 스레드에서 실행되므로)
+            2. 핸들러가 호출하는 모든 외부 서비스에는 반드시 라이브러리 레벨
+               Timeout을 설정해야 합니다. (예: requests.get(url, timeout=30))
+            3. 장기 실행 핸들러는 getattr(step, '_stop_event', None)으로
+               취소 신호를 주기적으로 확인해야 합니다.
         """
         self._step_handlers[step_type] = handler
         if compensate is not None:
@@ -479,8 +540,8 @@ class RecoveryCoordinator:
         """
         다음 복구 단계 실행.
 
-        Phase 2.7: 멱등성 핸들러 적용
-        Phase 3.7: READY_TO_RESTORE 상태 전환
+        개별 Step에 타임아웃을 적용하고, 협력적 취소(stop_event)를 주입하며,
+        Lock 하트비트를 유지하면서 핸들러를 실행한다.
 
         Args:
             namespace: 네임스페이스
@@ -501,28 +562,35 @@ class RecoveryCoordinator:
 
             step = session.get_current_step()
             if not step:
-                # 모든 단계 완료 - Phase 3.7: READY_TO_RESTORE 체크
                 self._handle_all_steps_completed(session)
                 return None
 
-            # 단계 실행
+            # 단계 실행 준비
             now = datetime.now(timezone.utc).isoformat()
             step.started_at = now
             step.status = RecoveryStatus.IN_PROGRESS
 
+            # 협력적 취소 Event 주입 (좀비 스레드 종료 신호용)
+            stop_event = threading.Event()
+            step._stop_event = stop_event  # type: ignore[attr-defined]
+
+            # Step 타임아웃 결정 (Step 개별 → 유형별 Settings → 전역 기본값)
+            timeout = self._get_step_timeout(step)
+
             try:
-                # Phase 2.7: 멱등성 핸들러 사용 시도
+                # 핸들러 선택
                 idempotent_registry = self._get_idempotent_registry()
 
                 if idempotent_registry and idempotent_registry.has_handler(step.step_type):
-                    # 멱등성 핸들러 실행
-                    result = idempotent_registry.execute(session, step)
+                    handler_fn = lambda: idempotent_registry.execute(session, step)
                 else:
-                    # 기본 핸들러 실행
                     handler = self._step_handlers.get(step.step_type)
                     if not handler:
                         raise ValueError(f"No handler for step type: {step.step_type}")
-                    result = handler(session, step)
+                    handler_fn = lambda: handler(session, step)
+
+                # 타임아웃 + Lock 하트비트 + Django DB 안전 래퍼 적용 실행
+                result = self._execute_with_timeout(handler_fn, timeout, step, session)
 
                 if result.get("success"):
                     step.status = RecoveryStatus.COMPLETED
@@ -538,7 +606,6 @@ class RecoveryCoordinator:
                     elif result.get("already_applied"):
                         idempotent_info = " (already applied)"
 
-                    # Phase 5.3: 단계 완료 감사 기록
                     self._record_step_executed(session, step, success=True, result=result)
 
                     logger.info(
@@ -548,7 +615,6 @@ class RecoveryCoordinator:
                     step.status = RecoveryStatus.FAILED
                     step.error_message = result.get("error", "Unknown error")
 
-                    # Phase 5.3: 단계 실패 감사 기록
                     self._record_step_executed(
                         session,
                         step,
@@ -563,11 +629,29 @@ class RecoveryCoordinator:
                         f"[Recovery] Step failed: {step.step_type.value}, " f"session={session.id}, error={step.error_message}"
                     )
 
+            except StepTimeoutError:
+                # 타임아웃 시 stop_event 설정 → 좀비 스레드에 종료 신호
+                stop_event.set()
+
+                step.status = RecoveryStatus.FAILED
+                step.error_message = str(StepTimeoutError(step.step_type.value, timeout))
+
+                self._record_step_executed(
+                    session,
+                    step,
+                    success=False,
+                    error_message=step.error_message,
+                    result=None,
+                )
+
+                self._fail_session(session, step.error_message)
+
+                logger.error(f"[Recovery] Step timeout: {step.step_type.value}, " f"session={session.id}, timeout={timeout}s")
+
             except Exception as e:
                 step.status = RecoveryStatus.FAILED
                 step.error_message = str(e)
 
-                # Phase 5.3: 예외 발생 감사 기록
                 self._record_step_executed(session, step, success=False, error_message=str(e), result=None)
 
                 self._fail_session(session, str(e))
@@ -951,6 +1035,153 @@ class RecoveryCoordinator:
             return {"success": False, "error": str(e)}
 
     # =========================================================================
+    # Step Timeout Methods
+    # =========================================================================
+
+    def _get_step_timeout(self, step: RecoveryStep) -> int:
+        """
+        Step의 실효 타임아웃 결정.
+
+        우선순위:
+        1. step.timeout_seconds > 0 → Step 개별 설정 사용
+        2. Settings의 Step 유형별 기본값
+        3. Settings의 step_execution_timeout_seconds (전역 기본값)
+
+        Args:
+            step: RecoveryStep
+
+        Returns:
+            타임아웃 (초)
+        """
+        # 1. Step 개별 설정
+        if step.timeout_seconds > 0:
+            return step.timeout_seconds
+
+        # 2. Step 유형별 Settings
+        settings = get_recovery_coordinator_settings()
+        type_timeout_map = {
+            RecoveryStepType.BUDGET_RESET: settings.budget_reset_timeout_seconds,
+            RecoveryStepType.HEALTH_CHECK: settings.health_check_timeout_seconds,
+            RecoveryStepType.CANARY_RESUME: settings.canary_resume_timeout_seconds,
+            RecoveryStepType.GOVERNANCE_NORMAL: settings.governance_normal_timeout_seconds,
+        }
+
+        type_timeout = type_timeout_map.get(step.step_type)
+        if type_timeout and type_timeout > 0:
+            return type_timeout
+
+        # 3. 전역 기본값
+        return settings.step_execution_timeout_seconds
+
+    def _execute_with_timeout(
+        self,
+        handler_fn: Callable[[], dict[str, Any]],
+        timeout_seconds: int,
+        step: RecoveryStep,
+        session: RecoverySession,
+    ) -> dict[str, Any]:
+        """
+        핸들러를 타임아웃 + Lock Heartbeat + Django DB 안전 래퍼와 함께 실행.
+
+        Args:
+            handler_fn: 실행할 핸들러 함수 (인자 없는 callable)
+            timeout_seconds: 타임아웃 (초)
+            step: RecoveryStep (에러 보고용 + _stop_event 참조)
+            session: RecoverySession (Lock extend용)
+
+        Returns:
+            핸들러 결과 dict
+
+        Raises:
+            StepTimeoutError: 타임아웃 초과 시
+        """
+
+        def _wrapped_handler() -> dict[str, Any]:
+            """Django DB 커넥션 안전 래퍼."""
+            try:
+                from django.db import close_old_connections
+
+                close_old_connections()
+            except Exception:
+                pass  # Django 미설치 또는 미설정 환경
+            try:
+                return handler_fn()
+            finally:
+                try:
+                    from django.db import close_old_connections
+
+                    close_old_connections()
+                except Exception:
+                    pass  # Django 미설치 또는 미설정 환경
+
+        # ThreadPoolExecutor를 매 Step마다 생성 (Bulkhead 격리)
+        # 이유: 전역 풀(max_workers=1)에서 좀비가 worker를 점유하면
+        # 다음 Step 제출이 영구 block (Head-of-Line Blocking).
+        # 복구 세션당 최대 4 Step이므로 생성 오버헤드 무시 가능.
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            future = executor.submit(_wrapped_handler)
+            elapsed = 0
+            heartbeat = LOCK_HEARTBEAT_INTERVAL_SECONDS
+
+            # Polling 대기 루프: heartbeat 간격으로 Lock 연장
+            while elapsed < timeout_seconds:
+                remaining = timeout_seconds - elapsed
+                wait_time = min(heartbeat, remaining)
+                try:
+                    result = future.result(timeout=wait_time)
+                    return result
+                except concurrent.futures.TimeoutError:
+                    elapsed += wait_time
+                    if elapsed >= timeout_seconds:
+                        break
+                    # Lock TTL 연장 (하트비트)
+                    self._recovery_lock.extend(
+                        session.namespace,
+                        session.id,
+                        additional_seconds=300,  # 5분 연장
+                    )
+                    logger.debug(
+                        f"[Recovery] Lock heartbeat: step={step.step_type.value}, " f"elapsed={elapsed}s/{timeout_seconds}s"
+                    )
+
+            # 타임아웃 초과
+            logger.error(
+                f"[Recovery] Step TIMEOUT: {step.step_type.value}, " f"timeout={timeout_seconds}s, session={session.id}"
+            )
+
+            # 좀비 스레드에 종료 신호 (협력적 취소)
+            stop_event = getattr(step, "_stop_event", None)
+            if stop_event:
+                stop_event.set()
+
+            # 타임아웃 이벤트 발행 (Fail-Open)
+            try:
+                from selfhealing.services.event_bus import EventType, get_event_bus
+
+                get_event_bus().emit(
+                    event_type=EventType.EMERGENCY_RECOVERY_STARTED,
+                    data={
+                        "event": "step_timeout",
+                        "step_type": step.step_type.value,
+                        "timeout_seconds": timeout_seconds,
+                        "session_id": session.id,
+                    },
+                    source="recovery_coordinator",
+                )
+            except Exception:
+                pass
+
+            raise StepTimeoutError(
+                step_type=step.step_type.value,
+                timeout_seconds=timeout_seconds,
+            )
+        finally:
+            # wait=False: 좀비 스레드 완료를 기다리지 않고 즉시 반환
+            # 좀비 스레드는 _stop_event.set()으로 협력적 취소 신호를 받음
+            executor.shutdown(wait=False, cancel_futures=True)
+
+    # =========================================================================
     # Private Methods
     # =========================================================================
 
@@ -1304,13 +1535,48 @@ class RecoveryCoordinator:
         }
 
     def _save_session(self, session: RecoverySession) -> None:
-        """세션 저장."""
+        """세션 저장 (OCC 적용).
+
+        저장 시 version을 +1 증가시키고, Redis에서 현재 version과
+        일치할 때만 저장한다. 불일치 시 SessionVersionConflictError.
+
+        좀비 스레드의 뒤늦은 저장 시도를 차단한다.
+        """
+        expected_version = session.version
+        session.version += 1  # 저장 전 version 증가
+
         backend = self._get_backend()
         key = self.SESSION_KEY.format(
             namespace=session.namespace,
             session_id=session.id,
         )
-        backend.set(key, session.to_dict())
+
+        # RedisStateBackend인 경우 CAS 적용
+        if hasattr(backend, "_client"):
+            try:
+                data = json.dumps(session.to_dict(), default=str)
+                result = backend._client.eval(
+                    SESSION_CAS_SCRIPT,
+                    1,
+                    backend._make_key(key),
+                    data,
+                    str(expected_version),
+                )
+                if result == 0:
+                    session.version = expected_version  # 롤백
+                    raise SessionVersionConflictError(
+                        session.id,
+                        expected_version,
+                        session.version,
+                    )
+            except SessionVersionConflictError:
+                raise
+            except Exception:
+                # CAS 실패 시 Fail-Open: 기존 방식으로 폴백
+                backend.set(key, session.to_dict())
+        else:
+            # InMemory/File 백엔드: 단순 저장 (self._lock으로 이미 보호)
+            backend.set(key, session.to_dict())
 
     def _set_active_session(
         self,
@@ -1562,21 +1828,19 @@ class RecoveryCoordinator:
         """
         완료된 Step을 역순으로 보상 시도.
 
+        보상 핸들러에도 타임아웃을 적용한다.
+        Forward 핸들러가 외부 API 타임아웃으로 실패했다면,
+        동일 API를 호출하는 보상 핸들러도 hang될 수 있으므로
+        별도의 compensation_step_timeout_seconds를 적용한다.
+
         설계 원칙:
         - Fail-Open: 보상 실패가 세션 실패 처리를 중단시키지 않음.
         - At-least-once: 보상은 최소 1회 실행을 보장.
           compensate 핸들러는 반드시 멱등성(Idempotency)을 가져야 한다.
-          서버 재시작 시 compensation_status가 PENDING인 Step들은
-          재보상 대상이 될 수 있으므로, 핸들러가 중복 실행에 안전해야 한다.
         - compensate 핸들러가 등록되지 않은 Step은 건너뜀.
 
         Returns:
             CompensationResult — 보상 성공/실패/건너뜀 Step 목록.
-            Phase 3 DLQ 연동 시 failed_steps를 DLQ로 전송.
-
-        Reference:
-            docs/self_healing/middleware_system/248_SAGA_CORE_MODELS.md §2.3 SagaContext
-            docs/self_healing/middleware_system/248_SAGA_CORE_MODELS.md §2.4 SagaStep
         """
         result = CompensationResult()
 
@@ -1585,10 +1849,11 @@ class RecoveryCoordinator:
         # 역순 정렬 (order 기준 내림차순)
         completed_steps.sort(key=lambda s: s.order, reverse=True)
 
+        settings = get_recovery_coordinator_settings()
+        comp_timeout = settings.compensation_step_timeout_seconds
+
         for step in completed_steps:
             # 매 Step 보상 전 Lock TTL 연장 (하트비트)
-            # 기본 TTL 30분이 보상 도중 만료되면
-            # 다른 Worker가 동일 세션을 잡아 중복 실행할 위험이 있음
             self._recovery_lock.extend(
                 session.namespace,
                 session.id,
@@ -1608,7 +1873,15 @@ class RecoveryCoordinator:
                 continue
 
             try:
-                handler_result = compensate_handler(session, step)
+                # 보상에도 타임아웃 적용 (Forward와 독립적 설정)
+                handler_fn = lambda s=step: compensate_handler(session, s)
+                handler_result = self._execute_with_timeout(
+                    handler_fn,
+                    comp_timeout,
+                    step,
+                    session,
+                )
+
                 if handler_result.get("success"):
                     # 보상 성공 즉시 상태 저장 (서버 재시작 대비)
                     step.compensation_status = CompensationStatus.COMPENSATED
@@ -1623,6 +1896,12 @@ class RecoveryCoordinator:
 
                     result.failed_steps.append((step, error_msg))
                     logger.warning(f"[Recovery] Compensation failed: " f"{step.step_type.value}, error={error_msg}")
+            except StepTimeoutError as e:
+                # 보상 타임아웃도 COMPENSATE_FAILED 처리
+                step.compensation_status = CompensationStatus.COMPENSATE_FAILED
+                self._save_session(session)
+                result.failed_steps.append((step, str(e)))
+                logger.warning(f"[Recovery] Compensation timeout: {step.step_type.value}, " f"timeout={comp_timeout}s")
             except Exception as e:
                 step.compensation_status = CompensationStatus.COMPENSATE_FAILED
                 self._save_session(session)
