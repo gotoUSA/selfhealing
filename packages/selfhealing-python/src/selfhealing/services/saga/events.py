@@ -2,14 +2,17 @@
 Saga EventType 확장.
 
 Saga Orchestrator에서 사용하는 이벤트 타입을 정의한다.
-기존 EventType enum에 추가되는 Saga 전용 이벤트 값을 문자열 상수로 관리한다.
+도메인별 EventType 분리 패턴(AuditEventType, RecoveryAuditEventType)에 따라
+Saga 전용 이벤트를 별도 (str, Enum) 클래스로 관리한다.
 """
 
+from enum import Enum
 
-class SagaEventType:
-    """Saga Orchestrator 이벤트 타입 상수.
 
-    EventType enum에 추가할 Saga 이벤트 메시지 식별자.
+class SagaEventType(str, Enum):
+    """Saga Orchestrator 이벤트 타입.
+
+    도메인별 EventType 분리 패턴에 따른 Saga 전용 이벤트 식별자.
     """
 
     SAGA_STARTED = "saga_started"

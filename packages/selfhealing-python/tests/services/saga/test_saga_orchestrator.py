@@ -349,8 +349,7 @@ class TestSagaEventTypeContract:
 
     def test_event_type_count(self):
         """SagaEventType에는 10개의 이벤트 타입이 있어야 한다."""
-        all_events = [v for k, v in vars(SagaEventType).items() if not k.startswith("_") and isinstance(v, str)]
-        assert len(all_events) == 10
+        assert len(SagaEventType) == 10
 
 
 class TestLuaScriptsContract:

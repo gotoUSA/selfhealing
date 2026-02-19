@@ -170,7 +170,7 @@ def execute_saga(self, saga_name, initial_data, ...):
         # 4. EventBus 알림
         #    기존 코드: event_bus/bus.py L412+
         self._event_bus.emit(
-            EventType.SAGA_STARTED,
+            SagaEventType.SAGA_STARTED,
             data={"saga_name": saga_name, "instance_id": instance.id},
             source="SagaOrchestrator",
             correlation_id=correlation_id,
@@ -255,7 +255,7 @@ def _execute_forward(self, instance, definition):
             self._save_instance(instance)
 
             self._event_bus.emit(
-                EventType.SAGA_SUSPENDED,
+                SagaEventType.SAGA_SUSPENDED,
                 data={"step": step_def.name, "instance_id": instance.id},
                 source="SagaOrchestrator",
             )
@@ -329,7 +329,7 @@ def _execute_forward(self, instance, definition):
 
             # EventBus 알림
             self._event_bus.emit(
-                EventType.SAGA_STEP_COMPLETED,
+                SagaEventType.SAGA_STEP_COMPLETED,
                 data={"step": step_def.name, "instance_id": instance.id},
                 source="SagaOrchestrator",
             )
@@ -405,7 +405,7 @@ def _execute_forward(self, instance, definition):
             self._save_instance(instance)
 
             self._event_bus.emit(
-                EventType.SAGA_STEP_FAILED,
+                SagaEventType.SAGA_STEP_FAILED,
                 data={
                     "step": step_def.name,
                     "error": result.error,
@@ -531,7 +531,7 @@ def _execute_compensation(self, instance, definition):
                 self._save_instance(instance)
 
                 self._event_bus.emit(
-                    EventType.SAGA_COMPENSATING,
+                    SagaEventType.SAGA_COMPENSATING,
                     data={
                         "step": step_def.name,
                         "instance_id": instance.id,
@@ -628,7 +628,7 @@ def _store_compensation_failure_to_dlq(
 
     # EventBus 알림
     self._event_bus.emit(
-        EventType.SAGA_COMPENSATION_FAILED,
+        SagaEventType.SAGA_COMPENSATION_FAILED,
         data={
             "saga_name": instance.saga_name,
             "instance_id": instance.id,
@@ -921,7 +921,7 @@ def resume_saga(self, instance_id: str) -> SagaInstance:
 
     try:
         self._event_bus.emit(
-            EventType.SAGA_RESUMED,
+            SagaEventType.SAGA_RESUMED,
             data={"instance_id": instance.id, "resume_count": resume_count + 1},
             source="SagaOrchestrator",
         )
@@ -1194,16 +1194,17 @@ if not governance.allowed:
 
 ---
 
-## 6. EventType 확장
+## 6. SagaEventType 정의
 
-**파일**: `services/event_bus/bus.py` L57-160
+**파일**: `services/saga/events.py`
 
-기존 EventType enum에 Saga 이벤트 추가:
+도메인별 EventType 분리 패턴(AuditEventType, RecoveryAuditEventType)에 따라
+Saga 전용 이벤트를 별도 (str, Enum) 클래스로 정의:
 
 ```python
-class EventType(str, Enum):
-    # ... 기존 80+ 이벤트 타입 ...
+from enum import Enum
 
+class SagaEventType(str, Enum):
     # Saga Orchestrator
     SAGA_STARTED = "saga_started"
     SAGA_STEP_COMPLETED = "saga_step_completed"
@@ -1442,7 +1443,7 @@ services/saga/
 ├── registry.py          # register_saga(), get_saga_definition()
 ├── orchestrator.py      # SagaOrchestrator (_save_instance, resume_saga 포함)
 ├── tasks.py             # resume_saga_instance_task, scan_orphan_sagas (Celery)
-├── events.py            # EventType 확장 (SAGA_*)
+├── events.py            # SagaEventType(str, Enum) 정의 (SAGA_*)
 └── lua_scripts.py       # SAGA_TRANSITION_SCRIPT, SAGA_INSTANCE_CAS_SCRIPT
 ```
 
