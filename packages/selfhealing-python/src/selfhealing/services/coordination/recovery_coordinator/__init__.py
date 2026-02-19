@@ -58,8 +58,8 @@ if TYPE_CHECKING:
     from selfhealing.audit.cascade_auditor import CascadeEventAuditor
     from selfhealing.core.state_backend import StateBackend
 
-    from .idempotent_step_handlers import IdempotentStepHandlerRegistry
-    from .regional_recovery_policy import RegionalRecoveryPolicyEngine
+    from ..idempotent_step_handlers import IdempotentStepHandlerRegistry
+    from ..regional_recovery_policy import RegionalRecoveryPolicyEngine
 
 logger = logging.getLogger(__name__)
 
@@ -285,7 +285,7 @@ class RecoveryCoordinator(
             return self._regional_policy_engine
 
         try:
-            from .regional_recovery_policy import get_regional_recovery_policy_engine
+            from ..regional_recovery_policy import get_regional_recovery_policy_engine
 
             self._regional_policy_engine = get_regional_recovery_policy_engine()
             return self._regional_policy_engine
@@ -301,7 +301,7 @@ class RecoveryCoordinator(
             return self._idempotent_registry
 
         try:
-            from .idempotent_step_handlers import get_idempotent_step_handler_registry
+            from ..idempotent_step_handlers import get_idempotent_step_handler_registry
 
             self._idempotent_registry = get_idempotent_step_handler_registry()
             return self._idempotent_registry

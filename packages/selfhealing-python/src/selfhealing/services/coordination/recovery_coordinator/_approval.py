@@ -53,7 +53,7 @@ class ApprovalMixin:
         Phase 3.7: PendingRecoveryApprovalManager 연동
         """
         try:
-            from .pending_recovery_approval import get_pending_recovery_approval_manager
+            from ..pending_recovery_approval import get_pending_recovery_approval_manager
 
             manager = get_pending_recovery_approval_manager()
 
@@ -112,7 +112,7 @@ class ApprovalMixin:
 
             # 승인 요청 상태 업데이트
             try:
-                from .pending_recovery_approval import (
+                from ..pending_recovery_approval import (
                     get_pending_recovery_approval_manager,
                 )
 

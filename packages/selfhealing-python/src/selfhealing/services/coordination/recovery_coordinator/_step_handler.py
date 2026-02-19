@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+from collections.abc import Callable
+from typing import Any
+
 from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
 from ..enums import RecoveryStatus
 from ..recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
