@@ -39,13 +39,14 @@ from .distributed_recovery_lock import (
     DistributedRecoveryLock,
     InMemoryRecoveryLock,
 )
-from .enums import RecoveryStatus
+from .enums import CompensationStatus, RecoveryStatus
 from .recovery_audit import (
     RecoveryAuditEventType,
     RecoveryAuditRecorder,
     get_recovery_audit_recorder,
 )
 from .recovery_state import (
+    CompensationResult,
     RecoverySession,
     RecoveryStep,
     RecoveryStepType,
@@ -199,6 +200,7 @@ class RecoveryCoordinator:
         self._lock = threading.RLock()
         self._recovery_lock = recovery_lock or InMemoryRecoveryLock()
         self._step_handlers: dict[RecoveryStepType, Callable] = {}
+        self._compensate_handlers: dict[RecoveryStepType, Callable] = {}
         self._use_regional_policy = use_regional_policy
         self._use_idempotent_handlers = use_idempotent_handlers
         self._regional_policy_engine: RegionalRecoveryPolicyEngine | None = None
@@ -344,20 +346,33 @@ class RecoveryCoordinator:
             RecoveryStepType.CANARY_RESUME: self._handle_canary_resume,
             RecoveryStepType.GOVERNANCE_NORMAL: self._handle_governance_normal,
         }
+        # 보상 핸들러: 현재는 빈 dict (필요 시 등록)
+        self._compensate_handlers = {}
 
     def register_step_handler(
         self,
         step_type: RecoveryStepType,
         handler: Callable[[RecoverySession, RecoveryStep], dict[str, Any]],
+        compensate: Callable[[RecoverySession, RecoveryStep], dict[str, Any]] | None = None,
     ) -> None:
         """
         커스텀 단계 핸들러 등록.
 
         Args:
             step_type: 복구 단계 유형
-            handler: 핸들러 함수 (session, step) -> {"success": bool, ...}
+            handler: Forward 핸들러 함수 (session, step) -> {"success": bool, ...}
+            compensate: 보상 핸들러 함수 (선택). Step 실패 시 이전 성공 Step 역순 보상에 사용.
+                    None이면 해당 Step은 보상 대상에서 제외.
+
+        Note:
+            이 시스템은 At-least-once 보상을 지향합니다.
+            compensate 핸들러는 반드시 멱등성(Idempotency)을 보장해야 합니다.
+            동일한 Step에 대해 compensate가 여러 번 호출되어도 동일한 결과를 보장해야 합니다.
+            (서버 재시작, 네트워크 재시도 등으로 인해 중복 호출될 수 있음)
         """
         self._step_handlers[step_type] = handler
+        if compensate is not None:
+            self._compensate_handlers[step_type] = compensate
 
     # =========================================================================
     # Public API
@@ -393,6 +408,7 @@ class RecoveryCoordinator:
                 RecoveryStatus.IN_PROGRESS,
                 RecoveryStatus.HEALTH_CHECK,
                 RecoveryStatus.READY_TO_RESTORE,  # Phase 3.7: 승인 대기 중도 포함
+                RecoveryStatus.COMPENSATING,  # 보상 중에도 새 복구 차단
             ):
                 raise ValueError(f"Recovery already in progress: {active.id}")
 
@@ -508,6 +524,8 @@ class RecoveryCoordinator:
                 if result.get("success"):
                     step.status = RecoveryStatus.COMPLETED
                     step.completed_at = datetime.now(timezone.utc).isoformat()
+                    step.result_data = result
+                    step.compensation_status = CompensationStatus.PENDING
                     session.current_step_index += 1
 
                     # 멱등성 정보 로깅
@@ -1331,17 +1349,38 @@ class RecoveryCoordinator:
         session: RecoverySession,
         error: str,
     ) -> None:
-        """세션 실패 처리.
+        """세션 실패 처리 + 등록된 compensate 핸들러 역순 실행.
 
         ACTIVE_SESSION_KEY를 유지하여 resume_recovery()가
         실패 세션을 조회할 수 있도록 한다.
         start_recovery()의 중복 체크에서 FAILED 상태는
         차단 대상이 아니므로 새 복구 시작에 영향 없음.
-        """
-        session.status = RecoveryStatus.FAILED
-        session.abort_reason = error
-        session.completed_at = datetime.now(timezone.utc).isoformat()
 
+        보상 핸들러가 session.abort_reason으로 실패 원인을 참조할 수 있도록
+        abort_reason을 보상 루프 전에 설정한다.
+        """
+        # abort_reason을 보상 루프 전에 설정
+        # compensate 핸들러가 session.abort_reason으로 실패 원인 참조 가능
+        session.abort_reason = error
+
+        # COMPENSATING 상태로 전환 (보상 진행 중 표시)
+        session.status = RecoveryStatus.COMPENSATING
+        self._save_session(session)
+
+        # 이미 완료된 Step 역순 보상 시도
+        comp_result = self._attempt_compensation(session)
+
+        # 보상 실패 Step이 있으면 로깅
+        if not comp_result.all_compensated:
+            logger.warning(
+                f"[Recovery] Compensation incomplete: session={session.id}, "
+                f"failed={len(comp_result.failed_steps)}, "
+                f"skipped={len(comp_result.skipped_steps)}"
+            )
+
+        # 최종 실패 상태 설정
+        session.status = RecoveryStatus.FAILED
+        session.completed_at = datetime.now(timezone.utc).isoformat()
         self._save_session(session)
         # ACTIVE_SESSION_KEY 유지: resume_recovery()가 실패 세션을 조회할 수 있도록
         # start_recovery()가 _set_active_session()으로 기존 키를 덮어쓰므로
@@ -1351,6 +1390,79 @@ class RecoveryCoordinator:
         self._recovery_lock.release(session.namespace, session.id)
 
         logger.error(f"[Recovery] Failed: id={session.id}, error={error}")
+
+    def _attempt_compensation(
+        self,
+        session: RecoverySession,
+    ) -> CompensationResult:
+        """
+        완료된 Step을 역순으로 보상 시도.
+
+        설계 원칙:
+        - Fail-Open: 보상 실패가 세션 실패 처리를 중단시키지 않음.
+        - At-least-once: 보상은 최소 1회 실행을 보장.
+          compensate 핸들러는 반드시 멱등성(Idempotency)을 가져야 한다.
+          서버 재시작 시 compensation_status가 PENDING인 Step들은
+          재보상 대상이 될 수 있으므로, 핸들러가 중복 실행에 안전해야 한다.
+        - compensate 핸들러가 등록되지 않은 Step은 건너뜀.
+
+        Returns:
+            CompensationResult — 보상 성공/실패/건너뜀 Step 목록.
+        """
+        result = CompensationResult()
+
+        completed_steps = [step for step in session.steps if step.status == RecoveryStatus.COMPLETED]
+
+        # 역순 정렬 (order 기준 내림차순)
+        completed_steps.sort(key=lambda s: s.order, reverse=True)
+
+        for step in completed_steps:
+            # 매 Step 보상 전 Lock TTL 연장 (하트비트)
+            # 기본 TTL 30분이 보상 도중 만료되면
+            # 다른 Worker가 동일 세션을 잡아 중복 실행할 위험이 있음
+            self._recovery_lock.extend(
+                session.namespace,
+                session.id,
+                additional_seconds=300,  # 5분 연장
+            )
+
+            compensate_handler = self._compensate_handlers.get(step.step_type)
+            if compensate_handler is None:
+                logger.debug(f"[Recovery] No compensate handler for " f"{step.step_type.value}, skipping")
+                result.skipped_steps.append(step)
+                continue
+
+            # 이미 보상 완료된 Step은 건너뜀 (재시작 안전성)
+            if step.compensation_status == CompensationStatus.COMPENSATED:
+                logger.debug(f"[Recovery] Already compensated: " f"{step.step_type.value}, skipping")
+                result.compensated_steps.append(step)
+                continue
+
+            try:
+                handler_result = compensate_handler(session, step)
+                if handler_result.get("success"):
+                    # 보상 성공 즉시 상태 저장 (서버 재시작 대비)
+                    step.compensation_status = CompensationStatus.COMPENSATED
+                    self._save_session(session)
+
+                    result.compensated_steps.append(step)
+                    logger.info(f"[Recovery] Compensated: {step.step_type.value}, " f"session={session.id}")
+                else:
+                    error_msg = handler_result.get("error", "Unknown error")
+                    step.compensation_status = CompensationStatus.COMPENSATE_FAILED
+                    self._save_session(session)
+
+                    result.failed_steps.append((step, error_msg))
+                    logger.warning(f"[Recovery] Compensation failed: " f"{step.step_type.value}, error={error_msg}")
+            except Exception as e:
+                step.compensation_status = CompensationStatus.COMPENSATE_FAILED
+                self._save_session(session)
+
+                result.failed_steps.append((step, str(e)))
+                logger.warning(f"[Recovery] Compensation exception: " f"{step.step_type.value}, error={e}")
+                # Fail-Open: 보상 실패가 세션 실패 처리를 중단시키지 않음
+
+        return result
 
     # =========================================================================
     # Status & History Methods

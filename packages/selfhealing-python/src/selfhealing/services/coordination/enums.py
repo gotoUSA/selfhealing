@@ -130,5 +130,33 @@ class RecoveryStatus(str, Enum):
     FAILED = "failed"
     """복구 실패."""
 
+    COMPENSATING = "compensating"
+    """
+    보상 진행 중.
+
+    _fail_session() 진입 시 COMPENSATING으로 전환 → 보상 루프 실행 → 최종 FAILED.
+    모니터링 대시보드에서 "복구 진행 중"과 "보상 롤백 중"을 구분할 수 있게 함.
+    """
+
     ABORTED = "aborted"
     """복구 중단됨."""
+
+
+class CompensationStatus(str, Enum):
+    """
+    개별 Step의 보상 상태.
+
+    Forward 핸들러 실행 후 보상(역전) 처리의 진행 상황을 추적.
+    """
+
+    NOT_REQUIRED = "not_required"
+    """보상 핸들러 미등록 — 보상 대상 아님 (기본값)."""
+
+    PENDING = "pending"
+    """보상 대기 — 세션 실패 시 보상 대상."""
+
+    COMPENSATED = "compensated"
+    """보상 완료."""
+
+    COMPENSATE_FAILED = "compensate_failed"
+    """보상 실패."""

@@ -59,8 +59,8 @@ class RecoveryStepType(str, Enum):
     """
 
 
-# enums.py의 RecoveryStatus를 재사용
-from .enums import RecoveryStatus
+# enums.py의 RecoveryStatus, CompensationStatus를 재사용
+from .enums import CompensationStatus, RecoveryStatus
 
 
 @dataclass
@@ -113,6 +113,26 @@ class RecoveryStep:
     error_message: str | None = None
     """실패 시 에러 메시지."""
 
+    result_data: dict[str, Any] = field(default_factory=dict)
+    """
+    Forward 핸들러 실행 결과 데이터.
+
+    핸들러가 반환하는 dict를 저장하여 compensate 시 참조 가능하게 함.
+    "무엇을 했는지 알아야 되돌릴 수 있다."
+
+    예시:
+    - BUDGET_RESET: {"success": True, "multiplier": 1.0}
+    - CANARY_RESUME: {"success": True, "resumed_count": 3, "staggered": True}
+    """
+
+    compensation_status: CompensationStatus = CompensationStatus.NOT_REQUIRED
+    """
+    보상 상태.
+
+    서버 재시작 시 어디까지 보상했는지 추적.
+    Forward 성공 시 PENDING → 보상 성공 시 COMPENSATED → 실패 시 COMPENSATE_FAILED.
+    """
+
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
         return {
@@ -124,6 +144,8 @@ class RecoveryStep:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "error_message": self.error_message,
+            "result_data": self.result_data,
+            "compensation_status": self.compensation_status.value,
         }
 
     @classmethod
@@ -138,7 +160,32 @@ class RecoveryStep:
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
             error_message=data.get("error_message"),
+            result_data=data.get("result_data", {}),
+            compensation_status=CompensationStatus(data.get("compensation_status", "not_required")),
         )
+
+
+@dataclass
+class CompensationResult:
+    """
+    보상 실행 결과.
+
+    _attempt_compensation()의 반환값으로, 보상 성공/실패/건너뜀 Step 목록을 구조화.
+    """
+
+    compensated_steps: list[RecoveryStep] = field(default_factory=list)
+    """보상 성공한 Step 목록."""
+
+    failed_steps: list[tuple[RecoveryStep, str]] = field(default_factory=list)
+    """보상 실패한 Step 목록. (step, error_message) 튜플."""
+
+    skipped_steps: list[RecoveryStep] = field(default_factory=list)
+    """compensate 핸들러 미등록으로 건너뛴 Step 목록."""
+
+    @property
+    def all_compensated(self) -> bool:
+        """모든 보상 대상이 성공했는지 여부."""
+        return len(self.failed_steps) == 0
 
 
 @dataclass
@@ -239,9 +286,7 @@ class RecoverySession:
             "progress_percent": (completed / total * 100) if total > 0 else 0,
             "current_step": self.current_step_index,
             "current_step_type": (
-                self.steps[self.current_step_index].step_type.value
-                if self.current_step_index < total
-                else None
+                self.steps[self.current_step_index].step_type.value if self.current_step_index < total else None
             ),
         }
 
@@ -265,9 +310,7 @@ class RecoverySession:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RecoverySession:
         """딕셔너리에서 생성."""
-        steps = [
-            RecoveryStep.from_dict(step_data) for step_data in data.get("steps", [])
-        ]
+        steps = [RecoveryStep.from_dict(step_data) for step_data in data.get("steps", [])]
 
         return cls(
             id=data["id"],

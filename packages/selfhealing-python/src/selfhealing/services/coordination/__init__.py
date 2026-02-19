@@ -63,6 +63,7 @@ from .critical_worker import (
 from .enums import (
     ActionType,
     CommandPrecedence,
+    CompensationStatus,
     EmergencyScope,
     RecoveryStatus,
 )
@@ -189,6 +190,7 @@ __all__ = [
     "ActionType",
     "CommandPrecedence",
     "RecoveryStatus",
+    "CompensationStatus",
     # Models
     "CoordinationAction",
     "ScopedEmergencyState",
