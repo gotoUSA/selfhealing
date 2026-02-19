@@ -158,7 +158,7 @@ DLQ 저장 경로(`store_operations.py`)에는 마스킹 로직이 전혀 없다
 
 ```python
 def _fail_session(self, session: RecoverySession, error: str) -> None:
-    """세션 실패 처리 + DLQ 자동 저장."""
+    """세션 실패 처리 + 등록된 compensate 핸들러 역순 실행 + DLQ 자동 저장."""
     # 1. abort_reason 설정 (보상 핸들러 참조용)
     session.abort_reason = error
 
@@ -493,7 +493,7 @@ _fail_session()                              ← DLQ 1회 호출 (본 문서)
 |------|--------|--------|
 | `failure_type` | `RECOVERY_SESSION_FAILED` 또는 `RECOVERY_COMPENSATION_FAILED` (별도 엔트리) | `RECOVERY_SESSION_FAILED` 1건에 통합 |
 | `metadata.compensation_failures` | 없음 (별도 DLQ) | 보상 실패 리스트 (step_type, error, forward_result 포함) |
-| `metadata.compensation_summary` | 없음 | 요약 문자열 ("STEP (에러 50자)" 형식) |
+| `metadata.compensation_summary` | 없음 | 요약 문자열 ("STEP (에러 60자)" 형식) |
 | `snapshot_data.session` | 원본 `to_dict()` | `mask_sensitive_fields()` 적용 후 저장 |
 | `recommended_action` | 고정 `"manual_review"` | 보상 실패 시 `"manual_consistency_check"` |
 | `next_action_hint` | "Check session state..." | "Automatic compensation failed for: budget_reset (affected: multiplier)..." |
@@ -683,11 +683,13 @@ for entry in entries:
 | 3 | `test_fail_session_dlq_disabled` | DLQ 비활성화 시 예외 없이 진행 |
 | 4 | `test_dlq_entry_contains_masked_snapshot` | `snapshot_data`에 PII 마스킹된 세션 상태 포함 |
 | 5 | `test_dlq_entry_contains_failed_step_by_status` | `metadata.failed_step`이 `status == FAILED` 기반 탐색 결과 |
-| 6 | `test_dlq_entry_aggregates_compensation_failures` | 보상 실패 5건 → DLQ 1건, `metadata.compensation_failures` 리스트 5항목 |
+| 6 | `test_dlq_entry_aggregates_compensation_failures` | 보상 실패 N건 → DLQ 1건, `metadata.compensation_failures` 리스트 N항목 |
 | 7 | `test_dlq_entry_compensation_summary` | `metadata.compensation_summary`에 요약 문자열 포함 |
-| 8 | `test_dlq_recommended_action_dynamic` | 보상 실패 있으면 `"manual_consistency_check"`, 없으면 `"manual_review"` |
-| 9 | `test_dlq_next_action_hint_includes_result_data_keys` | 보상 실패 시 `next_action_hint`에 `result_data` 키 포함 |
-| 10 | `test_dlq_stored_after_lock_release` | DLQ 저장이 Lock 해제 후 수행됨 (호출 순서 검증) |
-| 11 | `test_logger_error_before_lock_release` | `logger.error()`가 Lock 해제 전에 호출됨 |
-| 12 | `test_dlq_entry_entity_id_is_session_id` | `entity_id`가 세션 ID와 동일 |
-| 13 | `test_mask_sensitive_fields_no_side_effect` | 마스킹이 원본 세션 객체에 영향 없음 확인 |
+| 8 | `test_recommended_action_manual_review_without_compensation_failure` | 보상 실패 없으면 `"manual_review"` |
+| 9 | `test_recommended_action_manual_consistency_check_with_compensation_failure` | 보상 실패 있으면 `"manual_consistency_check"` |
+| 10 | `test_next_action_hint_includes_result_data_keys` | 보상 실패 시 `next_action_hint`에 `result_data` 키 포함 |
+| 11 | `test_next_action_hint_without_compensation_failure` | 보상 없으면 `next_action_hint`에 step 이름과 `resume_recovery()` 안내 포함 |
+| 12 | `test_dlq_stored_after_lock_release` | DLQ 저장이 Lock 해제 후 수행됨 (호출 순서 검증) |
+| 13 | `test_logger_error_before_lock_release` | `logger.error()`가 Lock 해제 전에 호출됨 |
+| 14 | `test_dlq_entry_entity_id_is_session_id` | `entity_id`가 세션 ID와 동일 |
+| 15 | `test_mask_sensitive_fields_no_side_effect` | 마스킹이 원본 세션 객체에 영향 없음 확인 |
