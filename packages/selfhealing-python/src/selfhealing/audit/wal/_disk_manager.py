@@ -17,7 +17,7 @@ class WALDiskManagerMixin:
 
     def _handle_disk_full(self) -> None:
         """디스크 풀 상황 처리 (우선순위 기반 Purge 시도 후 Fail-Open 모드 전환)."""
-        from selfhealing.audit.wal_pkg._models import WALState
+        from selfhealing.audit.wal._models import WALState
 
         # 우선순위 기반 Purge 시도
         if self._config.priority_based_purge:
@@ -140,7 +140,7 @@ class WALDiskManagerMixin:
             True: 정상 모드로 복귀
             False: 여전히 디스크 풀 상태
         """
-        from selfhealing.audit.wal_pkg._models import WALState
+        from selfhealing.audit.wal._models import WALState
 
         if self._state != WALState.DISK_FULL_FAILOPEN:
             return True

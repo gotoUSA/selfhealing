@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Any
 
-from selfhealing.audit.wal_pkg._serialization import serialize_entry, sync_and_maybe_rotate
+from selfhealing.audit.wal._serialization import serialize_entry, sync_and_maybe_rotate
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class WALWriterMixin:
 
     def _direct_write(self, data: dict[str, Any]) -> int:
         """직접 기록 (Disk Full Fail-Open 지원)."""
-        from selfhealing.audit.wal_pkg._models import WALError, WALState
+        from selfhealing.audit.wal._models import WALError, WALState
 
         with self._lock:
             # Fail-Open 모드면 WAL 기록 스킵
@@ -94,7 +94,7 @@ class WALWriterMixin:
 
         여러 엔트리를 모아서 한 번에 fsync 수행.
         """
-        from selfhealing.audit.wal_pkg._models import WALError, WALState
+        from selfhealing.audit.wal._models import WALError, WALState
 
         with self._lock:
             if self._state == WALState.CLOSED:
@@ -160,7 +160,7 @@ class WALWriterMixin:
         Returns:
             각 엔트리의 시퀀스 번호 목록
         """
-        from selfhealing.audit.wal_pkg._models import WALError, WALState
+        from selfhealing.audit.wal._models import WALError, WALState
 
         if not entries:
             return []

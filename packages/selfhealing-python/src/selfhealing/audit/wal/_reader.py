@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from selfhealing.audit.wal_pkg._serialization import (
+from selfhealing.audit.wal._serialization import (
     compute_checksum,
     verify_checksum,
 )
@@ -59,7 +59,7 @@ class WALReaderMixin:
         Yields:
             WALEntry 객체
         """
-        from selfhealing.audit.wal_pkg._models import WALCorruptionError, WALEntry
+        from selfhealing.audit.wal._models import WALCorruptionError, WALEntry
 
         # Drift Detection 메트릭 (선택적 import)
         try:
@@ -159,7 +159,7 @@ class WALReaderMixin:
 
     def _parse_wal_record(self, data_bytes: bytes, checksum: str):
         """WAL 레코드 파싱. 실패 시 None."""
-        from selfhealing.audit.wal_pkg._models import WALEntry
+        from selfhealing.audit.wal._models import WALEntry
 
         try:
             entry_dict = json.loads(data_bytes.decode("utf-8"))

@@ -29,8 +29,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from selfhealing.audit.wal_pkg._disk_manager import WALDiskManagerMixin
-from selfhealing.audit.wal_pkg._models import (
+from selfhealing.audit.wal._disk_manager import WALDiskManagerMixin
+from selfhealing.audit.wal._models import (
     WALConfig,
     WALCorruptionError,
     WALEntry,
@@ -38,9 +38,9 @@ from selfhealing.audit.wal_pkg._models import (
     WALState,
     WALStats,
 )
-from selfhealing.audit.wal_pkg._reader import WALReaderMixin
-from selfhealing.audit.wal_pkg._serialization import compute_checksum, verify_checksum
-from selfhealing.audit.wal_pkg._writer import WALWriterMixin
+from selfhealing.audit.wal._reader import WALReaderMixin
+from selfhealing.audit.wal._serialization import compute_checksum, verify_checksum
+from selfhealing.audit.wal._writer import WALWriterMixin
 
 logger = logging.getLogger(__name__)
 
