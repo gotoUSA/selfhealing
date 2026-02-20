@@ -50,8 +50,10 @@ class EventPairKey:
     def __post_init__(self):
         # 정렬하여 (A,B) = (B,A) 보장
         if self.event_type_a > self.event_type_b:
-            object.__setattr__(self, 'event_type_a', self.event_type_b)
-            object.__setattr__(self, 'event_type_b', self.event_type_a)
+            original_a = self.event_type_a
+            original_b = self.event_type_b
+            object.__setattr__(self, 'event_type_a', original_b)
+            object.__setattr__(self, 'event_type_b', original_a)
 
     @property
     def key(self) -> str:
@@ -89,6 +91,21 @@ class CorrelationResult:
     confidence: float                 # 통계적 신뢰도
 ```
 
+### 2.4 CoOccurrenceSnapshot
+
+```python
+@dataclass(frozen=True)
+class CoOccurrenceSnapshot:
+    """인메모리 Co-occurrence 점수 스냅샷 (Immutable).
+
+    frozen=True로 설정하여 읽기 시 동시성 문제를 원천 방지한다.
+    백그라운드 스레드는 새 인스턴스를 생성하여 참조를 교체한다 (Copy-on-Write).
+    Python GIL 하에서 참조 교체는 atomic이므로 Lock 불필요.
+    기존 EventGraphBuilder 호환을 위한 get_pair_score()/update_snapshot() 인터페이스 제공.
+    """
+    scores: dict[tuple[str, str], float] = field(default_factory=dict)
+```
+
 ---
 
 ## 3. 알고리즘 상세
@@ -99,7 +116,7 @@ class CorrelationResult:
 class CoOccurrenceTracker:
     """이벤트 쌍별 동시발생 빈도 추적기"""
 
-    def __init__(self, settings: CorrelationEngineSettings):
+    def __init__(self, settings: CorrelationSettings):
         self._window_seconds: float = settings.window_seconds       # 기본 300초
         self._max_pairs: int = settings.max_tracked_pairs           # 기본 1000
         self._min_co_occurrences: int = settings.min_co_occurrences # 기본 3
@@ -182,7 +199,7 @@ class CoOccurrenceTracker:
         # (슬라이딩 윈도우: 일정 주기마다 count를 ZScore에 feed)
         if key not in self._pair_detectors:
             self._pair_detectors[key] = ZScoreDetector(
-                window_size=100, threshold=self._zscore_threshold
+                window=100, threshold=self._zscore_threshold
             )
             # Audit Logging: 분산 0에서 첫 동시발생 기록
             # — 사후 장애 분석 시 미지의 패턴 발견에 유용
@@ -192,7 +209,7 @@ class CoOccurrenceTracker:
 ### 3.2 주기적 분석 (Tick)
 
 ```python
-    def __init__(self, settings: CorrelationEngineSettings):
+    def __init__(self, settings: CorrelationSettings):
         # ... (§3.1 참조) ...
 
         # 알람 디바운스: 동일 페어의 이상 상태는 윈도우 시간 내 1회만 리포팅
@@ -327,9 +344,9 @@ class CoOccurrenceTracker:
 
         return {
             "pair": pair_key,
-            "current_frequency": self._get_current_frequency(pair_key),
+            "current_frequency": len(self._pair_time_gaps.get(pair_key, [])),
             "predicted_frequency_5_ticks_ahead": predicted,
-            "trend_direction": "increasing" if forecaster._trend > 0 else "decreasing",
+            "trend_direction": "increasing" if forecaster.get_trend_slope() > 0 else "decreasing",
             "confidence": confidence,
         }
 ```
@@ -387,6 +404,7 @@ class CoOccurrenceTracker:
         HoltLinearForecaster: save_state(key)로 개별 영속화
             — time_series.py L222-275 참조
         """
+        backend = get_state_backend()
         state = {
             "pair_detectors": {
                 key: det.to_dict()
@@ -395,16 +413,16 @@ class CoOccurrenceTracker:
             "pair_time_gaps": {
                 key: list(gaps) for key, gaps in self._pair_time_gaps.items()
             },
-            "pair_time_gaps_maxlen": 100,  # deque maxlen 메타데이터
+            "pair_time_gaps_maxlen": TIME_GAPS_MAXLEN,  # deque maxlen 메타데이터
             "saved_at": time.time(),
         }
-        success = StateBackend.set("correlation:co_occurrence_state", state)
+        backend.set("correlation:co_occurrence_state", state)
 
         # HoltLinearForecaster는 자체 save_state() 메서드로 개별 저장
         for pair_key, forecaster in self._pair_forecasters.items():
             forecaster.save_state(f"correlation:trend:{pair_key}")
 
-        return success
+        return True
 
     def load_state(self) -> bool:
         """저장된 상태 복원 — deque maxlen 보존 필수
@@ -415,7 +433,8 @@ class CoOccurrenceTracker:
         재적재하여 maxlen을 자연스럽게 보존한다.
         — time_series.py L290-315 참조
         """
-        state = StateBackend.get("correlation:co_occurrence_state")
+        backend = get_state_backend()
+        state = backend.get("correlation:co_occurrence_state")
         if not state:
             return False
 
@@ -424,7 +443,7 @@ class CoOccurrenceTracker:
             self._pair_detectors[key] = ZScoreDetector.from_dict(det_data)
 
         # pair_time_gaps 복원: maxlen 메타데이터로 deque 재생성
-        gaps_maxlen = state.get("pair_time_gaps_maxlen", 100)
+        gaps_maxlen = state.get("pair_time_gaps_maxlen", TIME_GAPS_MAXLEN)
         for key, gaps_list in state.get("pair_time_gaps", {}).items():
             restored = deque(maxlen=gaps_maxlen)
             restored.extend(gaps_list)
@@ -445,7 +464,7 @@ class CoOccurrenceTracker:
 
 ## 6. 설정 항목
 
-`CorrelationEngineSettings`의 Co-occurrence 관련 필드 (257번에서 전체 설정 상세):
+`CorrelationSettings`의 Co-occurrence 관련 필드 (257번에서 전체 설정 상세):
 
 | 환경변수 | 기본값 | 설명 |
 |---------|-------|------|
@@ -481,7 +500,7 @@ class CoOccurrenceTracker:
 | `ZScoreDetector` | `predictive_forecaster/anomaly_detector.py` | 동시발생 카운트의 이상치 판단에 직접 인스턴스화 |
 | `HoltLinearForecaster` | `predictive_forecaster/time_series.py` | 동시발생 빈도의 트렌드 예측에 직접 인스턴스화 |
 | `StateBackend` | `state_backend.py` | 학습 상태 영속화 |
-| `LearningService.learn_pattern()` | `learning/` | 발견된 상관 패턴 축적 (PatternType.ANOMALY) |
+| `LearningService.learn_pattern()` | `learning/` | 발견된 상관 패턴 축적 (PatternType.ANOMALY) — 통합 레이어(CorrelationService)에서 호출, 이 모듈은 직접 참조하지 않음 |
 
 ---
 
