@@ -359,7 +359,7 @@ def _resolve_severity(event_type, severity_map) -> str:
 "correlation_timeline": {
     "incident_id": "inc_2026-02-20_14:32:01_a1b2c3",
     "status": "resolved",                              // R2: TimelineStatus
-    "root_cause": "db-pool-service의 circuit_breaker_opened (87%)",
+    "root_cause_summary": "db-pool-service의 circuit_breaker_opened (87%)",
     "duration_seconds": 222,
     "phases": [
         {"name": "detection", "duration_seconds": 3, "re_escalation_count": 0},

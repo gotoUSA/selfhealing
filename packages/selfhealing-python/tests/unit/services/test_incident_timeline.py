@@ -1495,7 +1495,7 @@ class TestTimelineStatus:
         builder = IncidentTimelineBuilder()
         timeline = builder.build(dag, analysis)
 
-        assert timeline.status == TimelineStatus.ONGOING  # resolved_at=None due to flapping
+        assert timeline.status == TimelineStatus.FLAPPING  # recovery 후 critical 재발 → FLAPPING
 
     def test_status_badge_rendering(self):
         """_status_badge() 아이콘 반환."""
@@ -1769,7 +1769,7 @@ class TestFlappingDetection:
     """R1 재에스컬레이션 + R2 상태 결정 통합 검증."""
 
     def test_flapping_scenario_re_escalation_and_status(self):
-        """Recovery 중 critical 재발 → re_escalation 태그 + resolved_at=None."""
+        """Recovery 중 critical 재발 → re_escalation 태그 + resolved_at=None + FLAPPING."""
         nodes = [
             _make_node(event_id="e1", event_type="circuit_breaker_opened", service_name="svc", timestamp=1000.0),
             _make_node(event_id="e2", event_type="circuit_breaker_half_opened", service_name="svc", timestamp=1100.0),
@@ -1784,8 +1784,8 @@ class TestFlappingDetection:
 
         # resolved_at는 None (마지막 recovery 후 critical 재발)
         assert timeline.resolved_at is None
-        # 상태는 ONGOING (resolved_at가 None)
-        assert timeline.status == TimelineStatus.ONGOING
+        # 상태는 FLAPPING (recovery 이벤트 존재하나 이후 critical 재발)
+        assert timeline.status == TimelineStatus.FLAPPING
         # 재에스컬레이션 이벤트 존재
         re_esc_entries = [e for e in timeline.entries if e.is_re_escalation]
         assert len(re_esc_entries) >= 1

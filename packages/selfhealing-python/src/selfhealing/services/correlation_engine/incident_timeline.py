@@ -11,7 +11,7 @@ CB 이벤트뿐 아니라 45개 전체 EventType을 포함하는 통합 타임�
 
 리뷰 반영 사항:
   R1. Phase 분류 — 전역 필터링 → 상태 머신(State Machine) 단방향 전이
-  R2. TimelineStatus 도입 — Ongoing/Verifying/Resolved/Confirmed 명시
+  R2. TimelineStatus 도입 — Ongoing/Resolved/Flapping/Confirmed 명시
   R3. TTAR(Time to Automated Response) 메트릭 신설 및 세일즈 지표화
   R4. Payload Trimming — _sanitize_value()로 JSON 폭탄 방어
   R5. 미등록 EventType Fallback — _humanize_event_type() + prefix/suffix severity 추론 + logger.info 추적
@@ -946,15 +946,16 @@ class IncidentTimelineBuilder:
         - 마지막 recovery 후 critical 없음 → RESOLVED
         - (CONFIRMED는 외부에서 안정화 윈도우 경과 후 설정)
         """
-        if resolved_at is None:
-            return TimelineStatus.ONGOING
+        if resolved_at is not None:
+            return TimelineStatus.RESOLVED
 
-        # 마지막 recovery 이후에 critical이 있는지 확인
-        has_critical_after_resolve = any(e.timestamp > resolved_at and e.severity == "critical" for e in entries)
-        if has_critical_after_resolve:
+        # resolved_at이 None — recovery가 아예 없거나, flapping(recovery 후 critical 재발)
+        has_any_recovery = any(e.severity == "recovery" or e.is_resolution for e in entries)
+        if has_any_recovery:
+            # recovery 이벤트가 있지만 resolved_at=None → flapping
             return TimelineStatus.FLAPPING
 
-        return TimelineStatus.RESOLVED
+        return TimelineStatus.ONGOING
 
     # ── 내부 헬퍼 ──
 
