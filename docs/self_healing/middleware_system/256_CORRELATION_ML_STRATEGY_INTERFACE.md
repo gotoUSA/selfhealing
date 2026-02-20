@@ -234,7 +234,7 @@ class RootCauseStrategy(Protocol):
     """근본 원인 분석 전략
 
     기본 제공:
-        - DefaultRootCauseRanker: DAG 토폴로지 + 시간순 + BlastRadius 가중합
+        - RootCauseRanker: DAG 토폴로지 + 시간순 + BlastRadius 가중합
 
     구매자 확장 예시:
         - LLMRootCauseAnalyzer: OpenAI/Claude API로 DAG + 이벤트 맥락 분석
@@ -307,13 +307,13 @@ class GraphBuildStrategy(Protocol):
 class CorrelationEngineService:
     """전략 교체 가능한 오케스트레이터"""
 
-    def __init__(self, settings: CorrelationEngineSettings):
+    def __init__(self, settings: CorrelationSettings):
         # 기본 전략 (Day-1 제공)
         self._correlation_strategy: CorrelationStrategy = CoOccurrenceTracker(settings)
-        self._root_cause_strategy: RootCauseStrategy = DefaultRootCauseRanker()
-        self._graph_strategy: GraphBuildStrategy = EventGraphBuilder(
-            BlastRadiusService(), self._correlation_strategy
-        )
+        self._root_cause_strategy: RootCauseStrategy = RootCauseRanker()
+
+        # GraphBuildStrategy는 EventGraphBuilder 의존성이 있으므로 지연 초기화
+        self._graph_strategy: GraphBuildStrategy | None = None
 
     def set_correlation_strategy(self, strategy: CorrelationStrategy) -> None:
         """상관관계 분석 전략 교체"""
@@ -549,7 +549,7 @@ SELFHEALING_BULKHEAD_ML_INFERENCE_TIMEOUT=30.0
 
 ```python
 class CorrelationEngineService:
-    def __init__(self, settings: CorrelationEngineSettings):
+    def __init__(self, settings: CorrelationSettings):
         # ... 기존 전략 초기화 ...
 
         # ML 추론 격벽 — BulkheadRegistry에서 조회 또는 생성
@@ -1050,7 +1050,7 @@ class CorrelationEngineService:
 
 ### 13.1 문제
 
-LLM 전략이 타임아웃으로 실패하여 `DefaultRootCauseRanker`로 폴백된 경우, 최종 `RootCauseAnalysis`에 이 사실이 기록되지 않으면:
+LLM 전략이 타임아웃으로 실패하여 `RootCauseRanker`로 폴백된 경우, 최종 `RootCauseAnalysis`에 이 사실이 기록되지 않으면:
 1. 고객이 분석 결과의 신뢰도를 판단할 수 없음
 2. SRE 팀이 LLM 인프라 가용성을 추적할 수 없음
 3. 감사(Audit) 로그에 "정상 분석"으로 기록되어 규정 준수 문제 발생
@@ -1150,11 +1150,11 @@ class CorrelationEngineService:
     ) -> None:
         """주 전략 + 대체 전략 설정."""
         self._root_cause_strategy = primary
-        self._root_cause_fallback = fallback or DefaultRootCauseRanker()
+        self._root_cause_fallback = fallback or RootCauseRanker()
         self._primary_strategy_name = type(primary).__name__
         self._fallback_strategy_name = type(self._root_cause_fallback).__name__
 
-    def _analyze_root_cause(
+    def analyze_root_cause(
         self,
         dag: EventDAG,
         co_data: list[CorrelationResult],
@@ -1226,7 +1226,7 @@ def to_dict(self) -> dict[str, Any]:
   "incident_id": "INC-2026-0221-001",
   "confidence": 0.72,
   "strategy_metadata": {
-    "strategy_name": "DefaultRootCauseRanker",
+    "strategy_name": "RootCauseRanker",
     "fallback_used": true,
     "fallback_reason": "BulkheadTimeoutError: ml_inference timeout after 30.0s",
     "primary_strategy_name": "LLMRootCauseAnalyzer",
@@ -1280,7 +1280,7 @@ def to_dict(self) -> dict[str, Any]:
     │     ▼          ▼          │
     │  Result    [Fallback]     │
     │              │             │
-    │     DefaultRootCauseRanker│
+    │     RootCauseRanker       │
     │              │             │
     └──────────────┴─────────────┘
                   │
