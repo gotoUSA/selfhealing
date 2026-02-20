@@ -233,7 +233,10 @@ class TestWildcardObserverLifecycleIntegration:
         assert observer._consumer_thread is None
         assert observer._handler_ref is None
 
-        # 4) EventBus에서 구독 해제 확인
+        # 4) EventBus에서 WildcardObserver 핸들러 구독 해제 확인
+        #    싱글톤 EventBus에 다른 컴포넌트의 구독이 남아 있을 수 있으므로
+        #    WildcardObserver 핸들러만 제거되었는지 검증한다.
         for et in EventType.__members__.values():
             subs = event_bus._subscriptions.get(et, [])
-            assert len(subs) == 0
+            observer_subs = [s for s in subs if "WildcardObserver" in s.handler_name]
+            assert len(observer_subs) == 0
