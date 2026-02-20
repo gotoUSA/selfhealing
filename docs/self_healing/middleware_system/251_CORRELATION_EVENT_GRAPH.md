@@ -5,7 +5,7 @@
 > **Updated**: 2026-02-20
 > **Status**: Implemented
 > **Parent**: [250_CORRELATION_ENGINE_OVERVIEW.md](250_CORRELATION_ENGINE_OVERVIEW.md)
-> **Implements**: `services/correlation_engine/event_graph.py`
+> **Implements**: `services/correlation_engine/event_graph.py`, `event_graph_builder.py`, `event_graph_trigger.py`, `co_occurrence_tracker.py`
 
 ---
 
@@ -332,11 +332,12 @@ if now - last_ts >= self.inactivity_seconds:   # 비활성 체크
 
 ```python
 # settings/correlation.py (신규)
-correlation_lookback_seconds: int = Field(
+# env_prefix="SELFHEALING_CORRELATION_" → 환경변수: SELFHEALING_CORRELATION_LOOKBACK_SECONDS
+lookback_seconds: int = Field(
     default=300, ge=30, le=900,
     description="트리거 이벤트 기준 과거 캡처 범위 (초)",
 )
-correlation_lookahead_seconds: int = Field(
+lookahead_seconds: int = Field(
     default=60, ge=10, le=300,
     description="트리거 이벤트 기준 미래 캡처 범위 (초)",
 )
@@ -539,10 +540,14 @@ class CoOccurrenceTracker:
         """O(1) dict lookup — Lock 불필요."""
         return self._snapshot.scores.get((event_type_a, event_type_b))
 
-    def _refresh_from_backend(self):
-        """백그라운드 Timer(daemon)에서 주기적 호출 (60초 간격)."""
-        new_scores = self._pull_from_state_backend()  # Redis/DB
-        self._snapshot = CoOccurrenceSnapshot(scores=new_scores)  # atomic swap
+    def update_snapshot(self, scores: dict[tuple[str, str], float]) -> None:
+        """Phase 1: 외부에서 Co-occurrence 점수를 주입하여 스냅샷 교체."""
+        self._snapshot = CoOccurrenceSnapshot(scores=dict(scores))  # atomic swap
+
+    # Phase 2: 백그라운드 Timer(daemon)에서 주기적 호출 (60초 간격)
+    # def _refresh_from_backend(self):
+    #     new_scores = self._pull_from_state_backend()  # Redis/DB
+    #     self.update_snapshot(new_scores)
 ```
 
 백그라운드 리프레시 패턴 선례: `EmergencyStateRefresher`(30초+jitter), `PrecomputedCacheWorker`, `ConfigPropagator`(Redis Pub/Sub) 등 프로젝트 내 15+곳에서 `threading.Timer(daemon=True)` 또는 `threading.Thread(daemon=True)` 사용.

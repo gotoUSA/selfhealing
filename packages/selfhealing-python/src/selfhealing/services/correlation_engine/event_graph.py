@@ -57,6 +57,9 @@ DEFAULT_MAX_EVENTS_PER_DAG = 200
 DEFAULT_MIN_CONFIDENCE = 0.4
 """이 값 미만의 엣지는 제거"""
 
+DEFAULT_MAX_GRAPH_DEPTH = 3
+"""DAG 최대 깊이 — OOM 방지 (§12.1)"""
+
 
 # =============================================================================
 # EventNode — DAG의 노드

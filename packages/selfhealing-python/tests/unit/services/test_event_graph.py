@@ -34,6 +34,7 @@ from selfhealing.services.correlation_engine.event_graph import (
     CONFIDENCE_CORRELATION_ID,
     CONFIDENCE_DEPENDENCY,
     DEFAULT_MAX_EVENTS_PER_DAG,
+    DEFAULT_MAX_GRAPH_DEPTH,
     DEFAULT_MIN_CONFIDENCE,
     EVIDENCE_CONTEXTUAL,
     EVIDENCE_CO_OCCURRENCE,
@@ -401,6 +402,36 @@ class TestEventDAGBehavior:
         )
         ancestors = dag.get_ancestors(node_d)
         assert {n.event_id for n in ancestors} == {"a", "b", "c"}
+
+    def test_diamond_critical_path_deterministic(self):
+        """Diamond(A→{B,C}→D)에서 critical path가 결정적으로 선택 (§12.4)."""
+        node_a = _make_node(event_id="a", timestamp=100.0)
+        node_b = _make_node(event_id="b", timestamp=101.0)
+        node_c = _make_node(event_id="c", timestamp=101.5)
+        node_d = _make_node(event_id="d", timestamp=102.0)
+        edges = [
+            CausalEdge(node_a, node_b, 0.85, EVIDENCE_DEPENDENCY, 1.0),
+            CausalEdge(node_a, node_c, 0.85, EVIDENCE_DEPENDENCY, 1.5),
+            CausalEdge(node_b, node_d, 0.85, EVIDENCE_DEPENDENCY, 1.0),
+            CausalEdge(node_c, node_d, 0.85, EVIDENCE_DEPENDENCY, 0.5),
+        ]
+        dag = EventDAG(
+            incident_id="diamond",
+            window_start=100.0,
+            window_end=102.0,
+            nodes={"a": node_a, "b": node_b, "c": node_c, "d": node_d},
+            edges=edges,
+            root_nodes=[node_a],
+            leaf_nodes=[node_d],
+        )
+        # 양쪽 경로 모두 길이 3 (A→B→D, A→C→D)
+        critical = dag.get_critical_path()
+        assert len(critical) == 3
+        assert critical[0].event_id == "a"
+        assert critical[-1].event_id == "d"
+        # 2회 실행 시 동일 결과 (결정적)
+        critical_2 = dag.get_critical_path()
+        assert [n.event_id for n in critical] == [n.event_id for n in critical_2]
 
 
 # =============================================================================
@@ -813,6 +844,134 @@ class TestEventGraphBuilderBehavior:
         dag = builder.build_dag([e1, e2], window_seconds=300.0)
         assert dag.window_start == t1.timestamp()
         assert dag.window_end == t2.timestamp()
+
+    def test_depth_3_chain(
+        self,
+        blast_radius_service: BlastRadiusService,
+        co_occurrence_tracker: CoOccurrenceTracker,
+    ):
+        """A→B→C→D 깊이 3 체인 — 프로덕션 기본값과 동일 (§12.3)."""
+        blast_radius_service.add_dependency("svc-a", "svc-b", "sync")
+        blast_radius_service.add_dependency("svc-b", "svc-c", "sync")
+        blast_radius_service.add_dependency("svc-c", "svc-d", "sync")
+        builder = EventGraphBuilder(blast_radius_service, co_occurrence_tracker)
+        events = [
+            _make_event(
+                event_type=EventType.CIRCUIT_BREAKER_OPENED,
+                source="svc-a",
+                timestamp=datetime(2026, 2, 20, 14, 0, 0, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.EMERGENCY_ACTIVATED,
+                source="svc-b",
+                timestamp=datetime(2026, 2, 20, 14, 0, 10, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.EMERGENCY_LEVEL_CHANGED,
+                source="svc-c",
+                timestamp=datetime(2026, 2, 20, 14, 0, 20, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.EMERGENCY_DEACTIVATED,
+                source="svc-d",
+                timestamp=datetime(2026, 2, 20, 14, 0, 30, tzinfo=timezone.utc),
+            ),
+        ]
+        dag = builder.build_dag(events, window_seconds=30.0)
+        dep_edges = [e for e in dag.edges if e.evidence_type == EVIDENCE_DEPENDENCY]
+        # A→B, B→C, C→D = 3개 dependency 엣지
+        dep_pairs = {(e.source.service_name, e.target.service_name) for e in dep_edges}
+        assert ("svc-a", "svc-b") in dep_pairs
+        assert ("svc-b", "svc-c") in dep_pairs
+        assert ("svc-c", "svc-d") in dep_pairs
+        assert len(dep_edges) == 3
+
+    def test_max_graph_depth_enforcement(
+        self,
+        blast_radius_service: BlastRadiusService,
+        co_occurrence_tracker: CoOccurrenceTracker,
+    ):
+        """depth 5 체인 + max_graph_depth=3 → 깊은 엣지 제거 (§12.1/§12.3)."""
+        for src, tgt in [
+            ("svc-a", "svc-b"),
+            ("svc-b", "svc-c"),
+            ("svc-c", "svc-d"),
+            ("svc-d", "svc-e"),
+            ("svc-e", "svc-f"),
+        ]:
+            blast_radius_service.add_dependency(src, tgt, "sync")
+        builder = EventGraphBuilder(
+            blast_radius_service,
+            co_occurrence_tracker,
+            max_graph_depth=3,
+        )
+        events = [
+            _make_event(
+                event_type=EventType.CIRCUIT_BREAKER_OPENED,
+                source="svc-a",
+                timestamp=datetime(2026, 2, 20, 14, 0, 0, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.EMERGENCY_ACTIVATED,
+                source="svc-b",
+                timestamp=datetime(2026, 2, 20, 14, 0, 10, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.EMERGENCY_LEVEL_CHANGED,
+                source="svc-c",
+                timestamp=datetime(2026, 2, 20, 14, 0, 20, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.EMERGENCY_DEACTIVATED,
+                source="svc-d",
+                timestamp=datetime(2026, 2, 20, 14, 0, 30, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.CONFIG_UPDATED,
+                source="svc-e",
+                timestamp=datetime(2026, 2, 20, 14, 0, 40, tzinfo=timezone.utc),
+            ),
+            _make_event(
+                event_type=EventType.ERROR_BUDGET_CRITICAL,
+                source="svc-f",
+                timestamp=datetime(2026, 2, 20, 14, 0, 50, tzinfo=timezone.utc),
+            ),
+        ]
+        dag = builder.build_dag(events, window_seconds=30.0)
+        dep_edges = [e for e in dag.edges if e.evidence_type == EVIDENCE_DEPENDENCY]
+        # max_graph_depth=3: A(0)→B(1)→C(2)→D(3) 유지, D→E(4), E→F(5) 제거
+        dep_pairs = {(e.source.service_name, e.target.service_name) for e in dep_edges}
+        assert ("svc-a", "svc-b") in dep_pairs
+        assert ("svc-b", "svc-c") in dep_pairs
+        assert ("svc-c", "svc-d") in dep_pairs
+        assert ("svc-d", "svc-e") not in dep_pairs
+        assert ("svc-e", "svc-f") not in dep_pairs
+
+    def test_default_max_graph_depth_is_3(self):
+        """DEFAULT_MAX_GRAPH_DEPTH 기본값은 3이어야 한다 (§12.1)."""
+        assert DEFAULT_MAX_GRAPH_DEPTH == 3
+
+    def test_cycle_prevention_by_timestamp_order(self, builder: EventGraphBuilder):
+        """시간순 보장으로 순환(A→B→A)이 불가능 (§12.3)."""
+        t1 = datetime(2026, 2, 20, 14, 0, 0, tzinfo=timezone.utc)
+        t2 = datetime(2026, 2, 20, 14, 0, 5, tzinfo=timezone.utc)
+        e1 = _make_event(
+            event_type=EventType.CIRCUIT_BREAKER_OPENED,
+            source="svc-a",
+            timestamp=t1,
+        )
+        e2 = _make_event(
+            event_type=EventType.EMERGENCY_ACTIVATED,
+            source="svc-b",
+            timestamp=t2,
+        )
+        dag = builder.build_dag([e1, e2], window_seconds=300.0)
+        # 모든 엣지가 시간순 (source.timestamp <= target.timestamp)
+        for edge in dag.edges:
+            assert edge.source.timestamp <= edge.target.timestamp
+        # 셀프 루프 없음
+        for edge in dag.edges:
+            assert edge.source.event_id != edge.target.event_id
 
 
 # =============================================================================

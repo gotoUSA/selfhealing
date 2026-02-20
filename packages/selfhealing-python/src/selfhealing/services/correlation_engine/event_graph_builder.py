@@ -29,6 +29,7 @@ from selfhealing.services.correlation_engine.event_graph import (
     CONFIDENCE_CORRELATION_ID,
     CONFIDENCE_DEPENDENCY,
     DEFAULT_MAX_EVENTS_PER_DAG,
+    DEFAULT_MAX_GRAPH_DEPTH,
     DEFAULT_MIN_CONFIDENCE,
     EVIDENCE_CONTEXTUAL,
     EVIDENCE_CO_OCCURRENCE,
@@ -60,11 +61,13 @@ class EventGraphBuilder:
         *,
         max_events_per_dag: int = DEFAULT_MAX_EVENTS_PER_DAG,
         min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+        max_graph_depth: int = DEFAULT_MAX_GRAPH_DEPTH,
     ) -> None:
         self._blast_radius = blast_radius_service
         self._co_occurrence = co_occurrence_tracker
         self._max_events_per_dag = max_events_per_dag
         self._min_confidence = min_confidence
+        self._max_graph_depth = max_graph_depth
 
     def build_dag(
         self,
@@ -111,6 +114,9 @@ class EventGraphBuilder:
 
         # 4) 전이적 축소 (Transitive Reduction)
         edges = self._transitive_reduction(nodes, edges)
+
+        # 4.5) max_graph_depth 제한 — OOM 방지 (§12.1)
+        edges = self._enforce_max_depth(nodes, edges)
 
         # 5) root/leaf 노드 식별
         root_nodes = self._find_roots(nodes, edges)
@@ -301,6 +307,55 @@ class EventGraphBuilder:
             kept_edges.append(edge)
 
         return kept_edges
+
+    def _enforce_max_depth(
+        self,
+        nodes: dict[str, EventNode],
+        edges: list[CausalEdge],
+    ) -> list[CausalEdge]:
+        """max_graph_depth를 초과하는 깊이의 엣지를 제거한다 (§12.1 OOM 방지)."""
+        if not edges:
+            return edges
+
+        # 루트 노드 식별 (in-degree = 0)
+        target_ids = {e.target.event_id for e in edges}
+        root_ids = [eid for eid in nodes if eid not in target_ids]
+        if not root_ids:
+            return edges
+
+        # 순방향 인접 리스트
+        forward_adj: dict[str, list[str]] = {eid: [] for eid in nodes}
+        for edge in edges:
+            forward_adj[edge.source.event_id].append(edge.target.event_id)
+
+        # BFS로 루트에서 최소 깊이(hop count) 계산
+        depths: dict[str, int] = {}
+        queue = list(root_ids)
+        for rid in root_ids:
+            depths[rid] = 0
+
+        head = 0
+        while head < len(queue):
+            current = queue[head]
+            head += 1
+            current_depth = depths[current]
+            for child in forward_adj.get(current, []):
+                child_depth = current_depth + 1
+                if child not in depths or depths[child] > child_depth:
+                    depths[child] = child_depth
+                    queue.append(child)
+
+        # target 깊이가 max_graph_depth 이하인 엣지만 유지
+        kept = [e for e in edges if depths.get(e.target.event_id, 0) <= self._max_graph_depth]
+
+        if len(kept) < len(edges):
+            logger.debug(
+                "[EventGraphBuilder] max_graph_depth=%d: pruned %d edges",
+                self._max_graph_depth,
+                len(edges) - len(kept),
+            )
+
+        return kept
 
     @staticmethod
     def _find_roots(
