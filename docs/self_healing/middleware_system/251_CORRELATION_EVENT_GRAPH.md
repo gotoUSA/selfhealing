@@ -3,7 +3,7 @@
 > **Version**: 1.1.0
 > **Created**: 2026-02-20
 > **Updated**: 2026-02-20
-> **Status**: Approved
+> **Status**: Implemented
 > **Parent**: [250_CORRELATION_ENGINE_OVERVIEW.md](250_CORRELATION_ENGINE_OVERVIEW.md)
 > **Implements**: `services/correlation_engine/event_graph.py`
 
