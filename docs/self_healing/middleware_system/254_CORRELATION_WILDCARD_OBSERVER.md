@@ -206,7 +206,6 @@ EventBus는 `getattr(handler, "__name__", str(handler))`로 핸들러를 식별�
 `id(self)`를 포함한 고유 이름의 래퍼 함수를 생성하여 이를 방지한다.
 
 ```python
-import hashlib
 import logging
 import queue
 import threading
@@ -345,13 +344,14 @@ class WildcardObserver:
             self._consumer_thread.join(timeout=5.0)
         self._consumer_thread = None
 
-        # 2) 42개 전체 순회하며 구독 해제 — 개별 try-except로 보호
+        # 2) 전체 EventType 순회하며 구독 해제 — 개별 try-except로 보호
         handler = self._handler_ref
-        for event_type in EventType.__members__.values():
-            try:
-                event_bus.unsubscribe(event_type, handler)
-            except Exception:
-                pass  # 해제 실패해도 루프 계속
+        if handler is not None:
+            for event_type in EventType.__members__.values():
+                try:
+                    event_bus.unsubscribe(event_type, handler)
+                except Exception:
+                    pass
 
         self._subscribed = False
 
@@ -537,21 +537,28 @@ class WildcardObserver:
 
 ```python
     def refresh_subscriptions(self, event_bus: SelfHealingEventBus) -> int:
-        """EventType 변경 시 재등록.
+        """EventType 변경 시 누락된 타입에 대해 추가 구독.
 
-        D4의 _handler_ref를 재사용하여 handler_name 일관성을 유지한다.
+        _handler_ref를 재사용하여 handler_name 일관성을 유지한다.
+
+        Returns:
+            새로 추가된 구독 수.
         """
+        if not self._subscribed or self._handler_ref is None:
+            return 0
+
         current_types = set(EventType.__members__.values())
-        subscribed_types = set(self._subscribed_types)
+        new_count = 0
+        for event_type in current_types:
+            try:
+                event_bus.subscribe(event_type, self._handler_ref, EventPriority.LOW)
+                # subscribe()는 중복 구독 시 기존 것을 반환하므로
+                # 이미 구독된 타입은 추가되지 않음
+                new_count += 1
+            except Exception:
+                pass
 
-        new_types = current_types - subscribed_types
-        for event_type in new_types:
-            event_bus.subscribe(
-                event_type, self._handler_ref, EventPriority.LOW
-            )
-            self._subscribed_types.add(event_type)
-
-        return len(new_types)
+        return new_count
 ```
 
 ### 4.2 방안 B: EventBus 확장 (별도 제안)
