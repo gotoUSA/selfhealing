@@ -69,5 +69,5 @@ db.sqlite3.backup
 logs/selfhealing_state/*.json
 *.csv
 *.jsonl
-
+*.json
 gunicorn.ctl
