@@ -8,7 +8,7 @@ Modules:
     - event_graph: EventNode, CausalEdge, EventDAG 자료구조
     - event_graph_builder: EventGraphBuilder DAG 구축 엔진
     - event_graph_trigger: EventGraphTrigger DAG 빌드 트리거
-    - co_occurrence_tracker: 이벤트 동시 발생 패턴 추적기
+    - co_occurrence_tracker: 이벤트 동시 발생 패턴 추적 및 이상 탐지기
 
 Usage:
     from selfhealing.services.correlation_engine.event_graph import (
@@ -18,5 +18,11 @@ Usage:
     )
     from selfhealing.services.correlation_engine.event_graph_builder import (
         EventGraphBuilder,
+    )
+    from selfhealing.services.correlation_engine.co_occurrence_tracker import (
+        CoOccurrenceTracker,
+        EventPairKey,
+        CoOccurrenceRecord,
+        CorrelationResult,
     )
 """

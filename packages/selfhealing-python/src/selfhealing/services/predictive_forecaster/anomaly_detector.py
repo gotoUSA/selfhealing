@@ -159,6 +159,35 @@ class ZScoreDetector:
         """윈도우 데이터 초기화."""
         self._values.clear()
 
+    def to_dict(self) -> dict:
+        """학습 상태를 dict로 직렬화한다.
+
+        Returns:
+            threshold, window, values를 포함하는 dict.
+        """
+        return {
+            "values": list(self._values),
+            "threshold": self._threshold,
+            "window": self._window,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ZScoreDetector:
+        """dict에서 인스턴스를 복원한다.
+
+        __init__에서 deque(maxlen=window)가 생성되므로
+        extend로 데이터를 주입해도 maxlen이 보존된다.
+
+        Args:
+            data: to_dict()로 생성된 dict.
+
+        Returns:
+            복원된 ZScoreDetector 인스턴스.
+        """
+        det = cls(threshold=data["threshold"], window=data["window"])
+        det._values.extend(data["values"])
+        return det
+
 
 # =============================================================================
 # IQR (사분위수 범위) 기반 이상 탐지
