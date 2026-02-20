@@ -142,7 +142,7 @@ def _make_analysis(
 # =============================================================================
 
 
-class TestConstants:
+class TestConstantsContract:
     """§255에 명시된 상수 값 검증."""
 
     def test_default_severity(self):
@@ -187,8 +187,8 @@ class TestConstants:
 # =============================================================================
 
 
-class TestTimelineEntry:
-    """TimelineEntry dataclass 검증."""
+class TestTimelineEntryContract:
+    """TimelineEntry dataclass 계약 검증."""
 
     def test_frozen_dataclass(self):
         """TimelineEntry는 immutable."""
@@ -271,8 +271,8 @@ class TestTimelineEntry:
 # =============================================================================
 
 
-class TestTimelinePhase:
-    """TimelinePhase dataclass 검증."""
+class TestTimelinePhaseContract:
+    """TimelinePhase dataclass 계약 검증."""
 
     def test_frozen_dataclass(self):
         """TimelinePhase는 immutable."""
@@ -307,12 +307,12 @@ class TestTimelinePhase:
 
 
 # =============================================================================
-# Contract 테스트: IncidentTimeline 메트릭
+# Behavior 테스트: IncidentTimeline 메트릭
 # =============================================================================
 
 
-class TestIncidentTimelineMetrics:
-    """IncidentTimeline 메트릭 메서드 검증."""
+class TestIncidentTimelineMetricsBehavior:
+    """IncidentTimeline 메트릭 메서드 동작 검증."""
 
     def test_get_mttd_basic(self):
         """MTTD = 첫 이벤트 ~ 첫 critical 시간 차."""
@@ -472,8 +472,8 @@ class TestIncidentTimelineMetrics:
 # =============================================================================
 
 
-class TestSeverityMap:
-    """SEVERITY_MAP — §255에 명시된 매핑 검증."""
+class TestSeverityMapContract:
+    """SEVERITY_MAP — §255에 명시된 매핑 계약 검증."""
 
     def test_cb_opened_is_critical(self):
         builder = IncidentTimelineBuilder()
@@ -510,8 +510,8 @@ class TestSeverityMap:
 # =============================================================================
 
 
-class TestBuildSingleEvent:
-    """단일 이벤트 DAG → 1항목 타임라인."""
+class TestBuildSingleEventBehavior:
+    """단일 이벤트 DAG → 1항목 타임라인 동작 검증."""
 
     def test_single_event_produces_one_entry(self):
         node = _make_node(
@@ -552,11 +552,11 @@ class TestBuildSingleEvent:
         builder = IncidentTimelineBuilder()
         timeline = builder.build(dag, analysis)
 
-        assert timeline.entries[0].severity == "critical"
+        assert timeline.entries[0].severity == IncidentTimelineBuilder.SEVERITY_MAP["circuit_breaker_opened"]
 
 
-class TestBuildOpenCloseChain:
-    """OPEN → CLOSE 체인 — started_at/resolved_at 검증."""
+class TestBuildOpenCloseChainBehavior:
+    """OPEN → CLOSE 체인 — started_at/resolved_at 동작 검증."""
 
     def test_duration_calculation(self):
         """duration = resolved_at - started_at."""
@@ -640,8 +640,8 @@ class TestBuildOpenCloseChain:
         assert close_entry.causal_parent == "e1"
 
 
-class TestBuildEmptyDAG:
-    """빈 DAG → 최소 타임라인."""
+class TestBuildEmptyDAGBehavior:
+    """빈 DAG → 최소 타임라인 동작 검증."""
 
     def test_empty_dag_returns_empty_entries(self):
         dag = EventDAG.create_empty("inc_empty")
@@ -656,8 +656,8 @@ class TestBuildEmptyDAG:
         assert timeline.duration_seconds is None
 
 
-class TestBuildMultiServiceScenario:
-    """DB Pool → CB × 3 → Emergency → Recovery 시나리오."""
+class TestBuildMultiServiceScenarioBehavior:
+    """DB Pool → CB × 3 → Emergency → Recovery 시나리오 동작 검증."""
 
     def test_full_scenario_phases(self):
         """다중 서비스 인시던트 → escalation, mitigation, recovery 3 phases.
@@ -811,7 +811,7 @@ class TestBuildMultiServiceScenario:
 # =============================================================================
 
 
-class TestPhaseClassification:
+class TestPhaseClassificationBehavior:
     """_classify_phases() 동작 검증."""
 
     def test_detection_phase_duration(self):
@@ -887,7 +887,7 @@ class TestPhaseClassification:
 # =============================================================================
 
 
-class TestDescriptionFormatting:
+class TestDescriptionFormattingBehavior:
     """_format_description() 동작 검증."""
 
     def test_root_cause_prefix(self):
@@ -994,8 +994,8 @@ class TestDescriptionFormatting:
 # =============================================================================
 
 
-class TestToDict:
-    """IncidentTimeline.to_dict() 검증."""
+class TestToDictBehavior:
+    """IncidentTimeline.to_dict() 동작 검증."""
 
     def test_to_dict_contains_metrics(self):
         """to_dict()에 metrics 섹션 포함 (R2: status, R3: ttar 추가)."""
@@ -1045,8 +1045,8 @@ class TestToDict:
 # =============================================================================
 
 
-class TestToMarkdown:
-    """IncidentTimeline.to_markdown() 검증."""
+class TestToMarkdownBehavior:
+    """IncidentTimeline.to_markdown() 동작 검증."""
 
     def test_markdown_contains_header(self):
         """마크다운에 incident_id 헤더 포함."""
@@ -1119,7 +1119,7 @@ class TestToMarkdown:
 # =============================================================================
 
 
-class TestMetadataExtraction:
+class TestMetadataExtractionBehavior:
     """_extract_metadata() 동작 검증."""
 
     def test_level_from_data(self):
@@ -1166,8 +1166,8 @@ class TestMetadataExtraction:
 # =============================================================================
 
 
-class TestSeverityIcon:
-    """_severity_icon() 아이콘 매핑 검증."""
+class TestSeverityIconBehavior:
+    """_severity_icon() 아이콘 매핑 동작 검증."""
 
     def test_critical_icon(self):
         assert _severity_icon("critical") == "\U0001f534"  # 🔴
@@ -1190,8 +1190,8 @@ class TestSeverityIcon:
 # =============================================================================
 
 
-class TestFormatDuration:
-    """_format_duration() 사람이 읽기 쉬운 변환."""
+class TestFormatDurationBehavior:
+    """_format_duration() 사람이 읽기 쉬운 변환 동작 검증."""
 
     def test_none_returns_na(self):
         assert IncidentTimeline._format_duration(None) == "N/A"
@@ -1218,8 +1218,8 @@ class TestFormatDuration:
 # =============================================================================
 
 
-class TestResolutionDetection:
-    """Resolution 이벤트 자동 감지."""
+class TestResolutionDetectionBehavior:
+    """Resolution 이벤트 자동 감지 동작 검증."""
 
     def test_cb_closed_is_resolution(self):
         node = _make_node(
@@ -1275,8 +1275,8 @@ class TestResolutionDetection:
 # =============================================================================
 
 
-class TestStateMachinePhases:
-    """R1: 상태 머신 기반 Phase 분류 검증."""
+class TestStateMachinePhasesBehavior:
+    """R1: 상태 머신 기반 Phase 분류 동작 검증."""
 
     def test_detection_to_escalation_on_critical(self):
         """첫 critical 이벤트에서 DETECTION → ESCALATION 전이."""
@@ -1437,8 +1437,8 @@ class TestStateMachinePhases:
 # =============================================================================
 
 
-class TestTimelineStatus:
-    """R2: TimelineStatus 열거형 및 상태 결정 로직 검증."""
+class TestTimelineStatusContract:
+    """R2: TimelineStatus 열거형 계약 검증."""
 
     def test_timeline_status_enum_values(self):
         """TimelineStatus는 4개 값."""
@@ -1446,6 +1446,10 @@ class TestTimelineStatus:
         assert TimelineStatus.RESOLVED.value == "resolved"
         assert TimelineStatus.FLAPPING.value == "flapping"
         assert TimelineStatus.CONFIRMED.value == "confirmed"
+
+
+class TestTimelineStatusBehavior:
+    """R2: TimelineStatus 상태 결정 로직 동작 검증."""
 
     def test_status_ongoing_when_no_recovery(self):
         """recovery 이벤트 없음 → ONGOING."""
@@ -1533,8 +1537,8 @@ class TestTimelineStatus:
 # =============================================================================
 
 
-class TestTTAR:
-    """R3: TTAR 메트릭 검증."""
+class TestTTARBehavior:
+    """R3: TTAR 메트릭 동작 검증."""
 
     def test_ttar_basic(self):
         """TTAR = 첫 critical ~ 첫 mitigation 이벤트."""
@@ -1633,8 +1637,8 @@ class TestTTAR:
 # =============================================================================
 
 
-class TestSanitizeValue:
-    """R4: _sanitize_value() 크기 제한 검증."""
+class TestSanitizeValueBehavior:
+    """R4: _sanitize_value() 크기 제한 동작 검증."""
 
     def test_short_string_unchanged(self):
         """1024바이트 이하 문자열은 그대로 반환."""
@@ -1701,8 +1705,8 @@ class TestSanitizeValue:
 # =============================================================================
 
 
-class TestHumanizeEventType:
-    """R5: _humanize_event_type() snake_case → Title Case 변환."""
+class TestHumanizeEventTypeBehavior:
+    """R5: _humanize_event_type() snake_case → Title Case 변환 동작 검증."""
 
     def test_basic_conversion(self):
         assert _humanize_event_type("circuit_breaker_opened") == "Circuit Breaker Opened"
@@ -1717,8 +1721,8 @@ class TestHumanizeEventType:
         assert _humanize_event_type("kill_switch_activated") == "Kill Switch Activated"
 
 
-class TestResolveSeverity:
-    """R5: _resolve_severity() 다단계 fallback 검증."""
+class TestResolveSeverityBehavior:
+    """R5: _resolve_severity() 다단계 fallback 동작 검증."""
 
     def test_exact_match(self):
         """1단계: 정확 매칭."""
@@ -1727,15 +1731,15 @@ class TestResolveSeverity:
 
     def test_prefix_match(self):
         """2단계: prefix 매칭 — 'emergency_' → 'critical'."""
-        assert _resolve_severity("emergency_new_event", {}) == "critical"
+        assert _resolve_severity("emergency_new_event", {}) == CATEGORY_SEVERITY_DEFAULTS["emergency_"]
 
     def test_suffix_match(self):
         """3단계: suffix 매칭 — '_recovered' → 'recovery'."""
-        assert _resolve_severity("custom_service_recovered", {}) == "recovery"
+        assert _resolve_severity("custom_service_recovered", {}) == CATEGORY_SEVERITY_DEFAULTS["_recovered"]
 
     def test_suffix_failed_match(self):
         """3단계: suffix 매칭 — '_failed' → 'warning'."""
-        assert _resolve_severity("some_operation_failed", {}) == "warning"
+        assert _resolve_severity("some_operation_failed", {}) == CATEGORY_SEVERITY_DEFAULTS["_failed"]
 
     def test_fallback_to_default(self):
         """4단계: 모든 매칭 실패 → DEFAULT_SEVERITY ('info')."""
@@ -1746,6 +1750,10 @@ class TestResolveSeverity:
         severity_map = {"emergency_custom": "warning"}
         # prefix 매칭 시 'critical'이지만 정확 매칭이 우선
         assert _resolve_severity("emergency_custom", severity_map) == "warning"
+
+
+class TestCategorySeverityDefaultsContract:
+    """R5: CATEGORY_SEVERITY_DEFAULTS 계약값 검증."""
 
     def test_category_defaults_prefix_emergency(self):
         """CATEGORY_SEVERITY_DEFAULTS: 'emergency_' prefix → 'critical'."""
@@ -1765,8 +1773,8 @@ class TestResolveSeverity:
 # =============================================================================
 
 
-class TestFlappingDetection:
-    """R1 재에스컬레이션 + R2 상태 결정 통합 검증."""
+class TestFlappingDetectionBehavior:
+    """R1 재에스컬레이션 + R2 상태 결정 통합 동작 검증."""
 
     def test_flapping_scenario_re_escalation_and_status(self):
         """Recovery 중 critical 재발 → re_escalation 태그 + resolved_at=None + FLAPPING."""
