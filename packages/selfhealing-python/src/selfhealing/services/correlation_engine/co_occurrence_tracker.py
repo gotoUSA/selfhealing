@@ -524,6 +524,41 @@ class CoOccurrenceTracker:
             is_anomalous=is_anomalous,
         )
 
+    # ─── 동적 리사이징 ───
+
+    def resize(
+        self,
+        max_tracked_pairs: int | None = None,
+        count_history_size: int | None = None,
+    ) -> None:
+        """내부 데이터 구조를 새 설정에 맞게 리사이징한다.
+
+        RuntimeConfigManager 설정 변경 시 호출된다.
+
+        Args:
+            max_tracked_pairs: 축소 시 LRU 기반으로 오래된 쌍 제거
+            count_history_size: 축소 시 deque maxlen 변경 (좌측 자동 truncate)
+        """
+        if max_tracked_pairs is not None:
+            while len(self._pair_detectors) > max_tracked_pairs:
+                oldest_key = min(
+                    self._pair_detectors,
+                    key=lambda k: (
+                        self._pair_detectors[k].last_updated if hasattr(self._pair_detectors[k], "last_updated") else 0
+                    ),
+                )
+                del self._pair_detectors[oldest_key]
+                self._pair_time_gaps.pop(oldest_key, None)
+                self._pair_forecasters.pop(oldest_key, None)
+
+        if count_history_size is not None:
+            for key, gaps in self._pair_time_gaps.items():
+                old_data = list(gaps)
+                self._pair_time_gaps[key] = collections.deque(
+                    old_data[-count_history_size:],
+                    maxlen=count_history_size,
+                )
+
     # ─── StateBackend 영속화 ───
 
     def save_state(self) -> bool:

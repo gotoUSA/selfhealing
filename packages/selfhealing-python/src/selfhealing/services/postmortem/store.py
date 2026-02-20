@@ -519,6 +519,72 @@ def _get_incident_by_id_from_db(incident_id: str) -> dict[str, Any] | None:
         return None
 
 
+def update_incident_fields(incident_id: str, fields: dict[str, Any]) -> bool:
+    """기존 인시던트의 특정 필드를 부분 업데이트한다.
+
+    In-Memory 캐시와 PostgreSQL 모두 업데이트를 시도한다.
+    JSONField는 기존 dict 데이터와 deep merge하여 보존한다.
+
+    Args:
+        incident_id: 업데이트 대상 인시던트 ID
+        fields: 업데이트할 필드 dict
+
+    Returns:
+        업데이트 성공 여부
+    """
+    updated = False
+
+    # 1. In-Memory 캐시 업데이트
+    with _healing_incidents_lock:
+        for incident in _healing_incidents:
+            if incident.get("incident_id") == incident_id:
+                for key, value in fields.items():
+                    existing = incident.get(key)
+                    if isinstance(existing, dict) and isinstance(value, dict):
+                        existing.update(value)
+                    else:
+                        incident[key] = value
+                updated = True
+                break
+
+    # 2. PostgreSQL 업데이트
+    if _db_persistence_enabled:
+        try:
+            db_updated = _update_incident_fields_in_db(incident_id, fields)
+            updated = updated or db_updated
+        except Exception as e:
+            logger.warning(f"[Postmortem] DB update_incident_fields failed: {e}")
+
+    return updated
+
+
+def _update_incident_fields_in_db(incident_id: str, fields: dict[str, Any]) -> bool:
+    """PostgreSQL에서 인시던트 필드를 부분 업데이트한다."""
+    PostmortemRecord = _get_postmortem_model()
+    if PostmortemRecord is None:
+        return False
+
+    try:
+        record = PostmortemRecord.objects.filter(incident_id=incident_id).first()
+        if not record:
+            return False
+
+        for key, value in fields.items():
+            if hasattr(record, key):
+                existing = getattr(record, key)
+                if isinstance(existing, dict) and isinstance(value, dict):
+                    existing.update(value)
+                    setattr(record, key, existing)
+                else:
+                    setattr(record, key, value)
+
+        record.save(update_fields=list(fields.keys()))
+        return True
+    except Exception as e:
+        logger.debug(f"[Postmortem] _update_incident_fields_in_db failed: {e}")
+        return False
+
+
 # =============================================================================
 # Postmortem Generation Helpers
 # =============================================================================

@@ -38,6 +38,7 @@ from selfhealing.services.postmortem.store import (  # noqa: F401
     get_healing_incidents_count,
     get_incident_by_id,
     set_db_persistence_enabled,
+    update_incident_fields,
 )
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     "get_healing_incidents",
     "get_healing_incidents_count",
     "get_incident_by_id",
+    "update_incident_fields",
     "clear_healing_incidents",
     "set_db_persistence_enabled",
     "get_db_persistence_enabled",

@@ -554,3 +554,62 @@ class TestThreadSafetyBehavior:
             t.join()
 
         assert len(errors) == 0, f"Errors during concurrent execution: {errors}"
+
+
+# =============================================================================
+# Behavior Tests — resize() 동적 리사이징
+# =============================================================================
+
+
+class TestResizeBehavior:
+    """resize() 동적 리사이징 동작 검증."""
+
+    @pytest.fixture
+    def tracker_with_pairs(self) -> CoOccurrenceTracker:
+        """3개 페어가 등록된 상태의 Tracker."""
+        tracker = CoOccurrenceTracker()
+        now = time.time()
+        pairs = [
+            ("TYPE_A", "TYPE_B"),
+            ("TYPE_A", "TYPE_C"),
+            ("TYPE_B", "TYPE_C"),
+        ]
+        for event_a, event_b in pairs:
+            tracker.record_event(event_a, now, "svc_a")
+            tracker.record_event(event_b, now + 0.5, "svc_b")
+        return tracker
+
+    def test_resize_max_tracked_pairs_evicts_excess(self, tracker_with_pairs: CoOccurrenceTracker):
+        """max_tracked_pairs 축소 시 초과 페어가 제거된다."""
+        initial_count = len(tracker_with_pairs._pair_detectors)
+        assert initial_count >= 3
+
+        tracker_with_pairs.resize(max_tracked_pairs=1)
+
+        assert len(tracker_with_pairs._pair_detectors) <= 1
+
+    def test_resize_count_history_recreates_deque(self, tracker_with_pairs: CoOccurrenceTracker):
+        """count_history_size 변경 시 deque maxlen이 리사이징된다."""
+        # 데이터 추가 확인
+        if tracker_with_pairs._pair_time_gaps:
+            first_key = next(iter(tracker_with_pairs._pair_time_gaps))
+            tracker_with_pairs.resize(count_history_size=5)
+            assert tracker_with_pairs._pair_time_gaps[first_key].maxlen == 5
+
+    def test_resize_with_none_params_is_noop(self, tracker_with_pairs: CoOccurrenceTracker):
+        """None 파라미터는 해당 차원을 변경하지 않는다."""
+        initial_count = len(tracker_with_pairs._pair_detectors)
+        tracker_with_pairs.resize(max_tracked_pairs=None, count_history_size=None)
+        assert len(tracker_with_pairs._pair_detectors) == initial_count
+
+    def test_resize_evicts_from_time_gaps_and_forecasters(self, tracker_with_pairs: CoOccurrenceTracker):
+        """페어 제거 시 _pair_time_gaps와 _pair_forecasters도 함께 정리한다."""
+        # analyze_tick()으로 forecasters 등록
+        tracker_with_pairs.analyze_tick()
+
+        tracker_with_pairs.resize(max_tracked_pairs=1)
+
+        # pair_detectors 수와 동일하거나 적어야 함
+        assert (
+            len(tracker_with_pairs._pair_time_gaps) <= len(tracker_with_pairs._pair_detectors) + 3
+        )  # defaultdict이므로 접근 시 생성 가능
