@@ -152,6 +152,17 @@ from selfhealing.interfaces.resilience_policy import (  # Enums; DTOs; Protocols
 )
 
 # =============================================================================
+# ML Strategy Interfaces (AI/ML 확장 기반)
+# =============================================================================
+from selfhealing.interfaces.ml_strategy import (  # Protocols
+    AnomalyDetectionStrategy,
+    BatchCapable,
+    ClassificationStrategy,
+    ForecastStrategy,
+    StrategyLifecycle,
+)
+
+# =============================================================================
 # Web Framework Interface
 # =============================================================================
 from selfhealing.interfaces.web_framework import (  # Enums; DTOs; Exceptions; Interface; Type alias
@@ -309,4 +320,13 @@ __all__ = [
     "PolicyGuard",
     "PolicyHook",
     "FailureSink",
+    # =========================================================================
+    # ML Strategy Interfaces (AI/ML 확장 기반)
+    # =========================================================================
+    # Protocols
+    "AnomalyDetectionStrategy",
+    "ForecastStrategy",
+    "ClassificationStrategy",
+    "BatchCapable",
+    "StrategyLifecycle",
 ]

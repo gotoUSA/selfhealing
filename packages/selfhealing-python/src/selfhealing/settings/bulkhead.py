@@ -122,6 +122,30 @@ class BulkheadSettings(BaseSettings):
         description="캐시 인스턴스별 max_concurrent 설정",
     )
 
+    # ==========================================================================
+    # ML/LLM 추론 전용 격벽 설정
+    # ==========================================================================
+    ml_inference_max_workers: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="ML/LLM 추론 전용 스레드 풀 워커 수",
+    )
+
+    ml_inference_queue_size: int = Field(
+        default=5,
+        ge=0,
+        le=50,
+        description="ML/LLM 추론 전용 대기 큐 크기",
+    )
+
+    ml_inference_timeout: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=120.0,
+        description="ML/LLM 추론 타임아웃 (초)",
+    )
+
 
 # =============================================================================
 # Singleton

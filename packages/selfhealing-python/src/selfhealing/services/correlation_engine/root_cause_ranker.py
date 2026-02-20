@@ -25,6 +25,7 @@ import math
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import Any
 
 from selfhealing.services.blast_radius.service import BlastRadiusService
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
@@ -89,6 +90,33 @@ HISTORICAL_HIGH_THRESHOLD = 0.7
 # =============================================================================
 
 
+@dataclass
+class StrategyMetadata:
+    """분석에 사용된 전략의 투명성 메타데이터.
+
+    FallbackPolicy의 metadata 패턴과 PolicyResult의 outcome 패턴을 준수한다.
+    """
+
+    strategy_name: str
+    """실제 사용된 전략 이름 ("RootCauseRanker", "LLMRootCauseAnalyzer" 등)"""
+
+    fallback_used: bool = False
+    """Fallback 발동 여부. PolicyResult의 SUCCESS_WITH_FALLBACK 구분과 동일."""
+
+    fallback_reason: str | None = None
+    """Fallback 사유 ("LLM timeout after 30s", "API rate limit 429" 등).
+    FallbackPolicy.metadata["original_error"] 패턴과 동일."""
+
+    primary_strategy_name: str | None = None
+    """원래 의도된 주 전략 이름 (Fallback 발동 시에만 설정)"""
+
+    analysis_duration_ms: float = 0.0
+    """분석 소요 시간 (밀리초). PolicyResult.total_duration_ms 패턴."""
+
+    model_version: str | None = None
+    """ML 모델 버전 (MLOps 추적용)"""
+
+
 @dataclass(frozen=True)
 class RootCauseCandidate:
     """근본 원인 후보."""
@@ -133,6 +161,41 @@ class RootCauseAnalysis:
 
     summary: str
     """사람이 읽을 수 있는 요약"""
+
+    strategy_metadata: StrategyMetadata | None = None
+    """분석에 사용된 전략 정보. None이면 기본 전략 사용 (하위 호환)."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """직렬화용 딕셔너리 변환."""
+        result: dict[str, Any] = {
+            "incident_id": self.incident_id,
+            "analyzed_at": self.analyzed_at,
+            "confidence": self.confidence,
+            "summary": self.summary,
+            "candidates": [
+                {
+                    "event_id": c.event_node.event_id,
+                    "event_type": c.event_node.event_type,
+                    "service_name": c.event_node.service_name,
+                    "score": c.score,
+                    "rank": c.rank,
+                    "evidence": c.evidence,
+                    "affected_services": c.affected_services,
+                    "cascade_depth": c.cascade_depth,
+                }
+                for c in self.candidates
+            ],
+        }
+        if self.strategy_metadata:
+            result["strategy_metadata"] = {
+                "strategy_name": self.strategy_metadata.strategy_name,
+                "fallback_used": self.strategy_metadata.fallback_used,
+                "fallback_reason": self.strategy_metadata.fallback_reason,
+                "primary_strategy_name": self.strategy_metadata.primary_strategy_name,
+                "analysis_duration_ms": self.strategy_metadata.analysis_duration_ms,
+                "model_version": self.strategy_metadata.model_version,
+            }
+        return result
 
 
 # =============================================================================

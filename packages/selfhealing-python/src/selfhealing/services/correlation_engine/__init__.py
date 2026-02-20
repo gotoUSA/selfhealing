@@ -40,4 +40,15 @@ Usage:
         RESOLUTION_EVENT_TYPES,
         CATEGORY_SEVERITY_DEFAULTS,
     )
+    from selfhealing.services.correlation_engine.interfaces import (
+        CorrelationStrategy,
+        RootCauseStrategy,
+        GraphBuildStrategy,
+    )
+    from selfhealing.services.correlation_engine.service import (
+        CorrelationEngineService,
+    )
+    from selfhealing.services.correlation_engine.micro_batch import (
+        MicroBatchConsumer,
+    )
 """
