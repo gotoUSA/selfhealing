@@ -25,4 +25,9 @@ Usage:
         CoOccurrenceRecord,
         CorrelationResult,
     )
+    from selfhealing.services.correlation_engine.root_cause_ranker import (
+        RootCauseRanker,
+        RootCauseCandidate,
+        RootCauseAnalysis,
+    )
 """
