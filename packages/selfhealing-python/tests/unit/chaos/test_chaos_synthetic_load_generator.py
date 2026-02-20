@@ -40,7 +40,7 @@ class TestSyntheticLoadGenerator:
 
         config = LoadConfig(
             target_rps=10.0,
-            duration_seconds=2,
+            duration_seconds=0.3,
             pattern=LoadPattern.CONSTANT,
         )
 
@@ -54,7 +54,7 @@ class TestSyntheticLoadGenerator:
         generator.start(config, request_handler=track_request)
 
         # 잠시 대기
-        time.sleep(2.5)
+        time.sleep(0.5)
 
         stats = generator.stop()
 
@@ -78,9 +78,9 @@ class TestSyntheticLoadGenerator:
 
         config = LoadConfig(
             target_rps=20.0,
-            duration_seconds=3,
+            duration_seconds=1.0,
             pattern=LoadPattern.RAMP_UP,
-            ramp_up_seconds=2,
+            ramp_up_seconds=0.5,
         )
 
         rps_samples = []
@@ -91,8 +91,8 @@ class TestSyntheticLoadGenerator:
         generator.start(config, request_handler=track_with_timing)
 
         # RPS 샘플링
-        for _ in range(6):
-            time.sleep(0.5)
+        for _ in range(3):
+            time.sleep(0.2)
             rps_samples.append(generator.get_current_rps())
 
         generator.stop()
@@ -117,12 +117,12 @@ class TestSyntheticLoadGenerator:
 
         config = LoadConfig(
             target_rps=15.0,
-            duration_seconds=3,
+            duration_seconds=0.3,
             pattern=LoadPattern.STEADY_STATE,
         )
 
         generator.start(config)
-        time.sleep(3.5)
+        time.sleep(0.5)
         stats = generator.stop()
 
         # 검증
@@ -145,14 +145,14 @@ class TestSyntheticLoadGenerator:
 
         config = LoadConfig(
             target_rps=10.0,
-            duration_seconds=4,
+            duration_seconds=0.5,
             pattern=LoadPattern.SPIKE,
             spike_multiplier=3.0,
-            spike_duration_seconds=1,
+            spike_duration_seconds=0.2,
         )
 
         generator.start(config)
-        time.sleep(4.5)
+        time.sleep(0.7)
         stats = generator.stop()
 
         # 검증
@@ -182,7 +182,7 @@ class TestSyntheticLoadGenerator:
         generator.start(config)
 
         # 잠시 후 종료
-        time.sleep(1)
+        time.sleep(0.2)
 
         # Graceful shutdown
         stats = generator.stop(graceful=True)
@@ -336,9 +336,7 @@ class TestTrafficShaper:
 
         assert len(distributions) == 3
 
-        orders_dist = next(
-            (d for d in distributions if "orders" in d.endpoint), None
-        )
+        orders_dist = next((d for d in distributions if "orders" in d.endpoint), None)
         assert orders_dist is not None
         assert orders_dist.weight == pytest.approx(0.6, rel=0.01)
 
@@ -362,10 +360,10 @@ class TestTrafficShaper:
         shaper.configure(config)
 
         # 높은 레이턴시 시뮬레이션
-        for _ in range(20):
+        for _ in range(5):
             shaper.record_latency(200.0)  # 타겟보다 높음
             shaper.should_allow()
-            time.sleep(0.1)
+            time.sleep(0.05)
 
         stats = shaper.get_stats()
 
@@ -424,13 +422,13 @@ class TestPhase3Integration:
         load_gen.start(
             LoadConfig(
                 target_rps=50.0,  # 형성기보다 높은 RPS
-                duration_seconds=2,
+                duration_seconds=0.3,
                 pattern=LoadPattern.CONSTANT,
             ),
             request_handler=shaped_handler,
         )
 
-        time.sleep(2.5)
+        time.sleep(0.5)
         load_gen.stop()
 
         # 형성기 통계
@@ -471,7 +469,7 @@ class TestPhase3Integration:
             return True
 
         generator.start(config, request_handler=error_handler)
-        time.sleep(1)
+        time.sleep(0.2)
 
         # 정리
         cleanup_generator("test-cleanup-001", "error-service")

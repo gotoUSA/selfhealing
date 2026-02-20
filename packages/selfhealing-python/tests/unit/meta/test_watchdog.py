@@ -274,9 +274,10 @@ class TestDisabledWatchdog:
 class TestSingleton:
     """싱글톤 테스트."""
 
+    @patch("selfhealing.meta.watchdog.HealthProbeManager")
     @patch("selfhealing.meta.health_probe.RedisProbe.probe")
     @patch("selfhealing.meta.health_probe.CircuitBreakerProbe.probe")
-    def test_singleton_returns_same_instance(self, mock_cb_probe, mock_redis_probe):
+    def test_singleton_returns_same_instance(self, mock_cb_probe, mock_redis_probe, mock_probe_mgr):
         """싱글톤 인스턴스 반환."""
         from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 

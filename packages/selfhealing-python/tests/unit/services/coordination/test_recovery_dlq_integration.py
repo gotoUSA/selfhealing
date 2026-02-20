@@ -508,7 +508,7 @@ class TestDlqCallOrderBehavior:
 
         coord._recovery_lock.release = tracking_release
 
-        with patch("selfhealing.services.coordination.recovery_coordinator.logger") as mock_logger:
+        with patch("selfhealing.services.coordination.recovery_coordinator._session_persistence.logger") as mock_logger:
 
             def tracking_error(*args, **kwargs):
                 if args and "[Recovery] Failed:" in str(args[0]):

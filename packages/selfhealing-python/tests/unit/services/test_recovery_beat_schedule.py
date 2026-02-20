@@ -32,6 +32,7 @@ class TestRecoveryCeleryBeatSchedule:
             "..",
             "..",
             "..",
+            "..",
             "myproject",
             "celery.py",
         )

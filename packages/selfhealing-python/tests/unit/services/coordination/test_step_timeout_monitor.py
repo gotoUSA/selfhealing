@@ -762,7 +762,7 @@ class TestLockHeartbeatBehavior:
 
         # heartbeat 간격을 1초로 줄여 테스트
         with patch(
-            "selfhealing.services.coordination.recovery_coordinator.LOCK_HEARTBEAT_INTERVAL_SECONDS",
+            "selfhealing.services.coordination.recovery_coordinator._step_handler.LOCK_HEARTBEAT_INTERVAL_SECONDS",
             1,
         ):
             result = coordinator._execute_with_timeout(
@@ -813,7 +813,7 @@ class TestLockHeartbeatBehavior:
             return {"success": True}
 
         with patch(
-            "selfhealing.services.coordination.recovery_coordinator.LOCK_HEARTBEAT_INTERVAL_SECONDS",
+            "selfhealing.services.coordination.recovery_coordinator._step_handler.LOCK_HEARTBEAT_INTERVAL_SECONDS",
             1,
         ):
             result = coordinator._execute_with_timeout(

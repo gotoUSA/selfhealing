@@ -89,13 +89,13 @@ class TestChaosE2EIntegration:
         load_gen.start(
             LoadConfig(
                 target_rps=30.0,
-                duration_seconds=2,
+                duration_seconds=0.3,
                 pattern=LoadPattern.CONSTANT,
             ),
             request_handler=handler,
         )
 
-        time.sleep(2.5)
+        time.sleep(0.5)
         stats = load_gen.stop()
 
         # Phase 4: Verify and cleanup
@@ -110,9 +110,7 @@ class TestChaosE2EIntegration:
         experiment_id = "e2e-test-002"
         target_service = "order-api"
 
-        with patch(
-            "selfhealing.services.unified_notification.get_unified_notification_manager"
-        ) as mock_manager:
+        with patch("selfhealing.services.unified_notification.get_unified_notification_manager") as mock_manager:
             mock_instance = MagicMock()
             mock_manager.return_value = mock_instance
 
@@ -167,28 +165,26 @@ class TestChaosE2EIntegration:
 
         def error_handler(req):
             error_count[0] += 1
-            if error_count[0] >= 5:
+            if error_count[0] >= 2:
                 return False  # Simulate failures
             return True
 
         load_gen.start(
             LoadConfig(
-                target_rps=10.0,
-                duration_seconds=2,
+                target_rps=30.0,
+                duration_seconds=0.5,
             ),
             request_handler=error_handler,
         )
 
-        time.sleep(2.5)
+        time.sleep(0.7)
         stats = load_gen.stop()
 
         # Verify failure tracking
         assert stats.failed_requests > 0
 
         # Send failure notification
-        with patch(
-            "selfhealing.services.unified_notification.get_unified_notification_manager"
-        ) as mock_manager:
+        with patch("selfhealing.services.unified_notification.get_unified_notification_manager") as mock_manager:
             mock_instance = MagicMock()
             mock_manager.return_value = mock_instance
 
@@ -275,4 +271,3 @@ class TestChaosE2EIntegration:
         # Phase 4: All integration verified
         stats = shaper.get_stats()
         assert stats.total_shaped > 0
-

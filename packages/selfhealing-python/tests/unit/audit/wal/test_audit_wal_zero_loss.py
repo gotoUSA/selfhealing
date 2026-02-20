@@ -151,8 +151,12 @@ class TestAuditSyncWorker:
         """각 테스트 전후로 싱글톤 초기화."""
         from selfhealing.audit.sync_worker import AuditSyncWorker
 
+        if AuditSyncWorker._instance is not None:
+            AuditSyncWorker._instance.stop(timeout=0.05)
         AuditSyncWorker.reset_instance()
         yield
+        if AuditSyncWorker._instance is not None:
+            AuditSyncWorker._instance.stop(timeout=0.05)
         AuditSyncWorker.reset_instance()
 
     def test_sync_worker_singleton(self):
@@ -179,7 +183,7 @@ class TestAuditSyncWorker:
         assert worker.start() is False
 
         # 중지
-        worker.stop()
+        worker.stop(timeout=0.2)
         assert worker.is_running is False
 
     def test_sync_batch_with_mock_wal(self, tmp_path):
@@ -263,8 +267,12 @@ class TestAuditReconciler:
         """각 테스트 전후로 싱글톤 초기화."""
         from selfhealing.audit.reconciler import AuditReconciler
 
+        if AuditReconciler._instance is not None:
+            AuditReconciler._instance.stop(timeout=0.05)
         AuditReconciler.reset_instance()
         yield
+        if AuditReconciler._instance is not None:
+            AuditReconciler._instance.stop(timeout=0.05)
         AuditReconciler.reset_instance()
 
     def test_reconciler_singleton(self):
@@ -288,7 +296,7 @@ class TestAuditReconciler:
 
         assert reconciler.start() is False  # 중복 시작
 
-        reconciler.stop()
+        reconciler.stop(timeout=0.2)
         assert reconciler.is_running is False
 
     def test_reconcile_now(self, tmp_path):
@@ -488,9 +496,13 @@ class TestIntegrationWALFlow:
         from selfhealing.audit.reconciler import AuditReconciler
         from selfhealing.audit.resilience import AuditMetrics
 
-        # 초기화
+        # 초기화 — 빠른 stop 후 reset (timeout=0.05s)
         audit_helpers.disable_wal()
+        if AuditSyncWorker._instance is not None:
+            AuditSyncWorker._instance.stop(timeout=0.05)
         AuditSyncWorker.reset_instance()
+        if AuditReconciler._instance is not None:
+            AuditReconciler._instance.stop(timeout=0.05)
         AuditReconciler.reset_instance()
         AuditMetrics.get_instance().reset()
 
@@ -500,7 +512,11 @@ class TestIntegrationWALFlow:
 
         # 정리
         audit_helpers.disable_wal()
+        if AuditSyncWorker._instance is not None:
+            AuditSyncWorker._instance.stop(timeout=0.05)
         AuditSyncWorker.reset_instance()
+        if AuditReconciler._instance is not None:
+            AuditReconciler._instance.stop(timeout=0.05)
         AuditReconciler.reset_instance()
 
     def test_end_to_end_wal_flow(self):
