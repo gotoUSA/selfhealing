@@ -24,7 +24,20 @@ Correlation Engine의 오케스트레이터(`service.py`)와 설정(`settings/co
 
 ## 1. Settings — `settings/correlation_engine.py`
 
-### 1.1 기존 Settings 패턴 준수
+### 1.1 2계층 Settings 아키텍처
+
+실제 구현은 **2개의 Settings 클래스**로 분리한다:
+
+| 클래스 | 파일 | 역할 |
+|--------|------|------|
+| `CorrelationSettings` | `settings/correlation.py` | 서브 모듈 설정 (Co-occurrence, DAG, Observer) — 252번 문서에서 정의 |
+| `CorrelationEngineSettings` | `settings/correlation_engine.py` | 오케스트레이터 설정 (ON/OFF, 분석 주기, 가중치, 연동 플래그) |
+
+`CorrelationSettings`에 이미 정의된 서브 모듈 필드(`window_seconds`, `zscore_threshold`, `min_co_occurrences`, `max_tracked_pairs`, `count_history_size`, `min_confidence`, `max_events_per_dag`, `max_event_buffer`)를 중복 정의하지 않고, `CorrelationEngineSettings`는 오케스트레이터 수준 설정만 관리한다.
+
+**Wildcard Observer의 이벤트 발생률 이상 탐지**: 별도 `event_rate_zscore_threshold` 필드 없이 `CorrelationSettings.zscore_threshold`를 재사용한다.
+
+#### CorrelationEngineSettings — `settings/correlation_engine.py`
 
 [predictive_forecaster.py](../../packages/selfhealing-python/src/selfhealing/settings/predictive_forecaster.py) 패턴과 동일:
 
@@ -34,10 +47,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class CorrelationEngineSettings(BaseSettings):
-    """Metric Correlation Engine 설정
+    """Metric Correlation Engine 오케스트레이터 설정.
 
     환경변수 prefix: SELFHEALING_CORRELATION_
     예: SELFHEALING_CORRELATION_ENABLED=true
+
+    서브 모듈 설정(Co-occurrence, DAG, Observer)은
+    settings.correlation.CorrelationSettings에서 관리한다.
     """
 
     model_config = SettingsConfigDict(
@@ -54,72 +70,12 @@ class CorrelationEngineSettings(BaseSettings):
         description="Correlation Engine 활성화 여부",
     )
 
-    # ── 시간 윈도우 ──
-    window_seconds: float = Field(
-        default=300.0,
-        ge=30.0,
-        le=3600.0,
-        description="동시발생 판단 시간 윈도우 (초)",
-    )
+    # ── 주기적 분석 틱 ──
     analysis_interval_seconds: float = Field(
         default=60.0,
         ge=10.0,
         le=600.0,
         description="주기적 분석 틱 간격 (초)",
-    )
-
-    # ── Co-occurrence Tracker ──
-    zscore_threshold: float = Field(
-        default=2.5,
-        ge=1.0,
-        le=5.0,
-        description="동시발생 빈도 이상 판단 ZScore 임계값",
-    )
-    min_co_occurrences: int = Field(
-        default=3,
-        ge=1,
-        le=100,
-        description="최소 동시발생 횟수 (이하 무시)",
-    )
-    max_tracked_pairs: int = Field(
-        default=1000,
-        ge=10,
-        le=10000,
-        description="추적 가능한 최대 이벤트 쌍 수",
-    )
-    count_history_size: int = Field(
-        default=100,
-        ge=10,
-        le=1000,
-        description="쌍별 카운트 히스토리 크기",
-    )
-
-    # ── Event Graph ──
-    min_confidence: float = Field(
-        default=0.4,
-        ge=0.1,
-        le=0.9,
-        description="DAG 엣지 최소 신뢰도",
-    )
-    max_events_per_dag: int = Field(
-        default=200,
-        ge=10,
-        le=1000,
-        description="DAG당 최대 이벤트 수",
-    )
-
-    # ── Wildcard Observer ──
-    max_event_buffer: int = Field(
-        default=10000,
-        ge=100,
-        le=100000,
-        description="이벤트 타입별 최대 타임스탬프 버퍼",
-    )
-    event_rate_zscore_threshold: float = Field(
-        default=3.0,
-        ge=1.5,
-        le=5.0,
-        description="이벤트 발생률 이상 탐지 ZScore 임계값",
     )
 
     # ── Root Cause Ranker 가중치 ──
@@ -128,7 +84,7 @@ class CorrelationEngineSettings(BaseSettings):
     weight_blast_radius: float = Field(default=0.25, ge=0.0, le=1.0)
     weight_historical: float = Field(default=0.15, ge=0.0, le=1.0)
 
-    # ── 연동 ──
+    # ── 연동 플래그 ──
     learning_integration_enabled: bool = Field(
         default=True,
         description="LearningService 패턴 축적 연동 활성화",
@@ -173,7 +129,7 @@ from typing import Protocol
 
 from selfhealing.services.correlation_engine.wildcard_observer import WildcardObserver
 from selfhealing.services.correlation_engine.co_occurrence_tracker import CoOccurrenceTracker
-from selfhealing.services.correlation_engine.event_graph import EventGraphBuilder
+from selfhealing.services.correlation_engine.event_graph_builder import EventGraphBuilder
 from selfhealing.services.correlation_engine.root_cause_ranker import RootCauseRanker
 from selfhealing.services.correlation_engine.incident_timeline import IncidentTimelineBuilder
 from selfhealing.services.correlation_engine.interfaces import (
@@ -181,6 +137,7 @@ from selfhealing.services.correlation_engine.interfaces import (
     RootCauseStrategy,
     GraphBuildStrategy,
 )
+from selfhealing.settings.correlation import get_correlation_settings
 from selfhealing.settings.correlation_engine import get_correlation_engine_settings
 
 logger = logging.getLogger(__name__)
@@ -222,8 +179,9 @@ class CorrelationEngineService:
                 cls._instance.shutdown()
             cls._instance = None
 
-    def __init__(self):
-        self._settings = get_correlation_engine_settings()
+    def __init__(self, settings: CorrelationSettings | None = None):
+        self._settings = settings or get_correlation_settings()
+        self._engine_settings = get_correlation_engine_settings()
         self._initialized = False
         self._running = False
 
@@ -239,7 +197,7 @@ class CorrelationEngineService:
 
     def initialize(self) -> bool:
         """엔진 초기화 — EventBus 구독 등록 포함"""
-        if not self._settings.enabled:
+        if not self._engine_settings.enabled:
             logger.info("[CorrelationEngine] Disabled by settings")
             return False
 
@@ -252,18 +210,26 @@ class CorrelationEngineService:
             self._graph_builder = EventGraphBuilder(
                 blast_radius_service=self._get_blast_radius_service(),
                 co_occurrence_tracker=self._co_occurrence,
-                settings=self._settings,
+                max_events_per_dag=self._settings.max_events_per_dag,
+                min_confidence=self._settings.min_confidence,
+                max_graph_depth=self._settings.max_graph_depth,
             )
             self._root_cause_ranker = RootCauseRanker(self._settings)
             self._timeline_builder = IncidentTimelineBuilder()
 
             # 2. 상태 복원 (Cold Start 방지)
-            if self._settings.state_persistence_enabled:
+            if self._engine_settings.state_persistence_enabled:
                 self._co_occurrence.load_state()
 
-            # 3. Wildcard Observer 등록 (마지막)
+            # 3. Wildcard Observer 등록
             self._observer = WildcardObserver(self._settings, self._co_occurrence)
             self._observer.register(self._get_event_bus())
+
+            # 4. 분석 트리거 이벤트 구독
+            self._register_event_handlers()
+
+            # 5. 동적 설정 변경 구독
+            self._subscribe_config_updates()
 
             self._initialized = True
             logger.info("[CorrelationEngine] Initialized successfully")
@@ -280,7 +246,7 @@ class CorrelationEngineService:
         if self._observer:
             self._observer.unregister(self._get_event_bus())
 
-        if self._settings.state_persistence_enabled and self._co_occurrence:
+        if self._engine_settings.state_persistence_enabled and self._co_occurrence:
             self._co_occurrence.save_state()
 
         self._initialized = False
@@ -453,8 +419,7 @@ EventBus 핸들러 등록:
         - IdempotencyService로 중복 분석 차단 (§12)
         """
         try:
-            # §10: 이벤트에서 incident_id 추출 (없으면 analyze_incident 내부에서 자동 생성)
-            incident_id = event.data.get("incident_id") if hasattr(event, "data") else None
+            incident_id = event.data.get("incident_id") if hasattr(event, "data") and isinstance(event.data, dict) else None
 
             result = self.analyze_incident(incident_id=incident_id)
             if result:
@@ -886,8 +851,8 @@ def _generate_deterministic_incident_id(
 def update_incident_fields(incident_id: str, fields: dict[str, Any]) -> bool:
     """기존 인시던트의 특정 필드를 부분 업데이트한다.
 
-    Django ORM PostmortemRecord를 사용하며,
-    JSONField 병합(deep merge)을 지원한다.
+    In-Memory 캐시와 PostgreSQL 모두 업데이트를 시도한다.
+    JSONField는 기존 dict 데이터와 deep merge하여 보존한다.
 
     Args:
         incident_id: 업데이트 대상 인시던트 ID (unique)
@@ -896,31 +861,30 @@ def update_incident_fields(incident_id: str, fields: dict[str, Any]) -> bool:
     Returns:
         업데이트 성공 여부
     """
-    try:
-        from selfhealing.adapters.django.models import PostmortemRecord
+    updated = False
 
-        record = PostmortemRecord.objects.filter(
-            incident_id=incident_id
-        ).first()
-        if not record:
-            return False
+    # 1. In-Memory 캐시 업데이트
+    with _healing_incidents_lock:
+        for incident in _healing_incidents:
+            if incident.get("incident_id") == incident_id:
+                for key, value in fields.items():
+                    existing = incident.get(key)
+                    if isinstance(existing, dict) and isinstance(value, dict):
+                        existing.update(value)
+                    else:
+                        incident[key] = value
+                updated = True
+                break
 
-        # JSONField 병합 (system_snapshot 등 기존 데이터 보존)
-        for key, value in fields.items():
-            if hasattr(record, key):
-                existing = getattr(record, key)
-                if isinstance(existing, dict) and isinstance(value, dict):
-                    existing.update(value)
-                    setattr(record, key, existing)
-                else:
-                    setattr(record, key, value)
+    # 2. PostgreSQL 업데이트
+    if _db_persistence_enabled:
+        try:
+            db_updated = _update_incident_fields_in_db(incident_id, fields)
+            updated = updated or db_updated
+        except Exception as e:
+            logger.warning(f"[Postmortem] DB update_incident_fields failed: {e}")
 
-        record.save(update_fields=list(fields.keys()))
-        return True
-
-    except Exception as e:
-        logger.debug(f"[PostmortemStore] update_incident_fields failed: {e}")
-        return False
+    return updated
 ```
 
 ### 10.4 analyze_incident() 내 Fallback 체인
@@ -972,49 +936,42 @@ except (BulkheadFullError, BulkheadTimeoutError, Exception) as e:
 
 이 코드는 **기능적으로 동작**하지만, 선언적 PolicyComposer 패턴과 불일치하며 Fallback Observability가 누락되어 있다.
 
-### 11.2 목표: PolicyComposer 선언적 파이프라인 전환
+### 11.2 현재 구현: ML Bulkhead + 수동 Fallback
 
-**선택**: `compose()` + `FallbackPolicy` + `BulkheadPolicy` + `MetricsHook` 조합
-
-**선택 이유**: [`resilience/policies/composer.py`](../../packages/selfhealing-python/src/selfhealing/resilience/policies/composer.py)의 `compose()`가 역순 중첩 래핑, Guard/Hook/Sink 파이프라인을 완전 지원하며, [`presets.py`](../../packages/selfhealing-python/src/selfhealing/resilience/policies/presets.py)의 `ha_pipeline()`이 이미 동일 패턴을 사용 중이다. 전용 `TimeoutPolicy`는 미존재하나, `BulkheadPolicy`의 timeout 파라미터가 동일 역할을 수행한다.
+현재 `analyze_root_cause()`는 `_execute_with_ml_bulkhead()` + 수동 try/except Fallback으로 구현되어 있다.
+선언적 PolicyComposer 전환은 **향후 리팩토링 대상**이다.
 
 ```python
-from selfhealing.resilience.policies.composer import compose
-from selfhealing.resilience.policies.fallback import FallbackPolicy
-from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
-from selfhealing.resilience.policies.hooks.metrics import MetricsHook
-from selfhealing.resilience.policies.hooks.audit import AuditHook
-
 def analyze_root_cause(self, dag, co_occurrence_data) -> RootCauseAnalysis:
-    """PolicyComposer 기반 Fallback 파이프라인.
+    """ML Bulkhead + Fallback 기반 근본 원인 분석.
 
-    파이프라인 구성 (바깥 → 안쪽):
-      BulkheadPolicy(ml_inference, timeout=30s)
-        → FallbackPolicy(default_ranker)
-          → primary_strategy.rank_causes()
-
-    Hook:
-      MetricsHook — pipeline_name="correlation_root_cause" Counter/Histogram
-      AuditHook — fallback 사유 로깅
+    구성:
+      _execute_with_ml_bulkhead(primary_strategy.rank_causes())
+        → 실패 시 root_cause_fallback.rank_causes()
     """
-    pipeline = compose(
-        BulkheadPolicy(bulkhead=self._get_ml_bulkhead()),
-        FallbackPolicy(
-            fallback_fn=lambda: self._root_cause_fallback.rank_causes(
-                dag, co_occurrence_data
-            ),
-        ),
-    )
-    pipeline.add_hook(MetricsHook(pipeline_name="correlation_root_cause"))
-    pipeline.add_hook(AuditHook(pipeline_name="correlation_root_cause"))
-
-    result = pipeline.execute(
-        lambda: self._root_cause_strategy.rank_causes(dag, co_occurrence_data)
-    )
-    return result.value
+    try:
+        result = self._execute_with_ml_bulkhead(
+            self._root_cause_strategy.rank_causes, dag, co_occurrence_data)
+        result.strategy_metadata = StrategyMetadata(
+            strategy_name=self._primary_strategy_name,
+            fallback_used=False,
+            analysis_duration_ms=duration_ms)
+    except (BulkheadFullError, BulkheadTimeoutError, Exception) as e:
+        result = self._root_cause_fallback.rank_causes(dag, co_occurrence_data)
+        result.strategy_metadata = StrategyMetadata(
+            strategy_name=self._fallback_strategy_name,
+            fallback_used=True,
+            fallback_reason=f"{type(e).__name__}: {str(e)[:200]}",
+            primary_strategy_name=self._primary_strategy_name,
+            analysis_duration_ms=duration_ms)
+    return result
 ```
 
-### 11.3 Fallback Observability 보완
+### 11.3 향후 목표: PolicyComposer 선언적 파이프라인
+
+`compose()` + `FallbackPolicy` + `BulkheadPolicy` + `MetricsHook` 조합으로 전환하면 Fallback Observability가 자동 확보된다. [`resilience/policies/composer.py`](../../packages/selfhealing-python/src/selfhealing/resilience/policies/composer.py)의 `compose()`가 역순 중첩 래핑, Guard/Hook/Sink 파이프라인을 완전 지원하며, [`presets.py`](../../packages/selfhealing-python/src/selfhealing/resilience/policies/presets.py)의 `ha_pipeline()`이 이미 동일 패턴을 사용 중이다.
+
+### 11.4 Fallback Observability 보완
 
 코드 검증 결과, 기존 `MetricsHook`의 `on_success()`에서 `SUCCESS`와 `SUCCESS_WITH_FALLBACK`을 **구분하지 않는** 갭이 확인되었다:
 
@@ -1088,11 +1045,11 @@ def _check_already_analyzed(self, incident_id: str) -> bool:
     """
     try:
         service = IdempotencyService()
-        key = IdempotencyKey(
-            domain=IdempotencyDomain.INTERNAL_PROCESS,
+        key = IdempotencyKey.for_operation(
             entity_type="correlation_analysis",
             entity_id=incident_id,
             operation="analyze",
+            domain=IdempotencyDomain.INTERNAL_PROCESS,
         )
         result = service.check(key)
         return result.is_duplicate
@@ -1103,11 +1060,11 @@ def _mark_analysis_complete(self, incident_id: str) -> None:
     """분석 완료를 마킹한다 (§12)."""
     try:
         service = IdempotencyService()
-        key = IdempotencyKey(
-            domain=IdempotencyDomain.INTERNAL_PROCESS,
+        key = IdempotencyKey.for_operation(
             entity_type="correlation_analysis",
             entity_id=incident_id,
             operation="analyze",
+            domain=IdempotencyDomain.INTERNAL_PROCESS,
         )
         service.mark_as_processed(key)
     except Exception as e:
@@ -1195,7 +1152,7 @@ def _on_config_updated(self, event) -> None:
     - zscore_threshold: 즉시 반영 (다음 analyze_tick에서 적용)
     - enabled: False → 분석 루프 중단 + EventBus 구독 해제
     """
-    config_type = event.data.get("config_type", "") if hasattr(event, "data") else ""
+    config_type = event.data.get("config_type", "") if hasattr(event, "data") and isinstance(event.data, dict) else ""
     if config_type != "correlation":
         return
 

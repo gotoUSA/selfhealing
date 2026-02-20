@@ -795,12 +795,14 @@ class CorrelationEngineService:
         dag: EventDAG,
         co_occurrence_data: list[CorrelationResult],
     ) -> RootCauseAnalysis:
-        """PolicyComposer 기반 Fallback 파이프라인으로 근본 원인 분석.
+        """ML Bulkhead + Fallback 기반 근본 원인 분석.
 
-        파이프라인 구성 (바깥 → 안쪽):
-          BulkheadPolicy(ml_inference, timeout=30s)
-            → FallbackPolicy(default_ranker)
-              → primary_strategy.rank_causes()
+        ml_inference Bulkhead 내에서 주 전략을 실행하고,
+        BulkheadFullError/BulkheadTimeoutError 발생 시 Fallback 전략으로 전환한다.
+
+        구성:
+          _execute_with_ml_bulkhead(primary_strategy.rank_causes())
+            → 실패 시 root_cause_fallback.rank_causes()
 
         Args:
             dag: 이벤트 인과관계 그래프
