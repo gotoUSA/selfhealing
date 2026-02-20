@@ -30,4 +30,14 @@ Usage:
         RootCauseCandidate,
         RootCauseAnalysis,
     )
+    from selfhealing.services.correlation_engine.incident_timeline import (
+        IncidentTimelineBuilder,
+        IncidentTimeline,
+        TimelineEntry,
+        TimelinePhase,
+        TimelineStatus,
+        MITIGATION_EVENT_TYPES,
+        RESOLUTION_EVENT_TYPES,
+        CATEGORY_SEVERITY_DEFAULTS,
+    )
 """
