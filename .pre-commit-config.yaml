@@ -14,7 +14,7 @@ repos:
           - --remove-unused-variables
           - --ignore-init-module-imports
         exclude: ^.*/migrations/.*$
-        
+
   # isort - import 정렬
   - repo: https://github.com/PyCQA/isort
     rev: 5.13.2
@@ -22,7 +22,7 @@ repos:
       - id: isort
         args: ["--profile", "black", "--line-length", "127"]
         exclude: ^.*/migrations/.*$
-        
+
   # black - 코드 포맷팅
   - repo: https://github.com/psf/black
     rev: 24.3.0
@@ -30,18 +30,27 @@ repos:
       - id: black
         args: ["--line-length", "127"]
         exclude: ^.*/migrations/.*$
-        
+
   # flake8 - 코드 품질 검사
   - repo: https://github.com/PyCQA/flake8
     rev: 7.0.0
     hooks:
       - id: flake8
-        args: 
+        args:
           - --max-line-length=127
           - --exclude=*/migrations/*
           - --ignore=E501,W503
           - --max-complexity=15
         exclude: ^.*/migrations/.*$
+
+  # bandit - 보안 취약점 스캔 (selfhealing 패키지 대상)
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.2
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "-r"]
+        files: ^packages/selfhealing-python/src/selfhealing/
+        additional_dependencies: ["bandit[toml]"]
 
   # 추가 유용한 hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks

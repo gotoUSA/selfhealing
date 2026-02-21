@@ -593,7 +593,7 @@ cc_min = "C"  # Show complexity C or above (A=1-5, B=6-10, C=11-20, D=21-30, E=3
 [tool.bandit]
 exclude_dirs = ["tests", "migrations", "venv", "env", "htmlcov", "load_tests"]
 skips = ["B101", "B311"]  # B101: assert usage, B311: random (non-security use)
-targets = ["shopping"]
+targets = ["packages/selfhealing-python/src/selfhealing"]
 
 # ==========================================
 # vulture Configuration (Dead Code Detection)
