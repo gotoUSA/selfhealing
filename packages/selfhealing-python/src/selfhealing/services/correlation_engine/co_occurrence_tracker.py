@@ -116,6 +116,23 @@ class CoOccurrenceSnapshot:
     """(event_type_a, event_type_b) → 동시 발생 점수"""
 
 
+# Copy-on-Write CorrelationResult 인덱스 (RootCauseRanker 최적화용)
+@dataclass(frozen=True)
+class CorrelationIndex:
+    """event_type → 관련 CorrelationResult 룩업 테이블 (Immutable).
+
+    analyze_tick() 결과를 rolling 누적하여 O(M) 1회 구축하고,
+    RootCauseRanker._historical_score()가 O(1) 키 조회 → O(K) 순회만 수행한다.
+    CoOccurrenceSnapshot과 동일한 Copy-on-Write 패턴.
+    """
+
+    by_event_type: dict[str, list[CorrelationResult]] = field(default_factory=dict)
+    """event_type → 해당 이벤트가 포함된 CorrelationResult 목록"""
+
+    result_count: int = 0
+    """인덱스에 포함된 총 CorrelationResult 수"""
+
+
 # =============================================================================
 # CoOccurrenceTracker
 # =============================================================================
@@ -174,6 +191,14 @@ class CoOccurrenceTracker:
         # Copy-on-Write 읽기용 스냅샷 (EventGraphBuilder 호환)
         self._snapshot = CoOccurrenceSnapshot(scores={})
 
+        # Copy-on-Write CorrelationResult 인덱스 (RootCauseRanker 최적화용)
+        # analyze_tick() 결과를 rolling 누적하여 참조 교체한다.
+        self._correlation_index = CorrelationIndex()
+
+        # rolling 누적 결과 저장소 (analyze_tick()에서 append, 이전 결과 유지)
+        self._accumulated_results: list[CorrelationResult] = []
+        self._max_accumulated_results: int = 500
+
     # ─── 기존 EventGraphBuilder 호환 인터페이스 ───
 
     def get_pair_score(self, event_type_a: str, event_type_b: str) -> float | None:
@@ -200,6 +225,44 @@ class CoOccurrenceTracker:
         logger.debug(
             "[CoOccurrenceTracker] Snapshot updated: %d pairs",
             len(scores),
+        )
+
+    def get_correlation_index(self) -> CorrelationIndex:
+        """현재 rolling CorrelationIndex를 반환한다.
+
+        RootCauseRanker가 _historical_score에서 O(1) 키 조회로 사용한다.
+        Copy-on-Write이므로 Lock 불필요.
+        """
+        return self._correlation_index
+
+    def _rebuild_correlation_index(self, new_results: list[CorrelationResult]) -> None:
+        """새 분석 결과를 누적하고 CorrelationIndex를 원자적으로 교체한다.
+
+        pair.key 기준으로 중복 결과를 덮어써서 최신 상태를 유지한다.
+        최대 _max_accumulated_results개까지 보관하고 초과 시 오래된 결과를 제거한다.
+        """
+        # 기존 결과를 pair.key 기반 dict로 변환 (중복 시 최신 값 우선)
+        result_map: dict[str, CorrelationResult] = {r.pair.key: r for r in self._accumulated_results}
+        # 새 결과로 덮어쓰기
+        for r in new_results:
+            result_map[r.pair.key] = r
+
+        # 최대 개수 초과 시 오래된 결과 제거 (dict 삽입 순서 = 시간순)
+        all_results = list(result_map.values())
+        if len(all_results) > self._max_accumulated_results:
+            all_results = all_results[-self._max_accumulated_results :]
+        self._accumulated_results = all_results
+
+        # event_type → CorrelationResult 인덱스 구축 O(M)
+        index: dict[str, list[CorrelationResult]] = {}
+        for result in all_results:
+            index.setdefault(result.pair.event_type_a, []).append(result)
+            index.setdefault(result.pair.event_type_b, []).append(result)
+
+        # 원자적 참조 교체 (Copy-on-Write)
+        self._correlation_index = CorrelationIndex(
+            by_event_type=index,
+            result_count=len(all_results),
         )
 
     # ─── 이벤트 기록 (Hot Path) ───
@@ -323,6 +386,10 @@ class CoOccurrenceTracker:
 
         # Cold Path 축출: record_event(Hot Path)가 아닌 여기서 일괄 정리
         self._evict_if_needed()
+
+        # rolling 누적 인덱스 갱신 — RootCauseRanker O(1) 조회 지원
+        if results:
+            self._rebuild_correlation_index(results)
 
         return results
 

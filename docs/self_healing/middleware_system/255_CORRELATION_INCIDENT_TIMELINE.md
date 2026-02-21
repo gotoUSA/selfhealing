@@ -3,7 +3,7 @@
 > **Version**: 2.0.0
 > **Created**: 2026-02-20
 > **Updated**: 2026-02-21
-> **Status**: Approved
+> **Status**: Implemented
 > **Parent**: [250_CORRELATION_ENGINE_OVERVIEW.md](250_CORRELATION_ENGINE_OVERVIEW.md)
 > **Implements**: `services/correlation_engine/incident_timeline.py`
 > **Related**: [251_CORRELATION_EVENT_GRAPH.md](251_CORRELATION_EVENT_GRAPH.md), [253_CORRELATION_ROOT_CAUSE_RANKER.md](253_CORRELATION_ROOT_CAUSE_RANKER.md)

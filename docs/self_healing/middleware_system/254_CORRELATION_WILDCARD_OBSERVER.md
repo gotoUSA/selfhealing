@@ -184,11 +184,9 @@ class EventWindow:
         return original - len(self._events)
 ```
 
-> **향후 Dedup 확장 시**: `SelfHealingEvent`에는 현재 `event_id` 필드가 없고 `correlation_id`만 존재한다 (`bus/__init__.py` L217).
-> `correlation_id`는 여러 이벤트가 공유하는 트레이싱 컨텍스트이므로 개별 식별에 부적합하다.
-> Dedup이 필요해지면 `SelfHealingEvent`에 `event_id: str = field(default_factory=lambda: uuid4().hex)` 필드를 추가하고,
-> `(event_id)` 단독 또는 `(correlation_id + timestamp + event_type)` 복합키로 식별한다.
-> 직렬화는 `json.dumps(default=str, sort_keys=True)` + SHA256[:16] 방식을 사용한다.
+> **✅ Dedup 확장 완료**: `SelfHealingEvent`에 `event_id: str = field(default_factory=lambda: uuid4().hex)` 필드가 추가되었다 (`bus/__init__.py`).
+> 각 이벤트는 고유 UUID `event_id`로 식별 가능하며, `correlation_id`는 `emit()` 시 `get_trace_id()`로 자동 주입된다.
+> Dedup 시 `(event_id)` 단독 또는 `(correlation_id + timestamp + event_type)` 복합키로 식별 가능하다.
 
 ---
 
@@ -561,12 +559,12 @@ class WildcardObserver:
         return new_count
 ```
 
-### 4.2 방안 B: EventBus 확장 (별도 제안)
+### 4.2 방안 B: EventBus 확장 ✅ 구현 완료
 
-EventBus 자체에 Wildcard 구독 기능을 추가하는 것은 Correlation Engine의 범위 밖이지만, 향후 EventBus 확장 시 고려사항으로 기록:
+EventBus에 `subscribe_all()` Wildcard 구독 기능이 구현되었다 (`bus/__init__.py`):
 
 ```python
-# 미래 EventBus 확장 (현재 범위 밖)
+# ✅ 구현됨 — bus/__init__.py
 def subscribe_all(self, handler, priority=EventPriority.LOW):
     """모든 이벤트 타입에 대한 Wildcard 구독"""
     self._wildcard_subscribers.append(Subscription(handler, priority))
@@ -701,7 +699,7 @@ def shutdown(self):
 | **문제** | `str(sorted(data.items()))` + MD5: 중첩 dict 순서 비결정적, datetime 등 비직렬화 타입 예외 위험 |
 | **소비처 분석** | `ObservedEvent.data_fingerprint`를 읽는 모듈 = **없음**. DAG Builder 입력은 `get_current_window()` 이벤트 리스트, Co-occurrence는 `(event_type, timestamp, service_name)` 3-tuple |
 | **결정** | 필드 자체 제거 (YAGNI). Hot Path에서 ~5μs(MD5) + ~1μs(ObservedEvent 생성) 절약 |
-| **향후** | Dedup 필요 시 `SelfHealingEvent.event_id` UUID 필드 추가 → `json.dumps(default=str, sort_keys=True)` + SHA256[:16] |
+| **✅ 완료** | `SelfHealingEvent.event_id` UUID 필드 추가 완료 (`bus/__init__.py`) → Dedup 시 `event_id` 단독 식별 가능 |
 
 ### D2. Producer-Consumer 분리
 

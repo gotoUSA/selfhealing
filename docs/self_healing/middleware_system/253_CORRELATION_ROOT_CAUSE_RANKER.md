@@ -323,10 +323,10 @@ class RootCauseRanker:
         return cause_count / total
 ```
 
-> **향후 최적화 (§10.4)**: `CoOccurrenceTracker.analyze_tick()`이 60초 주기로 실행될 때
+> **✅ 최적화 구현 완료 (§10.4)**: `CoOccurrenceTracker.analyze_tick()`이 60초 주기로 실행될 때
 > rolling 누적 결과를 `CorrelationIndex` (frozen dataclass, Copy-on-Write) 형태로
-> 사전 구축하여 제공하면, `rank()`에서 인덱스 빌드 비용도 제거할 수 있다.
-> 현재 `CoOccurrenceSnapshot`의 Copy-on-Write 패턴(co_occurrence_tracker.py L107–116)과 동일한 구조.
+> 사전 구축하여 제공한다. `get_correlation_index()`로 O(1) 키 조회가 가능하며,
+> `_rebuild_correlation_index()`에서 pair.key 기준 중복 제거 + 최대 500개 유지.
 
 ---
 
@@ -669,13 +669,14 @@ for result in co_occurrence_data:
 
 `EventPairKey`가 알파벳 정렬을 보장하므로(`__post_init__`에서 교환, co_occurrence_tracker.py L65–71), 양쪽 키에 모두 등록하는 것이 안전하다.
 
-**향후 최적화 — CoOccurrenceTracker 위임**:
-- `analyze_tick()` 결과를 **rolling 누적 저장소**에 append
-- 누적 결과를 `CorrelationIndex` (frozen dataclass, Copy-on-Write)로 사전 구축
-- `CoOccurrenceSnapshot` (co_occurrence_tracker.py L107–116)과 동일한 패턴
-- Ranker는 인덱스 빌드 비용 0으로 O(1) 조회만 수행
+**✅ 최적화 구현 완료 — CoOccurrenceTracker 위임**:
+- `analyze_tick()` 결과를 `_accumulated_results`에 rolling 누적 (pair.key 기준 중복 제거)
+- 누적 결과를 `CorrelationIndex` (frozen dataclass, Copy-on-Write)로 원자적 교체
+- `CoOccurrenceSnapshot`과 동일한 Copy-on-Write 패턴
+- Ranker는 `get_correlation_index()`로 인덱스 빌드 비용 0, O(1) 조회만 수행
+- `_max_accumulated_results = 500`으로 메모리 상한 제어
 
-**주의**: `analyze_tick()`은 이상 탐지된 결과만 반환하므로, 매 틱 결과만 인덱싱하면 과거 이력이 유실된다. 반드시 rolling 누적이 필요하다.
+**설계 반영**: `analyze_tick()`은 이상 탐지된 결과만 반환하므로, rolling 누적으로 과거 이력을 보존한다.
 
 ### 10.5 Deterministic Tie-breaker + Timestamp 양자화
 

@@ -155,6 +155,35 @@ class ZScoreDetector:
             "max": max(self._values),
         }
 
+    # ─── AnomalyDetectionStrategy Protocol 호환 ───
+
+    def detect(
+        self,
+        value: float,
+        context: dict[str, Any] | None = None,
+    ) -> tuple[bool, float]:
+        """AnomalyDetectionStrategy.detect() — is_anomaly() 위임.
+
+        context는 통계 기반 전략이므로 무시한다.
+        """
+        return self.is_anomaly(value)
+
+    def update(
+        self,
+        value: float,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """AnomalyDetectionStrategy.update() — 윈도우에 값 추가.
+
+        is_anomaly()가 내부적으로 값을 추가하므로
+        별도 업데이트가 필요 없는 경우 이 메서드만 호출한다.
+        """
+        self._values.append(value)
+
+    def get_feature_schema(self) -> dict[str, str] | None:
+        """통계 기반 전략이므로 context 스키마 없음."""
+        return None
+
     def reset(self) -> None:
         """윈도우 데이터 초기화."""
         self._values.clear()
@@ -343,6 +372,31 @@ class IQRDetector:
             "lower_bound": q1 - self._multiplier * iqr,
             "upper_bound": q3 + self._multiplier * iqr,
         }
+
+    # ─── AnomalyDetectionStrategy Protocol 호환 ───
+
+    def detect(
+        self,
+        value: float,
+        context: dict[str, Any] | None = None,
+    ) -> tuple[bool, float]:
+        """AnomalyDetectionStrategy.detect() — is_anomaly() 위임.
+
+        context는 통계 기반 전략이므로 무시한다.
+        """
+        return self.is_anomaly(value)
+
+    def update(
+        self,
+        value: float,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """AnomalyDetectionStrategy.update() — 윈도우에 값 추가."""
+        self._values.append(value)
+
+    def get_feature_schema(self) -> dict[str, str] | None:
+        """통계 기반 전략이므로 context 스키마 없음."""
+        return None
 
     def reset(self) -> None:
         """윈도우 데이터 초기화."""

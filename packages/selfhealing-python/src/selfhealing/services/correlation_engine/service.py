@@ -85,6 +85,9 @@ ML_PRIORITY_WATERMARKS: dict[str, float] = {
 }
 """RateController의 PRIORITY_WATERMARKS 패턴 적용."""
 
+STARVATION_RELIEF_SECONDS: float = 300.0
+"""background 우선순위 기아 방지: 300초 이상 대기 시 강제 승격."""
+
 
 class CorrelationEngineService:
     """Correlation Engine 오케스트레이터.
@@ -780,14 +783,47 @@ class CorrelationEngineService:
         ThreadPoolBulkhead.execute()가 타임아웃 + 큐 제한을 처리한다.
         BulkheadFullError 발생 시 호출부에서 Fallback으로 전환한다.
         """
-        from selfhealing.settings.bulkhead import get_bulkhead_settings
-
-        timeout = get_bulkhead_settings().ml_inference_timeout
+        timeout = self._get_ml_bulkhead_timeout()
         bulkhead = self._get_ml_bulkhead()
         return bulkhead.execute(fn, *args, timeout=timeout, **kwargs)
 
+    def _get_ml_bulkhead_timeout(self) -> float:
+        """ML 추론 격벽 타임아웃 (초) 조회."""
+        from selfhealing.settings.bulkhead import get_bulkhead_settings
+
+        return get_bulkhead_settings().ml_inference_timeout
+
+    def should_admit_by_priority(self, priority: str = "standard") -> bool:
+        """Priority Watermark 기반 ML 추론 입장 제어.
+
+        격벽 점유율이 해당 우선순위의 watermark 이상이면 거부한다.
+        RateController의 PRIORITY_WATERMARKS 패턴 적용.
+
+        Args:
+            priority: "critical" | "standard" | "background"
+
+        Returns:
+            True이면 입장 허용, False이면 거부.
+        """
+        watermark = ML_PRIORITY_WATERMARKS.get(priority, 0.5)
+        bulkhead = self._get_ml_bulkhead()
+
+        active = getattr(bulkhead, "_active_count", 0)
+        max_workers = getattr(bulkhead, "_max_workers", 1)
+        utilization = active / max_workers if max_workers > 0 else 1.0
+
+        if utilization >= (1.0 - watermark):
+            logger.debug(
+                "[CorrelationEngine] ML bulkhead admission denied: " "priority=%s, utilization=%.1f%%, watermark=%.0f%%",
+                priority,
+                utilization * 100,
+                watermark * 100,
+            )
+            return False
+        return True
+
     # ─────────────────────────────────────────────
-    # 근본 원인 분석 (PolicyComposer Fallback 파이프라인)
+    # 근본 원인 분석 (PolicyComposer 선언적 Fallback 파이프라인)
     # ─────────────────────────────────────────────
 
     def analyze_root_cause(
@@ -795,14 +831,11 @@ class CorrelationEngineService:
         dag: EventDAG,
         co_occurrence_data: list[CorrelationResult],
     ) -> RootCauseAnalysis:
-        """ML Bulkhead + Fallback 기반 근본 원인 분석.
+        """PolicyComposer(BulkheadPolicy → FallbackPolicy) 선언적 파이프라인.
 
-        ml_inference Bulkhead 내에서 주 전략을 실행하고,
-        BulkheadFullError/BulkheadTimeoutError 발생 시 Fallback 전략으로 전환한다.
-
-        구성:
-          _execute_with_ml_bulkhead(primary_strategy.rank_causes())
-            → 실패 시 root_cause_fallback.rank_causes()
+        BulkheadPolicy가 ml_inference 격벽에서 주 전략을 실행하고,
+        BulkheadFullError/BulkheadTimeoutError 발생 시
+        FallbackPolicy가 대체 전략으로 자동 전환한다.
 
         Args:
             dag: 이벤트 인과관계 그래프
@@ -811,44 +844,55 @@ class CorrelationEngineService:
         Returns:
             근본 원인 분석 결과 (StrategyMetadata 포함)
         """
-        from selfhealing.resilience.bulkhead.exceptions import (
-            BulkheadFullError,
-            BulkheadTimeoutError,
-        )
+        from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
+        from selfhealing.resilience.policies.composer import compose
+        from selfhealing.resilience.policies.fallback import FallbackPolicy
 
         start_ms = time.monotonic() * 1000
 
-        try:
-            # ML Bulkhead 내에서 주 전략 실행
-            result = self._execute_with_ml_bulkhead(
-                self._root_cause_strategy.rank_causes,
-                dag,
-                co_occurrence_data,
-            )
-            duration_ms = time.monotonic() * 1000 - start_ms
+        fallback_strategy = self._root_cause_fallback
+        fallback_co_data = co_occurrence_data
+        fallback_dag = dag
 
-            # 성공 — 전략 메타데이터 첨부
-            result.strategy_metadata = StrategyMetadata(
-                strategy_name=self._primary_strategy_name,
-                fallback_used=False,
-                analysis_duration_ms=duration_ms,
-            )
-            return result
+        pipeline = compose(
+            BulkheadPolicy(
+                bulkhead=self._get_ml_bulkhead(),
+                timeout=self._get_ml_bulkhead_timeout(),
+            ),
+            FallbackPolicy(
+                fallback_fn=lambda: fallback_strategy.rank_causes(
+                    fallback_dag,
+                    fallback_co_data,
+                ),
+            ),
+        )
 
-        except (BulkheadFullError, BulkheadTimeoutError, Exception) as e:
-            # Fallback — FallbackPolicy.metadata 패턴 준수
-            logger.warning(f"[CorrelationEngine] Primary strategy failed, " f"falling back: {type(e).__name__}: {e}")
-            result = self._root_cause_fallback.rank_causes(dag, co_occurrence_data)
-            duration_ms = time.monotonic() * 1000 - start_ms
+        policy_result = pipeline.execute(
+            self._root_cause_strategy.rank_causes,
+            dag,
+            co_occurrence_data,
+        )
 
-            result.strategy_metadata = StrategyMetadata(
-                strategy_name=self._fallback_strategy_name,
-                fallback_used=True,
-                fallback_reason=f"{type(e).__name__}: {str(e)[:200]}",
-                primary_strategy_name=self._primary_strategy_name,
-                analysis_duration_ms=duration_ms,
+        duration_ms = time.monotonic() * 1000 - start_ms
+        result: RootCauseAnalysis = policy_result.value
+
+        fallback_used = policy_result.metadata.get("fallback_used", False)
+        fallback_reason = policy_result.metadata.get("fallback_reason") or policy_result.metadata.get("original_error")
+        result.strategy_metadata = StrategyMetadata(
+            strategy_name=(self._fallback_strategy_name if fallback_used else self._primary_strategy_name),
+            fallback_used=fallback_used,
+            fallback_reason=fallback_reason,
+            primary_strategy_name=self._primary_strategy_name,
+            analysis_duration_ms=duration_ms,
+        )
+
+        if fallback_used:
+            logger.warning(
+                "[CorrelationEngine] Primary strategy failed, " "PolicyComposer applied fallback: %s",
+                fallback_reason or "unknown",
             )
-            return result
+
+        return result
 
     # ─────────────────────────────────────────────
     # 배치 이상 탐지 (BatchCapable 분기)

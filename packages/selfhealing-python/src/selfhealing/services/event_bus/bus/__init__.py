@@ -45,6 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from typing import Any
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ class SelfHealingEvent:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     priority: EventPriority = EventPriority.NORMAL
     correlation_id: str | None = None
+    event_id: str = field(default_factory=lambda: uuid4().hex)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -224,6 +226,7 @@ class SelfHealingEvent:
             "timestamp": self.timestamp.isoformat(),
             "priority": self.priority.value,
             "correlation_id": self.correlation_id,
+            "event_id": self.event_id,
         }
 
 
@@ -371,6 +374,33 @@ class SelfHealingEventBus:
 
             return removed
 
+    def subscribe_all(
+        self,
+        handler: Callable[[SelfHealingEvent], None],
+        priority: EventPriority = EventPriority.LOW,
+    ) -> list[EventSubscription]:
+        """모든 EventType에 대한 Wildcard 구독.
+
+        Correlation Engine 등 전체 이벤트 관찰이 필요한 모듈에서 사용한다.
+        EventType enum의 모든 멤버를 자동 열거하여 개별 구독한다.
+
+        Args:
+            handler: 이벤트 핸들러 함수
+            priority: 핸들러 우선순위 (기본 LOW — 기존 핸들러보다 후순위)
+
+        Returns:
+            list[EventSubscription]: 생성된 구독 목록
+        """
+        subscriptions = []
+        for event_type in EventType:
+            sub = self.subscribe(event_type, handler, priority)
+            subscriptions.append(sub)
+        logger.info(
+            f"[EventBus] Wildcard subscription: {getattr(handler, '__name__', str(handler))} "
+            f"to all {len(subscriptions)} event types (priority={priority.name})"
+        )
+        return subscriptions
+
     def unsubscribe_all(self, event_type: EventType | None = None):
         """
         모든 구독 해제.
@@ -459,6 +489,13 @@ class SelfHealingEventBus:
         Returns:
             int: 호출된 핸들러 수
         """
+        if correlation_id is None:
+            try:
+                from selfhealing.audit.trace import get_trace_id
+
+                correlation_id = get_trace_id()
+            except Exception:
+                pass
         event = SelfHealingEvent(
             event_type=event_type,
             data=data,
@@ -622,11 +659,9 @@ def _on_error_budget_critical(event: SelfHealingEvent):
     logger.warning(f"[EventHandler] Error budget critical: {budget_percent:.1f}% < {threshold}% threshold")
 
 
-
 # =============================================================================
 # Throttle Event Handlers
 # =============================================================================
-
 
 
 # Handler sub-module imports
@@ -661,6 +696,7 @@ from ._throttle_handlers import (  # noqa: E402
     _on_error_budget_recovered_throttle,
     _on_kill_switch_activated_throttle,
 )
+
 
 def register_default_handlers():
     """

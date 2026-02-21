@@ -54,6 +54,9 @@ class ProviderRegistry:
     _security_repos: dict[str, type] = {}
     _audit_adapters: dict[str, type] = {}  # Audit adapters
     _traffic_routing_adapters: dict[str, type] = {}  # Traffic routing adapters
+    _correlation_strategies: dict[str, type] = {}  # Correlation ML strategies
+    _root_cause_strategies: dict[str, type] = {}  # Root cause analysis strategies
+    _graph_build_strategies: dict[str, type] = {}  # Graph build strategies
 
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
@@ -116,6 +119,24 @@ class ProviderRegistry:
         """Register a traffic routing adapter."""
         cls._traffic_routing_adapters[name] = adapter_class
         logger.debug(f"[Registry] Registered traffic routing: {name}")
+
+    @classmethod
+    def register_correlation_strategy(cls, name: str, strategy_class: type) -> None:
+        """Correlation Engine 상관관계 분석 전략 등록."""
+        cls._correlation_strategies[name] = strategy_class
+        logger.debug(f"[Registry] Registered correlation strategy: {name}")
+
+    @classmethod
+    def register_root_cause_strategy(cls, name: str, strategy_class: type) -> None:
+        """Correlation Engine 근본 원인 분석 전략 등록."""
+        cls._root_cause_strategies[name] = strategy_class
+        logger.debug(f"[Registry] Registered root cause strategy: {name}")
+
+    @classmethod
+    def register_graph_build_strategy(cls, name: str, strategy_class: type) -> None:
+        """Correlation Engine DAG 구축 전략 등록."""
+        cls._graph_build_strategies[name] = strategy_class
+        logger.debug(f"[Registry] Registered graph build strategy: {name}")
 
     @classmethod
     def register_statistics_adapter(
@@ -471,8 +492,7 @@ class ProviderRegistry:
 
         if name not in cls._traffic_routing_adapters:
             raise ValueError(
-                f"Unknown traffic routing adapter: {name}. "
-                f"Available: {list(cls._traffic_routing_adapters.keys())}"
+                f"Unknown traffic routing adapter: {name}. " f"Available: {list(cls._traffic_routing_adapters.keys())}"
             )
 
         instance = cls._traffic_routing_adapters[name]()
@@ -491,11 +511,48 @@ class ProviderRegistry:
             )
 
             if "logging" not in cls._traffic_routing_adapters:
-                cls.register_traffic_routing(
-                    "logging", LoggingTrafficRoutingAdapter
-                )
+                cls.register_traffic_routing("logging", LoggingTrafficRoutingAdapter)
         except ImportError:
             pass
+
+    # =========================================================================
+    # Correlation Engine Strategy Getters
+    # =========================================================================
+
+    @classmethod
+    def get_correlation_strategy(cls, name: str) -> type:
+        """등록된 Correlation 전략 클래스를 반환한다.
+
+        Args:
+            name: 전략 이름
+
+        Returns:
+            전략 클래스 (인스턴스화는 호출부 책임)
+
+        Raises:
+            ValueError: 등록되지 않은 전략 이름
+        """
+        if name not in cls._correlation_strategies:
+            raise ValueError(
+                f"Unknown correlation strategy: {name}. " f"Available: {list(cls._correlation_strategies.keys())}"
+            )
+        return cls._correlation_strategies[name]
+
+    @classmethod
+    def get_root_cause_strategy(cls, name: str) -> type:
+        """등록된 Root Cause 분석 전략 클래스를 반환한다."""
+        if name not in cls._root_cause_strategies:
+            raise ValueError(f"Unknown root cause strategy: {name}. " f"Available: {list(cls._root_cause_strategies.keys())}")
+        return cls._root_cause_strategies[name]
+
+    @classmethod
+    def get_graph_build_strategy(cls, name: str) -> type:
+        """등록된 Graph Build 전략 클래스를 반환한다."""
+        if name not in cls._graph_build_strategies:
+            raise ValueError(
+                f"Unknown graph build strategy: {name}. " f"Available: {list(cls._graph_build_strategies.keys())}"
+            )
+        return cls._graph_build_strategies[name]
 
     # =========================================================================
     # Configuration Methods
@@ -577,6 +634,9 @@ class ProviderRegistry:
         cls._security_repos.clear()
         cls._audit_adapters.clear()
         cls._traffic_routing_adapters.clear()
+        cls._correlation_strategies.clear()
+        cls._root_cause_strategies.clear()
+        cls._graph_build_strategies.clear()
         cls._statistics_adapter = None  # Reset statistics adapter
         cls._postmortem_model = None  # Reset postmortem model
         cls._default_cache = "memory"

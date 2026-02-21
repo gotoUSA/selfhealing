@@ -191,23 +191,23 @@ Correlation Engine은 Self-Healing 루프의 **"두뇌" 역할** — 개별 서�
 
 | 파일 경로 | 문서 | 상태 |
 |-----------|------|------|
-| `services/correlation_engine/__init__.py` | — | 구현 필요 |
-| `services/correlation_engine/interfaces.py` | [256](256_CORRELATION_ML_STRATEGY_INTERFACE.md) | 구현 필요 |
-| `services/correlation_engine/event_graph.py` | [251](251_CORRELATION_EVENT_GRAPH.md) | 구현 필요 |
-| `services/correlation_engine/co_occurrence_tracker.py` | [252](252_CORRELATION_CO_OCCURRENCE_TRACKER.md) | 구현 필요 |
-| `services/correlation_engine/root_cause_ranker.py` | [253](253_CORRELATION_ROOT_CAUSE_RANKER.md) | 구현 필요 |
-| `services/correlation_engine/wildcard_observer.py` | [254](254_CORRELATION_WILDCARD_OBSERVER.md) | 구현 필요 |
-| `services/correlation_engine/incident_timeline.py` | [255](255_CORRELATION_INCIDENT_TIMELINE.md) | 구현 필요 |
-| `services/correlation_engine/service.py` | [257](257_CORRELATION_SERVICE_INTEGRATION.md) | 구현 필요 |
-| `settings/correlation_engine.py` | [257](257_CORRELATION_SERVICE_INTEGRATION.md) | 구현 필요 |
-| `interfaces/ml_strategy.py` | [256](256_CORRELATION_ML_STRATEGY_INTERFACE.md) | 구현 필요 |
+| `services/correlation_engine/__init__.py` | — | ✅ 구현 완료 |
+| `services/correlation_engine/interfaces.py` | [256](256_CORRELATION_ML_STRATEGY_INTERFACE.md) | ✅ 구현 완료 |
+| `services/correlation_engine/event_graph.py` | [251](251_CORRELATION_EVENT_GRAPH.md) | ✅ 구현 완료 |
+| `services/correlation_engine/co_occurrence_tracker.py` | [252](252_CORRELATION_CO_OCCURRENCE_TRACKER.md) | ✅ 구현 완료 |
+| `services/correlation_engine/root_cause_ranker.py` | [253](253_CORRELATION_ROOT_CAUSE_RANKER.md) | ✅ 구현 완료 |
+| `services/correlation_engine/wildcard_observer.py` | [254](254_CORRELATION_WILDCARD_OBSERVER.md) | ✅ 구현 완료 |
+| `services/correlation_engine/incident_timeline.py` | [255](255_CORRELATION_INCIDENT_TIMELINE.md) | ✅ 구현 완료 |
+| `services/correlation_engine/service.py` | [257](257_CORRELATION_SERVICE_INTEGRATION.md) | ✅ 구현 완료 |
+| `settings/correlation_engine.py` | [257](257_CORRELATION_SERVICE_INTEGRATION.md) | ✅ 구현 완료 |
+| `interfaces/ml_strategy.py` | [256](256_CORRELATION_ML_STRATEGY_INTERFACE.md) | ✅ 구현 완료 |
 
 ### 6.2 수정 파일 (선택)
 
 | 파일 경로 | 변경 내용 | 필수 여부 |
 |-----------|---------|----------|
-| `factory.py` | `register_correlation_strategy()` 추가 | 선택 |
-| `pyproject.toml` | `[ml]` extras 추가 | 선택 |
+| `factory.py` | `register_correlation_strategy()` 추가 | ✅ 완료 |
+| `pyproject.toml` | `[ml]` extras 추가 | ✅ 완료 |
 | `services/event_bus/bus/__init__.py` | `register_default_handlers()`에 Correlation 핸들러 추가 | 선택 (service.py에서 직접 등록 가능) |
 
 ### 6.3 테스트 파일

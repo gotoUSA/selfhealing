@@ -440,7 +440,7 @@ class SelfHealingEvent:
 
 **Phase 1 (Day-1)**: Priority 1 적용 범위가 좁음을 전제로 설계. Priority 2(서비스 의존성)와 Priority 4(시간 근접성)가 대부분의 엣지를 생성.
 
-**Phase 2**: `emit()` wrapping으로 `get_trace_id()` → `correlation_id` 자동 주입. 커버리지 ~10개 → ~25개로 확대.
+**Phase 2 ✅ 구현 완료**: `emit()` wrapping으로 `get_trace_id()` → `correlation_id` 자동 주입 구현됨. `bus/__init__.py`의 `emit()` 메서드에서 `correlation_id`가 없으면 `get_trace_id()`로 자동 채움.
 
 ### 8.4 Priority 1.5: Contextual Matching (service_name 교차 검사)
 
@@ -472,7 +472,7 @@ if (not source.correlation_id or not target.correlation_id):
 
 ### 9.1 현재 상태
 
-`CoOccurrenceTracker`는 **아직 구현되지 않았다** (설계 문서 252만 존재). `correlation_engine/` 디렉토리 자체가 코드베이스에 없으며, `258_GAP_ANALYSIS.md`에서 "구현 필요"로 명시.
+`CoOccurrenceTracker`는 **구현 완료**되었다 (`correlation_engine/co_occurrence_tracker.py`). `CorrelationIndex` (frozen dataclass, Copy-on-Write)로 rolling 누적 인덱스를 제공하며, `get_correlation_index()`로 O(1) 조회를 지원한다.
 
 ### 9.2 BlastRadiusService.get_dependencies() — 완전 인메모리, 동기
 

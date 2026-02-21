@@ -3,7 +3,7 @@
 > **Version**: 1.1.0
 > **Created**: 2026-02-20
 > **Updated**: 2026-02-21
-> **Status**: Approved
+> **Status**: Implemented
 > **Parent**: [250_CORRELATION_ENGINE_OVERVIEW.md](250_CORRELATION_ENGINE_OVERVIEW.md)
 > **Implements**: `interfaces/ml_strategy.py`, `services/correlation_engine/interfaces.py`
 
@@ -334,12 +334,12 @@ class CorrelationEngineService:
         self._graph_strategy = strategy
 ```
 
-### 4.2 ProviderRegistry 확장 (선택사항)
+### 4.2 ProviderRegistry 확장 ✅ 구현 완료
 
-기존 `ProviderRegistry` 패턴과 일관성을 위해:
+기존 `ProviderRegistry` 패턴과 일관성을 위해 `factory.py`에 구현됨:
 
 ```python
-# factory.py 확장 (선택사항)
+# ✅ factory.py에 구현 완료
 class ProviderRegistry:
     _correlation_strategies: dict[str, type] = {}
     _root_cause_strategies: dict[str, type] = {}
@@ -465,7 +465,7 @@ class ZScoreDetectorAdapter:
         self._detector._values.clear()
 ```
 
-→ Phase 1에서는 Adapter로 감싸서 호환, 향후 기존 클래스 리팩토링 시 Protocol 직접 구현.
+→ ✅ 기존 클래스에 Protocol 메서드 직접 구현 완료. ZScoreDetector, IQRDetector에 `detect()`, `update()`, `get_feature_schema()` 추가. SpikeClassifier에 `classify_features()`, `_parse_history()` 추가.
 
 ---
 
@@ -576,7 +576,7 @@ class CorrelationEngineService:
         return self._ml_bulkhead.execute(fn, *args, timeout=timeout, **kwargs)
 ```
 
-### 9.6 Priority Watermark 연동 (선택사항)
+### 9.6 Priority Watermark 연동 ✅ 구현 완료
 
 `RateController`의 `PRIORITY_WATERMARKS` 패턴([scaling/rate_controller.py L36](../../packages/selfhealing-python/src/selfhealing/scaling/rate_controller.py))을 ML 격벽에도 적용하여, 토큰 잔량이 낮을 때 `non_essential` 추론 요청을 우선 드랍:
 

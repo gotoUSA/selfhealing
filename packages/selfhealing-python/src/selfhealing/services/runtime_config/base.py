@@ -113,9 +113,7 @@ class BaseConfigManager:
 
             return self._cache[config_type].copy()
 
-    def _update_config(
-        self, config_type: str, changed_by: str = "system", reason: str = "", **kwargs
-    ) -> dict[str, Any]:
+    def _update_config(self, config_type: str, changed_by: str = "system", reason: str = "", **kwargs) -> dict[str, Any]:
         """Update config fields with history tracking.
 
         Args:
@@ -153,24 +151,17 @@ class BaseConfigManager:
                     if not is_valid_value(config_type, key, value):
                         safe_value = get_safe_default(config_type, key)
                         if safe_value is not None:
-                            applied_safe_defaults.append(
-                                f"{key}: {value!r} → {safe_value!r}"
-                            )
+                            applied_safe_defaults.append(f"{key}: {value!r} → {safe_value!r}")
                             current[key] = safe_value
                             logger.warning(
-                                f"[RuntimeConfig] Safe default applied: "
-                                f"{config_type}.{key} ({value!r} → {safe_value!r})"
+                                f"[RuntimeConfig] Safe default applied: " f"{config_type}.{key} ({value!r} → {safe_value!r})"
                             )
                         else:
                             current[key] = value
-                            logger.info(
-                                f"[RuntimeConfig] Updated {config_type}.{key} = {value}"
-                            )
+                            logger.info(f"[RuntimeConfig] Updated {config_type}.{key} = {value}")
                     else:
                         current[key] = value
-                        logger.info(
-                            f"[RuntimeConfig] Updated {config_type}.{key} = {value}"
-                        )
+                        logger.info(f"[RuntimeConfig] Updated {config_type}.{key} = {value}")
 
             # Diff-Aware: Only save if there are actual changes
             if previous == current:
@@ -185,10 +176,7 @@ class BaseConfigManager:
             # Build final reason with Safe Default marker
             final_reason = reason or f"Updated: {list(kwargs.keys())}"
             if applied_safe_defaults:
-                final_reason = (
-                    f"⚠️ Safe Default applied: {', '.join(applied_safe_defaults)} | "
-                    f"{final_reason}"
-                )
+                final_reason = f"⚠️ Safe Default applied: {', '.join(applied_safe_defaults)} | " f"{final_reason}"
 
             # Save to ConfigHistory (best-effort)
             self._save_to_history(
@@ -204,6 +192,17 @@ class BaseConfigManager:
                     config_type=config_type,
                     changed_by=changed_by,
                     reason=final_reason,
+                    old_values=diff["old"],
+                    new_values=diff["new"],
+                )
+
+            # Emit EventBus CONFIG_UPDATED event (best-effort)
+            # BulkheadRegistry, HedgingStrategy, CorrelationEngine 등
+            # CONFIG_UPDATED 구독자에게 변경 사항을 전파한다.
+            if diff:
+                self._emit_config_updated_event(
+                    config_type=config_type,
+                    changed_by=changed_by,
                     old_values=diff["old"],
                     new_values=diff["new"],
                 )
@@ -272,12 +271,48 @@ class BaseConfigManager:
                 )
 
             logger.info(
-                f"[RuntimeConfig] Audit logged: {config_type} "
-                f"changed by {changed_by}, fields: {list(new_values.keys())}"
+                f"[RuntimeConfig] Audit logged: {config_type} " f"changed by {changed_by}, fields: {list(new_values.keys())}"
             )
         except Exception as e:
             # Graceful degradation - audit failure should not break config update
             logger.warning(f"[RuntimeConfig] Failed to emit audit: {e}")
+
+    def _emit_config_updated_event(
+        self,
+        config_type: str,
+        changed_by: str,
+        old_values: dict[str, Any],
+        new_values: dict[str, Any],
+    ) -> None:
+        """EventBus CONFIG_UPDATED 이벤트 발행.
+
+        BulkheadRegistry, HedgingStrategy, CorrelationEngine 등
+        CONFIG_UPDATED 이벤트를 구독하는 모든 컴포넌트에 설정 변경을 전파한다.
+
+        Best-effort: 실패해도 설정 업데이트에 영향 없음.
+        """
+        try:
+            from selfhealing.services.event_bus.bus import (
+                EventPriority,
+                EventType,
+                get_event_bus,
+            )
+
+            bus = get_event_bus()
+            bus.emit(
+                event_type=EventType.CONFIG_UPDATED,
+                data={
+                    "config_type": config_type,
+                    "changed_by": changed_by,
+                    "old_values": old_values,
+                    "new_values": new_values,
+                },
+                source="runtime_config_manager",
+                priority=EventPriority.NORMAL,
+            )
+            logger.debug(f"[RuntimeConfig] CONFIG_UPDATED event emitted: {config_type}")
+        except Exception as e:
+            logger.warning(f"[RuntimeConfig] Failed to emit CONFIG_UPDATED: {e}")
 
     def _save_to_history(
         self,
@@ -307,9 +342,7 @@ class BaseConfigManager:
                 changed_by=changed_by,
                 reason=reason,
             )
-            logger.debug(
-                f"[RuntimeConfig] Saved history for {config_type} by {changed_by}"
-            )
+            logger.debug(f"[RuntimeConfig] Saved history for {config_type} by {changed_by}")
         except Exception as e:
             # Graceful degradation - history save failure should not break config update
             logger.warning(f"[RuntimeConfig] Failed to save history: {e}")
@@ -317,10 +350,7 @@ class BaseConfigManager:
     def get_all_config(self) -> dict[str, dict[str, Any]]:
         """Get all configuration."""
         with self._lock:
-            return {
-                config_type: self._get_config(config_type)
-                for config_type in STORAGE_KEYS.keys()
-            }
+            return {config_type: self._get_config(config_type) for config_type in STORAGE_KEYS.keys()}
 
     def reset_to_defaults(self) -> dict[str, dict[str, Any]]:
         """Reset all configuration to defaults."""

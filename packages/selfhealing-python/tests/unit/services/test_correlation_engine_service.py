@@ -400,7 +400,7 @@ class TestFallbackBehavior:
 
         assert result.strategy_metadata is not None
         assert result.strategy_metadata.fallback_used is True
-        assert "RuntimeError" in result.strategy_metadata.fallback_reason
+        assert "LLM API timeout" in result.strategy_metadata.fallback_reason
         assert result.strategy_metadata.primary_strategy_name == "FailingRootCauseStrategy"
         assert result.strategy_metadata.strategy_name == "MockRootCauseStrategy"
 

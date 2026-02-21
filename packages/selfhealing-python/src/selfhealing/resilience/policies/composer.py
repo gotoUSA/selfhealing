@@ -277,6 +277,7 @@ class PolicyComposer(Generic[T]):
                 outcome=fb_result.outcome,
                 error=fb_result.error,
                 executed_policies=list(reversed(executed_policies)),
+                metadata=fb_result.metadata,
             )
         except PolicyRejectedException as e:
             return PolicyResult(

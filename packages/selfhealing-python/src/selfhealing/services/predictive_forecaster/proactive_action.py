@@ -157,6 +157,49 @@ class SpikeClassifier:
 
         return SpikeType.GRADUAL_DEGRADATION
 
+    # ─── ClassificationStrategy Protocol 호환 ───
+
+    def classify_features(
+        self,
+        features: dict[str, float],
+        context: dict[str, Any] | None = None,
+    ) -> tuple[str, float]:
+        """ClassificationStrategy.classify() 호환 어댑터.
+
+        features dict에서 rps_history, error_rate_history, latency_history를
+        추출하여 기존 classify()에 위임한다.
+
+        Args:
+            features: 특성 벡터. 필수 키:
+                - rps_history: 쉼표 구분 RPS 히스토리 문자열
+                - error_rate_history: 쉼표 구분 에러율 히스토리 문자열
+                - latency_history: 쉼표 구분 레이턴시 히스토리 문자열
+            context: 추가 메타데이터 (무시)
+
+        Returns:
+            (spike_type_label, confidence) 튜플.
+        """
+        rps = self._parse_history(features.get("rps_history", ""))
+        error_rate = self._parse_history(features.get("error_rate_history", ""))
+        latency = self._parse_history(features.get("latency_history", ""))
+
+        spike_type = self.classify(rps, error_rate, latency)
+
+        # 규칙 기반 분류의 신뢰도 — 입력 데이터 충분성에 비례
+        min_len = min(len(rps), len(error_rate), len(latency))
+        confidence = min(1.0, min_len / 10)
+
+        return spike_type.value, confidence
+
+    @staticmethod
+    def _parse_history(raw: Any) -> list[float]:
+        """문자열 또는 리스트 형태의 히스토리를 list[float]로 변환."""
+        if isinstance(raw, list):
+            return [float(v) for v in raw]
+        if isinstance(raw, str) and raw:
+            return [float(v.strip()) for v in raw.split(",") if v.strip()]
+        return []
+
 
 # =============================================================================
 # ProactiveAction — 사전 조치 결과 데이터

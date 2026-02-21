@@ -803,7 +803,7 @@ def _run_periodic_analysis(self) -> None:
 
 기존 `_inject_to_postmortem()`의 `store.get_latest_incident()`는:
 - **Race Condition**: 결제 장애 분석이 로그인 장애 포스트모템에 덮어씌워짐
-- **미구현**: `get_latest_incident()`, `update_incident_fields()` 모두 store.py에 존재하지 않음
+- **구현 완료**: `get_incident_by_id()`, `update_incident_fields()` 모두 store.py에 구현됨 (store.py L522)
 - **비결정적 ID**: `EventGraphBuilder._generate_incident_id()`가 `uuid.uuid4().hex[:6]`를 포함하여 동일 이벤트도 다른 ID 생성
 
 ### 10.2 Deterministic Incident ID 생성

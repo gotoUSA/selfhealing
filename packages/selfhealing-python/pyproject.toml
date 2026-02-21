@@ -77,6 +77,23 @@ caching = [
 disk-buffer = [
     "lmdb>=1.4.0",
 ]
+ml = [
+    "scikit-learn>=1.3.0",
+    "numpy>=1.24.0",
+]
+ml-deep = [
+    "selfhealing[ml]",
+    "torch>=2.0.0",
+]
+ml-llm = [
+    "selfhealing[ml]",
+    "openai>=1.0.0",
+]
+ml-timeseries = [
+    "selfhealing[ml]",
+    "prophet>=1.1.0",
+    "statsmodels>=0.14.0",
+]
 all = [
     "selfhealing[django,celery,prometheus,opentelemetry,kafka,fast-json,caching,disk-buffer,forensic]",
 ]
