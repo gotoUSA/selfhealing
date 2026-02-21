@@ -83,6 +83,15 @@ from .persistence import (
 )
 
 # ============================================================
+# Cell Evacuation Tasks
+# ============================================================
+from .cell_evacuation import (
+    notify_cell_blast_radius,
+    notify_cell_isolation,
+    notify_cell_restoration,
+)
+
+# ============================================================
 # SLA Notification Tasks
 # ============================================================
 from .sla_notification import send_sla_notification
@@ -122,6 +131,10 @@ __all__ = [
     "check_and_report_sla_breaches",
     "emit_selfhealing_heartbeat",
     "notify_failsafe_recovery",
+    # Cell Evacuation
+    "notify_cell_blast_radius",
+    "notify_cell_isolation",
+    "notify_cell_restoration",
     # SLA Notification
     "send_sla_notification",
     # Postmortem

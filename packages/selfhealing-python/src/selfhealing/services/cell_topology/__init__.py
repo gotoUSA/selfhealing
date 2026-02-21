@@ -20,6 +20,12 @@ from selfhealing.services.cell_topology.models import (
     CellInfo,
     CellState,
 )
+from selfhealing.services.cell_topology.policy import (
+    CellEvacuationPolicy,
+    EvacuationRecord,
+    get_cell_evacuation_policy,
+    reset_cell_evacuation_policy,
+)
 from selfhealing.services.cell_topology.registry import (
     CellRegistry,
     get_cell_registry,
@@ -28,13 +34,17 @@ from selfhealing.services.cell_topology.registry import (
 
 __all__ = [
     "CELL_STATE_PRIORITY",
+    "CellEvacuationPolicy",
     "CellHealthAggregator",
     "CellHealthSnapshot",
     "CellInfo",
     "CellRegistry",
     "CellState",
+    "EvacuationRecord",
+    "get_cell_evacuation_policy",
     "get_cell_health_aggregator",
     "get_cell_registry",
+    "reset_cell_evacuation_policy",
     "reset_cell_health_aggregator",
     "reset_cell_registry",
     "setup_cell_health_scheduler",

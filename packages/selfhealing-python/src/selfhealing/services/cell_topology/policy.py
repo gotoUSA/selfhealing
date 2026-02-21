@@ -1,0 +1,607 @@
+"""
+Cell 대피 정책 — Tick-Based State Machine + Hysteresis.
+
+LeaderScheduler의 aggregate_all() 루프에서 매 tick마다 호출되는
+멱등성 상태 전이 함수입니다.
+
+아키텍처 결정:
+- 히스테리시스 — 연속 카운터(CellInfo.metadata) + 상태 전이 시 양방향 리셋
+- Tick-Based State Machine — threading.Thread/time.sleep() 제거
+- bulkhead.max_concurrent = 0 제거 — Hash Ring 라우팅이 전역 차단 담당
+- max_evacuated_ratio — Cascading Failure 방지 하드 리미트
+- CellRegistry = SoT — Gate/Blast는 Celery Fire-and-forget 통보
+
+의존성:
+- CellRegistry: Cell 상태 관리 (SoT, Control Plane)
+- RegionalIsolationGate: 감사 로그/이벤트 발행 (통보, Fire-and-forget)
+- BlastRadiusService: 감사 로그 (통보, Fire-and-forget)
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.services.cell_topology.models import CellInfo
+    from selfhealing.services.cell_topology.registry import CellRegistry
+    from selfhealing.settings.cell_topology import CellTopologySettings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class EvacuationRecord:
+    """대피 기록."""
+
+    cell_id: str
+    trigger_health_score: float
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: datetime | None = None
+    reason: str = ""
+    affected_services: list[str] = field(default_factory=list)
+
+
+class CellEvacuationPolicy:
+    """
+    Cell 대피 정책 — Tick-Based State Machine.
+
+    evaluate()는 LeaderScheduler의 aggregate_all() 루프에서
+    매 tick(health_check_interval_seconds=10초)마다 호출됩니다.
+
+    각 호출에서 Cell의 현재 상태(CellState)와 metadata를 읽고,
+    다음 상태 전이를 결정합니다. 스레드를 생성하지 않으며,
+    모든 상태는 CellInfo.metadata에 영속화되므로 리더 교체에 안전합니다.
+
+    토글:
+    - CellTopologySettings.evacuation_enabled=True일 때만 동작
+    - False이면 evaluate() 즉시 반환
+
+    사용:
+        policy = get_cell_evacuation_policy()
+        for cell_id, info in registry.get_all_cells().items():
+            policy.evaluate(cell_id, info.health_score)
+    """
+
+    def __init__(self, settings: CellTopologySettings | None = None):
+        from selfhealing.settings.cell_topology import get_cell_topology_settings
+
+        self._settings = settings or get_cell_topology_settings()
+        self._evacuation_history: list[EvacuationRecord] = []
+
+    # =========================================================================
+    # evaluate() — 상태 머신 Tick
+    # =========================================================================
+
+    def evaluate(self, cell_id: str, health_score: float) -> bool:
+        """
+        상태 머신 Tick — 매 호출마다 Cell의 다음 전이를 결정.
+
+        멱등성: 같은 상태에서 같은 입력이면 같은 결과.
+        리더 교체 안전: CellInfo.metadata에 모든 카운터/시간 영속화.
+
+        Args:
+            cell_id: Cell 식별자
+            health_score: 현재 건강도 (0.0~1.0)
+
+        Returns:
+            상태 전이 발생 여부
+        """
+        if not self._settings.enabled or not self._settings.evacuation_enabled:
+            return False
+
+        from selfhealing.services.cell_topology import get_cell_registry
+        from selfhealing.services.cell_topology.models import CellState
+
+        registry = get_cell_registry()
+        cell = registry.get_cell_info(cell_id)
+        if not cell:
+            return False
+
+        # WARMUP Cell은 대피 평가 대상 아님
+        if cell.state == CellState.WARMUP:
+            return False
+
+        if cell.state == CellState.ACTIVE:
+            return self._tick_active(cell_id, health_score, cell, registry)
+
+        if cell.state == CellState.DRAINING:
+            return self._tick_draining(cell_id, cell, registry)
+
+        if cell.state == CellState.ISOLATED:
+            return self._tick_isolated(cell_id, health_score, cell, registry)
+
+        return False
+
+    # =========================================================================
+    # State: ACTIVE — 히스테리시스 기반 대피 판단
+    # =========================================================================
+
+    def _tick_active(
+        self,
+        cell_id: str,
+        health_score: float,
+        cell: CellInfo,
+        registry: CellRegistry,
+    ) -> bool:
+        """
+        ACTIVE 상태 Cell의 대피 필요 여부 평가.
+
+        히스테리시스: 연속 evacuation_consecutive_count(기본 3)회
+        임계치 이하일 때만 DRAINING으로 전환.
+        임계치를 초과하면 below_count를 즉시 0으로 리셋.
+        """
+        from selfhealing.services.cell_topology.models import CellState
+
+        threshold = self._settings.evacuation_health_threshold
+
+        if health_score <= threshold:
+            # 임계치 이하 — 카운터 증가
+            below_count = cell.metadata.get("evacuation_below_count", 0) + 1
+            cell.metadata["evacuation_below_count"] = below_count
+
+            if below_count < self._settings.evacuation_consecutive_count:
+                logger.debug(
+                    "Cell %s health=%.2f <= %.2f, " "below_count=%d/%d",
+                    cell_id,
+                    health_score,
+                    threshold,
+                    below_count,
+                    self._settings.evacuation_consecutive_count,
+                )
+                return False
+
+            # === Global Evacuation Limit — Cascading Failure 방지 ===
+            if not self._check_global_evacuation_limit(cell_id, registry):
+                return False
+
+            # === 연속 카운터 도달 — DRAINING 전환 ===
+            reason = f"Health score {health_score:.2f} <= {threshold} " f"for {below_count} consecutive ticks"
+            logger.warning(
+                "Cell %s: %s, transitioning ACTIVE -> DRAINING",
+                cell_id,
+                reason,
+            )
+
+            # 상태 전이 시 양방향 카운터 리셋 (유령 카운터 방지)
+            cell.metadata["evacuation_below_count"] = 0
+            cell.metadata["recovery_above_count"] = 0
+
+            # 영향 서비스 목록 기록
+            cell.metadata["evacuation_affected_services"] = list(cell.assigned_services)
+            cell.metadata["evacuation_trigger_score"] = health_score
+
+            # SoT: CellRegistry 상태 전환
+            registry.set_cell_state(cell_id, CellState.DRAINING, reason)
+
+            # 신규 트래픽 차단은 CellRegistry.get_cell_for_key()의
+            # Hash Ring 순회에서 DRAINING Cell이 자동 skip됨으로써 달성된다.
+            logger.info(
+                "Cell %s: DRAINING 전환 완료 — " "신규 트래픽은 Hash Ring 라우팅에서 차단됨",
+                cell_id,
+            )
+
+            # 대피 이력 기록
+            self._evacuation_history.append(
+                EvacuationRecord(
+                    cell_id=cell_id,
+                    trigger_health_score=health_score,
+                    reason=reason,
+                    affected_services=list(cell.assigned_services),
+                )
+            )
+            return True
+        else:
+            # 임계치 초과 — 카운터 리셋
+            if cell.metadata.get("evacuation_below_count", 0) > 0:
+                cell.metadata["evacuation_below_count"] = 0
+            return False
+
+    def _check_global_evacuation_limit(
+        self,
+        cell_id: str,
+        registry: CellRegistry,
+    ) -> bool:
+        """
+        전체 Cell 중 격리 비율이 max_evacuated_ratio를 초과하는지 확인.
+
+        Cascading Failure 방지를 위해 일정 비율 이상 격리를 거부한다.
+
+        Returns:
+            True면 대피 진행 가능, False면 리미트 초과로 거부.
+        """
+        total_cells = len(registry.get_all_cells())
+        if total_cells == 0:
+            return False
+
+        active_cells = len(registry.get_active_cells())
+        evacuated_ratio = 1.0 - (active_cells / total_cells)
+
+        if evacuated_ratio >= self._settings.max_evacuated_ratio:
+            logger.critical(
+                "[SEV-1] Global evacuation limit reached: "
+                "%.0f%% evacuated (max %.0f%%). "
+                "Refusing to evacuate %s. Active=%d/%d",
+                evacuated_ratio * 100,
+                self._settings.max_evacuated_ratio * 100,
+                cell_id,
+                active_cells,
+                total_cells,
+            )
+            return False
+
+        return True
+
+    # =========================================================================
+    # State: DRAINING — 드레인 시간 경과 기반 ISOLATED 전환
+    # =========================================================================
+
+    def _tick_draining(
+        self,
+        cell_id: str,
+        cell: CellInfo,
+        registry: CellRegistry,
+    ) -> bool:
+        """
+        DRAINING 상태 Cell의 드레인 시간 경과 확인.
+
+        metadata['last_state_change']의 시간값과 현재 시각을 비교하여,
+        drain_seconds + grace_buffer가 경과했으면 ISOLATED로 전환한다.
+
+        리더 교체 시에도 Redis L2에 동기화된 metadata를 읽어
+        파이프라인을 안전하게 재개할 수 있다.
+        """
+        from selfhealing.services.cell_topology.models import CellState
+
+        last_change = cell.metadata.get("last_state_change", {})
+        if last_change.get("to") != CellState.DRAINING.value:
+            # metadata가 없거나 불일치 — 보수적으로 skip
+            logger.warning(
+                "Cell %s: DRAINING but metadata mismatch, " "waiting for next tick",
+                cell_id,
+            )
+            return False
+
+        # 시간 경과 판단 — time.time() + Grace Buffer
+        drain_started = cell.metadata.get("last_state_change_time")
+        if drain_started is None:
+            # 시간 기록이 없으면 현재 시각 기록 후 다음 tick 대기
+            cell.metadata["last_state_change_time"] = time.time()
+            return False
+
+        elapsed = time.time() - drain_started
+        required = self._settings.evacuation_traffic_drain_seconds + self._settings.evacuation_drain_grace_seconds
+
+        if elapsed < required:
+            logger.debug(
+                "Cell %s: DRAINING elapsed=%.1fs < required=%.1fs, waiting",
+                cell_id,
+                elapsed,
+                required,
+            )
+            return False
+
+        # === 드레인 완료 — ISOLATED 전환 ===
+        reason = f"Drain period elapsed ({elapsed:.1f}s >= {required:.1f}s)"
+        logger.info(
+            "Cell %s: drain complete, transitioning DRAINING -> ISOLATED",
+            cell_id,
+        )
+
+        # 양방향 카운터 리셋
+        cell.metadata["evacuation_below_count"] = 0
+        cell.metadata["recovery_above_count"] = 0
+
+        # SoT: CellRegistry 상태 전환 (가장 먼저 실행)
+        registry.set_cell_state(cell_id, CellState.ISOLATED, reason)
+
+        # Fire-and-forget: 감사 로그 및 이벤트 발행
+        self._notify_isolation_gate(cell_id, reason)
+        self._notify_blast_radius(
+            cell_id,
+            cell.metadata.get("evacuation_affected_services", []),
+        )
+
+        # 서비스 재배치 로깅
+        affected = cell.metadata.get("evacuation_affected_services", [])
+        logger.info(
+            "Cell %s: ISOLATED — %d services redistributed via " "Consistent Hash Ring",
+            cell_id,
+            len(affected),
+        )
+        for svc in affected:
+            new_cell = registry.get_cell_for_key(svc)
+            logger.info("  Service '%s': %s -> %s", svc, cell_id, new_cell)
+
+        return True
+
+    # =========================================================================
+    # State: ISOLATED — 히스테리시스 기반 자동 복구
+    # =========================================================================
+
+    def _tick_isolated(
+        self,
+        cell_id: str,
+        health_score: float,
+        cell: CellInfo,
+        registry: CellRegistry,
+    ) -> bool:
+        """
+        ISOLATED 상태 Cell의 자동 복구 판단.
+
+        히스테리시스: 연속 recovery_consecutive_count(기본 5)회
+        recovery_health_threshold(기본 0.7) 이상일 때만 ACTIVE로 복구.
+        비대칭 설계: 대피(3회)는 빠르게, 복구(5회)는 보수적으로.
+        """
+        from selfhealing.services.cell_topology.models import CellState
+
+        recovery_threshold = self._settings.recovery_health_threshold
+
+        if health_score >= recovery_threshold:
+            above_count = cell.metadata.get("recovery_above_count", 0) + 1
+            cell.metadata["recovery_above_count"] = above_count
+
+            if above_count < self._settings.recovery_consecutive_count:
+                logger.debug(
+                    "Cell %s health=%.2f >= %.2f, " "above_count=%d/%d",
+                    cell_id,
+                    health_score,
+                    recovery_threshold,
+                    above_count,
+                    self._settings.recovery_consecutive_count,
+                )
+                return False
+
+            # === 연속 카운터 도달 — ACTIVE 복구 ===
+            reason = f"Health score {health_score:.2f} >= {recovery_threshold} " f"for {above_count} consecutive ticks"
+            logger.info(
+                "Cell %s: %s, restoring ISOLATED -> ACTIVE",
+                cell_id,
+                reason,
+            )
+
+            # 상태 전이 시 양방향 카운터 리셋
+            cell.metadata["evacuation_below_count"] = 0
+            cell.metadata["recovery_above_count"] = 0
+
+            # SoT: CellRegistry 상태 전환
+            registry.set_cell_state(cell_id, CellState.ACTIVE, reason)
+
+            # Fire-and-forget: 감사 로그 통보
+            self._notify_restore_region(cell_id)
+
+            # 대피 이력 완료 기록
+            for record in reversed(self._evacuation_history):
+                if record.cell_id == cell_id and record.completed_at is None:
+                    record.completed_at = datetime.now(timezone.utc)
+                    break
+
+            logger.info("Cell %s: restored to ACTIVE", cell_id)
+            return True
+        else:
+            # 임계치 미달 — 카운터 리셋
+            if cell.metadata.get("recovery_above_count", 0) > 0:
+                cell.metadata["recovery_above_count"] = 0
+            return False
+
+    # =========================================================================
+    # 수동 복구
+    # =========================================================================
+
+    def restore_cell(self, cell_id: str) -> bool:
+        """
+        Cell 수동 복구.
+
+        자동 복구 히스테리시스를 무시하고 즉시 ACTIVE로 전환합니다.
+        관리자 개입 시 사용.
+
+        Args:
+            cell_id: Cell 식별자
+
+        Returns:
+            복원 성공 여부
+        """
+        if not self._settings.enabled:
+            return False
+
+        try:
+            from selfhealing.services.cell_topology import get_cell_registry
+            from selfhealing.services.cell_topology.models import CellState
+
+            registry = get_cell_registry()
+            cell = registry.get_cell_info(cell_id)
+            if not cell:
+                return False
+
+            # 양방향 카운터 리셋
+            cell.metadata["evacuation_below_count"] = 0
+            cell.metadata["recovery_above_count"] = 0
+
+            # SoT: CellRegistry 상태 전환
+            registry.set_cell_state(cell_id, CellState.ACTIVE, "Manual restoration")
+
+            # Fire-and-forget: 감사 로그 통보
+            self._notify_restore_region(cell_id)
+
+            logger.info("Cell %s: manually restored to ACTIVE", cell_id)
+            return True
+
+        except Exception as e:
+            logger.error("Cell %s: manual restore failed: %s", cell_id, e)
+            return False
+
+    # =========================================================================
+    # Fire-and-forget 통보 — Celery apply_async
+    # =========================================================================
+
+    def _notify_isolation_gate(self, cell_id: str, reason: str) -> None:
+        """RegionalIsolationGate 격리 통보 (Fire-and-forget)."""
+        try:
+            from selfhealing.adapters.celery.tasks import (
+                notify_cell_isolation,
+            )
+
+            notify_cell_isolation.apply_async(
+                kwargs={
+                    "cell_id": cell_id,
+                    "reason": reason,
+                    "duration_seconds": 3600,
+                },
+            )
+        except ImportError:
+            # Celery 미사용: 동기 폴백
+            self._notify_isolation_gate_sync(cell_id, reason)
+        except Exception as e:
+            logger.warning(
+                "Cell %s: isolation gate async notify failed: %s",
+                cell_id,
+                e,
+            )
+            self._notify_isolation_gate_sync(cell_id, reason)
+
+    def _notify_isolation_gate_sync(self, cell_id: str, reason: str) -> None:
+        """RegionalIsolationGate 동기 폴백."""
+        try:
+            from selfhealing.services.isolation.regional_gate import (
+                get_regional_isolation_gate,
+            )
+
+            gate = get_regional_isolation_gate()
+            gate.isolate_region(
+                region=cell_id,
+                reason=reason,
+                duration_seconds=3600,
+            )
+        except ImportError:
+            logger.debug("RegionalIsolationGate not available")
+        except Exception as e:
+            logger.warning(
+                "Cell %s: isolation gate sync notify failed: %s",
+                cell_id,
+                e,
+            )
+
+    def _notify_blast_radius(self, cell_id: str, affected_services: list[str]) -> None:
+        """BlastRadiusService 정책 설정 통보 (Fire-and-forget)."""
+        try:
+            from selfhealing.adapters.celery.tasks import (
+                notify_cell_blast_radius,
+            )
+
+            notify_cell_blast_radius.apply_async(
+                kwargs={
+                    "cell_id": cell_id,
+                    "affected_services": affected_services,
+                },
+            )
+        except ImportError:
+            self._notify_blast_radius_sync(cell_id, affected_services)
+        except Exception as e:
+            logger.warning(
+                "Cell %s: blast radius async notify failed: %s",
+                cell_id,
+                e,
+            )
+            self._notify_blast_radius_sync(cell_id, affected_services)
+
+    def _notify_blast_radius_sync(self, cell_id: str, affected_services: list[str]) -> None:
+        """BlastRadiusService 동기 폴백."""
+        try:
+            from selfhealing.services.blast_radius.models import (
+                BlastRadiusLevel,
+            )
+            from selfhealing.services.blast_radius.service import (
+                BlastRadiusService,
+            )
+
+            blast_service = BlastRadiusService()
+            blast_service.set_policy(
+                stage_name=cell_id,
+                level=BlastRadiusLevel.CRITICAL,
+                affected_services=affected_services,
+                max_affected_percentage=0.0,
+                auto_isolate=True,
+            )
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(
+                "Cell %s: blast radius sync notify failed: %s",
+                cell_id,
+                e,
+            )
+
+    def _notify_restore_region(self, cell_id: str) -> None:
+        """RegionalIsolationGate 복구 통보 (Fire-and-forget)."""
+        try:
+            from selfhealing.adapters.celery.tasks import (
+                notify_cell_restoration,
+            )
+
+            notify_cell_restoration.apply_async(
+                kwargs={"cell_id": cell_id},
+            )
+        except ImportError:
+            self._notify_restore_region_sync(cell_id)
+        except Exception as e:
+            logger.warning(
+                "Cell %s: restore region async notify failed: %s",
+                cell_id,
+                e,
+            )
+            self._notify_restore_region_sync(cell_id)
+
+    def _notify_restore_region_sync(self, cell_id: str) -> None:
+        """RegionalIsolationGate 복구 동기 폴백."""
+        try:
+            from selfhealing.services.isolation.regional_gate import (
+                get_regional_isolation_gate,
+            )
+
+            gate = get_regional_isolation_gate()
+            gate.restore_region(cell_id)
+        except ImportError:
+            logger.debug("RegionalIsolationGate not available")
+        except Exception as e:
+            logger.warning(
+                "Cell %s: restore region sync notify failed: %s",
+                cell_id,
+                e,
+            )
+
+    # =========================================================================
+    # 조회
+    # =========================================================================
+
+    def get_evacuation_history(self) -> list[EvacuationRecord]:
+        """대피 이력."""
+        return list(self._evacuation_history)
+
+
+# =============================================================================
+# Singleton
+# =============================================================================
+
+_policy: CellEvacuationPolicy | None = None
+_policy_lock = threading.Lock()
+
+
+def get_cell_evacuation_policy() -> CellEvacuationPolicy:
+    """CellEvacuationPolicy 싱글톤 반환."""
+    global _policy
+    if _policy is None:
+        with _policy_lock:
+            if _policy is None:
+                _policy = CellEvacuationPolicy()
+    return _policy
+
+
+def reset_cell_evacuation_policy() -> None:
+    """싱글톤 초기화 (테스트용)."""
+    global _policy
+    with _policy_lock:
+        _policy = None
