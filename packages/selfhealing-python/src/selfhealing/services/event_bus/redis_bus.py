@@ -32,6 +32,16 @@ from selfhealing.services.event_bus.bus import (
 
 logger = logging.getLogger(__name__)
 
+# 인프라 장애 시에도 반드시 전파해야 하는 이벤트 타입
+CRITICAL_EVENT_TYPES: frozenset[EventType] = frozenset(
+    {
+        EventType.REGION_PRIMARY_CHANGED,
+        EventType.EMERGENCY_ACTIVATED,
+        EventType.EMERGENCY_DEACTIVATED,
+        EventType.KILL_SWITCH_ACTIVATED,
+    }
+)
+
 
 # =============================================================================
 # Channel Definitions
@@ -270,24 +280,109 @@ class RedisEventBus:
         """
         이벤트 발행.
 
+        폴백 체인 (크리티컬 이벤트에만 적용):
+        1. 로컬 핸들러 (항상 성공)
+        2. Redis Pub/Sub 전파
+        3. Kafka 토픽 폴백 (Redis 실패 시)
+        4. 로컬 WAL 기록 (Kafka도 실패 시, 최종 안전망)
+
         Args:
             event: 발행할 이벤트
             propagate_to_redis: Redis로 전파 여부 (기본 True)
         """
-        # 로컬 핸들러에 전달
+        # 1. 로컬 핸들러에 전달 (항상 성공)
         self._local_bus.publish(event)
 
-        # Redis로 전파
-        if propagate_to_redis and self._redis_client:
+        if not propagate_to_redis:
+            return
+
+        # 2. Redis 시도
+        if self._redis_client:
             try:
-                # EventType에 따른 채널 선택
                 channel = self._get_channel_for_event(event.event_type)
                 self._redis_client.publish(
                     channel,
                     json.dumps(event.to_dict(), default=str),
                 )
+                return  # 성공 시 종료
             except Exception as e:
-                logger.warning(f"[RedisEventBus] Failed to publish to Redis: {e}")
+                logger.warning(f"[RedisEventBus] Redis publish failed: {e}")
+
+        # 3. Kafka 폴백 (크리티컬 이벤트만)
+        if self._is_critical_event(event):
+            try:
+                self._publish_to_kafka_fallback(event)
+                return  # Kafka 성공 시 종료
+            except Exception as e:
+                logger.error(f"[RedisEventBus] Kafka fallback failed: {e}")
+
+            # 4. 최종 안전망: 로컬 WAL 기록
+            self._write_to_wal(event)
+
+    def _is_critical_event(self, event: SelfHealingEvent) -> bool:
+        """인프라 장애 시에도 반드시 전파해야 하는 크리티컬 이벤트인지 판별."""
+        return event.event_type in CRITICAL_EVENT_TYPES
+
+    def _publish_to_kafka_fallback(self, event: SelfHealingEvent) -> None:
+        """
+        Kafka 토픽으로 폴백 발행.
+
+        selfhealing.routing.events 토픽으로 이벤트를 발행합니다.
+        MirrorMaker2가 리전 간 자동 미러링하므로 타 리전에도 전달됩니다.
+
+        Raises:
+            Exception: Kafka 연결 실패 또는 발행 실패 시
+        """
+        import os
+
+        kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+        if not kafka_bootstrap:
+            raise RuntimeError("KAFKA_BOOTSTRAP_SERVERS not configured")
+
+        try:
+            from kafka import KafkaProducer
+        except ImportError:
+            raise RuntimeError("kafka-python package not installed")
+
+        producer = KafkaProducer(
+            bootstrap_servers=kafka_bootstrap.split(","),
+            value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
+            acks="all",
+            retries=3,
+            request_timeout_ms=10000,
+        )
+
+        topic = "selfhealing.routing.events"
+        producer.send(topic, value=event.to_dict()).get(timeout=10)
+        producer.flush(timeout=5)
+        producer.close(timeout=5)
+
+        logger.info(f"[RedisEventBus] Event published to Kafka fallback: " f"{event.event_type.value}")
+
+    def _write_to_wal(self, event: SelfHealingEvent) -> None:
+        """
+        로컬 WAL에 이벤트 기록 (최종 안전망).
+
+        인프라 복구 시 WAL을 재생하여 Redis/Kafka로 재발행할 수 있습니다.
+        audit/wal 모듈의 WriteAheadLog 패턴을 재활용합니다.
+        """
+        try:
+            from selfhealing.audit.wal import WriteAheadLog
+            from selfhealing.audit.wal._models import WALConfig
+
+            config = WALConfig(
+                wal_dir="/var/log/selfhealing/event_bus_wal",
+                file_prefix="event_bus_wal",
+                max_file_size_mb=50,
+                sync_on_write=True,
+                max_files=5,
+            )
+            wal = WriteAheadLog(config=config)
+            wal.write(event.to_dict())
+
+            logger.warning(f"[RedisEventBus] Critical event written to WAL: " f"{event.event_type.value}")
+        except Exception as e:
+            logger.error(f"[RedisEventBus] WAL write failed for critical event " f"{event.event_type.value}: {e}")
 
     def _get_channel_for_event(self, event_type: EventType) -> str:
         """EventType에 맞는 Redis 채널 반환."""

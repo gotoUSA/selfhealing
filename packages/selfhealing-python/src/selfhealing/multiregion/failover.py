@@ -536,20 +536,59 @@ class RegionFailover:
 
     def _check_and_failover(self) -> None:
         """건강 상태 확인 및 자동 페일오버."""
-        # Primary 리전 건강 확인 (자기 자신이 Primary일 때만)
-        if not self._settings.is_primary():
-            return
-
-        # 피어 리전 중 하나라도 UNREACHABLE이면 체크
         all_health = self._health_monitor.get_all_health_states()
 
-        for region, health in all_health.items():
-            if health.status == RegionHealthStatus.UNREACHABLE:
-                logger.warning(f"[Failover] Peer region unreachable: {region}")
+        if self._settings.is_primary():
+            # Primary: 피어 리전 장애 감시 (기존 동작 유지)
+            for region, health in all_health.items():
+                if health.status == RegionHealthStatus.UNREACHABLE:
+                    logger.warning(f"[Failover] Peer region unreachable: {region}")
+        else:
+            # Secondary: Primary 건강 감시 → 승격 시도
+            self._check_primary_and_promote(all_health)
 
-        # 현재 리전이 Primary이고, 다른 리전에서 장애가 발생하면
-        # 해당 리전으로의 복제를 중단하고 알림만 전송
-        # (자기 자신이 죽은 경우는 감지 불가)
+    def _check_primary_and_promote(self, all_health: dict[str, Any]) -> None:
+        """
+        Secondary 리전에서 Primary 장애 감지 시 승격을 시도.
+
+        승격 조건:
+        1. Primary 리전이 UNREACHABLE 상태
+        2. QuorumWitness 락 획득 성공 (Split-brain 방지)
+        3. 페일오버 쿨다운 미초과
+
+        QuorumWitness.try_acquire_primary()는 DynamoDB Global Table의
+        조건부 쓰기(ConditionExpression)로 단 하나의 리전만 승격을 보장한다.
+        """
+        primary_region = self._current_primary
+
+        # Primary 상태가 UNREACHABLE인지 확인
+        primary_health = all_health.get(primary_region)
+        if primary_health is None:
+            return
+        if primary_health.status != RegionHealthStatus.UNREACHABLE:
+            return
+
+        # 쿨다운 확인
+        if not self._can_failover():
+            return
+
+        # Quorum 획득 시도 (Split-brain 방지)
+        if not self._quorum_witness:
+            logger.warning("[Failover] QuorumWitness not configured, " "cannot promote from Secondary")
+            return
+
+        if not self._quorum_witness.try_acquire_primary():
+            logger.info("[Failover] Quorum denied: another region " "may already be promoting")
+            return
+
+        # 승격 성공 → 페일오버 실행
+        logger.warning(
+            f"[Failover] Secondary promoting: " f"{self._settings.current_region} taking over from " f"{primary_region}"
+        )
+        self._execute_failover(
+            target_region=self._settings.current_region,
+            reason=f"primary_unreachable:{primary_region}",
+        )
 
     def _run_loop(self) -> None:
         """모니터링 루프."""

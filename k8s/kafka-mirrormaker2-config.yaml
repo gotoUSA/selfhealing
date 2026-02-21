@@ -90,7 +90,7 @@ spec:
           heartbeats.topic.replication.factor: 3
           emit.heartbeats.interval.seconds: 10
         tasksMax: 1
-      topicsPattern: "selfhealing\\.audit\\..*"
+      topicsPattern: "selfhealing\\.(audit|routing)\\..*"
       groupsPattern: "audit-.*"
 
   # 리소스 설정

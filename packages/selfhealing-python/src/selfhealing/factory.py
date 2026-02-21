@@ -515,6 +515,16 @@ class ProviderRegistry:
         except ImportError:
             pass
 
+        try:
+            from selfhealing.adapters.traffic_routing.k8s_ingress_adapter import (
+                K8sIngressTrafficRoutingAdapter,
+            )
+
+            if "k8s_ingress" not in cls._traffic_routing_adapters:
+                cls.register_traffic_routing("k8s_ingress", K8sIngressTrafficRoutingAdapter)
+        except ImportError:
+            pass
+
     # =========================================================================
     # Correlation Engine Strategy Getters
     # =========================================================================
