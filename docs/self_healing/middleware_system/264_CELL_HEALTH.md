@@ -205,10 +205,10 @@ BulkheadRegistry·CB 상태 콜백을 수집하여 Cell 단위 건강도를 산�
 LeaderScheduler를 통해 클러스터 내 단일 리더만 집계를 수행합니다.
 
 의존성:
-- CellRegistry: 건강도 업데이트 대상 (registry.py L200)
-- BulkheadRegistry: Bulkhead utilization 조회 (registry.py L316)
-- LeaderScheduler: 단일 리더 실행 보장 (scheduler.py L83)
-- EWMAForecaster: 폴백 에러율 + 스코어 평활화 (time_series.py L332)
+- CellRegistry: 건강도 업데이트 대상 (registry.py update_health_score)
+- BulkheadRegistry: Bulkhead utilization 조회 (bulkhead/registry.py get_all_states)
+- LeaderScheduler: 단일 리더 실행 보장 (coordination/scheduler.py)
+- EWMAForecaster: 폴백 에러율 + 스코어 평활화 (time_series.py)
 - prometheus_client: 메트릭 노출 (선택적)
 """
 
@@ -473,8 +473,11 @@ class CellHealthAggregator:
         except Exception as e:
             self._prometheus_consecutive_failures += 1
             logger.warning(
-                f"Prometheus API failed for {cell_id} "
-                f"(consecutive={self._prometheus_consecutive_failures}): {e}"
+                "Prometheus API failed for %s "
+                "(consecutive=%d): %s",
+                cell_id,
+                self._prometheus_consecutive_failures,
+                e,
             )
             return None
 
@@ -519,6 +522,12 @@ class CellHealthAggregator:
                 latency_p99 = lat_ewma.get_smoothed() if lat_ewma else 0.0
                 total_requests = self._local_request_counts.get(cell_id, 0)
             source = "ewma_fallback"
+
+        # get_smoothed()는 None을 반환할 수 있으므로 기본값 보장
+        if error_rate is None:
+            error_rate = 0.0
+        if latency_p99 is None:
+            latency_p99 = 0.0
 
         # 2) Bulkhead Utilization (로컬 메모리)
         bulkhead_util = self._get_bulkhead_utilization(cell_id)
@@ -583,7 +592,7 @@ class CellHealthAggregator:
         """
         BulkheadRegistry에서 Cell Bulkhead 사용률 조회.
 
-        BulkheadRegistry.get_all_states() 사용 (로컬 메모리, L316 registry.py).
+        BulkheadRegistry.get_all_states()를 사용하여 로컬 메모리에서 조회합니다.
         """
         try:
             from selfhealing.resilience.bulkhead.registry import (
@@ -605,14 +614,8 @@ class CellHealthAggregator:
         """
         CB 상태 변경 콜백 기반 Cell CB OPEN 비율 조회.
 
-        Phase 1: _state_change_callbacks 기반 이벤트 카운터.
-            - CB 자동 전환(record_failure→OPEN, record_success→CLOSED) 감지.
-            - 수동 제어(force_open/force_close)는 콜백 미호출
-              (manual_control.py L69–L189 확인).
-              → Phase 2에서 CB metadata 확장으로 해결 (268_CB_METADATA.md).
-
-        Phase 2: CircuitBreakerStateData.metadata["cell_id"] 기반 직접 조회.
-            → 268_CB_METADATA.md 참조.
+        CB 자동 전환(record_failure→OPEN, record_success→CLOSED) 감지.
+        수동 제어(force_open/force_close)는 콜백 미호출이므로 감지 불가.
         """
         with self._lock:
             total = self._cb_total_counts.get(cell_id, 0)
@@ -623,14 +626,10 @@ class CellHealthAggregator:
         """
         CircuitBreakerService 상태 변경 콜백 등록.
 
-        _state_change_callbacks (service.py L96–L100) 활용:
-          self._state_change_callbacks = {
-              "open": [],
-              "closed": [],
-              "half_open": [],
-          }
+        _state_change_callbacks 활용:
+          {"open": [], "closed": [], "half_open": []}
 
-        콜백은 동기 실행 (service.py L150–L172)이므로 내부 로직을
+        콜백은 동기 실행이므로 내부 로직을
         최대한 가볍게(dict increment만) 유지합니다.
         """
         try:
@@ -671,7 +670,8 @@ class CellHealthAggregator:
             )
         except Exception as e:
             logger.warning(
-                f"[CellHealthAggregator] CB callback registration failed: {e}"
+                "[CellHealthAggregator] CB callback registration failed: %s",
+                e,
             )
 
     # =========================================================================
@@ -697,16 +697,15 @@ class CellHealthAggregator:
         LeaderScheduler의 @scheduler.job()을 통해
         클러스터 내 단일 리더 워커만 주기적으로 호출합니다.
         """
-        is_warming = False
         if self._leader_since is not None:
             elapsed = time.monotonic() - self._leader_since
             warmup_window = self._settings.health_check_interval_seconds * 2
             if elapsed < warmup_window:
-                is_warming = True
                 logger.info(
                     "[CellHealthAggregator] Leader warmup period "
-                    f"({elapsed:.1f}s < {warmup_window}s), "
-                    "scores may be volatile"
+                    "(%.1fs < %ss), scores may be volatile",
+                    elapsed,
+                    warmup_window,
                 )
 
         try:
@@ -717,7 +716,7 @@ class CellHealthAggregator:
                 score = self.compute_health(cell_id)
                 registry.update_health_score(cell_id, score)
         except Exception as e:
-            logger.error(f"CellHealthAggregator aggregate_all failed: {e}")
+            logger.error("CellHealthAggregator aggregate_all failed: %s", e)
 
     def on_become_leader(self) -> None:
         """리더 전환 시 호출 — warmup 시작 시각 기록."""
@@ -758,8 +757,8 @@ def setup_cell_health_scheduler() -> None:
     AppConfig.ready() 또는 startup에서 호출합니다.
 
     패턴 참조:
-    - LeaderScheduler (scheduler.py L83–L390)
-    - DLQConsumerCoordinator (dlq_consumer.py L42–L100)
+    - LeaderScheduler (coordination/scheduler.py)
+    - DLQConsumerCoordinator (coordination/dlq_consumer.py)
     """
     from selfhealing.settings.cell_topology import get_cell_topology_settings
 
@@ -787,8 +786,9 @@ def setup_cell_health_scheduler() -> None:
 
     scheduler.start()
     logger.info(
-        f"[CellHealthAggregator] LeaderScheduler registered "
-        f"(interval={settings.health_check_interval_seconds}s)"
+        "[CellHealthAggregator] LeaderScheduler registered "
+        "(interval=%ds)",
+        settings.health_check_interval_seconds,
     )
 
 
@@ -896,8 +896,9 @@ for cell_id in registry.get_all_cells():
 | 파일 | 변경 | 유형 |
 |------|------|------|
 | `services/cell_topology/health.py` | 신규 생성 | 필수 |
+| `services/cell_topology/__init__.py` | public API export 추가 | 필수 |
 
-**기존 파일 변경 없음** — `BulkheadRegistry.get_all_states()` (L316, registry.py), `CircuitBreakerService._state_change_callbacks` (L96, service.py) 모두 기존 API 그대로 사용.
+**기존 서비스 파일 변경 없음** — `BulkheadRegistry.get_all_states()` (bulkhead/registry.py), `CircuitBreakerService._state_change_callbacks` (service.py) 모두 기존 API 그대로 사용. `__init__.py`는 모듈 패키지 export만 추가.
 
 ---
 
