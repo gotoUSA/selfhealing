@@ -43,6 +43,11 @@ from selfhealing.context.causation_context import (  # X-Test Causation ID í”„ë¦
     restore_causation_from_celery,
     restore_causation_from_kafka,
 )
+from selfhealing.context.cell_context import (
+    cell_scope,
+    get_current_cell_id,
+    set_cell_id,
+)
 
 __all__ = [
     # Actor context
@@ -72,4 +77,8 @@ __all__ = [
     "XTEST_CAUSATION_PREFIX",
     "is_xtest_id",
     "normalize_causation_id",
+    # Cell context
+    "get_current_cell_id",
+    "set_cell_id",
+    "cell_scope",
 ]

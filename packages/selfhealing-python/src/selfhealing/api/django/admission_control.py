@@ -35,13 +35,9 @@ logger = logging.getLogger(__name__)
 
 # RTT 샘플 수집 — 3중 필터링 상수
 # 최소 임계치 미만의 초단기 요청(Health Check 등)은 노이즈로 간주하여 수집 제외
-_RTT_MIN_SAMPLE_MS: float = float(
-    os.environ.get("SELFHEALING_DEADLINE_RTT_MIN_SAMPLE_MS", "5")
-)
+_RTT_MIN_SAMPLE_MS: float = float(os.environ.get("SELFHEALING_DEADLINE_RTT_MIN_SAMPLE_MS", "5"))
 # 확률 샘플링 비율 (0.1 = 10%). Lock 경합 감소용. EMA 특성상 10% 샘플로 추세 파악 충분.
-_RTT_SAMPLE_RATE: float = float(
-    os.environ.get("SELFHEALING_DEADLINE_RTT_SAMPLE_RATE", "0.1")
-)
+_RTT_SAMPLE_RATE: float = float(os.environ.get("SELFHEALING_DEADLINE_RTT_SAMPLE_RATE", "0.1"))
 
 
 # Tier ID → TrafficGate priority int 매핑.
@@ -224,7 +220,12 @@ class AdmissionControlMiddleware:
 
         # 3. TrafficGate 판정
         traffic_priority = TIER_PRIORITY_MAP.get(tier_id, 50)
-        bulkhead_name = f"tier:{tier_id}"
+
+        # Cell Topology 활성화 시 Cell×Tier 2차원 격벽 적용
+        from selfhealing.context.cell_context import get_current_cell_id
+
+        cell_id = get_current_cell_id()
+        bulkhead_name = f"cell:{cell_id}:tier:{tier_id}" if cell_id else f"tier:{tier_id}"
 
         # Tier별 Bulkhead timeout: critical/standard는 짧은 대기, non_essential은 즉시 실패
         settings = self._settings
@@ -274,9 +275,7 @@ class AdmissionControlMiddleware:
                             get_gradient_calculator,
                         )
 
-                        get_gradient_calculator(
-                            f"admission_control:{tier_id}"
-                        ).add_sample(elapsed_ms)
+                        get_gradient_calculator(f"admission_control:{tier_id}").add_sample(elapsed_ms)
         except Exception:
             pass  # Fail-Open: RTT 수집 실패가 요청 처리에 영향 없음
 
