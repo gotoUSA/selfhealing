@@ -503,8 +503,36 @@ class CellHealthAggregator:
             for cell_id in registry.get_all_cells():
                 score = self.compute_health(cell_id)
                 registry.update_health_score(cell_id, score)
+
+            # 건강도 갱신 완료 후 대피 정책 평가
+            self._evaluate_evacuation_policy(registry)
         except Exception as e:
             logger.error("CellHealthAggregator aggregate_all failed: %s", e)
+
+    def _evaluate_evacuation_policy(self, registry: object) -> None:
+        """갱신된 건강도를 기반으로 Cell 대피 정책을 평가.
+
+        evacuation_enabled 토글이 꺼져 있으면 즉시 반환한다.
+        대피 정책 평가 실패가 건강도 수집 루프에 영향을 주지 않도록
+        독립적인 try/except로 보호한다.
+        """
+        if not self._settings.evacuation_enabled:
+            return
+
+        try:
+            from selfhealing.services.cell_topology.policy import (
+                get_cell_evacuation_policy,
+            )
+
+            policy = get_cell_evacuation_policy()
+            all_cells = registry.get_all_cells()  # type: ignore[attr-defined]
+            for cell_id, cell_info in all_cells.items():
+                policy.evaluate(cell_id, cell_info.health_score)
+        except Exception as e:
+            logger.error(
+                "CellHealthAggregator evacuation policy evaluation failed: %s",
+                e,
+            )
 
     def on_become_leader(self) -> None:
         """리더 전환 시 호출 — warmup 시작 시각 기록."""

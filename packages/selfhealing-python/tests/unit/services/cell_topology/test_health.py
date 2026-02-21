@@ -607,6 +607,91 @@ class TestAggregateAllBehavior:
             # 예외 없이 처리되어야 한다
             aggregator.aggregate_all()
 
+    def test_aggregate_all_calls_evacuation_policy(self):
+        """evacuation_enabled=True이면 건강도 갱신 후 대피 정책을 평가한다."""
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=True,
+            metrics_enabled=False,
+        )
+        agg = CellHealthAggregator(settings=settings)
+
+        mock_cell = MagicMock()
+        mock_cell.health_score = 0.5
+        mock_registry = MagicMock()
+        mock_registry.get_all_cells.return_value = {"cell-0": mock_cell}
+
+        mock_policy = MagicMock()
+
+        with (
+            patch(
+                "selfhealing.services.cell_topology.get_cell_registry",
+                return_value=mock_registry,
+            ),
+            patch(
+                "selfhealing.services.cell_topology.policy.get_cell_evacuation_policy",
+                return_value=mock_policy,
+            ),
+        ):
+            agg.aggregate_all()
+
+        mock_policy.evaluate.assert_called_once_with("cell-0", mock_cell.health_score)
+
+    def test_aggregate_all_skips_evacuation_when_disabled(self):
+        """evacuation_enabled=False이면 대피 정책 평가를 건너뛴다."""
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=False,
+            metrics_enabled=False,
+        )
+        agg = CellHealthAggregator(settings=settings)
+
+        mock_registry = MagicMock()
+        mock_registry.get_all_cells.return_value = {"cell-0": MagicMock()}
+
+        with (
+            patch(
+                "selfhealing.services.cell_topology.get_cell_registry",
+                return_value=mock_registry,
+            ),
+            patch(
+                "selfhealing.services.cell_topology.policy.get_cell_evacuation_policy",
+            ) as mock_get_policy,
+        ):
+            agg.aggregate_all()
+
+        mock_get_policy.assert_not_called()
+
+    def test_aggregate_all_evacuation_failure_does_not_affect_health_collection(self):
+        """대피 정책 평가 실패가 건강도 수집 루프에 영향을 주지 않는다."""
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=True,
+            metrics_enabled=False,
+        )
+        agg = CellHealthAggregator(settings=settings)
+
+        mock_registry = MagicMock()
+        mock_registry.get_all_cells.return_value = {
+            "cell-0": MagicMock(health_score=0.5),
+        }
+
+        with (
+            patch(
+                "selfhealing.services.cell_topology.get_cell_registry",
+                return_value=mock_registry,
+            ),
+            patch(
+                "selfhealing.services.cell_topology.policy.get_cell_evacuation_policy",
+                side_effect=RuntimeError("policy error"),
+            ),
+        ):
+            # 예외 없이 처리되어야 한다
+            agg.aggregate_all()
+
+        # 건강도 갱신은 정상적으로 호출되어야 한다
+        mock_registry.update_health_score.assert_called_once()
+
 
 class TestSingletonBehavior:
     """싱글톤 동작 검증."""

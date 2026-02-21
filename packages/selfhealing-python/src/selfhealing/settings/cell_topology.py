@@ -17,6 +17,8 @@ Environment Variables:
     SELFHEALING_CELL_TOPOLOGY_RECOVERY_CONSECUTIVE_COUNT=5
     SELFHEALING_CELL_TOPOLOGY_EVACUATION_DRAIN_GRACE_SECONDS=2.0
     SELFHEALING_CELL_TOPOLOGY_MAX_EVACUATED_RATIO=0.25
+    SELFHEALING_CELL_TOPOLOGY_ISOLATION_NOTIFICATION_DURATION_SECONDS=3600
+    SELFHEALING_CELL_TOPOLOGY_EVACUATION_HISTORY_MAX_SIZE=1000
     SELFHEALING_CELL_TOPOLOGY_WARMUP_INITIAL_PERCENTAGE=10.0
     SELFHEALING_CELL_TOPOLOGY_RECONCILIATION_INTERVAL_SECONDS=15.0
     SELFHEALING_CELL_TOPOLOGY_SERVICE_HEARTBEAT_TTL_SECONDS=300.0
@@ -147,6 +149,20 @@ class CellTopologySettings(BaseSettings):
         ge=0.0,
         le=1.0,
         description=("전체 Cell 중 최대 격리 허용 비율 (Cascading Failure 방지). " "예: 0.25 → 8 Cell 기준 최대 2개만 격리"),
+    )
+
+    isolation_notification_duration_seconds: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="격리 통보 시 RegionalIsolationGate에 전달하는 격리 예상 지속 시간 (초)",
+    )
+
+    evacuation_history_max_size: int = Field(
+        default=1000,
+        ge=10,
+        le=100000,
+        description="CellEvacuationPolicy 인메모리 대피 이력 최대 보관 건수",
     )
 
     health_check_interval_seconds: int = Field(

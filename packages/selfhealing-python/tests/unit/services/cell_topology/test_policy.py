@@ -784,7 +784,11 @@ class TestFireAndForgetNotificationBehavior:
         with patch.object(raw_policy, "_notify_isolation_gate_sync") as mock_sync:
             with patch.dict("sys.modules", {"selfhealing.adapters.celery.tasks": None}):
                 raw_policy._notify_isolation_gate("cell-0", "test reason")
-                mock_sync.assert_called_once_with("cell-0", "test reason")
+                mock_sync.assert_called_once_with(
+                    "cell-0",
+                    "test reason",
+                    duration_seconds=raw_policy._settings.isolation_notification_duration_seconds,
+                )
 
     def test_blast_radius_sync_fallback_on_import_error(self, raw_policy: CellEvacuationPolicy):
         """ImportError 시 blast radius 동기 폴백이 호출된다."""
@@ -873,3 +877,199 @@ class TestFullLifecycleBehavior:
             assert cell_1 is not None
             assert cell_0.state == CellState.DRAINING
             assert cell_1.state == CellState.ACTIVE
+
+
+# =============================================================================
+# 리팩토링 검증 — 설정 계약값 + 동작 검증
+# =============================================================================
+
+
+class TestRefactoredSettingsContract:
+    """리팩토링으로 추가된 설정 필드 계약값 검증."""
+
+    def test_isolation_notification_duration_seconds_contract(self):
+        """격리 통보 지속 시간 설계 계약값: 3600."""
+        settings = CellTopologySettings()
+        assert settings.isolation_notification_duration_seconds == 3600
+
+    def test_evacuation_history_max_size_contract(self):
+        """대피 이력 최대 보관 건수 설계 계약값: 1000."""
+        settings = CellTopologySettings()
+        assert settings.evacuation_history_max_size == 1000
+
+
+class TestDrainingTimestampRecordingBehavior:
+    """ACTIVE → DRAINING 전환 시 last_state_change_time 즉시 기록 검증."""
+
+    def test_draining_transition_records_timestamp_immediately(
+        self,
+        policy: CellEvacuationPolicy,
+        registry: CellRegistry,
+    ):
+        """DRAINING 전환 시 last_state_change_time이 즉시 기록된다."""
+        threshold = policy._settings.evacuation_health_threshold
+        required_count = policy._settings.evacuation_consecutive_count
+
+        with patch(
+            "selfhealing.services.cell_topology.get_cell_registry",
+            return_value=registry,
+        ):
+            before = time.time()
+            for _ in range(required_count):
+                policy.evaluate("cell-0", threshold - 0.1)
+            after = time.time()
+
+            cell = registry.get_cell_info("cell-0")
+            assert cell is not None
+            assert cell.state == CellState.DRAINING
+            recorded = cell.metadata.get("last_state_change_time")
+            assert recorded is not None
+            assert before <= recorded <= after
+
+    def test_draining_uses_prerecorded_timestamp_for_elapsed(
+        self,
+        policy: CellEvacuationPolicy,
+        registry: CellRegistry,
+    ):
+        """DRAINING 전환 시 기록된 타임스탬프가 드레인 경과 계산에 사용된다.
+
+        _tick_draining()의 첫 tick에서 시간을 새로 기록하는 것이 아니라
+        _tick_active()에서 이미 기록된 시간이 그대로 유지된다.
+        """
+        threshold = policy._settings.evacuation_health_threshold
+        required_count = policy._settings.evacuation_consecutive_count
+        drain_required = policy._settings.evacuation_traffic_drain_seconds + policy._settings.evacuation_drain_grace_seconds
+
+        with patch(
+            "selfhealing.services.cell_topology.get_cell_registry",
+            return_value=registry,
+        ):
+            for _ in range(required_count):
+                policy.evaluate("cell-0", threshold - 0.1)
+
+            cell = registry.get_cell_info("cell-0")
+            assert cell is not None
+            original_time = cell.metadata["last_state_change_time"]
+
+            # 시간을 충분히 경과한 것으로 직접 설정
+            cell.metadata["last_state_change_time"] = time.time() - (drain_required + 1)
+
+            result = policy.evaluate("cell-0", 0.2)
+            assert result is True
+            assert cell.state == CellState.ISOLATED
+
+            # 중간 tick에서 새 시간이 덮어쓰여지지 않음을 확인
+            assert original_time != cell.metadata.get("last_state_change_time", original_time)
+
+
+class TestEvacuationHistoryBoundedBehavior:
+    """대피 이력 deque maxlen 경계 동작 검증."""
+
+    def test_history_bounded_by_max_size(self):
+        """대피 이력은 evacuation_history_max_size를 초과하지 않는다."""
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=True,
+            evacuation_history_max_size=10,
+        )
+        pol = CellEvacuationPolicy(settings=settings)
+
+        for i in range(15):
+            pol._evacuation_history.append(
+                EvacuationRecord(
+                    cell_id=f"cell-{i}",
+                    trigger_health_score=0.2,
+                    reason="test",
+                ),
+            )
+
+        assert len(pol.get_evacuation_history()) == settings.evacuation_history_max_size
+
+    def test_oldest_records_evicted_first(self):
+        """maxlen 초과 시 가장 오래된 레코드가 먼저 제거된다."""
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=True,
+            evacuation_history_max_size=10,
+        )
+        pol = CellEvacuationPolicy(settings=settings)
+
+        for i in range(15):
+            pol._evacuation_history.append(
+                EvacuationRecord(
+                    cell_id=f"cell-{i}",
+                    trigger_health_score=0.2,
+                    reason="test",
+                ),
+            )
+
+        history = pol.get_evacuation_history()
+        assert len(history) == 10
+        # 가장 오래된 5개(cell-0~cell-4)가 제거되고 cell-5부터 남아야 한다
+        assert history[0].cell_id == "cell-5"
+        assert history[-1].cell_id == "cell-14"
+
+
+class TestIsolationNotificationDurationBehavior:
+    """격리 통보 duration_seconds 설정 참조 동작 검증."""
+
+    def test_isolation_gate_receives_configured_duration(self, registry: CellRegistry):
+        """격리 통보 시 설정의 isolation_notification_duration_seconds가 전달된다."""
+        custom_duration = 7200
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=True,
+            isolation_notification_duration_seconds=custom_duration,
+        )
+        pol = CellEvacuationPolicy(settings=settings)
+
+        mock_task = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {
+                "selfhealing.adapters.celery.tasks": MagicMock(
+                    notify_cell_isolation=mock_task,
+                ),
+            },
+        ):
+            pol._notify_isolation_gate(
+                "cell-0",
+                "test reason",
+                duration_seconds=custom_duration,
+            )
+            call_kwargs = mock_task.apply_async.call_args[1]["kwargs"]
+            assert call_kwargs["duration_seconds"] == custom_duration
+
+    def test_draining_to_isolated_passes_settings_duration(self, registry: CellRegistry):
+        """DRAINING → ISOLATED 전환 시 설정의 duration이 통보에 전달된다."""
+        custom_duration = 1800
+        settings = CellTopologySettings(
+            enabled=True,
+            evacuation_enabled=True,
+            bulkhead_isolation_enabled=False,
+            cell_count=8,
+            cell_prefix="cell",
+            isolation_notification_duration_seconds=custom_duration,
+        )
+        reg = CellRegistry(settings=settings)
+        pol = CellEvacuationPolicy(settings=settings)
+
+        # DRAINING 상태로 사전 설정
+        reg.set_cell_state("cell-0", CellState.DRAINING, "test drain")
+        cell = reg.get_cell_info("cell-0")
+        assert cell is not None
+        drain_required = settings.evacuation_traffic_drain_seconds + settings.evacuation_drain_grace_seconds
+        cell.metadata["last_state_change_time"] = time.time() - (drain_required + 1)
+
+        with (
+            patch(
+                "selfhealing.services.cell_topology.get_cell_registry",
+                return_value=reg,
+            ),
+            patch.object(pol, "_notify_isolation_gate") as mock_gate,
+            patch.object(pol, "_notify_blast_radius"),
+        ):
+            pol.evaluate("cell-0", 0.2)
+            mock_gate.assert_called_once()
+            call_kwargs = mock_gate.call_args[1]
+            assert call_kwargs["duration_seconds"] == custom_duration

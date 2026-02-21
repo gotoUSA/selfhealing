@@ -1,6 +1,6 @@
 # 265. Cell Evacuation Policy — Tick-Based State Machine + Hysteresis
 
-> **Version**: 2.0.0
+> **Version**: 2.1.0
 > **Created**: 2026-02-22
 > **Updated**: 2026-02-22
 > **Status**: Done
@@ -200,9 +200,15 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from selfhealing.services.cell_topology.models import CellInfo
+    from selfhealing.services.cell_topology.registry import CellRegistry
+    from selfhealing.settings.cell_topology import CellTopologySettings
 
 logger = logging.getLogger(__name__)
 
@@ -241,11 +247,13 @@ class CellEvacuationPolicy:
             policy.evaluate(cell_id, info.health_score)
     """
 
-    def __init__(self, settings: Any = None):
+    def __init__(self, settings: CellTopologySettings | None = None):
         from selfhealing.settings.cell_topology import get_cell_topology_settings
 
         self._settings = settings or get_cell_topology_settings()
-        self._evacuation_history: list[EvacuationRecord] = []
+        self._evacuation_history: deque[EvacuationRecord] = deque(
+            maxlen=self._settings.evacuation_history_max_size,
+        )
 
     # =========================================================================
     # evaluate() — 상태 머신 Tick
@@ -371,6 +379,10 @@ class CellEvacuationPolicy:
             # === SoT: CellRegistry 상태 전환 ===
             registry.set_cell_state(cell_id, CellState.DRAINING, reason)
 
+            # DRAINING 전환 시점을 즉시 기록 — _tick_draining()이
+            # 첫 tick에서 시간을 기록하는 지연 없이 바로 드레인 타이머 시작
+            cell.metadata["last_state_change_time"] = time.time()
+
             # 신규 트래픽 차단은 CellRegistry.get_cell_for_key()의
             # Hash Ring 순회에서 DRAINING Cell이 자동 skip됨으로써 달성된다.
             # (registry.py L137-150: ACTIVE/WARMUP만 반환, DRAINING/ISOLATED는 implicit skip)
@@ -470,7 +482,11 @@ class CellEvacuationPolicy:
         # === Fire-and-forget: 감사 로그 및 이벤트 발행 ===
         # 통보 실패가 대피 파이프라인에 영향 없음.
         # Celery apply_async 패턴 (services/throttle/sla_notification.py 참조)
-        self._notify_isolation_gate(cell_id, reason)
+        self._notify_isolation_gate(
+            cell_id,
+            reason,
+            duration_seconds=self._settings.isolation_notification_duration_seconds,
+        )
         self._notify_blast_radius(
             cell_id,
             cell.metadata.get("evacuation_affected_services", []),
@@ -610,7 +626,13 @@ class CellEvacuationPolicy:
     # 패턴 참조: services/throttle/sla_notification.py
     # Celery 미사용 환경에서는 동기 폴백 (try/except 보호)
 
-    def _notify_isolation_gate(self, cell_id: str, reason: str) -> None:
+    def _notify_isolation_gate(
+        self,
+        cell_id: str,
+        reason: str,
+        *,
+        duration_seconds: int = 3600,
+    ) -> None:
         """RegionalIsolationGate 격리 통보 (Fire-and-forget)."""
         try:
             from selfhealing.adapters.celery.tasks import (
@@ -621,19 +643,29 @@ class CellEvacuationPolicy:
                 kwargs={
                     "cell_id": cell_id,
                     "reason": reason,
-                    "duration_seconds": 3600,
+                    "duration_seconds": duration_seconds,
                 },
             )
         except ImportError:
             # Celery 미사용: 동기 폴백
-            self._notify_isolation_gate_sync(cell_id, reason)
+            self._notify_isolation_gate_sync(
+                cell_id, reason, duration_seconds=duration_seconds,
+            )
         except Exception as e:
             logger.warning(
                 f"Cell {cell_id}: isolation gate async notify failed: {e}"
             )
-            self._notify_isolation_gate_sync(cell_id, reason)
+            self._notify_isolation_gate_sync(
+                cell_id, reason, duration_seconds=duration_seconds,
+            )
 
-    def _notify_isolation_gate_sync(self, cell_id: str, reason: str) -> None:
+    def _notify_isolation_gate_sync(
+        self,
+        cell_id: str,
+        reason: str,
+        *,
+        duration_seconds: int = 3600,
+    ) -> None:
         """RegionalIsolationGate 동기 폴백."""
         try:
             from selfhealing.services.isolation.regional_gate import (
@@ -644,7 +676,7 @@ class CellEvacuationPolicy:
             gate.isolate_region(
                 region=cell_id,
                 reason=reason,
-                duration_seconds=3600,
+                duration_seconds=duration_seconds,
             )
         except ImportError:
             logger.debug("RegionalIsolationGate not available")
@@ -966,6 +998,10 @@ evacuation_consecutive_count: int = 3        # 대피 연속 횟수 (R1)
 recovery_consecutive_count: int = 5          # 복구 연속 횟수 (R1)
 evacuation_drain_grace_seconds: float = 2.0  # NTP Drift 버퍼 (R2)
 max_evacuated_ratio: float = 0.25            # Global Hard Limit (R4)
+
+# v2.1 리팩토링 추가
+isolation_notification_duration_seconds: int = 3600  # 격리 통보 지속 시간
+evacuation_history_max_size: int = 1000              # 인메모리 이력 최대 보관 건수
 ```
 
 **환경변수**:
@@ -975,6 +1011,8 @@ SELFHEALING_CELL_TOPOLOGY_EVACUATION_CONSECUTIVE_COUNT=3
 SELFHEALING_CELL_TOPOLOGY_RECOVERY_CONSECUTIVE_COUNT=5
 SELFHEALING_CELL_TOPOLOGY_EVACUATION_DRAIN_GRACE_SECONDS=2.0
 SELFHEALING_CELL_TOPOLOGY_MAX_EVACUATED_RATIO=0.25
+SELFHEALING_CELL_TOPOLOGY_ISOLATION_NOTIFICATION_DURATION_SECONDS=3600
+SELFHEALING_CELL_TOPOLOGY_EVACUATION_HISTORY_MAX_SIZE=1000
 ```
 
 ---
@@ -984,7 +1022,8 @@ SELFHEALING_CELL_TOPOLOGY_MAX_EVACUATED_RATIO=0.25
 | 파일 | 변경 | 유형 | 리뷰 반영 |
 |------|------|------|----------|
 | `services/cell_topology/policy.py` | 전면 재작성 | 필수 | R1~R5 전체 |
-| `settings/cell_topology.py` | 5개 필드 추가 | 필수 | R1, R2, R4 |
+| `services/cell_topology/health.py` | `aggregate_all()` → `evaluate()` 호출 추가 | 필수 | §1 설계 반영 |
+| `settings/cell_topology.py` | 7개 필드 추가 | 필수 | R1, R2, R4 + v2.1 |
 | `adapters/celery/tasks.py` | Celery 태스크 3개 추가 | 필수 | R5 |
 
 **기존 파일 변경 없음**:
