@@ -116,11 +116,16 @@ class CellTopologySettings(BaseSettings):
     )
 
     # ==========================================================================
-    # 메트릭
+    # 메트릭 / Prometheus
     # ==========================================================================
     metrics_enabled: bool = Field(
         default=True,
         description="Prometheus 메트릭 수집 활성화",
+    )
+
+    prometheus_url: str = Field(
+        default="http://localhost:9090",
+        description="Prometheus HTTP API 엔드포인트 URL",
     )
 
     # ==========================================================================

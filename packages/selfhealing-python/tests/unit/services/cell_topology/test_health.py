@@ -23,6 +23,7 @@ from selfhealing.services.cell_topology.health import (
     CellHealthAggregator,
     CellHealthSnapshot,
     _PROMETHEUS_MAX_CONSECUTIVE_FAILURES,
+    _PROMETHEUS_RETRY_AFTER_SECONDS,
     _PROMETHEUS_TIMEOUT,
     get_cell_health_aggregator,
     reset_cell_health_aggregator,
@@ -123,6 +124,10 @@ class TestPrometheusConfigContract:
     def test_prometheus_max_consecutive_failures(self):
         """Prometheus 연속 실패 임계값은 3이어야 한다."""
         assert _PROMETHEUS_MAX_CONSECUTIVE_FAILURES == 3
+
+    def test_prometheus_retry_after_seconds(self):
+        """Prometheus half-open probe 재시도 대기는 60초이어야 한다."""
+        assert _PROMETHEUS_RETRY_AFTER_SECONDS == 60.0
 
 
 class TestCellHealthSnapshotContract:
@@ -313,7 +318,7 @@ class TestCBOpenRatioBehavior:
         """CB OPEN 이벤트가 카운터를 증가시켜야 한다."""
         with aggregator._lock:
             aggregator._cb_open_counts["cell-0"] = 2
-            aggregator._cb_total_counts["cell-0"] = 5
+            aggregator._cb_open_transition_counts["cell-0"] = 5
 
         ratio = aggregator._get_cb_open_ratio("cell-0")
         assert ratio == pytest.approx(2 / 5)
@@ -322,7 +327,7 @@ class TestCBOpenRatioBehavior:
         """CB CLOSED 이벤트 시 open count가 감소해야 한다."""
         with aggregator._lock:
             aggregator._cb_open_counts["cell-0"] = 3
-            aggregator._cb_total_counts["cell-0"] = 5
+            aggregator._cb_open_transition_counts["cell-0"] = 5
 
         # CB closed 시뮬레이션 (open count 감소)
         with aggregator._lock:
@@ -335,7 +340,7 @@ class TestCBOpenRatioBehavior:
         """CB open count는 0 미만으로 내려가지 않아야 한다."""
         with aggregator._lock:
             aggregator._cb_open_counts["cell-0"] = 0
-            aggregator._cb_total_counts["cell-0"] = 3
+            aggregator._cb_open_transition_counts["cell-0"] = 3
 
         # CB closed 한번 더 (open=0 상태에서)
         with aggregator._lock:
@@ -404,18 +409,21 @@ class TestPrometheusFallbackBehavior:
 
     def test_initial_prometheus_failures_counted(self, settings: CellTopologySettings):
         """Prometheus 실패 시 연속 실패 카운트가 증가해야 한다."""
-        agg = CellHealthAggregator(settings=settings, prometheus_url="http://invalid:9999")
+        agg = CellHealthAggregator(settings=settings, prometheus_url="http://localhost:9999")
 
-        result = agg._fetch_prometheus_metrics("cell-0")
+        with patch("httpx.get", side_effect=ConnectionError("mocked")):
+            result = agg._fetch_prometheus_metrics("cell-0")
         assert result is None
         assert agg._prometheus_consecutive_failures == 1
 
     def test_fallback_mode_after_max_consecutive_failures(self, settings: CellTopologySettings):
-        """연속 실패 임계값 도달 시 API 호출 없이 None 반환해야 한다."""
+        """연속 실패 임계값 도달 시 대기 시간 내에는 API 호출 없이 None 반환해야 한다."""
         agg = CellHealthAggregator(settings=settings)
         agg._prometheus_consecutive_failures = _PROMETHEUS_MAX_CONSECUTIVE_FAILURES
+        # half-open probe 억제: 방금 실패한 것처럼 시간 설정
+        agg._last_prometheus_failure_time = time.monotonic()
 
-        # 실패 카운트가 이미 임계치 → 즉시 None (HTTP 호출 없이)
+        # 실패 카운트가 이미 임계치 + 대기 미경과 → 즉시 None (HTTP 호출 없이)
         result = agg._fetch_prometheus_metrics("cell-0")
         assert result is None
         # 카운트가 더 증가하지 않아야 한다 (API 호출 자체를 건너뛰므로)
@@ -429,6 +437,31 @@ class TestPrometheusFallbackBehavior:
         snapshot = aggregator.get_snapshot("cell-0")
         assert snapshot is not None
         assert snapshot.source == "ewma_fallback"
+
+    def test_half_open_probe_after_retry_interval(self, settings: CellTopologySettings):
+        """half-open: 대기 시간 경과 후 Prometheus probe를 재시도해야 한다."""
+        agg = CellHealthAggregator(settings=settings, prometheus_url="http://invalid:9999")
+        # 임계값 도달 + 불가능한 URL로 반드시 실패하는 상태
+        agg._prometheus_consecutive_failures = _PROMETHEUS_MAX_CONSECUTIVE_FAILURES
+        # 대기 시간 미경과 → 즉시 None
+        agg._last_prometheus_failure_time = time.monotonic()
+        result = agg._fetch_prometheus_metrics("cell-0")
+        assert result is None
+        # 카운트 증가 없음 (HTTP 호출 자체를 건너뜀)
+        assert agg._prometheus_consecutive_failures == (_PROMETHEUS_MAX_CONSECUTIVE_FAILURES)
+
+    def test_half_open_probe_attempts_after_elapsed(self, settings: CellTopologySettings):
+        """half-open: 대기 시간 경과 시 HTTP 호출을 시도해야 한다."""
+        agg = CellHealthAggregator(settings=settings, prometheus_url="http://localhost:9999")
+        agg._prometheus_consecutive_failures = _PROMETHEUS_MAX_CONSECUTIVE_FAILURES
+        # 초과된 시간 설정 (현재보다 retry_after 이상 과거)
+        agg._last_prometheus_failure_time = time.monotonic() - _PROMETHEUS_RETRY_AFTER_SECONDS - 1.0
+        # httpx mock: 네트워크 호출 없이 즉시 실패
+        with patch("httpx.get", side_effect=ConnectionError("mocked")):
+            # probe 시도 → 실패하지만 카운트가 증가해야 한다 (HTTP 호출이 실제로 시도됨)
+            result = agg._fetch_prometheus_metrics("cell-0")
+        assert result is None
+        assert agg._prometheus_consecutive_failures == (_PROMETHEUS_MAX_CONSECUTIVE_FAILURES + 1)
 
 
 class TestParsePrometheusScalarBehavior:

@@ -1,6 +1,6 @@
 # 264. Cell Health Aggregator — 건강도 집계 및 Prometheus 메트릭
 
-> **Version**: 2.0.0
+> **Version**: 2.1.0
 > **Created**: 2026-02-22
 > **Updated**: 2026-02-22
 > **Status**: Implemented
@@ -17,7 +17,7 @@
 
 | # | 문제 | 결정 | 근거 |
 |---|------|------|------|
-| R1 | 멀티 워커 메트릭 파편화 | Prometheus API를 글로벌 SSOT로, 로컬 EWMA를 폴백으로 | `prometheus_client` Counter/Histogram은 워커별 독립이므로 Prometheus의 `rate()`로 합산 |
+| R1 | 멀티 워커 메트릭 파편화 | Prometheus API를 글로벌 SSOT로, 로컬 EWMA를 폴백으로. Mini CB는 half-open probe 포함 | `prometheus_client` Counter/Histogram은 워커별 독립이므로 Prometheus의 `rate()`로 합산. 연속 실패 후 60초 대기 후 probe 재시도 |
 | R2 | 누적 카운터 과거 데이터 영속 | Prometheus `rate()`로 Sliding Window 자동 해결, 폴백은 EWMA 감쇠 | `EWMAForecaster` (L332, `time_series.py`) 재사용 |
 | R3 | 백그라운드 스레드 중복 실행 | `LeaderScheduler`로 단일 리더만 집계 | `DLQConsumerCoordinator` (L42, `dlq_consumer.py`) 동일 패턴 |
 | R4 | CB-Cell 간접 매핑 불안정 | Phase 1: 콜백 이벤트 기반, Phase 2: CB metadata 확장 | [268_CB_METADATA.md](268_CB_METADATA.md) 별도 문서 |
@@ -143,6 +143,8 @@ class EWMAForecaster:
 │  │ Primary: PromQL     │  │ Fallback: 로컬 EWMA     ││
 │  │ rate()[5m], p99     │──│ Prom 3회 연속 실패 시    ││
 │  │ timeout=3s          │  │ 자동 전환               ││
+│  │ half-open: 60s 후   │  │                         ││
+│  │ probe 재시도        │  │                         ││
 │  └────────────────────┘  └─────────────────────────┘│
 └─────────────────────────────────────────────────────┘
 ```
@@ -218,7 +220,12 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.services.predictive_forecaster.time_series import (
+        EWMAForecaster,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +234,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _PROMETHEUS_TIMEOUT = 3.0  # 초 — aggregate_all 블로킹 방지
 _PROMETHEUS_MAX_CONSECUTIVE_FAILURES = 3  # 연속 실패 시 폴백 모드 전환
+_PROMETHEUS_RETRY_AFTER_SECONDS = 60.0  # half-open probe 대기 시간
 
 
 @dataclass
@@ -288,21 +296,26 @@ class CellHealthAggregator:
         self._lock = threading.RLock()
         self._snapshots: dict[str, CellHealthSnapshot] = {}
 
-        # Prometheus API 엔드포인트
-        self._prometheus_url = prometheus_url or "http://localhost:9090"
+        # Prometheus API 엔드포인트 (생성자 인자 > 설정 > 기본값 우선순위)
+        self._prometheus_url = (
+            prometheus_url
+            or self._settings.prometheus_url
+            or "http://localhost:9090"
+        )
         self._prometheus_consecutive_failures = 0
+        self._last_prometheus_failure_time = 0.0  # half-open probe 시간 추적
 
         # EWMA 폴백 — 에러율·레이턴시 추적 (워커 로컬, O(1) 메모리)
-        self._error_rate_ewma: dict[str, Any] = {}   # cell_id → EWMAForecaster
-        self._latency_ewma: dict[str, Any] = {}      # cell_id → EWMAForecaster
+        self._error_rate_ewma: dict[str, EWMAForecaster] = {}   # cell_id → EWMAForecaster
+        self._latency_ewma: dict[str, EWMAForecaster] = {}      # cell_id → EWMAForecaster
         self._local_request_counts: dict[str, int] = {}  # 폴백 총 요청 수 추적
 
         # Health Score 스무딩 — Raw Score에 EWMA 적용
-        self._health_ewma: dict[str, Any] = {}  # cell_id → EWMAForecaster
+        self._health_ewma: dict[str, EWMAForecaster] = {}  # cell_id → EWMAForecaster
 
         # CB 상태 변경 콜백 기반 카운터
         self._cb_open_counts: dict[str, int] = {}
-        self._cb_total_counts: dict[str, int] = {}
+        self._cb_open_transition_counts: dict[str, int] = {}  # OPEN 전환 누적 횟수
 
         # Leader Handoff 감지
         self._leader_since: float | None = None
@@ -415,10 +428,20 @@ class CellHealthAggregator:
         Returns:
             (error_rate, latency_p99, total_requests) 또는 실패 시 None
         """
-        # Mini Circuit Breaker — 연속 실패 시 API 호출 건너뜀
+        # Mini Circuit Breaker (half-open 포함)
+        # 연속 실패 임계값 도달 시 폴백 모드, 일정 시간 후 1회 probe 시도
         if (self._prometheus_consecutive_failures
                 >= _PROMETHEUS_MAX_CONSECUTIVE_FAILURES):
-            return None
+            elapsed_since_failure = (
+                time.monotonic() - self._last_prometheus_failure_time
+            )
+            if elapsed_since_failure < _PROMETHEUS_RETRY_AFTER_SECONDS:
+                return None
+            logger.info(
+                "[CellHealthAggregator] Prometheus half-open probe "
+                "(%.1fs since last failure)",
+                elapsed_since_failure,
+            )
 
         try:
             import httpx
@@ -472,6 +495,7 @@ class CellHealthAggregator:
 
         except Exception as e:
             self._prometheus_consecutive_failures += 1
+            self._last_prometheus_failure_time = time.monotonic()
             logger.warning(
                 "Prometheus API failed for %s "
                 "(consecutive=%d): %s",
@@ -606,8 +630,15 @@ class CellHealthAggregator:
                 max_c = state.max_concurrent or 1
                 active = state.active_count or 0
                 return min(active / max_c, 1.0)
-        except Exception:
+        except ImportError:
             pass
+        except Exception as e:
+            logger.warning(
+                "[CellHealthAggregator] Bulkhead utilization "
+                "query failed for %s: %s",
+                cell_id,
+                e,
+            )
         return 0.0
 
     def _get_cb_open_ratio(self, cell_id: str) -> float:
@@ -618,7 +649,7 @@ class CellHealthAggregator:
         수동 제어(force_open/force_close)는 콜백 미호출이므로 감지 불가.
         """
         with self._lock:
-            total = self._cb_total_counts.get(cell_id, 0)
+            total = self._cb_open_transition_counts.get(cell_id, 0)
             open_count = self._cb_open_counts.get(cell_id, 0)
             return (open_count / total) if total > 0 else 0.0
 
@@ -626,8 +657,8 @@ class CellHealthAggregator:
         """
         CircuitBreakerService 상태 변경 콜백 등록.
 
-        _state_change_callbacks 활용:
-          {"open": [], "closed": [], "half_open": []}
+        register_state_change_callback() 공개 API 활용:
+          state="open" | "closed" | "half_open"
 
         콜백은 동기 실행이므로 내부 로직을
         최대한 가볍게(dict increment만) 유지합니다.
@@ -649,8 +680,8 @@ class CellHealthAggregator:
                     self._cb_open_counts[cell_id] = (
                         self._cb_open_counts.get(cell_id, 0) + 1
                     )
-                    self._cb_total_counts[cell_id] = (
-                        self._cb_total_counts.get(cell_id, 0) + 1
+                    self._cb_open_transition_counts[cell_id] = (
+                        self._cb_open_transition_counts.get(cell_id, 0) + 1
                     )
 
             def _on_cb_closed(
@@ -662,8 +693,8 @@ class CellHealthAggregator:
                         0, self._cb_open_counts.get(cell_id, 0) - 1
                     )
 
-            cb_service._state_change_callbacks["open"].append(_on_cb_opened)
-            cb_service._state_change_callbacks["closed"].append(_on_cb_closed)
+            cb_service.register_state_change_callback("open", _on_cb_opened)
+            cb_service.register_state_change_callback("closed", _on_cb_closed)
 
             logger.info(
                 "[CellHealthAggregator] CB state change callbacks registered"
@@ -774,8 +805,10 @@ def setup_cell_health_scheduler() -> None:
     scheduler = get_leader_scheduler("cell-health-aggregator")
 
     # 리더 전환 이벤트 감지 — warmup 컨텍스트 기록
-    scheduler._elector.on_become_leader(aggregator.on_become_leader)
-    scheduler._elector.on_lose_leader(aggregator.on_lose_leader)
+    scheduler.register_leader_callbacks(
+        on_become=aggregator.on_become_leader,
+        on_lose=aggregator.on_lose_leader,
+    )
 
     @scheduler.job(
         interval_seconds=settings.health_check_interval_seconds,
@@ -897,8 +930,10 @@ for cell_id in registry.get_all_cells():
 |------|------|------|
 | `services/cell_topology/health.py` | 신규 생성 | 필수 |
 | `services/cell_topology/__init__.py` | public API export 추가 | 필수 |
+| `settings/cell_topology.py` | `prometheus_url` 필드 추가 | v2.1.0 |
+| `coordination/scheduler.py` | `register_leader_callbacks()` 공개 메서드 추가 | v2.1.0 |
 
-**기존 서비스 파일 변경 없음** — `BulkheadRegistry.get_all_states()` (bulkhead/registry.py), `CircuitBreakerService._state_change_callbacks` (service.py) 모두 기존 API 그대로 사용. `__init__.py`는 모듈 패키지 export만 추가.
+**기존 서비스 파일 변경 최소화** — `BulkheadRegistry.get_all_states()` (bulkhead/registry.py) 기존 API 그대로 사용. `CircuitBreakerService.register_state_change_callback()` 공개 API로 전환 (v2.1.0). `LeaderScheduler.register_leader_callbacks()` 공개 메서드로 `_elector` 직접 접근 제거 (v2.1.0).
 
 ---
 
@@ -911,7 +946,7 @@ for cell_id in registry.get_all_cells():
 | 에러율 소스 | `_request_counts` / `_error_counts` (워커 로컬 누적) | Prometheus `rate()[5m]` (글로벌 합산) |
 | 레이턴시 소스 | `_latency_samples` (최근 1000개 로컬 리스트) | Prometheus `histogram_quantile(0.99, ...)` |
 | 폴백 | 없음 | `EWMAForecaster(alpha=0.3)` — O(1) 메모리 |
-| Prom API 보호 | 없음 | timeout=3s + 연속 3회 실패 시 폴백 전환 (Mini CB) |
+| Prom API 보호 | 없음 | timeout=3s + 연속 3회 실패 시 폴백 전환 (Mini CB) + 60초 후 half-open probe |
 
 **근거**: `prometheus_client` Counter는 워커별 독립 타임시리즈를 생성하므로, Prometheus `sum(rate(...))` PromQL이 **자동으로 20개 워커의 메트릭을 합산**한다.
 

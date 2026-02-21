@@ -19,7 +19,12 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.services.predictive_forecaster.time_series import (
+        EWMAForecaster,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _PROMETHEUS_TIMEOUT = 3.0  # 초 — aggregate_all 블로킹 방지
 _PROMETHEUS_MAX_CONSECUTIVE_FAILURES = 3  # 연속 실패 시 폴백 모드 전환
+_PROMETHEUS_RETRY_AFTER_SECONDS = 60.0  # 폴백 모드 진입 후 half-open probe 재시도 대기
 
 
 @dataclass
@@ -95,21 +101,22 @@ class CellHealthAggregator:
         self._lock = threading.RLock()
         self._snapshots: dict[str, CellHealthSnapshot] = {}
 
-        # Prometheus API 엔드포인트
-        self._prometheus_url = prometheus_url or "http://localhost:9090"
+        # Prometheus API 엔드포인트 (설정 → 생성자 인자 → 기본값 순 우선)
+        self._prometheus_url = prometheus_url or getattr(self._settings, "prometheus_url", None) or "http://localhost:9090"
         self._prometheus_consecutive_failures = 0
+        self._last_prometheus_failure_time: float = 0.0
 
         # EWMA 폴백 — 에러율·레이턴시 추적 (워커 로컬, O(1) 메모리)
-        self._error_rate_ewma: dict[str, Any] = {}  # cell_id → EWMAForecaster
-        self._latency_ewma: dict[str, Any] = {}  # cell_id → EWMAForecaster
+        self._error_rate_ewma: dict[str, EWMAForecaster] = {}
+        self._latency_ewma: dict[str, EWMAForecaster] = {}
         self._local_request_counts: dict[str, int] = {}  # 폴백 총 요청 수 추적
 
         # Health Score 스무딩 — Raw Score에 EWMA 적용
-        self._health_ewma: dict[str, Any] = {}  # cell_id → EWMAForecaster
+        self._health_ewma: dict[str, EWMAForecaster] = {}
 
-        # CB 상태 변경 콜백 기반 카운터
-        self._cb_open_counts: dict[str, int] = {}
-        self._cb_total_counts: dict[str, int] = {}
+        # CB OPEN 전환 이벤트 기반 카운터
+        self._cb_open_counts: dict[str, int] = {}  # 현재 OPEN 상태 CB 수
+        self._cb_open_transition_counts: dict[str, int] = {}  # OPEN 전환 누적 횟수
 
         # Leader Handoff 감지
         self._leader_since: float | None = None
@@ -212,9 +219,16 @@ class CellHealthAggregator:
         Returns:
             (error_rate, latency_p99, total_requests) 또는 실패 시 None
         """
-        # Mini Circuit Breaker — 연속 실패 시 API 호출 건너뜀
+        # Mini Circuit Breaker (half-open 포함)
+        # 연속 실패 임계값 도달 시 폴백 모드, 일정 시간 후 1회 probe 시도
         if self._prometheus_consecutive_failures >= _PROMETHEUS_MAX_CONSECUTIVE_FAILURES:
-            return None
+            elapsed_since_failure = time.monotonic() - self._last_prometheus_failure_time
+            if elapsed_since_failure < _PROMETHEUS_RETRY_AFTER_SECONDS:
+                return None
+            logger.info(
+                "[CellHealthAggregator] Prometheus half-open probe " "(%.1fs since last failure)",
+                elapsed_since_failure,
+            )
 
         try:
             import httpx
@@ -257,6 +271,7 @@ class CellHealthAggregator:
 
         except Exception as e:
             self._prometheus_consecutive_failures += 1
+            self._last_prometheus_failure_time = time.monotonic()
             logger.warning(
                 "Prometheus API failed for %s " "(consecutive=%d): %s",
                 cell_id,
@@ -383,19 +398,28 @@ class CellHealthAggregator:
                 max_c = state.max_concurrent or 1
                 active = state.active_count or 0
                 return min(active / max_c, 1.0)
-        except Exception:
+        except ImportError:
             pass
+        except Exception as e:
+            logger.warning(
+                "[CellHealthAggregator] Bulkhead util query failed " "for %s: %s",
+                cell_id,
+                e,
+            )
         return 0.0
 
     def _get_cb_open_ratio(self, cell_id: str) -> float:
         """
-        CB 상태 변경 콜백 기반 Cell CB OPEN 비율 조회.
+        CB OPEN 전환 이벤트 기반 Cell CB OPEN 비율 조회.
+
+        비율 = 현재 OPEN CB 수 / OPEN 전환 누적 횟수.
+        시간 경과에 따라 분모가 증가하여 비율이 감쇠됩니다.
 
         CB 자동 전환(record_failure→OPEN, record_success→CLOSED) 감지.
         수동 제어(force_open/force_close)는 콜백 미호출이므로 감지 불가.
         """
         with self._lock:
-            total = self._cb_total_counts.get(cell_id, 0)
+            total = self._cb_open_transition_counts.get(cell_id, 0)
             open_count = self._cb_open_counts.get(cell_id, 0)
             return (open_count / total) if total > 0 else 0.0
 
@@ -403,8 +427,8 @@ class CellHealthAggregator:
         """
         CircuitBreakerService 상태 변경 콜백 등록.
 
-        _state_change_callbacks 활용:
-          {"open": [], "closed": [], "half_open": []}
+        register_state_change_callback() 공개 API를 사용하여
+        OPEN/CLOSED 전환 이벤트를 구독합니다.
 
         콜백은 동기 실행이므로 내부 로직을
         최대한 가볍게(dict increment만) 유지합니다.
@@ -422,15 +446,15 @@ class CellHealthAggregator:
                 cell_id = registry.get_cell_for_key(service_name)
                 with self._lock:
                     self._cb_open_counts[cell_id] = self._cb_open_counts.get(cell_id, 0) + 1
-                    self._cb_total_counts[cell_id] = self._cb_total_counts.get(cell_id, 0) + 1
+                    self._cb_open_transition_counts[cell_id] = self._cb_open_transition_counts.get(cell_id, 0) + 1
 
             def _on_cb_closed(service_name: str, old_state: str, new_state: str) -> None:
                 cell_id = registry.get_cell_for_key(service_name)
                 with self._lock:
                     self._cb_open_counts[cell_id] = max(0, self._cb_open_counts.get(cell_id, 0) - 1)
 
-            cb_service._state_change_callbacks["open"].append(_on_cb_opened)
-            cb_service._state_change_callbacks["closed"].append(_on_cb_closed)
+            cb_service.register_state_change_callback("open", _on_cb_opened)
+            cb_service.register_state_change_callback("closed", _on_cb_closed)
 
             logger.info("[CellHealthAggregator] CB state change callbacks registered")
         except Exception as e:
@@ -535,8 +559,10 @@ def setup_cell_health_scheduler() -> None:
     scheduler = get_leader_scheduler("cell-health-aggregator")
 
     # 리더 전환 이벤트 감지 — warmup 컨텍스트 기록
-    scheduler._elector.on_become_leader(aggregator.on_become_leader)
-    scheduler._elector.on_lose_leader(aggregator.on_lose_leader)
+    scheduler.register_leader_callbacks(
+        on_become=aggregator.on_become_leader,
+        on_lose=aggregator.on_lose_leader,
+    )
 
     @scheduler.job(
         interval_seconds=settings.health_check_interval_seconds,

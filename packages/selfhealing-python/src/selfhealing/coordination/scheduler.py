@@ -136,6 +136,26 @@ class LeaderScheduler:
         """등록된 작업 목록."""
         return self._jobs.copy()
 
+    def register_leader_callbacks(
+        self,
+        on_become: Callable[[], None] | None = None,
+        on_lose: Callable[[], None] | None = None,
+    ) -> None:
+        """
+        리더 전환 이벤트에 외부 콜백 등록.
+
+        LeaderElector의 on_become_leader/on_lose_leader에 콜백을 추가합니다.
+        스케줄러 내부 콜백과 별도로 실행됩니다.
+
+        Args:
+            on_become: 리더 획득 시 호출할 콜백
+            on_lose: 리더십 상실 시 호출할 콜백
+        """
+        if on_become is not None:
+            self._elector.on_become_leader(on_become)
+        if on_lose is not None:
+            self._elector.on_lose_leader(on_lose)
+
     def job(
         self,
         interval_seconds: float,
