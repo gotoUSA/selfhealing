@@ -206,19 +206,21 @@ class CellRegistry:
         """
         Consistent Hash Ring 구성.
 
-        각 Cell에 대해 가상 노드(vnode) 150개를 생성하여
+        각 Cell에 대해 가상 노드(vnode)를 생성하여
         균일 분배를 보장합니다.
+        Copy-on-Write 방식으로 새 리스트를 구성 후
+        원자적 참조 교체(GIL-safe)합니다.
         """
-        vnodes_per_cell = 150
         ring: list[tuple[int, str]] = []
 
         for cell_id in self._cells:
-            for vnode_idx in range(vnodes_per_cell):
+            for vnode_idx in range(VNODES_PER_CELL):
                 key = f"{cell_id}:vnode-{vnode_idx}"
                 hash_val = self._hash(key)
                 ring.append((hash_val, cell_id))
 
         ring.sort(key=lambda x: x[0])
+        # Atomic reference swap (GIL-safe)
         self._hash_ring = ring
 
     @staticmethod
@@ -368,6 +370,8 @@ class CellRegistry:
             from selfhealing.adapters.redis import get_redis_client
 
             redis = get_redis_client()
+            if redis is None:
+                return
             key = f"selfhealing:cell:{cell_id}:services"
             redis.zadd(key, {service_name: time.time()})
         except Exception as e:
@@ -392,6 +396,8 @@ class CellRegistry:
             from selfhealing.adapters.redis import get_redis_client
 
             redis = get_redis_client()
+            if redis is None:
+                return evicted
             key = f"selfhealing:cell:{cell_id}:services"
             cutoff = time.time() - ttl_seconds
 
@@ -458,6 +464,8 @@ class CellRegistry:
             from selfhealing.adapters.redis import get_redis_client
 
             redis = get_redis_client()
+            if redis is None:
+                return
             cell = self._cells.get(cell_id)
             if not cell:
                 return
@@ -492,6 +500,8 @@ class CellRegistry:
             from selfhealing.adapters.redis import get_redis_client
 
             redis = get_redis_client()
+            if redis is None:
+                return synced
             for cell_id in self._cells:
                 key = f"selfhealing:cell:state:{cell_id}"
                 data = redis.hgetall(key)
@@ -504,15 +514,8 @@ class CellRegistry:
                     if isinstance(state_str, bytes):
                         state_str = state_str.decode()
                     new_state = CellState(state_str)
-                    # Most Restrictive Wins (DriftReconciler 패턴)
-                    # ISOLATED(3) > DRAINING(2) > WARMUP(1) > ACTIVE(0)
-                    state_priority = {
-                        CellState.ACTIVE: 0,
-                        CellState.WARMUP: 1,
-                        CellState.DRAINING: 2,
-                        CellState.ISOLATED: 3,
-                    }
-                    if state_priority.get(new_state, 0) >= state_priority.get(
+                    # Most Restrictive Wins
+                    if CELL_STATE_PRIORITY.get(new_state, 0) >= CELL_STATE_PRIORITY.get(
                         cell.state, 0
                     ):
                         cell.state = new_state
@@ -942,7 +945,7 @@ def _build_hash_ring(self) -> None:
     # 새 리스트를 별도로 구성
     new_ring: list[tuple[int, str]] = []
     for cell_id in self._cells:
-        for vnode_idx in range(150):
+        for vnode_idx in range(VNODES_PER_CELL):
             key = f"{cell_id}:vnode-{vnode_idx}"
             new_ring.append((self._hash(key), cell_id))
     new_ring.sort(key=lambda x: x[0])

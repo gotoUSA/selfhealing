@@ -226,12 +226,14 @@ class TestCellRegistryStateBehavior:
 
     def test_get_active_cells_excludes_non_active(self, registry: CellRegistry):
         """get_active_cells는 ACTIVE 상태만 반환해야 한다."""
+        total_cells = len(registry.get_all_cells())
         registry.set_cell_state("cell-0", CellState.DRAINING, reason="test")
         registry.set_cell_state("cell-1", CellState.ISOLATED, reason="test")
+        excluded_count = 2
         active = registry.get_active_cells()
         assert "cell-0" not in active
         assert "cell-1" not in active
-        assert len(active) == 6  # 8 - 2
+        assert len(active) == total_cells - excluded_count
 
     def test_update_health_score_clamps_0_to_1(self, registry: CellRegistry):
         """건강도는 0.0~1.0 범위로 클램프되어야 한다."""
@@ -292,7 +294,8 @@ class TestCellRegistryDynamicScalingBehavior:
 
     def test_add_cells_creates_warmup_cells(self, registry: CellRegistry):
         """add_cells로 WARMUP 상태의 새 Cell이 추가되어야 한다."""
-        added = registry.add_cells(2)
+        with patch.object(registry, "_sync_state_to_redis"):
+            added = registry.add_cells(2)
         assert len(added) == 2
         assert "cell-8" in added
         assert "cell-9" in added
@@ -304,7 +307,8 @@ class TestCellRegistryDynamicScalingBehavior:
 
     def test_add_cells_sets_initial_warmup_percentage(self, registry: CellRegistry):
         """새 Cell의 warmup_percentage가 설정값과 일치해야 한다."""
-        added = registry.add_cells(1)
+        with patch.object(registry, "_sync_state_to_redis"):
+            added = registry.add_cells(1)
         info = registry.get_cell_info(added[0])
         assert info is not None
         expected = registry._settings.warmup_initial_percentage
@@ -313,19 +317,22 @@ class TestCellRegistryDynamicScalingBehavior:
     def test_add_cells_rebuilds_hash_ring(self, registry: CellRegistry):
         """Cell 추가 후 Hash Ring이 리빌딩되어야 한다."""
         old_ring_size = len(registry._hash_ring)
-        registry.add_cells(1)
+        with patch.object(registry, "_sync_state_to_redis"):
+            registry.add_cells(1)
         new_ring_size = len(registry._hash_ring)
         assert new_ring_size == old_ring_size + VNODES_PER_CELL
 
     def test_add_cells_increases_total_count(self, registry: CellRegistry):
         """Cell 추가 후 전체 Cell 수가 증가해야 한다."""
         initial_count = len(registry.get_all_cells())
-        registry.add_cells(3)
+        with patch.object(registry, "_sync_state_to_redis"):
+            registry.add_cells(3)
         assert len(registry.get_all_cells()) == initial_count + 3
 
     def test_remove_cells_transitions_to_draining(self, registry: CellRegistry):
         """remove_cells로 Cell이 DRAINING 상태로 전환되어야 한다."""
-        drained = registry.remove_cells(["cell-6", "cell-7"])
+        with patch.object(registry, "_sync_state_to_redis"):
+            drained = registry.remove_cells(["cell-6", "cell-7"])
         assert "cell-6" in drained
         assert "cell-7" in drained
 
@@ -336,7 +343,8 @@ class TestCellRegistryDynamicScalingBehavior:
 
     def test_remove_nonexistent_cell_returns_empty(self, registry: CellRegistry):
         """존재하지 않는 Cell 제거 시 빈 리스트를 반환해야 한다."""
-        drained = registry.remove_cells(["cell-999"])
+        with patch.object(registry, "_sync_state_to_redis"):
+            drained = registry.remove_cells(["cell-999"])
         assert drained == []
 
 
