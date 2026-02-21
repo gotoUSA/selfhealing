@@ -3,7 +3,7 @@
 > **Version**: 2.0.0
 > **Created**: 2026-02-22
 > **Updated**: 2026-02-22
-> **Status**: Planned
+> **Status**: Implemented
 > **Parent**: [250_CORRELATION_ENGINE_OVERVIEW.md](250_CORRELATION_ENGINE_OVERVIEW.md)
 > **Implements**: `meta/watchdog.py` — `_recover_redis()` 개선
 

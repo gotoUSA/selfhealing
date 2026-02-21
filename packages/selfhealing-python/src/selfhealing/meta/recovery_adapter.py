@@ -181,6 +181,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
         self._apps_v1: Any = None
         self._core_v1: Any = None
         self._is_available = False
+        self._resource_kind_cache: dict[str, str] = {}
         self._initialize_client()
 
     def _initialize_client(self) -> None:
@@ -206,14 +207,58 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
     def is_available(self) -> bool:
         return self._is_available
 
-    def restart_worker(self, worker_name: str) -> RecoveryResult:
+    def _detect_resource_kind(self, name: str) -> str:
         """
-        Celery Worker Pod 재시작 (Rolling restart via annotation).
+        워크로드 리소스 Kind를 감지하고 캐싱.
 
-        Deployment에 annotation 추가로 rolling restart를 트리거합니다.
+        탐색 체인: Deployment → StatefulSet
+        최초 1회 API 호출 후 캐싱하여 이후 호출에서는 API 미호출.
 
         Args:
-            worker_name: 워커(Deployment) 이름
+            name: 워크로드 이름
+
+        Returns:
+            "Deployment" 또는 "StatefulSet"
+
+        Raises:
+            Exception: 두 Kind 모두에서 리소스를 찾지 못한 경우
+        """
+        cache_key = f"{self._namespace}/{name}"
+        if cache_key in self._resource_kind_cache:
+            return self._resource_kind_cache[cache_key]
+
+        from kubernetes.client.exceptions import ApiException
+
+        # Deployment 탐색
+        try:
+            self._apps_v1.read_namespaced_deployment(name, self._namespace)
+            self._resource_kind_cache[cache_key] = "Deployment"
+            logger.debug(f"[KubernetesRecoveryAdapter] Detected {name} as Deployment")
+            return "Deployment"
+        except ApiException as e:
+            if e.status != 404:
+                raise
+
+        # StatefulSet 탐색
+        try:
+            self._apps_v1.read_namespaced_stateful_set(name, self._namespace)
+            self._resource_kind_cache[cache_key] = "StatefulSet"
+            logger.debug(f"[KubernetesRecoveryAdapter] Detected {name} as StatefulSet")
+            return "StatefulSet"
+        except ApiException as e:
+            if e.status != 404:
+                raise
+
+        raise Exception(f"Workload '{name}' not found as Deployment or StatefulSet " f"in namespace '{self._namespace}'")
+
+    def restart_worker(self, worker_name: str) -> RecoveryResult:
+        """
+        워크로드 Pod 재시작 (Rolling restart via annotation).
+
+        Deployment/StatefulSet을 자동 감지하여 annotation 패치로 rolling restart를 트리거합니다.
+
+        Args:
+            worker_name: 워크로드(Deployment/StatefulSet) 이름
 
         Returns:
             RecoveryResult
@@ -228,7 +273,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
             )
 
         try:
-            # Deployment에 annotation 추가로 rolling restart 트리거
+            self._validate_service_name(worker_name)
+
+            kind = self._detect_resource_kind(worker_name)
+
             patch = {
                 "spec": {
                     "template": {
@@ -238,17 +286,26 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                     }
                 }
             }
-            self._apps_v1.patch_namespaced_deployment(
-                name=worker_name,
-                namespace=self._namespace,
-                body=patch,
-            )
-            logger.info(f"[KubernetesRecoveryAdapter] Triggered restart: {worker_name}")
+
+            if kind == "Deployment":
+                self._apps_v1.patch_namespaced_deployment(
+                    name=worker_name,
+                    namespace=self._namespace,
+                    body=patch,
+                )
+            else:  # StatefulSet
+                self._apps_v1.patch_namespaced_stateful_set(
+                    name=worker_name,
+                    namespace=self._namespace,
+                    body=patch,
+                )
+
+            logger.info(f"[KubernetesRecoveryAdapter] Triggered restart: " f"{worker_name} ({kind})")
             return RecoveryResult(
                 action=RecoveryAction.RESTART_WORKER,
                 success=True,
                 target=worker_name,
-                message="Rolling restart triggered",
+                message=f"Rolling restart triggered ({kind})",
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:

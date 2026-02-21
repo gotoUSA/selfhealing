@@ -228,6 +228,8 @@ class TestKubernetesRecoveryAdapter:
         adapter = KubernetesRecoveryAdapter()
         adapter._is_available = True
         adapter._apps_v1 = mock.MagicMock()
+        # _detect_resource_kind() 캐시 프라이밍 — kubernetes 패키지 미설치 환경 대응
+        adapter._resource_kind_cache["selfhealing/celery-worker"] = "Deployment"
 
         result = adapter.restart_worker("celery-worker")
 

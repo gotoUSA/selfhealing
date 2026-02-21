@@ -101,6 +101,23 @@ class MetaWatchdogSettings(BaseSettings):
         ge=60.0,
     )
 
+    # 복구 쿨다운 설정
+    recovery_cooldown_seconds: float = Field(
+        default=300.0,
+        description="동일 컴포넌트 복구 시도 쿨다운 (초, 기본 5분)",
+        ge=30.0,
+    )
+
+    # 워크로드 이름 설정 (K8s Deployment/StatefulSet 이름)
+    redis_workload_name: str = Field(
+        default="redis",
+        description="Redis Deployment/StatefulSet 이름 (K8s 리소스명)",
+    )
+    dlq_worker_workload_name: str = Field(
+        default="celery-dlq-worker",
+        description="DLQ Worker Deployment 이름 (K8s 리소스명)",
+    )
+
     # PagerDuty 설정
     pagerduty_routing_key: str | None = Field(
         default=None,

@@ -116,6 +116,9 @@ class SelfHealerWatchdog:
         self._self_cb_open_time: float = 0
         self._self_cb_failure_count = 0
 
+        # Recovery 쿨다운 추적
+        self._last_recovery_time: dict[str, float] = {}
+
     def _should_skip_due_to_self_cb(self) -> bool:
         """
         Self-Healing CB 상태 확인.
@@ -254,6 +257,7 @@ class SelfHealerWatchdog:
         자동 복구 시도 (Audit 연동).
 
         복구 전후에 RecoveryAuditRecorder를 통해 감사 로그를 기록합니다.
+        동일 컴포넌트에 대해 recovery_cooldown_seconds 내 재시도를 차단합니다.
 
         Args:
             component: 컴포넌트 이름
@@ -262,7 +266,16 @@ class SelfHealerWatchdog:
         Returns:
             복구 성공 여부
         """
-        start_time = time.time()
+        # === 쿨다운 확인 ===
+        now = time.time()
+        last_time = self._last_recovery_time.get(component, 0.0)
+        elapsed = now - last_time
+        if elapsed < self._settings.recovery_cooldown_seconds:
+            remaining = self._settings.recovery_cooldown_seconds - elapsed
+            logger.info(f"[SelfHealerWatchdog] Recovery cooldown active for {component}: " f"{remaining:.0f}s remaining")
+            return False
+
+        start_time = now
         success = False
         session_id = f"meta-watchdog-{component}-{int(start_time)}"
 
@@ -286,6 +299,9 @@ class SelfHealerWatchdog:
                 logger.debug(f"[SelfHealerWatchdog] No recovery action for {component}")
                 return False
 
+            # 복구 시도 후 타임스탬프 기록 (성공/실패 무관)
+            self._last_recovery_time[component] = start_time
+
             duration_ms = (time.time() - start_time) * 1000
 
             # 복구 완료/실패 Audit
@@ -299,6 +315,9 @@ class SelfHealerWatchdog:
             return success
 
         except Exception as e:
+            # 복구 시도 후 타임스탬프 기록 (성공/실패 무관)
+            self._last_recovery_time[component] = start_time
+
             duration_ms = (time.time() - start_time) * 1000
 
             # 복구 실패 Audit
@@ -463,7 +482,7 @@ class SelfHealerWatchdog:
                 from selfhealing.meta.recovery_adapter import get_recovery_adapter
 
                 adapter = get_recovery_adapter()
-                result = adapter.restart_worker("celery-dlq-worker")
+                result = adapter.restart_worker(self._settings.dlq_worker_workload_name)
                 return result.success
             except ImportError:
                 pass
@@ -475,9 +494,14 @@ class SelfHealerWatchdog:
 
     def _recover_redis(self, result: ProbeResult) -> bool:
         """
-        Redis 연결 복구.
+        Redis 연결 복구 — 2단계 전략.
 
-        연결 풀 리셋을 통해 연결 복구를 시도합니다.
+        Stage 1: ProviderRegistry 싱글톤의 커넥션 풀 리셋 (소프트 복구)
+        Stage 2: RecoveryAdapter를 통한 인프라 재시작 (하드 복구)
+
+        예외 세분화:
+        - ConnectionError, TimeoutError, BusyLoadingError → Stage 2 진행
+        - AuthenticationError, ResponseError 등 → Stage 2 스킵 (재시작 무의미)
 
         Args:
             result: 프로브 결과
@@ -485,24 +509,55 @@ class SelfHealerWatchdog:
         Returns:
             복구 성공 여부
         """
+        # === Stage 1: 진성 커넥션 풀 복구 ===
         try:
-            # Redis 연결 풀 리셋 시도
-            logger.info("[SelfHealerWatchdog] Redis connection reset")
+            logger.info("[SelfHealerWatchdog] Redis recovery Stage 1: connection pool reset")
 
-            # RedisCacheAdapter 재초기화
-            try:
-                from selfhealing.adapters.cache.redis_adapter import RedisCacheAdapter
+            from selfhealing.factory import ProviderRegistry
 
-                # 새 어댑터 생성으로 연결 갱신
-                adapter = RedisCacheAdapter()
-                adapter._redis.ping()
+            adapter = ProviderRegistry.get_cache("redis")
+            if adapter.reconnect():
+                logger.info("[SelfHealerWatchdog] Redis Stage 1 success: " "connection pool restored")
                 return True
-            except Exception:
-                pass
+            # reconnect()가 False 반환 — ping 실패
+            logger.warning("[SelfHealerWatchdog] Redis Stage 1 failed: reconnect returned False")
+        except ImportError:
+            logger.warning("[SelfHealerWatchdog] ProviderRegistry not available")
+        except Exception as e:
+            import redis as redis_lib
 
+            _INFRA_RECOVERABLE_ERRORS = (
+                redis_lib.exceptions.ConnectionError,
+                redis_lib.exceptions.TimeoutError,
+                redis_lib.exceptions.BusyLoadingError,
+            )
+
+            if isinstance(e, _INFRA_RECOVERABLE_ERRORS):
+                logger.warning(
+                    f"[SelfHealerWatchdog] Redis Stage 1 failed (recoverable): {e}, "
+                    "proceeding to Stage 2 (infrastructure restart)"
+                )
+            else:
+                logger.error(f"[SelfHealerWatchdog] Redis Stage 1 failed " f"(non-recoverable, skip Stage 2): {e}")
+                return False
+
+        # === Stage 2: RecoveryAdapter 인프라 재시작 ===
+        try:
+            from selfhealing.meta.recovery_adapter import get_recovery_adapter
+
+            recovery_adapter = get_recovery_adapter()
+            workload_name = self._settings.redis_workload_name
+            recovery_result = recovery_adapter.restart_worker(workload_name)
+            if recovery_result.success:
+                logger.info("[SelfHealerWatchdog] Redis Stage 2 success: " f"{recovery_result.message}")
+            else:
+                logger.error("[SelfHealerWatchdog] Redis Stage 2 failed: " f"{recovery_result.message}")
+            return recovery_result.success
+        except ImportError:
+            logger.warning("[SelfHealerWatchdog] RecoveryAdapter not available")
             return False
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] Redis recovery error: {e}")
+            logger.error(f"[SelfHealerWatchdog] Redis Stage 2 error: {e}")
             return False
 
     def _recover_recovery_pipeline(self, result: ProbeResult) -> bool:

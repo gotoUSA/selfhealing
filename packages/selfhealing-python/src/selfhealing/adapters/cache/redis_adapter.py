@@ -128,9 +128,7 @@ class RedisDistributedLock(DistributedLock):
             LockNotOwnedError: If lock is not owned by this instance
         """
         if not self._acquired:
-            logger.warning(
-                f"[RedisLock] Attempting to release non-acquired lock: {self._name}"
-            )
+            logger.warning(f"[RedisLock] Attempting to release non-acquired lock: {self._name}")
             return
 
         # Lua script for atomic check-and-delete
@@ -196,9 +194,7 @@ class RedisDistributedLock(DistributedLock):
         """
 
         try:
-            result = self._redis.eval(
-                lua_script, 1, self._name, self._owner_id, additional_ms
-            )
+            result = self._redis.eval(lua_script, 1, self._name, self._owner_id, additional_ms)
             return result == 1
         except Exception as e:
             logger.error(f"[RedisLock] Error extending lock: {e}")
@@ -460,9 +456,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             return True
 
         try:
-            prefixed_mapping = {
-                self._make_key(k): self._serialize(v) for k, v in mapping.items()
-            }
+            prefixed_mapping = {self._make_key(k): self._serialize(v) for k, v in mapping.items()}
 
             # MSET doesn't support TTL, so we use pipeline
             if ttl:
@@ -574,14 +568,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             raw_keys = self._redis.keys(full_pattern)
             # Remove prefix from returned keys
             prefix_len = len(self._key_prefix)
-            return [
-                (
-                    k.decode("utf-8")[prefix_len:]
-                    if isinstance(k, bytes)
-                    else k[prefix_len:]
-                )
-                for k in raw_keys
-            ]
+            return [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
         except Exception as e:
             logger.error(f"[RedisCache] Keys error for {pattern}: {e}")
             return []
@@ -596,15 +583,25 @@ class RedisCacheAdapter(CacheProviderInterface):
             full_pattern = self._make_key(pattern)
             cursor, raw_keys = self._redis.scan(0, match=full_pattern, count=count)
             prefix_len = len(self._key_prefix)
-            keys = [
-                (
-                    k.decode("utf-8")[prefix_len:]
-                    if isinstance(k, bytes)
-                    else k[prefix_len:]
-                )
-                for k in raw_keys
-            ]
+            keys = [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
             return (cursor, keys)
         except Exception as e:
             logger.error(f"[RedisCache] Scan error for {pattern}: {e}")
             return (0, [])
+
+    def reconnect(self) -> bool:
+        """
+        커넥션 풀 리셋 — 기존 dead 커넥션 해제 후 재연결.
+
+        redis-py의 ConnectionPool.disconnect()는 풀 내 모든 커넥션을 닫는다.
+        이후 ping() 호출 시 풀이 자동으로 새 커넥션을 생성한다.
+
+        Returns:
+            재연결 성공 여부
+        """
+        try:
+            self._redis.connection_pool.disconnect()
+            return self._redis.ping()
+        except Exception as e:
+            logger.error(f"[RedisCache] Reconnect failed: {e}")
+            return False
