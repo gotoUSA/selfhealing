@@ -82,6 +82,11 @@ from selfhealing.settings.cascade_retention import (
     get_cascade_retention_settings,
     reset_cascade_retention_settings,
 )
+from selfhealing.settings.cell_topology import (
+    CellTopologySettings,
+    get_cell_topology_settings,
+    reset_cell_topology_settings,
+)
 from selfhealing.settings.celery_task import (
     CeleryTaskSettings,
     get_celery_task_settings,
@@ -589,6 +594,10 @@ __all__ = [
     "AuditSettings",
     "get_audit_settings",
     "reset_audit_settings",
+    # Cell Topology
+    "CellTopologySettings",
+    "get_cell_topology_settings",
+    "reset_cell_topology_settings",
     # Celery Task
     "CeleryTaskSettings",
     "get_celery_task_settings",
