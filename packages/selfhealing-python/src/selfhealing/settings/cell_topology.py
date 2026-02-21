@@ -11,6 +11,12 @@ Environment Variables:
     SELFHEALING_CELL_TOPOLOGY_CELL_PREFIX=cell
     SELFHEALING_CELL_TOPOLOGY_BULKHEAD_ISOLATION_ENABLED=false
     SELFHEALING_CELL_TOPOLOGY_BULKHEAD_MAX_CONCURRENT_PER_CELL=100
+    SELFHEALING_CELL_TOPOLOGY_EVACUATION_HEALTH_THRESHOLD=0.3
+    SELFHEALING_CELL_TOPOLOGY_RECOVERY_HEALTH_THRESHOLD=0.7
+    SELFHEALING_CELL_TOPOLOGY_EVACUATION_CONSECUTIVE_COUNT=3
+    SELFHEALING_CELL_TOPOLOGY_RECOVERY_CONSECUTIVE_COUNT=5
+    SELFHEALING_CELL_TOPOLOGY_EVACUATION_DRAIN_GRACE_SECONDS=2.0
+    SELFHEALING_CELL_TOPOLOGY_MAX_EVACUATED_RATIO=0.25
     SELFHEALING_CELL_TOPOLOGY_WARMUP_INITIAL_PERCENTAGE=10.0
     SELFHEALING_CELL_TOPOLOGY_RECONCILIATION_INTERVAL_SECONDS=15.0
     SELFHEALING_CELL_TOPOLOGY_SERVICE_HEARTBEAT_TTL_SECONDS=300.0
@@ -98,7 +104,28 @@ class CellTopologySettings(BaseSettings):
         default=0.3,
         ge=0.0,
         le=1.0,
-        description="대피 트리거 건강도 임계값 (이 값 미만이면 대피 시작)",
+        description="대피 트리거 건강도 임계값 (이 값 이하이면 대피 카운터 증가)",
+    )
+
+    recovery_health_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="복구 트리거 건강도 임계값 (이 값 이상이면 복구 카운터 증가)",
+    )
+
+    evacuation_consecutive_count: int = Field(
+        default=3,
+        ge=1,
+        le=30,
+        description="연속 N회 임계치 이하 시 대피 트리거 (히스테리시스)",
+    )
+
+    recovery_consecutive_count: int = Field(
+        default=5,
+        ge=1,
+        le=30,
+        description="연속 N회 임계치 이상 시 자동 복구 트리거 (히스테리시스)",
     )
 
     evacuation_traffic_drain_seconds: int = Field(
@@ -106,6 +133,20 @@ class CellTopologySettings(BaseSettings):
         ge=1,
         le=600,
         description="트래픽 드레인 대기 시간 (초)",
+    )
+
+    evacuation_drain_grace_seconds: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=30.0,
+        description="NTP Drift 허용 버퍼 (초). 드레인 시간 경과 판단 시 추가 여유.",
+    )
+
+    max_evacuated_ratio: float = Field(
+        default=0.25,
+        ge=0.0,
+        le=1.0,
+        description=("전체 Cell 중 최대 격리 허용 비율 (Cascading Failure 방지). " "예: 0.25 → 8 Cell 기준 최대 2개만 격리"),
     )
 
     health_check_interval_seconds: int = Field(
