@@ -132,6 +132,13 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     # ==========================================================================
+    # [6.5] Cell Tagging Middleware (Cell Topology — Cell 단위 트래픽 태깅)
+    # ==========================================================================
+    # AuthenticationMiddleware + SessionMiddleware 이후 배치
+    # → request.user.pk, request.session.session_key 접근 가능
+    # 비활성화: SELFHEALING_CELL_TOPOLOGY_ENABLED=false 또는 SELFHEALING_CELL_TAGGING_ENABLED=false
+    "selfhealing.api.django.cell.middleware.CellTaggingMiddleware",
+    # ==========================================================================
     # [7] Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback)
     # ==========================================================================
     "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",

@@ -507,7 +507,7 @@ from celery.signals import before_task_publish, task_prerun, task_postrun
 logger = logging.getLogger(__name__)
 
 # kwargs에서 추출할 라우팅 키 (우선순위 순)
-_CELERY_ROUTING_KEYS = [
+CELERY_ROUTING_KEYS = [
     "service_name",   # CB, Postmortem 태스크
     "namespace",      # Recovery, Incident 태스크
     "domain",         # DLQ Replay 태스크
@@ -530,7 +530,7 @@ def _extract_routing_key(kwargs: dict[str, Any]) -> tuple[str, str] | None:
         사용하므로 단순 dict.get()으로 충분하다.
         향후 중첩 구조 도입 시 이 함수 내부만 수정하면 된다.
     """
-    for key in _CELERY_ROUTING_KEYS:
+    for key in CELERY_ROUTING_KEYS:
         value = kwargs.get(key)
         if value is not None:
             return (key, str(value))
@@ -598,7 +598,7 @@ def add_cell_id_to_task(
 
 
 @task_prerun.connect
-def extract_cell_id(task=None, **kwargs) -> None:
+def extract_cell_id_on_prerun(task=None, **kwargs) -> None:
     """
     태스크 실행 전 cell_id를 ContextVar에 설정.
 
@@ -615,7 +615,7 @@ def extract_cell_id(task=None, **kwargs) -> None:
 
 
 @task_postrun.connect
-def clear_cell_id(task=None, **kwargs) -> None:
+def clear_cell_id_on_postrun(task=None, **kwargs) -> None:
     """태스크 종료 후 ContextVar 정리."""
     try:
         token = getattr(task, "_cell_id_token", None)

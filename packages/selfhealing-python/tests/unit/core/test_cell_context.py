@@ -19,14 +19,6 @@ from selfhealing.context.cell_context import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _reset_cell_context():
-    """테스트 간 ContextVar 상태 초기화."""
-    token = _current_cell_id.set(None)
-    yield
-    _current_cell_id.reset(token)
-
-
 class TestCellContextContract:
     """Cell Context 계약 검증."""
 

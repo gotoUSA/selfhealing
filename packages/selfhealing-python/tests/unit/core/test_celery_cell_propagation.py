@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.context.cell_context import _current_cell_id, get_current_cell_id
 from selfhealing.context.celery_cell_propagation import (
     CELERY_ROUTING_KEYS,
@@ -23,14 +21,6 @@ from selfhealing.context.celery_cell_propagation import (
     clear_cell_id_on_postrun,
     extract_cell_id_on_prerun,
 )
-
-
-@pytest.fixture(autouse=True)
-def _reset_cell_context():
-    """테스트 간 ContextVar 상태 초기화."""
-    token = _current_cell_id.set(None)
-    yield
-    _current_cell_id.reset(token)
 
 
 class TestExtractRoutingKeyContract:
