@@ -30,6 +30,7 @@ from selfhealing.multiregion.config import (
     get_multiregion_settings,
 )
 from selfhealing.multiregion.health_monitor import (
+    RegionHealth,
     RegionHealthMonitor,
     RegionHealthStatus,
 )
@@ -547,7 +548,7 @@ class RegionFailover:
             # Secondary: Primary 건강 감시 → 승격 시도
             self._check_primary_and_promote(all_health)
 
-    def _check_primary_and_promote(self, all_health: dict[str, Any]) -> None:
+    def _check_primary_and_promote(self, all_health: dict[str, RegionHealth]) -> None:
         """
         Secondary 리전에서 Primary 장애 감지 시 승격을 시도.
 

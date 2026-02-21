@@ -901,15 +901,17 @@ def publish(self, event, propagate_to_redis=True):
 크리티컬 이벤트 판별:
 
 ```python
-_CRITICAL_EVENT_TYPES = {
-    EventType.REGION_PRIMARY_CHANGED,
-    EventType.EMERGENCY_ACTIVATED,
-    EventType.EMERGENCY_DEACTIVATED,
-    EventType.KILL_SWITCH_ACTIVATED,
-}
+CRITICAL_EVENT_TYPES: frozenset[EventType] = frozenset(
+    {
+        EventType.REGION_PRIMARY_CHANGED,
+        EventType.EMERGENCY_ACTIVATED,
+        EventType.EMERGENCY_DEACTIVATED,
+        EventType.KILL_SWITCH_ACTIVATED,
+    }
+)
 
 def _is_critical_event(self, event: SelfHealingEvent) -> bool:
-    return event.event_type in self._CRITICAL_EVENT_TYPES
+    return event.event_type in CRITICAL_EVENT_TYPES
 ```
 
 ### 5.4 Kafka MirrorMaker2 토픽 추가
