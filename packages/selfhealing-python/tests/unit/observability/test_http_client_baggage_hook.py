@@ -4,12 +4,15 @@ SelfHealingHttpClient Baggage Pre-request Hook 단위 테스트.
 대상: selfhealing.services.http_client.SelfHealingHttpClient._execute_request
 검증:
 - 수동 Deadline 헤더 주입이 제거되었는지
-- Pre-request Baggage 동기화가 수행되는지
+- Pre-request Baggage 동기화가 내부 URL에서 수행되는지
 """
 
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+
+# Trust Boundary 필터를 통과하는 내부 서비스 URL
+_INTERNAL_TEST_URL = "http://order-svc.default.svc.cluster.local/api"
 
 
 class TestHttpClientDeadlineHeaderRemovalContract:
@@ -69,8 +72,12 @@ class TestHttpClientBaggagePreRequestHookBehavior:
             patch("selfhealing.observability.baggage.sync_contextvars_to_baggage", side_effect=mock_sync),
             patch("selfhealing.observability.baggage.detach_baggage_token"),
             patch("requests.get", return_value=MagicMock(status_code=200)),
+            patch(
+                "selfhealing.settings.cell_topology.get_cell_topology_settings",
+                return_value=MagicMock(internal_dns_suffixes=[".svc.cluster.local", ".internal"]),
+            ),
         ):
-            client.get("http://example.com/api")
+            client.get(_INTERNAL_TEST_URL)
 
         assert sync_called is True
 
@@ -96,8 +103,12 @@ class TestHttpClientBaggagePreRequestHookBehavior:
                 side_effect=mock_detach,
             ),
             patch("requests.get", return_value=MagicMock(status_code=200)),
+            patch(
+                "selfhealing.settings.cell_topology.get_cell_topology_settings",
+                return_value=MagicMock(internal_dns_suffixes=[".svc.cluster.local", ".internal"]),
+            ),
         ):
-            client.get("http://example.com/api")
+            client.get(_INTERNAL_TEST_URL)
 
         assert detached_token is sentinel_token
 
@@ -123,8 +134,12 @@ class TestHttpClientBaggagePreRequestHookBehavior:
                 side_effect=mock_detach,
             ),
             patch("requests.get", side_effect=ConnectionError("timeout")),
+            patch(
+                "selfhealing.settings.cell_topology.get_cell_topology_settings",
+                return_value=MagicMock(internal_dns_suffixes=[".svc.cluster.local", ".internal"]),
+            ),
         ):
             with pytest.raises(ConnectionError):
-                client.get("http://example.com/api")
+                client.get(_INTERNAL_TEST_URL)
 
         assert detach_called is True

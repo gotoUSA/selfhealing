@@ -236,6 +236,32 @@ class CellTopologySettings(BaseSettings):
         description="서비스 Heartbeat 만료 시간 (초). 기본 5분.",
     )
 
+    # ==========================================================================
+    # Trust Boundary 제어
+    # ==========================================================================
+    internal_dns_suffixes: list[str] = Field(
+        default=[".svc.cluster.local", ".internal"],
+        description=(
+            "내부 서비스로 간주할 DNS 접미사. "
+            "이 접미사에 해당하는 호스트에만 OTel Baggage(cell_id 등)를 전파한다. "
+            "예: Kubernetes 환경에서 .svc.cluster.local"
+        ),
+    )
+
+    trusted_source_cidrs: list[str] = Field(
+        default=[
+            "10.0.0.0/8",  # RFC 1918 Class A — K8s Pod/Service CIDR 기본값
+            "172.16.0.0/12",  # RFC 1918 Class B
+            "192.168.0.0/16",  # RFC 1918 Class C
+            "127.0.0.0/8",  # Loopback (개발 환경)
+        ],
+        description=(
+            "cell_id 전파를 신뢰할 소스 CIDR 목록. "
+            "이 대역에서 온 요청만 상위 서비스의 cell_id를 수용한다. "
+            "퍼블릭 인터넷에서 온 요청은 로컬 해싱으로 폴백."
+        ),
+    )
+
 
 # =============================================================================
 # Singleton

@@ -120,6 +120,21 @@ class TestCellTopologySettingsContract:
         settings = CellTopologySettings()
         assert settings.service_heartbeat_ttl_seconds == pytest.approx(300.0)
 
+    def test_internal_dns_suffixes_default(self):
+        """내부 DNS 접미사 기본값: ['.svc.cluster.local', '.internal']."""
+        settings = CellTopologySettings()
+        assert settings.internal_dns_suffixes == [".svc.cluster.local", ".internal"]
+
+    def test_trusted_source_cidrs_default(self):
+        """신뢰 소스 CIDR 기본값: RFC 1918 사설 대역 + Loopback."""
+        settings = CellTopologySettings()
+        assert settings.trusted_source_cidrs == [
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "127.0.0.0/8",
+        ]
+
 
 class TestCellTopologySettingsBehavior:
     """CellTopologySettings 동작 검증."""

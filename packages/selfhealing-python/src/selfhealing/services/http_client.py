@@ -20,6 +20,12 @@ from selfhealing.settings.http_client import get_http_client_settings
 
 logger = logging.getLogger(__name__)
 
+# Kubernetes / 내부 DNS 기본 접미사 — Settings 로드 실패 시 폴백
+_DEFAULT_INTERNAL_DNS_SUFFIXES = (
+    ".svc.cluster.local",
+    ".internal",
+)
+
 # Context variable for chaos experiment status
 _is_chaos_request: ContextVar[bool] = ContextVar("is_chaos_request", default=False)
 
@@ -101,6 +107,7 @@ class SelfHealingHttpClient:
         base_headers: dict[str, str] | None = None,
         timeout: float | None = None,
         suppress_internal_spans: bool = False,
+        propagate_context: bool = True,
     ):
         """
         초기화.
@@ -109,12 +116,16 @@ class SelfHealingHttpClient:
             base_headers: 모든 요청에 포함할 기본 헤더
             timeout: 기본 타임아웃 (초). None이면 Settings에서 로드.
             suppress_internal_spans: 내부 호출 시 OTEL span 생성 억제 여부
+            propagate_context: OTel Baggage(cell_id 등) 전파 여부.
+                True(기본)이면 DNS suffix 매칭으로 내부 서비스에만 전파.
+                False이면 모든 요청에서 Baggage 전파를 차단.
         """
         _settings = get_http_client_settings()
         self.base_headers = base_headers or {}
         self.default_timeout = timeout if timeout is not None else _settings.default_timeout
         self._experiment_id: str | None = None
         self._suppress_internal_spans = suppress_internal_spans
+        self._propagate_context = propagate_context
 
     def _get_headers(
         self,
@@ -189,14 +200,17 @@ class SelfHealingHttpClient:
 
         request_func = getattr(req_lib, method.lower())
 
-        # Pre-request: ContextVar → Baggage 재동기화
-        # 비즈니스 로직에서 ContextVar가 중간 변경된 경우 최신값을 반영
-        from selfhealing.observability.baggage import (
-            detach_baggage_token,
-            sync_contextvars_to_baggage,
-        )
+        # Trust Boundary 필터링 — 내부 서비스에만 Baggage 전파
+        if self._should_propagate_context(url):
+            from selfhealing.observability.baggage import (
+                detach_baggage_token,
+                sync_contextvars_to_baggage,
+            )
 
-        baggage_token = sync_contextvars_to_baggage()
+            baggage_token = sync_contextvars_to_baggage()
+        else:
+            baggage_token = None
+
         try:
             if self._suppress_internal_spans and _is_otel_enabled():
                 with suppress_otel_instrumentation():
@@ -204,7 +218,40 @@ class SelfHealingHttpClient:
 
             return request_func(url, headers=headers, timeout=timeout, **kwargs)
         finally:
-            detach_baggage_token(baggage_token)
+            if baggage_token is not None:
+                from selfhealing.observability.baggage import detach_baggage_token
+
+                detach_baggage_token(baggage_token)
+
+    def _should_propagate_context(self, url: str) -> bool:
+        """
+        Trust Boundary 판별 — 내부 서비스에만 컨텍스트 전파.
+
+        계층적 결정:
+        1. propagate_context=False (명시적) → 무조건 차단
+        2. propagate_context=True → DNS suffix 매칭으로 자동 판별
+        """
+        if not self._propagate_context:
+            return False
+
+        try:
+            from urllib.parse import urlparse
+
+            hostname = urlparse(url).hostname
+            if not hostname:
+                return False
+
+            from selfhealing.settings.cell_topology import get_cell_topology_settings
+
+            settings = get_cell_topology_settings()
+            suffixes = getattr(settings, "internal_dns_suffixes", None)
+            if suffixes is None:
+                suffixes = _DEFAULT_INTERNAL_DNS_SUFFIXES
+
+            return any(hostname.endswith(suffix) for suffix in suffixes)
+        except Exception:
+            # 파싱 실패 시 안전하게 차단 (Fail-Closed)
+            return False
 
     def get(
         self,
