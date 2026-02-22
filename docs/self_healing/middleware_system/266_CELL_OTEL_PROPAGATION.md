@@ -41,9 +41,11 @@ HTTP 클라이언트, Celery 시그널, 미들웨어를 모두 개별 수정해�
 [Service A]                          [Service B]
 ContextVar들 → OTel Baggage 통합  →  W3C baggage 헤더로 자동 전파  →  ContextVar 복원
   _current_cell_id                     baggage: selfhealing.cell_id=cell-3,
-  _current_domain                               selfhealing.domain=payment,
-  _request_deadline                              selfhealing.deadline_remaining=450
+  _current_domain                               selfhealing.domain=payment
 ```
+
+> **Phase 3 (후속)**: `_request_deadline` → `selfhealing.deadline_remaining` Baggage 통합은
+> 270_CELERY_CONTEXT_CONSOLIDATION에서 Celery 컨텍스트와 함께 처리한다.
 
 ---
 
@@ -453,7 +455,12 @@ def _get_headers(self, extra_headers=None):
 `X-Chaos-Experiment-Id`)는 OTel Baggage 전파 대상이 아니다.
 이는 테스트 인프라 전용 메커니즘이므로 그대로 유지한다.
 
-**수신 측 변경**:
+**수신 측 변경 (후속 — 270에서 처리)**:
+
+> 아래 `resolve_deadline_from_request()` 는 **Phase 3** 설계 참조용이다.
+> 현재 구현에서 deadline은 Baggage 매핑에 포함되지 않으며,
+> 수신 측(`admission_control.py`)은 기존 `X-Deadline-Remaining` 헤더를 그대로 사용한다.
+> SelfHealingHttpClient 간 deadline 전파는 270에서 Baggage 매핑 추가 시 복원된다.
 
 수신 측에서 `X-Deadline-Remaining` 커스텀 헤더를 읽는 코드는
 Baggage에서 읽도록 변경한다. 레거시 Fallback 없이 Baggage만 사용:
@@ -522,10 +529,10 @@ def _sync_and_request(self, method, url, **kwargs):
 |--------|------|----------|
 | `opentelemetry-api` | `baggage`, `propagate` 모듈 | ✅ 이미 설치됨 |
 | `opentelemetry-sdk` | TracerProvider | ✅ 이미 설치됨 |
-| `opentelemetry-instrumentation-django` | `DjangoInstrumentor` | ❓ 설치 확인 필요 |
+| `opentelemetry-instrumentation-django` | `DjangoInstrumentor` | ✅ pyproject.toml에 포함 |
 | Baggage Propagator | `W3CBaggagePropagator` | `opentelemetry-api`에 포함 |
 
-`opentelemetry-instrumentation-django`가 미설치 시 `requirements.txt`에 추가.
+`opentelemetry-instrumentation-django`는 이미 `pyproject.toml`에 포함되어 있다.
 
 ---
 

@@ -145,8 +145,9 @@ class SelfHealingHttpClient:
             if self._experiment_id:
                 headers[CHAOS_EXPERIMENT_ID_HEADER] = self._experiment_id
 
-        # Deadline 헤더 전파는 OTel Baggage로 대체됨
-        # (observability/baggage.py sync_contextvars_to_baggage → W3C baggage 헤더 자동 전파)
+        # Deadline 헤더 수동 전파 제거 (266)
+        # - 수신 측(admission_control.py)은 외부 게이트웨이의 X-Deadline-Remaining 헤더를 직접 사용
+        # - SelfHealingHttpClient 간 deadline Baggage 전파는 270에서 추가 예정
 
         return headers
 
