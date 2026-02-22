@@ -7,10 +7,11 @@ Mock Deployment Adapter.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
+
+import structlog
 
 from .base import (
     DeploymentConfigChange,

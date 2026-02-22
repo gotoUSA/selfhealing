@@ -31,9 +31,10 @@ Usage in settings.py:
 
 from __future__ import annotations
 
-import structlog
 import os
 from typing import TYPE_CHECKING, Callable
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse

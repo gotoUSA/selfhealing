@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -126,7 +125,8 @@ class RateLimitSettings(BaseSettings):
         """Emergency rate limit should be conservative."""
         if v > 50:
             logger.warning(
-                f"[SafeDefault] High emergency_rate_limit={v}, " "consider using <= 50 for safety during Redis failures"
+                "safe_default.high_consider_using_safety",
+                v=v,
             )
         return v
 

@@ -6,8 +6,9 @@ Provides methods for audit logging and notifications with Fail-Open principle.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

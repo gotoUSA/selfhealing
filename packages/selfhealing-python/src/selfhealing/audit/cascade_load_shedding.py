@@ -36,12 +36,13 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.cascade_config import (
     AuditBackpressureConfig,
@@ -249,9 +250,10 @@ class CascadeLoadShedding:
         self._metrics.last_shedding_time = datetime.now(timezone.utc).isoformat()
 
         logger.warning(
-            f"[CascadeLoadShedding] Event dropped: "
-            f"priority={priority.name}, reason={reason}, "
-            f"buffer_ratio={buffer_ratio:.2%}"
+            "cascade_load_shedding.event_dropped",
+            priority=priority.name,
+            reason=reason,
+            buffer_ratio=buffer_ratio,
         )
 
         return {

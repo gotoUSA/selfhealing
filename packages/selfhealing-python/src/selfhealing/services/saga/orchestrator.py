@@ -18,11 +18,13 @@ Saga Orchestrator.
 from __future__ import annotations
 
 import json
-import structlog
 import uuid
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable
+
+import structlog
 
 from selfhealing.services.coordination.recovery_coordinator import (
     SessionVersionConflictError,
@@ -739,7 +741,7 @@ class SagaOrchestrator:
 
         except Exception as e:
             # Redis 장애/타임아웃: Split-brain 방지를 위해 re-raise
-            logger.error(
+            logger.exception(
                 "[Saga] _save_instance failed — Fail-fast",
                 extra={
                     "instance_id": instance.id,
@@ -762,7 +764,7 @@ class SagaOrchestrator:
                 data = json.loads(data)
             return SagaInstance.from_dict(data)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[Saga] _load_instance failed",
                 extra={"instance_id": instance_id, "error": str(e)},
             )

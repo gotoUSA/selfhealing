@@ -15,7 +15,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -97,8 +96,8 @@ class AuditWatchdogSettings(BaseSettings):
         """heartbeat 주기가 너무 짧으면 경고."""
         if v < 15.0:
             logger.warning(
-                f"[AuditWatchdogSettings] Low heartbeat_interval={v}s, "
-                "consider using >= 15s to reduce overhead"
+                "audit_watchdog_settings.low_consider_using_reduce",
+                v=v,
             )
         return v
 

@@ -22,7 +22,6 @@ Security:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -112,8 +111,10 @@ class RateLimitStatusView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] Rate limit status: mode={mode}, "
-            f"redis_healthy={health_checker.is_healthy}, active_clients={active_clients}"
+            "test_mode_rate_limit",
+            mode=mode,
+            health_checker=health_checker.is_healthy,
+            active_clients=active_clients,
         )
 
         response_data = {
@@ -208,8 +209,10 @@ class RateLimitClientView(XTestModeMixin, APIView):
         client_status = local_limiter.get_client_status(client_key)
 
         logger.info(
-            f"[X-Test-Mode] Rate limit client status: client_key={client_key}, "
-            f"count={client_status['current_count']}, blocked={client_status['blocked']}"
+            "test_mode_rate_limit",
+            client_key=client_key,
+            client_status=client_status['current_count'],
+            client_status_2=client_status['blocked'],
         )
 
         response_data = {
@@ -299,7 +302,10 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
         total_exceeded = sum(stats.get("exceeded", 0) for stats in client_stats.values())
 
         logger.info(
-            f"[X-Test-Mode] Rate limit history: returned={len(events)}, " f"total={total_events}, exceeded={total_exceeded}"
+            "test_mode_rate_limit",
+            count=len(events),
+            total_events=total_events,
+            total_exceeded=total_exceeded,
         )
 
         response_data = {

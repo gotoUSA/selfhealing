@@ -20,7 +20,6 @@ CascadeEvent 기록 정책:
 
 from __future__ import annotations
 
-import structlog
 import random
 import uuid
 from contextvars import ContextVar
@@ -29,6 +28,8 @@ from enum import Enum
 from queue import Full, Queue
 from threading import Lock, Thread
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

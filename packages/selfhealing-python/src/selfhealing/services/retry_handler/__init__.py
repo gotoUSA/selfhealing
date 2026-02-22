@@ -23,8 +23,25 @@ import sys as _sys
 import types as _types
 from typing import Any as _Any
 
-# === Explicit re-exports ===
+# Decorators
+from .decorators import (
+    with_retry,
+)
 
+# Guards
+from .guards import ErrorBudgetGuard, KillSwitchGuard
+
+# Handler (legacy)
+from .handler import (
+    RetryHandler,
+    _is_system_enabled,
+    logger,
+)
+
+# Hooks
+from .hooks import AuditHook, MetricsHook
+
+# === Explicit re-exports ===
 # Models
 from .models import (
     MaxRetriesExceededError,
@@ -35,29 +52,11 @@ from .models import (
     T,
 )
 
-# Handler (legacy)
-from .handler import (
-    RetryHandler,
-    _is_system_enabled,
-    logger,
-)
-
 # Policy (new)
 from .policy import RetryPolicy
 
-# Guards
-from .guards import ErrorBudgetGuard, KillSwitchGuard
-
-# Hooks
-from .hooks import AuditHook, MetricsHook
-
 # Sinks
 from .sinks import DLQSink
-
-# Decorators
-from .decorators import (
-    with_retry,
-)
 
 __all__ = [
     # models

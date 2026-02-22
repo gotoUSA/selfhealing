@@ -10,13 +10,14 @@ Usage:
     batch = buffer.get_batch(max_size=100)  # Background worker
 """
 
-import structlog
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from typing import Generic, TypeVar
+
+import structlog
 
 # BackpressureStrategy: 단일 소스는 scaling/config.py (Item 6 중복 제거)
 from selfhealing.scaling.config import BackpressureStrategy  # noqa: E402, F401
@@ -94,8 +95,9 @@ class RingBuffer(Generic[T]):
         if capacity > self.CAPACITY_WARNING_THRESHOLD:
             estimated_mb = (capacity * self.ESTIMATED_EVENT_SIZE_BYTES) / (1024 * 1024)
             logger.warning(
-                f"[RingBuffer] High capacity={capacity:,} may use ~{estimated_mb:.0f}MB RAM. "
-                f"Consider using a lower capacity or enabling WAL for persistence."
+                "ring_buffer.high_use_mb_ram",
+                capacity=capacity,
+                estimated_mb=estimated_mb,
             )
 
         self._capacity = capacity

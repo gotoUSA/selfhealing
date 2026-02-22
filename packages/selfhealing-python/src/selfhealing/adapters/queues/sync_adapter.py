@@ -17,7 +17,6 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import traceback
 import uuid
 from collections.abc import Callable
@@ -25,6 +24,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.task_queue import (
     ScheduleInfo,
@@ -268,7 +269,9 @@ class SyncTaskAdapter(TaskQueueInterface):
                 record.retries += 1
                 record.status = TaskStatus.RETRY
                 logger.debug(
-                    f"[SyncAdapter] Retrying task: {record.task_id} (attempt {record.retries})"
+                    "sync_adapter.retrying_task_attempt",
+                    record=record.task_id,
+                    record_1=record.retries,
                 )
                 self._execute_task(record, registered)
             else:

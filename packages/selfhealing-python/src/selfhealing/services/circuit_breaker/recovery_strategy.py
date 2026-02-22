@@ -11,10 +11,11 @@ immediate vs canary 전략을 지원합니다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 from selfhealing.services.circuit_breaker.canary_recovery import (
     CanaryRecoveryManager,
@@ -371,8 +372,9 @@ class RecoveryStrategySelector:
                     strategy=selection.strategy,
                 )
                 logger.info(
-                    f"[RecoveryStrategy] {service_id}: Started canary recovery, "
-                    f"strict_mode={selection.strategy.strict_mode}"
+                    "recovery_strategy.started_canary_recovery",
+                    service_id=service_id,
+                    selection=selection.strategy.strict_mode,
                 )
             else:
                 # Immediate 전략 - 즉시 100% 허용

@@ -20,10 +20,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.regional_recovery_policy import (
     get_regional_recovery_policy_settings,
@@ -378,8 +379,8 @@ class RegionalRecoveryPolicyEngine:
             # 폴백: global 설정 사용
             if "global" in self._configs:
                 logger.debug(
-                    f"[RegionalRecoveryPolicy] Using global config for "
-                    f"unknown namespace: {namespace}"
+                    "regional_recovery_policy.using_global_config_unknown",
+                    namespace=namespace,
                 )
                 return self._configs["global"]
 
@@ -396,7 +397,8 @@ class RegionalRecoveryPolicyEngine:
         with self._lock:
             self._configs[config.namespace] = config
             logger.info(
-                f"[RegionalRecoveryPolicy] Registered config: {config.namespace}"
+                "cell_registry.bulkheads_registered",
+                config=config.namespace,
             )
 
     def remove_config(self, namespace: str) -> bool:

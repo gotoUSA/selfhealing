@@ -7,9 +7,10 @@ Includes throttle-aware replay for safe re-processing with adaptive throttle.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationData
@@ -87,7 +88,10 @@ class ReplayOperationsMixin:
                         self.resolve_entry(entry.id, "auto_replay")
                         result.success += 1
                         logger.info(
-                            f"[DLQService] Successfully replayed entry {entry.id}: " f"{entry.domain}/{entry.failure_type}"
+                            "dlq_service.successfully_replayed_entry",
+                            entry=entry.id,
+                            entry_1=entry.domain,
+                            entry_2=entry.failure_type,
                         )
                         # Audit 로깅: Replay 성공 (버퍼 패턴 지원)
                         self._log_dlq_audit(
@@ -128,13 +132,15 @@ class ReplayOperationsMixin:
                     )
 
             logger.info(
-                f"[DLQService] Replay completed: domain={domain}, "
-                f"processed={result.processed}, success={result.success}, "
-                f"failed={result.failed}"
+                "dlq_service.replay_completed",
+                domain=domain,
+                result=result.processed,
+                result_2=result.success,
+                result_3=result.failed,
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dlq_service.replay_failed",
                 error=e,
             )

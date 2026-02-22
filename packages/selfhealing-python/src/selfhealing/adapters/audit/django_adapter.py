@@ -17,10 +17,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.interfaces.audit_adapter import (
     AuditAction,
@@ -102,7 +103,7 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
                     audit_event_id=audit_event_id,
                 )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_audit_adapter.failed_log",
                 error=e,
             )
@@ -145,7 +146,7 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             )
             return inserted, skipped
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_audit_adapter.batch_failed",
                 error=e,
             )

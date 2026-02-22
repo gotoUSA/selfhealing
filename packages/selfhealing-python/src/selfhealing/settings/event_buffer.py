@@ -10,9 +10,9 @@ Environment Variables:
     SELFHEALING_EVENT_BUFFER_OVERFLOW_STRATEGY=drop_oldest
 """
 
-import structlog
 from typing import Literal
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

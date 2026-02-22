@@ -21,12 +21,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 # HealthStatus: 단일 소스는 meta/health_probe.py (Item 9 중복 제거)
 from selfhealing.meta.health_probe import HealthStatus
@@ -267,7 +268,7 @@ class SidecarIPCProbe:
 
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
-            logger.error(
+            logger.exception(
                 "sidecar_ipc_probe.health_check_error",
                 error=e,
             )

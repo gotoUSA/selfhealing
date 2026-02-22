@@ -7,9 +7,10 @@ Metric Sync Service - 메트릭 동기화 서비스 레이어.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.adapters.metrics.factory import get_metric_adapter
 from selfhealing.metrics.reconciler import (
@@ -348,9 +349,9 @@ class MetricSyncService:
         """Audit 로깅."""
         try:
             from selfhealing.audit.logger import (
-                ConfigAuditAction,
-                AuditLogger,
                 AuditConfigChangeEvent,
+                AuditLogger,
+                ConfigAuditAction,
             )
 
             audit_logger = AuditLogger.get_instance()

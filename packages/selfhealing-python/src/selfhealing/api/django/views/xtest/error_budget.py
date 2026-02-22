@@ -6,7 +6,6 @@ Error Budget 관련 테스트 API:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -86,9 +85,12 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
         budget_status = eb_service.get_budget_status()
 
         logger.info(
-            f"[X-Test-Mode] Error Budget injection: type={error_type}, "
-            f"count={count}, budget={initial_budget:.1f}%→{current_budget:.1f}%, "
-            f"user={request.user}"
+            "test_mode_error_budget",
+            error_type=error_type,
+            count=count,
+            initial_budget=initial_budget,
+            current_budget=current_budget,
+            request=request.user,
         )
 
         return Response(

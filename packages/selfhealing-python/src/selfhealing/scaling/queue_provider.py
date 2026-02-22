@@ -6,10 +6,11 @@ Redis 큐 조회 시 네트워크 지연이 RateController 병목이 되는 것�
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import Callable
+
+import structlog
 
 from selfhealing.scaling.config import (
     BackpressureSettings,

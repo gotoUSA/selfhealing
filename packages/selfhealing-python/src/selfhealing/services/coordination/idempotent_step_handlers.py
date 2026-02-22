@@ -21,13 +21,14 @@ Reference:
 from __future__ import annotations
 
 import hashlib
-import structlog
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from .recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
 
@@ -291,7 +292,9 @@ class IdempotentStepHandler(ABC):
         if record and not record.is_safe_to_execute():
             # 이미 완료된 경우 캐시된 결과 반환
             logger.info(
-                f"[IdempotentStepHandler] Returning cached result: " f"key={idempotency_key}, status={record.status.value}"
+                "idempotent_step_handler.returning_cached_result",
+                idempotency_key=idempotency_key,
+                status=record.status.value,
             )
             return {
                 "success": record.status == IdempotencyStatus.COMPLETED,
@@ -560,11 +563,7 @@ class IdempotentHealthCheckHandler(IdempotentStepHandler):
         # 실제 에러율 기반 판단 필요 시:
         #   PrometheusMetricsCollector.query_instant() 활용
         #   (selfhealing.services.postmortem.prometheus_collector)
-        logger.debug(
-            "[IdempotentHealthCheckHandler] Stability check: "
-            f"namespace={session.namespace}, duration={duration_minutes}m, "
-            f"threshold={error_rate_threshold}"
-        )
+        logger.debug("idempotent_health_check_handler.stability_check")
         return {
             "success": True,
             "assumed": True,

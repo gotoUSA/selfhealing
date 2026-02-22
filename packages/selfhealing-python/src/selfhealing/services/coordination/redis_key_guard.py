@@ -24,10 +24,11 @@ Reference:
 from __future__ import annotations
 
 import fnmatch
-import structlog
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import (
     get_redis_key_guard_settings,
@@ -365,7 +366,7 @@ class RedisKeyPriorityEviction:
                 keys_with_ttl=keys_with_ttl,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_key_priority_eviction.get_memory_info_failed",
                 error=e,
             )
@@ -423,7 +424,7 @@ class RedisKeyPriorityEviction:
                         if info.used_percent <= target_used:
                             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_key_priority_eviction.cleanup_error",
                 counter_key=counter_key,
                 error=e,
@@ -455,14 +456,16 @@ class RedisKeyPriorityEviction:
 
         if info.used_percent <= target_used:
             logger.info(
-                f"[RedisKeyPriorityEviction] No cleanup needed: "
-                f"used={info.used_percent:.1f}%, target={target_used:.1f}%"
+                "redis_key_priority_eviction.no_cleanup_needed",
+                info=info.used_percent,
+                target_used=target_used,
             )
             return result
 
         logger.warning(
-            f"[RedisKeyPriorityEviction] Starting emergency cleanup: "
-            f"used={info.used_percent:.1f}%, target={target_used:.1f}%"
+            "redis_key_priority_eviction.starting_emergency_cleanup",
+            info=info.used_percent,
+            target_used=target_used,
         )
 
         # P4 키 삭제 (audit 7일 경과)
@@ -483,8 +486,9 @@ class RedisKeyPriorityEviction:
                     break
 
         logger.warning(
-            f"[RedisKeyPriorityEviction] Emergency cleanup completed: "
-            f"P4={result['deleted_p4']}, P3={result['deleted_p3']}"
+            "redis_key_priority_eviction.emergency_cleanup_completed",
+            result=result['deleted_p4'],
+            result_1=result['deleted_p3'],
         )
 
         return result
@@ -515,7 +519,8 @@ class RedisKeyPriorityEviction:
                 if current_ttl > 0:
                     redis_client.persist(key)
                     logger.debug(
-                        f"[RedisKeyPriorityEviction] Removed TTL from protected key: {key}"
+                        "redis_key_priority_eviction.removed_ttl_protected_key",
+                        key=key,
                     )
             except Exception:
                 pass
@@ -568,7 +573,7 @@ class RedisKeyPriorityEviction:
                 else:
                     result["skipped"] += 1
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_key_priority_eviction.scan_set_ttls_failed",
                 error=e,
             )

@@ -21,11 +21,12 @@ Configuration:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.core.state_backend import StateBackend, get_state_backend
 
@@ -124,8 +125,9 @@ class SystemControlManager:
             if data:
                 self._cached_state = SystemState.from_dict(data)
                 logger.info(
-                    f"[SystemControl] Loaded state: enabled={self._cached_state.enabled}, "
-                    f"backend={type(self._backend).__name__}"
+                    "system_control.loaded_state",
+                    self=self._cached_state.enabled,
+                    value=type(self._backend).__name__,
                 )
             else:
                 self._cached_state = SystemState()
@@ -143,7 +145,7 @@ class SystemControlManager:
             self._backend.set(STATE_KEY, self._cached_state.to_dict())
             logger.debug("system_control.state_saved")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "system_control.failed_save_state",
                 error=e,
             )
@@ -224,7 +226,9 @@ class SystemControlManager:
 
             if not was_enabled:
                 logger.info(
-                    f"[SystemControl] System ENABLED by {actor}. Reason: {reason or 'N/A'}"
+                    "system_control.system_enabled_reason",
+                    actor=actor,
+                    value=reason or 'N/A',
                 )
                 # Audit 기록
                 self._log_audit("enable", actor, old_state, new_state, reason)
@@ -254,8 +258,9 @@ class SystemControlManager:
 
             if was_enabled:
                 logger.warning(
-                    f"[SystemControl] System DISABLED (Kill Switch) by {actor}. "
-                    f"Reason: {reason or 'N/A'}"
+                    "system_control.system_disabled_kill_switch",
+                    actor=actor,
+                    value=reason or 'N/A',
                 )
                 # Audit 기록
                 self._log_audit("disable", actor, old_state, new_state, reason)
@@ -289,8 +294,8 @@ class SystemControlManager:
 
             if not was_dry_run:
                 logger.info(
-                    f"[SystemControl] DRY RUN mode ENABLED by {actor}. "
-                    "Actions will be logged but not executed."
+                    "system_control.dry_run_mode_enabled",
+                    actor=actor,
                 )
                 # Audit 기록
                 self._log_audit(
@@ -317,8 +322,8 @@ class SystemControlManager:
 
             if was_dry_run:
                 logger.warning(
-                    f"[SystemControl] DRY RUN mode DISABLED by {actor}. "
-                    "Self-healing is now LIVE."
+                    "system_control.dry_run_mode_disabled",
+                    actor=actor,
                 )
                 # Audit 기록
                 self._log_audit(

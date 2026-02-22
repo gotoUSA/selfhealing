@@ -13,7 +13,6 @@ Production Post-mortem API는 views/postmortem.py를 참조하세요:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -211,9 +210,10 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
         cb_service.force_close(affected_service, reason="Blast radius test cleanup", controlled_by="xtest")
 
         logger.info(
-            f"[Stage 51] Blast radius test: {affected_service} → "
-            f"isolated={results['isolation_verified']}, "
-            f"unaffected={len(results['unaffected_services'])}"
+            "stage_blast_radius_test",
+            affected_service=affected_service,
+            results=results['isolation_verified'],
+            count=len(results['unaffected_services']),
         )
 
         # WAL Audit 기록
@@ -392,19 +392,30 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
 
 # Import from centralized postmortem_store
 from selfhealing.services.postmortem_store import (
-    collect_service_states as _collect_service_states,
     build_timeline as _build_timeline,
+)
+from selfhealing.services.postmortem_store import (
+    collect_service_states as _collect_service_states,
+)
+from selfhealing.services.postmortem_store import (
     generate_postmortem_data as _generate_postmortem_data,
 )
-
 
 # Re-export from utils for backward compatibility
 from selfhealing.utils.duration import (
     IncidentDurationResult,
     calculate_incident_duration,
+)
+from selfhealing.utils.duration import (
     calculate_time_diff_seconds as _calculate_time_diff_seconds,
+)
+from selfhealing.utils.duration import (
     find_first_event_by_type as _find_first_event_by_type,
+)
+from selfhealing.utils.duration import (
     find_last_event_by_type as _find_last_event_by_type,
+)
+from selfhealing.utils.duration import (
     parse_iso_timestamp as _parse_iso_timestamp,
 )
 

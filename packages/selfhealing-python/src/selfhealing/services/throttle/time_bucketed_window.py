@@ -23,11 +23,12 @@ Usage:
 from __future__ import annotations
 
 import array
-import structlog
 import threading
 import time
 from dataclasses import dataclass
 from typing import NamedTuple
+
+import structlog
 
 logger = structlog.get_logger()
 

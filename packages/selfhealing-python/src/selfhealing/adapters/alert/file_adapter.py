@@ -8,9 +8,10 @@ Supports tracking active vs resolved alerts.
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from pathlib import Path
+
+import structlog
 
 from selfhealing.interfaces.alert_adapter import Alert, AlertAdapter
 
@@ -81,7 +82,7 @@ class FileAlertAdapter(AlertAdapter):
                     indent=2,
                 )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "file_alert_adapter.error_saving_active_alerts",
                 error=e,
             )
@@ -102,7 +103,7 @@ class FileAlertAdapter(AlertAdapter):
                 }
                 f.write(json.dumps(entry, default=str) + "\n")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "file_alert_adapter.error_writing_alert_history",
                 error=e,
             )
@@ -126,7 +127,7 @@ class FileAlertAdapter(AlertAdapter):
                 }
                 f.write(json.dumps(entry, default=str) + "\n")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "file_alert_adapter.error_writing_resolution",
                 error=e,
             )

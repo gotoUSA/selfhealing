@@ -18,7 +18,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -144,15 +143,15 @@ class CascadeRetentionSettings(BaseSettings):
         """보관 기간 순서 검증: Hot < Warm < Cold."""
         if self.hot_retention_days >= self.warm_retention_days:
             logger.warning(
-                f"[CascadeRetention] hot_retention_days({self.hot_retention_days}) >= "
-                f"warm_retention_days({self.warm_retention_days}). "
-                "Hot tier가 Warm보다 짧아야 합니다."
+                "cascade_retention.hot_tier가_warm보다_짧아야",
+                self=self.hot_retention_days,
+                self_1=self.warm_retention_days,
             )
         if self.warm_retention_days >= self.cold_retention_days:
             logger.warning(
-                f"[CascadeRetention] warm_retention_days({self.warm_retention_days}) >= "
-                f"cold_retention_days({self.cold_retention_days}). "
-                "Warm tier가 Cold보다 짧아야 합니다."
+                "cascade_retention.warm_tier가_cold보다_짧아야",
+                self=self.warm_retention_days,
+                self_1=self.cold_retention_days,
             )
         return self
 

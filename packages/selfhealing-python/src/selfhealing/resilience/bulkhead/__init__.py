@@ -53,11 +53,11 @@ from selfhealing.resilience.bulkhead.decorator import (
 )
 from selfhealing.resilience.bulkhead.exceptions import (
     BulkheadError,
-    BulkheadFullError,
-    BulkheadTimeoutError,
     # Deprecated aliases
     BulkheadException,
+    BulkheadFullError,
     BulkheadFullException,
+    BulkheadTimeoutError,
     BulkheadTimeoutException,
 )
 from selfhealing.resilience.bulkhead.metrics import (

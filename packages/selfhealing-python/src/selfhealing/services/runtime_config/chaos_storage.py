@@ -8,9 +8,10 @@ Provides get/update methods for:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import asdict, fields
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import L2StorageSettings as L2StorageConfig
 
@@ -231,7 +232,8 @@ class ChaosStorageMixin:
             current["dry_run_config"] = dry_run_config
             self._backend.set(storage_key, current)
             logger.info(
-                f"[RuntimeConfig] Updated chaos.dry_run_config: enabled={dry_run_config['enabled']}"
+                "runtime_config.updated_chaos",
+                dry_run_config=dry_run_config['enabled'],
             )
             return dry_run_config
 
@@ -291,7 +293,8 @@ class ChaosStorageMixin:
             self._backend.set(storage_key, current)
             self._cache["l2_storage"] = current
             logger.info(
-                f"[RuntimeConfig] Updated l2_storage config: {list(kwargs.keys())}"
+                "runtime_config.updated_config",
+                value=list(kwargs.keys()),
             )
             return current
 

@@ -17,13 +17,14 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.core.cluster_identity import ClusterIdentity
@@ -206,13 +207,16 @@ class GlobalConfigPropagator:
             subscribers = self._redis.publish(channel, payload)
 
             logger.info(
-                f"[GlobalConfigPropagator] Propagated {change.config_type}.{change.config_key} "
-                f"to {subscribers} subscribers via {channel}"
+                "global_config_propagator.propagated_subscribers_via",
+                change=change.config_type,
+                change_1=change.config_key,
+                subscribers=subscribers,
+                channel=channel,
             )
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "global_config_propagator.propagation_failed",
                 error=e,
             )
@@ -313,7 +317,7 @@ class GlobalConfigPropagator:
                     self._handle_message(message["data"])
             except Exception as e:
                 if self._running:
-                    logger.error(
+                    logger.exception(
                         "global_config_propagator.listen_error",
                         error=e,
                     )
@@ -334,18 +338,20 @@ class GlobalConfigPropagator:
                 try:
                     handler(change)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "global_config_propagator.handler_error",
                         error=e,
                     )
 
             logger.info(
-                f"[GlobalConfigPropagator] Received config change: {change.config_type}.{change.config_key} "
-                f"from {change.source_cluster}"
+                "global_config_propagator.received_config_change",
+                change=change.config_type,
+                change_1=change.config_key,
+                change_2=change.source_cluster,
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "global_config_propagator.message_parsing_failed",
                 error=e,
             )

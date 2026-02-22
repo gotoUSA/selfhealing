@@ -20,10 +20,11 @@ CB 이벤트뿐 아니라 45개 전체 EventType을 포함하는 통합 타임�
 from __future__ import annotations
 
 import enum
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.correlation_engine.event_graph import (
     CausalEdge,

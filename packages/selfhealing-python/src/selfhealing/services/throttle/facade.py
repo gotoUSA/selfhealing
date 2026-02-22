@@ -19,8 +19,9 @@ ThrottlePolicy 기반으로 위임하여 하위 호환성을 보장한다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
 

@@ -28,11 +28,12 @@ Environment Variables:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
+
+import structlog
 
 logger = structlog.get_logger()
 

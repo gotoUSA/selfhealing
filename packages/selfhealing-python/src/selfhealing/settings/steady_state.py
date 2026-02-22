@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -87,7 +86,8 @@ class SteadyStateSettings(BaseSettings):
         # Note: cross-field validation은 model_validator에서 처리
         if v < 100.0:
             logger.warning(
-                f"[SafeDefault] Very tight p99_latency_max_ms={v}ms, may cause false positives"
+                "safe_default.very_tight_ms_cause",
+                v=v,
             )
         return v
 
@@ -97,7 +97,8 @@ class SteadyStateSettings(BaseSettings):
         """에러율 경고."""
         if v > 5.0:
             logger.warning(
-                f"[SafeDefault] High error_rate_max_percent={v}%, may miss real issues"
+                "safe_default.high_miss_real_issues",
+                v=v,
             )
         return v
 
@@ -106,9 +107,7 @@ class SteadyStateSettings(BaseSettings):
     def validate_throughput(cls, v: float) -> float:
         """처리량 경고."""
         if v == 0.0:
-            logger.warning(
-                "[SafeDefault] throughput_min_rps=0, throughput check is effectively disabled"
-            )
+            logger.warning("safe_default.throughput_check_effectively_disabled")
         return v
 
 

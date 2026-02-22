@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import atexit
 import json
-import structlog
 import os
 import signal
 import socket
@@ -26,6 +25,8 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
+
+import structlog
 
 if TYPE_CHECKING:
     import redis
@@ -202,7 +203,7 @@ class RedisAuditBuffer:
                         self._fallback.log(entry)
                     logger.info("redis_audit_buffer.used_file_fallback")
                 except Exception as fallback_error:
-                    logger.error(
+                    logger.exception(
                         "redis_audit_buffer.fallback_also_failed",
                         fallback_error=fallback_error,
                     )
@@ -304,7 +305,7 @@ class RedisAuditBuffer:
 
         except Exception as e:
             logger.warning(
-                f"[RedisAuditBuffer] Batch chunk failed: {e}",
+                f"[RedisAuditBuffer] Batch chunk failed: {e}",  # noqa: G004
                 extra={"entries_count": len(entries), "domain": domain},
             )
 
@@ -442,7 +443,7 @@ class RedisAuditBuffer:
                         flushed += 1
                         count += 1
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             "redis_audit_buffer.flush_error",
                             error=e,
                         )
@@ -454,7 +455,7 @@ class RedisAuditBuffer:
                 self._total_flushes += flushed
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_audit_buffer.flush_scan_error",
                 error=e,
             )
@@ -508,13 +509,13 @@ class RedisAuditBuffer:
             pass
 
         if size >= _BUFFER_CRITICAL_THRESHOLD:
-            logger.error(
-                f"[RedisAuditBuffer] CRITICAL: Buffer overflow for {domain}",
+            logger.exception(
+                f"[RedisAuditBuffer] CRITICAL: Buffer overflow for {domain}",  # noqa: G004
                 extra={"domain": domain, "size": size, "threshold": _BUFFER_CRITICAL_THRESHOLD},
             )
         elif size >= _BUFFER_WARNING_THRESHOLD:
             logger.warning(
-                f"[RedisAuditBuffer] WARNING: Buffer high for {domain}",
+                f"[RedisAuditBuffer] WARNING: Buffer high for {domain}",  # noqa: G004
                 extra={"domain": domain, "size": size, "threshold": _BUFFER_WARNING_THRESHOLD},
             )
 
@@ -630,7 +631,7 @@ class RedisAuditBuffer:
                     trimmed_count = size - _SAFETY_LTRIM_THRESHOLD
 
                     logger.warning(
-                        f"[RedisAuditBuffer] Safety LTRIM: {domain}",
+                        f"[RedisAuditBuffer] Safety LTRIM: {domain}",  # noqa: G004
                         extra={
                             "domain": domain,
                             "original_size": size,
@@ -655,7 +656,7 @@ class RedisAuditBuffer:
                         pass
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_audit_buffer.safety_ltrim_failed",
                 error=e,
             )
@@ -732,7 +733,7 @@ class RedisAuditBuffer:
                 )
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "redis_audit_buffer.flush_failed",
                     current_domain=current_domain,
                     error=e,
@@ -746,7 +747,7 @@ class RedisAuditBuffer:
                         restored=restored,
                     )
                 except Exception as restore_error:
-                    logger.error(
+                    logger.exception(
                         "redis_audit_buffer.restore_failed",
                         restore_error=restore_error,
                     )
@@ -776,7 +777,7 @@ class RedisAuditBuffer:
 
         for processing_key, worker_id, age in orphaned:
             logger.warning(
-                f"[RedisAuditBuffer] Orphaned queue detected",
+                f"[RedisAuditBuffer] Orphaned queue detected",  # noqa: G004
                 extra={
                     "processing_key": processing_key,
                     "worker_id": worker_id,
@@ -795,7 +796,7 @@ class RedisAuditBuffer:
                     domain=domain,
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "watchdog.recovery_failed",
                     processing_key=processing_key,
                     error=e,
@@ -925,7 +926,7 @@ def create_redis_audit_buffer(
         return RedisAuditBuffer(
             redis_client=redis_client,
             fallback_adapter=fallback,
-            on_fallback=lambda e: logger.warning(f"Redis audit fallback: {e}"),
+            on_fallback=lambda e: logger.warning(f"Redis audit fallback: {e}"),  # noqa: G004
             **kwargs,
         )
 

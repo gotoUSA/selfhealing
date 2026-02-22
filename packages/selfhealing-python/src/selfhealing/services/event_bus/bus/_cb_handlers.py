@@ -6,10 +6,11 @@ Circuit Breaker 알림 및 Postmortem 핸들러.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
-from . import SelfHealingEvent, EventType
+import structlog
+
+from . import EventType, SelfHealingEvent
 
 logger = structlog.get_logger()
 
@@ -112,8 +113,10 @@ def _send_postmortem_notification(
         notification_min_duration = settings.notification_min_duration
         if duration is not None and duration < notification_min_duration:
             logger.debug(
-                f"[Notification] Postmortem notification skipped for {incident_id}: "
-                f"duration {duration}s < min {notification_min_duration}s"
+                "notification.postmortem_notification_skipped_duration",
+                incident_id=incident_id,
+                duration=duration,
+                notification_min_duration=notification_min_duration,
             )
             return
 
@@ -172,7 +175,9 @@ def _send_postmortem_notification(
             )
         elif result.suppressed:
             logger.debug(
-                f"[Notification] Postmortem notification suppressed for {incident_id}: " f"{result.suppression_reason}"
+                "notification.postmortem_notification_suppressed",
+                incident_id=incident_id,
+                result=result.suppression_reason,
             )
 
     except Exception as e:
@@ -203,9 +208,9 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
 
         if event.data.get(INTEGRITY_FAILED_KEY, False):
             logger.critical(
-                f"[EventHandler] Replay BLOCKED for {service_name}: "
-                f"integrity gate failed. "
-                f"Details: {event.data.get('integrity_gate_result', {})}"
+                "event_handler.replay_blocked_integrity_gate",
+                service_name=service_name,
+                event=event.data.get('integrity_gate_result', {}),
             )
             return  # 리플레이 중단
     except ImportError:
@@ -247,8 +252,9 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
             max_items=max_items,
         )
         logger.info(
-            f"[EventHandler] Circuit breaker closed for {service_name}, "
-            f"triggered Track 1 auto replay (max_items={max_items})"
+            "event_handler.circuit_breaker_closed_triggered",
+            service_name=service_name,
+            max_items=max_items,
         )
     except ImportError:
         logger.debug(
@@ -256,7 +262,7 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
             service_name=service_name,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "event_handler.failed_trigger_track_replay",
             service_name=service_name,
             error=e,
@@ -315,6 +321,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
     # 개별 Post-mortem 생성을 Celery task로 위임
     try:
         from selfhealing.adapters.celery.tasks import process_individual_postmortem
+
         from . import get_event_bus
 
         # bus.get_history()는 프로세스 로컬 인메모리이므로 여기서 수집

@@ -4,9 +4,11 @@ ErrorBudgetHandlerMixin for AdaptiveThrottle.
 이 모듈은 selfhealing.services.throttle.adaptive 패키지의 내부 구현입니다.
 """
 
-from selfhealing.services.throttle.config import ThrottleResult
-import selfhealing.services.throttle.adaptive as _adaptive_mod
 import structlog
+
+import selfhealing.services.throttle.adaptive as _adaptive_mod
+from selfhealing.services.throttle.config import ThrottleResult
+
 logger = structlog.get_logger()
 
 
@@ -83,8 +85,9 @@ class ErrorBudgetHandlerMixin:
         # SLO 필터링
         if not self._should_react_to_slo(slo_name):
             logger.debug(
-                f"[AdaptiveThrottle] Ignoring warning for SLO '{slo_name}' "
-                f"(not in target patterns: {self._target_slo_patterns})"
+                "adaptive_throttle.ignoring_warning_slo_target",
+                slo_name=slo_name,
+                self=self._target_slo_patterns,
             )
             return
 
@@ -104,8 +107,10 @@ class ErrorBudgetHandlerMixin:
         self.current_limit = new_limit
 
         logger.warning(
-            f"[AdaptiveThrottle] Error budget WARNING: {budget_percent:.1f}%, "
-            f"limit reduced: {previous_limit} → {new_limit} (×0.8)"
+            "adaptive_throttle.error_budget_warning_limit",
+            budget_percent=budget_percent,
+            previous_limit=previous_limit,
+            new_limit=new_limit,
         )
 
         # 메트릭 기록
@@ -146,8 +151,9 @@ class ErrorBudgetHandlerMixin:
         # SLO 필터링
         if not self._should_react_to_slo(slo_name):
             logger.debug(
-                f"[AdaptiveThrottle] Ignoring critical for SLO '{slo_name}' "
-                f"(not in target patterns: {self._target_slo_patterns})"
+                "adaptive_throttle.ignoring_critical_slo_target",
+                slo_name=slo_name,
+                self=self._target_slo_patterns,
             )
             return
 
@@ -170,9 +176,11 @@ class ErrorBudgetHandlerMixin:
         self.current_limit = new_limit
 
         logger.error(
-            f"[AdaptiveThrottle] Error budget CRITICAL: {budget_percent:.1f}%, "
-            f"limit reduced: {previous_limit} → {new_limit} (×0.5), "
-            f"violation_id={violation_id}"
+            "adaptive_throttle.error_budget_critical_limit",
+            budget_percent=budget_percent,
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            violation_id=violation_id,
         )
 
         # 메트릭 기록
@@ -230,13 +238,15 @@ class ErrorBudgetHandlerMixin:
         # SLO 필터링
         if not self._should_react_to_slo(slo_name):
             logger.debug(
-                f"[AdaptiveThrottle] Ignoring recovery for SLO '{slo_name}' "
-                f"(not in target patterns: {self._target_slo_patterns})"
+                "adaptive_throttle.ignoring_recovery_slo_target",
+                slo_name=slo_name,
+                self=self._target_slo_patterns,
             )
             return
 
         logger.info(
-            f"[AdaptiveThrottle] Error budget recovered: {budget_percent:.1f}%, " f"starting recovery dampening with jitter"
+            "adaptive_throttle.error_budget_recovered_starting",
+            budget_percent=budget_percent,
         )
 
         previous_limit = self._current_limit
@@ -276,8 +286,12 @@ class ErrorBudgetHandlerMixin:
             return
 
         try:
-            from selfhealing.services.error_budget_service import get_error_budget_service
-            from selfhealing.services.error_budget.forecaster import BudgetDepletionForecaster
+            from selfhealing.services.error_budget.forecaster import (
+                BudgetDepletionForecaster,
+            )
+            from selfhealing.services.error_budget_service import (
+                get_error_budget_service,
+            )
 
             service = get_error_budget_service()
             status = service.get_budget_status()
@@ -288,10 +302,10 @@ class ErrorBudgetHandlerMixin:
                 forecast = forecaster.forecast(status)
 
                 logger.warning(
-                    f"[AdaptiveThrottle] Preemptive throttle triggered: "
-                    f"risk_level={forecast.risk_level}, "
-                    f"estimated_depletion={forecast.estimated_depletion_hours}, "
-                    f"burn_rate_1h={forecast.burn_rate_1h:.2f}"
+                    "adaptive_throttle.preemptive_throttle_triggered",
+                    forecast=forecast.risk_level,
+                    forecast_1=forecast.estimated_depletion_hours,
+                    forecast_2=forecast.burn_rate_1h,
                 )
 
                 self._apply_preemptive_reduction(forecast)
@@ -329,8 +343,10 @@ class ErrorBudgetHandlerMixin:
         self.current_limit = new_limit
 
         logger.warning(
-            f"[AdaptiveThrottle] Preemptive limit reduction applied: "
-            f"{previous_limit} → {new_limit} (×{self._error_budget_multiplier})"
+            "adaptive_throttle.preemptive_limit_reduction_applied",
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            self=self._error_budget_multiplier,
         )
 
         # 메트릭 기록

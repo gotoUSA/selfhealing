@@ -15,13 +15,14 @@ Design Principle:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -245,8 +246,9 @@ class SyntheticTrafficGenerator:
         self._generated_count += 1
 
         logger.debug(
-            f"[SyntheticTraffic] Created synthetic request "
-            f"for {target_service} (experiment: {self.experiment_id})"
+            "synthetic_traffic.created_synthetic_request_experiment",
+            target_service=target_service,
+            self=self.experiment_id,
         )
 
         return SyntheticRequest(
@@ -367,7 +369,8 @@ class SyntheticLoadGenerator:
         """
         if self._state == GeneratorState.RUNNING:
             logger.warning(
-                f"[SyntheticLoad] Generator already running for {self.experiment_id}"
+                "synthetic_load.generator_already_running",
+                self=self.experiment_id,
             )
             return False
 
@@ -387,9 +390,11 @@ class SyntheticLoadGenerator:
         self._worker_thread.start()
 
         logger.info(
-            f"[SyntheticLoad] Started generator for {self.target_service} "
-            f"(experiment: {self.experiment_id}, pattern: {config.pattern.value}, "
-            f"target_rps: {config.target_rps})"
+            "synthetic_load.started_generator_experiment_pattern",
+            self=self.target_service,
+            self_1=self.experiment_id,
+            pattern=config.pattern.value,
+            config=config.target_rps,
         )
 
         return True
@@ -416,8 +421,9 @@ class SyntheticLoadGenerator:
         self._state = GeneratorState.STOPPED
 
         logger.info(
-            f"[SyntheticLoad] Stopped generator for {self.experiment_id}. "
-            f"Stats: {self._stats.to_dict()}"
+            "synthetic_load.stopped_generator_stats",
+            self=self.experiment_id,
+            self_1=self._stats.to_dict(),
         )
 
         return self._stats

@@ -26,9 +26,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from enum import Enum
+
+import structlog
 
 from selfhealing.services.error_budget.constants import MAX_COMBINED_MULTIPLIER
 
@@ -182,9 +183,10 @@ class MultiplierPrecedenceResolver:
 
         if result != final:
             logger.warning(
-                f"[PrecedenceResolver] Multiplier capped: "
-                f"raw={result:.2f}, capped={final:.2f}, "
-                f"strategy={strategy.value}"
+                "precedence_resolver.multiplier_capped",
+                result=result,
+                final=final,
+                strategy=strategy.value,
             )
 
         return final

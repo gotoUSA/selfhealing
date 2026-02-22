@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -93,8 +92,8 @@ class DLQSettings(BaseSettings):
         """Warn if retention is very short (< 7 days)."""
         if v < 7:
             logger.warning(
-                f"[SafeDefault] Short retention_days={v}, "
-                "consider using >= 7 for data safety"
+                "safe_default.short_consider_using_data",
+                v=v,
             )
         return v
 

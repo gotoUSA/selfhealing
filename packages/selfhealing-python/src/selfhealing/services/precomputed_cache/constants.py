@@ -7,8 +7,9 @@ Cache keys, config loader functions, feature flags, and fast JSON serialization.
 from __future__ import annotations
 
 import json
-import structlog
 from typing import Any
+
+import structlog
 
 try:
     import orjson

@@ -7,11 +7,12 @@ with privacy protection, tamper detection, and multi-backend support.
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.backends import (
     CompositeBackend,
@@ -173,7 +174,7 @@ class AuditLogger:
             return success
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "audit_logger.failed_log_change",
                 error=e,
             )
@@ -317,10 +318,12 @@ class AuditLogger:
         actor = entry.get("actor", {})
 
         logger.info(
-            f"[AUDIT] {change.get('action', 'unknown').upper()} "
-            f"{change.get('config_type', '')}.{change.get('config_key', '')} "
-            f"by {actor.get('user', 'system')} "
-            f"from {actor.get('ip_address', 'unknown')}"
+            "audit.event",
+            change=change.get('action', 'unknown').upper(),
+            change_1=change.get('config_type', ''),
+            change_2=change.get('config_key', ''),
+            actor=actor.get('user', 'system'),
+            actor_4=actor.get('ip_address', 'unknown'),
         )
 
     def _generate_batch_id(self) -> str:

@@ -13,13 +13,13 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from urllib.parse import quote, urlencode
 
 import requests
+import structlog
 
 logger = structlog.get_logger()
 
@@ -192,7 +192,7 @@ class PrometheusMetricsCollector:
                 error_message=f"Connection error: {e}",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "prometheus_collector.query_failed",
                 error=e,
             )
@@ -272,7 +272,7 @@ class PrometheusMetricsCollector:
                 error_message=f"Connection error: {e}",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "prometheus_collector.range_query_failed",
                 error=e,
             )

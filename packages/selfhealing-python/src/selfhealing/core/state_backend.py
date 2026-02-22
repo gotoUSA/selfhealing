@@ -18,12 +18,13 @@ Configuration:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Generic, TypeVar
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -173,7 +174,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                     json.dump(value, f, indent=2, default=str)
                 temp_file.replace(file_path)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "state_backend.error_writing",
                     key=key,
                     error=e,
@@ -257,10 +258,10 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
                 self=self._redis_url,
             )
         except ImportError:
-            logger.error("state_backend.redis_package_installed_run")
+            logger.exception("state_backend.redis_package_installed_run")
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "state_backend.redis_connection_failed",
                 error=e,
             )
@@ -290,7 +291,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             else:
                 self._client.set(self._make_key(key), data)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "state_backend.redis_set_error",
                 key=key,
                 error=e,
@@ -301,7 +302,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
         try:
             return self._client.delete(self._make_key(key)) > 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "state_backend.redis_delete_error",
                 key=key,
                 error=e,
@@ -357,7 +358,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
                     result[short_key] = json.loads(data)
                     count += 1
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "state_backend.redis_scan_error",
                 error=e,
             )

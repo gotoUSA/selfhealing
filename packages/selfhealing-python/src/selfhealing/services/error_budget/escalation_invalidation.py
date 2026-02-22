@@ -24,9 +24,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -82,8 +83,8 @@ class EscalationTriggeredInvalidation:
         if invalidate_fn not in self._invalidation_targets:
             self._invalidation_targets.append(invalidate_fn)
             logger.debug(
-                f"[EscalationInvalidation] Target registered, "
-                f"total={len(self._invalidation_targets)}"
+                "escalation_invalidation.target_registered",
+                count=len(self._invalidation_targets),
             )
 
     def unregister_target(self, invalidate_fn: Callable[[], None]) -> bool:
@@ -122,16 +123,11 @@ class EscalationTriggeredInvalidation:
             )
             self._registered = True
 
-            logger.info(
-                "[EscalationInvalidation] Registered for EMERGENCY_LEVEL_CHANGED events"
-            )
+            logger.info("cell_registry.bulkheads_registered")
             return True
 
         except ImportError:
-            logger.warning(
-                "[EscalationInvalidation] Event bus not available, "
-                "falling back to manual invalidation"
-            )
+            logger.warning("escalation_invalidation.event_bus_available_falling")
             return False
         except Exception as e:
             logger.warning(
@@ -214,9 +210,10 @@ class EscalationTriggeredInvalidation:
             성공적으로 무효화된 대상 수
         """
         logger.warning(
-            f"[EscalationInvalidation] Invalidating all caches: "
-            f"reason={reason}, namespace={namespace}, "
-            f"targets={len(self._invalidation_targets)}"
+            "escalation_invalidation.invalidating_all_caches",
+            reason=reason,
+            namespace=namespace,
+            count=len(self._invalidation_targets),
         )
 
         success_count = 0
@@ -225,7 +222,7 @@ class EscalationTriggeredInvalidation:
                 invalidate_fn()
                 success_count += 1
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "escalation_invalidation.invalidation_failed",
                     error=e,
                 )
@@ -338,19 +335,17 @@ def setup_crisis_multiplier_invalidation() -> bool:
         # CrisisMultiplierProvider의 캐시를 무효화 대상으로 등록
         invalidation.register_target(provider.invalidate_cache)
 
-        logger.info(
-            "[EscalationInvalidation] CrisisMultiplierProvider registered for "
-            "push-based invalidation on escalation events"
-        )
+        logger.info("escalation_invalidation.crisismultiplierprovider_registered_push_based")
         return True
 
     except ImportError as e:
         logger.warning(
-            f"[EscalationInvalidation] CrisisMultiplierProvider not available: {e}"
+            "escalation_invalidation.crisismultiplierprovider_available",
+            error=e,
         )
         return False
     except Exception as e:
-        logger.error(
+        logger.exception(
             "escalation_invalidation.setup_failed",
             error=e,
         )

@@ -48,14 +48,6 @@ from selfhealing.interfaces.audit_adapter import (  # Enums; Data Classes; Inter
 )
 
 # =============================================================================
-# Traffic Routing Adapter Interface (Multi-Region Failover)
-# =============================================================================
-from selfhealing.interfaces.traffic_routing import (  # Data Classes; Interface
-    RoutingChange,
-    TrafficRoutingAdapter,
-)
-
-# =============================================================================
 # Cache Provider Interface
 # =============================================================================
 from selfhealing.interfaces.cache_provider import (  # Lock interface; Exceptions; Interface
@@ -72,6 +64,17 @@ from selfhealing.interfaces.config_provider import (  # Interface; Default imple
     ConfigProviderInterface,
     DictConfigProvider,
     EnvConfigProvider,
+)
+
+# =============================================================================
+# ML Strategy Interfaces (AI/ML 확장 기반)
+# =============================================================================
+from selfhealing.interfaces.ml_strategy import (  # Protocols
+    AnomalyDetectionStrategy,
+    BatchCapable,
+    ClassificationStrategy,
+    ForecastStrategy,
+    StrategyLifecycle,
 )
 
 # =============================================================================
@@ -101,6 +104,21 @@ from selfhealing.interfaces.repositories import (  # Enums; Data Classes; Reposi
     SecurityIncidentStatus,
     SecurityIncidentType,
     SecuritySeverity,
+)
+
+# =============================================================================
+# Resilience Policy Interfaces (Policy Composition)
+# =============================================================================
+from selfhealing.interfaces.resilience_policy import (  # Enums; DTOs; Protocols
+    AsyncResiliencePolicy,
+    FailureSink,
+    GuardResult,
+    PolicyContext,
+    PolicyGuard,
+    PolicyHook,
+    PolicyOutcome,
+    PolicyResult,
+    ResiliencePolicy,
 )
 
 # =============================================================================
@@ -137,29 +155,11 @@ from selfhealing.interfaces.task_queue import (  # Enums; DTOs; Exceptions; Inte
 )
 
 # =============================================================================
-# Resilience Policy Interfaces (Policy Composition)
+# Traffic Routing Adapter Interface (Multi-Region Failover)
 # =============================================================================
-from selfhealing.interfaces.resilience_policy import (  # Enums; DTOs; Protocols
-    AsyncResiliencePolicy,
-    FailureSink,
-    GuardResult,
-    PolicyContext,
-    PolicyGuard,
-    PolicyHook,
-    PolicyOutcome,
-    PolicyResult,
-    ResiliencePolicy,
-)
-
-# =============================================================================
-# ML Strategy Interfaces (AI/ML 확장 기반)
-# =============================================================================
-from selfhealing.interfaces.ml_strategy import (  # Protocols
-    AnomalyDetectionStrategy,
-    BatchCapable,
-    ClassificationStrategy,
-    ForecastStrategy,
-    StrategyLifecycle,
+from selfhealing.interfaces.traffic_routing import (  # Data Classes; Interface
+    RoutingChange,
+    TrafficRoutingAdapter,
 )
 
 # =============================================================================

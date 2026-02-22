@@ -10,7 +10,6 @@ Manages graceful shutdown with in-flight request handling:
 Framework-agnostic design.
 """
 
-import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -19,6 +18,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -280,7 +281,7 @@ class GracefulShutdownCoordinator:
             try:
                 self._handler.on_shutdown_start()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "error_shutdown_handler",
                     error=e,
                 )

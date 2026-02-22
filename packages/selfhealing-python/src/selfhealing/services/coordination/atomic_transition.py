@@ -15,9 +15,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -229,19 +230,23 @@ class AtomicLevelTransition:
 
             if success:
                 logger.info(
-                    f"[AtomicTransition] Success: {namespace} "
-                    f"{expected_level} -> {new_level}"
+                    "atomic_transition.success",
+                    namespace=namespace,
+                    expected_level=expected_level,
+                    new_level=new_level,
                 )
             else:
                 logger.warning(
-                    f"[AtomicTransition] Failed: {message}, "
-                    f"current={level}, expected={expected_level}"
+                    "atomic_transition.failed",
+                    message=message,
+                    level=level,
+                    expected_level=expected_level,
                 )
 
             return (success, message, level)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_transition.error",
                 error=e,
             )
@@ -300,7 +305,7 @@ class AtomicLevelTransition:
             return (success, message, level)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_transition.conditional_error",
                 error=e,
             )
@@ -355,7 +360,7 @@ class AtomicLevelTransition:
             return (success, message, level)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_transition.escalate_error",
                 error=e,
             )
@@ -390,7 +395,7 @@ class AtomicLevelTransition:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_transition.get_state_error",
                 error=e,
             )

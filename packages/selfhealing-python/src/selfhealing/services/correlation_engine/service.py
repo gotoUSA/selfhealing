@@ -37,10 +37,11 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import structlog
 import threading
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.ml_strategy import (
     AnomalyDetectionStrategy,
@@ -224,7 +225,7 @@ class CorrelationEngineService:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "correlation_engine.initialization_failed",
                 error=e,
             )
@@ -411,7 +412,7 @@ class CorrelationEngineService:
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "correlation_engine.incident_analysis_failed",
                 error=e,
             )
@@ -490,11 +491,10 @@ class CorrelationEngineService:
             result = self.analyze_incident(incident_id=incident_id)
             if result:
                 logger.info(
-                    f"[CorrelationEngine] Auto-analysis complete: "
-                    f"incident={result['incident_id']}, "
-                    f"root_cause="
-                    f"{result['root_cause'].primary_cause.event_node.service_name} "
-                    f"({result['root_cause'].primary_cause.score:.0%})"
+                    "correlation_engine.auto_analysis_complete",
+                    result=result['incident_id'],
+                    value=result['root_cause'].primary_cause.event_node.service_name,
+                    value_2=result['root_cause'].primary_cause.score,
                 )
         except Exception as e:
             logger.debug(
@@ -737,13 +737,13 @@ class CorrelationEngineService:
                 return
 
             logger.info(
-                f"[CorrelationEngine] Config reloaded: "
-                f"zscore={self._settings.zscore_threshold}, "
-                f"window={self._settings.window_seconds}s"
+                "correlation_engine.config_reloaded",
+                self=self._settings.zscore_threshold,
+                self_1=self._settings.window_seconds,
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "correlation_engine.config_reload_failed",
                 error=e,
             )

@@ -21,8 +21,9 @@ bulkhead_policy() / async_bulkhead_policy() 팩토리 함수가 Registry 연동�
 
 from __future__ import annotations
 
-import structlog
 from typing import Any, Callable, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,

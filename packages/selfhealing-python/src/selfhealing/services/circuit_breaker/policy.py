@@ -15,10 +15,11 @@ ResiliencePolicy.execute() 기반의 함수 래핑 방식으로 전환한다.
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,

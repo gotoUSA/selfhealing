@@ -4,9 +4,12 @@ EmergencyModeMixin for AdaptiveThrottle.
 이 모듈은 selfhealing.services.throttle.adaptive 패키지의 내부 구현입니다.
 """
 
-import selfhealing.services.throttle.adaptive as _adaptive_mod
-import structlog
 import time
+
+import structlog
+
+import selfhealing.services.throttle.adaptive as _adaptive_mod
+
 logger = structlog.get_logger()
 
 
@@ -49,9 +52,7 @@ class EmergencyModeMixin:
 
             # Recovery Dampening으로 점진적 복구
             self.start_recovery_dampening()
-            logger.info(
-                "adaptive_throttle.emergency_deactivated_starting_recovery",
-            )
+            logger.info("adaptive_throttle.emergencymode_available_sync")
         else:
             # Emergency 활성화
             if not self._emergency_mode_active:
@@ -75,7 +76,8 @@ class EmergencyModeMixin:
                     return  # Full Stop이 limit을 0으로 설정
 
                 logger.warning(
-                    f"[AdaptiveThrottle] Emergency LEVEL_3, " f"limit frozen to min_limit={new_limit}, Gradient frozen"
+                    "adaptive_throttle.emergency_limit_frozen_gradient",
+                    new_limit=new_limit,
                 )
                 self.current_limit = new_limit
                 # Emergency 조정 메트릭 기록
@@ -106,8 +108,12 @@ class EmergencyModeMixin:
                 previous_limit = self._current_limit
                 new_limit = int(self._base_limit_before_emergency * multiplier)
                 logger.info(
-                    f"[AdaptiveThrottle] Emergency level {previous_level} → {level}, "
-                    f"limit: {self._current_limit} → {new_limit} (×{multiplier})"
+                    "adaptive_throttle.emergency_level_limit",
+                    previous_level=previous_level,
+                    level=level,
+                    self=self._current_limit,
+                    new_limit=new_limit,
+                    multiplier=multiplier,
                 )
                 self.current_limit = new_limit
                 # Emergency 조정 메트릭 기록
@@ -190,9 +196,11 @@ class EmergencyModeMixin:
         effective_limit = max(effective_limit, self.config.min_limit)
 
         logger.debug(
-            f"[AdaptiveThrottle] Hard-Cap applied: "
-            f"gradient_limit={gradient_limit}, tier={tier_id}, "
-            f"multiplier={multiplier}, effective_limit={effective_limit}"
+            "adaptive_throttle.hard_cap_applied",
+            gradient_limit=gradient_limit,
+            tier_id=tier_id,
+            multiplier=multiplier,
+            effective_limit=effective_limit,
         )
 
         return effective_limit

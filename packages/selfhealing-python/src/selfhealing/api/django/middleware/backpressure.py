@@ -12,9 +12,9 @@ RateController와 GracefulDegradation을 통합합니다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any, Callable
 
+import structlog
 from django.http import HttpRequest, HttpResponse
 
 from selfhealing.scaling.config import get_backpressure_settings

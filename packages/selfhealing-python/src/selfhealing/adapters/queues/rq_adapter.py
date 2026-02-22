@@ -7,10 +7,11 @@ RQ is a simple, lightweight, Python library for queueing jobs and processing the
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.task_queue import (
     TaskOptions,
@@ -375,7 +376,7 @@ class RQTaskAdapter(TaskQueueInterface):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.failed_get_result",
                 task_id=task_id,
                 error=e,
@@ -420,7 +421,7 @@ class RQTaskAdapter(TaskQueueInterface):
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.failed_revoke_task",
                 task_id=task_id,
                 error=e,
@@ -457,7 +458,7 @@ class RQTaskAdapter(TaskQueueInterface):
             return task_id
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.failed_retry_task",
                 task_id=task_id,
                 error=e,
@@ -545,7 +546,7 @@ class RQTaskAdapter(TaskQueueInterface):
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.failed_unschedule",
                 schedule_id=schedule_id,
                 error=e,
@@ -576,7 +577,7 @@ class RQTaskAdapter(TaskQueueInterface):
             return count
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.failed_purge_queue",
                 queue_name=queue_name,
                 error=e,
@@ -589,7 +590,7 @@ class RQTaskAdapter(TaskQueueInterface):
             queue = self._get_queue(queue_name)
             return queue.count
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.failed_get_queue_length",
                 queue_name=queue_name,
                 error=e,
@@ -606,7 +607,7 @@ class RQTaskAdapter(TaskQueueInterface):
             self.connection.ping()
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rq.health_check_failed",
                 error=e,
             )

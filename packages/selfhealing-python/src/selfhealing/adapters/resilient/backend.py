@@ -12,7 +12,6 @@ Key Principles:
 
 from __future__ import annotations
 
-import structlog
 import os
 import random
 import threading
@@ -20,6 +19,8 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -213,7 +214,7 @@ class ResilientStorageBackend:
             logger.debug("resilient_storage.wal_initialized")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "resilient_storage.wal_init_failed",
                 _safe_error_message=_safe_error_message(e),
             )
@@ -274,7 +275,7 @@ class ResilientStorageBackend:
                     self._last_processed_wal_seq = entry.sequence
                     recovered_count += 1
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "resilient_storage.wal_replay_failed_seq",
                         entry=entry.sequence,
                         _safe_error_message=_safe_error_message(e),
@@ -291,7 +292,7 @@ class ResilientStorageBackend:
                 self._wal.cleanup_processed(self._last_processed_wal_seq)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "resilient_storage.wal_recovery_failed",
                 _safe_error_message=_safe_error_message(e),
             )
@@ -774,7 +775,7 @@ class ResilientStorageBackend:
                         self._replay_wal_entry(entry)
                         self._last_processed_wal_seq = entry.sequence
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             "resilient_storage.wal_replay_error",
                             _safe_error_message=_safe_error_message(e),
                         )
@@ -794,7 +795,7 @@ class ResilientStorageBackend:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.recovery_failed",
                 _safe_error_message=_safe_error_message(e),
             )
@@ -843,7 +844,7 @@ class ResilientStorageBackend:
                     self._redis.set(full_key, value)
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "resilient_storage.sync_error_key",
                     key=key,
                     _safe_error_message=_safe_error_message(e),

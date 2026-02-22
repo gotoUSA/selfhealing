@@ -40,22 +40,22 @@ from selfhealing.coordination.config import (
     get_leader_election_settings,
     reset_leader_election_settings,
 )
+from selfhealing.coordination.dlq_consumer import DLQConsumerCoordinator
+from selfhealing.coordination.etcd_elector import (
+    EtcdLeaderElector,
+    is_etcd_available,
+)
 from selfhealing.coordination.factory import (
     get_leader_elector,
     reset_leader_electors,
 )
 from selfhealing.coordination.redis_elector import RedisLeaderElector
-from selfhealing.coordination.etcd_elector import (
-    EtcdLeaderElector,
-    is_etcd_available,
-)
+from selfhealing.coordination.scheduler import LeaderScheduler, ScheduledJob
 from selfhealing.coordination.shutdown_integration import (
     integrate_with_shutdown_coordinator,
     register_for_graceful_shutdown,
     unregister_from_graceful_shutdown,
 )
-from selfhealing.coordination.dlq_consumer import DLQConsumerCoordinator
-from selfhealing.coordination.scheduler import LeaderScheduler, ScheduledJob
 
 __all__ = [
     # 기본 인터페이스

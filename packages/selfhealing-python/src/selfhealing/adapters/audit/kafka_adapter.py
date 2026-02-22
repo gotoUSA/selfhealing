@@ -24,12 +24,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import threading
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.context.causation_context import get_causation_for_kafka
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
@@ -200,7 +201,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
 
         except (TypeError, ValueError) as e:
             # 직렬화 실패 → Dead Letter Topic으로 전송
-            logger.error(
+            logger.exception(
                 "kafka_audit_adapter.serialization_failed",
                 error=e,
             )
@@ -210,7 +211,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
                 self._pending_count -= 1
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_audit_adapter.produce_failed",
                 error=e,
             )
@@ -232,7 +233,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
                 value=json.dumps(dlt_value).encode("utf-8"),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_audit_adapter.dlt_send_failed",
                 error=e,
             )

@@ -10,11 +10,12 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -103,8 +104,9 @@ class GateFaultDetector:
             elif self._failure_count >= self._failure_threshold:
                 self._state = GateFaultState.DEGRADED
                 logger.warning(
-                    f"[GateFaultDetector] State: HEALTHY -> DEGRADED "
-                    f"(failures: {self._failure_count}/{self._failure_threshold})"
+                    "gate_fault_detector.state_healthy_degraded_failures",
+                    self=self._failure_count,
+                    self_1=self._failure_threshold,
                 )
 
     def get_status(self) -> dict[str, Any]:

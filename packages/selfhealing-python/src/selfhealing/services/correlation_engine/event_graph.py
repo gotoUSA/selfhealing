@@ -10,9 +10,10 @@ BlastRadiusService의 서비스 의존성 그래프와 교차하여
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from dataclasses import dataclass, field
+
+import structlog
 
 logger = structlog.get_logger()
 

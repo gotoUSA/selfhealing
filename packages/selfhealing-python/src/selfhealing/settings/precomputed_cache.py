@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -81,8 +80,8 @@ class PrecomputedCacheSettings(BaseSettings):
         # 단순 경고만 발생시킴
         if v > 15.0:
             logger.warning(
-                f"[PrecomputedCacheSettings] refresh_interval={v}s >= L2_TTL, "
-                "cache may expire before refresh"
+                "precomputed_cache_settings.cache_expire_before_refresh",
+                v=v,
             )
         return v
 

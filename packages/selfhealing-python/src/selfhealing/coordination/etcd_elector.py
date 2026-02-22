@@ -15,11 +15,12 @@ Redis 대안으로, 더 강력한 일관성이 필요한 환경에서 사용.
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable
+
+import structlog
 
 from selfhealing.coordination.base import (
     LeaderElector,
@@ -183,7 +184,7 @@ class EtcdLeaderElector(LeaderElector):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "etcd_leader_elector.get_leader_error",
                 error=e,
             )
@@ -241,8 +242,9 @@ class EtcdLeaderElector(LeaderElector):
                 # Fencing Token 증가
                 self._increment_fencing_token()
                 logger.info(
-                    f"[EtcdLeaderElector] 리더 획득 성공 "
-                    f"(resource={self._resource_name}, fencing_token={self._fencing_token})"
+                    "etcd_leader_elector.리더_획득_성공",
+                    self=self._resource_name,
+                    self_1=self._fencing_token,
                 )
                 return True
             else:
@@ -253,7 +255,7 @@ class EtcdLeaderElector(LeaderElector):
                 return False
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "etcd_leader_elector.acquire_error",
                 error=e,
             )
@@ -276,7 +278,7 @@ class EtcdLeaderElector(LeaderElector):
             return new_value
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "etcd_leader_elector.fencing_token_error",
                 error=e,
             )
@@ -297,7 +299,7 @@ class EtcdLeaderElector(LeaderElector):
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "etcd_leader_elector.renew_error",
                 error=e,
             )
@@ -327,7 +329,7 @@ class EtcdLeaderElector(LeaderElector):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "etcd_leader_elector.release_error",
                 error=e,
             )
@@ -372,7 +374,7 @@ class EtcdLeaderElector(LeaderElector):
         try:
             callback()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "etcd_leader_elector.callback_error",
                 callback_type=callback_type,
                 error=e,
@@ -431,7 +433,7 @@ class EtcdLeaderElector(LeaderElector):
                         break
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "etcd_leader_elector.loop_error",
                     error=e,
                 )

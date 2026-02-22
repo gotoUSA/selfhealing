@@ -8,9 +8,10 @@ asyncio를 사용하여 코루틴 후보들을 병렬 실행하고,
 from __future__ import annotations
 
 import asyncio
-import structlog
 import time
 from typing import Awaitable, Callable, TypeVar
+
+import structlog
 
 from selfhealing.core.hedging.config import (
     HedgingCandidate,
@@ -170,8 +171,9 @@ class AsyncHedgingExecutor:
         except asyncio.TimeoutError:
             # delay 초과 → Secondary 추가
             logger.debug(
-                f"[Hedging] Primary '{primary.name}' did not respond within "
-                f"{self._config.delay}s, adding secondary candidates"
+                "hedging.primary_respond_within_adding",
+                primary=primary.name,
+                self=self._config.delay,
             )
             tasks: dict[asyncio.Task, HedgingCandidate] = {primary_task: primary}
 

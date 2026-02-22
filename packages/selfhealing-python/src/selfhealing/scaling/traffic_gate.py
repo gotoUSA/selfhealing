@@ -12,9 +12,10 @@ RateController, CascadeLoadShedding, Bulkhead를 파이프라인 형태로 통�
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 from selfhealing.scaling.config import (
     BackpressureLevel,

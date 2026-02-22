@@ -7,8 +7,9 @@ Guard.check()가 allowed=False를 반환하면 Policy 실행을 차단한다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import GuardResult, PolicyContext
 

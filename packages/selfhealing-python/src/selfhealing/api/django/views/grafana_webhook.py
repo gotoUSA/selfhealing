@@ -16,10 +16,10 @@ Note:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
 
+import structlog
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -179,7 +179,7 @@ class GrafanaAlertWebhookView(APIView):
                 self._process_single_alert(alert, notification_manager)
                 processed_count += 1
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "grafana_webhook_alert_처리",
                     error=str(e),
                 )

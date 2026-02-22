@@ -24,7 +24,6 @@ WORM (Write Once Read Many) Storage Adapters.
 from __future__ import annotations
 
 import json
-import structlog
 import urllib.error
 import urllib.request
 from abc import abstractmethod
@@ -33,6 +32,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
 
@@ -126,7 +127,8 @@ class WORMAdapter(AuditLogAdapter):
             self._write_to_worm(entry)
         except Exception as e:
             logger.warning(
-                f"[WORM] Failed to write to WORM storage: {e}, using fallback"
+                "worm.failed_write_worm_storage",
+                error=e,
             )
             self._write_to_fallback(entry)
             if self._on_error:
@@ -143,7 +145,7 @@ class WORMAdapter(AuditLogAdapter):
             with open(self._fallback_path, "a", encoding="utf-8") as f:
                 f.write(entry.to_json() + "\n")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "worm.fallback_write_failed",
                 error=e,
             )
@@ -446,7 +448,7 @@ class SidecarFileWatcher:
             try:
                 self._process_files(watch_dir)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "sidecar.error_processing_files",
                     error=e,
                 )
@@ -468,7 +470,7 @@ class SidecarFileWatcher:
                 if self._on_success:
                     self._on_success(file_path)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "sidecar.failed_process",
                     file_path=file_path,
                     error=e,

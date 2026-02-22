@@ -26,12 +26,13 @@ from __future__ import annotations
 
 import gzip
 import json
-import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
@@ -152,7 +153,7 @@ class LocalFileColdStorage:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cold_storage.write_failed",
                 key=key,
                 error=e,
@@ -175,7 +176,7 @@ class LocalFileColdStorage:
                 return f.read()
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cold_storage.read_failed",
                 key=key,
                 error=e,
@@ -363,7 +364,7 @@ class AnchorColdStorage:
             return expiring
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cold_storage.error_finding_expiring_anchors",
                 error=e,
             )
@@ -415,7 +416,7 @@ class AnchorColdStorage:
             return success
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cold_storage.archive_failed",
                 error=e,
             )
@@ -508,7 +509,7 @@ class AnchorColdStorage:
             return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cold_storage.retrieval_failed",
                 date_str=date_str,
                 error=e,

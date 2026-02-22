@@ -7,11 +7,12 @@ Handles tier definitions, mappings, and overrides with fallback chain.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections import OrderedDict
 from typing import Any
+
+import structlog
 
 from .circuit_breaker import get_tiering_circuit_breaker
 from .defaults import (
@@ -151,7 +152,9 @@ class TierRegistry:
 
             # 설정 복원 (import_config 사용)
             logger.warning(
-                f"[TierRegistry] Rolling back to snapshot at {snapshot['timestamp']}, " f"original action={snapshot['action']}"
+                "tier_registry.rolling_back_snapshot_original",
+                snapshot=snapshot['timestamp'],
+                snapshot_1=snapshot['action'],
             )
 
             # 직접 복원 (import_config 호출 시 무한 루프 방지)
@@ -539,7 +542,7 @@ class TierRegistry:
                 user="system",
             )
         except Exception as audit_error:
-            logger.error(
+            logger.exception(
                 "tier_registry.shadow_audit_failed",
                 audit_error=audit_error,
             )

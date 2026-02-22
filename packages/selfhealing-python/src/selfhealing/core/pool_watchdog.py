@@ -8,12 +8,13 @@ Automatic recovery actions for pool issues:
 - Circuit breaker for new connections
 """
 
-import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+
+import structlog
 
 from .pool_monitor import (
     ConnectionPoolMonitor,
@@ -155,8 +156,10 @@ class PoolWatchdog:
                     self._monitor.on_connection_released(conn_info.connection_id)
                     closed += 1
             except Exception as e:
-                logger.error(
-                    f"Failed to close connection {conn_info.connection_id}: {e}"
+                logger.exception(
+                    "failed_close_connection",
+                    conn_info=conn_info.connection_id,
+                    error=e,
                 )
 
         return PoolRecoveryResult(
@@ -245,7 +248,7 @@ class PoolWatchdog:
             try:
                 self._alert_callback(message, status)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "failed_send_alert",
                     error=e,
                 )

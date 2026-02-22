@@ -10,7 +10,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -82,7 +81,7 @@ def get_state_cache_settings() -> StateCacheSettings:
     if _settings is None:
         _settings = StateCacheSettings()
         logger.debug(
-            "[StateCacheSettings] Loaded: "
+            "[StateCacheSettings] Loaded: "  # noqa: G004
             f"base_ttl={_settings.base_ttl}s, "
             f"jitter_range=±{_settings.jitter_range}s"
         )

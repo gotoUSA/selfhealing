@@ -13,11 +13,12 @@ Correlation Engine 모듈(DAG Builder, Co-occurrence Tracker)에 공급하는 �
 
 from __future__ import annotations
 
-import structlog
 import queue
 import threading
 import time
 from collections import Counter, deque
+
+import structlog
 
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
     CoOccurrenceTracker,

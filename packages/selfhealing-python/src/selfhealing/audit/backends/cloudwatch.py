@@ -11,9 +11,10 @@ To activate this backend:
 4. Uncomment the actual implementation
 """
 
-import structlog
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 
@@ -61,10 +62,7 @@ class CloudWatchBackend(AuditBackend):
         self._client = None  # boto3 client placeholder
         self._enabled = False
 
-        logger.info(
-            "[CloudWatchBackend] Initialized as interface only. "
-            "Enable with boto3 and AWS credentials."
-        )
+        logger.info("cloud_watch_backend.initialized_interface_only_enable")
 
     @property
     def name(self) -> str:
@@ -106,13 +104,10 @@ class CloudWatchBackend(AuditBackend):
             # self._client.describe_log_groups(limit=1)
             # self._enabled = True
 
-            logger.warning(
-                "[CloudWatchBackend] enable() called but boto3 not configured. "
-                "This is an interface-only stub."
-            )
+            logger.warning("cloud_watch_backend.enable_called_configured_interface")
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cloud_watch_backend.failed_enable",
                 error=e,
             )
@@ -146,7 +141,7 @@ class CloudWatchBackend(AuditBackend):
         #     )
         #     return True
         # except Exception as e:
-        #     logger.error(f"[CloudWatchBackend] Write failed: {e}")
+        #     logger.exception(f"[CloudWatchBackend] Write failed: {e}")
         #     return False
 
         return True

@@ -27,6 +27,40 @@ Modules:
     ``precomputed_cache.py`` 플랫 파일에서 ``precomputed_cache/`` 패키지로 전환.
 """
 
+# ---------------------------------------------------------------------------
+# Dynamic attribute forwarding – expose ALL sub-module attributes at package
+# level so that ``from selfhealing.services.precomputed_cache import _x``
+# keeps working even for private helpers.
+# ---------------------------------------------------------------------------
+import sys as _sys
+
+from selfhealing.services.precomputed_cache import (
+    compute_functions as _compute_functions_mod,
+)
+from selfhealing.services.precomputed_cache import (
+    constants as _constants_mod,
+)
+from selfhealing.services.precomputed_cache import (
+    l1_cache as _l1_cache_mod,
+)
+from selfhealing.services.precomputed_cache import (
+    l2_cache as _l2_cache_mod,
+)
+from selfhealing.services.precomputed_cache import (
+    multi_tier as _multi_tier_mod,
+)
+from selfhealing.services.precomputed_cache import (
+    worker as _worker_mod,
+)
+from selfhealing.services.precomputed_cache.compute_functions import (
+    compute_error_budget_status,
+    compute_health_status,
+    compute_pool_status,
+    get_cached_error_budget,
+    get_cached_health,
+    get_cached_pool_status,
+    register_default_compute_functions,
+)
 from selfhealing.services.precomputed_cache.constants import (
     CACHE_KEY_ERROR_BUDGET,
     CACHE_KEY_HEALTH,
@@ -55,31 +89,6 @@ from selfhealing.services.precomputed_cache.worker import (
     get_precomputed_cache_worker,
     start_precomputed_cache,
     stop_precomputed_cache,
-)
-from selfhealing.services.precomputed_cache.compute_functions import (
-    compute_error_budget_status,
-    compute_health_status,
-    compute_pool_status,
-    get_cached_error_budget,
-    get_cached_health,
-    get_cached_pool_status,
-    register_default_compute_functions,
-)
-
-# ---------------------------------------------------------------------------
-# Dynamic attribute forwarding – expose ALL sub-module attributes at package
-# level so that ``from selfhealing.services.precomputed_cache import _x``
-# keeps working even for private helpers.
-# ---------------------------------------------------------------------------
-import sys as _sys
-
-from selfhealing.services.precomputed_cache import (
-    constants as _constants_mod,
-    l1_cache as _l1_cache_mod,
-    l2_cache as _l2_cache_mod,
-    multi_tier as _multi_tier_mod,
-    worker as _worker_mod,
-    compute_functions as _compute_functions_mod,
 )
 
 _pkg = _sys.modules[__name__]

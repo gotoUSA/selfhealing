@@ -21,7 +21,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -159,8 +158,8 @@ class RecoveryTasksSettings(BaseSettings):
         """중요 태스크 재시도 최소 1회 보장."""
         if v < 1:
             logger.warning(
-                f"[RecoveryTasksSettings] Critical task max_retries={v} is low, "
-                "consider using >= 1 for resilience"
+                "recovery_tasks_settings.critical_task_low_consider",
+                v=v,
             )
         return v
 
@@ -175,7 +174,9 @@ class RecoveryTasksSettings(BaseSettings):
         for name, delay in delays:
             if delay < 10:
                 logger.warning(
-                    f"[RecoveryTasksSettings] {name}_retry_delay={delay}s is very short"
+                    "recovery_tasks_settings.very_short",
+                    name=name,
+                    delay=delay,
                 )
         return self
 

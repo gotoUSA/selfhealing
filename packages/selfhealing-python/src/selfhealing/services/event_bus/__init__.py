@@ -18,6 +18,11 @@ Usage:
     ``event_bus.py`` 플랫 파일에서 ``event_bus/`` 패키지로 전환.
 """
 
+# bus.py의 모든 속성(private handler 포함)을 패키지 레벨에 노출.
+# 기존 `from selfhealing.services.event_bus import _on_*` 패턴 호환 유지.
+import sys as _sys
+
+from selfhealing.services.event_bus import bus as _bus_module
 from selfhealing.services.event_bus.bus import (
     EventPriority,
     EventSubscription,
@@ -30,11 +35,6 @@ from selfhealing.services.event_bus.bus import (
     get_event_bus,
     register_default_handlers,
 )
-
-# bus.py의 모든 속성(private handler 포함)을 패키지 레벨에 노출.
-# 기존 `from selfhealing.services.event_bus import _on_*` 패턴 호환 유지.
-import sys as _sys
-from selfhealing.services.event_bus import bus as _bus_module
 
 _pkg = _sys.modules[__name__]
 for _name in dir(_bus_module):

@@ -41,12 +41,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.canary.service import CanaryRolloutService
@@ -447,8 +448,8 @@ class CanarySafetyInterlock:
             # Fail-Closed: 백엔드 장애 시 LEVEL_3로 간주
             if self.fail_closed:
                 logger.critical(
-                    f"[CanaryInterlock] Backend unavailable, "
-                    f"applying Fail-Closed policy: {e}"
+                    "canary_interlock.backend_unavailable_applying_fail",
+                    error=e,
                 )
                 return InterlockResult.fail_closed(
                     failure=InterlockCheckFailure.BACKEND_UNAVAILABLE,
@@ -458,8 +459,8 @@ class CanarySafetyInterlock:
             else:
                 # Fail-Open (위험! 프로덕션 비권장)
                 logger.error(
-                    f"[CanaryInterlock] Backend unavailable, "
-                    f"Fail-Open mode (dangerous): {e}"
+                    "canary_interlock.backend_unavailable_fail_open",
+                    error=e,
                 )
                 return InterlockResult.allow(
                     emergency_level=0,
@@ -485,8 +486,10 @@ class CanarySafetyInterlock:
                 namespace=ns,
             )
             logger.warning(
-                f"[CanaryInterlock] Allowing {operation} with warning: "
-                f"rollout={rollout_id}, level={level_name}"
+                "canary_interlock.allowing_warning",
+                operation=operation,
+                rollout_id=rollout_id,
+                level_name=level_name,
             )
 
         elif action == InterlockAction.PAUSE:
@@ -496,8 +499,10 @@ class CanarySafetyInterlock:
                 namespace=ns,
             )
             logger.warning(
-                f"[CanaryInterlock] PAUSE required: "
-                f"rollout={rollout_id}, level={level_name}, operation={operation}"
+                "canary_interlock.pause_required",
+                rollout_id=rollout_id,
+                level_name=level_name,
+                operation=operation,
             )
 
         elif action == InterlockAction.ROLLBACK:
@@ -507,8 +512,10 @@ class CanarySafetyInterlock:
                 namespace=ns,
             )
             logger.warning(
-                f"[CanaryInterlock] ROLLBACK required: "
-                f"rollout={rollout_id}, level={level_name}, operation={operation}"
+                "canary_interlock.rollback_required",
+                rollout_id=rollout_id,
+                level_name=level_name,
+                operation=operation,
             )
 
         else:  # BLOCK (기본)
@@ -518,8 +525,10 @@ class CanarySafetyInterlock:
                 namespace=ns,
             )
             logger.warning(
-                f"[CanaryInterlock] BLOCK: "
-                f"rollout={rollout_id}, level={level_name}, operation={operation}"
+                "canary_interlock.block",
+                rollout_id=rollout_id,
+                level_name=level_name,
+                operation=operation,
             )
 
         return result
@@ -552,15 +561,17 @@ class CanarySafetyInterlock:
             try:
                 success = canary_service.pause(rollout_id)
                 logger.warning(
-                    f"[CanaryInterlock] Auto-paused: "
-                    f"rollout={rollout_id}, success={success}"
+                    "canary_interlock.auto_paused",
+                    rollout_id=rollout_id,
+                    success=success,
                 )
                 result.metadata["auto_applied"] = True
                 result.metadata["apply_success"] = success
             except Exception as e:
-                logger.error(
-                    f"[CanaryInterlock] Failed to auto-pause: "
-                    f"rollout={rollout_id}, error={e}"
+                logger.exception(
+                    "canary_interlock.failed_auto_pause",
+                    rollout_id=rollout_id,
+                    error=e,
                 )
                 result.metadata["auto_applied"] = True
                 result.metadata["apply_success"] = False
@@ -571,15 +582,17 @@ class CanarySafetyInterlock:
             try:
                 success = canary_service.rollback(rollout_id, reason=reason)
                 logger.warning(
-                    f"[CanaryInterlock] Auto-rolled back: "
-                    f"rollout={rollout_id}, success={success}"
+                    "canary_interlock.auto_rolled_back",
+                    rollout_id=rollout_id,
+                    success=success,
                 )
                 result.metadata["auto_applied"] = True
                 result.metadata["apply_success"] = success
             except Exception as e:
-                logger.error(
-                    f"[CanaryInterlock] Failed to auto-rollback: "
-                    f"rollout={rollout_id}, error={e}"
+                logger.exception(
+                    "canary_interlock.failed_auto_rollback",
+                    rollout_id=rollout_id,
+                    error=e,
                 )
                 result.metadata["auto_applied"] = True
                 result.metadata["apply_success"] = False

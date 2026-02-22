@@ -13,10 +13,11 @@ Redis Key Structure:
 
 from __future__ import annotations
 
-import structlog
 import time
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.interfaces.repositories import (
     FailedOperationData,
@@ -203,8 +204,10 @@ class RedisDLQRepository(FailedOperationRepository):
         self._backend.zadd(domain_key, {str(entry_id): time.time()})
 
         logger.info(
-            f"[RedisDLQ] Created entry {entry_id} for domain={domain} "
-            f"failure_type={failure_type}"
+            "redis_dlq.created_entry",
+            entry_id=entry_id,
+            domain=domain,
+            failure_type=failure_type,
         )
 
         # Return the created entry as FailedOperationData
@@ -468,7 +471,7 @@ class RedisDLQRepository(FailedOperationRepository):
                     break
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_dlq.error",
                 error=e,
             )

@@ -13,9 +13,10 @@ Usage in DRF views:
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.services.throttle.adaptive import (
     AdaptiveThrottle,
@@ -93,8 +94,9 @@ class AdaptiveDRFThrottle:
 
         if not result.allowed:
             logger.info(
-                f"[AdaptiveDRFThrottle] Request throttled: "
-                f"limit={result.limit}, count={result.current_count}"
+                "adaptive_drf_throttle.request_throttled",
+                result=result.limit,
+                result_1=result.current_count,
             )
 
         return result.allowed

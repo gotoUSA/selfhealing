@@ -6,10 +6,11 @@ Provides methods for drift detection and reconciliation.
 
 from __future__ import annotations
 
-import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
+
+import structlog
 
 from selfhealing.adapters.memory.drift_reconciliation import DriftReconciliationResult
 
@@ -27,14 +28,14 @@ class DriftOperationsMixin:
                 jitter = self._drift_reconciler.get_jitter()
                 if jitter > 0:
                     logger.debug(
-                        f"[LayeredRepo] Drift reconciliation scheduled with "
-                        f"{jitter:.2f}s jitter (Thundering Herd prevention)"
+                        "layered_repo.drift_reconciliation_scheduled_jitter",
+                        jitter=jitter,
                     )
                     time.sleep(jitter)
 
                 self._reconcile_all_drift()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "layered_repo.drift_reconciliation_error",
                     error=e,
                 )
@@ -44,7 +45,8 @@ class DriftOperationsMixin:
             executor.submit(_run_reconciliation)
         except Exception as e:
             logger.warning(
-                f"[LayeredRepo] Failed to schedule drift reconciliation: {e}"
+                "layered_repo.failed_schedule_drift_reconciliation",
+                error=e,
             )
 
     def _reconcile_all_drift(self) -> dict[str, Any]:
@@ -71,8 +73,8 @@ class DriftOperationsMixin:
                     l2_state = future.result(timeout=timeout)
                 except FuturesTimeoutError:
                     logger.warning(
-                        f"[LayeredRepo] Drift reconciliation timeout for "
-                        f"{l1_state.service_name}, skipping"
+                        "layered_repo.drift_reconciliation_timeout_skipping",
+                        l1_state=l1_state.service_name,
                     )
                     continue
 
@@ -119,8 +121,9 @@ class DriftOperationsMixin:
                     }
                 )
                 logger.warning(
-                    f"[LayeredRepo] Drift reconciliation error for "
-                    f"{l1_state.service_name}: {e}"
+                    "layered_repo.drift_reconciliation_error",
+                    l1_state=l1_state.service_name,
+                    error=e,
                 )
 
         self._metrics["drift_reconciliation_count"] += reconciled_count
@@ -147,8 +150,10 @@ class DriftOperationsMixin:
         }
 
         logger.info(
-            f"[LayeredRepo] Drift reconciliation completed: "
-            f"{reconciled_count} reconciled, L1 wins={l1_wins_count}, L2 wins={l2_wins_count}"
+            "layered_repo.drift_reconciliation_completed_reconciled",
+            reconciled_count=reconciled_count,
+            l1_wins_count=l1_wins_count,
+            l2_wins_count=l2_wins_count,
         )
 
         return result_dict

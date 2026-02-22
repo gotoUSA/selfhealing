@@ -14,9 +14,10 @@ Audit, DLQ)을 제거하고 순수한 재시도 로직만 담당한다.
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import structlog
 
 from selfhealing.core.backoff import BackoffStrategy, ExponentialBackoff
 from selfhealing.interfaces.resilience_policy import (

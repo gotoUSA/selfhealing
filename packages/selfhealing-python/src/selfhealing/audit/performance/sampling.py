@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.settings.sampling import SamplingSettings
@@ -126,8 +127,10 @@ class SamplingVerifier:
             sample_indices = sorted(random.sample(range(n), sample_size))
 
         logger.debug(
-            f"[SamplingVerifier] Sampling {sample_size}/{n} entries "
-            f"({sample_size/n*100:.1f}%)"
+            "sampling_verifier.sampling_entries",
+            sample_size=sample_size,
+            n=n,
+            value=sample_size/n*100,
         )
 
         # Verify sampled entries
@@ -135,10 +138,7 @@ class SamplingVerifier:
 
         if issues and self._config.full_verify_on_failure:
             # Sample failed - do full verification
-            logger.info(
-                "[SamplingVerifier] Sample verification failed, "
-                "performing full verification"
-            )
+            logger.info("sampling_verifier.sample_verification_failed_performing")
             return self._verify_full(entries)
 
         return len(issues) == 0, issues

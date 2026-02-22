@@ -17,11 +17,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.audit.graceful_degradation.enums import CircuitState
 from selfhealing.services.throttle.adaptive import AdaptiveThrottle
@@ -113,8 +114,11 @@ class ThrottleRegistry:
         with self._throttle_lock:
             self._configs[config.service_name] = config
             logger.info(
-                f"[ThrottleRegistry] Registered config for '{config.service_name}': "
-                f"limit={config.initial_limit}, min={config.min_limit}, max={config.max_limit}"
+                "cell_registry.bulkheads_registered",
+                config=config.service_name,
+                config_1=config.initial_limit,
+                config_2=config.min_limit,
+                config_3=config.max_limit,
             )
 
     def get_throttle(self, service_name: str) -> AdaptiveThrottle:
@@ -198,7 +202,10 @@ class ThrottleRegistry:
 
                 throttle.current_limit = new_limit
                 logger.warning(
-                    f"[ThrottleRegistry] CB OPEN for '{service_name}', " f"limit: {previous_limit} → {throttle.current_limit}"
+                    "throttle_registry.cb_open_limit",
+                    service_name=service_name,
+                    previous_limit=previous_limit,
+                    throttle=throttle.current_limit,
                 )
 
             elif new_cb_state == CircuitState.HALF_OPEN:
@@ -208,8 +215,10 @@ class ThrottleRegistry:
                 new_limit = int(config.initial_limit * config.cb_half_open_limit_ratio)
                 throttle.current_limit = new_limit
                 logger.info(
-                    f"[ThrottleRegistry] CB HALF_OPEN for '{service_name}', "
-                    f"limit: {previous_limit} → {throttle.current_limit}"
+                    "throttle_registry.cb_limit",
+                    service_name=service_name,
+                    previous_limit=previous_limit,
+                    throttle=throttle.current_limit,
                 )
 
             elif new_cb_state == CircuitState.CLOSED:
@@ -224,8 +233,10 @@ class ThrottleRegistry:
 
                 throttle.current_limit = new_limit
                 logger.info(
-                    f"[ThrottleRegistry] CB CLOSED for '{service_name}', "
-                    f"limit: {previous_limit} → {throttle.current_limit}"
+                    "throttle_registry.cb_closed_limit",
+                    service_name=service_name,
+                    previous_limit=previous_limit,
+                    throttle=throttle.current_limit,
                 )
 
     def register_circuit_breaker_callbacks(

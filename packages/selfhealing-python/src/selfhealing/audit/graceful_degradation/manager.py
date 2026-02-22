@@ -11,10 +11,11 @@ Provides coordinated access to all Phase 4 graceful degradation components:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from .circuit_breaker import HashChainCircuitBreaker
 from .degradation_manager import HashChainDegradationManager
@@ -169,7 +170,7 @@ class HashChainGracefulDegradationManager:
         except Exception as e:
             result["status"] = "failed"
             result["error"] = str(e)
-            logger.error(
+            logger.exception(
                 "graceful_degradation.startup_recovery_failed",
                 error=e,
             )

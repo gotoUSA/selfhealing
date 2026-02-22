@@ -6,8 +6,9 @@ Manages IMMEDIATE, DELAYED, and GRACEFUL apply strategies for configuration chan
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.core.apply_strategy import (
     ApplyStrategy,
@@ -191,8 +192,10 @@ class StrategyMixin:
             }
         except Exception as e:
             pending_service.mark_failed(pending_id, str(e))
-            logger.error(
-                f"[RuntimeConfig] Failed to apply pending change {pending_id}: {e}"
+            logger.exception(
+                "runtime_config.failed_apply_pending_change",
+                pending_id=pending_id,
+                error=e,
             )
             return {
                 "status": "error",

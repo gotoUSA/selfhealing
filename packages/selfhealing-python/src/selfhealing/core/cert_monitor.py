@@ -7,11 +7,12 @@ Can be run as scheduled task to alert before expiry.
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -150,7 +151,7 @@ class CertificateExpiryMonitor:
             try:
                 self._alert_callback(cert_info)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "error_certificate_alert_callback",
                     error=e,
                 )

@@ -19,7 +19,6 @@ Apply Strategies:
 """
 
 import structlog
-
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import status
@@ -241,8 +240,11 @@ class BaseConfigView(APIView):
             # Audit log for validation failures (potential misuse detection)
             client_ip = self._get_client_ip(request)
             logger.warning(
-                f"[ConfigAudit] Validation failed: config={self.config_name}, "
-                f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
+                "config_audit.validation_failed",
+                self=self.config_name,
+                serializer=serializer.errors,
+                request=request.user,
+                client_ip=client_ip,
             )
             raise ValidationError(serializer.errors)
 
@@ -274,8 +276,11 @@ class BaseConfigView(APIView):
         try:
             change_summary = format_changes_summary(config_changes, previous_config)
             logger.info(
-                f"[ConfigAPI] {self.config_name.upper()} config updated by {request.user}:"
-                f"{change_summary}\n  Applied: {result.get('applied_strategy', 'immediate')}"
+                "config_api.config_updated_applied",
+                self=self.config_name.upper(),
+                request=request.user,
+                change_summary=change_summary,
+                result=result.get('applied_strategy', 'immediate'),
             )
         except Exception as log_err:
             # Fallback to basic logging - never let logging failure affect the API
@@ -284,8 +289,11 @@ class BaseConfigView(APIView):
                 log_err=log_err,
             )
             logger.info(
-                f"[ConfigAPI] {self.config_name} config updated by {request.user}: "
-                f"changes={config_changes}, strategy={result.get('applied_strategy')}"
+                "config_api.config_updated",
+                self=self.config_name,
+                request=request.user,
+                config_changes=config_changes,
+                result=result.get('applied_strategy'),
             )
 
         # Determine response status based on result
@@ -427,8 +435,11 @@ class SLOConfigView(BaseConfigView):
             # Audit log for validation failures
             client_ip = self._get_client_ip(request)
             logger.warning(
-                f"[ConfigAudit] Validation failed: config={self.config_name}, "
-                f"errors={serializer.errors}, user={request.user}, ip={client_ip}"
+                "config_audit.validation_failed",
+                self=self.config_name,
+                serializer=serializer.errors,
+                request=request.user,
+                client_ip=client_ip,
             )
             raise ValidationError(serializer.errors)
 

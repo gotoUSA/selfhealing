@@ -4,10 +4,11 @@ Pending Sequence Watchdog (Self-Cleanup).
 Provides background monitoring and cleanup of stale pending sequences.
 """
 
-import structlog
 import threading
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -148,7 +149,7 @@ class PendingSequenceWatchdog:
             try:
                 self._cleanup_stale_local()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "pending_watchdog.cleanup_error",
                     error=e,
                 )

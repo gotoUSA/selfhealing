@@ -11,7 +11,6 @@ Endpoints:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request

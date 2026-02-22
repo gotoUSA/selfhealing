@@ -23,10 +23,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import get_critical_worker_settings
 

@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -124,8 +123,8 @@ class SecuritySettings(BaseSettings):
         """
         if v > 1000:
             logger.warning(
-                f"[FATAL_CONFIG] Very high rate_limit_max_requests={v}, "
-                "system may be vulnerable to DDoS. Consider <= 1000"
+                "fatal_config.very_high_system_vulnerable",
+                v=v,
             )
         return v
 
@@ -139,8 +138,8 @@ class SecuritySettings(BaseSettings):
         """
         if v < 12:
             logger.warning(
-                f"[FATAL_CONFIG] Short injection_ban_hours={v}, "
-                "consider >= 12 hours for SQL injection attempts"
+                "fatal_config.short_consider_hours_sql",
+                v=v,
             )
         return v
 
@@ -154,8 +153,8 @@ class SecuritySettings(BaseSettings):
         """
         if v > 20:
             logger.warning(
-                f"[FATAL_CONFIG] High failed_login_threshold={v}, "
-                "consider <= 20 for brute force protection"
+                "fatal_config.high_consider_brute_force",
+                v=v,
             )
         return v
 

@@ -57,7 +57,10 @@ def close_incident_group(
     Returns:
         처리 결과 딕셔너리
     """
-    logger.info(f"[CloseIncidentGroup] Starting for group {group_id}")
+    logger.info(
+        "close_incident_group.starting_group",
+        group_id=group_id,
+    )
 
     try:
         from selfhealing.services.postmortem.incident_group import (
@@ -73,7 +76,10 @@ def close_incident_group(
         group = manager.get_active_group(namespace)
 
         if not group:
-            logger.info(f"[CloseIncidentGroup] No active group for namespace={namespace}")
+            logger.info(
+                "close_incident_group.no_active_group",
+                namespace=namespace,
+            )
             return {
                 "success": True,
                 "message": "No active group",
@@ -81,7 +87,11 @@ def close_incident_group(
             }
 
         if group.group_id != group_id:
-            logger.warning(f"[CloseIncidentGroup] Group mismatch: expected={group_id}, " f"active={group.group_id}")
+            logger.warning(
+                "close_incident_group.group_mismatch",
+                group_id=group_id,
+                group=group.group_id,
+            )
             return {
                 "success": False,
                 "message": "Group ID mismatch",
@@ -89,7 +99,11 @@ def close_incident_group(
             }
 
         if group.status != IncidentGroupStatus.OPEN:
-            logger.info(f"[CloseIncidentGroup] Group {group_id} already {group.status.value}")
+            logger.info(
+                "close_incident_group.group_already",
+                group_id=group_id,
+                status=group.status.value,
+            )
             return {
                 "success": True,
                 "message": f"Group already {group.status.value}",
@@ -98,7 +112,10 @@ def close_incident_group(
 
         # 종료 조건 확인
         if not manager.should_close_group(group_id, namespace):
-            logger.info(f"[CloseIncidentGroup] Group {group_id} not ready to close")
+            logger.info(
+                "close_incident_group.group_ready_close",
+                group_id=group_id,
+            )
             return {
                 "success": True,
                 "message": "Group not ready to close",
@@ -121,13 +138,19 @@ def close_incident_group(
         if incident_count < min_count:
             # 개별 Postmortem 생성
             logger.info(
-                f"[CloseIncidentGroup] Group {group_id} has {incident_count} incidents "
-                f"(< min {min_count}), creating individual postmortems"
+                "close_incident_group.group_incidents_min_creating",
+                group_id=group_id,
+                incident_count=incident_count,
+                min_count=min_count,
             )
             result = _create_individual_postmortems(closed_group)
         else:
             # 그룹 Postmortem 생성
-            logger.info(f"[CloseIncidentGroup] Group {group_id} has {incident_count} incidents, " f"creating group postmortem")
+            logger.info(
+                "close_incident_group.group_incidents_creating_group",
+                group_id=group_id,
+                incident_count=incident_count,
+            )
             result = _create_group_postmortem(closed_group)
 
         # 그룹 완료 마킹
@@ -142,7 +165,11 @@ def close_incident_group(
         }
 
     except Exception as e:
-        logger.error(f"[CloseIncidentGroup] Error closing group {group_id}: {e}")
+        logger.exception(
+            "close_incident_group.error_closing_group",
+            group_id=group_id,
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -153,7 +180,9 @@ def close_incident_group(
 def _create_individual_postmortems(group) -> dict[str, Any]:
     """그룹 내 인시던트들에 대해 개별 Postmortem 생성."""
     try:
-        from selfhealing.services.postmortem.integrity_sealer import get_integrity_sealer
+        from selfhealing.services.postmortem.integrity_sealer import (
+            get_integrity_sealer,
+        )
         from selfhealing.services.postmortem_store import add_healing_incident
 
         sealer = get_integrity_sealer()
@@ -188,7 +217,10 @@ def _create_individual_postmortems(group) -> dict[str, Any]:
             add_healing_incident(sealed)
             created_ids.append(postmortem["incident_id"])
 
-            logger.info(f"[CloseIncidentGroup] Individual postmortem created: {postmortem['incident_id']}")
+            logger.info(
+                "close_incident_group.individual_postmortem_created",
+                postmortem=postmortem['incident_id'],
+            )
 
         return {
             "postmortem_type": "individual",
@@ -196,7 +228,10 @@ def _create_individual_postmortems(group) -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"[CloseIncidentGroup] Error creating individual postmortems: {e}")
+        logger.exception(
+            "close_incident_group.error_creating_individual_postmortems",
+            error=e,
+        )
         return {
             "postmortem_type": "individual",
             "error": str(e),
@@ -208,7 +243,9 @@ def _create_group_postmortem(group) -> dict[str, Any]:
     try:
         from datetime import datetime, timezone
 
-        from selfhealing.services.postmortem.integrity_sealer import get_integrity_sealer
+        from selfhealing.services.postmortem.integrity_sealer import (
+            get_integrity_sealer,
+        )
         from selfhealing.services.postmortem_store import add_healing_incident
 
         sealer = get_integrity_sealer()
@@ -271,8 +308,10 @@ def _create_group_postmortem(group) -> dict[str, Any]:
         add_healing_incident(sealed)
 
         logger.info(
-            f"[CloseIncidentGroup] Group postmortem created: {group.group_id} "
-            f"(pattern={cascading_pattern}, services={len(affected_services)})"
+            "close_incident_group.group_postmortem_created",
+            group=group.group_id,
+            cascading_pattern=cascading_pattern,
+            count=len(affected_services),
         )
 
         return {
@@ -282,7 +321,10 @@ def _create_group_postmortem(group) -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"[CloseIncidentGroup] Error creating group postmortem: {e}")
+        logger.exception(
+            "close_incident_group.error_creating_group_postmortem",
+            error=e,
+        )
         return {
             "postmortem_type": "group",
             "error": str(e),
@@ -341,7 +383,10 @@ def flush_aggregated_notifications(
     Returns:
         처리 결과 딕셔너리
     """
-    logger.info(f"[FlushNotifications] Starting for namespace={namespace}")
+    logger.info(
+        "flush_notifications.starting",
+        namespace=namespace,
+    )
 
     try:
         from selfhealing.services.postmortem.notification_aggregator import (
@@ -364,7 +409,10 @@ def flush_aggregated_notifications(
         if not aggregator.should_flush(namespace):
             pending_count = aggregator.get_pending_count(namespace)
             if pending_count > 0:
-                logger.debug(f"[FlushNotifications] Not ready to flush " f"({pending_count} pending)")
+                logger.debug(
+                    "flush_notifications.ready_flush_pending",
+                    pending_count=pending_count,
+                )
             return {
                 "success": True,
                 "message": "Not ready to flush",
@@ -390,7 +438,10 @@ def flush_aggregated_notifications(
         }
 
     except Exception as e:
-        logger.error(f"[FlushNotifications] Error: {e}")
+        logger.exception(
+            "flush_notifications.error",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -453,14 +504,26 @@ def _send_aggregated_notification(summary, settings) -> None:
         result = manager.notify(payload)
 
         if result.success:
-            logger.info(f"[FlushNotifications] Summary notification sent: " f"{summary.total_incidents} incidents")
+            logger.info(
+                "flush_notifications.summary_notification_sent_incidents",
+                summary=summary.total_incidents,
+            )
         else:
-            logger.warning(f"[FlushNotifications] Notification failed: {result.error}")
+            logger.warning(
+                "flush_notifications.notification_failed",
+                result=result.error,
+            )
 
     except ImportError as e:
-        logger.debug(f"[FlushNotifications] Notification module not available: {e}")
+        logger.debug(
+            "flush_notifications.notification_module_available",
+            error=e,
+        )
     except Exception as e:
-        logger.warning(f"[FlushNotifications] Failed to send notification: {e}")
+        logger.warning(
+            "flush_notifications.failed_send_notification",
+            error=e,
+        )
 
 
 @shared_task(
@@ -487,7 +550,10 @@ def check_stale_incident_groups(
     Returns:
         처리 결과 딕셔너리
     """
-    logger.debug(f"[CheckStaleGroups] Checking namespace={namespace}")
+    logger.debug(
+        "check_stale_groups.checking",
+        namespace=namespace,
+    )
 
     try:
         from selfhealing.services.postmortem.incident_group import (
@@ -518,7 +584,10 @@ def check_stale_incident_groups(
                 group_id=group.group_id,
                 namespace=namespace,
             )
-            logger.info(f"[CheckStaleGroups] Scheduled close for group {group.group_id}")
+            logger.info(
+                "check_stale_groups.scheduled_close_group",
+                group=group.group_id,
+            )
             return {
                 "success": True,
                 "message": "Close task scheduled",
@@ -533,7 +602,10 @@ def check_stale_incident_groups(
         }
 
     except Exception as e:
-        logger.error(f"[CheckStaleGroups] Error: {e}")
+        logger.exception(
+            "check_stale_groups.error",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -584,8 +656,10 @@ def process_individual_postmortem(
         Postmortem 생성 결과 딕셔너리
     """
     logger.info(
-        f"[ProcessIndividualPostmortem] Starting for '{service_name}' "
-        f"(type={event_type}, attempt {self.request.retries + 1})"
+        "process_individual_postmortem.starting_attempt",
+        service_name=service_name,
+        event_type=event_type,
+        self=self.request.retries + 1,
     )
 
     if event_bus_history is None:
@@ -607,7 +681,10 @@ def process_individual_postmortem(
                 web_server_metrics=web_server_metrics,
             )
         else:
-            logger.warning(f"[ProcessIndividualPostmortem] Unknown event_type: {event_type}")
+            logger.warning(
+                "process_individual_postmortem.unknown",
+                event_type=event_type,
+            )
             return {
                 "success": False,
                 "service_name": service_name,
@@ -615,9 +692,10 @@ def process_individual_postmortem(
             }
 
     except Exception as e:
-        logger.error(
-            f"[ProcessIndividualPostmortem] Failed for '{service_name}': {e}",
-            exc_info=True,
+        logger.exception(
+            "process_individual_postmortem.failed",
+            service_name=service_name,
+            error=e,
         )
         return {
             "success": False,
@@ -642,8 +720,14 @@ def _process_cb_closed_postmortem(
     )
     from selfhealing.services.postmortem_store import (
         add_healing_incident,
+    )
+    from selfhealing.services.postmortem_store import (
         build_timeline as _build_timeline,
+    )
+    from selfhealing.services.postmortem_store import (
         collect_service_states as _collect_service_states,
+    )
+    from selfhealing.services.postmortem_store import (
         generate_postmortem_data as _generate_postmortem_data,
     )
     from selfhealing.settings.postmortem import get_postmortem_settings
@@ -690,7 +774,10 @@ def _process_cb_closed_postmortem(
     duration = postmortem.get("duration_seconds")
     if duration is not None and duration < min_duration:
         logger.debug(
-            f"[ProcessIndividualPostmortem] Skipped for '{service_name}': " f"duration {duration:.0f}s < min {min_duration}s"
+            "process_individual_postmortem.skipped_duration_min",
+            service_name=service_name,
+            duration=duration,
+            min_duration=min_duration,
         )
         return {
             "success": True,
@@ -701,17 +788,26 @@ def _process_cb_closed_postmortem(
 
     # 무결성 봉인
     try:
-        from selfhealing.services.postmortem.integrity_sealer import get_integrity_sealer
+        from selfhealing.services.postmortem.integrity_sealer import (
+            get_integrity_sealer,
+        )
 
         sealer = get_integrity_sealer()
         postmortem = sealer.seal(postmortem)
     except Exception as seal_error:
-        logger.warning(f"[ProcessIndividualPostmortem] Integrity seal failed: {seal_error}")
+        logger.warning(
+            "process_individual_postmortem.integrity_seal_failed",
+            seal_error=seal_error,
+        )
 
     # 저장
     add_healing_incident(postmortem)
 
-    logger.info(f"[ProcessIndividualPostmortem] CB postmortem generated: {incident_id} " f"(duration={duration}s)")
+    logger.info(
+        "process_individual_postmortem.cb_postmortem_generated",
+        incident_id=incident_id,
+        duration=duration,
+    )
 
     # 알림 발송
     _send_postmortem_notification_from_task(
@@ -742,7 +838,10 @@ def _process_cb_closed_postmortem(
             target_id=incident_id,
         )
     except Exception as audit_error:
-        logger.warning(f"[ProcessIndividualPostmortem] Failed to log audit: {audit_error}")
+        logger.warning(
+            "process_individual_postmortem.failed_log_audit",
+            audit_error=audit_error,
+        )
 
     return {
         "success": True,
@@ -804,8 +903,11 @@ def _process_emergency_postmortem(
 
     incident_id = postmortem.get("incident_id")
     logger.info(
-        f"[ProcessIndividualPostmortem] Emergency postmortem generated: {incident_id} "
-        f"(session={session_id}, level={trigger_level}, duration={duration}s)"
+        "process_individual_postmortem.emergency_postmortem_generated",
+        incident_id=incident_id,
+        session_id=session_id,
+        trigger_level=trigger_level,
+        duration=duration,
     )
 
     # WAL Audit 기록
@@ -829,7 +931,10 @@ def _process_emergency_postmortem(
             target_id=incident_id,
         )
     except Exception as audit_error:
-        logger.warning(f"[ProcessIndividualPostmortem] Failed to log emergency audit: {audit_error}")
+        logger.warning(
+            "process_individual_postmortem.failed_log_emergency_audit",
+            audit_error=audit_error,
+        )
 
     # 알림 발송
     try:
@@ -842,7 +947,10 @@ def _process_emergency_postmortem(
             affected_services=[],
         )
     except Exception as notify_error:
-        logger.warning(f"[ProcessIndividualPostmortem] Failed to send emergency notification: {notify_error}")
+        logger.warning(
+            "process_individual_postmortem.failed_send_emergency_notification",
+            notify_error=notify_error,
+        )
 
     return {
         "success": True,
@@ -864,14 +972,19 @@ def _send_postmortem_notification_from_task(
     """Celery Task 내에서 Postmortem 알림 발송."""
     try:
         if not settings.notification_enabled:
-            logger.debug(f"[ProcessIndividualPostmortem] Notification disabled for {incident_id}")
+            logger.debug(
+                "process_individual_postmortem.notification_disabled",
+                incident_id=incident_id,
+            )
             return
 
         notification_min_duration = settings.notification_min_duration
         if duration is not None and duration < notification_min_duration:
             logger.debug(
-                f"[ProcessIndividualPostmortem] Notification skipped for {incident_id}: "
-                f"duration {duration}s < min {notification_min_duration}s"
+                "process_individual_postmortem.notification_skipped_duration_min",
+                incident_id=incident_id,
+                duration=duration,
+                notification_min_duration=notification_min_duration,
             )
             return
 
@@ -924,11 +1037,19 @@ def _send_postmortem_notification_from_task(
         result = manager.notify(payload)
 
         if result.success and not result.suppressed:
-            logger.info(f"[ProcessIndividualPostmortem] Notification sent for {incident_id}")
+            logger.info(
+                "process_individual_postmortem.notification_sent",
+                incident_id=incident_id,
+            )
         elif result.suppressed:
             logger.debug(
-                f"[ProcessIndividualPostmortem] Notification suppressed for {incident_id}: " f"{result.suppression_reason}"
+                "process_individual_postmortem.notification_suppressed",
+                incident_id=incident_id,
+                result=result.suppression_reason,
             )
 
     except Exception as e:
-        logger.warning(f"[ProcessIndividualPostmortem] Failed to send notification: {e}")
+        logger.warning(
+            "process_individual_postmortem.failed_send_notification",
+            error=e,
+        )

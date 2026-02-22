@@ -8,9 +8,10 @@ Saga 오케스트레이터를 위한 Celery 태스크.
 - scan_orphan_sagas: 고아/중단 Saga를 주기적으로 스캔하여 재개
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 # Celery는 선택적 의존성
 try:
@@ -198,7 +199,7 @@ def _scan_active_saga_instances():
 
         return instances
     except Exception as e:
-        logger.error(
+        logger.exception(
             "[Saga] scan_active_saga_instances failed",
             extra={"error": str(e)},
         )

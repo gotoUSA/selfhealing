@@ -176,8 +176,9 @@ class AbstractPostmortemRecord(models.Model if DJANGO_AVAILABLE else object):
             생성된 PostmortemRecord 인스턴스 (미저장)
         """
         import uuid
-        from django.utils import timezone as dj_timezone
         from datetime import datetime
+
+        from django.utils import timezone as dj_timezone
 
         # incident_id 추출 또는 생성
         incident_id = incident_data.get("incident_id") or str(uuid.uuid4())

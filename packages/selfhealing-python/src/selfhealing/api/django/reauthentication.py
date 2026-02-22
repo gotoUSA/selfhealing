@@ -14,13 +14,14 @@ Key Features:
 
 from __future__ import annotations
 
-import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -149,8 +150,9 @@ class ReauthenticationProvider(ABC):
         user = getattr(request, "user", None)
         user_id = getattr(user, "id", "anonymous") if user else "anonymous"
         logger.info(
-            f"[Reauth] Reauthentication required: user={user_id}, "
-            f"path={request.path}, reason=idle_or_session_timeout"
+            "reauth.reauthentication_required",
+            user_id=user_id,
+            request=request.path,
         )
 
 
@@ -223,7 +225,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
 
         if not hasattr(request, "session"):
             # No session available, can't check
-            logger.warning("reauth.no_session_available_reauthentication")
+            logger.warning("reauth")
             return False
 
         now = datetime.now(timezone.utc)
@@ -236,7 +238,9 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
                 idle_minutes = (now - last_activity).total_seconds() / 60
                 if idle_minutes > config.max_idle_minutes:
                     logger.info(
-                        f"[Reauth] Idle timeout exceeded: {idle_minutes:.1f} > {config.max_idle_minutes}"
+                        "reauth.idle_timeout_exceeded",
+                        idle_minutes=idle_minutes,
+                        config=config.max_idle_minutes,
                     )
                     return True
             except (ValueError, TypeError):
@@ -250,7 +254,9 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
                 session_minutes = (now - auth_time).total_seconds() / 60
                 if session_minutes > config.max_session_minutes:
                     logger.info(
-                        f"[Reauth] Session timeout exceeded: {session_minutes:.1f} > {config.max_session_minutes}"
+                        "reauth.session_timeout_exceeded",
+                        session_minutes=session_minutes,
+                        config=config.max_session_minutes,
                     )
                     return True
             except (ValueError, TypeError):
@@ -397,7 +403,7 @@ def requires_reauthentication(
                     return provider.get_reauthentication_response(request, config)
             except Exception as e:
                 # FAIL-SECURE: On error checking reauth, deny access
-                logger.error(
+                logger.exception(
                     "reauth.error_checking_reauthentication",
                     error=e,
                 )
@@ -463,7 +469,7 @@ class RequiresReauthenticationPermission:
 
         except Exception as e:
             # FAIL-SECURE: On error, deny access
-            logger.error(
+            logger.exception(
                 "reauth.permission_check_error",
                 error=e,
             )

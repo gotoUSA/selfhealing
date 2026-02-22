@@ -20,12 +20,13 @@ Postmortem의 root_cause_hypothesis를 키워드 매칭에서
 
 from __future__ import annotations
 
-import structlog
 import math
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.blast_radius.service import BlastRadiusService
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (

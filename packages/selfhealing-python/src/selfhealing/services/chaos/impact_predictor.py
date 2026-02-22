@@ -15,9 +15,10 @@ Design Principle:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -166,8 +167,9 @@ class ImpactPredictor:
 
             if not similar_patterns:
                 logger.info(
-                    f"[ImpactPredictor] No similar patterns found for "
-                    f"{experiment_type} on {target_service}"
+                    "impact_predictor.no_similar_patterns_found",
+                    experiment_type=experiment_type,
+                    target_service=target_service,
                 )
                 # 기본 예측 반환 (패턴 없음)
                 return self._generate_default_prediction(

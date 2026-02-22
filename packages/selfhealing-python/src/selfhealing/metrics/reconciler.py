@@ -7,10 +7,11 @@ during server startup and on-demand.
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.adapters.metrics.base import (
     MetricSourceAdapter,
@@ -399,7 +400,7 @@ class MetricReconciler:
                     },
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "reconciler.failed_create_incident",
                     error=e,
                 )

@@ -36,11 +36,11 @@ Note:
 
 from __future__ import annotations
 
-import structlog
 import random
 import threading
 from typing import TYPE_CHECKING
 
+import structlog
 from django.apps import AppConfig
 from django.conf import settings
 from django.db.models.signals import post_migrate
@@ -287,8 +287,8 @@ class SelfHealingConfig(AppConfig):
 
                 if action == "synced_redis_to_file":
                     logger.warning(
-                        f"[SelfHealing] Hash chain sync: Redis was behind, "
-                        f"synced to file (seq {result.get('file_sequence')})"
+                        "self_healing.hash_chain_sync_redis",
+                        result=result.get('file_sequence'),
                     )
                 elif action == "fresh_start":
                     logger.info("self_healing.hash_chain_sync_fresh")
@@ -300,7 +300,8 @@ class SelfHealingConfig(AppConfig):
 
                 if pending_cleaned > 0:
                     logger.info(
-                        f"[SelfHealing] Hash chain sync: Cleaned {pending_cleaned} " "pending sequences from previous crash"
+                        "self_healing.hash_chain_sync_cleaned",
+                        pending_cleaned=pending_cleaned,
                     )
             else:
                 logger.warning(
@@ -437,15 +438,12 @@ class SelfHealingConfig(AppConfig):
                 ttl_seconds=None,  # 무기한 (수동 해제 필요)
             )
 
-            logger.critical(
-                "[QUARANTINE] System started in Quarantine Mode (LEVEL_3) "
-                "due to fatal config violations. Manual intervention required."
-            )
+            logger.critical("quarantine.system_started_quarantine_mode")
 
         except ImportError:
             logger.warning("self_healing.module_available_quarantine")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "self_healing.failed_activate_quarantine_mode",
                 error=e,
             )
@@ -524,9 +522,9 @@ class SelfHealingConfig(AppConfig):
             result = reconciler.sync_all_gauges()
 
             logger.info(
-                f"[SelfHealing] Gauge hydration completed: "
-                f"dlq_domains={len(result.dlq_pending)}, "
-                f"cb_services={len(result.circuit_breaker_states)}"
+                "self_healing.gauge_hydration_completed",
+                count=len(result.dlq_pending),
+                count_1=len(result.circuit_breaker_states),
             )
 
         except ImportError:
@@ -534,8 +532,8 @@ class SelfHealingConfig(AppConfig):
         except Exception as e:
             # Graceful Degradation: 실패해도 서버 기동은 계속
             logger.warning(
-                f"[SelfHealing] Gauge hydration failed (non-fatal): {e}. "
-                f"Gauges will be updated on next event or manual sync."
+                "self_healing.gauge_hydration_failed_non",
+                error=e,
             )
 
     # =========================================================================
@@ -578,18 +576,15 @@ class SelfHealingConfig(AppConfig):
             # Start background worker
             start_precomputed_cache()
 
-            logger.info(
-                "[SelfHealing] Pre-computed cache worker started "
-                "(L3 observability endpoints: health, error-budget, pool-status)"
-            )
+            logger.info("self_healing.pre_computed_cache_worker")
 
         except ImportError:
             logger.debug("self_healing.module_available")
         except Exception as e:
             # Graceful Degradation: 실패해도 서버 기동은 계속
             logger.warning(
-                f"[SelfHealing] Failed to start pre-computed cache worker (non-fatal): {e}. "
-                f"L3 endpoints will compute on-demand."
+                "self_healing.failed_start_pre_computed",
+                error=e,
             )
 
     # =========================================================================
@@ -632,17 +627,17 @@ class SelfHealingConfig(AppConfig):
             start_system_metrics_cache()
 
             logger.info(
-                f"[SelfHealing] System metrics cache started "
-                f"(refresh={settings.refresh_interval}s, "
-                f"sample={settings.sample_interval}s)"
+                "self_healing.system_metrics_cache_started",
+                settings=settings.refresh_interval,
+                settings_1=settings.sample_interval,
             )
 
         except ImportError:
             logger.debug("self_healing.module_available")
         except Exception as e:
             logger.warning(
-                f"[SelfHealing] Failed to start system metrics cache (non-fatal): {e}. "
-                f"Consumers will use direct psutil calls."
+                "self_healing.failed_start_system_metrics",
+                error=e,
             )
 
     # =========================================================================
@@ -703,8 +698,8 @@ class SelfHealingConfig(AppConfig):
         except Exception as e:
             # Graceful Degradation: 실패해도 서버 기동은 계속
             logger.warning(
-                f"[SelfHealing] Failed to start Meta-Watchdog (non-fatal): {e}. "
-                f"Self-Healing system will operate without self-monitoring."
+                "self_healing.failed_start_meta_watchdog",
+                error=e,
             )
 
     @classmethod
@@ -760,13 +755,8 @@ class SelfHealingConfig(AppConfig):
             # traceback과 해결 방법(환경변수 설정 가이드)은 제공하지 않음.
             # 이 블록에서 보완하여 운영자가 즉시 조치할 수 있도록 함.
             logger.critical(
-                f"[SelfHealing] Secrets validation FAILED: {e}\n"
-                "Resolution: Set the missing environment variables before starting.\n"
-                "  CRITICAL secrets (env_prefix='SELFHEALING_SECRET_'):\n"
-                "  - SELFHEALING_SECRET_ENCRYPTION_KEY: 데이터 암호화 키\n"
-                "  - SELFHEALING_SECRET_AUDIT_SIGNING_KEY: 감사 로그 서명 키\n"
-                "See: selfhealing/settings/secrets.py SecretsSettings 클래스 참조",
-                exc_info=True,
+                "self_healing.secrets_validation_failed_resolution",
+                error=e,
             )
             raise
         except Exception as e:

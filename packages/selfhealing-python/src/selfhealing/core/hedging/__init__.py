@@ -43,46 +43,46 @@ Usage:
     result = executor.execute(candidates)
 """
 
+from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
+from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 from selfhealing.core.hedging.config import (
     HedgingCandidate,
     HedgingConfig,
     HedgingMode,
 )
-from selfhealing.core.hedging.result import HedgingResult
-from selfhealing.core.hedging.exceptions import (
-    HedgingAllFailedError,
-    HedgingDisabledError,
-    HedgingError,
-    HedgingTimeoutError,
-    NonRetryableHedgingError,
-    # Deprecated aliases
-    HedgingException,
-    HedgingAllFailedException,
-    HedgingTimeoutException,
-)
-from selfhealing.core.hedging.executor import HedgingExecutor
-from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
-from selfhealing.core.hedging.strategy import HedgingStrategy, HedgingStrategyCompat
-from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 from selfhealing.core.hedging.decorator import (
     hedged,
     hedged_async,
     hedged_sync,
 )
+from selfhealing.core.hedging.exceptions import (
+    HedgingAllFailedError,
+    HedgingAllFailedException,
+    HedgingDisabledError,
+    HedgingError,
+    # Deprecated aliases
+    HedgingException,
+    HedgingTimeoutError,
+    HedgingTimeoutException,
+    NonRetryableHedgingError,
+)
+from selfhealing.core.hedging.executor import HedgingExecutor
 from selfhealing.core.hedging.latency_tracker import HedgingLatencyTracker
+from selfhealing.core.hedging.metrics import (
+    record_hedging_benefit,
+    record_hedging_disabled,
+    record_hedging_execution,
+    record_hedging_failure,
+    record_hedging_hedged,
+    record_hedging_success,
+)
+from selfhealing.core.hedging.otel import hedging_span, record_hedging_result
+from selfhealing.core.hedging.result import HedgingResult
 from selfhealing.core.hedging.result_validator import (
     HedgingResultValidator,
     ResultMismatchRecord,
 )
-from selfhealing.core.hedging.otel import hedging_span, record_hedging_result
-from selfhealing.core.hedging.metrics import (
-    record_hedging_execution,
-    record_hedging_success,
-    record_hedging_failure,
-    record_hedging_hedged,
-    record_hedging_benefit,
-    record_hedging_disabled,
-)
+from selfhealing.core.hedging.strategy import HedgingStrategy, HedgingStrategyCompat
 from selfhealing.resilience.policies.hedging import (
     AsyncHedgingPolicy,
     HedgingConfigUpdateHook,

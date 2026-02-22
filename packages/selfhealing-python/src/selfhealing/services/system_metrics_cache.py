@@ -11,12 +11,13 @@ threading.Timer + daemon=True 패턴.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -87,7 +88,9 @@ class SystemMetricsCache:
                 return
             self._running = True
             logger.info(
-                f"[SystemMetricsCache] Starting " f"(refresh={self._refresh_interval}s, sample={self._sample_interval}s)"
+                "system_metrics_cache.starting",
+                self=self._refresh_interval,
+                self_1=self._sample_interval,
             )
 
             # Cold Start 방지: 첫 측정을 동기로 수행 (~100ms)
@@ -103,7 +106,7 @@ class SystemMetricsCache:
             if self._timer:
                 self._timer.cancel()
                 self._timer = None
-            logger.info("system_metrics_cache.stopped")
+            logger.info("stopped")
 
     def is_running(self) -> bool:
         """캐시 워커 실행 여부."""

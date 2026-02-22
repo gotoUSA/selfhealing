@@ -14,10 +14,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.canary.interlock import CanarySafetyInterlock
@@ -125,7 +126,7 @@ class EmergencyStateRefresher:
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
 
-            logger.info("emergency_state_refresher.started")
+            logger.info("started")
             return True
 
     def stop(self) -> None:
@@ -142,7 +143,7 @@ class EmergencyStateRefresher:
 
             self._thread = None
 
-            logger.info("emergency_state_refresher.stopped")
+            logger.info("stopped")
 
     def force_refresh(self) -> dict[str, Any] | None:
         """
@@ -165,8 +166,10 @@ class EmergencyStateRefresher:
             # 레벨 변경 감지
             if old_level is not None and new_level != old_level:
                 logger.warning(
-                    f"[EmergencyStateRefresher] Level changed: "
-                    f"{namespace}: {old_level} -> {new_level}"
+                    "emergency_state_refresher.level_changed",
+                    namespace=namespace,
+                    old_level=old_level,
+                    new_level=new_level,
                 )
 
                 # 레벨 상승 시 활성 롤아웃 일시 중지
@@ -184,7 +187,7 @@ class EmergencyStateRefresher:
             return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "emergency_state_refresher.refresh_failed",
                 error=e,
             )
@@ -200,9 +203,10 @@ class EmergencyStateRefresher:
                 self._consecutive_failures = 0
             except Exception as e:
                 self._consecutive_failures += 1
-                logger.error(
-                    f"[EmergencyStateRefresher] Refresh error "
-                    f"(failures: {self._consecutive_failures}): {e}"
+                logger.exception(
+                    "emergency_state_refresher.refresh_error_failures",
+                    self=self._consecutive_failures,
+                    error=e,
                 )
 
             # 다음 갱신까지 대기 (with jitter)
@@ -232,17 +236,21 @@ class EmergencyStateRefresher:
                     self._canary_service.pause(rollout.id)
                     count += 1
                     logger.warning(
-                        f"[EmergencyStateRefresher] Paused rollout: {rollout.id}"
+                        "emergency_state_refresher.paused_rollout",
+                        rollout=rollout.id,
                     )
                 except Exception as e:
-                    logger.error(
-                        f"[EmergencyStateRefresher] Failed to pause {rollout.id}: {e}"
+                    logger.exception(
+                        "emergency_state_refresher.failed_pause",
+                        rollout=rollout.id,
+                        error=e,
                     )
 
             return count
         except Exception as e:
-            logger.error(
-                f"[EmergencyStateRefresher] Failed to get active rollouts: {e}"
+            logger.exception(
+                "emergency_state_refresher.failed_get_active_rollouts",
+                error=e,
             )
             return 0
 

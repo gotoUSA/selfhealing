@@ -13,9 +13,9 @@ Celery 태스크에 cell_id 태깅 — 하이브리드 3단계 전파.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
+import structlog
 from celery.signals import before_task_publish
 
 logger = structlog.get_logger()

@@ -13,8 +13,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import _try_add_to_buffer, _write_to_wal
 
@@ -106,8 +107,12 @@ def log_retry_audit(
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     status = "SUCCESS" if success else ("EXHAUSTED" if is_exhausted else "RETRY")
     logger.info(
-        f"[RetryAudit] {status} | domain={domain} | "
-        f"attempt={attempt}/{max_attempts} | error={error_type or 'none'}"
+        "retry_audit.event",
+        status=status,
+        domain=domain,
+        attempt=attempt,
+        max_attempts=max_attempts,
+        value=error_type or 'none',
     )
     return wal_seq
 
@@ -172,7 +177,10 @@ def log_system_control_audit(
 
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     logger.info(
-        f"[SystemControlAudit] {action.upper()} | actor={actor} | reason={reason or 'N/A'}"
+        "system_control_audit.event",
+        action=action.upper(),
+        actor=actor,
+        value=reason or 'N/A',
     )
     return wal_seq
 
@@ -259,8 +267,11 @@ def log_rollback_audit(
 
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     logger.info(
-        f"[RollbackAudit] {state.upper()} | request={request_id} | "
-        f"stage={stage_name} | by={triggered_by} | "
-        f"duration={duration_seconds or 0:.2f}s"
+        "rollback_audit.event",
+        state=state.upper(),
+        request_id=request_id,
+        stage_name=stage_name,
+        triggered_by=triggered_by,
+        value=duration_seconds or 0,
     )
     return wal_seq

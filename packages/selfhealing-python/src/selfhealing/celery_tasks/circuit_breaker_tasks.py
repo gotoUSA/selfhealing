@@ -39,12 +39,19 @@ def check_circuit_breaker_recovery(self) -> dict:
         result = service.check_recovery_transitions()
 
         if result.get("count", 0) > 0:
-            logger.info(f"[Circuit Check] Transitioned {result['count']} circuit(s): " f"{result.get('transitioned', [])}")
+            logger.info(
+                "circuit_check_transitioned_circuit",
+                result=result['count'],
+                result_1=result.get('transitioned', []),
+            )
 
         return result
 
     except Exception as e:
-        logger.error(f"[Circuit Check] Error: {e}", exc_info=True)
+        logger.exception(
+            "circuit_check_error",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -85,7 +92,10 @@ def expire_manual_overrides(self) -> dict:
         expired = service.check_and_expire_manual_overrides()
 
         if expired:
-            logger.warning(f"[Circuit Breaker] Expired manual overrides: {expired}")
+            logger.warning(
+                "circuit_breaker_expired_manual",
+                expired=expired,
+            )
 
         return {
             "success": True,
@@ -94,7 +104,10 @@ def expire_manual_overrides(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[Circuit Breaker] Error expiring overrides: {e}", exc_info=True)
+        logger.exception(
+            "circuit_breaker_error_expiring",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -130,7 +143,11 @@ def force_open_circuit_breaker(
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
+    logger.warning(
+        "circuit_breaker_force_opening",
+        service_name=service_name,
+        reason=reason,
+    )
 
     try:
         service = get_circuit_breaker_service()
@@ -141,7 +158,10 @@ def force_open_circuit_breaker(
         )
 
         if result.success:
-            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
+            logger.warning(
+                "circuit_breaker_successfully_opened",
+                service_name=service_name,
+            )
             return {
                 "success": True,
                 "service_name": service_name,
@@ -157,7 +177,10 @@ def force_open_circuit_breaker(
             }
 
     except Exception as e:
-        logger.error(f"[Circuit Breaker] Error opening circuit: {e}", exc_info=True)
+        logger.exception(
+            "circuit_breaker_error_opening",
+            error=e,
+        )
         return {
             "success": False,
             "service_name": service_name,
@@ -196,7 +219,11 @@ def force_close_circuit_breaker(
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
+    logger.info(
+        "circuit_breaker_force_closing",
+        service_name=service_name,
+        reason=reason,
+    )
 
     try:
         service = get_circuit_breaker_service()
@@ -208,7 +235,10 @@ def force_close_circuit_breaker(
         )
 
         if result.success:
-            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
+            logger.info(
+                "circuit_breaker_successfully_closed",
+                service_name=service_name,
+            )
             return {
                 "success": True,
                 "service_name": service_name,
@@ -224,7 +254,10 @@ def force_close_circuit_breaker(
             }
 
     except Exception as e:
-        logger.error(f"[Circuit Breaker] Error closing circuit: {e}", exc_info=True)
+        logger.exception(
+            "circuit_breaker_error_closing",
+            error=e,
+        )
         return {
             "success": False,
             "service_name": service_name,

@@ -13,7 +13,6 @@ Escalation Manager - 인간 개입 요청.
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 import urllib.error
@@ -22,6 +21,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
 
@@ -309,13 +310,13 @@ class EscalationManager:
 
             return False
         except urllib.error.URLError as e:
-            logger.error(
+            logger.exception(
                 "escalation.pagerduty_network_error",
                 error=e,
             )
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "escalation.pagerduty_error",
                 error=e,
             )
@@ -399,13 +400,13 @@ class EscalationManager:
 
             return False
         except urllib.error.URLError as e:
-            logger.error(
+            logger.exception(
                 "escalation.slack_network_error",
                 error=e,
             )
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "escalation.slack_error",
                 error=e,
             )

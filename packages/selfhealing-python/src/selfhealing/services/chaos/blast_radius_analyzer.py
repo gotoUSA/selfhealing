@@ -16,10 +16,11 @@ Design Principle:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -214,8 +215,9 @@ class BlastRadiusAnalyzer:
             BlastRadiusAnalysisResult: 분석 결과
         """
         logger.info(
-            f"[BlastRadiusAnalyzer] Analyzing blast radius for "
-            f"{experiment_type} on {target_service}"
+            "blast_radius_analyzer.analyzing_blast_radius",
+            experiment_type=experiment_type,
+            target_service=target_service,
         )
 
         # 1. 영향받는 서비스 탐색
@@ -278,8 +280,10 @@ class BlastRadiusAnalyzer:
         )
 
         logger.info(
-            f"[BlastRadiusAnalyzer] Analysis complete: level={level.value}, "
-            f"affected={len(affected_services)}, risk={risk_score:.2f}"
+            "blast_radius_analyzer.analysis_complete",
+            level=level.value,
+            count=len(affected_services),
+            risk_score=risk_score,
         )
 
         return result

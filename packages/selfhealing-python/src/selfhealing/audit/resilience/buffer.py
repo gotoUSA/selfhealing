@@ -8,11 +8,12 @@ WAL 실패 시 메모리 폴백 버퍼.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.resilient_recorder import get_resilient_recorder_settings
 
@@ -105,7 +106,7 @@ class InMemoryAuditBuffer:
                 self._total_dropped += 1
                 dropped = True
                 logger.warning(
-                    "[InMemoryAuditBuffer] Buffer full, dropped oldest entry " f"(total dropped: {self._total_dropped})"
+                    "[InMemoryAuditBuffer] Buffer full, dropped oldest entry " f"(total dropped: {self._total_dropped})"  # noqa: G004
                 )
 
             entry["buffered_at"] = datetime.now(timezone.utc).isoformat()

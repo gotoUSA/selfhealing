@@ -13,12 +13,13 @@ Primary 승격 전 반드시 Witness 락을 획득해야 합니다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Protocol
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -256,7 +257,7 @@ class QuorumWitness:
                 return True
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "quorum.lease_renewal_failed",
                     error=e,
                 )
@@ -318,7 +319,7 @@ class QuorumWitness:
             return item["region"]["S"]
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "quorum.get_primary_failed",
                 error=e,
             )
@@ -358,14 +359,14 @@ class QuorumWitness:
             daemon=True,
         )
         self._renew_thread.start()
-        logger.info("quorum.auto_renew_started")
+        logger.info("quorum")
 
     def stop_auto_renew(self) -> None:
         """자동 갱신 중지."""
         self._renew_running = False
         if self._renew_thread:
             self._renew_thread.join(timeout=5.0)
-        logger.info("quorum.auto_renew_stopped")
+        logger.info("quorum")
 
 
 class InMemoryQuorumWitness:
@@ -414,8 +415,9 @@ class InMemoryQuorumWitness:
                 return True
             else:
                 logger.warning(
-                    f"[Quorum/InMemory] Lease denied: {self._region} "
-                    f"(held by {InMemoryQuorumWitness._global_lease.region})"
+                    "lease_denied_held",
+                    self=self._region,
+                    InMemoryQuorumWitness=InMemoryQuorumWitness._global_lease.region,
                 )
                 return False
 

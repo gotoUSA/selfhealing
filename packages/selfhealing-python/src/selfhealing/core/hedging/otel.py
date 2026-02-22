@@ -12,10 +12,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import time
 from contextlib import contextmanager
 from typing import Any, Generator
+
+import structlog
 
 logger = structlog.get_logger()
 

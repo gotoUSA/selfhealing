@@ -28,7 +28,6 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import queue
 import threading
 import time
@@ -37,6 +36,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.interfaces.audit_adapter import AuditEntry
 
@@ -52,7 +53,6 @@ logger = structlog.get_logger()
 # =============================================================================
 
 from selfhealing.utils.async_logger import EventSeverity  # noqa: E402, F401
-
 
 # =============================================================================
 # AsyncLogger Adapter
@@ -416,7 +416,7 @@ class AsyncLoggerAdapter:
             )
         except Exception as e:
             self._stats["flush_errors"] += 1
-            logger.error(
+            logger.exception(
                 "async_logger_adapter.flush_failed",
                 error=e,
             )
@@ -633,7 +633,7 @@ class IntegratedAuditRecorder:
                 try:
                     observer.on_event(event)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "integrated_recorder.observer_error",
                         error=e,
                     )
@@ -815,12 +815,12 @@ def create_command_center_callback(
                         response=response.status,
                     )
         except urllib.error.URLError as e:
-            logger.error(
+            logger.exception(
                 "failed_send_command_center",
                 error=e,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "command_center_callback_error",
                 error=e,
             )

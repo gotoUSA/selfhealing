@@ -18,7 +18,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -151,8 +150,8 @@ class CorruptionShieldSettings(BaseSettings):
         """Z-Score가 너무 낮으면 경고."""
         if v < 2.0:
             logger.warning(
-                f"[CorruptionShield] z_score_threshold={v}는 매우 민감합니다. "
-                "오탐(false positive)이 증가할 수 있습니다."
+                "corruption_shield.매우_민감합니다_오탐_false",
+                v=v,
             )
         return v
 
@@ -162,8 +161,8 @@ class CorruptionShieldSettings(BaseSettings):
         """금액 범위 로깅."""
         if info.field_name == "max_amount" and v > 500_000_000:
             logger.info(
-                f"[CorruptionShield] max_amount={v:,}원으로 설정됨. "
-                "대규모 거래가 허용됩니다."
+                "corruption_shield.원으로_설정됨_대규모_거래가",
+                v=v,
             )
         return v
 

@@ -50,7 +50,10 @@ def async_persist_dlq_entry(self, entry_data: dict[str, Any]) -> dict:
     Returns:
         Dictionary with persistence result
     """
-    logger.debug(f"[AsyncPersist] Persisting DLQ entry: {entry_data.get('id', 'unknown')}")
+    logger.debug(
+        "async_persist.persisting_dlq_entry",
+        entry_data=entry_data.get('id', 'unknown'),
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -80,7 +83,10 @@ def async_persist_dlq_entry(self, entry_data: dict[str, Any]) -> dict:
             }
 
     except Exception as e:
-        logger.error(f"[AsyncPersist] Failed to persist DLQ entry: {e}", exc_info=True)
+        logger.exception(
+            "async_persist.failed_persist_dlq_entry",
+            error=e,
+        )
         raise  # Re-raise for Celery retry
 
 
@@ -105,7 +111,10 @@ def async_persist_batch(self, entries: list[dict[str, Any]]) -> dict:
     Returns:
         Dictionary with batch persistence result
     """
-    logger.info(f"[AsyncPersist] Batch persisting {len(entries)} entries")
+    logger.info(
+        "async_persist.batch_persisting_entries",
+        count=len(entries),
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -121,7 +130,11 @@ def async_persist_batch(self, entries: list[dict[str, Any]]) -> dict:
         stats_repo = ProviderRegistry.get_statistics_repo()
         synced = stats_repo.sync_from_runtime(entries)
 
-        logger.info(f"[AsyncPersist] Batch persisted {synced}/{len(entries)} entries")
+        logger.info(
+            "async_persist.batch_persisted_entries",
+            synced=synced,
+            count=len(entries),
+        )
         return {
             "success": True,
             "synced": synced,
@@ -129,7 +142,10 @@ def async_persist_batch(self, entries: list[dict[str, Any]]) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[AsyncPersist] Batch persist failed: {e}", exc_info=True)
+        logger.exception(
+            "async_persist.batch_persist_failed",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -172,7 +188,11 @@ def link_audit_to_dlq(
     Returns:
         Dictionary with link result
     """
-    logger.debug(f"[AuditLink] Linking audit to {entity_type}:{entity_id}")
+    logger.debug(
+        "audit_link.linking_audit",
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -194,5 +214,8 @@ def link_audit_to_dlq(
         return {"success": success}
 
     except Exception as e:
-        logger.error(f"[AuditLink] Failed: {e}", exc_info=True)
+        logger.exception(
+            "audit_link.failed",
+            error=e,
+        )
         return {"success": False, "error": str(e)}

@@ -11,9 +11,10 @@ To activate this backend:
 4. Set AWS credentials
 """
 
-import structlog
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
@@ -71,10 +72,7 @@ class S3WORMBackend(AuditBackend):
         self._client = None
         self._enabled = False
 
-        logger.info(
-            "[S3WORMBackend] Initialized as interface only. "
-            "Enable with boto3 and Object Lock enabled bucket."
-        )
+        logger.info("s3_worm_backend.initialized_interface_only_enable")
 
     @property
     def name(self) -> str:
@@ -94,13 +92,10 @@ class S3WORMBackend(AuditBackend):
             #     raise ValueError("Object Lock not enabled on bucket")
             # self._enabled = True
 
-            logger.warning(
-                "[S3WORMBackend] enable() called but boto3 not configured. "
-                "This is an interface-only stub."
-            )
+            logger.warning("s3_worm_backend.enable_called_configured_interface")
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "s3_worm_backend.failed_enable",
                 error=e,
             )
@@ -135,7 +130,7 @@ class S3WORMBackend(AuditBackend):
         #     )
         #     return True
         # except Exception as e:
-        #     logger.error(f"[S3WORMBackend] Write failed: {e}")
+        #     logger.exception(f"[S3WORMBackend] Write failed: {e}")
         #     return False
 
         return True
@@ -223,9 +218,7 @@ resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
         Use for investigations or legal requirements.
         """
         if not self._enabled:
-            logger.warning(
-                "[S3WORMBackend] Cannot place legal hold - backend not enabled"
-            )
+            logger.warning("s3_worm_backend.cannot_place_legal_hold")
             return False
 
         # Actual implementation:
@@ -237,7 +230,7 @@ resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
         #     )
         #     return True
         # except Exception as e:
-        #     logger.error(f"[S3WORMBackend] Failed to place legal hold: {e}")
+        #     logger.exception(f"[S3WORMBackend] Failed to place legal hold: {e}")
         #     return False
 
         return False

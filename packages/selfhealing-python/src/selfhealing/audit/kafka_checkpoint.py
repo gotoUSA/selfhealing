@@ -37,7 +37,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import tempfile
 import threading
@@ -46,6 +45,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     import redis
@@ -386,7 +387,7 @@ def sync_wal_to_kafka_with_checkpoint(
             synced += 1
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "wal_kafka_sync_failed",
                 entry=entry.sequence,
                 error=e,

@@ -19,11 +19,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.services.chaos.resilience_expectation import (
@@ -137,7 +138,7 @@ class DefaultCircuitBreakerStatusProvider:
 
             return get_cb_status(service_name)
         except ImportError:
-            logger.debug("watchdog.cb_service_unavailable")
+            logger.debug("watchdog")
             return {"state": "unknown", "service": service_name}
         except Exception as e:
             logger.warning(
@@ -359,13 +360,14 @@ class ResilienceValidator:
                 )
             else:
                 logger.warning(
-                    f"[ResilienceValidator] ❌ {assertion.description}: FAILED "
-                    f"(actual: {actual_state})"
+                    "resilience_validator.failed_actual",
+                    assertion=assertion.description,
+                    actual_state=actual_state,
                 )
 
         except Exception as e:
             result["error"] = str(e)
-            logger.error(
+            logger.exception(
                 "resilience_validator.validation_error",
                 error=e,
             )

@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import structlog
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -40,6 +39,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, TextIO
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -181,7 +182,7 @@ class AuditExporter:
                             yield entry
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "failed_read",
                     file_path=file_path,
                     error=e,
@@ -238,8 +239,10 @@ class AuditExporter:
                 if prev_hash != prev_hash_in_entry:
                     self._stats.integrity_errors += 1
                     logger.warning(
-                        f"Hash chain broken at {entry.get('audit_id')}: "
-                        f"expected {prev_hash}, got {prev_hash_in_entry}"
+                        "hash_chain_broken_expected",
+                        entry=entry.get('audit_id'),
+                        prev_hash=prev_hash,
+                        prev_hash_in_entry=prev_hash_in_entry,
                     )
 
             prev_hash = checksum
@@ -602,7 +605,7 @@ Examples:
         return 0
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "export_failed",
             error=e,
         )

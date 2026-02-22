@@ -15,10 +15,11 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -168,10 +169,10 @@ class SnapshotBuilder:
             return snapshot
 
         except ImportError:
-            logger.warning("snapshot_builder.available")
+            logger.warning("available")
             return {"timestamp": datetime.now(timezone.utc).isoformat(), "error": "snapshot_unavailable"}
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "snapshot_builder.failed_collect_close_snapshot",
                 error=e,
             )
@@ -306,10 +307,11 @@ class SnapshotBuilder:
         self._snapshot.dashboard_links = self._generate_dashboard_links()
 
         logger.info(
-            f"[SnapshotBuilder] Snapshot built for {self._service_name}: "
-            f"open_metrics={bool(self._snapshot.metrics_at_open)}, "
-            f"peak_metrics={bool(self._snapshot.peak_metrics)}, "
-            f"logs={len(self._snapshot.captured_logs)}"
+            "snapshot_builder.snapshot_built",
+            self=self._service_name,
+            value=bool(self._snapshot.metrics_at_open),
+            value_2=bool(self._snapshot.peak_metrics),
+            count=len(self._snapshot.captured_logs),
         )
 
         return self._snapshot

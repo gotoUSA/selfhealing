@@ -14,7 +14,6 @@ from .models import (
 )
 from .service import get_unified_notification_manager
 
-
 # =============================================================================
 # Convenience Functions
 # =============================================================================

@@ -36,12 +36,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.context.actor_context import ActorContext
 from selfhealing.interfaces.audit_adapter import (
@@ -146,8 +147,12 @@ class ConfigChangeTracker:
 
         # Log before change (pre-action logging)
         logger.info(
-            f"[ConfigChangeTracker] CHANGING config_key={config_key} "
-            f"old={old_value} new={new_value} by={actor.actor_id} reason={reason}"
+            "config_change_tracker.changing",
+            config_key=config_key,
+            old_value=old_value,
+            new_value=new_value,
+            actor=actor.actor_id,
+            reason=reason,
         )
 
         try:
@@ -162,11 +167,13 @@ class ConfigChangeTracker:
                     invalidate_cache_fn()
                     change.cache_invalidated = True
                     logger.info(
-                        f"[ConfigChangeTracker] Cache invalidated for {config_key}"
+                        "config_change_tracker.cache_invalidated",
+                        config_key=config_key,
                     )
                 except Exception as e:
-                    logger.error(
-                        f"[ConfigChangeTracker] Cache invalidation failed: {e}"
+                    logger.exception(
+                        "config_change_tracker.cache_invalidation_failed",
+                        error=e,
                     )
                     change.cache_invalidated = False
 
@@ -277,8 +284,11 @@ class ConfigChangeTracker:
                     target_id=config_key,
                 )
                 logger.warning(
-                    f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} "
-                    f"value={new_value} reason={reason}"
+                    "config_change_tracker.event",
+                    override_type=override_type,
+                    config_key=config_key,
+                    new_value=new_value,
+                    reason=reason,
                 )
                 return  # 버퍼에 추가됨 - AuditMiddleware에서 기록
             except ImportError:
@@ -297,8 +307,11 @@ class ConfigChangeTracker:
 
         self.audit_adapter.log(entry)
         logger.warning(
-            f"[ConfigChangeTracker] MANUAL_OVERRIDE {override_type}={config_key} "
-            f"value={new_value} reason={reason}"
+            "config_change_tracker.event",
+            override_type=override_type,
+            config_key=config_key,
+            new_value=new_value,
+            reason=reason,
         )
 
 

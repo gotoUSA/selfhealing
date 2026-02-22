@@ -16,8 +16,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any, ClassVar
+
+import structlog
 
 from selfhealing.scaling.config import get_backpressure_settings
 from selfhealing.scaling.graceful_degradation import (
@@ -133,14 +134,16 @@ class BackpressureTaskMixin:
 
         if self._backpressure_retry_count > self.backpressure_max_retries:
             logger.error(
-                f"[BackpressureTaskMixin] Max retries exceeded for task: " f"retries={self._backpressure_retry_count}"
+                "backpressure_task_mixin.max_retries_exceeded_task",
+                self=self._backpressure_retry_count,
             )
             raise BackpressureMaxRetriesExceeded(f"Max backpressure retries ({self.backpressure_max_retries}) exceeded")
 
         logger.info(
-            f"[BackpressureTaskMixin] Scheduling retry: "
-            f"countdown={self.backpressure_retry_countdown}s, "
-            f"retry={self._backpressure_retry_count}/{self.backpressure_max_retries}"
+            "backpressure_task_mixin.scheduling_retry",
+            self=self.backpressure_retry_countdown,
+            self_1=self._backpressure_retry_count,
+            self_2=self.backpressure_max_retries,
         )
 
         # Celery Task의 retry 메서드 호출 (Celery Task를 상속한 경우)

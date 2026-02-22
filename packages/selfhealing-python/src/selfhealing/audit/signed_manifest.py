@@ -36,13 +36,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import structlog
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -258,14 +259,14 @@ class RFC3161Client:
                 return self._parse_timestamp_response(response_data, data_hash)
 
         except urllib.error.URLError as e:
-            logger.error(
+            logger.exception(
                 "failed_get_timestamp",
                 self=self._tsa_url,
                 error=e,
             )
             return None
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "timestamp_request_failed",
                 error=e,
             )
@@ -610,8 +611,9 @@ class SignedManifest:
 
         if computed_root != self._merkle_root:
             logger.error(
-                f"Merkle root mismatch! "
-                f"Expected: {self._merkle_root}, Got: {computed_root}"
+                "merkle_root_mismatch_expected",
+                self=self._merkle_root,
+                computed_root=computed_root,
             )
             return False
 

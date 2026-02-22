@@ -26,11 +26,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

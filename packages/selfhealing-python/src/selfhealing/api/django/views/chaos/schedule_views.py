@@ -5,7 +5,6 @@ API views for scheduled experiment management.
 """
 
 import structlog
-
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -259,8 +258,10 @@ class ScheduleExecuteView(APIView):
         result = scheduler.execute_now(schedule_id, force=force)
 
         logger.info(
-            f"[ChaosAPI] Schedule executed: {schedule_id} by {request.user}, "
-            f"result={result.status}"
+            "chaos_api.schedule_executed",
+            schedule_id=schedule_id,
+            request=request.user,
+            result=result.status,
         )
 
         return Response(

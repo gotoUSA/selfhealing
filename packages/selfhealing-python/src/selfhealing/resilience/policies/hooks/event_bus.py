@@ -10,8 +10,9 @@ EventBus가 없는 환경에서는 아무 동작도 하지 않는다 (Fail-Open)
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import PolicyResult
 

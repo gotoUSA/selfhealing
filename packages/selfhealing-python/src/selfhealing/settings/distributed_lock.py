@@ -18,7 +18,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -101,8 +100,8 @@ class DistributedLockSettings(BaseSettings):
         """타임아웃이 너무 길면 경고."""
         if v > 60:
             logger.warning(
-                f"[DistributedLock] timeout_minutes={v}분은 긴 시간입니다. "
-                "복구가 실패할 경우 오랜 시간 락이 유지됩니다."
+                "distributed_lock.분은_시간입니다_복구가_실패할",
+                v=v,
             )
         return v
 
@@ -112,8 +111,8 @@ class DistributedLockSettings(BaseSettings):
         """재시도 간격이 너무 짧으면 경고."""
         if v < 0.05:
             logger.warning(
-                f"[DistributedLock] retry_interval_seconds={v}초는 매우 짧습니다. "
-                "Redis 부하가 증가할 수 있습니다."
+                "distributed_lock.초는_매우_짧습니다_redis",
+                v=v,
             )
         return v
 

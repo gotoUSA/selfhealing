@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 import random
 import threading
 from collections.abc import Callable
@@ -22,6 +21,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Literal, TypeVar
+
+import structlog
 
 from selfhealing.core.hedging.metrics import record_result_mismatch
 
@@ -305,12 +306,14 @@ class HedgingResultValidator:
 
         # 2. 경고 로깅
         logger.warning(
-            f"[HedgingValidator] Result mismatch detected: "
-            f"op={record.operation_id}, "
-            f"winner={record.winner_source}({record.winner_region or 'local'}), "
-            f"other={record.other_source}({record.other_region or 'local'}), "
-            f"type={record.mismatch_type}, "
-            f"lag_ms={record.estimated_replication_lag_ms}"
+            "hedging_validator.result_mismatch_detected",
+            record=record.operation_id,
+            record_1=record.winner_source,
+            record_2=record.winner_region or 'local',
+            record_3=record.other_source,
+            record_4=record.other_region or 'local',
+            record_5=record.mismatch_type,
+            record_6=record.estimated_replication_lag_ms,
         )
 
         # 3. Prometheus 메트릭

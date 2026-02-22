@@ -16,9 +16,9 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import structlog
 import time
 
+import structlog
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -96,8 +96,11 @@ class ThrottleEmergencySimulationView(XTestModeMixin, APIView):
         multiplier = multiplier_map.get(level, 1.0)
 
         logger.info(
-            f"[X-Test-Mode] Throttle emergency simulation: "
-            f"level {previous_level} → {level}, limit {previous_limit} → {new_limit}"
+            "test_mode_throttle_emergency",
+            previous_level=previous_level,
+            level=level,
+            previous_limit=previous_limit,
+            new_limit=new_limit,
         )
 
         # 감사 로그 기록
@@ -211,9 +214,11 @@ class ThrottleCBOpenSimulationView(XTestModeMixin, APIView):
         actual_new_limit = throttle.current_limit
 
         logger.info(
-            f"[X-Test-Mode] Throttle CB simulation: "
-            f"service={service}, state={cb_state}, "
-            f"limit {previous_limit} → {actual_new_limit}"
+            "test_mode_throttle_cb",
+            service=service,
+            cb_state=cb_state,
+            previous_limit=previous_limit,
+            actual_new_limit=actual_new_limit,
         )
 
         # 감사 로그 기록
@@ -334,9 +339,12 @@ class ThrottleRTTDelayInjectionView(XTestModeMixin, APIView):
             sla_status = "normal"
 
         logger.info(
-            f"[X-Test-Mode] Throttle RTT injection: "
-            f"rtt={rtt_ms}ms×{count}, limit {previous_limit} → {new_limit}, "
-            f"gradient={new_gradient:.4f}"
+            "test_mode_throttle_rtt",
+            rtt_ms=rtt_ms,
+            count=count,
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            new_gradient=new_gradient,
         )
 
         # 감사 로그 기록

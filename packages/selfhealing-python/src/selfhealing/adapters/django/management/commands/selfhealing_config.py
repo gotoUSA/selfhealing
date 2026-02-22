@@ -207,22 +207,22 @@ class Command(BaseCommand):
     def _get_settings_map(self) -> Dict[str, type]:
         """설정 타입 → 클래스 매핑."""
         from selfhealing.settings import (
+            ChaosSettings,
             CircuitBreakerSettings,
             DLQSettings,
-            RetrySettings,
-            RateLimitSettings,
-            SecuritySettings,
-            SLASettings,
-            IdempotencySettings,
-            ForensicSettings,
-            MetricsSettings,
-            NotificationSettings,
-            GovernanceSettings,
-            ErrorBudgetSettings,
-            ChaosSettings,
             DriftThresholdSettings,
+            ErrorBudgetSettings,
+            ForensicSettings,
+            GovernanceSettings,
+            IdempotencySettings,
             L2StorageSettings,
             LoggingSettings,
+            MetricsSettings,
+            NotificationSettings,
+            RateLimitSettings,
+            RetrySettings,
+            SecuritySettings,
+            SLASettings,
         )
 
         return {

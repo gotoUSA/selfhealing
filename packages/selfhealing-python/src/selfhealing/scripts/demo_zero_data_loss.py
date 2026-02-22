@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import structlog
 import sys
 import tempfile
 import time
@@ -31,6 +30,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -39,11 +39,12 @@ CRITICAL 수준이면 OPEN을 보류합니다.
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusLevel
 
@@ -274,7 +275,7 @@ class BlastRadiusIntegration:
         self._last_assessment: BlastRadiusAssessment | None = None
         self._initialized = True
 
-        logger.debug("blast_radius_integration.initialized")
+        logger.debug("initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -341,8 +342,10 @@ class BlastRadiusIntegration:
         self._service_criticality[service_id] = criticality
 
         logger.debug(
-            f"[BlastRadiusIntegration] Dependency registered: {service_id} "
-            f"(criticality={criticality}, depends_on={depends_on})"
+            "blast_radius_integration.dependency_registered",
+            service_id=service_id,
+            criticality=criticality,
+            depends_on=depends_on,
         )
 
     def set_service_criticality(self, service_id: str, criticality: str) -> None:
@@ -431,9 +434,11 @@ class BlastRadiusIntegration:
         self._last_assessment = assessment
 
         logger.info(
-            f"[BlastRadiusIntegration] Impact assessed: {trigger_service} | "
-            f"level={level.value} | affected={affected_count} | "
-            f"critical_affected={len(critical_affected)}"
+            "blast_radius_integration.impact_assessed",
+            trigger_service=trigger_service,
+            level=level.value,
+            affected_count=affected_count,
+            count=len(critical_affected),
         )
 
         return assessment
@@ -516,8 +521,9 @@ class BlastRadiusIntegration:
         # 3. EXTENSIVE면 경고만
         if assessment.level == BlastRadiusLevel.EXTENSIVE and self._config.alert_on_extensive:
             logger.warning(
-                f"[BlastRadiusIntegration] CB auto-open proceeding with caution: "
-                f"{service_id}, blast radius EXTENSIVE ({assessment.affected_count} services)"
+                "blast_radius_integration.cb_auto_open_proceeding",
+                service_id=service_id,
+                assessment=assessment.affected_count,
             )
 
         return True, None, assessment
@@ -543,8 +549,9 @@ class BlastRadiusIntegration:
             )
         except ImportError:
             logger.warning(
-                f"[BlastRadiusIntegration] GOVERNANCE_BLOCKED | service={service_id} | "
-                f"reason=blast_radius_critical | affected={assessment.affected_count}"
+                "blast_radius_integration.event",
+                service_id=service_id,
+                assessment=assessment.affected_count,
             )
         except Exception as e:
             logger.debug(

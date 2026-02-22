@@ -16,12 +16,13 @@ Reference:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.services.event_bus.bus import (
     EventPriority,
@@ -259,7 +260,7 @@ class RedisEventBus:
                     self._handle_redis_message(message["data"])
             except Exception as e:
                 if self._running:
-                    logger.error(
+                    logger.exception(
                         "redis_event_bus.listener_error",
                         error=e,
                     )
@@ -279,7 +280,7 @@ class RedisEventBus:
             # 로컬 핸들러에 전달 (from_redis=True로 무한 루프 방지)
             self._local_bus.publish(event)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_event_bus.failed_process_message",
                 error=e,
             )
@@ -329,7 +330,7 @@ class RedisEventBus:
                 self._publish_to_kafka_fallback(event)
                 return  # Kafka 성공 시 종료
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "redis_event_bus.kafka_fallback_failed",
                     error=e,
                 )
@@ -406,7 +407,7 @@ class RedisEventBus:
                 event_type=event.event_type.value,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_event_bus.wal_write_failed_critical",
                 event_type=event.event_type.value,
                 error=e,

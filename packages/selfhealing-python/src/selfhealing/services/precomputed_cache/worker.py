@@ -6,12 +6,13 @@ Threading.Timer based lightweight scheduling without Celery dependency.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from .constants import (
     HAS_CACHETOOLS,

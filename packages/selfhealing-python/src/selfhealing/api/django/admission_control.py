@@ -26,10 +26,11 @@ Configuration:
 
 from __future__ import annotations
 
-import structlog
 import os
 import random
 import time
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -110,7 +111,7 @@ class AdmissionControlMiddleware:
                     max_concurrent=settings.get_tier_max_concurrent(tier_id),
                 )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[AdmissionControlMiddleware] Dependency init failed: %s",
                 e,
             )
@@ -123,7 +124,7 @@ class AdmissionControlMiddleware:
         try:
             return self._process_request(request)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[AdmissionControlMiddleware] Error: %s, allowing request",
                 e,
             )

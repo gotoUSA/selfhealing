@@ -15,12 +15,13 @@ Purpose:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
@@ -217,7 +218,7 @@ class IntegrityHealthScore:
             logger.debug("health_score.prometheus_metrics_initialized")
 
         except ImportError:
-            logger.debug("health_score.available")
+            logger.debug("available")
             self._prometheus_initialized = True  # Don't retry
 
     def record_recovery(
@@ -264,8 +265,10 @@ class IntegrityHealthScore:
         self._log_recovery_event(event)
 
         logger.info(
-            f"[HealthScore] Recorded recovery: type={event_type}, "
-            f"sequences={sequences_affected}, time={recovery_time_ms:.2f}ms"
+            "health_score.recorded_recovery_ms",
+            event_type=event_type,
+            sequences_affected=sequences_affected,
+            recovery_time_ms=recovery_time_ms,
         )
 
     def record_chain_break(self) -> None:

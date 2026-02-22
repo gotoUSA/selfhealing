@@ -8,11 +8,12 @@ Contains:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.integrity.models import compute_hash
 

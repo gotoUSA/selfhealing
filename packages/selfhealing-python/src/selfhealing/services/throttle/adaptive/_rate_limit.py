@@ -4,9 +4,12 @@ RateLimitHandlerMixin for AdaptiveThrottle.
 이 모듈은 selfhealing.services.throttle.adaptive 패키지의 내부 구현입니다.
 """
 
-import selfhealing.services.throttle.adaptive as _adaptive_mod
-import structlog
 import time
+
+import structlog
+
+import selfhealing.services.throttle.adaptive as _adaptive_mod
+
 logger = structlog.get_logger()
 
 
@@ -90,9 +93,12 @@ class RateLimitHandlerMixin:
         new_limit = self.conservative_limit
 
         logger.warning(
-            f"[AdaptiveThrottle] 429 response on '{key}', "
-            f"reducing limit: {previous_limit} → {new_limit} "
-            f"(consecutive={consecutive}, reduction={int((1-reduction_percent)*100)}%)"
+            "adaptive_throttle.response_reducing_limit",
+            key=key,
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            consecutive=consecutive,
+            int=int((1-reduction_percent)*100),
         )
 
         self.current_limit = new_limit

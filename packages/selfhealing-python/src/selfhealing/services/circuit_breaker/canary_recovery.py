@@ -12,7 +12,6 @@ HALF_OPEN 상태에서 즉시 100% 트래픽을 보내는 대신,
 
 from __future__ import annotations
 
-import structlog
 import random
 import threading
 from collections.abc import Callable
@@ -20,6 +19,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.services.circuit_breaker.models import (
     CanaryRecoveryStageConfig,
@@ -428,9 +429,10 @@ class CanaryRecoveryManager:
             self._recovery_states[service_id] = state
 
             logger.info(
-                f"[CanaryRecovery] {service_id}: Started canary recovery, "
-                f"stage={state.current_stage.value}, "
-                f"traffic={effective_strategy.canary_stages[0].traffic_percent}%"
+                "canary_recovery.started_canary_recovery",
+                service_id=service_id,
+                current_stage=state.current_stage.value,
+                effective_strategy=effective_strategy.canary_stages[0].traffic_percent,
             )
 
             return state
@@ -635,8 +637,11 @@ class CanaryRecoveryManager:
             state.reset()
 
             logger.warning(
-                f"[CanaryRecovery] {service_id}: Recovery FAILED at {previous_stage.value}, "
-                f"success_rate={success_rate:.1f}% (required={required_rate:.1f}%)"
+                "canary_recovery.recovery_failed",
+                service_id=service_id,
+                previous_stage=previous_stage.value,
+                success_rate=success_rate,
+                required_rate=required_rate,
             )
 
             if self._on_recovery_failed:
@@ -659,8 +664,11 @@ class CanaryRecoveryManager:
                 )
 
                 logger.info(
-                    f"[CanaryRecovery] {service_id}: Advanced {previous_stage.value} → {new_stage.value}, "
-                    f"success_rate={success_rate:.1f}%"
+                    "canary_recovery.advanced",
+                    service_id=service_id,
+                    previous_stage=previous_stage.value,
+                    new_stage=new_stage.value,
+                    success_rate=success_rate,
                 )
 
                 if self._on_stage_advanced:

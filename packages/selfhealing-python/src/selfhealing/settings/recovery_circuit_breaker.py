@@ -18,7 +18,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -110,8 +109,8 @@ class RecoveryCircuitBreakerSettings(BaseSettings):
         """Validate error rate threshold is reasonable."""
         if v > 0.5:
             logger.warning(
-                f"High error_rate_threshold={v}. "
-                "Consider using <= 0.5 for effective protection"
+                "high_consider_using_effective",
+                v=v,
             )
         return v
 
@@ -122,7 +121,9 @@ class RecoveryCircuitBreakerSettings(BaseSettings):
         valid_levels = {"NORMAL", "LEVEL_1", "LEVEL_2", "LEVEL_3"}
         if v not in valid_levels:
             logger.warning(
-                f"Unknown re_escalation_level={v}. " f"Valid levels: {valid_levels}"
+                "unknown_valid_levels",
+                v=v,
+                valid_levels=valid_levels,
             )
         return v
 

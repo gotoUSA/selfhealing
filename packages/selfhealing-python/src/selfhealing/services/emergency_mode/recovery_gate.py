@@ -6,9 +6,10 @@ Manages metrics-based recovery checks and gradual recovery steps.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
+
+import structlog
 
 from .enums import EmergencyLevel
 from .models import RecoveryGateConfig

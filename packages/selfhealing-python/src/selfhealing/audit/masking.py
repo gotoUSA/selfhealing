@@ -21,8 +21,9 @@ Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
 
 import base64
 import hashlib
-import structlog
 from enum import Enum
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -13,9 +13,9 @@ Environment Variables:
     SELFHEALING_RING_BUFFER_STRATEGY=drop_oldest
 """
 
-import structlog
 from typing import Literal
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -72,8 +72,8 @@ class RingBufferSettings(BaseSettings):
         """capacity가 너무 크면 경고."""
         if v > 100000:
             logger.warning(
-                f"[RingBufferSettings] High capacity={v}, "
-                "consider using <= 100000 for memory efficiency"
+                "ring_buffer_settings.high_consider_using_memory",
+                v=v,
             )
         return v
 

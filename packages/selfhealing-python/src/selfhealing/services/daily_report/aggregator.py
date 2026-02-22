@@ -6,9 +6,10 @@ Collects and aggregates task results from cache/storage.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.daily_report import get_daily_report_settings
 

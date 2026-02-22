@@ -6,10 +6,11 @@ Provides methods for syncing data to/from L2 storage.
 
 from __future__ import annotations
 
-import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.repositories import CircuitBreakerStateData
 
@@ -53,8 +54,9 @@ class L2SyncMixin:
         except FuturesTimeoutError:
             self._handle_l2_timeout("sync", service_name)
             logger.warning(
-                f"[LayeredRepo] L2 sync timeout for {service_name} "
-                f"({timeout*1000:.0f}ms). L1 isolated."
+                "layered_repo.sync_timeout_ms_isolated",
+                service_name=service_name,
+                value=timeout*1000,
             )
             return False
 
@@ -90,7 +92,7 @@ class L2SyncMixin:
             self._load_from_l2_with_timeout()
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "layered_repo.force_sync_failed",
                 error=e,
             )

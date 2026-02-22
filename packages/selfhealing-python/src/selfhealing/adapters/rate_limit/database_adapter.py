@@ -21,10 +21,11 @@ Performance Note:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
+
+import structlog
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
@@ -125,7 +126,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "database_rate_limit_storage.failed_get_state",
                 error=e,
             )
@@ -152,12 +153,13 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 )
 
                 logger.debug(
-                    f"[DatabaseRateLimitStorage] Set cooldown for '{key}': "
-                    f"until={cooldown_until}"
+                    "database_rate_limit_storage.set_cooldown",
+                    key=key,
+                    cooldown_until=cooldown_until,
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "database_rate_limit_storage.failed_set_cooldown",
                 error=e,
             )
@@ -171,13 +173,14 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 new_value = repo.increment(key, "consecutive_429s")
 
                 logger.debug(
-                    f"[DatabaseRateLimitStorage] Incremented 429 counter for '{key}': "
-                    f"{new_value}"
+                    "database_rate_limit_storage.incremented_counter",
+                    key=key,
+                    new_value=new_value,
                 )
                 return new_value
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "database_rate_limit_storage.failed_increment",
                 error=e,
             )
@@ -191,11 +194,12 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 repo.update(key, {"consecutive_429s": 0})
 
                 logger.debug(
-                    f"[DatabaseRateLimitStorage] Reset 429 counter for '{key}'"
+                    "database_rate_limit_storage.reset_counter",
+                    key=key,
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "database_rate_limit_storage.failed_reset",
                 error=e,
             )
@@ -213,7 +217,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "database_rate_limit_storage.failed_clear",
                 error=e,
             )

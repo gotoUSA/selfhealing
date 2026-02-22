@@ -10,13 +10,11 @@ from rest_framework import serializers
 # =============================================================================
 # Constants - 단일 소스는 core/constants.py (Item 31-33 중복 제거)
 # =============================================================================
-
 from selfhealing.core.constants import (  # noqa: E402
     ControlAPIActions,
     ControlAPIEnvironments,
     RiskLevels,
 )
-
 
 # =============================================================================
 # Request Serializers

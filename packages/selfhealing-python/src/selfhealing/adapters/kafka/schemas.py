@@ -24,8 +24,9 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.adapters.kafka.config import KafkaSettings
@@ -203,7 +204,7 @@ class AuditEventSchemaRegistry:
                 "설치되지 않았습니다. 스키마 레지스트리 기능이 비활성화됩니다."
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "schema_registry.초기화_실패",
                 error=e,
             )
@@ -257,7 +258,7 @@ class AuditEventSchemaRegistry:
             return serializer
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "schema_registry.직렬화기_생성_실패",
                 error=e,
             )
@@ -295,7 +296,7 @@ class AuditEventSchemaRegistry:
             return deserializer
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "schema_registry.역직렬화기_생성_실패",
                 error=e,
             )
@@ -325,7 +326,7 @@ class AuditEventSchemaRegistry:
             return client.test_compatibility(subject, schema)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "schema_registry.호환성_검사_실패",
                 error=e,
             )
@@ -361,7 +362,7 @@ class AuditEventSchemaRegistry:
             return schema_id
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "schema_registry.스키마_등록_실패",
                 error=e,
             )

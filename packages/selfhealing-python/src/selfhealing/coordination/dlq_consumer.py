@@ -166,7 +166,10 @@ class DLQConsumerCoordinator:
                 self._stop_event.wait(timeout=self._process_interval)
 
             except Exception as e:
-                logger.error(f"[DLQConsumer] 소비 루프 오류: {e}", exc_info=True)
+                logger.exception(
+                    "dlq_consumer.소비_루프_오류",
+                    error=e,
+                )
                 self._stop_event.wait(timeout=self._process_interval)
 
         logger.info("dlq_consumer.소비_루프_종료")
@@ -231,7 +234,10 @@ class DLQConsumerCoordinator:
             logger.debug("dlq_consumer.dlq_서비스_없음_테스트")
             return 0
         except Exception as e:
-            logger.error(f"[DLQConsumer] 배치 처리 오류: {e}", exc_info=True)
+            logger.exception(
+                "dlq_consumer.배치_처리_오류",
+                error=e,
+            )
             return 0
 
 

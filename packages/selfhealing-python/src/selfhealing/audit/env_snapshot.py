@@ -26,11 +26,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -167,8 +168,9 @@ def log_env_snapshot_to_audit() -> bool:
             metric_recorded.set(1)
             metric_count.set(snapshot["count"])
         logger.info(
-            f"[EnvAudit] Snapshot recorded: "
-            f"count={snapshot['count']}, hash={snapshot['hash']}"
+            "env_audit.snapshot_recorded",
+            snapshot=snapshot['count'],
+            snapshot_1=snapshot['hash'],
         )
         return True
 
@@ -255,12 +257,13 @@ def _log_to_fallback(snapshot: dict[str, Any]) -> bool:
             f.write(json.dumps(fallback_entry, ensure_ascii=False) + "\n")
 
         logger.warning(
-            f"[EnvAudit] Fallback recorded to {fallback_path}: "
-            f"hash={snapshot['hash']}"
+            "env_audit.fallback_recorded",
+            fallback_path=fallback_path,
+            snapshot=snapshot['hash'],
         )
         return True
     except Exception as e:
-        logger.error(
+        logger.exception(
             "env_audit.fallback_logging_also_failed",
             error=e,
         )
@@ -280,11 +283,12 @@ def _emit_critical_log(
     """
     status = "FALLBACK" if fallback_success else "FAILED"
     logger.critical(
-        f"[EnvAudit] SNAPSHOT {status}: "
-        f"hash={snapshot['hash']} "
-        f"count={snapshot['count']} "
-        f"primary={primary_success} "
-        f"fallback={fallback_success}"
+        "env_audit.snapshot",
+        status=status,
+        snapshot=snapshot['hash'],
+        snapshot_2=snapshot['count'],
+        primary_success=primary_success,
+        fallback_success=fallback_success,
     )
 
 

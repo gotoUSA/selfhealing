@@ -12,9 +12,10 @@ Tasks:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.tasks.base import BaseNotifyingTask
 from selfhealing.tasks.notification_policy import (
@@ -72,8 +73,9 @@ class RunComplianceCheckTask(BaseNotifyingTask):
     ) -> dict[str, Any]:
         """규정 준수 점검 태스크 실행."""
         logger.info(
-            f"[RunComplianceCheck] Starting compliance check - "
-            f"type={check_type}, stage={stage_name or 'all'}"
+            "run_compliance_check.starting_compliance_check",
+            check_type=check_type,
+            value=stage_name or 'all',
         )
 
         try:
@@ -107,9 +109,10 @@ class RunComplianceCheckTask(BaseNotifyingTask):
             ]
 
             logger.info(
-                f"[RunComplianceCheck] Completed - "
-                f"total={report.total_checks}, passed={report.passed_checks}, "
-                f"failed={report.failed_checks}"
+                "run_compliance_check.completed",
+                report=report.total_checks,
+                report_1=report.passed_checks,
+                report_2=report.failed_checks,
             )
 
             return {
@@ -123,7 +126,10 @@ class RunComplianceCheckTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[RunComplianceCheck] Failed: {e}", exc_info=True)
+            logger.exception(
+                "run_compliance_check.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -224,8 +230,9 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
     ) -> dict[str, Any]:
         """FinOps 리포트 생성 태스크 실행."""
         logger.info(
-            f"[GenerateFinOpsReport] Generating {period} report"
-            f"{f' for {stage_name}' if stage_name else ''}"
+            "generate_fin_ops_report.generating_report_else",
+            period=period,
+            value=f' for {stage_name}' if stage_name else '',
         )
 
         try:
@@ -243,8 +250,9 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
             savings = self._calculate_savings(service, period, stage_name)
 
             logger.info(
-                f"[GenerateFinOpsReport] Generated report - "
-                f"total_cost=${report.total_cost}, records={report.record_count}"
+                "generate_fin_ops_report.generated_report",
+                report=report.total_cost,
+                report_1=report.record_count,
             )
 
             return {
@@ -260,7 +268,10 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[GenerateFinOpsReport] Failed: {e}", exc_info=True)
+            logger.exception(
+                "generate_fin_ops_report.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -381,7 +392,8 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
             timestamp = datetime.now(timezone.utc).isoformat()
 
             logger.info(
-                f"[CollectSelfHealingMetrics] Collected {metrics_collected} metrics"
+                "collect_self_healing_metrics.collected_metrics",
+                metrics_collected=metrics_collected,
             )
 
             return {
@@ -391,7 +403,10 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[CollectSelfHealingMetrics] Failed: {e}", exc_info=True)
+            logger.exception(
+                "collect_self_healing_metrics.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),

@@ -19,13 +19,14 @@ LeaderScheduler의 aggregate_all() 루프에서 매 tick마다 호출되는
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.cell_topology.models import CellInfo
@@ -461,7 +462,7 @@ class CellEvacuationPolicy:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cell_manual_restore_failed",
                 cell_id=cell_id,
                 error=e,

@@ -19,13 +19,14 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import (
     get_recovery_shutdown_settings,
@@ -198,18 +199,12 @@ class RecoveryAwareShutdownHook:
         self._stats.recovery_active_at_start = recovery_active
 
         if recovery_active:
-            logger.warning(
-                "[RecoveryAwareShutdownHook] Recovery session in progress. "
-                f"Extending shutdown timeout by {self._config.recovery_extension_seconds}s"
-            )
+            logger.warning("recovery_aware_shutdown_hook.recovery_session_progress_extending")
 
             # Recovery 완료까지 대기
             self._wait_for_recovery_completion()
         else:
-            logger.info(
-                "[RecoveryAwareShutdownHook] No active recovery session. "
-                "Proceeding with normal shutdown."
-            )
+            logger.info("recovery_aware_shutdown_hook.no_active_recovery_session")
 
     def on_drain_complete(self) -> None:
         """Drain 완료 시 호출."""
@@ -222,25 +217,22 @@ class RecoveryAwareShutdownHook:
 
         if pending_count > 0:
             logger.error(
-                f"[RecoveryAwareShutdownHook] Force shutdown with "
-                f"{pending_count} pending requests!"
+                "recovery_aware_shutdown_hook.force_shutdown_pending_requests",
+                pending_count=pending_count,
             )
 
         # 강제 종료 시 Recovery Session 상태 기록
         if self._check_recovery():
-            logger.critical(
-                "[RecoveryAwareShutdownHook] CRITICAL: "
-                "Force shutdown during active recovery session! "
-                "Recovery state may be inconsistent."
-            )
+            logger.critical("recovery_aware_shutdown_hook.critical_force_shutdown_during")
             self._stats.force_shutdown = True
 
         if self._on_force_shutdown:
             try:
                 self._on_force_shutdown()
             except Exception as e:
-                logger.error(
-                    f"[RecoveryAwareShutdownHook] Force shutdown callback error: {e}"
+                logger.exception(
+                    "recovery_aware_shutdown_hook.force_shutdown_callback_error",
+                    error=e,
                 )
 
         self._shutdown_complete.set()
@@ -268,16 +260,17 @@ class RecoveryAwareShutdownHook:
                 self._stats.recovery_completed = True
 
                 logger.info(
-                    f"[RecoveryAwareShutdownHook] Recovery completed after {elapsed:.1f}s. "
-                    "Proceeding with shutdown."
+                    "recovery_aware_shutdown_hook.recovery_completed_after_proceeding",
+                    elapsed=elapsed,
                 )
 
                 if self._on_recovery_complete:
                     try:
                         self._on_recovery_complete()
                     except Exception as e:
-                        logger.error(
-                            f"[RecoveryAwareShutdownHook] Recovery complete callback error: {e}"
+                        logger.exception(
+                            "recovery_aware_shutdown_hook.recovery_complete_callback_error",
+                            error=e,
                         )
 
                 return
@@ -287,8 +280,8 @@ class RecoveryAwareShutdownHook:
             if current_time - last_log_time >= log_interval:
                 remaining = max_wait - (current_time - start_time)
                 logger.info(
-                    f"[RecoveryAwareShutdownHook] Waiting for recovery... "
-                    f"({remaining:.0f}s remaining)"
+                    "recovery_aware_shutdown_hook.waiting_recovery_remaining",
+                    remaining=remaining,
                 )
                 last_log_time = current_time
 
@@ -301,14 +294,14 @@ class RecoveryAwareShutdownHook:
 
         if self._config.allow_force_shutdown:
             logger.warning(
-                f"[RecoveryAwareShutdownHook] Max wait time ({max_wait}s) exceeded. "
-                "Proceeding with shutdown despite active recovery."
+                "recovery_aware_shutdown_hook.max_wait_time_exceeded",
+                max_wait=max_wait,
             )
             self._stats.force_shutdown = True
         else:
             logger.critical(
-                f"[RecoveryAwareShutdownHook] Max wait time ({max_wait}s) exceeded. "
-                "Force shutdown not allowed. Waiting indefinitely."
+                "recovery_aware_shutdown_hook.max_wait_time_exceeded",
+                max_wait=max_wait,
             )
             # 무한 대기 (K8s가 SIGKILL로 강제 종료할 때까지)
             while self._check_recovery():

@@ -37,11 +37,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -360,9 +361,11 @@ def combine_weights(
     result = min(combined, max_weight)
 
     logger.debug(
-        f"[ExceptionWeights] combine_weights: "
-        f"emergency={emergency_weight}, error={error_weight}, "
-        f"policy={policy.value}, result={result}"
+        "exception_weights.event",
+        emergency_weight=emergency_weight,
+        error_weight=error_weight,
+        policy=policy.value,
+        result=result,
     )
 
     return result

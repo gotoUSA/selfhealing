@@ -21,11 +21,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import queue
 import threading
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.ml_strategy import (
     AnomalyDetectionStrategy,

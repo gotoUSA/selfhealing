@@ -18,9 +18,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
+import structlog
 
 from selfhealing.settings import get_anti_flapping_settings
 
@@ -156,9 +157,9 @@ class AntiFlappingGuard:
                 minutes=self.flapping_lockout_minutes
             )
             logger.warning(
-                f"[AntiFlappingGuard] Flapping detected: "
-                f"{len(recent_transitions)} transitions in last hour. "
-                f"Lockout for {self.flapping_lockout_minutes} minutes."
+                "anti_flapping_guard.flapping_detected_transitions_last",
+                count=len(recent_transitions),
+                self=self.flapping_lockout_minutes,
             )
             return (
                 False,
@@ -246,8 +247,9 @@ class AntiFlappingGuard:
         self._transition_history = [t for t in self._transition_history if t > cutoff]
 
         logger.debug(
-            f"[AntiFlappingGuard] Transition recorded at {transition_time.isoformat()}. "
-            f"History size: {len(self._transition_history)}"
+            "anti_flapping_guard.transition_recorded_history_size",
+            transition_time=transition_time.isoformat(),
+            count=len(self._transition_history),
         )
 
     def record_recovery_complete(self, at: datetime | None = None) -> None:
@@ -259,8 +261,8 @@ class AntiFlappingGuard:
         """
         self._last_recovery_at = at or datetime.now(timezone.utc)
         logger.info(
-            f"[AntiFlappingGuard] Recovery completed at "
-            f"{self._last_recovery_at.isoformat()}"
+            "anti_flapping_guard.recovery_completed",
+            self=self._last_recovery_at.isoformat(),
         )
 
     def clear_lockout(self) -> None:
@@ -327,8 +329,10 @@ class AntiFlappingGuard:
             # 복구 시 히스테리시스 팩터 적용
             effective_duration = int(base_duration * self.recovery_hysteresis_factor)
             logger.debug(
-                f"[AntiFlappingGuard] Recovery stability duration: "
-                f"{base_duration}s * {self.recovery_hysteresis_factor} = {effective_duration}s"
+                "anti_flapping_guard.recovery_stability_duration",
+                base_duration=base_duration,
+                self=self.recovery_hysteresis_factor,
+                effective_duration=effective_duration,
             )
             return effective_duration
 

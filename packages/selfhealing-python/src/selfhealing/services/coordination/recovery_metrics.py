@@ -16,10 +16,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -221,8 +222,9 @@ class RecoveryMetricsRecorder:
         self._set_status(namespace, "recovering")
 
         logger.debug(
-            f"[RecoveryMetrics] Session started: "
-            f"namespace={namespace}, level={trigger_level}"
+            "recovery_metrics.session_started",
+            namespace=namespace,
+            trigger_level=trigger_level,
         )
 
     def record_session_completed(
@@ -257,8 +259,10 @@ class RecoveryMetricsRecorder:
         self._set_status(namespace, final_status)
 
         logger.debug(
-            f"[RecoveryMetrics] Session completed: "
-            f"namespace={namespace}, status={status}, duration={duration_seconds:.1f}s"
+            "recovery_metrics.session_completed",
+            namespace=namespace,
+            status=status,
+            duration_seconds=duration_seconds,
         )
 
     # =========================================================================
@@ -284,8 +288,9 @@ class RecoveryMetricsRecorder:
         ).inc()
 
         logger.debug(
-            f"[RecoveryMetrics] Step started: "
-            f"namespace={namespace}, step={step_type}"
+            "recovery_metrics.step_started",
+            namespace=namespace,
+            step_type=step_type,
         )
 
     def record_step_completed(
@@ -326,9 +331,11 @@ class RecoveryMetricsRecorder:
             ).inc()
 
         logger.debug(
-            f"[RecoveryMetrics] Step completed: "
-            f"namespace={namespace}, step={step_type}, "
-            f"success={success}, duration={duration_seconds:.2f}s"
+            "recovery_metrics.step_completed",
+            namespace=namespace,
+            step_type=step_type,
+            success=success,
+            duration_seconds=duration_seconds,
         )
 
     def record_step_retry(
@@ -349,7 +356,9 @@ class RecoveryMetricsRecorder:
         ).inc()
 
         logger.debug(
-            f"[RecoveryMetrics] Step retry: " f"namespace={namespace}, step={step_type}"
+            "recovery_metrics.step_retry",
+            namespace=namespace,
+            step_type=step_type,
         )
 
     # =========================================================================
@@ -376,8 +385,9 @@ class RecoveryMetricsRecorder:
         self._set_status(namespace, "emergency")
 
         logger.warning(
-            f"[RecoveryMetrics] Circuit breaker tripped: "
-            f"namespace={namespace}, reason={reason}"
+            "recovery_metrics.circuit_breaker_tripped",
+            namespace=namespace,
+            reason=reason,
         )
 
     # =========================================================================

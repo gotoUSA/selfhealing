@@ -8,7 +8,6 @@ L3: Anomaly Detection - Statistical outliers
 
 from __future__ import annotations
 
-import structlog
 import math
 import re
 import threading
@@ -16,6 +15,8 @@ from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
 

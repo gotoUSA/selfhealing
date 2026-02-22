@@ -16,7 +16,6 @@ Features:
 from __future__ import annotations
 
 import json
-import structlog
 import random
 import threading
 import time
@@ -26,6 +25,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import structlog
 from django.http import JsonResponse
 
 if TYPE_CHECKING:
@@ -429,7 +429,9 @@ class RedisHealthChecker:
             if self._state != RedisHealthState.UNHEALTHY:
                 self._state = RedisHealthState.UNHEALTHY
                 logger.critical(
-                    f"[RedisHealth] UNHEALTHY: {self._consecutive_failures} " f"consecutive failures. Error: {error}"
+                    "redis_health.unhealthy_consecutive_failures_error",
+                    self=self._consecutive_failures,
+                    error=error,
                 )
                 self._record_degraded_mode(True)
 
@@ -755,7 +757,7 @@ class HybridRateLimitMiddleware:
 
         except Exception as e:
             # On Redis error, fall back to local limiter
-            logger.error(
+            logger.exception(
                 "rate_limit.redis_error_falling_back",
                 error=e,
             )
@@ -823,7 +825,7 @@ class HybridRateLimitMiddleware:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rate_limit.failed_write_fallback_log",
                 error=e,
             )

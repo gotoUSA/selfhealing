@@ -4,9 +4,12 @@ GovernanceEventMixin for AdaptiveThrottle.
 이 모듈은 selfhealing.services.throttle.adaptive 패키지의 내부 구현입니다.
 """
 
-import selfhealing.services.throttle.adaptive as _adaptive_mod
-import structlog
 import time
+
+import structlog
+
+import selfhealing.services.throttle.adaptive as _adaptive_mod
+
 logger = structlog.get_logger()
 
 
@@ -127,10 +130,7 @@ class GovernanceEventMixin:
             if not self._emergency_mode_active and not self._429_reduction_active:
                 self.start_recovery_dampening(apply_jitter=True)
 
-            logger.info(
-                "[AdaptiveThrottle] Load Shedding deactivated, "
-                f"shedding_suggested_limit restored to {self.config.max_limit}"
-            )
+            logger.info("adaptive_throttle.load_shedding_deactivated_restored")
         else:
             # Shedding 활성화: 보상 계수 적용하여 이중 차단 완화
             self._shedding_affected_services = set(affected)
@@ -142,10 +142,11 @@ class GovernanceEventMixin:
             self._shedding_suggested_limit = max(compensated, self.config.min_limit)
 
             logger.warning(
-                f"[AdaptiveThrottle] Load Shedding level={new_level}, "
-                f"traffic_limit={traffic_limit}%, "
-                f"shedding_suggested_limit={self._shedding_suggested_limit}, "
-                f"affected_services={affected}"
+                "adaptive_throttle.load_shedding",
+                new_level=new_level,
+                traffic_limit=traffic_limit,
+                self=self._shedding_suggested_limit,
+                affected=affected,
             )
 
         # 메트릭 기록
@@ -189,8 +190,9 @@ class GovernanceEventMixin:
             # Drift 감지: 캐시된 레벨과 실제 레벨이 다른 경우
             if current_level != self._emergency_level:
                 logger.warning(
-                    f"[AdaptiveThrottle] Emergency state drift detected: "
-                    f"cached={self._emergency_level}, actual={current_level}"
+                    "adaptive_throttle.emergency_state_drift_detected",
+                    self=self._emergency_level,
+                    current_level=current_level,
                 )
                 self.adjust_for_emergency(current_level)
                 return True

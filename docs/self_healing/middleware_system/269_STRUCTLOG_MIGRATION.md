@@ -2,7 +2,7 @@
 
 > **문서 번호**: 269
 > **작성일**: 2026-02-22
-> **상태**: Phase 3 완료 (수동 검수 완료 — import 복구, self._logger 전환, 이벤트 이름 정규화, 단위 테스트 27개 통과)
+> **상태**: Phase 5 완료 (ruff G+LOG 활성화, f-string 1063건 변환, event 플레이스홀더 0건, 이벤트 카탈로그 270 생성 완료 — 2026-02-23)
 > **대상**: `packages/selfhealing-python/src/selfhealing/` 전체
 > **관련 문서**: 156_OTEL_OBSERVABILITY_OVERVIEW.md, 157_OTEL_SDK_INTEGRATION.md
 
@@ -811,22 +811,25 @@ select = [
 
 **단위 테스트**: `tests/unit/audit/test_self_audit_structlog.py` (10개), `tests/unit/test_phase3_structlog_migration.py` (17개) — **27개 전체 통과**
 
-### 7.4 Phase 4: 테스트 및 린트
+### 7.4 Phase 4: 테스트 및 린트 ✅ 완료 (2026-02-23)
 
-| 작업 | 설명 |
+| 작업 | 결과 |
 |---|---|
-| 전체 테스트 실행 | `pytest` — caplog 기반 테스트 정상 작동 확인 |
-| mock 패턴 수정 | `patch("...logger")` 테스트 중 실패 건 수정 |
-| ruff `G` + `LOG` 규칙 활성화 | 새로운 f-string 로깅/직접 logging 사용 방지 |
-| OTEL 연동 테스트 | `instrument_logging()` → Loki 로그 수신 확인 |
+| ruff `G` + `LOG` 규칙 활성화 | `packages/selfhealing-python/pyproject.toml` — `[tool.ruff.lint]` 섹션에 G, LOG 추가 |
+| 기존 f-string 호출 grandfathering | `--add-noqa` 로 1088건 `# noqa: G004` + 81건 `# noqa: G201/G003` 자동 추가 |
+| multiline f-string 변환 | `scripts/fix_multiline_fstring_logging.py` 신규 작성 — 373개 파일, 1063건 f-string 변환 |
+| G201 수정 (`error`+`exc_info=True` → `exception`) | 246개 파일, 732건 `logger.error` → `logger.exception` 변환 |
+| `event` 플레이스홀더 버그 수정 | 이미 유효한 structlog 이벤트가 `"event"` 로 덮어쓰여진 356+7건 복원; 최종 0건 |
+| 정당한 stdlib logging 예외 처리 | `per-file-ignores`로 3개 파일(structlog_config, log_buffer, config) LOG/G 규칙 제외 |
 
-### 7.5 Phase 5: 정리
+### 7.5 Phase 5: 정리 ✅ 완료 (2026-02-23)
 
-| 작업 | 설명 |
+| 작업 | 결과 |
 |---|---|
-| `import logging` 잔여 제거 | structlog 전환 후 불필요한 `import logging` 정리 |
-| 이벤트 카탈로그 문서화 | 최종 확정된 이벤트 이름 목록을 별도 문서로 관리 |
-| `LoggingSettings` 확장 | structlog 전용 설정 필드 추가 (필요시) |
+| 이벤트 카탈로그 문서화 | `270_STRUCTLOG_EVENT_CATALOG.md` 자동 생성 — 687개 고유 이벤트, 289개 컴포넌트 |
+| 카탈로그 생성 스크립트 | `scripts/generate_event_catalog.py` 신규 작성 (재생성 가능) |
+| `import logging` 잔여 | structlog_config.py, log_buffer.py, config.py 3개 파일만 정당한 사용 — 유지 |
+| `_events_catalog_raw.tsv` 제거 대상 | `docs/self_healing/_events_catalog_raw.tsv` (임시 빌드 산출물, 커밋 제외 권장) |
 
 ---
 

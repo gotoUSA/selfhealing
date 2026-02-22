@@ -8,17 +8,20 @@ Hedging Executor - 병렬 실행 및 첫 응답 선택 (동기).
 from __future__ import annotations
 
 import contextvars
-import structlog
 import threading
 import time
 from concurrent.futures import (
     CancelledError,
     Future,
     ThreadPoolExecutor,
-    TimeoutError as FuturesTimeoutError,
     as_completed,
 )
+from concurrent.futures import (
+    TimeoutError as FuturesTimeoutError,
+)
 from typing import TypeVar
+
+import structlog
 
 from selfhealing.core.hedging.config import (
     HedgingCandidate,
@@ -219,8 +222,9 @@ class HedgingExecutor:
         except FuturesTimeoutError:
             # Primary가 delay 내에 응답하지 않음 → Secondary 추가 (ContextVar 전파)
             logger.debug(
-                f"[Hedging] Primary '{primary.name}' did not respond within "
-                f"{self._config.delay}s, adding secondary candidates"
+                "hedging.primary_respond_within_adding",
+                primary=primary.name,
+                self=self._config.delay,
             )
             for candidate in candidates[1:]:
                 future = self._submit_with_context(executor, candidate.fn)

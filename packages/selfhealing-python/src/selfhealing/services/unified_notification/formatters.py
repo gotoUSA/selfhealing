@@ -10,7 +10,6 @@ from typing import Any
 
 from .models import NotificationPayload, NotificationPriority
 
-
 # =============================================================================
 # Slack Block Kit Formatters - Actionable Alert
 # =============================================================================

@@ -32,13 +32,14 @@ Architecture:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.settings.auto_rollback import get_auto_rollback_settings
 
@@ -239,7 +240,7 @@ class AutoRollbackGuard:
                 try:
                     self._perform_health_check()
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "auto_rollback_guard.health_check_error",
                         error=e,
                     )
@@ -394,7 +395,7 @@ class AutoRollbackGuard:
                         last_good=last_good['value'],
                     )
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "auto_rollback_guard.rollback_failed",
                         param=param,
                         error=e,
@@ -498,7 +499,7 @@ class AutoRollbackGuard:
             )
             return f"system_default:{system_default}"
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "auto_rollback_guard.all_recovery_failed",
                 parameter=parameter,
                 error=e,

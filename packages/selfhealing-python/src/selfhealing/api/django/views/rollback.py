@@ -5,7 +5,6 @@ Rollback DNA 서비스의 REST API 엔드포인트
 """
 
 import structlog
-
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response

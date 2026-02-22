@@ -6,10 +6,11 @@ Emergency Postmortem 자동 생성 핸들러.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
-from . import SelfHealingEvent, EventType
+import structlog
+
+from . import EventType, SelfHealingEvent
 
 logger = structlog.get_logger()
 
@@ -20,7 +21,9 @@ def _handle_incident_group(event: SelfHealingEvent, service_name: str, settings)
 
     새 그룹 생성 시 종료 타이머를 스케줄링합니다.
     """
-    from selfhealing.services.postmortem.incident_group import get_incident_group_manager
+    from selfhealing.services.postmortem.incident_group import (
+        get_incident_group_manager,
+    )
 
     manager = get_incident_group_manager()
     namespace = event.data.get("namespace", "default")
@@ -92,15 +95,22 @@ def _create_individual_postmortem(
             collect_system_snapshot,
             get_healing_events,
         )
-        from selfhealing.services.postmortem_store import (
-            add_healing_incident,
-            build_timeline as _build_timeline,
-            collect_service_states as _collect_service_states,
-            generate_postmortem_data as _generate_postmortem_data,
-        )
         from selfhealing.services.circuit_breaker_service import (
             get_circuit_breaker_service,
         )
+        from selfhealing.services.postmortem_store import (
+            add_healing_incident,
+        )
+        from selfhealing.services.postmortem_store import (
+            build_timeline as _build_timeline,
+        )
+        from selfhealing.services.postmortem_store import (
+            collect_service_states as _collect_service_states,
+        )
+        from selfhealing.services.postmortem_store import (
+            generate_postmortem_data as _generate_postmortem_data,
+        )
+
         from . import get_event_bus
 
         # 히스토리 및 상태 수집
@@ -127,14 +137,18 @@ def _create_individual_postmortem(
         duration = postmortem.get("duration_seconds")
         if duration is not None and duration < min_duration:
             logger.debug(
-                f"[EventHandler] Auto postmortem skipped for {service_name}: "
-                f"duration {duration:.0f}s < min {min_duration}s"
+                "event_handler.auto_postmortem_skipped_duration",
+                service_name=service_name,
+                duration=duration,
+                min_duration=min_duration,
             )
             return
 
         # 무결성 봉인
         try:
-            from selfhealing.services.postmortem.integrity_sealer import get_integrity_sealer
+            from selfhealing.services.postmortem.integrity_sealer import (
+                get_integrity_sealer,
+            )
 
             sealer = get_integrity_sealer()
             postmortem = sealer.seal(postmortem)
@@ -185,7 +199,7 @@ def _create_individual_postmortem(
     except ImportError:
         logger.debug("event_handler.postmortem_module_available_skipping")
     except Exception as e:
-        logger.error(
+        logger.exception(
             "event_handler.failed_generate_auto_postmortem",
             error=e,
         )
@@ -325,7 +339,9 @@ def _build_emergency_deep_links(
 ) -> dict:
     """Emergency 딥링크 생성."""
     try:
-        from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
+        from selfhealing.services.postmortem.deep_links import (
+            get_postmortem_deep_link_builder,
+        )
 
         deep_link_builder = get_postmortem_deep_link_builder()
         postmortem_links = deep_link_builder.build_postmortem_links(
@@ -367,7 +383,8 @@ def _generate_emergency_postmortem_data(
     Returns:
         Emergency Postmortem 데이터 딕셔너리
     """
-    from datetime import datetime, timezone as dt_timezone
+    from datetime import datetime
+    from datetime import timezone as dt_timezone
 
     # 세션 데이터 추출
     session_id = session_data.get("session_id", "unknown")
@@ -466,13 +483,17 @@ def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
     # 최소 duration 확인 (빠른 체크, I/O 없음)
     if duration is not None and duration < min_duration:
         logger.debug(
-            f"[EventHandler] Emergency postmortem skipped for {session_id}: " f"duration {duration:.0f}s < min {min_duration}s"
+            "event_handler.emergency_postmortem_skipped_duration",
+            session_id=session_id,
+            duration=duration,
+            min_duration=min_duration,
         )
         return
 
     # Celery Task로 위임
     try:
         from selfhealing.adapters.celery.tasks import process_individual_postmortem
+
         from . import get_event_bus
         from ._cb_handlers import _collect_web_server_metrics
 
@@ -512,6 +533,7 @@ def _create_emergency_postmortem_sync(
     try:
         from selfhealing.api.django.views.xtest.base import collect_system_snapshot
         from selfhealing.services.postmortem_store import add_healing_incident
+
         from . import get_event_bus
 
         # 히스토리 및 스냅샷 수집
@@ -531,8 +553,11 @@ def _create_emergency_postmortem_sync(
 
         incident_id = postmortem.get("incident_id")
         logger.info(
-            f"[EventHandler] Emergency postmortem generated: {incident_id} "
-            f"(session={session_id}, level={trigger_level}, duration={duration}s)"
+            "event_handler.emergency_postmortem_generated",
+            incident_id=incident_id,
+            session_id=session_id,
+            trigger_level=trigger_level,
+            duration=duration,
         )
 
         # WAL Audit 기록
@@ -564,6 +589,7 @@ def _create_emergency_postmortem_sync(
         # Postmortem 알림 발송
         try:
             from selfhealing.settings.postmortem import get_postmortem_settings
+
             from ._cb_handlers import _send_postmortem_notification
 
             settings = get_postmortem_settings()
@@ -587,7 +613,7 @@ def _create_emergency_postmortem_sync(
             error=e,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "event_handler.failed_generate_emergency_postmortem",
             error=e,
         )

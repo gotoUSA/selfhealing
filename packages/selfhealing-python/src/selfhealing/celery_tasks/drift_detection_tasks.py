@@ -80,9 +80,7 @@ def _resolve_expired_chaos_experiments() -> int:
 
         return resolve_expired_chaos_experiments()
     except ImportError:
-        logger.debug(
-            "[DriftDetection] Django adapter not available, skipping chaos cleanup"
-        )
+        logger.debug("drift_detection.django_adapter_available_skipping")
         return 0
 
 
@@ -140,7 +138,10 @@ def check_sla_drift(self) -> dict[str, Any]:
                 task_id=task_id,
             )
         except Exception as audit_error:
-            logger.debug(f"[DriftDetection] Audit logging failed: {audit_error}")
+            logger.debug(
+                "drift_detection.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result
 
@@ -203,7 +204,10 @@ def cleanup_expired_chaos_experiments(self) -> dict[str, Any]:
                 },
             )
         except Exception as audit_error:
-            logger.debug(f"[DriftDetection] Audit logging failed: {audit_error}")
+            logger.debug(
+                "drift_detection.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result
 

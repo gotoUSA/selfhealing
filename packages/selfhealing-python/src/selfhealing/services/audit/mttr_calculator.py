@@ -11,11 +11,12 @@ Audit 로그 기반으로 장애 복구 시간을 자동 계산합니다.
 
 from __future__ import annotations
 
-import structlog
 import statistics
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

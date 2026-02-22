@@ -16,10 +16,11 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 
 from __future__ import annotations
 
-import structlog
 import os
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

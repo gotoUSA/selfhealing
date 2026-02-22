@@ -13,12 +13,13 @@ Slack/PagerDuty 전송 실패 시 로컬 디스크에 기록.
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -88,7 +89,7 @@ class FallbackEscalationHandler:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "fallback_escalation.cannot_create_directory",
                 error=e,
             )
@@ -164,7 +165,7 @@ class FallbackEscalationHandler:
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "fallback_escalation.file_write_failed",
                 error=e,
             )
@@ -187,7 +188,9 @@ class FallbackEscalationHandler:
                 self._memory_buffer = self._memory_buffer[-self._max_buffer_size :]
 
         logger.warning(
-            f"[FallbackEscalation] Stored in memory: {entry['component']} " f"(buffer size: {len(self._memory_buffer)})"
+            "fallback_escalation.stored_memory_buffer_size",
+            entry=entry['component'],
+            count=len(self._memory_buffer),
         )
         return True
 
@@ -211,7 +214,7 @@ class FallbackEscalationHandler:
                         if line:
                             entries.append(json.loads(line))
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "fallback_escalation.file_read_failed",
                     error=e,
                 )
@@ -271,7 +274,7 @@ class FallbackEscalationHandler:
                 self._log_path.unlink()
                 logger.info("fallback_escalation.file_cleared")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "fallback_escalation.clear_failed",
                 error=e,
             )

@@ -43,10 +43,10 @@ Usage:
 """
 
 from selfhealing.scaling.config import (
+    LEVEL_RATE_MULTIPLIERS,
     BackpressureLevel,
     BackpressureSettings,
     BackpressureStrategy,
-    LEVEL_RATE_MULTIPLIERS,
     get_backpressure_settings,
     reset_backpressure_settings,
 )
@@ -81,8 +81,8 @@ from selfhealing.scaling.graceful_degradation import (
     get_graceful_degradation,
 )
 from selfhealing.scaling.hpa_exporter import (
-    HPAMetricsExporter,
     LEVEL_TO_INT,
+    HPAMetricsExporter,
     get_hpa_metrics_exporter,
     reset_hpa_metrics_exporter,
 )

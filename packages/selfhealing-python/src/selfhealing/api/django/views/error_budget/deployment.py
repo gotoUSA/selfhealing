@@ -19,7 +19,6 @@ FAIL-SAFE DESIGN:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -83,7 +82,10 @@ class DeploymentVerdictView(APIView):
             )
 
         except Exception as e:
-            logger.error(f"[DeploymentPolicyAPI] Verdict failed: {e}", exc_info=True)
+            logger.exception(
+                "deployment_policy_api.verdict_failed",
+                error=e,
+            )
             # FAIL-SAFE: 시스템 장애 시에도 기본 PROCEED 응답 (200 OK)
             return Response(get_failsafe_verdict_response(str(e)))
 
@@ -191,8 +193,10 @@ class DeploymentOverrideView(APIView):
         )
 
         logger.warning(
-            f"[DeploymentPolicy] Override approved by {decided_by}: "
-            f"type={override_type.value}, deployment={deployment_name}"
+            "deployment_policy.override_approved",
+            decided_by=decided_by,
+            override_type=override_type.value,
+            deployment_name=deployment_name,
         )
 
         return Response(

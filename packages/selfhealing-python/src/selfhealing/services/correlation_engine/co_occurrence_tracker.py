@@ -27,10 +27,11 @@ Usage:
 from __future__ import annotations
 
 import collections
-import structlog
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.predictive_forecaster.anomaly_detector import (
     ZScoreDetector,

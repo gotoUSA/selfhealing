@@ -28,13 +28,14 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import statistics
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.core.timezone import now as utc_now
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
@@ -344,9 +345,11 @@ class EmergencyBackfillCalculator:
         self._record_to_hash_chain(result)
 
         logger.info(
-            f"[Backfill] Calculated: emergency_id={emergency_id}, "
-            f"errors={errors_affected}, delta={adjustment_delta:.2f}min, "
-            f"multiplier={backfill_multiplier}x"
+            "backfill.calculated_min",
+            emergency_id=emergency_id,
+            errors_affected=errors_affected,
+            adjustment_delta=adjustment_delta,
+            backfill_multiplier=backfill_multiplier,
         )
 
         return result

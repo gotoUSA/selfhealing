@@ -9,8 +9,9 @@ FAIL-SECURE Design:
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -40,8 +41,9 @@ class FailSecureIsAuthenticated:
 
             if not is_authenticated:
                 logger.info(
-                    f"[Permission] Denied: user not authenticated, "
-                    f"path={request.path}, ip={request.META.get('REMOTE_ADDR')}"
+                    "permission.denied_user_authenticated",
+                    request=request.path,
+                    request_1=request.META.get('REMOTE_ADDR'),
                 )
 
             return is_authenticated
@@ -49,8 +51,9 @@ class FailSecureIsAuthenticated:
         except Exception as e:
             # FAIL-SECURE: Any error = deny access
             logger.warning(
-                f"[Permission] FAIL-SECURE denial due to error: {e}, "
-                f"path={request.path}"
+                "permission.fail_secure_denial_due",
+                error=e,
+                request=request.path,
             )
             return False
 
@@ -77,8 +80,8 @@ class FailSecureIsAdminUser:
 
             if not is_authenticated:
                 logger.info(
-                    f"[Permission] Admin check denied: not authenticated, "
-                    f"path={request.path}"
+                    "permission.admin_check_denied_authenticated",
+                    request=request.path,
                 )
                 return False
 
@@ -87,8 +90,9 @@ class FailSecureIsAdminUser:
 
             if not is_admin:
                 logger.info(
-                    f"[Permission] Admin check denied: user={request.user}, "
-                    f"path={request.path}"
+                    "permission.admin_check_denied",
+                    request=request.user,
+                    request_1=request.path,
                 )
 
             return is_admin
@@ -96,7 +100,8 @@ class FailSecureIsAdminUser:
         except Exception as e:
             # FAIL-SECURE: Any error = deny access
             logger.warning(
-                f"[Permission] FAIL-SECURE admin denial due to error: {e}, "
-                f"path={request.path}"
+                "permission.fail_secure_admin_denial",
+                error=e,
+                request=request.path,
             )
             return False

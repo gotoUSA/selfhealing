@@ -14,10 +14,10 @@ Multi-Region 설정 관리.
 from __future__ import annotations
 
 import json
-import structlog
 from functools import lru_cache
 from typing import Literal
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 

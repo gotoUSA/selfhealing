@@ -19,8 +19,9 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.governance_checks import (
     GovernanceCheckMixin,
@@ -154,12 +155,14 @@ class ChaosExecutionService(GovernanceCheckMixin):
                 result.experiments.append(exp_result)
 
             logger.info(
-                f"[ChaosExecutionService] Completed: {result.executed} executed, "
-                f"{result.skipped} skipped, {result.blocked} blocked"
+                "chaos_execution_service.completed_executed_skipped_blocked",
+                result=result.executed,
+                result_1=result.skipped,
+                result_2=result.blocked,
             )
 
         except Exception as e:
-            logger.exception("chaos_execution_service.error")
+            logger.exception("error")
             result.errors.append({"error": str(e)})
 
         return result

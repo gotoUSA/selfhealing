@@ -20,11 +20,12 @@ Environment Variables:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -326,7 +327,9 @@ class PostmortemNotifier:
         self._block_builder = SlackBlockKitBuilder()
 
         logger.debug(
-            f"[PostmortemNotifier] Initialized with " f"enabled={self._config.enabled}, " f"channels={self._config.channels}"
+            "postmortem_notifier.initialized",
+            self=self._config.enabled,
+            self_1=self._config.channels,
         )
 
     def notify_postmortem_created(
@@ -400,8 +403,8 @@ class PostmortemNotifier:
             return True  # 설정 안 됨 = 성공으로 간주
 
         try:
-            import urllib.request
             import urllib.error
+            import urllib.request
 
             message = self._block_builder.build_postmortem_message(payload)
             data = json.dumps(message).encode("utf-8")
@@ -496,8 +499,8 @@ class PostmortemNotifier:
             bool: 발송 성공 여부
         """
         try:
-            import urllib.request
             import urllib.error
+            import urllib.request
 
             data = json.dumps(payload.to_dict()).encode("utf-8")
 

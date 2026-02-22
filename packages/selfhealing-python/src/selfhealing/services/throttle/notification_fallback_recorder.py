@@ -6,12 +6,13 @@
 """
 
 import json
-import structlog
 import threading
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

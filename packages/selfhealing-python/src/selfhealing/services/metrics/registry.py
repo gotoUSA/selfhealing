@@ -9,13 +9,13 @@ and batch metric recording for high-throughput paths.
 
 from __future__ import annotations
 
-import structlog
 import queue
 import re
 import threading
 import time
 from typing import Any, Callable
 
+import structlog
 from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
 logger = structlog.get_logger()

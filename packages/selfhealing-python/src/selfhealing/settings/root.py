@@ -6,10 +6,10 @@ Unified Pydantic Settings replacing core/config.py:SelfHealingConfig.
 All sub-settings are composed here for single-point access.
 """
 
-import structlog
 import os
 from typing import Any
 
+import structlog
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

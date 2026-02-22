@@ -30,6 +30,27 @@ Usage:
     ``backoff_calculator.py`` 플랫 파일에서 ``backoff_calculator/`` 패키지로 전환.
 """
 
+# sub-module의 모든 속성을 패키지 레벨에 노출.
+# 기존 `from selfhealing.services.backoff_calculator import _xxx` 패턴 호환 유지.
+import sys as _sys
+
+from selfhealing.services.backoff_calculator import budget as _budget_module
+from selfhealing.services.backoff_calculator import calculator as _calculator_module
+from selfhealing.services.backoff_calculator import global_state as _global_state_module
+from selfhealing.services.backoff_calculator import models as _models_module
+from selfhealing.services.backoff_calculator.budget import (
+    AdaptiveRetryBudget,
+)
+from selfhealing.services.backoff_calculator.calculator import (
+    BackoffCalculator,
+    ThrottleAwareBackoffCalculator,
+    _calculators,
+    calculate_backoff,
+    get_calculator_for_domain,
+)
+from selfhealing.services.backoff_calculator.global_state import (
+    GlobalThrottleStateManager,
+)
 from selfhealing.services.backoff_calculator.models import (
     SYSTEM_TIMEOUT_SECONDS,
     BackoffConfig,
@@ -37,27 +58,6 @@ from selfhealing.services.backoff_calculator.models import (
     PushBasedThrottleStateCache,
     ThrottleState,
 )
-from selfhealing.services.backoff_calculator.budget import (
-    AdaptiveRetryBudget,
-)
-from selfhealing.services.backoff_calculator.global_state import (
-    GlobalThrottleStateManager,
-)
-from selfhealing.services.backoff_calculator.calculator import (
-    BackoffCalculator,
-    ThrottleAwareBackoffCalculator,
-    calculate_backoff,
-    get_calculator_for_domain,
-    _calculators,
-)
-
-# sub-module의 모든 속성을 패키지 레벨에 노출.
-# 기존 `from selfhealing.services.backoff_calculator import _xxx` 패턴 호환 유지.
-import sys as _sys
-from selfhealing.services.backoff_calculator import models as _models_module
-from selfhealing.services.backoff_calculator import budget as _budget_module
-from selfhealing.services.backoff_calculator import global_state as _global_state_module
-from selfhealing.services.backoff_calculator import calculator as _calculator_module
 
 _pkg = _sys.modules[__name__]
 for _mod in (_models_module, _budget_module, _global_state_module, _calculator_module):

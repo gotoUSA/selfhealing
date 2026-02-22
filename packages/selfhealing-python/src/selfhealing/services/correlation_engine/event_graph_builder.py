@@ -14,9 +14,10 @@ Evidence 우선순위:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from datetime import datetime, timezone
+
+import structlog
 
 from selfhealing.services.blast_radius.service import BlastRadiusService
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
@@ -31,8 +32,8 @@ from selfhealing.services.correlation_engine.event_graph import (
     DEFAULT_MAX_EVENTS_PER_DAG,
     DEFAULT_MAX_GRAPH_DEPTH,
     DEFAULT_MIN_CONFIDENCE,
-    EVIDENCE_CONTEXTUAL,
     EVIDENCE_CO_OCCURRENCE,
+    EVIDENCE_CONTEXTUAL,
     EVIDENCE_CORRELATION_ID,
     EVIDENCE_DEPENDENCY,
     EVIDENCE_TEMPORAL,

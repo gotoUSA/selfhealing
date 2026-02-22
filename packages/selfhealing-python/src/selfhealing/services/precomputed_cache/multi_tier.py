@@ -4,11 +4,12 @@ Pre-computed Cache Service - Multi-Tier Cache Access with Drift Detection.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 from .constants import (
     fast_json_dumps,
@@ -131,7 +132,7 @@ def get_cached_response(
         return data
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "precomputed_cache.compute_failed",
             cache_key=cache_key,
             error=e,

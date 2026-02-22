@@ -15,7 +15,6 @@ Provides:
 
 from __future__ import annotations
 
-import structlog
 import ssl
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -23,6 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, TypeVar
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -301,7 +302,9 @@ class SimpleTLSResilientClient(TLSResilientClient):
                 error_info = self._classifier.classify(e, url)
                 self.on_tls_error(error_info)
                 logger.warning(
-                    f"TLS error (attempt {attempt + 1}): {error_info.error_type}"
+                    "tls_error_attempt",
+                    value=attempt + 1,
+                    error_info=error_info.error_type,
                 )
 
                 if not error_info.is_retryable:
@@ -317,7 +320,9 @@ class SimpleTLSResilientClient(TLSResilientClient):
                     error_info = self._classifier.classify(e, url)
                     self.on_tls_error(error_info)
                     logger.warning(
-                        f"TLS error (attempt {attempt + 1}): {error_info.error_type}"
+                        "tls_error_attempt",
+                        value=attempt + 1,
+                        error_info=error_info.error_type,
                     )
 
                     if not error_info.is_retryable:
@@ -339,7 +344,7 @@ class SimpleTLSResilientClient(TLSResilientClient):
             try:
                 self._error_callback(error_info)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "error_tls_error_callback",
                     error=e,
                 )

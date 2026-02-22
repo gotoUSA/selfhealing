@@ -7,9 +7,10 @@ Samples 100% during emergencies or SLA violations.
 
 from __future__ import annotations
 
-import structlog
 import random
 from typing import TYPE_CHECKING, Sequence
+
+import structlog
 
 if TYPE_CHECKING:
     from opentelemetry.context import Context

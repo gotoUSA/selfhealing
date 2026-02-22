@@ -17,6 +17,12 @@ Usage:
     )
 """
 
+# Dynamic forwarding (event_bus pattern)
+# service.py의 모든 속성을 패키지 레벨에 노출.
+# 기존 `from selfhealing.services.dashboard_service import ...` 패턴 호환 유지.
+import sys as _sys
+
+from selfhealing.services.dashboard_service import service as _service_module
 from selfhealing.services.dashboard_service.models import (
     AlertInfo,
     DashboardSummary,
@@ -31,12 +37,6 @@ from selfhealing.services.dashboard_service.service import (
     invalidate_dashboard_cache,
     logger,
 )
-
-# Dynamic forwarding (event_bus pattern)
-# service.py의 모든 속성을 패키지 레벨에 노출.
-# 기존 `from selfhealing.services.dashboard_service import ...` 패턴 호환 유지.
-import sys as _sys
-from selfhealing.services.dashboard_service import service as _service_module
 
 _pkg = _sys.modules[__name__]
 for _name in dir(_service_module):

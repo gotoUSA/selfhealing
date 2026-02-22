@@ -7,9 +7,10 @@ Redis 기반 예산 소진 상태 글로벌 플래그 관리.
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -14,7 +14,6 @@ Tasks:
 """
 
 import structlog
-
 from celery import shared_task
 
 from selfhealing.settings.apply_strategy import get_apply_strategy_settings
@@ -85,8 +84,9 @@ def apply_pending_config_changes(self):
         return result
 
     except Exception as e:
-        logger.error(
-            f"[ConfigTask] Error in apply_pending_config_changes: {e}", exc_info=True
+        logger.exception(
+            "config_task.error",
+            error=e,
         )
 
         # === Audit 기록 (실패) ===
@@ -159,8 +159,9 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
         if status == "retry":
             # 진행 중인 작업이 있으면 재시도
             logger.info(
-                f"[ConfigTask] Waiting for in-progress ops for {pending_id}, "
-                f"retry {self.request.retries + 1}"
+                "config_task.waiting_progress_ops_retry",
+                pending_id=pending_id,
+                self=self.request.retries + 1,
             )
             raise self.retry(countdown=min(5 * (self.request.retries + 1), 30))
 
@@ -188,7 +189,8 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
         if self.request.retries >= self.max_retries:
             # Max retries reached, apply anyway
             logger.warning(
-                f"[ConfigTask] Max retries reached for {pending_id}, applying anyway"
+                "config_task.max_retries_reached_applying",
+                pending_id=pending_id,
             )
             try:
                 from selfhealing.services.runtime_config import (
@@ -267,8 +269,9 @@ def cleanup_expired_config_changes(max_age_hours: int = None):
             "expired_count": count,
         }
     except Exception as e:
-        logger.error(
-            f"[ConfigTask] Error cleaning up expired changes: {e}", exc_info=True
+        logger.exception(
+            "config_task.error_cleaning_up_expired",
+            error=e,
         )
         return {
             "status": "error",

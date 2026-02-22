@@ -6,8 +6,9 @@ Runtime configuration helpers for chaos experiments.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -21,7 +22,8 @@ def _apply_chaos_config(config: dict[str, Any]) -> None:
         manager.update_chaos_config(**config)
     except Exception as e:
         logger.warning(
-            f"[ChaosExperiment] Could not apply config via RuntimeConfig: {e}"
+            "chaos_experiment.apply_config_via_runtimeconfig",
+            error=e,
         )
 
 

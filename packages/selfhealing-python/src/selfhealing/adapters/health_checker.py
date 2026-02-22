@@ -6,7 +6,6 @@ OS별 최적 성능 자동 선택
 추상화 레이어 + 자동 Fallback
 """
 
-import structlog
 import platform
 import socket
 import struct
@@ -15,6 +14,8 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 __all__ = [
     "HealthCheckStrategy",
@@ -161,7 +162,9 @@ class LinuxTCPInfoStrategy(HealthCheckStrategy):
 
         except Exception as e:
             logger.debug(
-                f"[LinuxTCPInfoStrategy] Health check failed for {target}: {e}"
+                "linux_tcp_info_strategy.health_check_failed",
+                target=target,
+                error=e,
             )
             return False
 
@@ -199,7 +202,9 @@ class SimpleSocketStrategy(HealthCheckStrategy):
 
         except Exception as e:
             logger.debug(
-                f"[SimpleSocketStrategy] Health check failed for {target}: {e}"
+                "simple_socket_strategy.health_check_failed",
+                target=target,
+                error=e,
             )
             return False
 

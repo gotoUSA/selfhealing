@@ -20,7 +20,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -153,10 +152,7 @@ class ChaosBlastRadiusSettings(BaseSettings):
     def warn_region_auto_approve(cls, v: bool) -> bool:
         """REGION 자동 승인은 위험함."""
         if v:
-            logger.warning(
-                "[ChaosBlastRadius] region_auto_approve=True는 매우 위험합니다. "
-                "REGION 레벨 실험은 항상 수동 승인을 권장합니다."
-            )
+            logger.warning("chaos_blast_radius.매우_위험합니다_region_레벨")
         return v
 
     @field_validator("max_traffic_percent_region")
@@ -165,8 +161,8 @@ class ChaosBlastRadiusSettings(BaseSettings):
         """REGION 트래픽이 높으면 경고."""
         if v > 20.0:
             logger.warning(
-                f"[ChaosBlastRadius] max_traffic_percent_region={v}%는 위험한 수준입니다. "
-                "10% 이하를 권장합니다."
+                "chaos_blast_radius.위험한_수준입니다_이하를_권장합니다",
+                v=v,
             )
         return v
 

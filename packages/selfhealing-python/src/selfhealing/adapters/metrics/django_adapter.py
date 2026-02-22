@@ -6,9 +6,10 @@ Provides metrics from Django models for the self-healing system.
 
 from __future__ import annotations
 
-import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
 

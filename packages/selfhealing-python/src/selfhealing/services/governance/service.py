@@ -19,9 +19,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.governance.checks import GovernanceCheckMixin
 
@@ -169,9 +170,9 @@ class GovernanceService(GovernanceCheckMixin):
             return result
 
         logger.info(
-            f"[GovernanceService] Emergency mode expiry check: "
-            f"hours_elapsed={result.hours_elapsed:.1f}, "
-            f"hours_remaining={result.hours_remaining:.1f}"
+            "governance_service.emergency_mode_expiry_check",
+            result=result.hours_elapsed,
+            result_1=result.hours_remaining,
         )
 
         # Action 1: Auto-restore (highest priority - 8시간)
@@ -287,7 +288,7 @@ class GovernanceService(GovernanceCheckMixin):
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "governance_service.failed_activate_emergency",
                 error=e,
             )
@@ -340,7 +341,7 @@ class GovernanceService(GovernanceCheckMixin):
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "governance_service.failed_deactivate_emergency",
                 error=e,
             )
@@ -414,7 +415,7 @@ class GovernanceService(GovernanceCheckMixin):
             return GovernanceNotificationResult(sent=True, channels=channels)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "governance_service.failed_send_notification",
                 error=e,
             )

@@ -20,12 +20,13 @@ Version: 6.4.0 - Drift Detection 메트릭 추가
 from __future__ import annotations
 
 import fnmatch
-import structlog
 import threading
 import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,

@@ -11,8 +11,9 @@ Dependency Analyzer - 의존성 분석 및 Root Cause 억제.
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
+
+import structlog
 
 logger = structlog.get_logger()
 

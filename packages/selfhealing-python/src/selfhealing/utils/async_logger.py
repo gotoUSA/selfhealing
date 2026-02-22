@@ -16,7 +16,6 @@ Zero-Latency Logging을 위한 비동기 이벤트 버퍼링
 
 from __future__ import annotations
 
-import structlog
 import queue
 import threading
 import time
@@ -26,6 +25,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.settings.batch import get_batch_settings
 
@@ -651,8 +652,11 @@ class AsyncHealingLogger:
                     cls._stats["total_retries"] += 1
 
                 logger.warning(
-                    f"[AsyncHealingLogger] Flush failed, retry {attempt + 1}/{cls._retry_policy.max_retries} "
-                    f"after {delay:.1f}s: {e}"
+                    "async_healing_logger.flush_failed_retry_after",
+                    value=attempt + 1,
+                    cls=cls._retry_policy.max_retries,
+                    delay=delay,
+                    error=e,
                 )
             else:
                 # 최종 실패
@@ -714,7 +718,7 @@ class AsyncHealingLogger:
         except ImportError:
             logger.warning("async_healing_logger.dlq_available_events_lost")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "async_healing_logger.dlq_store_failed",
                 error=e,
             )
@@ -777,7 +781,7 @@ class AsyncHealingLogger:
         except ImportError:
             logger.warning("async_healing_logger.unifiednotificationmanager_available")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "async_healing_logger.failed_send_alert",
                 error=e,
             )

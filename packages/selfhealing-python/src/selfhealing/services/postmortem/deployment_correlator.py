@@ -18,11 +18,12 @@ Postmortem에 포함시켜 장애 원인 분석 정확도를 높입니다.
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -233,9 +234,11 @@ class DeploymentCorrelator:
         )
 
         logger.info(
-            f"[DeploymentCorrelator] Analyzed {service_name}: "
-            f"{len(deployments)} deployments, {len(config_changes)} config changes, "
-            f"correlation={result.correlation_type.value}"
+            "deployment_correlator.analyzed_deployments_config_changes",
+            service_name=service_name,
+            count=len(deployments),
+            count_2=len(config_changes),
+            correlation_type=result.correlation_type.value,
         )
 
         return result

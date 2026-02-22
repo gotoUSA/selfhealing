@@ -10,16 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from selfhealing.settings import get_config
-
 # =============================================================================
 # Circuit Breaker State Enum
 # =============================================================================
-
 # 정규 소스: interfaces/repositories.py의 CircuitBreakerStateEnum(str, Enum)
 # 하위 호환을 위해 alias 유지 — 소비자 코드 변경 0건
 from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
-
+from selfhealing.settings import get_config
 
 # =============================================================================
 # Configuration

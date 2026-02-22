@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
 from typing import Any
 
-from .enums import OverrideIdentifierType, TierMatchType, TierFallbackReason
+from .enums import OverrideIdentifierType, TierFallbackReason, TierMatchType
 
 
 @dataclass

@@ -21,8 +21,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
@@ -627,9 +628,10 @@ class ProviderRegistry:
             cls._default_repo = repo
 
         logger.info(
-            f"[Registry] Defaults updated: "
-            f"cache={cls._default_cache}, "
-            f"queue={cls._default_queue}, repo={cls._default_repo}"
+            "registry.defaults_updated",
+            cls=cls._default_cache,
+            cls_1=cls._default_queue,
+            cls_2=cls._default_repo,
         )
 
     @classmethod
@@ -663,7 +665,7 @@ class ProviderRegistry:
         For testing only. Use to reset singleton instances between tests.
         """
         cls._instances.clear()
-        logger.debug("registry.cleared_all_cached_instances")
+        logger.debug("registry")
 
     @classmethod
     def reset(cls) -> None:
@@ -690,7 +692,7 @@ class ProviderRegistry:
         cls._default_repo = "redis"  # Changed from "django" to "redis"
         cls._default_audit = "file"
         cls._default_traffic_routing = "logging"
-        logger.debug("registry.reset_initial_state")
+        logger.debug("registry")
 
     # =========================================================================
     # Health Check
@@ -710,7 +712,7 @@ class ProviderRegistry:
             cache = cls.get_cache()
             results["cache"] = cache.health_check()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "registry.cache_health_check_failed",
                 error=e,
             )
@@ -720,7 +722,7 @@ class ProviderRegistry:
             queue = cls.get_queue()
             results["queue"] = queue.health_check()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "registry.queue_health_check_failed",
                 error=e,
             )
@@ -823,8 +825,12 @@ def _auto_register_adapters() -> None:
         from selfhealing.adapters.memory.layered_repository import (
             LayeredCircuitBreakerStateRepository,
         )
-        from selfhealing.adapters.redis import RedisCircuitBreakerStateRepository as _RedisCBRepo
-        from selfhealing.adapters.resilient.backend import get_storage_backend as _get_backend
+        from selfhealing.adapters.redis import (
+            RedisCircuitBreakerStateRepository as _RedisCBRepo,
+        )
+        from selfhealing.adapters.resilient.backend import (
+            get_storage_backend as _get_backend,
+        )
 
         def _create_layered_cb_repo():
             l2_repo = _RedisCBRepo(_get_backend())

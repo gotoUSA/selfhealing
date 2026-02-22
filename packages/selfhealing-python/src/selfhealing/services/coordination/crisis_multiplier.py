@@ -15,14 +15,15 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
+
+import structlog
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.constants import (
     DEFAULT_LEVEL_MULTIPLIERS,
-    get_domain_sensitivity,
     MAX_CRISIS_MULTIPLIER_CAP,
+    get_domain_sensitivity,
 )
 
 logger = structlog.get_logger()
@@ -117,20 +118,23 @@ class DomainAwareCrisisMultiplier:
             final_multiplier = min(raw_multiplier, self.max_multiplier)
 
             logger.debug(
-                f"[CrisisMultiplier] Same domain: "
-                f"crisis={crisis_domain}, error={error_domain}, "
-                f"level={crisis_level.name}, domain_weight={domain_weight}, "
-                f"level_weight={level_weight}, raw={raw_multiplier:.2f}, "
-                f"final={final_multiplier:.2f}"
+                "crisis_multiplier.same_domain",
+                crisis_domain=crisis_domain,
+                error_domain=error_domain,
+                crisis_level=crisis_level.name,
+                domain_weight=domain_weight,
+                level_weight=level_weight,
+                raw_multiplier=raw_multiplier,
+                final_multiplier=final_multiplier,
             )
 
             return final_multiplier
 
         # 다른 도메인: 기본 가중치 유지
         logger.debug(
-            f"[CrisisMultiplier] Different domain: "
-            f"crisis={crisis_domain}, error={error_domain}, "
-            f"using default multiplier=1.0"
+            "crisis_multiplier.different_domain_using_default",
+            crisis_domain=crisis_domain,
+            error_domain=error_domain,
         )
         return 1.0
 
@@ -178,7 +182,9 @@ class DomainAwareCrisisMultiplier:
         """
         if sensitivity < 1.0:
             logger.warning(
-                f"[CrisisMultiplier] Sensitivity < 1.0 not recommended: " f"domain={domain}, sensitivity={sensitivity}"
+                "crisis_multiplier.sensitivity_recommended",
+                domain=domain,
+                sensitivity=sensitivity,
             )
         self.domain_sensitivity[domain.lower()] = sensitivity
 

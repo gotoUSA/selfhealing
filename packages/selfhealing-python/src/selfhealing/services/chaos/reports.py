@@ -13,12 +13,13 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -378,8 +379,11 @@ class ResilienceReportGenerator:
             self._send_notifications(report, trend)
 
             logger.info(
-                f"[ReportGenerator] Generated report {report_id}: "
-                f"Grade={grade}, Passed={stats['passed']}/{stats['total']}"
+                "report_generator.generated_report",
+                report_id=report_id,
+                grade=grade,
+                stats=stats['passed'],
+                stats_3=stats['total'],
             )
 
             return report
@@ -738,17 +742,20 @@ class ResilienceReportGenerator:
         # TODO: Implement when metrics are defined
         # grade_value = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}.get(report.grade, 0)
         logger.debug(
-            f"[ReportGenerator] Metrics recording skipped - grade={report.grade}, "
-            f"experiments={report.total_experiments}"
+            "report_generator.metrics_recording_skipped",
+            report=report.grade,
+            report_1=report.total_experiments,
         )
 
     def _record_audit(self, report: DailyResilienceReport) -> None:
         """Record report to audit trail."""
         logger.info(
-            f"[ResilienceReportAudit] report_id={report.report_id} "
-            f"date={report.report_date} grade={report.grade} "
-            f"experiments={report.total_experiments} "
-            f"passed={report.passed_experiments}"
+            "resilience_report_audit.event",
+            report=report.report_id,
+            report_1=report.report_date,
+            report_2=report.grade,
+            report_3=report.total_experiments,
+            report_4=report.passed_experiments,
         )
 
     def _send_notifications(self, report: DailyResilienceReport, trend: str) -> None:

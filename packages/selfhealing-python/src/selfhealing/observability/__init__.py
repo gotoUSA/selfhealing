@@ -518,8 +518,8 @@ def is_logging_instrumented() -> bool:
 def _is_otel_logging_available() -> bool:
     """Check if OpenTelemetry logging SDK packages are installed."""
     try:
-        import opentelemetry.sdk._logs  # noqa: F401
         import opentelemetry.exporter.otlp.proto.grpc._log_exporter  # noqa: F401
+        import opentelemetry.sdk._logs  # noqa: F401
 
         return True
     except ImportError:

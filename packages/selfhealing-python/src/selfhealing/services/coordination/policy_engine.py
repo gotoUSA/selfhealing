@@ -12,9 +12,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
@@ -216,8 +217,9 @@ class CoordinationPolicyEngine:
         # 레벨이 상승한 경우만 액션 실행 (하락은 Recovery Coordinator 담당)
         if new_level.value <= old_level.value:
             logger.debug(
-                f"[PolicyEngine] No actions: level not increasing "
-                f"({old_level.name} -> {new_level.name})"
+                "policy_engine.no_actions_level_increasing",
+                old_level=old_level.name,
+                new_level=new_level.name,
             )
             return []
 
@@ -237,8 +239,10 @@ class CoordinationPolicyEngine:
                 continue
 
             logger.info(
-                f"[PolicyEngine] Policy matched: {policy.name} "
-                f"for {new_level.name} on {namespace}"
+                "policy_engine.policy_matched",
+                policy=policy.name,
+                new_level=new_level.name,
+                namespace=namespace,
             )
 
             matching_actions.extend(policy.actions)

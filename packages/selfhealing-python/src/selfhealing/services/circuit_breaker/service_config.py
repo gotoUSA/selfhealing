@@ -22,9 +22,10 @@ Service Configuration Manager for Circuit Breaker
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.circuit_breaker.models import (
     CircuitBreakerAdvancedConfig,
@@ -87,7 +88,7 @@ class ServiceConfigManager:
         self._default_recovery: RecoveryStrategy = RecoveryStrategy()
         self._initialized = True
 
-        logger.debug("service_config_manager.initialized")
+        logger.debug("initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -123,8 +124,11 @@ class ServiceConfigManager:
 
         action = "updated" if is_update else "registered"
         logger.info(
-            f"[ServiceConfigManager] Service {action}: {service_id} "
-            f"(criticality={config.criticality}, shed_priority={config.shed_priority})"
+            "service_config_manager.service",
+            action=action,
+            service_id=service_id,
+            config=config.criticality,
+            config_3=config.shed_priority,
         )
 
         return True
@@ -353,7 +357,8 @@ class ServiceConfigManager:
         """
         self._default_recovery = strategy
         logger.info(
-            f"[ServiceConfigManager] Default recovery strategy set: {strategy.type}"
+            "service_config_manager.default_recovery_strategy_set",
+            strategy=strategy.type,
         )
 
     def get_recovery_strategy(self, service_id: str) -> RecoveryStrategy:
@@ -444,8 +449,8 @@ class ServiceConfigManager:
         self.set_default_recovery_strategy(config.default_recovery)
 
         logger.info(
-            f"[ServiceConfigManager] Configured from advanced config: "
-            f"{count} services registered"
+            "service_config_manager.configured_advanced_config_services",
+            count=count,
         )
 
         return count

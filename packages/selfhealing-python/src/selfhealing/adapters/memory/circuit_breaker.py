@@ -12,11 +12,12 @@ Note: This module has been refactored for better maintainability:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.adapters.memory.base import _now
 

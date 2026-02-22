@@ -30,10 +30,11 @@ Celery Beat 설정 예시:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.utils.time import utc_now
 
@@ -248,14 +249,14 @@ class RolloutWatchdog:
                         result.rollback_count += 1
 
             logger.info(
-                f"[Watchdog] Scan complete: "
-                f"scanned={result.scanned_count}, "
-                f"zombies={result.zombie_count}, "
-                f"rollbacks={result.rollback_count}"
+                "watchdog.scan_complete",
+                result=result.scanned_count,
+                result_1=result.zombie_count,
+                result_2=result.rollback_count,
             )
 
         except Exception as e:
-            logger.exception("watchdog.scan_failed")
+            logger.exception("watchdog")
             result.success = False
             result.errors.append(str(e))
 
@@ -367,7 +368,7 @@ class RolloutWatchdog:
                     )
                     return "auto_rolled_back"
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "watchdog.auto_rollback_failed",
                     error=e,
                 )
@@ -478,7 +479,7 @@ class RolloutWatchdog:
                 return result
 
         except ImportError:
-            logger.debug("watchdog.governancechecks_available_skipping")
+            logger.debug("watchdog")
             # Fail-Closed: Import 실패 시에도 차단 (보수적 정책)
             result.governance_blocked = True
             result.governance_block_reason = "GovernanceChecks module not available"
@@ -527,7 +528,7 @@ class RolloutWatchdog:
                     result.errors.append(f"{rollout.id}: {e}")
 
         except Exception as e:
-            logger.exception("watchdog.auto_promote_scan_failed")
+            logger.exception("watchdog")
             result.success = False
             result.errors.append(str(e))
 
@@ -613,7 +614,10 @@ def scan_zombie_rollouts() -> dict[str, Any]:
         return result.to_dict()
 
     except Exception as e:
-        logger.error(f"[CanaryWatchdog] scan_zombie_rollouts failed: {e}", exc_info=True)
+        logger.exception(
+            "canary_watchdog.failed",
+            error=e,
+        )
         raise
 
 
@@ -640,7 +644,10 @@ def auto_promote_eligible() -> dict[str, Any]:
         return result.to_dict()
 
     except Exception as e:
-        logger.error(f"[CanaryWatchdog] auto_promote_eligible failed: {e}", exc_info=True)
+        logger.exception(
+            "canary_watchdog.failed",
+            error=e,
+        )
         raise
 
 
@@ -675,7 +682,10 @@ def collect_canary_metrics() -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"[CanaryWatchdog] collect_canary_metrics failed: {e}", exc_info=True)
+        logger.exception(
+            "canary_watchdog.failed",
+            error=e,
+        )
         raise
 
 

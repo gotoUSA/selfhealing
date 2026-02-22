@@ -17,12 +17,12 @@ from __future__ import annotations
 from .base import (
     DeploymentConfigChange,
     DeploymentEvent,
-    DeploymentType,
     DeploymentSource,
+    DeploymentType,
     ExternalDeploymentAdapter,
 )
-from .mock import MockDeploymentAdapter
 from .kubernetes import KubernetesDeploymentAdapter
+from .mock import MockDeploymentAdapter
 
 __all__ = [
     # Models

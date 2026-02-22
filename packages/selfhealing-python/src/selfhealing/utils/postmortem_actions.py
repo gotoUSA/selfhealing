@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-
 # 이벤트 타입별 Action 메시지 매핑
 EVENT_ACTION_MAP = {
     "circuit_breaker_opened": "Circuit Breaker OPEN 전환",

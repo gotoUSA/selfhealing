@@ -14,9 +14,9 @@ Environment Variables:
 
 """
 
-import structlog
 from typing import Any
 
+import structlog
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

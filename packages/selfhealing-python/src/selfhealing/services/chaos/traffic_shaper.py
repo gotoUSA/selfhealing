@@ -16,12 +16,13 @@ Design Principle:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -295,8 +296,10 @@ class TrafficShaper:
                 )
 
         logger.info(
-            f"[TrafficShaper] Configured for {self.experiment_id}: "
-            f"mode={config.mode.value}, target_rps={config.target_rps}"
+            "traffic_shaper.configured",
+            self=self.experiment_id,
+            mode=config.mode.value,
+            config=config.target_rps,
         )
 
     def should_allow(self, endpoint: str | None = None) -> bool:
@@ -491,9 +494,10 @@ class TrafficShaper:
         self._stats.adaptations_made += 1
 
         logger.debug(
-            f"[TrafficShaper] Adapted rate: {new_rate:.1f} RPS "
-            f"(multiplier: {self._current_rate_multiplier:.2f}, "
-            f"avg_latency: {avg_latency:.1f}ms)"
+            "traffic_shaper.adapted_rate_rps_multiplier",
+            new_rate=new_rate,
+            self=self._current_rate_multiplier,
+            avg_latency=avg_latency,
         )
 
     def _update_stats(self) -> None:

@@ -26,12 +26,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
+
+import structlog
 
 from selfhealing.core.decision_logger import (
     DecisionLogger,
@@ -243,8 +244,10 @@ class ActionExecutor:
         try:
             result = action.execute_fn()
             logger.info(
-                f"[ActionExecutor] Executed {action.name} on {action.target} | "
-                f"mode={mode.mode.value}"
+                "action_executor.executed",
+                action=action.name,
+                action_1=action.target,
+                mode=mode.mode.value,
             )
             return ActionResult(
                 action_id=action.action_id,
@@ -259,8 +262,11 @@ class ActionExecutor:
                 validation_result=validation_result,
             )
         except Exception as e:
-            logger.error(
-                f"[ActionExecutor] Failed {action.name} on {action.target}: {e}"
+            logger.exception(
+                "action_executor.failed",
+                action=action.name,
+                action_1=action.target,
+                error=e,
             )
             return ActionResult(
                 action_id=action.action_id,
@@ -285,8 +291,11 @@ class ActionExecutor:
     ) -> ActionResult:
         """Log the action without executing (shadow/evaluation mode)."""
         logger.info(
-            f"[ActionExecutor] SHADOW/EVAL: Would execute {action.name} on "
-            f"{action.target} | mode={mode.mode.value} | params={action.params}"
+            "action_executor.execute",
+            action=action.name,
+            action_1=action.target,
+            mode=mode.mode.value,
+            action_3=action.params,
         )
         return ActionResult(
             action_id=action.action_id,

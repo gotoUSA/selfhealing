@@ -14,11 +14,12 @@ CB 상태 변화 시 해당 상태 변화를 유발한 '마지막 요청'의 tra
 
 from __future__ import annotations
 
-import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -94,8 +95,8 @@ def _get_otel_trace_context() -> tuple[str | None, str | None]:
     """
     try:
         from selfhealing.observability import (
-            get_current_trace_id_from_otel,
             get_current_span_id_from_otel,
+            get_current_trace_id_from_otel,
         )
 
         return get_current_trace_id_from_otel(), get_current_span_id_from_otel()
@@ -591,9 +592,12 @@ class CircuitBreakerTracingManager:
             )
 
             logger.info(
-                f"[CBTracing] State change logged: {service_id} "
-                f"{previous_state} -> {new_state} | "
-                f"trigger={trigger} | trace_id={current_trace.trace_id}"
+                "cb_tracing.state_change_logged",
+                service_id=service_id,
+                previous_state=previous_state,
+                new_state=new_state,
+                trigger=trigger,
+                current_trace=current_trace.trace_id,
             )
 
             return wal_seq
@@ -668,10 +672,10 @@ class CircuitBreakerTracingManager:
             )
 
             logger.debug(
-                "[CBTracing] Created OTEL span for %s: %s -> %s",
-                service_id,
-                previous_state,
-                new_state,
+                "cb_tracing.created_otel_span",
+                service_id=service_id,
+                previous_state=previous_state,
+                new_state=new_state,
             )
 
             return span

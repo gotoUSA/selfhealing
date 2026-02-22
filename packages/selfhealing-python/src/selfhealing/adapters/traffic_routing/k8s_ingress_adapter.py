@@ -17,9 +17,10 @@ Ingress spec.rules의 backend.service.name을 직접 교체하여
 from __future__ import annotations
 
 import copy
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.traffic_routing import (
     RoutingChange,
@@ -170,10 +171,11 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
 
             self._current_primary = to_region
             logger.info(
-                f"[K8sIngressTrafficRouter] Switched: "
-                f"{from_region} → {to_region} "
-                f"(ingress={self._ingress_name}, "
-                f"replaced={replaced_count} backends)"
+                "k8s_ingress_traffic_router.switched_backends",
+                from_region=from_region,
+                to_region=to_region,
+                self=self._ingress_name,
+                replaced_count=replaced_count,
             )
 
             # 앱 레벨 이벤트 발행 — 실패해도 RoutingChange에 영향 없음
@@ -195,7 +197,7 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "k8s_ingress_traffic_router.switch_failed",
                 error=e,
             )
@@ -263,7 +265,7 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
                 )
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "k8s_ingress_traffic_router.event_publish_failed",
                 error=e,
             )

@@ -17,7 +17,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -87,8 +86,8 @@ class NamespaceEmergencySettings(BaseSettings):
         """escalation_threshold가 너무 작으면 경고."""
         if v < 2:
             logger.warning(
-                f"[NamespaceEmergencySettings] Low escalation_threshold={v}, "
-                "consider using >= 2 to avoid false positives"
+                "namespace_emergency_settings.low_consider_using_avoid",
+                v=v,
             )
         return v
 

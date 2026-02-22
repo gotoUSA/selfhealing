@@ -7,11 +7,13 @@ StepHandlerMixin for RecoveryCoordinator.
 from __future__ import annotations
 
 import concurrent.futures
-import structlog
 from collections.abc import Callable
 from typing import Any
 
+import structlog
+
 from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
+
 from ..enums import RecoveryStatus
 from ..recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
 from . import LOCK_HEARTBEAT_INTERVAL_SECONDS, StepTimeoutError
@@ -46,7 +48,7 @@ class StepHandlerMixin:
                 provider = get_crisis_multiplier_provider()
                 provider.reset_multiplier(session.namespace)
             except ImportError:
-                logger.warning("recovery.crisismultiplierprovider_available_skipping_budget")
+                logger.warning("recovery")
 
             return {"success": True, "multiplier": target}
         except Exception as e:
@@ -141,7 +143,7 @@ class StepHandlerMixin:
                     "triggered_by_whitelist": triggered_by_whitelist,
                 }
             except (ImportError, AttributeError):
-                logger.warning("recovery.canaryservice_available_missing_method")
+                logger.warning("recovery")
                 return {"success": True, "resumed_count": 0, "skipped": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -172,7 +174,7 @@ class StepHandlerMixin:
                     reason=reason,
                 )
             except (ImportError, AttributeError):
-                logger.warning("recovery.emergencymodetracker_available_skipping_governance")
+                logger.warning("recovery")
                 return {"success": True, "mode": "NORMAL", "skipped": True}
 
             return {"success": True, "mode": "NORMAL"}
@@ -287,12 +289,18 @@ class StepHandlerMixin:
                         additional_seconds=300,  # 5분 연장
                     )
                     logger.debug(
-                        f"[Recovery] Lock heartbeat: step={step.step_type.value}, " f"elapsed={elapsed}s/{timeout_seconds}s"
+                        "recovery.lock_heartbeat",
+                        step_type=step.step_type.value,
+                        elapsed=elapsed,
+                        timeout_seconds=timeout_seconds,
                     )
 
             # 타임아웃 초과
             logger.error(
-                f"[Recovery] Step TIMEOUT: {step.step_type.value}, " f"timeout={timeout_seconds}s, session={session.id}"
+                "recovery.step_timeout",
+                step_type=step.step_type.value,
+                timeout_seconds=timeout_seconds,
+                session=session.id,
             )
 
             # 좀비 스레드에 종료 신호 (협력적 취소)

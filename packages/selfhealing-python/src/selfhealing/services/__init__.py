@@ -194,15 +194,14 @@ from .security import (
 
 # --- Backward Compatibility - Security Notification ---
 from .security_notification import (
+    ChannelDeliveryResult,
     NotificationChannel,
     NotificationConfig,
-    ChannelDeliveryResult,
     SecurityNotificationResult,
     SecurityNotificationService,
     get_security_notification_service,
     notify_security_incident,
 )
-
 
 # =============================================================================
 # __all__ - IDE 인텔리센스 최적화

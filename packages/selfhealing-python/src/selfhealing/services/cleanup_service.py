@@ -15,9 +15,10 @@ Audit:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit import (
     log_system_control_audit,
@@ -82,7 +83,8 @@ class CleanupService:
             older_than_days = get_cleanup_settings().archive_older_than_days
 
         logger.info(
-            f"[CleanupService] Archiving DLQ entries older than {older_than_days} days"
+            "cleanup_service.archiving_dlq_entries_older",
+            older_than_days=older_than_days,
         )
 
         try:
@@ -113,7 +115,10 @@ class CleanupService:
             )
 
         except Exception as e:
-            logger.error(f"[CleanupService] Archive failed: {e}", exc_info=True)
+            logger.exception(
+                "cleanup_service.archive_failed",
+                error=e,
+            )
             return CleanupResult(
                 success=False,
                 operation="archived",
@@ -140,7 +145,8 @@ class CleanupService:
             older_than_hours = get_cleanup_settings().expired_config_hours
 
         logger.info(
-            f"[CleanupService] Cleaning up configs older than {older_than_hours} hours"
+            "cleanup_service.cleaning_up_configs_older",
+            older_than_hours=older_than_hours,
         )
 
         try:
@@ -171,7 +177,10 @@ class CleanupService:
             )
 
         except Exception as e:
-            logger.error(f"[CleanupService] Cleanup failed: {e}", exc_info=True)
+            logger.exception(
+                "cleanup_service.cleanup_failed",
+                error=e,
+            )
             return CleanupResult(
                 success=False,
                 operation="expired",
@@ -198,8 +207,8 @@ class CleanupService:
             older_than_hours = get_cleanup_settings().approval_expiry_hours
 
         logger.info(
-            f"[CleanupService] Expiring approval requests older than "
-            f"{older_than_hours} hours"
+            "cleanup_service.expiring_approval_requests_older",
+            older_than_hours=older_than_hours,
         )
 
         try:
@@ -221,8 +230,9 @@ class CleanupService:
             )
 
         except Exception as e:
-            logger.error(
-                f"[CleanupService] Approval expiration failed: {e}", exc_info=True
+            logger.exception(
+                "cleanup_service.approval_expiration_failed",
+                error=e,
             )
             return CleanupResult(
                 success=False,
@@ -254,8 +264,9 @@ class CleanupService:
             older_than_days = get_cleanup_settings().purge_older_than_days
 
         logger.warning(
-            f"[CleanupService] ⚠️ Purging archived DLQ entries older than "
-            f"{older_than_days} days (dry_run={dry_run})"
+            "cleanup_service.purging_archived_dlq_entries",
+            older_than_days=older_than_days,
+            dry_run=dry_run,
         )
 
         try:
@@ -269,7 +280,8 @@ class CleanupService:
                     older_than_days=older_than_days
                 )
                 logger.info(
-                    f"[CleanupService] DRY RUN: Would purge {count} archived entries"
+                    "cleanup_service.dry_run_purge_archived",
+                    count=count,
                 )
 
                 # === Audit 기록: DRY RUN 모드 (실제 삭제 없음) ===
@@ -283,7 +295,8 @@ class CleanupService:
             else:
                 count = dlq_service.purge_archived(older_than_days=older_than_days)
                 logger.warning(
-                    f"[CleanupService] ⚠️ PERMANENTLY DELETED {count} entries"
+                    "cleanup_service.permanently_deleted_entries",
+                    count=count,
                 )
 
                 # === Audit 기록: 영구 삭제 (고위험, 복구 불가) ===
@@ -315,7 +328,10 @@ class CleanupService:
             )
 
         except Exception as e:
-            logger.error(f"[CleanupService] Purge failed: {e}", exc_info=True)
+            logger.exception(
+                "cleanup_service.purge_failed",
+                error=e,
+            )
             return CleanupResult(
                 success=False,
                 operation="purged",

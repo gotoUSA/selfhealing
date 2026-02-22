@@ -24,16 +24,17 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 if TYPE_CHECKING:
-    from selfhealing.settings.audit_sync import AuditSyncSettings
     from selfhealing.audit.checkpoint_strategy import CheckpointStorageStrategy
+    from selfhealing.settings.audit_sync import AuditSyncSettings
 
 logger = structlog.get_logger()
 
@@ -209,8 +210,9 @@ class AuditSyncWorker:
         self._last_checkpoint_time: float = time.time()
 
         logger.info(
-            f"[AuditSyncWorker] Initialized with interval={self._config.sync_interval_seconds}s, "
-            f"batch_size={self._config.batch_size}"
+            "audit_sync_worker.initialized",
+            self=self._config.sync_interval_seconds,
+            self_1=self._config.batch_size,
         )
 
     @classmethod
@@ -293,7 +295,7 @@ class AuditSyncWorker:
                 daemon=True,
             )
             self._thread.start()
-            logger.info("audit_sync_worker.started")
+            logger.info("started")
             return True
 
     def stop(self, timeout: float = 1.0) -> None:
@@ -315,7 +317,7 @@ class AuditSyncWorker:
             if self._thread.is_alive():
                 logger.warning("audit_sync_worker.thread_stop_gracefully")
 
-        logger.info("audit_sync_worker.stopped")
+        logger.info("stopped")
 
     def _run_loop(self) -> None:
         """메인 동기화 루프."""
@@ -340,7 +342,7 @@ class AuditSyncWorker:
                     last_metrics_time = now
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "audit_sync_worker.sync_loop_error",
                     error=e,
                 )
@@ -607,8 +609,9 @@ class AuditSyncWorker:
             return
 
         try:
-            from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
             from datetime import datetime, timezone
+
+            from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
             checkpoint_data = UnifiedCheckpointData(
                 wal_sequence=self._last_processed_seq,

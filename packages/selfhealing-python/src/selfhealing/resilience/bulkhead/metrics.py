@@ -13,9 +13,10 @@ Metrics:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
+
+import structlog
 
 logger = structlog.get_logger()
 

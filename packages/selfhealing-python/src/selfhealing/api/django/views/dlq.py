@@ -17,7 +17,6 @@ Endpoints:
 """
 
 import structlog
-
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -57,9 +56,12 @@ class DLQReplayView(APIView):
         result = service.replay(domain=domain, batch_size=batch_size)
 
         logger.info(
-            f"[DLQ] Replay triggered via API: domain={domain}, "
-            f"batch_size={batch_size}, processed={result.processed}, "
-            f"success={result.success}, failed={result.failed}"
+            "dlq.replay_triggered_via_api",
+            domain=domain,
+            batch_size=batch_size,
+            result=result.processed,
+            result_3=result.success,
+            result_4=result.failed,
         )
 
         return Response(
@@ -127,7 +129,10 @@ class DLQArchiveView(APIView):
         count = service.archive_old_entries(older_than_days=older_than_days)
 
         logger.info(
-            f"[DLQ] Archived {count} entries via API " f"(resolved > {older_than_days} days ago) by user {request.user}"
+            "dlq.archived_entries_via_api",
+            count=count,
+            older_than_days=older_than_days,
+            request=request.user,
         )
 
         return Response(
@@ -381,9 +386,11 @@ class DLQTestCreateView(APIView):
         )
 
         logger.info(
-            f"[DLQ] Test entry created: id={result['dlq_id']}, "
-            f"domain={domain}, failure_type={failure_type}, "
-            f"user={request.user}"
+            "dlq.test_entry_created",
+            result=result['dlq_id'],
+            domain=domain,
+            failure_type=failure_type,
+            request=request.user,
         )
 
         return Response(result, status=status.HTTP_201_CREATED)

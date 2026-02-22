@@ -14,8 +14,9 @@ PARTIAL DEPRECATION NOTICE:
 새 코드에서는 selfhealing.settings 모듈의 Pydantic Settings를 사용하세요.
 """
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -523,16 +524,21 @@ def validate_with_safe_fallback(
             if safe_value is not None:
                 if log_changes:
                     logger.warning(
-                        f"[SafeDefault] Invalid {config_type}.{key}={value!r}, "
-                        f"using safe default: {safe_value!r}"
+                        "safe_default.invalid_using_safe_default",
+                        config_type=config_type,
+                        key=key,
+                        value=value,
+                        safe_value=safe_value,
                     )
                 result[key] = safe_value
             else:
                 # Safe default가 없으면 원래 값 유지하되 경고
                 if log_changes:
                     logger.warning(
-                        f"[SafeDefault] Invalid {config_type}.{key}={value!r}, "
-                        f"no safe default available, keeping original"
+                        "safe_default.invalid_no_safe_default",
+                        config_type=config_type,
+                        key=key,
+                        value=value,
                     )
                 result[key] = value
         else:
@@ -711,8 +717,10 @@ def _handle_fatal_violation(
     result.add_fatal_violation(config_type, key, error_msg)
     if log_changes:
         logger.error(
-            f"[FATAL] Invalid {config_type}.{key}={current!r}, "
-            f"this is a critical config violation!"
+            "fatal.invalid_critical_config_violation",
+            config_type=config_type,
+            key=key,
+            current=current,
         )
 
 
@@ -730,8 +738,11 @@ def _handle_non_fatal_violation(
     result.add_non_fatal_warning(config_type, key, error_msg)
     if log_changes:
         logger.warning(
-            f"[Startup] Invalid {config_type}.{key}={current!r}, "
-            f"applying safe default: {safe_value!r}"
+            "startup.invalid_applying_safe_default",
+            config_type=config_type,
+            key=key,
+            current=current,
+            safe_value=safe_value,
         )
     try:
         setattr(sub_config, key, safe_value)
@@ -794,8 +805,9 @@ def _finalize_validation(
     if result.has_fatal_violations:
         if log_changes:
             logger.critical(
-                f"[FATAL] {len(result.fatal_violations)} fatal config violations detected! "
-                f"Types: {list(result.fatal_violations.keys())}"
+                "fatal.fatal_config_violations_detected",
+                count=len(result.fatal_violations),
+                value=list(result.fatal_violations.keys()),
             )
         if raise_on_fatal:
             raise FatalConfigError(result.fatal_violations)
@@ -923,8 +935,8 @@ def validate_chaos_config(values: dict[str, Any]) -> dict[str, Any]:
     if "max_blast_radius" in result:
         if result["max_blast_radius"] > 0.5:
             logger.warning(
-                f"[SafeDefault] Chaos max_blast_radius={result['max_blast_radius']} "
-                f"exceeds 50%, clamping to 0.5"
+                "safe_default.chaos_exceeds_clamping",
+                result=result['max_blast_radius'],
             )
             result["max_blast_radius"] = 0.5
         if result["max_blast_radius"] < 0:
@@ -934,8 +946,8 @@ def validate_chaos_config(values: dict[str, Any]) -> dict[str, Any]:
     if "failure_rate" in result:
         if result["failure_rate"] > 0.5:
             logger.warning(
-                f"[SafeDefault] Chaos failure_rate={result['failure_rate']} "
-                f"exceeds 50%, clamping to 0.5"
+                "safe_default.chaos_exceeds_clamping",
+                result=result['failure_rate'],
             )
             result["failure_rate"] = 0.5
         if result["failure_rate"] < 0:
@@ -946,9 +958,7 @@ def validate_chaos_config(values: dict[str, Any]) -> dict[str, Any]:
 
     if os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith("production"):
         if not result.get("dry_run", True):
-            logger.warning(
-                "[SafeDefault] Chaos dry_run=False in production, forcing to True"
-            )
+            logger.warning("safe_default.chaos_production_forcing_true")
             result["dry_run"] = True
 
     return result

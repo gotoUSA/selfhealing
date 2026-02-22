@@ -14,8 +14,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import _try_add_to_buffer, _write_to_wal
 
@@ -80,8 +81,11 @@ def log_cb_state_change_audit(
 
     # Fallback: 직접 로깅
     logger.info(
-        f"[CBAudit] STATE_CHANGE | cb={cb_name} | "
-        f"{old_state} -> {new_state} | reason={reason or 'auto'}"
+        "cb_audit.event",
+        cb_name=cb_name,
+        old_state=old_state,
+        new_state=new_state,
+        value=reason or 'auto',
     )
     return wal_seq
 
@@ -141,7 +145,9 @@ def log_governance_blocked_audit(
 
     # Fallback: 직접 로깅
     logger.warning(
-        f"[GovernanceAudit] BLOCKED | action={action} | reason={block_reason}"
+        "governance_audit.blocked",
+        action=action,
+        block_reason=block_reason,
     )
     return wal_seq
 
@@ -201,8 +207,10 @@ def log_rate_limited_audit(
 
     # Fallback: 직접 로깅
     logger.info(
-        f"[RateLimitAudit] BLOCKED | ip={client_ip} | "
-        f"endpoint={endpoint} | type={limit_type}"
+        "rate_limit_audit.blocked",
+        client_ip=client_ip,
+        endpoint=endpoint,
+        limit_type=limit_type,
     )
     return wal_seq
 
@@ -267,8 +275,10 @@ def log_pool_cb_rejection_audit(
 
     # Fallback: 직접 로깅
     logger.warning(
-        f"[PoolCBAudit] REJECTION | pool={pool_name} | "
-        f"utilization={current_utilization:.2%} | threshold={threshold:.2%}"
+        "pool_cb_audit.rejection",
+        pool_name=pool_name,
+        current_utilization=current_utilization,
+        threshold=threshold,
     )
     return wal_seq
 
@@ -338,8 +348,12 @@ def log_cb_state_change_with_trace_audit(
     # Fallback: 직접 로깅
     trace_info = f" | trace_id={trace_id}" if trace_id else ""
     logger.info(
-        f"[CBAudit] STATE_CHANGE_WITH_TRACE | cb={cb_name} | "
-        f"{old_state} -> {new_state} | trigger={trigger}{trace_info}"
+        "cb_audit.event",
+        cb_name=cb_name,
+        old_state=old_state,
+        new_state=new_state,
+        trigger=trigger,
+        trace_info=trace_info,
     )
     return wal_seq
 
@@ -418,8 +432,11 @@ def log_governance_blocked_cb_audit(
 
     # Fallback: 직접 로깅
     logger.warning(
-        f"[CBAudit] GOVERNANCE_BLOCKED | cb={service_id} | "
-        f"action={action} | blast_radius={blast_radius_level} | "
-        f"affected={affected_count} | requires_approval={requires_manual_approval}"
+        "cb_audit.event",
+        service_id=service_id,
+        action=action,
+        blast_radius_level=blast_radius_level,
+        affected_count=affected_count,
+        requires_manual_approval=requires_manual_approval,
     )
     return wal_seq

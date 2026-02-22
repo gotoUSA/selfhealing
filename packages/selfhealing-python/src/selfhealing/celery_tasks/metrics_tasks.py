@@ -35,12 +35,15 @@ def collect_self_healing_metrics(self) -> dict:
     """
     from selfhealing.services import collect_all_metrics
 
-    logger.debug("metrics.collection_started")
+    logger.debug("metrics")
 
     try:
         metrics = collect_all_metrics()
 
-        logger.debug(f"[Metrics] Collection complete: " f"pending={sum(metrics.get('dlq_pending_by_domain', {}).values())}")
+        logger.debug(
+            "metrics.collection_complete_values",
+            value=sum(metrics.get('dlq_pending_by_domain', {}).values()),
+        )
 
         return {
             "success": True,
@@ -48,7 +51,10 @@ def collect_self_healing_metrics(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[Metrics] Failed to collect metrics: {e}", exc_info=True)
+        logger.exception(
+            "metrics.failed_collect_metrics",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -93,7 +99,11 @@ def check_and_report_sla_breaches(self) -> dict:
         total_breaches = sum(breaches_by_domain.values())
 
         if total_breaches > 0:
-            logger.warning(f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}")
+            logger.warning(
+                "sla_check_found_sla",
+                total_breaches=total_breaches,
+                breaches_by_domain=breaches_by_domain,
+            )
         else:
             logger.debug("sla_check.no_breaches_found")
 
@@ -104,7 +114,10 @@ def check_and_report_sla_breaches(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[SLA Check] Failed: {e}", exc_info=True)
+        logger.exception(
+            "sla_check_failed",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),

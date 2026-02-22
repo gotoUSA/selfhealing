@@ -16,9 +16,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.circuit_breaker.load_shedding.manager import (
@@ -80,7 +81,7 @@ class LoadSheddingMiddleware:
             try:
                 self._on_shed_callback(service_id, decision)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "load_shedding_middleware.callback_failed",
                     error=e,
                 )

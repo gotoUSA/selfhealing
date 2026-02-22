@@ -7,10 +7,11 @@ Health Check Service
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -181,7 +182,7 @@ class HealthCheckService:
             )
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
-            logger.error(
+            logger.exception(
                 "health_check.database_check_failed",
                 alias=alias,
                 error=e,
@@ -231,7 +232,7 @@ class HealthCheckService:
                 status="healthy" if is_usable else "degraded",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "health_check.connection_pool_check_failed",
                 alias=alias,
                 error=e,
@@ -317,7 +318,7 @@ class HealthCheckService:
                 health_status = "degraded"
                 db_status = "unhealthy"
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "health_check.overall_health_check_failed",
                 error=e,
             )
@@ -327,8 +328,12 @@ class HealthCheckService:
 
         # 클러스터 정보 포함 로깅
         logger.info(
-            f"[HealthCheck] cluster_id={cluster_id} region={region} env={environment} "
-            f"status={health_status} services={services_count}"
+            "health_check.event",
+            cluster_id=cluster_id,
+            region=region,
+            environment=environment,
+            health_status=health_status,
+            services_count=services_count,
         )
 
         return SystemHealthSummary(

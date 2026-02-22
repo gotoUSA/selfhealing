@@ -7,8 +7,9 @@ should_dlq 플래그 기반 Dumb Sink: 저장 여부 판단은 RetryPolicy가 �
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import PolicyContext, PolicyResult
 
@@ -115,7 +116,7 @@ class DLQSink:
                 return None
 
         except Exception as dlq_error:
-            logger.error(
+            logger.exception(
                 "dlq_sink.failed_create_dlq_entry",
                 dlq_error=dlq_error,
             )

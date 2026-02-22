@@ -22,10 +22,11 @@ Reference:
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -77,9 +78,10 @@ def archive_cascade_events(
 
     if dry_run:
         logger.info(
-            f"[CascadeCleanup] Archive dry run: "
-            f"found {len(to_archive)} events to archive, "
-            f"namespace={namespace}, older_than_days={older_than_days}"
+            "cascade_cleanup.archive_dry_run_found",
+            count=len(to_archive),
+            namespace=namespace,
+            older_than_days=older_than_days,
         )
         return {
             "status": "dry_run",
@@ -99,7 +101,7 @@ def archive_cascade_events(
             _archive_single_event_to_db(event)
             archived_count += 1
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cascade_cleanup.archive_failed",
                 event=event.id,
                 error=e,
@@ -107,7 +109,10 @@ def archive_cascade_events(
             failed_count += 1
 
     logger.info(
-        f"[CascadeCleanup] Archive completed: " f"archived={archived_count}, failed={failed_count}, " f"namespace={namespace}"
+        "cascade_cleanup.archive_completed",
+        archived_count=archived_count,
+        failed_count=failed_count,
+        namespace=namespace,
     )
 
     return {
@@ -220,9 +225,10 @@ def purge_old_cascade_events(
 
     if dry_run:
         logger.warning(
-            f"[CascadeCleanup] Purge dry run: "
-            f"found {len(to_purge)} events to purge, "
-            f"namespace={namespace}, older_than_days={older_than_days}"
+            "cascade_cleanup.purge_dry_run_found",
+            count=len(to_purge),
+            namespace=namespace,
+            older_than_days=older_than_days,
         )
         return {
             "status": "dry_run",
@@ -241,7 +247,7 @@ def purge_old_cascade_events(
             _delete_cascade_event(event.id, namespace)
             purged_count += 1
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cascade_cleanup.purge_failed",
                 event=event.id,
                 error=e,
@@ -249,7 +255,10 @@ def purge_old_cascade_events(
             failed_count += 1
 
     logger.warning(
-        f"[CascadeCleanup] Purge completed: " f"purged={purged_count}, failed={failed_count}, " f"namespace={namespace}"
+        "cascade_cleanup.purge_completed",
+        purged_count=purged_count,
+        failed_count=failed_count,
+        namespace=namespace,
     )
 
     return {
@@ -315,7 +324,9 @@ def create_cascade_daily_checkpoint(
     checkpoint = auditor.create_checkpoint(namespace)
 
     logger.info(
-        f"[CascadeCleanup] Daily checkpoint created: " f"namespace={namespace}, event_count={checkpoint.get('event_count')}"
+        "cascade_cleanup.daily_checkpoint_created",
+        namespace=namespace,
+        checkpoint=checkpoint.get('event_count'),
     )
 
     # 머클 블록 루트도 함께 빌드 (스팟체크 기준선)
@@ -476,7 +487,7 @@ def recover_cascade_from_wal(
             auditor._add_to_index(namespace, event.id)
             recovered += 1
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.recovery_failed",
                 error=e,
             )

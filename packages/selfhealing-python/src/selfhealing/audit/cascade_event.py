@@ -236,10 +236,10 @@ class ExternalTraceContext:
 
         try:
             from selfhealing.observability import (
-                get_current_trace_id_from_otel,
-                get_current_span_id_from_otel,
-                is_otel_enabled,
                 get_current_span,
+                get_current_span_id_from_otel,
+                get_current_trace_id_from_otel,
+                is_otel_enabled,
             )
 
             if not is_otel_enabled():

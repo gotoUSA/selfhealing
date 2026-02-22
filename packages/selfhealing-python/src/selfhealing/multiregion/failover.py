@@ -15,7 +15,6 @@ Region Failover - 리전 장애 시 자동 페일오버.
 from __future__ import annotations
 
 import json
-import structlog
 import ssl
 import threading
 import time
@@ -24,6 +23,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable
+
+import structlog
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
@@ -195,14 +196,14 @@ class RegionFailover:
         healthy = self._health_monitor.get_healthy_regions()
 
         if not healthy:
-            logger.error("failover.no_healthy_regions_available")
+            logger.error("failover")
             return None
 
         # 현재 Primary 제외
         candidates = [r for r in healthy if r != self._current_primary]
 
         if not candidates:
-            logger.error("failover.no_failover_candidates")
+            logger.error("failover")
             return None
 
         # 우선순위 기준 정렬 (우선순위 낮을수록 높은 우선순위)
@@ -260,7 +261,7 @@ class RegionFailover:
         """
         with self._lock:
             if self._state == FailoverState.FAILOVER_IN_PROGRESS:
-                logger.warning("failover.already_progress")
+                logger.warning("failover")
                 return False
 
             self._state = FailoverState.FAILOVER_IN_PROGRESS
@@ -276,7 +277,7 @@ class RegionFailover:
             # 1. Quorum 획득 (Split-brain 방지)
             if self._quorum_witness:
                 if not self._quorum_witness.try_acquire_primary():
-                    logger.error("failover.cannot_become_primary_quorum")
+                    logger.error("failover")
                     with self._lock:
                         self._state = FailoverState.NORMAL
                     return False
@@ -313,7 +314,7 @@ class RegionFailover:
                 try:
                     self._on_failover(event)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "failover.callback_error",
                         error=e,
                     )
@@ -329,7 +330,7 @@ class RegionFailover:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "failover.failed",
                 error=e,
             )
@@ -360,7 +361,10 @@ class RegionFailover:
         self._last_routing_change = result
 
         logger.info(
-            f"[Failover] Traffic routing updated: " f"{self._current_primary} → {target_region} " f"(details={result.details})"
+            "failover.traffic_routing_updated",
+            self=self._current_primary,
+            target_region=target_region,
+            result=result.details,
         )
 
     def _get_traffic_routing_adapter(self) -> Any:
@@ -504,7 +508,7 @@ class RegionFailover:
             )
             return None
         except ssl.SSLError as e:
-            logger.error(
+            logger.exception(
                 "failover.ssl_context_creation_failed",
                 error=e,
             )
@@ -578,9 +582,9 @@ class RegionFailover:
                 )
             )
         except ImportError:
-            logger.warning("failover.escalation_module_available")
+            logger.warning("failover")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "failover.alert_error",
                 error=e,
             )
@@ -628,16 +632,18 @@ class RegionFailover:
 
         # Quorum 획득 시도 (Split-brain 방지)
         if not self._quorum_witness:
-            logger.warning("failover.quorumwitness_configured_cannot_promote")
+            logger.warning("failover")
             return
 
         if not self._quorum_witness.try_acquire_primary():
-            logger.info("failover.quorum_denied_another_region")
+            logger.info("failover")
             return
 
         # 승격 성공 → 페일오버 실행
         logger.warning(
-            f"[Failover] Secondary promoting: " f"{self._settings.current_region} taking over from " f"{primary_region}"
+            "failover.secondary_promoting_taking_over",
+            self=self._settings.current_region,
+            primary_region=primary_region,
         )
         self._execute_failover(
             target_region=self._settings.current_region,
@@ -650,7 +656,7 @@ class RegionFailover:
             try:
                 self._check_and_failover()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "failover.loop_error",
                     error=e,
                 )
@@ -662,7 +668,7 @@ class RegionFailover:
     def start(self) -> None:
         """페일오버 모니터링 시작."""
         if not self._settings.enabled or not self._settings.failover_enabled:
-            logger.info("failover.disabled")
+            logger.info("failover_disabled")
             return
 
         if self._running:
@@ -679,7 +685,7 @@ class RegionFailover:
             daemon=True,
         )
         self._worker.start()
-        logger.info("failover.started")
+        logger.info("failover_started")
 
     def stop(self) -> None:
         """페일오버 모니터링 중지."""
@@ -688,7 +694,7 @@ class RegionFailover:
         if self._worker:
             self._worker.join(timeout=2.0)
         self._health_monitor.stop()
-        logger.info("failover.stopped")
+        logger.info("failover_stopped")
 
     def is_running(self) -> bool:
         """실행 중인지 확인."""

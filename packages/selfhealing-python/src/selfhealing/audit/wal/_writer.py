@@ -6,9 +6,10 @@ WAL 쓰기 모듈.
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.wal._serialization import serialize_entry, sync_and_maybe_rotate
 

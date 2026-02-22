@@ -4,10 +4,12 @@ RecoveryDampeningMixin for AdaptiveThrottle.
 이 모듈은 selfhealing.services.throttle.adaptive 패키지의 내부 구현입니다.
 """
 
-import selfhealing.services.throttle.adaptive as _adaptive_mod
-import structlog
 import threading
 import time
+
+import structlog
+
+import selfhealing.services.throttle.adaptive as _adaptive_mod
 
 logger = structlog.get_logger()
 
@@ -34,7 +36,8 @@ class RecoveryDampeningMixin:
             jitter_seconds = random.uniform(0, self._recovery_jitter_max_seconds)
 
             logger.info(
-                f"[AdaptiveThrottle] Recovery jitter applied: " f"waiting {jitter_seconds:.2f}s before dampening start"
+                "adaptive_throttle.recovery_jitter_applied_waiting",
+                jitter_seconds=jitter_seconds,
             )
 
             # 비동기 지연 후 실제 복구 시작
@@ -111,9 +114,10 @@ class RecoveryDampeningMixin:
         self.current_limit = target_limit
 
         logger.info(
-            f"[AdaptiveThrottle] Recovery dampening advanced: "
-            f"step={self._recovery_dampening_step} ({int(multiplier * 100)}%), "
-            f"limit={target_limit}"
+            "adaptive_throttle.recovery_dampening_advanced",
+            self=self._recovery_dampening_step,
+            int=int(multiplier * 100),
+            target_limit=target_limit,
         )
 
         return True
@@ -135,7 +139,8 @@ class RecoveryDampeningMixin:
         self.current_limit = self._base_limit_before_emergency
 
         logger.info(
-            f"[AdaptiveThrottle] Recovery dampening completed immediately: " f"limit={self._base_limit_before_emergency}"
+            "adaptive_throttle.recovery_dampening_completed_immediately",
+            self=self._base_limit_before_emergency,
         )
 
         # 감사 로깅 (Recovery Dampening 완료)

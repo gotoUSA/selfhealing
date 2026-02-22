@@ -18,7 +18,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -115,8 +114,8 @@ class AuditSyncSettings(BaseSettings):
         """동기화 주기가 너무 짧으면 경고."""
         if v < 0.5:
             logger.warning(
-                f"[AuditSyncSettings] Very short sync_interval={v}s, "
-                "consider using >= 0.5s to reduce CPU usage"
+                "audit_sync_settings.very_short_consider_using",
+                v=v,
             )
         return v
 

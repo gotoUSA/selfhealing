@@ -5,10 +5,11 @@ Continuous Audit Configuration.
 보안에 민감한 값(해시 시드)은 반드시 환경변수로 설정.
 """
 
-import structlog
 import os
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

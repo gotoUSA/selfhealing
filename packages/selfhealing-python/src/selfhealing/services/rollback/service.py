@@ -4,12 +4,13 @@ Rollback DNA Service - 롤백 관리 서비스
 
 from __future__ import annotations
 
-import structlog
 import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from threading import Lock
+
+import structlog
 
 from .models import (
     RollbackPolicy,
@@ -297,7 +298,7 @@ class RollbackService:
             result.state = RollbackState.FAILED
             result.message = str(e)
             result.errors.append(str(e))
-            logger.error(
+            logger.exception(
                 "rollback_failed",
                 error=e,
             )

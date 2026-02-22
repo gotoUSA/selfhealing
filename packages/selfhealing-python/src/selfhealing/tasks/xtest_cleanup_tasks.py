@@ -16,8 +16,9 @@ Schedule:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -60,19 +61,19 @@ def cleanup_xtest_artifacts() -> dict[str, Any]:
         result = service.cleanup_expired_sessions()
 
         logger.info(
-            f"[XTestCleanupTask] Completed: "
-            f"sessions={result.sessions_cleaned}, "
-            f"cb={result.cb_states_restored}, "
-            f"dlq={result.dlq_entries_purged}, "
-            f"idempotency={result.idempotency_keys_cleared}"
+            "x_test_cleanup_task.completed",
+            result=result.sessions_cleaned,
+            result_1=result.cb_states_restored,
+            result_2=result.dlq_entries_purged,
+            result_3=result.idempotency_keys_cleared,
         )
 
         return result.to_dict()
 
     except Exception as e:
-        logger.error(
-            f"[XTestCleanupTask] cleanup_xtest_artifacts failed: {e}",
-            exc_info=True,
+        logger.exception(
+            "x_test_cleanup_task.failed",
+            error=e,
         )
         raise
 
@@ -91,9 +92,9 @@ def get_xtest_cleanup_stats() -> dict[str, Any]:
         return service.get_cleanup_stats()
 
     except Exception as e:
-        logger.error(
-            f"[XTestCleanupTask] get_xtest_cleanup_stats failed: {e}",
-            exc_info=True,
+        logger.exception(
+            "x_test_cleanup_task.failed",
+            error=e,
         )
         return {"error": str(e)}
 

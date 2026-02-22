@@ -8,10 +8,11 @@ DegradedModeHandler - 사령탑 연결 실패 시 Degraded Mode 관리 (Platinum
 Note: 정적 설정 기본값은 safe_defaults.py 참조
 """
 
-import structlog
 import os
 import threading
 from typing import Any
+
+import structlog
 
 __all__ = ["DegradedModeHandler"]
 

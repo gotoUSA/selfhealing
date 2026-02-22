@@ -12,11 +12,12 @@ Universal Async Support:
 from __future__ import annotations
 
 import asyncio
-import structlog
 import time
 from collections.abc import Callable
 from functools import wraps
 from typing import ParamSpec, TypeVar
+
+import structlog
 
 from selfhealing.metrics.event_handlers import (
     DLQMetricEventHandler,
@@ -226,7 +227,10 @@ def track_execution_time(
                 duration = time.monotonic() - start_time
                 # 메트릭 기록은 구체적인 구현에서 처리
                 logger.debug(
-                    f"[Metrics] {metric_name}: {duration:.4f}s, labels={labels}"
+                    "metrics.event",
+                    metric_name=metric_name,
+                    duration=duration,
+                    labels=labels,
                 )
 
         return wrapper
@@ -262,13 +266,17 @@ def track_counter(
                 result = func(*args, **kwargs)
                 if on_success:
                     logger.debug(
-                        f"[Metrics] Counter {metric_name}.inc(), labels={labels}"
+                        "metrics.counter_inc",
+                        metric_name=metric_name,
+                        labels=labels,
                     )
                 return result
             except Exception:
                 if on_failure:
                     logger.debug(
-                        f"[Metrics] Counter {metric_name}.inc() (failure), labels={labels}"
+                        "metrics.counter_inc_failure",
+                        metric_name=metric_name,
+                        labels=labels,
                     )
                 raise
 

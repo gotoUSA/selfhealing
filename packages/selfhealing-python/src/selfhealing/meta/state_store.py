@@ -12,11 +12,12 @@ Pod 재시작 시에도 상태 유지를 위한 Redis 기반 저장소.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

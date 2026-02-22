@@ -12,11 +12,12 @@ CB CLOSE 시 자동으로 replay하는 기능을 제공합니다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -147,9 +148,10 @@ class ThrottleDLQIntegration:
                     self._pending_counts[service_name] = self._pending_counts.get(service_name, 0) + 1
 
                 logger.info(
-                    f"[ThrottleDLQ] Stored denied request: "
-                    f"service={service_name}, key={request_key}, "
-                    f"dlq_id={result.entry_id}"
+                    "throttle_dlq.stored_denied_request",
+                    service_name=service_name,
+                    request_key=request_key,
+                    result=result.entry_id,
                 )
                 return denied_request
             else:
@@ -160,7 +162,7 @@ class ThrottleDLQIntegration:
                 return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "throttle_dlq.store_failed",
                 error=e,
             )
@@ -206,9 +208,10 @@ class ThrottleDLQIntegration:
                         self._pending_counts[svc] = 0
 
             logger.info(
-                f"[ThrottleDLQ] Replay completed: "
-                f"processed={result.processed}, success={result.success}, "
-                f"failed={result.failed}"
+                "throttle_dlq.replay_completed",
+                result=result.processed,
+                result_1=result.success,
+                result_2=result.failed,
             )
 
             return {
@@ -219,7 +222,7 @@ class ThrottleDLQIntegration:
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "throttle_dlq.replay_failed",
                 error=e,
             )

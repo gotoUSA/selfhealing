@@ -8,8 +8,9 @@ Includes:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -80,9 +81,10 @@ class ResourceExhaustionExperiment(ChaosExperiment):
 
             if not is_safe:
                 logger.warning(
-                    f"[ResourceExhaustion] Capping memory to {actual_bytes / 1024 / 1024:.0f}MB "
-                    f"(cgroup limit: {max_bytes / 1024 / 1024:.0f}MB, "
-                    f"safety margin: {self.SAFETY_MARGIN_PERCENT * 100:.0f}%)"
+                    "resource_exhaustion.capping_memory_mb_cgroup",
+                    value=actual_bytes / 1024 / 1024,
+                    value_1=max_bytes / 1024 / 1024,
+                    self=self.SAFETY_MARGIN_PERCENT * 100,
                 )
 
             return actual_bytes
@@ -106,10 +108,12 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             exhaustion_config["safety_margin_applied"] = True
 
         logger.info(
-            f"[ResourceExhaustion] Exhausting {self.resource_type} to "
-            f"{self.exhaustion_percent*100}% on {self.config.target_service} "
-            f"(TTL: {self._effective_ttl}s"
-            f"{f', capped to {safe_bytes / 1024 / 1024:.0f}MB' if safe_bytes else ''})"
+            "resource_exhaustion.exhausting_ttl_mb_else",
+            self=self.resource_type,
+            self_1=self.exhaustion_percent*100,
+            self_2=self.config.target_service,
+            self_3=self._effective_ttl,
+            value=f', capped to {safe_bytes / 1024 / 1024:.0f}MB' if safe_bytes else '',
         )
 
         try:
@@ -130,7 +134,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "resource_exhaustion.failed_inject",
                 error=e,
             )
@@ -141,7 +145,8 @@ class ResourceExhaustionExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[ResourceExhaustion] Rollback already completed for {self.experiment_id}"
+                    "resource_exhaustion.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -162,7 +167,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "resource_exhaustion.rollback_failed",
                     error=e,
                 )
@@ -226,8 +231,10 @@ class PoolExhaustionExperiment(ChaosExperiment):
         )
 
         logger.info(
-            f"[PoolExhaustion] Injecting simulated {self.simulated_status} status "
-            f"for pool '{self.target_pool}' (TTL: {self._effective_ttl}s)"
+            "pool_exhaustion.injecting_simulated_status_pool",
+            self=self.simulated_status,
+            self_1=self.target_pool,
+            self_2=self._effective_ttl,
         )
 
         try:
@@ -266,12 +273,13 @@ class PoolExhaustionExperiment(ChaosExperiment):
             )
 
             logger.info(
-                f"[PoolExhaustion] Simulation override set: {health_status.value}"
+                "pool_exhaustion.simulation_override_set",
+                health_status=health_status.value,
             )
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pool_exhaustion.failed_inject",
                 error=e,
             )
@@ -282,7 +290,8 @@ class PoolExhaustionExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[PoolExhaustion] Rollback already completed for {self.experiment_id}"
+                    "pool_exhaustion.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -306,7 +315,7 @@ class PoolExhaustionExperiment(ChaosExperiment):
                 self._rollback_completed = True
                 logger.info("pool_exhaustion.simulation_override_cleared")
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "pool_exhaustion.rollback_failed",
                     error=e,
                 )

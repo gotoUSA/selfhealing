@@ -7,8 +7,9 @@ Uses Repository pattern for domain-free architecture.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -61,8 +62,10 @@ class EntryOperationsMixin:
             raise ValueError(f"Failed to increment retry count for entry {pk}")
 
         logger.info(
-            f"[DLQService] Retry triggered for entry {pk} "
-            f"({entry.domain}/{entry.failure_type})"
+            "dlq_service.retry_triggered_entry",
+            pk=pk,
+            entry=entry.domain,
+            entry_2=entry.failure_type,
         )
 
         return {

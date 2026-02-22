@@ -25,11 +25,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.predictive_forecaster.anomaly_detector import (
     IQRDetector,
@@ -474,9 +475,10 @@ class PredictiveForecasterService:
                 ttl_hours=168,
             )
             logger.warning(
-                f"[PredictiveForecasterService] Blacklisted: "
-                f"predictive_forecaster:{parameter}={metric_name} "
-                f"({misprediction_count} consecutive mispredictions)"
+                "predictive_forecaster_service.blacklisted_consecutive_mispredictions",
+                parameter=parameter,
+                metric_name=metric_name,
+                misprediction_count=misprediction_count,
             )
         except Exception as e:
             logger.debug(

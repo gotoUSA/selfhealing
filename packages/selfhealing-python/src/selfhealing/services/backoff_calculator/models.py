@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 
 from selfhealing.settings import get_config
 
-
 # =============================================================================
 # Constants
 # =============================================================================

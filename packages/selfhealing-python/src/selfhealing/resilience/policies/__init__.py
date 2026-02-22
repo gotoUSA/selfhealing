@@ -30,6 +30,9 @@ from selfhealing.interfaces.resilience_policy import (
     ResiliencePolicy,
 )
 
+# Policies — 외부 도메인 패키지 re-export
+from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
+
 # Composer
 from selfhealing.resilience.policies.composer import (
     AsyncPolicyComposer,
@@ -44,12 +47,6 @@ from selfhealing.resilience.policies.fallback import (
     FallbackPolicy,
     partition_aware_chain,
 )
-
-# Policies — 외부 도메인 패키지 re-export
-from selfhealing.resilience.bulkhead.policy import BulkheadPolicy
-from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
-from selfhealing.services.retry_handler.policy import RetryPolicy
-from selfhealing.services.throttle.policy import ThrottlePolicy
 
 # Guards
 from selfhealing.resilience.policies.guards import (
@@ -69,11 +66,14 @@ from selfhealing.resilience.policies.hooks import (
     MetricsHook,
 )
 
-# Sinks
-from selfhealing.resilience.policies.sinks import DLQSink
-
 # Presets
 from selfhealing.resilience.policies.presets import ha_pipeline, standard_pipeline
+
+# Sinks
+from selfhealing.resilience.policies.sinks import DLQSink
+from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
+from selfhealing.services.retry_handler.policy import RetryPolicy
+from selfhealing.services.throttle.policy import ThrottlePolicy
 
 if TYPE_CHECKING:
     from selfhealing.resilience.policies.hedging import (

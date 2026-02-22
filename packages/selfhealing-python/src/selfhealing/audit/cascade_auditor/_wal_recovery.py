@@ -8,10 +8,11 @@ Cascade Auditor - WAL/Load Shedding 모듈.
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.cascade_auditor._helpers import get_index_ids
 from selfhealing.audit.cascade_event import CascadeEvent, ExternalTraceContext
@@ -97,7 +98,9 @@ class WALRecoveryMixin:
         if not decision["accepted"]:
             # 드롭
             logger.warning(
-                f"[CascadeAudit] Event dropped by load shedding: " f"trigger={trigger_type}, reason={decision['reason']}"
+                "cascade_audit.event_dropped_load_shedding",
+                trigger_type=trigger_type,
+                decision=decision['reason'],
             )
 
             # 폴백 권장 시 로컬에 저장
@@ -138,7 +141,7 @@ class WALRecoveryMixin:
                 event=event.id,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cascade_audit.local_wal_save_failed",
                 error=e,
             )
@@ -242,7 +245,7 @@ class WALRecoveryMixin:
                 self._add_to_index(namespace, event.id)
                 recovered += 1
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "watchdog.recovery_failed",
                     error=e,
                 )
@@ -253,7 +256,10 @@ class WALRecoveryMixin:
             self._remove_namespace_from_wal(namespace)
 
         logger.info(
-            f"[CascadeAudit] WAL recovery completed: " f"recovered={recovered}, failed={failed}, namespace={namespace}"
+            "cascade_audit.wal_recovery_completed",
+            recovered=recovered,
+            failed=failed,
+            namespace=namespace,
         )
 
         return {

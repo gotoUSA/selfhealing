@@ -12,10 +12,11 @@ Redis 키 구조:
 from __future__ import annotations
 
 import json
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -177,7 +178,7 @@ class XTestSessionManager:
                 )
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "x_test_session.failed_create_session",
                     error=e,
                 )
@@ -221,7 +222,7 @@ class XTestSessionManager:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_session.failed_get_session",
                 session_id=session_id,
                 error=e,
@@ -266,7 +267,7 @@ class XTestSessionManager:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_session.failed_update_session",
                 session_id=session_id,
                 error=e,
@@ -321,7 +322,7 @@ class XTestSessionManager:
             return [sid.decode() if isinstance(sid, bytes) else sid for sid in session_ids]
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_session.failed_get_active_sessions",
                 error=e,
             )
@@ -380,7 +381,7 @@ class XTestSessionManager:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_session.failed_delete_session",
                 session_id=session_id,
                 error=e,

@@ -17,7 +17,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -97,8 +96,8 @@ class AuditReconcilerSettings(BaseSettings):
         """check_interval이 너무 짧으면 경고."""
         if v < 120:
             logger.warning(
-                f"[AuditReconcilerSettings] Low check_interval={v}s, "
-                "consider using >= 120s to reduce overhead"
+                "audit_reconciler_settings.low_consider_using_reduce",
+                v=v,
             )
         return v
 

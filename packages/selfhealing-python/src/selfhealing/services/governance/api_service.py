@@ -20,9 +20,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     pass
@@ -234,7 +235,9 @@ class GovernanceApiService:
                     mode="STRICT",
                 )
                 logger.info(
-                    f"[Governance] Emergency tracker activated: " f"actor={actor}, expires_at={result.get('expiry_hours', 8)}h"
+                    "governance.emergency_tracker_activated",
+                    actor=actor,
+                    result=result.get('expiry_hours', 8),
                 )
 
                 # 만료 시각 계산
@@ -257,7 +260,7 @@ class GovernanceApiService:
                 return result
 
         except ImportError:
-            logger.debug("governance.emergencymodetracker_available")
+            logger.debug("governance")
         except Exception as e:
             logger.warning(
                 "governance.failed_sync_emergency_tracker",
@@ -274,7 +277,7 @@ class GovernanceApiService:
             manager = get_reliability_manager()
             return manager.get_all_states()
         except ImportError:
-            logger.debug("governance.reliabilitymanager_available")
+            logger.debug("governance")
             return {}
         except Exception as e:
             logger.warning(
@@ -476,8 +479,8 @@ class GovernanceApiService:
         """모드 변경 Audit 로깅."""
         try:
             from selfhealing.audit.logger import (
-                AuditLogger,
                 AuditConfigChangeEvent,
+                AuditLogger,
             )
 
             audit_logger = AuditLogger.get_instance()

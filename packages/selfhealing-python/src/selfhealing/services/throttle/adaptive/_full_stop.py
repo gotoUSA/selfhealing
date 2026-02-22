@@ -4,14 +4,11 @@ FullStopMixin for AdaptiveThrottle.
 이 모듈은 selfhealing.services.throttle.adaptive 패키지의 내부 구현입니다.
 """
 
-import selfhealing.services.throttle.adaptive as _adaptive_mod
 import structlog
+
+import selfhealing.services.throttle.adaptive as _adaptive_mod
+
 logger = structlog.get_logger()
-
-
-
-
-
 
 
 class FullStopMixin:
@@ -146,7 +143,9 @@ class FullStopMixin:
         self._current_limit = 0
 
         logger.critical(
-            f"[AdaptiveThrottle] FULL STOP ACTIVATED: {reason}, " f"limit: {previous_limit} → 0 (all requests blocked)"
+            "adaptive_throttle.full_stop_activated_limit",
+            reason=reason,
+            previous_limit=previous_limit,
         )
 
         # KILL_SWITCH_ACTIVATED 이벤트 발행
@@ -207,9 +206,7 @@ class FullStopMixin:
         # Recovery Dampening으로 복구 시작
         self.start_recovery_dampening()
 
-        logger.warning(
-            "adaptive_throttle.full_stop_deactivated_starting",
-        )
+        logger.warning("adaptive_throttle.full_stop_deactivated_starting")
 
         # 감사 로깅 (Full Stop 비활성화 → CascadeEvent 포함)
         _adaptive_mod._record_audit_safe(
@@ -222,4 +219,3 @@ class FullStopMixin:
     def is_full_stop_active(self) -> bool:
         """Full Stop 활성화 여부."""
         return self._full_stop_active
-

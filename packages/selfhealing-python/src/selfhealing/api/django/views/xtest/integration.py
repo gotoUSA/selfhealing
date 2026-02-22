@@ -24,9 +24,9 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import structlog
 from typing import Any
 
+import structlog
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -128,8 +128,10 @@ class RunScenarioView(XTestModeMixin, APIView):
             result = scenario.run()
 
             logger.info(
-                f"[X-Test Integration] Scenario {scenario_name} completed: "
-                f"status={result.status.value}, steps={len(result.steps)}"
+                "test_integration_scenario_completed",
+                scenario_name=scenario_name,
+                status=result.status.value,
+                count=len(result.steps),
             )
 
             # WAL Audit 기록 (scenario_audit 사용)
@@ -157,7 +159,7 @@ class RunScenarioView(XTestModeMixin, APIView):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_integration_scenario_error",
                 scenario_name=scenario_name,
                 error=e,
@@ -595,8 +597,10 @@ class ResetView(XTestModeMixin, APIView):
         reset_results = self._execute_resets(components, service_name, xtest_only)
 
         logger.info(
-            f"[X-Test Integration] Reset completed: components={components}, "
-            f"service={service_name}, xtest_only={xtest_only}"
+            "test_integration_reset_completed",
+            components=components,
+            service_name=service_name,
+            xtest_only=xtest_only,
         )
 
         response_data = {

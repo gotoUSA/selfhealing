@@ -8,11 +8,12 @@ Error Budget Gate - Core Gate Class.
 from __future__ import annotations
 
 import functools
-import structlog
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.error_budget_gate.alert_manager import GateAlertManager
 from selfhealing.services.error_budget_gate.config import (
@@ -177,7 +178,7 @@ class ErrorBudgetGate:
             return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "error_budget_gate.failed_get_error_budget",
                 error=e,
             )
@@ -295,13 +296,15 @@ class ErrorBudgetGate:
             # 로깅
             if result.status == GateStatus.BLOCKED:
                 logger.warning(
-                    f"[ErrorBudgetGate] AUTOMATION BLOCKED - "
-                    f"Error budget {budget_percent:.1f}% < {self._config.critical_threshold_percent}%"
+                    "error_budget_gate.automation_blocked_error_budget",
+                    budget_percent=budget_percent,
+                    self=self._config.critical_threshold_percent,
                 )
             elif result.status == GateStatus.WARNING:
                 logger.info(
-                    f"[ErrorBudgetGate] Warning - Error budget {budget_percent:.1f}% "
-                    f"< {self._config.warning_threshold_percent}%"
+                    "error_budget_gate.warning_error_budget",
+                    budget_percent=budget_percent,
+                    self=self._config.warning_threshold_percent,
                 )
 
             return result
@@ -516,7 +519,8 @@ class ErrorBudgetGate:
         else:
             # Rate Limit 초과 - 차단
             logger.warning(
-                f"[ErrorBudgetGate] FAIL-OPEN rate limit exceeded - " f"blocking automation (reset at {reset_at.isoformat()})"
+                "error_budget_gate.fail_open_rate_limit",
+                reset_at=reset_at.isoformat(),
             )
 
             # Rate Limit 초과 알림 발송
@@ -569,7 +573,9 @@ class ErrorBudgetGate:
 
         if not result.allowed:
             logger.warning(
-                f"[ErrorBudgetGate] Action blocked: {action or 'unknown'} - " f"Error budget: {result.error_budget_percent}%"
+                "error_budget_gate.action_blocked_error_budget",
+                value=action or 'unknown',
+                result=result.error_budget_percent,
             )
 
             # 감사 로깅
@@ -771,7 +777,7 @@ class ErrorBudgetGate:
         except Exception as e:
             gate_status = "error"
             gate_healthy = False
-            logger.error(
+            logger.exception(
                 "error_budget_gate.health_check_failed",
                 error=e,
             )

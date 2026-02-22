@@ -30,10 +30,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import structlog
 import threading
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 from selfhealing.adapters.kafka.config import KafkaSettings, get_kafka_settings
 from selfhealing.adapters.kafka.consumer import (
@@ -183,7 +184,7 @@ class KafkaEventBus:
                 try:
                     results.append(handler(event))
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "kafka_event_bus.핸들러_오류",
                         error=e,
                     )

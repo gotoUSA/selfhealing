@@ -26,10 +26,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import os
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
@@ -182,8 +183,8 @@ class ServiceFactory:
         NOTE: Django repository 모듈이 현재 구현되지 않아 InMemory로 fallback합니다.
         """
         logger.warning(
-            f"[ServiceFactory] Django repository not implemented. "
-            f"Falling back to in-memory for: {repo_type}"
+            "service_factory.django_repository_implemented_falling",
+            repo_type=repo_type,
         )
         return self._create_inmemory_repository(repo_type)
 
@@ -205,16 +206,13 @@ class ServiceFactory:
                 )
 
                 l2_repo = RedisCircuitBreakerStateRepository()
-                logger.info(
-                    "[ServiceFactory] Using Layered storage: L1=Memory + L2=Redis"
-                )
+                logger.info("service_factory.using_layered_storage")
             except ImportError:
-                logger.info(
-                    "[ServiceFactory] Redis adapter not available. Using L1=Memory only"
-                )
+                logger.info("service_factory.redis_adapter_available_using")
             except Exception as e:
                 logger.warning(
-                    f"[ServiceFactory] Redis connection failed: {e}. Using L1=Memory only"
+                    "service_factory.redis_connection_failed_using",
+                    error=e,
                 )
 
             return LayeredCircuitBreakerStateRepository(l2_repo=l2_repo)

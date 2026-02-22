@@ -6,10 +6,11 @@ Handles Email-specific notification sending and formatting.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
-from .models import NotificationConfig, ChannelDeliveryResult
+import structlog
+
+from .models import ChannelDeliveryResult, NotificationConfig
 
 logger = structlog.get_logger()
 
@@ -62,8 +63,9 @@ class EmailHandlerMixin:
             # The selfhealing package logs the intent but actual sending
             # should be handled by the application's email service
             logger.info(
-                f"[Security Notification] Email notification prepared for {len(recipients)} recipients: "
-                f"Subject: {subject}"
+                "security_notification_email_notification",
+                count=len(recipients),
+                subject=subject,
             )
             logger.debug(
                 "security_notification_email_body",
@@ -78,7 +80,7 @@ class EmailHandlerMixin:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_email_error",
                 error=e,
             )
@@ -150,7 +152,7 @@ This is an automated security alert. Do not reply to this email.
                 message=f"Email alert prepared for {len(recipients)} recipients",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_email_alert",
                 error=e,
             )

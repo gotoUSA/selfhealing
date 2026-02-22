@@ -15,11 +15,12 @@ Active-Active 환경에서 충돌 해결(LWW)의 정확성을 위해 5ms 이하�
 
 from __future__ import annotations
 
-import structlog
 import platform
 import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
+
+import structlog
 
 logger = structlog.get_logger()
 

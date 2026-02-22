@@ -40,7 +40,9 @@ def conditional_replay_on_circuit_close(
     from selfhealing.services import get_replay_service
 
     logger.info(
-        f"[Circuit Recovery] Starting conditional replay for '{service_name}', max_items={max_items}"
+        "circuit_recovery_starting_conditional",
+        service_name=service_name,
+        max_items=max_items,
     )
 
     try:
@@ -51,9 +53,11 @@ def conditional_replay_on_circuit_close(
         )
 
         logger.info(
-            f"[Circuit Recovery] Completed for '{service_name}': "
-            f"total={result.total}, success={result.success_count}, "
-            f"failed={result.failed_count}"
+            "circuit_recovery_completed",
+            service_name=service_name,
+            result=result.total,
+            result_2=result.success_count,
+            result_3=result.failed_count,
         )
 
         return {
@@ -65,9 +69,10 @@ def conditional_replay_on_circuit_close(
         }
 
     except Exception as e:
-        logger.error(
-            f"[Circuit Recovery] Failed for '{service_name}': {e}",
-            exc_info=True,
+        logger.exception(
+            "circuit_recovery_failed",
+            service_name=service_name,
+            error=e,
         )
         return {
             "success": False,
@@ -99,14 +104,20 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
     """
     from selfhealing.services import get_replay_service
 
-    logger.info(f"[DLQ Replay] Starting replay for DLQ entry: {dlq_id}")
+    logger.info(
+        "dlq_replay_starting_replay",
+        dlq_id=dlq_id,
+    )
 
     try:
         service = get_replay_service()
         result = service.replay_single(dlq_id)
 
         if result.success:
-            logger.info(f"[DLQ Replay] Successfully replayed DLQ entry {dlq_id}")
+            logger.info(
+                "dlq_replay_successfully_replayed",
+                dlq_id=dlq_id,
+            )
             return {
                 "success": True,
                 "dlq_id": dlq_id,
@@ -115,7 +126,9 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
             }
         else:
             logger.warning(
-                f"[DLQ Replay] Failed to replay DLQ entry {dlq_id}: {result.error}"
+                "dlq_replay_failed_replay",
+                dlq_id=dlq_id,
+                result=result.error,
             )
             return {
                 "success": False,
@@ -124,7 +137,11 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
             }
 
     except Exception as e:
-        logger.error(f"[DLQ Replay] Unexpected error replaying DLQ entry {dlq_id}: {e}")
+        logger.exception(
+            "dlq_replay_unexpected_error",
+            dlq_id=dlq_id,
+            error=e,
+        )
         return {
             "success": False,
             "dlq_id": dlq_id,
@@ -161,7 +178,9 @@ def replay_batch_by_failure_type(
     from selfhealing.services import get_replay_service
 
     logger.info(
-        f"[DLQ Batch Replay] Starting batch replay for failure_type={failure_type}, max_items={max_items}"
+        "dlq_batch_replay_starting",
+        failure_type=failure_type,
+        max_items=max_items,
     )
 
     try:
@@ -172,8 +191,10 @@ def replay_batch_by_failure_type(
         )
 
         logger.info(
-            f"[DLQ Batch Replay] Completed: total={result.total}, "
-            f"success={result.success_count}, failed={result.failed_count}"
+            "dlq_batch_replay_completed",
+            result=result.total,
+            result_1=result.success_count,
+            result_2=result.failed_count,
         )
 
         return {
@@ -185,7 +206,10 @@ def replay_batch_by_failure_type(
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Batch Replay] Unexpected error: {e}")
+        logger.exception(
+            "dlq_batch_replay_unexpected",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -221,7 +245,9 @@ def replay_batch_by_domain(
     from selfhealing.services import get_replay_service
 
     logger.info(
-        f"[DLQ Batch Replay] Starting batch replay for domain={domain}, max_items={max_items}"
+        "dlq_batch_replay_starting",
+        domain=domain,
+        max_items=max_items,
     )
 
     try:
@@ -232,8 +258,10 @@ def replay_batch_by_domain(
         )
 
         logger.info(
-            f"[DLQ Batch Replay] Completed: total={result.total}, "
-            f"success={result.success_count}, failed={result.failed_count}"
+            "dlq_batch_replay_completed",
+            result=result.total,
+            result_1=result.success_count,
+            result_2=result.failed_count,
         )
 
         return {
@@ -245,7 +273,10 @@ def replay_batch_by_domain(
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Batch Replay] Unexpected error: {e}")
+        logger.exception(
+            "dlq_batch_replay_unexpected",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -280,15 +311,19 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
     """
     from selfhealing.services import get_dlq_service
 
-    logger.info(f"[DLQ Cleanup] Starting cleanup of entries older than {days_old} days")
+    logger.info(
+        "dlq_cleanup_starting_cleanup",
+        days_old=days_old,
+    )
 
     try:
         dlq_service = get_dlq_service()
         result = dlq_service.cleanup_old_entries(days_old=days_old)
 
         logger.info(
-            f"[DLQ Cleanup] Completed: expired={result.get('expired_count', 0)}, "
-            f"archived={result.get('archived_count', 0)}"
+            "dlq_cleanup_completed",
+            result=result.get('expired_count', 0),
+            result_1=result.get('archived_count', 0),
         )
 
         return {
@@ -297,7 +332,10 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Cleanup] Unexpected error: {e}")
+        logger.exception(
+            "dlq_cleanup_unexpected_error",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),

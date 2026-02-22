@@ -44,8 +44,10 @@ class RateLimitExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject rate limit responses to trigger CB cascade."""
         logger.info(
-            f"[RateLimitInjection] Injecting {self.rate_limit_count} rate limits "
-            f"to {self.config.target_service} (TTL: {self._effective_ttl}s)"
+            "rate_limit_injection.injecting_rate_limits_ttl",
+            self=self.rate_limit_count,
+            self_1=self.config.target_service,
+            self_2=self._effective_ttl,
         )
 
         try:
@@ -78,7 +80,7 @@ class RateLimitExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rate_limit_injection.failed_inject",
                 error=e,
             )
@@ -89,7 +91,8 @@ class RateLimitExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[RateLimitInjection] Rollback already completed for {self.experiment_id}"
+                    "rate_limit_injection.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -111,7 +114,7 @@ class RateLimitExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "rate_limit_injection.rollback_failed",
                     error=e,
                 )

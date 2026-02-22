@@ -9,12 +9,13 @@ Provides graceful degradation strategies when connections fail:
 
 from __future__ import annotations
 
-import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Generic, TypeVar
+
+import structlog
 
 from .connection_health import PartitionState
 

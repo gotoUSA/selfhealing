@@ -57,8 +57,9 @@ class CertificateExpiryExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject certificate expiry simulation."""
         logger.warning(
-            f"[CertificateExpiry] Simulating expiry "
-            f"(days: {self.days_until_expiry}, mTLS: {self.check_mtls})"
+            "certificate_expiry.simulating_expiry_days_mtls",
+            self=self.days_until_expiry,
+            self_1=self.check_mtls,
         )
 
         try:
@@ -79,7 +80,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "certificate_expiry.failed_inject",
                 error=e,
             )
@@ -109,7 +110,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "certificate_expiry.rollback_failed",
                     error=e,
                 )
@@ -149,8 +150,10 @@ class ClockSkewExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject clock skew."""
         logger.info(
-            f"[ClockSkew] Injecting {self.skew_seconds}s skew "
-            f"(JWT: {self.affect_jwt}, Cache: {self.affect_cache})"
+            "clock_skew.injecting_skew_jwt_cache",
+            self=self.skew_seconds,
+            self_1=self.affect_jwt,
+            self_2=self.affect_cache,
         )
 
         try:
@@ -172,7 +175,7 @@ class ClockSkewExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "clock_skew.failed_inject",
                 error=e,
             )
@@ -202,7 +205,7 @@ class ClockSkewExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "clock_skew.rollback_failed",
                     error=e,
                 )
@@ -241,8 +244,9 @@ class DNSFailureExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject DNS failure simulation."""
         logger.warning(
-            f"[DNSFailure] Injecting {self.failure_rate*100}% DNS failure "
-            f"for {self.config.target_service}"
+            "dns_failure.injecting_dns_failure",
+            self=self.failure_rate*100,
+            self_1=self.config.target_service,
         )
 
         try:
@@ -264,7 +268,7 @@ class DNSFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dns_failure.failed_inject",
                 error=e,
             )
@@ -294,7 +298,7 @@ class DNSFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "dns_failure.rollback_failed",
                     error=e,
                 )
@@ -333,8 +337,10 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject disk I/O latency."""
         logger.info(
-            f"[SimulatedDiskIO] Injecting {self.latency_ms}ms latency, "
-            f"{self.error_rate*100}% errors to {self.config.target_service}"
+            "simulated_disk_io.injecting_ms_latency_errors",
+            self=self.latency_ms,
+            self_1=self.error_rate*100,
+            self_2=self.config.target_service,
         )
 
         try:
@@ -356,7 +362,7 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "simulated_disk_io.failed_inject",
                 error=e,
             )
@@ -386,7 +392,7 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "simulated_disk_io.rollback_failed",
                     error=e,
                 )
@@ -425,8 +431,10 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject TLS failure simulation."""
         logger.warning(
-            f"[SimulatedTLS] Injecting {self.failure_type} failures at "
-            f"{self.failure_rate*100}% rate to {self.config.target_service}"
+            "simulated_tls.injecting_failures_rate",
+            self=self.failure_type,
+            self_1=self.failure_rate*100,
+            self_2=self.config.target_service,
         )
 
         try:
@@ -448,7 +456,7 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "simulated_tls.failed_inject",
                 error=e,
             )
@@ -478,7 +486,7 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "simulated_tls.rollback_failed",
                     error=e,
                 )

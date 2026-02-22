@@ -12,11 +12,11 @@ Design Philosophy:
 - 무결성 검증 엔드포인트
 """
 
-import structlog
 from datetime import datetime, timezone
 
-from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
+import structlog
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views import View
 
 logger = structlog.get_logger()
@@ -116,7 +116,7 @@ class ContinuousAuditQueryView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "continuous_audit_query_view.error",
                 error=e,
             )
@@ -166,7 +166,7 @@ class ContinuousAuditDetailView(View):
             return JsonResponse({"error": f"Log entry '{log_id}' not found"}, status=404)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "continuous_audit_detail_view.error",
                 error=e,
             )
@@ -211,7 +211,7 @@ class ContinuousAuditAutoTuningView(LoginRequiredMixin, View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "continuous_audit_auto_tuning_view.error",
                 error=e,
             )
@@ -260,7 +260,7 @@ class DriftHistoryView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "drift_history_view.error",
                 error=e,
             )
@@ -305,7 +305,7 @@ class ComplianceHistoryView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "compliance_history_view.error",
                 error=e,
             )
@@ -330,7 +330,7 @@ class IntegrityVerifyView(View):
             return JsonResponse(result, status=status_code)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "integrity_verify_view.error",
                 error=e,
             )
@@ -358,7 +358,7 @@ class ChainStateView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "chain_state_view.error",
                 error=e,
             )
@@ -418,7 +418,7 @@ class ExportJSONLView(View):
             return response
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "export_jsonl_view.error",
                 error=e,
             )
@@ -485,7 +485,7 @@ class ExportCSVView(View):
             return response
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "export_csv_view.error",
                 error=e,
             )
@@ -513,7 +513,7 @@ class ConfigView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "config_view.error",
                 error=e,
             )

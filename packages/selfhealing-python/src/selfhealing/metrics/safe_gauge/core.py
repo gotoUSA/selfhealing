@@ -22,11 +22,12 @@ Memory Management (LRU Cache):
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from .noop import NoOpGaugeChild
 from .sync import SyncInfo
@@ -156,8 +157,8 @@ class SafeGaugeChild:
                 # First operation after restart is a dec - likely stale event
                 # Don't decrement, just log and return
                 logger.debug(
-                    f"[SafeGauge] Ignoring dec() before any inc() - "
-                    f"likely stale event after restart. labels={self._label_values}"
+                    "safe_gauge.ignoring_dec_before_any",
+                    self=self._label_values,
                 )
                 return
 
@@ -172,10 +173,9 @@ class SafeGaugeChild:
                 # Set to 0 instead of decrementing
                 self._gauge_child.set(0)
                 logger.warning(
-                    f"[SafeGauge] Clamped gauge to 0 (would be {old_value - amount}). "
-                    f"labels={self._label_values}. "
-                    f"This may indicate event ordering issues after restart. "
-                    f"Reconciler will sync correct value on next cycle."
+                    "safe_gauge.clamped_gauge_indicate_event",
+                    value=old_value - amount,
+                    self=self._label_values,
                 )
 
             self._sync_info.mark_synced("push")
@@ -191,7 +191,9 @@ class SafeGaugeChild:
         with self._lock:
             if value < 0:
                 logger.warning(
-                    f"[SafeGauge] Attempted to set negative value {value}, " f"clamping to 0. labels={self._label_values}"
+                    "safe_gauge.attempted_set_negative_value",
+                    value=value,
+                    self=self._label_values,
                 )
                 value = 0.0
             self._shadow_value = value
@@ -377,9 +379,11 @@ class SafeGauge:
 
         # 운영 인지를 위한 경고 로그
         logger.warning(
-            f"[SafeGauge] LRU eviction #{self._eviction_count}: "
-            f"labels={dict(oldest_key)}, shadow_value={oldest_child.get_shadow_value()}, "
-            f"max_label_combinations={self._max_label_combinations}"
+            "safe_gauge.lru_eviction",
+            self=self._eviction_count,
+            dict=dict(oldest_key),
+            oldest_child=oldest_child.get_shadow_value(),
+            self_3=self._max_label_combinations,
         )
 
         # Eviction 메트릭 기록 (prometheus가 있는 경우)
@@ -397,7 +401,7 @@ class SafeGauge:
             try:
                 self._on_eviction(oldest_key, oldest_child)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "safe_gauge.eviction_callback_failed",
                     error=e,
                 )

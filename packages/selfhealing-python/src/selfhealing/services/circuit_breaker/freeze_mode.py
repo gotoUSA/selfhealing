@@ -20,8 +20,9 @@ Freeze Mode 동작:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
+
+import structlog
 
 from selfhealing.services.circuit_breaker.models import FreezeModeState
 
@@ -216,10 +217,7 @@ class FreezeModeManager:
         """
         # LOCKDOWN 상태에서는 수동 비활성화 불가
         if self._is_lockdown():
-            logger.warning(
-                "[FreezeMode] Cannot deactivate during LOCKDOWN. "
-                "Lower Emergency Level first."
-            )
+            logger.warning("freeze_mode.cannot_deactivate_during_lockdown")
             return False
 
         previous_state = self._state.active
@@ -291,8 +289,9 @@ class FreezeModeManager:
         # Freeze Mode에서 수동 조작은 허용
         if is_manual:
             logger.info(
-                f"[FreezeMode] Manual override allowed: "
-                f"service={service_id}, new_state={new_state}"
+                "freeze_mode.manual_override_allowed",
+                service_id=service_id,
+                new_state=new_state,
             )
             return True, ""
 

@@ -17,7 +17,6 @@ Usage:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -75,8 +74,8 @@ class SafeGaugeSettings(BaseSettings):
         """레이블 조합 수가 적절한지 경고."""
         if v > 5000:
             logger.warning(
-                f"[SafeGauge] max_label_combinations={v}는 메모리 사용량이 클 수 있습니다. "
-                "K8s 환경에서는 500 이하를 권장합니다."
+                "safe_gauge.메모리_사용량이_있습니다_환경에서는",
+                v=v,
             )
         return v
 

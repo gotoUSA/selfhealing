@@ -19,7 +19,6 @@ Region Health Monitor - 리전 건강 상태 모니터링.
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 import urllib.error
@@ -28,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
@@ -198,8 +199,10 @@ class RegionHealthMonitor:
             )
         elif max_lag > self.REPLICATION_LAG_WARNING_MS:
             logger.warning(
-                f"[RegionHealth] {endpoint.region} replication lag warning: "
-                f"kafka={kafka_lag:.0f}ms, redis={redis_lag:.0f}ms"
+                "region_health.replication_lag_warning_ms",
+                endpoint=endpoint.region,
+                kafka_lag=kafka_lag,
+                redis_lag=redis_lag,
             )
 
         # 4. 정상
@@ -373,7 +376,7 @@ class RegionHealthMonitor:
                 health = self.check_region(endpoint)
                 results[endpoint.region] = health
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "region_health.check_error",
                     endpoint=endpoint.region,
                     error=e,
@@ -466,7 +469,7 @@ class RegionHealthMonitor:
             try:
                 self.check_all_regions()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "region_health.loop_error",
                     error=e,
                 )
@@ -523,13 +526,7 @@ class RegionHealthMonitor:
             except redis_lib.exceptions.ResponseError as e:
                 error_msg = str(e).lower()
                 if "unknown command" in error_msg or "permission" in error_msg:
-                    logger.warning(
-                        "[RegionHealth] 'CONFIG SET' not permitted. "
-                        "If using managed Redis (ElastiCache, Memorystore), "
-                        "set 'notify-keyspace-events=Ex' in the parameter "
-                        "group/instance config. "
-                        f"Error: {e}"
-                    )
+                    logger.warning("region_health.config_set_permitted_using")
                 else:
                     raise  # 다른 ResponseError는 상위로 전파
 
@@ -584,7 +581,7 @@ class RegionHealthMonitor:
         )
         self._heartbeat_worker.start()
 
-        logger.info("region_health.started")
+        logger.info("started")
 
     def stop(self) -> None:
         """
@@ -596,7 +593,7 @@ class RegionHealthMonitor:
         self._stop_event.set()
         if self._worker:
             self._worker.join(timeout=2.0)
-        logger.info("region_health.stopped")
+        logger.info("stopped")
 
     def is_running(self) -> bool:
         """모니터링 실행 중인지 확인."""

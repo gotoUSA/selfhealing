@@ -30,11 +30,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -348,7 +349,10 @@ class ProactiveActionTrigger:
         # 신뢰도 미달 시 조치 거부
         if confidence < self._min_confidence:
             logger.debug(
-                f"[ProactiveActionTrigger] Low confidence ({confidence:.2f}) " f"for {parameter}, min={self._min_confidence}"
+                "proactive_action_trigger.low_confidence",
+                confidence=confidence,
+                parameter=parameter,
+                self=self._min_confidence,
             )
             return None
 
@@ -382,17 +386,23 @@ class ProactiveActionTrigger:
 
         if self._dry_run:
             logger.info(
-                f"[ProactiveActionTrigger] DRY_RUN: {parameter} "
-                f"{current_value} → {suggested_value:.2f} "
-                f"(spike_type={spike_type.value}, confidence={confidence:.2f}, "
-                f"metric={metric_name})"
+                "proactive_action_trigger.event",
+                parameter=parameter,
+                current_value=current_value,
+                suggested_value=suggested_value,
+                spike_type=spike_type.value,
+                confidence=confidence,
+                metric_name=metric_name,
             )
         else:
             logger.info(
-                f"[ProactiveActionTrigger] Action: {parameter} "
-                f"{current_value} → {suggested_value:.2f} "
-                f"(spike_type={spike_type.value}, confidence={confidence:.2f}, "
-                f"metric={metric_name})"
+                "proactive_action_trigger.action",
+                parameter=parameter,
+                current_value=current_value,
+                suggested_value=suggested_value,
+                spike_type=spike_type.value,
+                confidence=confidence,
+                metric_name=metric_name,
             )
 
         return action

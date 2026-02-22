@@ -20,9 +20,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.core.connection_health import ConnectionType
 from selfhealing.resilience.bulkhead.async_semaphore import AsyncSemaphoreBulkhead

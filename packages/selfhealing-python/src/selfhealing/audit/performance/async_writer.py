@@ -4,12 +4,13 @@ Async Audit Writer (Non-blocking writes).
 Provides asynchronous audit writing with background thread.
 """
 
-import structlog
 import queue
 import threading
 import time
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -76,7 +77,7 @@ class AsyncAuditWriter:
             name="AsyncAuditWriter",
         )
         self._thread.start()
-        logger.info("async_audit_writer.started")
+        logger.info("started")
 
     def stop(self, timeout: float = 5.0) -> None:
         """Stop background writer thread."""
@@ -90,8 +91,9 @@ class AsyncAuditWriter:
 
         self._is_running = False
         logger.info(
-            f"[AsyncAuditWriter] Stopped. "
-            f"Queued: {self._entries_queued}, Written: {self._entries_written}"
+            "async_audit_writer.stopped_queued_written",
+            self=self._entries_queued,
+            self_1=self._entries_written,
         )
 
     def write_async(
@@ -116,8 +118,8 @@ class AsyncAuditWriter:
         except queue.Full:
             self._entries_dropped += 1
             logger.warning(
-                f"[AsyncAuditWriter] Queue full, entry dropped "
-                f"(total dropped: {self._entries_dropped})"
+                "async_audit_writer.queue_full_entry_dropped",
+                self=self._entries_dropped,
             )
             return False
 
@@ -146,7 +148,7 @@ class AsyncAuditWriter:
                     last_flush = time.monotonic()
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "async_audit_writer.writer_loop_error",
                     error=e,
                 )
@@ -162,7 +164,7 @@ class AsyncAuditWriter:
                 if self._sync_writer(entry):
                     self._entries_written += 1
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "async_audit_writer.write_failed",
                     error=e,
                 )

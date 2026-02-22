@@ -51,9 +51,9 @@ class Command(BaseCommand):
 
         try:
             from selfhealing.core.safe_defaults import (
-                validate_config_preflight,
-                get_all_fatal_configs,
                 FATAL_CONFIGS,
+                get_all_fatal_configs,
+                validate_config_preflight,
             )
             from selfhealing.settings import get_config
         except ImportError as e:

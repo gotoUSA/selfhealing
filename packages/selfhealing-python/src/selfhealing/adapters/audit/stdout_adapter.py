@@ -7,9 +7,10 @@ Ideal for containerized environments where logs are collected from stdout.
 
 from __future__ import annotations
 
-import structlog
 import sys
 from datetime import datetime
+
+import structlog
 
 from selfhealing.interfaces.audit_adapter import (
     AuditAction,

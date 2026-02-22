@@ -18,8 +18,9 @@ Reference:
 from __future__ import annotations
 
 import json
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -256,7 +257,7 @@ class AtomicStateQuery:
             return (state, decision_type, decision_reason)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_state_query.query_failed",
                 error=e,
             )

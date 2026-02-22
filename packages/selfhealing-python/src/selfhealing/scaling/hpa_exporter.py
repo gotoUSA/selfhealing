@@ -12,10 +12,11 @@ Kubernetes HPA용 커스텀 메트릭을 Prometheus 형식으로 노출합니다
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import Callable
+
+import structlog
 
 from selfhealing.scaling.config import (
     BackpressureLevel,
@@ -111,12 +112,14 @@ class HPAMetricsExporter:
             self._metrics.set_backpressure_level(self._component_name, level_int)
 
             logger.debug(
-                f"[HPAMetricsExporter] Updated: queue_depth={queue_size}, "
-                f"rate={state.current_rate:.1f}, level={state.level.value}"
+                "hpa_metrics_exporter.updated",
+                queue_size=queue_size,
+                state=state.current_rate,
+                level=state.level.value,
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "hpa_metrics_exporter.update_error",
                 error=e,
             )
@@ -151,7 +154,7 @@ class HPAMetricsExporter:
                 daemon=True,
             )
             self._worker.start()
-            logger.info("hpa_metrics_exporter.started")
+            logger.info("started")
 
     def stop(self) -> None:
         """Exporter 중지."""
@@ -163,7 +166,7 @@ class HPAMetricsExporter:
             self._worker.join(timeout=2.0)
             self._worker = None
 
-        logger.info("hpa_metrics_exporter.stopped")
+        logger.info("stopped")
 
     def is_running(self) -> bool:
         """실행 중 여부 반환."""

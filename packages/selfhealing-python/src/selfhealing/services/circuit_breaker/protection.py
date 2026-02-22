@@ -6,9 +6,10 @@ Provides rate limit cascade detection and self-DDoS protection functionality.
 
 from __future__ import annotations
 
-import structlog
 import random
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from .rate_limit_tracker import get_rate_limit_tracker
 
@@ -66,8 +67,10 @@ class ProtectionMixin:
 
         if rate_limit_count >= self.config.rate_limit_cascade_threshold:
             logger.warning(
-                f"[CircuitBreaker] Rate limit cascade detected for '{service_name}': "
-                f"{rate_limit_count} 429s in {self.config.rate_limit_cascade_window_seconds}s"
+                "circuit_breaker.rate_limit_cascade_detected",
+                service_name=service_name,
+                rate_limit_count=rate_limit_count,
+                self=self.config.rate_limit_cascade_window_seconds,
             )
 
             # Auto-open circuit breaker
@@ -140,9 +143,11 @@ class ProtectionMixin:
             # Too many requests - suggest backoff but don't block
             backoff = self.calculate_adaptive_backoff(service_name)
             logger.warning(
-                f"[CircuitBreaker] Self-DDoS protection triggered for '{service_name}': "
-                f"{request_count} requests in {self.config.self_ddos_window_seconds}s, "
-                f"suggesting backoff of {backoff:.2f}s"
+                "circuit_breaker.self_ddos_protection_triggered",
+                service_name=service_name,
+                request_count=request_count,
+                self=self.config.self_ddos_window_seconds,
+                backoff=backoff,
             )
             return True, backoff  # Allow but suggest delay
 

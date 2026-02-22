@@ -17,10 +17,12 @@ Features:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime
+from datetime import timezone as dt_timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

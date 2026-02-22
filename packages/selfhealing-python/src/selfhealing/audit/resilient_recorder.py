@@ -26,7 +26,6 @@ Usage:
     recorder.record_auto_tuning(...)
 """
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -35,6 +34,8 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
 from selfhealing.settings import (
@@ -46,8 +47,8 @@ from .checksum import compute_crc32
 from .config import AuditConfig
 from .continuous_audit import ContinuousAuditRecorder
 from .resilience import (
-    AuditMetrics,
     AuditCircuitBreakerConfig,
+    AuditMetrics,
     CircuitBreakerRegistry,
     CircuitState,
     DegradedModeManager,
@@ -340,7 +341,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                     SelfAuditEvent.BATCH_FLUSH_FAILED,
                     f"Flush loop error: {e}",
                 )
-                logger.error(
+                logger.exception(
                     "resilient_recorder.flush_loop_error",
                     error=e,
                 )

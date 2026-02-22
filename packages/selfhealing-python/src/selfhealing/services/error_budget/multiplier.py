@@ -37,10 +37,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
@@ -426,7 +427,7 @@ class CrisisMultiplierProvider:
 
                 error_weight = get_weight_for_error_code(error_code)
             except ImportError:
-                logger.warning("crisis_multiplier.available")
+                logger.warning("available")
 
         # 3. 결합 정책 조회
         try:
@@ -449,9 +450,11 @@ class CrisisMultiplierProvider:
             combined = emergency_weight
 
         logger.debug(
-            f"[CrisisMultiplier] Combined: "
-            f"emergency={emergency_weight}, error={error_weight}, "
-            f"combined={combined}x, error_code={error_code}"
+            "crisis_multiplier.combined",
+            emergency_weight=emergency_weight,
+            error_weight=error_weight,
+            combined=combined,
+            error_code=error_code,
         )
 
         return combined

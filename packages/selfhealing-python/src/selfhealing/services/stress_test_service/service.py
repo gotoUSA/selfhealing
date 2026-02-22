@@ -13,12 +13,12 @@ Note:
 
 from __future__ import annotations
 
-import structlog
 import os
 import threading
 import time
 from typing import TYPE_CHECKING
 
+import structlog
 from django.conf import settings
 from django.db import connections
 
@@ -129,7 +129,7 @@ class StressTestService:
                 use_connection_pool=os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
             )
         except SATimeoutError as e:
-            logger.error(
+            logger.exception(
                 "stress_test_service.pool_exhausted_timeouterror",
                 error=e,
             )
@@ -139,7 +139,7 @@ class StressTestService:
                 error_type="SQLAlchemy TimeoutError",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "stress_test_service.failed",
                 error=e,
             )
@@ -167,7 +167,7 @@ class StressTestService:
             )
         except SATimeoutError as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.pool_exhausted_timeout_after",
                 elapsed=elapsed,
                 error=e,
@@ -180,7 +180,7 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.failed_after",
                 elapsed=elapsed,
                 error=e,
@@ -221,7 +221,7 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.leak_simulation_failed_after",
                 elapsed=elapsed,
                 error=e,
@@ -260,7 +260,7 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.failed_after",
                 elapsed=elapsed,
                 error=e,
@@ -412,7 +412,7 @@ class StressTestService:
 
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.contention_test_failed",
                 error=e,
             )
@@ -447,8 +447,9 @@ class StressTestService:
                 statement_timeout_ms=lock_timeout_ms * 10,
             ):
                 logger.warning(
-                    f"[StressTestService] 🔥 BURST STARTED: lock_timeout={lock_timeout_ms}ms, "
-                    f"duration={burst_duration_seconds}s"
+                    "stress_test_service.burst_started_ms",
+                    lock_timeout_ms=lock_timeout_ms,
+                    burst_duration_seconds=burst_duration_seconds,
                 )
 
                 # 먼저 하나의 락을 잡아서 유지 (다른 요청들이 실패하도록)
@@ -481,7 +482,7 @@ class StressTestService:
                     self._repo.release_advisory_lock(lock_id)
 
                 except Exception as lock_e:
-                    logger.error(
+                    logger.exception(
                         "stress_test_service.main_lock_failed",
                         lock_e=lock_e,
                     )
@@ -513,7 +514,7 @@ class StressTestService:
 
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.test_failed",
                 error=e,
             )
@@ -544,7 +545,9 @@ class StressTestService:
 
         try:
             logger.warning(
-                f"[StressTestService] 🔥 Starting pool exhaustion: " f"{connections_to_hold} connections for {hold_seconds}s"
+                "stress_test_service.starting_pool_exhaustion_connections",
+                connections_to_hold=connections_to_hold,
+                hold_seconds=hold_seconds,
             )
 
             # 기존 점유 커넥션 정리
@@ -620,7 +623,7 @@ class StressTestService:
 
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(
+            logger.exception(
                 "stress_test_service.failed",
                 error=e,
             )

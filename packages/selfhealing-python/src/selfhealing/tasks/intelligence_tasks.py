@@ -11,8 +11,9 @@ Tasks:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.tasks.base import BaseNotifyingTask
 from selfhealing.tasks.notification_policy import (
@@ -121,7 +122,10 @@ class CheckSLADriftTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[CheckSLADrift] Failed: {e}", exc_info=True)
+            logger.exception(
+                "check_sla_drift.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -197,8 +201,8 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
             threshold_minutes = settings.analysis_threshold_minutes
 
         logger.info(
-            f"[AnalyzeForensicPending] Starting analysis for items "
-            f"pending over {threshold_minutes} minutes"
+            "analyze_forensic_pending.starting_analysis_items_pending",
+            threshold_minutes=threshold_minutes,
         )
 
         try:
@@ -236,8 +240,9 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
             )
 
             logger.info(
-                f"[AnalyzeForensicPending] Completed - "
-                f"analyzed={analyzed_count}, suspicious={suspicious_count}"
+                "analyze_forensic_pending.completed",
+                analyzed_count=analyzed_count,
+                suspicious_count=suspicious_count,
             )
 
             return {
@@ -250,7 +255,10 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[AnalyzeForensicPending] Failed: {e}", exc_info=True)
+            logger.exception(
+                "analyze_forensic_pending.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -367,8 +375,8 @@ class AnalyzeCrossStageInsightsTask(BaseNotifyingTask):
             recommendations = self._generate_recommendations(raw_insights, insights)
 
             logger.info(
-                f"[AnalyzeCrossStageInsights] Completed with "
-                f"{len(insights)} insights"
+                "analyze_cross_stage_insights.completed_insights",
+                count=len(insights),
             )
 
             return {
@@ -380,7 +388,10 @@ class AnalyzeCrossStageInsightsTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[AnalyzeCrossStageInsights] Failed: {e}", exc_info=True)
+            logger.exception(
+                "analyze_cross_stage_insights.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -516,8 +527,9 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
             recovered = result.get("circuits_recovered", [])
 
             logger.info(
-                f"[CheckRecoveryTransitions] Completed - "
-                f"transitions={transitions}, recovered={len(recovered)}"
+                "check_recovery_transitions.completed",
+                transitions=transitions,
+                count=len(recovered),
             )
 
             return {
@@ -527,7 +539,10 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[CheckRecoveryTransitions] Failed: {e}", exc_info=True)
+            logger.exception(
+                "check_recovery_transitions.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -623,8 +638,9 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
                         high_variance_count += 1
 
             logger.info(
-                f"[VerifyReconciliationAccuracy] Completed: "
-                f"verified={verified_count}, high_variance={high_variance_count}"
+                "verify_reconciliation_accuracy.completed",
+                verified_count=verified_count,
+                high_variance_count=high_variance_count,
             )
 
             return {
@@ -634,7 +650,10 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
             }
 
         except Exception as e:
-            logger.error(f"[VerifyReconciliationAccuracy] Failed: {e}", exc_info=True)
+            logger.exception(
+                "verify_reconciliation_accuracy.failed",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -677,17 +696,20 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
             self._record_accuracy_audit(shadow, actual_errors, variance_percent)
 
             logger.debug(
-                f"[VerifyReconciliationAccuracy] Verified: "
-                f"calculation_id={shadow.calculation_id}, "
-                f"estimated={shadow.estimated_errors}, actual={actual_errors}, "
-                f"variance={variance_percent:.2f}%"
+                "verify_reconciliation_accuracy.verified",
+                shadow=shadow.calculation_id,
+                shadow_1=shadow.estimated_errors,
+                actual_errors=actual_errors,
+                variance_percent=variance_percent,
             )
 
             return variance_percent
 
         except Exception as e:
             logger.warning(
-                f"[VerifyReconciliationAccuracy] Failed to verify {shadow.calculation_id}: {e}"
+                "verify_reconciliation_accuracy.failed_verify",
+                shadow=shadow.calculation_id,
+                error=e,
             )
             return None
 

@@ -5,13 +5,14 @@ Provides batched file writing with reduced fsync overhead.
 """
 
 import json
-import structlog
 import os
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -95,7 +96,7 @@ class BatchFlushWriter:
                 return True
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "batch_flush_writer.write_failed",
                     error=e,
                 )
@@ -134,13 +135,14 @@ class BatchFlushWriter:
             self._last_flush = time.monotonic()
 
             logger.debug(
-                f"[BatchFlushWriter] Flushed {flushed_count} entries "
-                f"(total: {self._entries_written})"
+                "batch_flush_writer.flushed_entries_total",
+                flushed_count=flushed_count,
+                self=self._entries_written,
             )
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "batch_flush_writer.flush_failed",
                 error=e,
             )

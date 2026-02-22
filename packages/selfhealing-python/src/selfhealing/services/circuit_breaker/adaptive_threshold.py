@@ -19,9 +19,10 @@ Emergency Level에 따른 CB 임계값 자동 조정.
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.services.circuit_breaker.models import (
     AdaptiveThresholdPolicy,
@@ -182,9 +183,11 @@ class AdaptiveThresholdManager:
         is_lockdown = level == "LOCKDOWN" or multiplier.failure == float("inf")
 
         logger.debug(
-            f"[AdaptiveThreshold] level={level}, "
-            f"threshold={adjusted_failure:.1f}/{adjusted_window:.0f}s, "
-            f"lockdown={is_lockdown}"
+            "adaptive_threshold.event",
+            level=level,
+            adjusted_failure=adjusted_failure,
+            adjusted_window=adjusted_window,
+            is_lockdown=is_lockdown,
         )
 
         return AdjustedThreshold(
@@ -278,9 +281,10 @@ class AdaptiveThresholdManager:
 
         if exceeded:
             logger.info(
-                f"[AdaptiveThreshold] Threshold exceeded: "
-                f"{failure_count} >= {threshold.failure_threshold:.1f} "
-                f"(level={threshold.emergency_level})"
+                "adaptive_threshold.threshold_exceeded",
+                failure_count=failure_count,
+                threshold=threshold.failure_threshold,
+                threshold_2=threshold.emergency_level,
             )
 
         return exceeded, threshold

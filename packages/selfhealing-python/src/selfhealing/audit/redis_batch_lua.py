@@ -7,10 +7,10 @@ Buffer → Processing Queue → External 패턴을 통한 데이터 손실 방�
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
 
 import redis as redis_lib
+import structlog
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -118,7 +118,7 @@ class AuditBatchLuaScripts:
             self._scripts["batch_restore"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_RESTORE)
             logger.info("audit_batch_lua_scripts.lua_scripts_registered")
         except redis_lib.RedisError as e:
-            logger.error(
+            logger.exception(
                 "audit_batch_lua_scripts.script_registration_failed",
                 error=e,
             )
@@ -246,7 +246,7 @@ class AuditBatchLuaScripts:
                     orphaned.append((key_str, "unknown", timeout_seconds + 1))
 
         except redis_lib.RedisError as e:
-            logger.error(
+            logger.exception(
                 "audit_batch_lua_scripts.failed_get_orphaned_queues",
                 error=e,
             )

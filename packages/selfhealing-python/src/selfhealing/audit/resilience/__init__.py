@@ -37,8 +37,8 @@ from .buffer import (
     get_inmemory_audit_buffer,
 )
 from .circuit_breaker import (
-    CircuitBreaker,
     AuditCircuitBreakerConfig,
+    CircuitBreaker,
     CircuitBreakerRegistry,
     CircuitBreakerSnapshot,
     CircuitState,

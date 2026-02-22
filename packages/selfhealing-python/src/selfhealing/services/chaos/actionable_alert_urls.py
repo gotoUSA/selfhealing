@@ -11,10 +11,11 @@ Chaos 알림에 포함될 Admin Deep Link를 생성합니다.
 
 from __future__ import annotations
 
-import structlog
 import os
 from dataclasses import dataclass
 from urllib.parse import urlencode
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -83,9 +84,9 @@ class ChaosActionableAlertUrlBuilder:
         self._runbook_base_url = os.getenv("CHAOS_RUNBOOK_URL", "")
 
         logger.debug(
-            f"[ChaosAlertUrlBuilder] Initialized: "
-            f"admin={bool(self._admin_base_url)}, "
-            f"dashboard={bool(self._dashboard_base_url)}"
+            "chaos_alert_url_builder.initialized",
+            value=bool(self._admin_base_url),
+            value_1=bool(self._dashboard_base_url),
         )
 
     def build_experiment_alert_urls(

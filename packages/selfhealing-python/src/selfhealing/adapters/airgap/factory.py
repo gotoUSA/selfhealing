@@ -13,8 +13,9 @@ Configuration:
 
 from __future__ import annotations
 
-import structlog
 import os
+
+import structlog
 
 from selfhealing.adapters.airgap.base import AirGapStorageAdapter
 from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
@@ -139,10 +140,10 @@ def _create_redis_adapter() -> AirGapStorageAdapter | None:
         return adapter
 
     except ImportError:
-        logger.error("air_gap.redis_package_installed")
+        logger.exception("air_gap.redis_package_installed")
         return None
     except Exception as e:
-        logger.error(
+        logger.exception(
             "air_gap.failed_create_redis_adapter",
             error=e,
         )

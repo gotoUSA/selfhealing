@@ -11,7 +11,6 @@ Endpoints:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -134,7 +133,9 @@ class ShadowLogClearView(APIView):
         shadow_logger.clear()
 
         logger.warning(
-            f"[L2StorageAPI] Shadow log cleared by {request.user}. " f"Cleared {stats_before['total_records']} entries."
+            "l2_storage_api.shadow_log_cleared_cleared",
+            request=request.user,
+            stats_before=stats_before['total_records'],
         )
 
         return Response(
@@ -253,9 +254,11 @@ class ShadowLogReplayView(APIView):
                 marked_count = shadow_logger.mark_all_as_synced()
 
         logger.info(
-            f"[L2StorageAPI] Shadow log replay by {request.user}: "
-            f"synced={result.get('synced', 0)}, failed={result.get('failed', 0)}, "
-            f"marked={marked_count}"
+            "l2_storage_api.shadow_log_replay",
+            request=request.user,
+            result=result.get('synced', 0),
+            result_2=result.get('failed', 0),
+            marked_count=marked_count,
         )
 
         return Response(

@@ -11,9 +11,10 @@ Kubernetes API를 통해 Deployment 이력을 수집하는 어댑터입니다.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from .base import (
     DeploymentConfigChange,

@@ -15,7 +15,6 @@ Design Philosophy:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import threading
 import time
@@ -23,6 +22,8 @@ from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.audit.config import AuditConfig
 from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
@@ -164,7 +165,9 @@ class ContinuousAuditRecorder:
         if checkpoint_strategy is None and wal_enabled:
             # WAL 활성화 시 기본 전략 자동 설정
             try:
-                from selfhealing.audit.checkpoint_strategy import get_default_checkpoint_strategy
+                from selfhealing.audit.checkpoint_strategy import (
+                    get_default_checkpoint_strategy,
+                )
 
                 self._checkpoint_strategy = get_default_checkpoint_strategy()
                 logger.info("continuous_audit.checkpoint_strategy_initialized")
@@ -808,7 +811,9 @@ class ContinuousAuditRecorder:
                     raise
 
                 logger.warning(
-                    f"[ContinuousAudit] Write failed (fail-open): {e}. " f"Total failures: {self._failed_write_count}"
+                    "continuous_audit.write_failed_fail_open",
+                    error=e,
+                    self=self._failed_write_count,
                 )
 
             # ID 생성 (timestamp + sequence)

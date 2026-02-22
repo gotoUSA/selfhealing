@@ -6,12 +6,13 @@ Main service orchestrating reconciliation workflow.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -158,13 +159,15 @@ class ErrorBudgetReconciliationService:
             period = self._period_tracker.get_period(failsafe_period_id)
             if not period:
                 logger.warning(
-                    f"[Reconciliation] Period not found: {failsafe_period_id}"
+                    "reconciliation.period_found",
+                    failsafe_period_id=failsafe_period_id,
                 )
                 return None
 
             if not period.ended_at:
                 logger.warning(
-                    f"[Reconciliation] Period not ended yet: {failsafe_period_id}"
+                    "reconciliation.period_ended_yet",
+                    failsafe_period_id=failsafe_period_id,
                 )
                 return None
 
@@ -189,7 +192,7 @@ class ErrorBudgetReconciliationService:
             try:
                 return self._get_current_budget()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "reconciliation.failed_get_current_budget",
                     error=e,
                 )
@@ -241,13 +244,15 @@ class ErrorBudgetReconciliationService:
             shadow = self._shadow_budgets.get(calculation_id)
             if not shadow:
                 logger.warning(
-                    f"[Reconciliation] Shadow budget not found: {calculation_id}"
+                    "reconciliation.shadow_budget_found",
+                    calculation_id=calculation_id,
                 )
                 return None
 
             if shadow.status != ReconciliationStatus.CALCULATED:
                 logger.warning(
-                    f"[Reconciliation] Invalid status for approval: {shadow.status}"
+                    "reconciliation.invalid_status_approval",
+                    shadow=shadow.status,
                 )
                 return None
 
@@ -277,8 +282,10 @@ class ErrorBudgetReconciliationService:
             )
 
             logger.info(
-                f"[Reconciliation] Shadow budget approved: {calculation_id}, "
-                f"by: {approved_by}, adjustment: {shadow.adjustment_percent:.2f}%"
+                "reconciliation.shadow_budget_approved_adjustment",
+                calculation_id=calculation_id,
+                approved_by=approved_by,
+                shadow=shadow.adjustment_percent,
             )
 
             # Primary Budget에 적용
@@ -295,7 +302,9 @@ class ErrorBudgetReconciliationService:
             max_adj = self._config.max_adjustment_percent_per_cycle
             if adjustment > max_adj:
                 logger.info(
-                    f"[Reconciliation] Capping adjustment: {adjustment:.2f}% -> {max_adj:.2f}%"
+                    "reconciliation.capping_adjustment",
+                    adjustment=adjustment,
+                    max_adj=max_adj,
                 )
                 adjustment = max_adj
 
@@ -309,14 +318,15 @@ class ErrorBudgetReconciliationService:
                     adjustment=adjustment,
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "reconciliation.failed_apply_adjustment",
                     error=e,
                 )
         else:
             shadow.status = ReconciliationStatus.APPLIED
             logger.info(
-                f"[Reconciliation] Adjustment recorded (no apply callback): {adjustment:.2f}%"
+                "reconciliation.adjustment_recorded_no_apply",
+                adjustment=adjustment,
             )
 
         # ConfigHistory에 기록
@@ -359,7 +369,8 @@ class ErrorBudgetReconciliationService:
                 reason=f"Shadow Budget Reconciliation: {shadow.review_justification or 'approved'}",
             )
             logger.debug(
-                f"[Reconciliation] Saved to history: calculation_id={shadow.calculation_id}"
+                "reconciliation.saved_history",
+                shadow=shadow.calculation_id,
             )
         except Exception as e:
             # Graceful Degradation - 히스토리 저장 실패해도 설정 변경은 성공
@@ -431,8 +442,9 @@ class ErrorBudgetReconciliationService:
             )
 
             logger.info(
-                f"[Reconciliation] Shadow budget rejected: {calculation_id}, "
-                f"by: {rejected_by}, excluded period created"
+                "reconciliation.shadow_budget_rejected_excluded",
+                calculation_id=calculation_id,
+                rejected_by=rejected_by,
             )
 
             return shadow
@@ -463,8 +475,10 @@ class ErrorBudgetReconciliationService:
             self._excluded_periods[exclusion.exclusion_id] = exclusion
 
             logger.info(
-                f"[Reconciliation] Period excluded: {exclusion.exclusion_id}, "
-                f"by: {excluded_by}, reason: {reason}"
+                "reconciliation.period_excluded_reason",
+                exclusion=exclusion.exclusion_id,
+                excluded_by=excluded_by,
+                reason=reason,
             )
 
             return exclusion

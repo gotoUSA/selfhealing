@@ -12,11 +12,12 @@ Levels:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.settings import ChaosBlastRadiusSettings, get_layered_settings
@@ -739,7 +740,10 @@ class BlastRadiusManager:
 
             self._pending_approvals[experiment_id] = request
             logger.info(
-                f"[BlastRadius] Approval requested for {experiment_id} " f"({blast_radius.value} level) by {requested_by}"
+                "blast_radius.approval_requested_level",
+                experiment_id=experiment_id,
+                blast_radius=blast_radius.value,
+                requested_by=requested_by,
             )
 
             # Send notification (best-effort)
@@ -894,10 +898,10 @@ class BlastRadiusManager:
         """Record approval decision to audit trail."""
         try:
             logger.info(
-                f"[BlastRadius] Approval decision recorded: "
-                f"experiment={request.experiment_id}, "
-                f"status={request.status}, "
-                f"by={request.approved_by}"
+                "blast_radius.approval_decision_recorded",
+                request=request.experiment_id,
+                request_1=request.status,
+                request_2=request.approved_by,
             )
         except Exception as e:
             logger.warning(

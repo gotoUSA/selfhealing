@@ -6,10 +6,11 @@ Freeze Decision Recorder (Audit Trail)
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.services.error_budget.advisor import DeploymentPolicyAdvisor
@@ -88,8 +89,9 @@ class FreezeDecisionRecorder:
         self._save_and_emit(record)
 
         logger.info(
-            f"[FreezeDecision] Freeze acknowledged by {decided_by}: "
-            f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
+            "freeze_decision.freeze_acknowledged",
+            decided_by=decided_by,
+            verdict=verdict.budget_status.budget_remaining_percent,
         )
 
         return record
@@ -150,9 +152,11 @@ class FreezeDecisionRecorder:
         )
 
         logger.warning(
-            f"[FreezeDecision] Override approved by {decided_by}: "
-            f"type={override_type.value}, deployment={deployment_name}, "
-            f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
+            "freeze_decision.override_approved",
+            decided_by=decided_by,
+            override_type=override_type.value,
+            deployment_name=deployment_name,
+            verdict=verdict.budget_status.budget_remaining_percent,
         )
 
         return record
@@ -197,18 +201,20 @@ class FreezeDecisionRecorder:
                     escalation_mention=escalation_mention,
                 )
                 logger.info(
-                    f"[FreezeDecision] Escalation alert sent: "
-                    f"type={override_type.value}, channel={escalation_channel}"
+                    "freeze_decision.escalation_alert_sent",
+                    override_type=override_type.value,
+                    escalation_channel=escalation_channel,
                 )
             else:
                 logger.warning(
-                    f"[FreezeDecision] No alert adapter configured, "
-                    f"escalation logged only: type={override_type.value}, "
-                    f"requester={requester}, reason={reason}"
+                    "freeze_decision.no_alert_adapter_configured",
+                    override_type=override_type.value,
+                    requester=requester,
+                    reason=reason,
                 )
         except Exception as e:
             # 에스컬레이션 실패는 Override 자체를 막지 않음
-            logger.error(
+            logger.exception(
                 "freeze_decision.failed_send_escalation",
                 error=e,
             )
@@ -248,8 +254,9 @@ class FreezeDecisionRecorder:
         self._save_and_emit(record)
 
         logger.info(
-            f"[FreezeDecision] Freeze lifted by {decided_by}: "
-            f"budget={verdict.budget_status.budget_remaining_percent:.1f}%"
+            "freeze_decision.freeze_lifted",
+            decided_by=decided_by,
+            verdict=verdict.budget_status.budget_remaining_percent,
         )
 
         return record
@@ -286,7 +293,7 @@ class FreezeDecisionRecorder:
             try:
                 self._persist_record(record)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "freeze_decision.failed_persist_record",
                     error=e,
                 )

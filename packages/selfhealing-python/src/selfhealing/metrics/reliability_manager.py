@@ -18,13 +18,14 @@ Design Philosophy:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -290,7 +291,9 @@ class MetricReliabilityManager:
                 state.operating_mode = OperatingMode.CAUTIOUS
                 state.stabilization_start = time.time()
                 logger.info(
-                    f"[Reliability] {state.domain}: Starting stabilization " f"({self._thresholds.stabilization_duration}s)"
+                    "reliability.starting_stabilization",
+                    state=state.domain,
+                    self=self._thresholds.stabilization_duration,
                 )
             elif old_mode == OperatingMode.CAUTIOUS:
                 # 안정화 기간 확인

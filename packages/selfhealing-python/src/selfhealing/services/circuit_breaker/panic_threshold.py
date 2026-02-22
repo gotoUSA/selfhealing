@@ -23,10 +23,11 @@ Panic Threshold for Circuit Breaker
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.services.circuit_breaker.models import PanicThresholdConfig
 
@@ -265,8 +266,10 @@ class PanicThresholdMonitor:
         action_taken = "emergency_level_3_escalation"
 
         logger.critical(
-            f"🚨 PANIC THRESHOLD TRIGGERED: {len(open_circuits)}/{len(total_circuits)} "
-            f"circuits OPEN ({open_rate:.1f}%) - Escalating to Emergency Level 3"
+            "panic_threshold_triggered_circuits",
+            count=len(open_circuits),
+            count_1=len(total_circuits),
+            open_rate=open_rate,
         )
 
         # 1. Audit 기록
@@ -355,11 +358,12 @@ class PanicThresholdMonitor:
             )
 
             logger.warning(
-                f"[PanicThreshold] Escalated to Emergency Level 3: "
-                f"open_rate={open_rate:.1f}%, open_circuits={len(open_circuits)}"
+                "panic_threshold.escalated_emergency_level",
+                open_rate=open_rate,
+                count=len(open_circuits),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "panic_threshold.failed_escalate_level",
                 error=e,
             )
@@ -394,14 +398,12 @@ class PanicThresholdMonitor:
         """운영팀에 긴급 알림 전송."""
         # 알림은 별도 시스템에서 처리 (로깅만 수행)
         logger.critical(
-            f"🚨 PANIC THRESHOLD - Emergency Level 3 Activated\n"
-            f"시스템 전체 붕괴 감지: {open_count}/{total_count} 서비스 OPEN ({open_rate:.1f}%)\n"
-            f"자동 조치:\n"
-            f"- Emergency Level 3 선포\n"
-            f"- 모든 자동 복구 중단 ({', '.join(halted_systems)})\n"
-            f"- Global Lockdown (Freeze Mode) 활성화\n"
-            f"즉각적인 운영자 개입이 필요합니다.\n"
-            f"OPEN 서비스: {', '.join(open_circuits)}"
+            "panic_threshold_emergency_level",
+            open_count=open_count,
+            total_count=total_count,
+            open_rate=open_rate,
+            value=', '.join(halted_systems),
+            value_4=', '.join(open_circuits),
         )
 
     def get_last_result(self) -> PanicThresholdResult | None:

@@ -47,10 +47,11 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -407,7 +408,9 @@ class AuditMiddleware:
             # Audit 실패가 메인 흐름을 막지 않음 (Fail-Open)
             self._failed_recordings += 1
             logger.warning(
-                f"[AuditMiddleware] Recording failed (fail-open): {e}. " f"Total failures: {self._failed_recordings}"
+                "audit_middleware.recording_failed_fail_open",
+                error=e,
+                self=self._failed_recordings,
             )
             # Fallback 시도
             self._fallback_log_events(buffer)

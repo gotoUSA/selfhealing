@@ -34,8 +34,9 @@ Example:
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 try:
     from django.contrib import admin

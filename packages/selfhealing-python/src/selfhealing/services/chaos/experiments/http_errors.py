@@ -62,9 +62,11 @@ class Error5xxExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject 5xx errors into target service with TTL."""
         logger.info(
-            f"[Error5xxInjection] Injecting {self.error_code} errors "
-            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
-            f"(TTL: {self._effective_ttl}s)"
+            "error5xx_injection.injecting_errors_rate_ttl",
+            self=self.error_code,
+            self_1=self.config.target_service,
+            self_2=self.config.injection_rate*100,
+            self_3=self._effective_ttl,
         )
 
         try:
@@ -87,7 +89,7 @@ class Error5xxExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "error5xx_injection.failed_inject",
                 error=e,
             )
@@ -98,7 +100,8 @@ class Error5xxExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[Error5xxInjection] Rollback already completed for {self.experiment_id}"
+                    "error5xx_injection.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -119,7 +122,7 @@ class Error5xxExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "error5xx_injection.rollback_failed",
                     error=e,
                 )
@@ -171,9 +174,11 @@ class Error4xxExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject 4xx errors into target service with TTL."""
         logger.info(
-            f"[Error4xxInjection] Injecting {self.error_code} errors "
-            f"to {self.config.target_service} at {self.config.injection_rate*100}% rate "
-            f"(TTL: {self._effective_ttl}s)"
+            "error4xx_injection.injecting_errors_rate_ttl",
+            self=self.error_code,
+            self_1=self.config.target_service,
+            self_2=self.config.injection_rate*100,
+            self_3=self._effective_ttl,
         )
 
         try:
@@ -196,7 +201,7 @@ class Error4xxExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "error4xx_injection.failed_inject",
                 error=e,
             )
@@ -207,7 +212,8 @@ class Error4xxExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[Error4xxInjection] Rollback already completed for {self.experiment_id}"
+                    "error4xx_injection.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -228,7 +234,7 @@ class Error4xxExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "error4xx_injection.rollback_failed",
                     error=e,
                 )

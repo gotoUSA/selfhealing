@@ -6,12 +6,13 @@ This is the default backend that is always active.
 """
 
 import json
-import structlog
 import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 from selfhealing.audit.integrity import (
@@ -98,10 +99,7 @@ class LocalFileBackend(AuditBackend):
                 # Local mode: File-based hash chain
                 self._hash_chain = HashChainManager(state_file)
                 if distributed_hash_chain:
-                    logger.warning(
-                        "[LocalFileBackend] Distributed hash chain requested but "
-                        "no Redis client provided. Using local mode."
-                    )
+                    logger.warning("local_file_backend.distributed_hash_chain_requested")
         else:
             self._hash_chain = None
 
@@ -166,7 +164,7 @@ class LocalFileBackend(AuditBackend):
             return True
         except Exception as e:
             self._last_error = str(e)
-            logger.error(
+            logger.exception(
                 "local_file_backend.failed_open_log_file",
                 error=e,
             )
@@ -241,7 +239,7 @@ class LocalFileBackend(AuditBackend):
 
             except Exception as e:
                 self._last_error = str(e)
-                logger.error(
+                logger.exception(
                     "local_file_backend.failed_write_entry",
                     error=e,
                 )
@@ -269,7 +267,8 @@ class LocalFileBackend(AuditBackend):
                 # Create anchor for yesterday (the day that just ended)
                 self._anchor_manager.create_anchor(date=self._last_anchor_date)
                 logger.info(
-                    f"[LocalFileBackend] Created anchor backup for {self._last_anchor_date}"
+                    "local_file_backend.created_anchor_backup",
+                    self=self._last_anchor_date,
                 )
 
             self._last_anchor_date = today
@@ -310,7 +309,7 @@ class LocalFileBackend(AuditBackend):
                     os.fsync(self._file_handle.fileno())
                     return True
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "local_file_backend.failed_flush",
                         error=e,
                     )
@@ -415,7 +414,7 @@ class LocalFileBackend(AuditBackend):
                             results.append(entry)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "local_file_backend.query_failed",
                 error=e,
             )

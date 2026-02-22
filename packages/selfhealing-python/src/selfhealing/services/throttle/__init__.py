@@ -31,15 +31,6 @@ from selfhealing.services.throttle.adaptive import (
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.base import BaseThrottle, SlidingWindowThrottle
-from selfhealing.services.throttle.gradient import (
-    RTTSample,
-    get_gradient_calculator,
-    reset_gradient_calculators,
-)
-from selfhealing.services.throttle.dlq_sink import ThrottleDLQSink
-from selfhealing.services.throttle.facade import AdaptiveThrottleFacade
-from selfhealing.services.throttle.limit_adjuster import ThrottleLimitAdjuster
-from selfhealing.services.throttle.policy import ThrottlePolicy
 from selfhealing.services.throttle.cb_bridge import (
     RTTMetrics,
     RTTSeverity,
@@ -56,6 +47,15 @@ from selfhealing.services.throttle.dlq_integration import (
     get_throttle_dlq_integration,
     reset_throttle_dlq_integration,
 )
+from selfhealing.services.throttle.dlq_sink import ThrottleDLQSink
+from selfhealing.services.throttle.facade import AdaptiveThrottleFacade
+from selfhealing.services.throttle.gradient import (
+    RTTSample,
+    get_gradient_calculator,
+    reset_gradient_calculators,
+)
+from selfhealing.services.throttle.limit_adjuster import ThrottleLimitAdjuster
+from selfhealing.services.throttle.policy import ThrottlePolicy
 from selfhealing.services.throttle.recovery_dampening import (
     RecoveryDampeningConfig,
     RecoveryDampeningManager,

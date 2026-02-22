@@ -21,7 +21,6 @@ Fallback Hierarchy:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import tempfile
 import threading
@@ -29,6 +28,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -214,7 +215,7 @@ class MetricSnapshotStorage:
         try:
             if not self.file_path.exists():
                 self._snapshot = MetricSnapshot(source="new")
-                logger.debug("snapshot.no_existing_snapshot_created")
+                logger.debug("snapshot")
                 return
 
             with open(self.file_path, encoding="utf-8") as f:
@@ -222,8 +223,9 @@ class MetricSnapshotStorage:
 
             self._snapshot = MetricSnapshot.from_dict(data)
             logger.info(
-                f"[Snapshot] Loaded snapshot (age: {self._snapshot.age_seconds:.1f}s, "
-                f"categories: {len(self._snapshot.values)})"
+                "snapshot.loaded_snapshot_age_categories",
+                self=self._snapshot.age_seconds,
+                count=len(self._snapshot.values),
             )
         except Exception as e:
             logger.warning(

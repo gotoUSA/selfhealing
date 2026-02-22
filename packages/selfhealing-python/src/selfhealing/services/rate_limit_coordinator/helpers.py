@@ -6,8 +6,9 @@ EventBus integration and utility functions for rate limit coordination.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -33,7 +34,11 @@ def _emit_rate_limit_event(
         priority_name: 우선순위 이름 (예: "HIGH", "CRITICAL")
     """
     try:
-        from selfhealing.services.event_bus import EventType, EventPriority, get_event_bus
+        from selfhealing.services.event_bus import (
+            EventPriority,
+            EventType,
+            get_event_bus,
+        )
 
         bus = get_event_bus()
         event_type = getattr(EventType, event_type_name, None)
@@ -78,8 +83,8 @@ def _record_rate_limit_metrics(
     try:
         from selfhealing.services.metrics.definitions import (
             rate_limit_429_total,
-            rate_limit_cooldown_seconds,
             rate_limit_consecutive_429s,
+            rate_limit_cooldown_seconds,
         )
 
         rate_limit_429_total.labels(key=key, status_code=str(status_code)).inc()

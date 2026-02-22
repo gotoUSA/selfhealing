@@ -6,10 +6,11 @@ Throttle EventBus 연동 핸들러.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
-from . import SelfHealingEvent, EventType
+import structlog
+
+from . import EventType, SelfHealingEvent
 
 logger = structlog.get_logger()
 
@@ -44,7 +45,11 @@ def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
         throttle.adjust_for_emergency(level)
 
         logger.info(
-            f"[Throttle] Emergency level {previous_level} → {level}, " f"limit: {previous_limit} → {throttle.current_limit}"
+            "throttle.emergency_level_limit",
+            previous_level=previous_level,
+            level=level,
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
         )
     except ImportError:
         logger.debug("event_handler.throttle_module_available")
@@ -104,9 +109,9 @@ def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
 
     try:
         from selfhealing.services.throttle.adaptive import (
-            get_adaptive_throttle,
-            _record_throttle_metrics,
             _record_audit_safe,
+            _record_throttle_metrics,
+            get_adaptive_throttle,
         )
 
         throttle = get_adaptive_throttle()
@@ -182,8 +187,10 @@ def _on_circuit_breaker_half_opened_throttle(event: SelfHealingEvent) -> None:
             pass
 
         logger.info(
-            f"[Throttle] CB HALF_OPEN for {service_name}, "
-            f"limit: {previous_limit} → {throttle.current_limit} (recovery test mode)"
+            "throttle.cb_limit_recovery_test",
+            service_name=service_name,
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
         )
     except ImportError:
         logger.debug("event_handler.throttle_module_available")
@@ -229,7 +236,10 @@ def _on_circuit_breaker_closed_throttle(event: SelfHealingEvent) -> None:
             pass
 
         logger.info(
-            f"[Throttle] CB CLOSED for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit} (recovery mode)"
+            "throttle.cb_closed_limit_recovery",
+            service_name=service_name,
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
         )
     except ImportError:
         logger.debug("event_handler.throttle_module_available")
@@ -264,8 +274,10 @@ def _on_error_budget_critical_throttle(event: SelfHealingEvent) -> None:
         throttle.current_limit = new_limit
 
         logger.warning(
-            f"[Throttle] Error budget critical ({budget_percent:.1f}%), "
-            f"limit: {previous_limit} → {throttle.current_limit} (×0.5)"
+            "throttle.error_budget_critical_limit",
+            budget_percent=budget_percent,
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
         )
     except ImportError:
         logger.debug("event_handler.throttle_module_available")

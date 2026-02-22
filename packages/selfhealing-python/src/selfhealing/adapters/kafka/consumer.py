@@ -26,12 +26,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from confluent_kafka import Consumer, Message
@@ -137,12 +138,12 @@ class KafkaAuditConsumer:
                 full_topics=full_topics,
             )
         except ImportError:
-            logger.error(
+            logger.exception(
                 "[KafkaConsumer] confluent-kafka 패키지가 설치되지 않았습니다. " "설치: pip install 'selfhealing[kafka]'"
             )
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_consumer.초기화_실패",
                 error=e,
             )
@@ -198,7 +199,7 @@ class KafkaAuditConsumer:
                 timestamp=timestamp,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_consumer.메시지_파싱_오류",
                 error=e,
             )
@@ -220,7 +221,7 @@ class KafkaAuditConsumer:
                 try:
                     return self._event_handler(event)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "kafka_consumer.핸들러_오류",
                         error=e,
                     )
@@ -265,7 +266,7 @@ class KafkaAuditConsumer:
                 event_2=event.offset,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_consumer.커밋_오류",
                 error=e,
             )
@@ -368,7 +369,7 @@ class KafkaAuditConsumer:
                     self._commit_offset(event)
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "kafka_consumer.루프_오류",
                     error=e,
                 )

@@ -22,7 +22,6 @@ LMDB가 설치되지 않은 환경에서 대안으로 사용합니다.
 from __future__ import annotations
 
 import json
-import structlog
 import mmap
 import os
 import struct
@@ -30,6 +29,8 @@ import sys
 import threading
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

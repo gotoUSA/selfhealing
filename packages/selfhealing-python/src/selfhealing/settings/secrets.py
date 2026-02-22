@@ -15,9 +15,9 @@ Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
 - validate_required_secrets() 추가: 핵심 시크릿 미설정 시 경고/에러
 """
 
-import structlog
 import os
 
+import structlog
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -237,7 +237,8 @@ def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:
         if not secret.get_secret_value():
             result["critical"].append(name)
             logger.error(
-                f"[Security] CRITICAL secret '{name}' is not set. " "System security is compromised without this secret."
+                "security.critical_secret_set_system",
+                name=name,
             )
 
     # IMPORTANT 시크릿 검증

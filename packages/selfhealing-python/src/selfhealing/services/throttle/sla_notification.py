@@ -8,8 +8,9 @@ Celery 미사용 환경에서는 동기 폴백으로 동작합니다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -265,7 +266,7 @@ def _send_sla_critical_sync(event_data: dict[str, Any]) -> None:
     except ImportError:
         logger.debug("sla_notification.unifiednotification_available")
     except Exception as e:
-        logger.error(
+        logger.exception(
             "sla_notification.failed_send_critical",
             error=e,
         )

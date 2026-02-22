@@ -34,10 +34,11 @@ Reference:
 from __future__ import annotations
 
 import functools
-import structlog
 from collections.abc import Callable
 from contextvars import ContextVar, Token
 from typing import Any, TypeVar
+
+import structlog
 
 logger = structlog.get_logger()
 

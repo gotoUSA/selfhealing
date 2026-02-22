@@ -6,8 +6,9 @@ Cascade Event 생성/저장 책임을 담당합니다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.cascade_event import (
     CascadeEffect,
@@ -101,9 +102,11 @@ class RecordingMixin:
                 self._save_to_local_fallback(cascade_event)
 
             logger.info(
-                f"[CascadeAudit] Recorded: id={cascade_id}, "
-                f"trigger={trigger_type}, effects={len(cascade_effects)}, "
-                f"namespace={namespace}"
+                "cascade_audit.recorded",
+                cascade_id=cascade_id,
+                trigger_type=trigger_type,
+                count=len(cascade_effects),
+                namespace=namespace,
             )
 
             return cascade_event

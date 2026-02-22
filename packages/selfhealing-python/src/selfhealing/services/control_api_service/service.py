@@ -6,8 +6,9 @@ ControlAPIService 클래스, 싱글톤 인스턴스, get_control_api_service() �
 
 from __future__ import annotations
 
-import structlog
 from datetime import timedelta
+
+import structlog
 
 from selfhealing.core.constants import (
     ControlAPIActions,
@@ -281,8 +282,11 @@ class ControlAPIService:
             state = self.circuit_breaker.get_or_create_state(request.service_name)
 
             logger.info(
-                f"[ControlAPI] Triggered {trigger_cb_failures} failures for '{request.service_name}': "
-                f"state={state.state}, failure_count={state.failure_count}"
+                "control_api.triggered_failures",
+                trigger_cb_failures=trigger_cb_failures,
+                request=request.service_name,
+                state=state.state,
+                state_3=state.failure_count,
             )
 
             return ControlResponse(
@@ -312,8 +316,10 @@ class ControlAPIService:
         self._failure_injections[request.service_name] = failure_config
 
         logger.info(
-            f"[ControlAPI] Failure injection enabled for '{request.service_name}': "
-            f"rate={failure_config['failure_rate']}, type={failure_config['failure_type']}"
+            "control_api.failure_injection_enabled",
+            request=request.service_name,
+            failure_config=failure_config['failure_rate'],
+            failure_config_2=failure_config['failure_type'],
         )
 
         effective_until = None
@@ -351,8 +357,11 @@ class ControlAPIService:
         state = self.circuit_breaker.get_or_create_state(request.service_name)
 
         logger.info(
-            f"[ControlAPI] Recorded {success_count} successes for '{request.service_name}': "
-            f"state={state.state}, success_count_in_half_open={state.success_count}"
+            "control_api.recorded_successes",
+            success_count=success_count,
+            request=request.service_name,
+            state=state.state,
+            state_3=state.success_count,
         )
 
         return ControlResponse(
@@ -445,14 +454,14 @@ class ControlAPIService:
         """
         try:
             logger.info(
-                f"[ControlAPI][AUDIT] "
-                f"action={request.action} "
-                f"service={request.service_name} "
-                f"env={request.environment} "
-                f"status={response.status} "
-                f"actor={request.actor} "
-                f"risk={response.risk_level} "
-                f"reason='{request.reason}'"
+                "control_api.audit",
+                request=request.action,
+                request_1=request.service_name,
+                request_2=request.environment,
+                response=response.status,
+                request_4=request.actor,
+                response_5=response.risk_level,
+                request_6=request.reason,
             )
         except Exception as e:
             logger.warning(

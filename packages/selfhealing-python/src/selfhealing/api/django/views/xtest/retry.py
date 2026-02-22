@@ -16,10 +16,10 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import structlog
 import time
 from typing import Any
 
+import structlog
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -359,9 +359,11 @@ class RetrySimulateView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] Retry simulate: failure_count={failure_count}, "
-            f"total_attempts={total_attempts}, final_action={final_action}, "
-            f"dlq_routed={dlq_routed}"
+            "test_mode_retry_simulate",
+            failure_count=failure_count,
+            total_attempts=total_attempts,
+            final_action=final_action,
+            dlq_routed=dlq_routed,
         )
 
         response_data = {
@@ -500,8 +502,10 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
             snapshot = collect_system_snapshot()
 
             logger.info(
-                f"[X-Test-Mode] Rate limit status: domain={domain}, "
-                f"throttled={state.is_in_cooldown}, consecutive_429s={state.consecutive_429s}"
+                "test_mode_rate_limit",
+                domain=domain,
+                state=state.is_in_cooldown,
+                state_2=state.consecutive_429s,
             )
 
             response_data = {

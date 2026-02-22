@@ -21,9 +21,9 @@ from typing import Any
 
 # Models and data classes
 from .models import (
+    ChannelDeliveryResult,
     NotificationChannel,
     NotificationConfig,
-    ChannelDeliveryResult,
     SecurityNotificationResult,
     _get_notification_limits,
 )

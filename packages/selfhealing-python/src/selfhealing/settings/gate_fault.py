@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -65,8 +64,8 @@ class GateFaultSettings(BaseSettings):
         """failure_threshold가 너무 작으면 경고."""
         if v < 3:
             logger.warning(
-                f"[GateFaultSettings] Low failure_threshold={v}, "
-                "consider using >= 3 to avoid false positives"
+                "gate_fault_settings.low_consider_using_avoid",
+                v=v,
             )
         return v
 

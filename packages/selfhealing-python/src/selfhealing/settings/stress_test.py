@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -163,8 +162,8 @@ class StressTestSettings(BaseSettings):
         """Burst duration이 너무 길면 경고."""
         if v > 60:
             logger.warning(
-                f"[StressTestSettings] High burst_duration={v}s, "
-                "consider using <= 60s for safety"
+                "stress_test_settings.high_consider_using_safety",
+                v=v,
             )
         return v
 

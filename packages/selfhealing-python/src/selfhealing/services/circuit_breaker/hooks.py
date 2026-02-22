@@ -15,8 +15,9 @@ Fail-Open: 훅 실패가 비즈니스 로직을 중단시키지 않는다.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.resilience_policy import PolicyResult

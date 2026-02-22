@@ -9,13 +9,14 @@ Contains:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -189,7 +190,7 @@ class HashChainWALRecovery:
         except Exception as e:
             result["status"] = "failed"
             result["error"] = str(e)
-            logger.error(
+            logger.exception(
                 "watchdog.recovery_failed",
                 error=e,
             )
@@ -254,7 +255,7 @@ class HashChainWALRecovery:
                     result["failed"] += 1
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "hash_chain_wal.error_reading",
                 wal_file=wal_file,
                 error=e,
@@ -308,7 +309,7 @@ class HashChainWALRecovery:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "hash_chain_wal.replay_failed",
                 error=e,
             )

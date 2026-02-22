@@ -32,9 +32,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseAnalysis,

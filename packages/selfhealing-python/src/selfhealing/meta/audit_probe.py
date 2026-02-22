@@ -13,11 +13,12 @@ Audit System Health Probe - 감사 시스템 건강 상태 수집.
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

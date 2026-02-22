@@ -11,9 +11,10 @@ Cell Registry — Consistent Hash 기반 Cell 할당.
 from __future__ import annotations
 
 import hashlib
-import structlog
 import threading
 from typing import Any
+
+import structlog
 
 from selfhealing.services.cell_topology.models import (
     CELL_STATE_PRIORITY,
@@ -74,8 +75,9 @@ class CellRegistry:
             self._register_cell_bulkheads()
 
         logger.info(
-            f"CellRegistry initialized: {self._settings.cell_count} cells, "
-            f"bulkhead={self._settings.bulkhead_isolation_enabled}"
+            "cellregistry_initialized_cells",
+            self=self._settings.cell_count,
+            self_1=self._settings.bulkhead_isolation_enabled,
         )
 
     def _build_hash_ring(self) -> None:
@@ -327,14 +329,14 @@ class CellRegistry:
                 )
 
             logger.info(
-                f"Registered {len(self._cells)} Cell Bulkheads "
-                f"(max_concurrent="
-                f"{self._settings.bulkhead_max_concurrent_per_cell})"
+                "cell_registry.bulkheads_registered",
+                count=len(self._cells),
+                self=self._settings.bulkhead_max_concurrent_per_cell,
             )
         except ImportError:
             logger.warning("cell_registry.bulkhead_registry_unavailable")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cell_bulkhead_registration_failed",
                 error=e,
             )

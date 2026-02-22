@@ -24,12 +24,13 @@ Celery task_prerun/postrun 시그널에서 분산되어 있던 컨텍스트 복�
 from __future__ import annotations
 
 import contextvars
-import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -399,9 +400,9 @@ def restore_all_task_context(
     # ── 1. trace_id 복원 [OPTIONAL] ──
     try:
         from selfhealing.audit.trace import (
+            _celery_context_var,
             generate_celery_trace_id,
             set_trace_id,
-            _celery_context_var,
         )
 
         trace_info = kwargs.get("trace_info") if kwargs else None
@@ -559,7 +560,7 @@ def cleanup_all_task_context(task: Any) -> None:
 
     # ── 5. trace_id / celery_context 정리 ──
     try:
-        from selfhealing.audit.trace import clear_trace_id, clear_celery_context
+        from selfhealing.audit.trace import clear_celery_context, clear_trace_id
 
         clear_trace_id()
         clear_celery_context()

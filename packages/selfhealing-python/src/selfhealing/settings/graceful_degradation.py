@@ -18,7 +18,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -107,8 +106,8 @@ class GracefulDegradationSettings(BaseSettings):
         """redis_timeout이 너무 길면 경고."""
         if v > 10.0:
             logger.warning(
-                f"[GracefulDegradationSettings] High redis_timeout={v}s, "
-                "consider using <= 10s for responsiveness"
+                "graceful_degradation_settings.high_consider_using_responsiveness",
+                v=v,
             )
         return v
 

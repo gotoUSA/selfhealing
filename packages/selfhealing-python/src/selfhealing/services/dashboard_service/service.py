@@ -19,9 +19,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.interfaces.statistics import (
@@ -311,7 +312,7 @@ class DashboardService:
                 archived=stats.archived,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dashboard.error",
                 error=e,
             )
@@ -339,7 +340,7 @@ class DashboardService:
                 resolved_in_7d=activity.resolved_in_7d,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dashboard.error",
                 error=e,
             )
@@ -366,7 +367,7 @@ class DashboardService:
                 by_failure_type=[{"failure_type": f.failure_type, "count": f.count} for f in failure_dist],
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dashboard.error",
                 error=e,
             )
@@ -399,7 +400,7 @@ class DashboardService:
                 avg_retry_count=round(avg_retry, 2),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dashboard.error",
                 error=e,
             )

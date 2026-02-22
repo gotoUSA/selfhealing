@@ -14,9 +14,10 @@ DiskPersistentBuffer Prometheus 메트릭.
 
 from __future__ import annotations
 
-import structlog
 import shutil
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.audit.persistence.disk_buffer import DiskPersistentBuffer

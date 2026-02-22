@@ -4,10 +4,11 @@ FinOps DNA Service - 비용 관리 서비스
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from threading import Lock
+
+import structlog
 
 from .models import CostAlert, CostBudget, CostRecord, CostReport, CostTier
 

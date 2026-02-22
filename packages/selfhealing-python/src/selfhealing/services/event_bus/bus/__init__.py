@@ -37,7 +37,6 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import traceback
 from collections.abc import Callable
@@ -46,6 +45,8 @@ from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from typing import Any
 from uuid import uuid4
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -409,8 +410,10 @@ class SelfHealingEventBus:
             sub = self.subscribe(event_type, handler, priority)
             subscriptions.append(sub)
         logger.info(
-            f"[EventBus] Wildcard subscription: {getattr(handler, '__name__', str(handler))} "
-            f"to all {len(subscriptions)} event types (priority={priority.name})"
+            "event_bus.wildcard_subscription_all_event",
+            getattr=getattr(handler, '__name__', str(handler)),
+            count=len(subscriptions),
+            priority=priority.name,
         )
         return subscriptions
 
@@ -483,13 +486,19 @@ class SelfHealingEventBus:
                     event_type=event.event_type.value,
                 )
             except Exception as e:
-                logger.error(
-                    f"[EventBus] Handler {subscription.handler_name} failed "
-                    f"for {event.event_type.value}: {e}\n{traceback.format_exc()}"
+                logger.exception(
+                    "event_bus.handler_failed",
+                    subscription=subscription.handler_name,
+                    event_type=event.event_type.value,
+                    error=e,
+                    traceback=traceback.format_exc(),
                 )
 
         logger.info(
-            f"[EventBus] Published {event.event_type.value} from {event.source}, " f"{handlers_called} handlers called"
+            "adaptive_throttle.event_published",
+            event_type=event.event_type.value,
+            event=event.source,
+            handlers_called=handlers_called,
         )
 
         return handlers_called
@@ -579,12 +588,12 @@ class SelfHealingEventBus:
     def enable(self):
         """이벤트 버스 활성화."""
         self._enabled = True
-        logger.info("event_bus.enabled")
+        logger.info("enabled")
 
     def disable(self):
         """이벤트 버스 비활성화."""
         self._enabled = False
-        logger.info("event_bus.disabled")
+        logger.info("disabled")
 
     def is_enabled(self) -> bool:
         """활성화 여부."""
@@ -701,32 +710,32 @@ def _on_error_budget_critical(event: SelfHealingEvent):
 
 # Handler sub-module imports
 from ._cb_handlers import (  # noqa: E402
-    _on_circuit_breaker_opened_notify,
     _collect_web_server_metrics,
-    _on_circuit_breaker_opened_snapshot,
-    _send_postmortem_notification,
     _on_circuit_breaker_closed,
     _on_circuit_breaker_closed_postmortem,
+    _on_circuit_breaker_opened_notify,
+    _on_circuit_breaker_opened_snapshot,
+    _send_postmortem_notification,
 )
 from ._emergency_postmortem import (  # noqa: E402
-    _handle_incident_group,
-    _schedule_group_close,
-    _create_individual_postmortem,
+    _build_emergency_actions,
+    _build_emergency_deep_links,
     _build_emergency_timeline,
     _build_recovery_steps,
-    _build_emergency_actions,
     _collect_emergency_cascade_event_data,
-    _build_emergency_deep_links,
-    _generate_emergency_postmortem_data,
-    _on_emergency_recovery_completed_postmortem,
     _create_emergency_postmortem_sync,
+    _create_individual_postmortem,
+    _generate_emergency_postmortem_data,
+    _handle_incident_group,
+    _on_emergency_recovery_completed_postmortem,
+    _schedule_group_close,
 )
 from ._throttle_handlers import (  # noqa: E402
-    _on_emergency_level_changed_throttle,
-    _on_emergency_deactivated_throttle,
-    _on_circuit_breaker_opened_throttle,
-    _on_circuit_breaker_half_opened_throttle,
     _on_circuit_breaker_closed_throttle,
+    _on_circuit_breaker_half_opened_throttle,
+    _on_circuit_breaker_opened_throttle,
+    _on_emergency_deactivated_throttle,
+    _on_emergency_level_changed_throttle,
     _on_error_budget_critical_throttle,
     _on_error_budget_recovered_throttle,
     _on_kill_switch_activated_throttle,

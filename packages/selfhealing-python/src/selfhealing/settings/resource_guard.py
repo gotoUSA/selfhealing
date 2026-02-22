@@ -12,7 +12,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -94,7 +93,7 @@ def get_resource_guard_settings() -> ResourceGuardSettings:
     if _settings is None:
         _settings = ResourceGuardSettings()
         logger.debug(
-            "[ResourceGuardSettings] Loaded: "
+            "[ResourceGuardSettings] Loaded: "  # noqa: G004
             f"cpu_threshold={_settings.cpu_threshold}, "
             f"memory_threshold={_settings.memory_threshold}, "
             f"enabled={_settings.resource_check_enabled}, "

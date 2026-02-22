@@ -14,10 +14,11 @@ Related:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.task_queue import (
     ScheduleInfo,
@@ -308,7 +309,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
         except TaskTimeoutError:
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_getting_result",
                 task_id=task_id,
                 error=e,
@@ -342,7 +343,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_revoking_task",
                 task_id=task_id,
                 error=e,
@@ -389,7 +390,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
             result.forget()
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_forgetting_task",
                 task_id=task_id,
                 error=e,
@@ -478,7 +479,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
             )
             return purged or 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_purging_queue",
                 error=e,
             )
@@ -492,7 +493,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 queue = conn.default_channel.queue_declare(queue_name, passive=True)
                 return queue.message_count
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_getting_queue_length",
                 error=e,
             )
@@ -515,7 +516,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 return sum(len(tasks) for tasks in active.values())
             return 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_getting_active_count",
                 error=e,
             )
@@ -534,7 +535,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
             ping_result = inspect.ping()
             return ping_result is not None and len(ping_result) > 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.health_check_failed",
                 error=e,
             )
@@ -550,7 +551,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 return len(ping_result)
             return 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_adapter.error_getting_worker_count",
                 error=e,
             )

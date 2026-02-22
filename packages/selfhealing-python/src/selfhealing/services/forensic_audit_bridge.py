@@ -15,10 +15,11 @@ Forensic Rate Limiter (SlidingWindow):
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

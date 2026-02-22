@@ -25,11 +25,12 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.coordination.enums import EmergencyScope
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
@@ -234,8 +235,9 @@ class RegionalCascadeDetector:
             )
 
             logger.warning(
-                f"[CascadeDetector] Cascade condition detected: "
-                f"regions={regional_strict}, count={strict_count}"
+                "cascade_detector.cascade_condition_detected",
+                regional_strict=regional_strict,
+                strict_count=strict_count,
             )
 
             # Cascade 이벤트 기록
@@ -330,8 +332,9 @@ class RegionalCascadeDetector:
                 self._cascade_history = self._cascade_history[-self._max_history_size :]
 
         logger.critical(
-            f"[CascadeDetector] MANUAL ESCALATION to GLOBAL: "
-            f"by={escalated_by}, regions={regional_strict}"
+            "cascade_detector.manual_escalation_global",
+            escalated_by=escalated_by,
+            regional_strict=regional_strict,
         )
 
         return {
@@ -404,8 +407,8 @@ class RegionalCascadeDetector:
             )
 
         logger.critical(
-            f"[CascadeDetector] AUTO-ESCALATED to GLOBAL STRICT: "
-            f"affected_regions={affected_regions}"
+            "cascade_detector.auto_escalated_global_strict",
+            affected_regions=affected_regions,
         )
 
 

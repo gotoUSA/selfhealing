@@ -42,9 +42,10 @@ Reference:
 
 import hashlib
 import json
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit import log_config_apply_audit, log_rollback_audit
 
@@ -192,7 +193,11 @@ class ConfigHistoryService:
             pipe.execute()
 
             logger.info(
-                f"[ConfigHistory] Saved: type={config_type}, " f"version={version_num}, by={changed_by}, reason={reason}"
+                "config_history.saved",
+                config_type=config_type,
+                version_num=version_num,
+                changed_by=changed_by,
+                reason=reason,
             )
 
             # === Audit 기록: 설정 버전 저장 ===
@@ -213,7 +218,10 @@ class ConfigHistoryService:
             return version
 
         except Exception as e:
-            logger.error(f"[ConfigHistory] Save failed: {e}", exc_info=True)
+            logger.exception(
+                "config_history.save_failed",
+                error=e,
+            )
             return None
 
     def get_history(self, config_type: str, limit: int = 10) -> list[ConfigVersion]:
@@ -261,7 +269,10 @@ class ConfigHistoryService:
             return versions
 
         except Exception as e:
-            logger.error(f"[ConfigHistory] Get history failed: {e}", exc_info=True)
+            logger.exception(
+                "config_history.get_history_failed",
+                error=e,
+            )
             return []
 
     def get_current_version(self, config_type: str) -> ConfigVersion | None:
@@ -284,7 +295,10 @@ class ConfigHistoryService:
             return None
 
         except Exception as e:
-            logger.error(f"[ConfigHistory] Get current failed: {e}", exc_info=True)
+            logger.exception(
+                "config_history.get_current_failed",
+                error=e,
+            )
             return None
 
     def get_version(self, config_type: str, version: int) -> ConfigVersion | None:
@@ -332,8 +346,11 @@ class ConfigHistoryService:
 
         if new_version:
             logger.info(
-                f"[ConfigHistory] Rollback successful: {config_type} "
-                f"v{target_version} -> v{new_version.version} by {rolled_back_by}"
+                "config_history.rollback_successful",
+                config_type=config_type,
+                target_version=target_version,
+                new_version=new_version.version,
+                rolled_back_by=rolled_back_by,
             )
 
             # === Audit 기록: 설정 롤백 ===
@@ -422,7 +439,7 @@ class ConfigHistoryService:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "config_history.clear_failed",
                 error=e,
             )

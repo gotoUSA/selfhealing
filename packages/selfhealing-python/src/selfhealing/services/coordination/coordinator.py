@@ -19,19 +19,20 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
 from .anti_flapping import AntiFlappingGuard
 from .enums import ActionType
 from .models import (
-    CoordinationActionResult,
     CoordinationAction,
+    CoordinationActionResult,
     CoordinationResult,
     OverrideTTLConfig,
     ScopedEmergencyState,
@@ -218,7 +219,7 @@ class EmergencyCoordinator:
                 succeeded = [r for r in results if r.success]
                 failed = [r for r in results if not r.success]
                 logger.warning(
-                    f"[Coordinator] Partial failure during level change: "
+                    f"[Coordinator] Partial failure during level change: "  # noqa: G004
                     f"namespace={namespace}, "
                     f"succeeded=[{', '.join(r.action_type.value for r in succeeded)}], "
                     f"failed=[{', '.join(r.action_type.value for r in failed)}], "
@@ -354,7 +355,7 @@ class EmergencyCoordinator:
         """
         if not self._cascade_auditor:
             # cascade_auditor가 주입되지 않으면 기록 생략
-            logger.debug("coordinator.cascade_audit_skipped_no")
+            logger.debug("coordinator")
             return
 
         try:
@@ -399,7 +400,10 @@ class EmergencyCoordinator:
                 )
 
             logger.debug(
-                f"[Coordinator] Cascade event recorded: " f"{old_level.name} -> {new_level.name}, effects={len(effects)}"
+                "coordinator.cascade_event_recorded",
+                old_level=old_level.name,
+                new_level=new_level.name,
+                count=len(effects),
             )
         except Exception as e:
             # Cascade 기록 실패는 Emergency 처리를 중단시키면 안 됨
@@ -494,7 +498,7 @@ class EmergencyCoordinator:
                 details={"effective_ttl_minutes": effective_ttl},
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "coordinator.action_failed",
                 type=action.type.value,
                 namespace=namespace,
@@ -522,7 +526,11 @@ class EmergencyCoordinator:
         """
         # Phase 1: 로깅만 수행
         logger.info(
-            f"[Coordinator] Executing {action.type.value} on {namespace}: " f"params={action.params}, ttl={effective_ttl}min"
+            "coordinator.executing_min",
+            type=action.type.value,
+            namespace=namespace,
+            action=action.params,
+            effective_ttl=effective_ttl,
         )
 
         # 상태 업데이트
@@ -573,7 +581,7 @@ class EmergencyCoordinator:
             auditor: CascadeEventAuditor 인스턴스
         """
         self._cascade_auditor = auditor
-        logger.info("coordinator.cascade_auditor_configured")
+        logger.info("coordinator")
 
     def get_cascade_auditor(self) -> CascadeEventAuditor | None:
         """

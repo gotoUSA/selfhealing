@@ -17,7 +17,6 @@ Features:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from collections import defaultdict
@@ -25,6 +24,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.event_bus import SelfHealingEvent
@@ -348,8 +349,10 @@ class IncidentGroupManager:
             )
 
             logger.info(
-                f"[IncidentGroupManager] New group created: {active_group_id} "
-                f"(service={service_name}, namespace={namespace})"
+                "incident_group_manager.new_group_created",
+                active_group_id=active_group_id,
+                service_name=service_name,
+                namespace=namespace,
             )
 
         # 2. 엔트리 추가
@@ -549,7 +552,9 @@ class IncidentGroupManager:
                 last_ts = last_dt.timestamp()
                 if now - last_ts >= self.inactivity_seconds:
                     logger.info(
-                        f"[IncidentGroupManager] Group {group_id} inactivity " f"(last_event={now - last_ts:.0f}s ago)"
+                        "incident_group_manager.group_inactivity_ago",
+                        group_id=group_id,
+                        value=now - last_ts,
                     )
                     return True
             except (ValueError, AttributeError):
@@ -664,8 +669,10 @@ class IncidentGroupManager:
         group.closed_at = now_iso
 
         logger.info(
-            f"[IncidentGroupManager] Group {group_id} closed "
-            f"(entries={group.incident_count}, pattern={group.get_cascading_pattern()})"
+            "incident_group_manager.group_closed",
+            group_id=group_id,
+            group=group.incident_count,
+            group_2=group.get_cascading_pattern(),
         )
 
         return group

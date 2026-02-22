@@ -7,8 +7,9 @@ Controls traffic based on API tier during emergency mode.
 
 from __future__ import annotations
 
-import structlog
 import random
+
+import structlog
 
 from .registry import get_tier_registry
 
@@ -98,14 +99,14 @@ class TieringMiddleware:
             return self.get_response(request)
 
         try:
+            from selfhealing.api.django.tiering.defaults import BACKPRESSURE_TIER_RULES
+            from selfhealing.scaling.config import BackpressureLevel
+            from selfhealing.scaling.rate_controller import get_rate_controller
             from selfhealing.services.emergency_mode import get_emergency_manager
             from selfhealing.services.emergency_mode.enums import (
                 EMERGENCY_LEVEL_RULES,
                 EmergencyLevel,
             )
-            from selfhealing.scaling.rate_controller import get_rate_controller
-            from selfhealing.scaling.config import BackpressureLevel
-            from selfhealing.api.django.tiering.defaults import BACKPRESSURE_TIER_RULES
 
             manager = get_emergency_manager()
             controller = get_rate_controller()
@@ -154,7 +155,7 @@ class TieringMiddleware:
             return self.get_response(request)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "tiering_middleware.error_allowing_request",
                 error=e,
             )
@@ -203,9 +204,11 @@ class TieringMiddleware:
         from django.http import JsonResponse
 
         logger.warning(
-            f"[TieringMiddleware] Load shedding: "
-            f"path={request.path}, tier={tier_id}, "
-            f"multiplier={multiplier}, level={emergency_level.name}"
+            "tiering_middleware.load_shedding",
+            request=request.path,
+            tier_id=tier_id,
+            multiplier=multiplier,
+            emergency_level=emergency_level.name,
         )
 
         self._record_load_shedding_metrics(tier_id, emergency_level)

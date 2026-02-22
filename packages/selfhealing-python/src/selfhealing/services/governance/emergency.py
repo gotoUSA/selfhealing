@@ -35,13 +35,14 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -286,9 +287,10 @@ class EmergencyModeTracker:
             self._save_state(state)
 
             logger.info(
-                f"[Governance] Normal mode restored: "
-                f"by={restored_by}, previous_mode={previous_mode}, "
-                f"previously_activated_by={activated_by}"
+                "governance.normal_mode_restored",
+                restored_by=restored_by,
+                previous_mode=previous_mode,
+                activated_by=activated_by,
             )
 
             # Send notification
@@ -385,7 +387,7 @@ class EmergencyModeTracker:
             state = self._load_state()
             state.warning_sent_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
-            logger.info("governance.warning_notification_marked_sent")
+            logger.info("governance")
 
     def mark_final_warning_sent(self) -> None:
         """Mark that final warning notification has been sent."""
@@ -393,7 +395,7 @@ class EmergencyModeTracker:
             state = self._load_state()
             state.final_warning_sent_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
-            logger.info("governance.final_warning_notification_marked")
+            logger.info("governance")
 
     def acknowledge_warning(self, acknowledged_by: str) -> dict[str, Any]:
         """
@@ -438,7 +440,7 @@ class EmergencyModeTracker:
             reason="Emergency mode auto-expired after configured duration",
         )
 
-        logger.warning("governance.emergency_mode_auto_expired")
+        logger.warning("governance")
 
         return result
 
@@ -474,13 +476,13 @@ class EmergencyModeTracker:
                 try:
                     handler(event_type, message, channels, config)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "governance.notification_handler_error",
                         error=e,
                     )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "governance.failed_send_notification",
                 error=e,
             )

@@ -6,9 +6,10 @@ Creates the appropriate metric source adapter based on configuration.
 
 from __future__ import annotations
 
-import structlog
 import os
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.adapters.metrics.base import (
     MetricSourceAdapter,
@@ -116,13 +117,12 @@ def _create_redis_adapter() -> MetricSourceAdapter:
         return RedisMetricSourceAdapter(redis_client=client, prefix=prefix)
 
     except ImportError:
-        logger.warning(
-            "[MetricAdapter] redis package not installed, falling back to NullAdapter"
-        )
+        logger.warning("metric_adapter.redis_package_installed_falling")
         return NullMetricSourceAdapter()
     except Exception as e:
         logger.warning(
-            f"[MetricAdapter] Redis connection failed: {e}, falling back to NullAdapter"
+            "metric_adapter.redis_connection_failed_falling",
+            error=e,
         )
         return NullMetricSourceAdapter()
 
@@ -136,10 +136,7 @@ def _create_django_adapter() -> MetricSourceAdapter:
 
         # Django 모델은 사용자가 configure_adapter()로 직접 설정해야 함
         # 여기서는 모델 없이 빈 어댑터 생성
-        logger.info(
-            "[MetricAdapter] Django adapter created without models. "
-            "Call configure_adapter() with your models."
-        )
+        logger.info("metric_adapter.django_adapter_created_without")
         return DjangoMetricSourceAdapter()
 
     except ImportError as e:

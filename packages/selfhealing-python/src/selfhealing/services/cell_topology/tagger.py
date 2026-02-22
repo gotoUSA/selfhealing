@@ -14,9 +14,10 @@ CellRegistry.get_cell_for_key()를 사용하여
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

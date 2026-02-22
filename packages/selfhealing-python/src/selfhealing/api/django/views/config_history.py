@@ -11,7 +11,6 @@ Endpoints:
 """
 
 import structlog
-
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -248,7 +247,11 @@ class ConfigRollbackView(APIView):
         self._apply_config_values(config_type, target.values)
 
         logger.info(
-            f"[ConfigRollback] {config_type} rolled back to v{target_version} " f"(new v{rolled_back.version}) by {username}"
+            "config_rollback.rolled_back_new",
+            config_type=config_type,
+            target_version=target_version,
+            rolled_back=rolled_back.version,
+            username=username,
         )
 
         return Response(

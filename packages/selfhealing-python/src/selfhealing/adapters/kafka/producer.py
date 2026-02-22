@@ -24,13 +24,14 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from confluent_kafka import Producer
@@ -117,17 +118,15 @@ class KafkaAuditProducer:
             self._producer = Producer(config)
 
             logger.info(
-                f"[KafkaProducer] 초기화 완료 - "
-                f"bootstrap_servers={self._settings.bootstrap_servers}, "
-                f"idempotent={self._settings.producer_idempotent}"
+                "kafka_producer.초기화_완료",
+                self=self._settings.bootstrap_servers,
+                self_1=self._settings.producer_idempotent,
             )
         except ImportError:
-            logger.error(
-                "[KafkaProducer] confluent-kafka 패키지가 설치되지 않았습니다. " "설치: pip install 'selfhealing[kafka]'"
-            )
+            logger.exception("kafka_producer.confluent_kafka_패키지가_설치되지")
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_producer.초기화_실패",
                 error=e,
             )
@@ -195,7 +194,7 @@ class KafkaAuditProducer:
             try:
                 user_callback(report)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "kafka_producer.사용자_콜백_오류",
                     error=e,
                 )
@@ -205,7 +204,7 @@ class KafkaAuditProducer:
             try:
                 self._on_delivery(report)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "kafka_producer.콜백_오류",
                     error=e,
                 )
@@ -286,7 +285,7 @@ class KafkaAuditProducer:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_producer.발행_오류",
                 error=e,
             )
@@ -373,7 +372,7 @@ class KafkaAuditProducer:
                     remaining=remaining,
                 )
             self._producer = None
-            logger.info("kafka_producer.종료됨")
+            logger.info("종료됨")
 
     def get_stats(self) -> dict[str, Any]:
         """전송 통계 반환."""

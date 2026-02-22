@@ -6,11 +6,12 @@ Framework-agnostic throttle logic with sliding window algorithm.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
+
+import structlog
 
 from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
 

@@ -28,10 +28,11 @@ Usage:
 from __future__ import annotations
 
 import hmac
-import structlog
 import os
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

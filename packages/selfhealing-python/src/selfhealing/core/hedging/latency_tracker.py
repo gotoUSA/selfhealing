@@ -7,9 +7,10 @@ P50/P95 기반으로 동적 delay를 계산합니다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections import deque
+
+import structlog
 
 logger = structlog.get_logger()
 

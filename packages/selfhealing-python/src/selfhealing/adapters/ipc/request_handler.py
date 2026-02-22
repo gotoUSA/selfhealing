@@ -30,8 +30,9 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 from typing import Any, Callable
+
+import structlog
 
 from selfhealing.adapters.ipc.exceptions import (
     IPCInvalidParamsError,

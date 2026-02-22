@@ -7,28 +7,27 @@ Execution Services Package
 
 from __future__ import annotations
 
-# === Explicit re-exports ===
+# Chaos Service
+from .chaos_service import (
+    ChaosExecutionService,
+    _chaos_execution_service_instance,
+    get_chaos_execution_service,
+)
 
+# Config Apply Service
+from .config_apply_service import (
+    ConfigApplyService,
+    _config_apply_service_instance,
+    get_config_apply_service,
+)
+
+# === Explicit re-exports ===
 # Models
 from .models import (
     ApprovalCleanupResult,
     DailyReportResult,
     ExperimentExecutionResult,
     PendingApprovalCheckResult,
-)
-
-# Chaos Service
-from .chaos_service import (
-    ChaosExecutionService,
-    get_chaos_execution_service,
-    _chaos_execution_service_instance,
-)
-
-# Config Apply Service
-from .config_apply_service import (
-    ConfigApplyService,
-    get_config_apply_service,
-    _config_apply_service_instance,
 )
 
 __all__ = [

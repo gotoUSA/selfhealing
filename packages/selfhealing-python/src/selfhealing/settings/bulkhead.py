@@ -17,9 +17,9 @@ Environment Variables:
 
 from __future__ import annotations
 
-import structlog
 import threading
 
+import structlog
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

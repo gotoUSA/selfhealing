@@ -8,12 +8,13 @@ Contains:
 
 from __future__ import annotations
 
-import structlog
 import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

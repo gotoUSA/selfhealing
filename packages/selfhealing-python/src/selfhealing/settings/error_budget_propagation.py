@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -167,9 +166,7 @@ class ErrorBudgetPropagationSettings(BaseSettings):
                 f"default_combine_strategy must be one of {valid_strategies}"
             )
         if v == "multiply":
-            logger.warning(
-                "[SafeDefault] 'multiply' strategy is risky, ensure multiplier caps are set"
-            )
+            logger.warning("safe_default.multiply_strategy_risky_ensure")
         return v
 
     @field_validator("min_multiplier")
@@ -179,7 +176,8 @@ class ErrorBudgetPropagationSettings(BaseSettings):
         # 다른 필드 접근이 어려우므로 기본 검증만 수행
         if v > 5.0:
             logger.warning(
-                f"[SafeDefault] High min_multiplier={v}, consider lower values"
+                "safe_default.high_consider_lower_values",
+                v=v,
             )
         return v
 

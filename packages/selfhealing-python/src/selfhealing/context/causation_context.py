@@ -33,7 +33,6 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -41,6 +40,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

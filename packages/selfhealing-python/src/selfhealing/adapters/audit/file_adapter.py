@@ -8,9 +8,10 @@ Non-invasive - does not require database tables or external services.
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from pathlib import Path
+
+import structlog
 
 from selfhealing.interfaces.audit_adapter import (
     AuditAction,
@@ -73,7 +74,7 @@ class FileAuditLogAdapter(AuditLogAdapter):
             with open(file_path, "a", encoding="utf-8") as f:
                 f.write(entry.to_json() + "\n")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "file_audit_log_adapter.failed_write_audit_log",
                 error=e,
             )

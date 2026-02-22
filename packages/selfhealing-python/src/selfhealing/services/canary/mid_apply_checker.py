@@ -14,10 +14,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.canary.interlock import (
@@ -152,8 +153,10 @@ class MidApplyInterlockChecker:
                 # 인터락 발동 (진행 불가)
                 if not interlock_result.allowed:
                     logger.warning(
-                        f"[MidApplyInterlockChecker] Interlock triggered at cluster {i}: "
-                        f"action={interlock_result.action}, reason={interlock_result.reason}"
+                        "mid_apply_interlock_checker.interlock_triggered_cluster",
+                        i=i,
+                        interlock_result=interlock_result.action,
+                        interlock_result_2=interlock_result.reason,
                     )
 
                     # 이미 적용된 클러스터 롤백
@@ -163,11 +166,14 @@ class MidApplyInterlockChecker:
                             try:
                                 rollback_fn(applied)
                                 logger.info(
-                                    f"[MidApplyInterlockChecker] Rolled back: {applied}"
+                                    "mid_apply_interlock_checker.rolled_back",
+                                    applied=applied,
                                 )
                             except Exception as e:
-                                logger.error(
-                                    f"[MidApplyInterlockChecker] Rollback failed for {applied}: {e}"
+                                logger.exception(
+                                    "mid_apply_interlock_checker.rollback_failed",
+                                    applied=applied,
+                                    error=e,
                                 )
 
                     return MidApplyCheckResult(
@@ -186,8 +192,10 @@ class MidApplyInterlockChecker:
                     applied_clusters.append(cluster)
                     remaining_clusters.remove(cluster)
             except Exception as e:
-                logger.error(
-                    f"[MidApplyInterlockChecker] Apply failed for {cluster}: {e}"
+                logger.exception(
+                    "mid_apply_interlock_checker.apply_failed",
+                    cluster=cluster,
+                    error=e,
                 )
 
         # 모든 클러스터 적용 완료

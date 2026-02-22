@@ -6,10 +6,11 @@ Provides approval request management for critical configuration changes.
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 from .constants import STORAGE_KEYS
 
@@ -87,7 +88,9 @@ class ApprovalMixin:
             requests.append(request)
             self._backend.set(storage_key, requests)
             logger.info(
-                f"[RuntimeConfig] Created approval request: {request['id']} by {requested_by}"
+                "runtime_config.created_approval_request",
+                request=request['id'],
+                requested_by=requested_by,
             )
             return request
 
@@ -114,14 +117,16 @@ class ApprovalMixin:
                 if request["id"] == request_id:
                     if request["status"] != "PENDING":
                         logger.warning(
-                            f"[RuntimeConfig] Request {request_id} is not PENDING"
+                            "runtime_config.request_pending",
+                            request_id=request_id,
                         )
                         return None
 
                     # 4-Eyes: Approver must be different from requester
                     if request["requested_by"] == approved_by:
                         logger.warning(
-                            f"[RuntimeConfig] Self-approval not allowed: {approved_by}"
+                            "runtime_config.self_approval_allowed",
+                            approved_by=approved_by,
                         )
                         return None
 
@@ -131,7 +136,8 @@ class ApprovalMixin:
                         request["status"] = "EXPIRED"
                         self._backend.set(storage_key, requests)
                         logger.warning(
-                            f"[RuntimeConfig] Request {request_id} has expired"
+                            "runtime_config.request_expired",
+                            request_id=request_id,
                         )
                         return None
 
@@ -141,7 +147,9 @@ class ApprovalMixin:
 
                     self._backend.set(storage_key, requests)
                     logger.info(
-                        f"[RuntimeConfig] Approved request {request_id} by {approved_by}"
+                        "runtime_config.approved_request",
+                        request_id=request_id,
+                        approved_by=approved_by,
                     )
                     return request
 
@@ -172,7 +180,8 @@ class ApprovalMixin:
                 if request["id"] == request_id:
                     if request["status"] != "PENDING":
                         logger.warning(
-                            f"[RuntimeConfig] Request {request_id} is not PENDING"
+                            "runtime_config.request_pending",
+                            request_id=request_id,
                         )
                         return None
 
@@ -185,7 +194,9 @@ class ApprovalMixin:
 
                     self._backend.set(storage_key, requests)
                     logger.info(
-                        f"[RuntimeConfig] Rejected request {request_id} by {rejected_by}"
+                        "runtime_config.rejected_request",
+                        request_id=request_id,
+                        rejected_by=rejected_by,
                     )
                     return request
 
@@ -214,7 +225,8 @@ class ApprovalMixin:
             if expired_count > 0:
                 self._backend.set(storage_key, requests)
                 logger.info(
-                    f"[RuntimeConfig] Expired {expired_count} approval requests"
+                    "runtime_config.expired_approval_requests",
+                    expired_count=expired_count,
                 )
 
             return expired_count

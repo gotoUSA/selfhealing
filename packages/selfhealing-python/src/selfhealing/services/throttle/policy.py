@@ -17,10 +17,11 @@ Guard/Hook/Sink는 PolicyComposer가 외부에서 연결한다.
 
 from __future__ import annotations
 
-import structlog
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,

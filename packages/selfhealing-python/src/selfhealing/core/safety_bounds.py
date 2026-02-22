@@ -16,9 +16,10 @@ Safety Bounds - 자율 조정 안전 한계
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from threading import RLock
+
+import structlog
 
 from selfhealing.settings.safety_bounds import get_safety_bounds_settings
 
@@ -207,8 +208,10 @@ class SafetyBounds:
                 change_ratio = abs(new_value - current_value) / current_value
                 if change_ratio > bound.max_change_per_cycle:
                     logger.warning(
-                        f"[SafetyBounds] {parameter} change ratio {change_ratio:.1%} "
-                        f"exceeds limit {bound.max_change_per_cycle:.1%}"
+                        "safety_bounds.change_ratio_exceeds_limit",
+                        parameter=parameter,
+                        change_ratio=change_ratio,
+                        bound=bound.max_change_per_cycle,
                     )
                     return False
 
@@ -284,13 +287,15 @@ class SafetyBounds:
 
                 self.bounds[parameter] = new_bound
                 logger.info(
-                    f"[SafetyBounds] Updated bounds for {parameter}: "
-                    f"[{new_bound.min_value}, {new_bound.max_value}], "
-                    f"max_change={new_bound.max_change_per_cycle:.0%}"
+                    "safety_bounds.updated_bounds",
+                    parameter=parameter,
+                    new_bound=new_bound.min_value,
+                    new_bound_2=new_bound.max_value,
+                    new_bound_3=new_bound.max_change_per_cycle,
                 )
                 return True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "safety_bounds.failed_update_bounds",
                     error=e,
                 )

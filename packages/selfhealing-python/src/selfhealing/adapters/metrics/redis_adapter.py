@@ -6,8 +6,9 @@ Provides metrics from Redis cache using Write-Through pattern.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
 

@@ -25,11 +25,12 @@ Environment Variables:
 
 from __future__ import annotations
 
-import structlog
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlencode
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -138,10 +139,10 @@ class PostmortemDeepLinkBuilder:
         self._grafana_org_id = os.getenv("GRAFANA_ORG_ID", "1")
 
         logger.debug(
-            f"[PostmortemDeepLinkBuilder] Initialized with "
-            f"postmortem={bool(self._postmortem_base_url)}, "
-            f"dashboard={bool(self._dashboard_base_url)}, "
-            f"prometheus={bool(self._prometheus_base_url)}"
+            "postmortem_deep_link_builder.initialized",
+            value=bool(self._postmortem_base_url),
+            value_1=bool(self._dashboard_base_url),
+            value_2=bool(self._prometheus_base_url),
         )
 
     def build_postmortem_links(

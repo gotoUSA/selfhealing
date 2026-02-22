@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 from selfhealing.settings.throttle import (  # noqa: F401
     ThrottleSettings as ThrottleConfig,
+)
+from selfhealing.settings.throttle import (
     get_throttle_settings,
     reset_throttle_settings,
 )

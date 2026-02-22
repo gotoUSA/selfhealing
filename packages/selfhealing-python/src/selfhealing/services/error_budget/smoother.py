@@ -29,9 +29,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -135,7 +136,9 @@ class MultiplierSmoother:
             self._transition_start_value = self._current_value
 
             logger.debug(
-                f"[Smoother] Target changed: {self._current_value:.2f} → {target_multiplier:.2f}"
+                "smoother.target_changed",
+                self=self._current_value,
+                target_multiplier=target_multiplier,
             )
 
     def get_smoothed_value(self) -> float:

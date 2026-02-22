@@ -13,12 +13,13 @@ Netflix Hystrix, Google Autopilot 스타일의 자율 조정 엔진
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.settings.decision_engine import get_decision_engine_settings
 

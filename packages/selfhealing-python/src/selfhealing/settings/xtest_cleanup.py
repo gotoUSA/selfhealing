@@ -17,7 +17,6 @@ Environment Variables:
 from __future__ import annotations
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -155,9 +154,9 @@ def get_xtest_cleanup_settings() -> XTestCleanupSettings:
     if _xtest_cleanup_settings is None:
         _xtest_cleanup_settings = XTestCleanupSettings()
         logger.debug(
-            f"[XTestCleanup] Settings loaded: "
-            f"ttl={_xtest_cleanup_settings.session_ttl_hours}h, "
-            f"interval={_xtest_cleanup_settings.cleanup_interval_minutes}m"
+            "x_test_cleanup.settings_loaded",
+            _xtest_cleanup_settings=_xtest_cleanup_settings.session_ttl_hours,
+            _xtest_cleanup_settings_1=_xtest_cleanup_settings.cleanup_interval_minutes,
         )
     return _xtest_cleanup_settings
 

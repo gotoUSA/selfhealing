@@ -15,9 +15,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import (
     _try_add_to_buffer,
@@ -75,8 +76,11 @@ def log_kill_switch_override_audit(
             pass
 
     logger.warning(
-        f"[KillSwitchOverride] {action.upper()} | service={service_name} | "
-        f"by={controlled_by_id} | reason={reason or 'N/A'}"
+        "kill_switch_override.event",
+        action=action.upper(),
+        service_name=service_name,
+        controlled_by_id=controlled_by_id,
+        value=reason or 'N/A',
     )
     return wal_seq
 
@@ -139,8 +143,11 @@ def log_panic_threshold_audit(
             pass
 
     logger.critical(
-        f"🚨 [PanicThreshold] TRIGGERED | open_rate={open_rate:.1f}% | "
-        f"circuits={open_count}/{total_count} | action={action_taken}"
+        "panicthreshold_triggered",
+        open_rate=open_rate,
+        open_count=open_count,
+        total_count=total_count,
+        action_taken=action_taken,
     )
     return wal_seq
 
@@ -195,8 +202,11 @@ def log_freeze_mode_audit(
             pass
 
     logger.warning(
-        f"[FreezeMode] {action.upper()} | by={activated_by} | "
-        f"level={emergency_level or 'N/A'} | reason={reason or 'N/A'}"
+        "freeze_mode.event",
+        action=action.upper(),
+        activated_by=activated_by,
+        value=emergency_level or 'N/A',
+        value_3=reason or 'N/A',
     )
     return wal_seq
 
@@ -291,7 +301,7 @@ def log_chaos_experiment_audit(
             pass
 
     logger.info(
-        f"[ChaosAudit] {experiment_id} | {event_type} | {record_id}",
+        f"[ChaosAudit] {experiment_id} | {event_type} | {record_id}",  # noqa: G004
         extra={"audit_data": details},
     )
     return record_id
@@ -365,8 +375,11 @@ def log_emergency_mode_audit(
             pass
 
     logger.info(
-        f"[EmergencyModeAudit] {action.upper()} | level={level} | "
-        f"user={user} | reason={reason or 'N/A'}"
+        "emergency_mode_audit.event",
+        action=action.upper(),
+        level=level,
+        user=user,
+        value=reason or 'N/A',
     )
 
     # 기존 log_config_change 호환 호출
@@ -501,7 +514,10 @@ def log_error_budget_blocked_audit(
     )
     trace_str = trace_id[:8] if trace_id else "N/A"
     logger.warning(
-        f"[ErrorBudgetAudit] BLOCKED | action={action} | "
-        f"budget={budget_str} | status={gate_status} | trace_id={trace_str}"
+        "error_budget_audit.blocked",
+        action=action,
+        budget_str=budget_str,
+        gate_status=gate_status,
+        trace_str=trace_str,
     )
     return wal_seq

@@ -25,9 +25,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from .models import (
     NotificationCategory,
@@ -232,7 +233,7 @@ class UnifiedNotificationManager:
             result.success = len(result.channels_sent) > 0
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "unified_notification.send_failed",
                 error=e,
             )

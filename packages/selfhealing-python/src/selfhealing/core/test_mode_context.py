@@ -30,10 +30,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -92,7 +93,8 @@ class TestModeContext:
         token_session = _synthetic_session_id.set(session_id)
 
         logger.debug(
-            f"[TestModeContext] Entered synthetic mode: session_id={session_id}"
+            "test_mode_context.entered_synthetic_mode",
+            session_id=session_id,
         )
 
         try:
@@ -102,7 +104,8 @@ class TestModeContext:
             _synthetic_session_id.reset(token_session)
 
             logger.debug(
-                f"[TestModeContext] Exited synthetic mode: session_id={session_id}"
+                "test_mode_context.exited_synthetic_mode",
+                session_id=session_id,
             )
 
     @classmethod
@@ -123,7 +126,8 @@ class TestModeContext:
         cls._token_session = _synthetic_session_id.set(session_id)
 
         logger.debug(
-            f"[TestModeContext] Manual enter synthetic mode: session_id={session_id}"
+            "test_mode_context.manual_enter_synthetic_mode",
+            session_id=session_id,
         )
 
     @classmethod

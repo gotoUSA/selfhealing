@@ -297,10 +297,10 @@ if TYPE_CHECKING:
     )
     from selfhealing.audit.audit_watchdog import (
         AuditWatchdog,
-        HeartbeatTarget,
-        WatchdogChecker,
         AuditWatchdogConfig,
         AuditWatchdogStatus,
+        HeartbeatTarget,
+        WatchdogChecker,
         WatchdogStats,
         get_watchdog,
         start_watchdog,
@@ -363,12 +363,16 @@ if TYPE_CHECKING:
         HashChainVerifier,
         verify_audit_log_integrity,
     )
-    from selfhealing.audit.logger import ConfigAuditAction, AuditConfigChangeEvent, ConfigChangeEvent
+    from selfhealing.audit.logger import (
+        AuditConfigChangeEvent,
+        ConfigAuditAction,
+        ConfigChangeEvent,
+    )
     from selfhealing.audit.masking import extract_ip_from_request, mask_sensitive_fields
     from selfhealing.audit.resilience import (
+        AuditCircuitBreakerConfig,
         AuditMetrics,
         CircuitBreaker,
-        AuditCircuitBreakerConfig,
         CircuitBreakerRegistry,
         CircuitBreakerSnapshot,
         CircuitState,

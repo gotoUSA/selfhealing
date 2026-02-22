@@ -22,13 +22,14 @@ HTTP 헤더 규약:
 
 from __future__ import annotations
 
-import structlog
 import os
 import re
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Generator
+
+import structlog
 
 logger = structlog.get_logger()
 

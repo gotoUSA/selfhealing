@@ -8,11 +8,12 @@ WAL 파일 읽기/복구 모듈.
 from __future__ import annotations
 
 import json
-import structlog
 import struct
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.wal._serialization import (
     compute_checksum,

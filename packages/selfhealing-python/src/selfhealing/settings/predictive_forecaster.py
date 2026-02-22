@@ -20,7 +20,6 @@ Usage:
 from __future__ import annotations
 
 import structlog
-
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

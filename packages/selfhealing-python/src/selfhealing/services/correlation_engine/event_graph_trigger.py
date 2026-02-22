@@ -10,9 +10,10 @@ RateLimitCoordinator._should_emit_event() 패턴을 차용한다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
+
+import structlog
 
 from selfhealing.services.event_bus.bus import EventType
 

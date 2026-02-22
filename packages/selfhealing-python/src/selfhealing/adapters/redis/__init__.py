@@ -10,8 +10,9 @@ Uses ResilientStorageBackend for zero data loss guarantees.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.adapters.redis.circuit_breaker import (
     RedisCircuitBreakerStateRepository,

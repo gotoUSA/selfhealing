@@ -6,12 +6,13 @@ Prevents slow/failing external services from blocking the main application.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 # CircuitState: 단일 소스는 graceful_degradation/enums.py (Item 2 중복 제거)
 # str, Enum 으로 통일하여 JSON 직렬화 호환

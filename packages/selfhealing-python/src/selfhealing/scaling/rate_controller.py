@@ -11,11 +11,12 @@ AIMD (Additive Increase, Multiplicative Decrease) 패턴 적용.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
+
+import structlog
 
 from selfhealing.scaling.config import (
     BackpressureLevel,
@@ -457,9 +458,11 @@ class RateController:
                 self._current_rate = new_rate
                 self._token_bucket.set_rate(new_rate)
                 logger.info(
-                    f"[RateController] Rate adjusted: {new_rate:.1f}/s "
-                    f"(level={new_level.value}, queue={queue_size}, "
-                    f"multiplier={self._settings.get_rate_multiplier(new_level)})"
+                    "rate_controller.rate_adjusted",
+                    new_rate=new_rate,
+                    new_level=new_level.value,
+                    queue_size=queue_size,
+                    self=self._settings.get_rate_multiplier(new_level),
                 )
 
     def _run_loop(self) -> None:
@@ -468,7 +471,7 @@ class RateController:
             try:
                 self._adjust_rate()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "rate_controller.adjust_error",
                     error=e,
                 )
@@ -478,7 +481,7 @@ class RateController:
     def start(self) -> None:
         """Rate 조절 시작."""
         if not self._settings.backpressure_enabled:
-            logger.info("rate_controller.disabled")
+            logger.info("disabled")
             return
 
         if self._running:
@@ -491,14 +494,14 @@ class RateController:
             daemon=True,
         )
         self._worker.start()
-        logger.info("rate_controller.started")
+        logger.info("started")
 
     def stop(self) -> None:
         """Rate 조절 중지."""
         self._running = False
         if self._worker:
             self._worker.join(timeout=5.0)
-        logger.info("rate_controller.stopped")
+        logger.info("stopped")
 
 
 # =============================================================================

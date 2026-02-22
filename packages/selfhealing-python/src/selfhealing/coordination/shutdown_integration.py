@@ -8,10 +8,11 @@ SIGTERM/SIGINT 수신 시 자동으로 리더십을 안전하게 반납.
 from __future__ import annotations
 
 import atexit
-import structlog
 import signal
 import sys
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.coordination.base import LeaderElector
@@ -107,7 +108,7 @@ def _shutdown_all_electors() -> None:
                 elector=elector.resource_name,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "leader_elector.종료_실패",
                 elector=elector.resource_name,
                 error=e,

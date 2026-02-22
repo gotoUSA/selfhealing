@@ -9,9 +9,10 @@ mTLS로 암호화 및 상호 인증을 적용합니다.
 
 from __future__ import annotations
 
-import structlog
 import ssl
 from typing import Any
+
+import structlog
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
@@ -96,13 +97,13 @@ class SecureRedisClient:
             )
             return None
         except ssl.SSLError as e:
-            logger.error(
+            logger.exception(
                 "secure_redis.ssl_context_creation_failed",
                 error=e,
             )
             raise
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "secure_redis.unexpected_error_creating_ssl",
                 error=e,
             )
@@ -121,7 +122,7 @@ class SecureRedisClient:
             try:
                 import redis
             except ImportError:
-                logger.error("secure_redis.redis_package_installed")
+                logger.exception("secure_redis.redis_package_installed")
                 raise
 
             ssl_context = self._create_ssl_context()

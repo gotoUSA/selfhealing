@@ -15,11 +15,12 @@ Related:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from datetime import timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
@@ -165,7 +166,7 @@ class RedisDistributedLock(DistributedLock):
                 )
                 self._acquired = False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_lock.error_releasing_lock",
                 error=e,
             )
@@ -215,7 +216,7 @@ class RedisDistributedLock(DistributedLock):
             result = self._redis.eval(lua_script, 1, self._name, self._owner_id, additional_ms)
             return result == 1
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_lock.error_extending_lock",
                 error=e,
             )
@@ -318,7 +319,7 @@ class RedisCacheAdapter(CacheProviderInterface):
                 return None
             return self._deserialize(data)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.get_error",
                 key=key,
                 error=e,
@@ -347,7 +348,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             else:
                 return bool(self._redis.set(self._make_key(key), serialized))
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.set_error",
                 key=key,
                 error=e,
@@ -359,7 +360,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.delete(self._make_key(key)) > 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.delete_error",
                 key=key,
                 error=e,
@@ -371,7 +372,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.exists(self._make_key(key)) > 0
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.exists_error",
                 key=key,
                 error=e,
@@ -387,7 +388,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.incr(self._make_key(key), amount)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.incr_error",
                 key=key,
                 error=e,
@@ -399,7 +400,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.decr(self._make_key(key), amount)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.decr_error",
                 key=key,
                 error=e,
@@ -416,7 +417,7 @@ class RedisCacheAdapter(CacheProviderInterface):
                 )
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.expire_error",
                 key=key,
                 error=e,
@@ -433,7 +434,7 @@ class RedisCacheAdapter(CacheProviderInterface):
                 return -2  # Key doesn't exist
             return result
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.ttl_error",
                 key=key,
                 error=e,
@@ -456,7 +457,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             else:
                 return bool(self._redis.setnx(self._make_key(key), serialized))
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.setnx_error",
                 key=key,
                 error=e,
@@ -500,7 +501,7 @@ class RedisCacheAdapter(CacheProviderInterface):
                     result[key] = self._deserialize(value)
             return result
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.mget_error",
                 error=e,
             )
@@ -530,7 +531,7 @@ class RedisCacheAdapter(CacheProviderInterface):
 
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.mset_error",
                 error=e,
             )
@@ -545,7 +546,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             prefixed_keys = [self._make_key(k) for k in keys]
             return self._redis.delete(*prefixed_keys)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.mdelete_error",
                 error=e,
             )
@@ -563,7 +564,7 @@ class RedisCacheAdapter(CacheProviderInterface):
                 return None
             return self._deserialize(data)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.hget_error",
                 name=name,
                 key=key,
@@ -578,7 +579,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             self._redis.hset(self._make_key(name), key, serialized)
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.hset_error",
                 name=name,
                 key=key,
@@ -597,7 +598,7 @@ class RedisCacheAdapter(CacheProviderInterface):
                 result[k] = self._deserialize(v)
             return result
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.hgetall_error",
                 name=name,
                 error=e,
@@ -613,7 +614,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.ping()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.health_check_failed",
                 error=e,
             )
@@ -640,7 +641,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.flush_error",
                 error=e,
             )
@@ -659,7 +660,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             prefix_len = len(self._key_prefix)
             return [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.keys_error",
                 pattern=pattern,
                 error=e,
@@ -679,7 +680,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             keys = [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
             return (cursor, keys)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.scan_error",
                 pattern=pattern,
                 error=e,
@@ -700,7 +701,7 @@ class RedisCacheAdapter(CacheProviderInterface):
             self._redis.connection_pool.disconnect()
             return self._redis.ping()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cache.reconnect_failed",
                 error=e,
             )

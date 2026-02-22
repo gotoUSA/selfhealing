@@ -11,8 +11,9 @@ TTL: cooldown_seconds (자동 만료)
 
 from __future__ import annotations
 
-import structlog
 import time
+
+import structlog
 
 logger = structlog.get_logger()
 

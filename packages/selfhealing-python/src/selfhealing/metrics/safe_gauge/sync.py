@@ -6,10 +6,11 @@ Provides synchronization state management for metric reliability.
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass
 from enum import Enum
+
+import structlog
 
 logger = structlog.get_logger()
 

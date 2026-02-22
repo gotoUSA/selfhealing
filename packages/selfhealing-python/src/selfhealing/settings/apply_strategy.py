@@ -28,7 +28,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -229,7 +228,7 @@ def get_apply_strategy_settings() -> ApplyStrategySettings:
     if _settings is None:
         _settings = ApplyStrategySettings()
         logger.debug(
-            "[ApplyStrategySettings] Loaded: "
+            "[ApplyStrategySettings] Loaded: "  # noqa: G004
             f"cb_delay={_settings.circuit_breaker_delay}s, "
             f"security_delay={_settings.security_delay}s, "
             f"grace_timeout={_settings.default_grace_timeout}s"

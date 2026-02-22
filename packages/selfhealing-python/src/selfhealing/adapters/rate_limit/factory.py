@@ -21,8 +21,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any, Literal
+
+import structlog
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageInterface,
@@ -78,8 +79,8 @@ def get_rate_limit_storage(
         _storage_instance = storage
 
     logger.info(
-        f"[RateLimitStorage] Initialized storage backend: "
-        f"{storage.storage_type.value}"
+        "rate_limit_storage.initialized_storage_backend",
+        storage_type=storage.storage_type.value,
     )
 
     return storage
@@ -134,10 +135,7 @@ def _auto_detect_storage(
         )
 
     # 3. Fall back to In-Memory (single process)
-    logger.warning(
-        "[RateLimitStorage] Falling back to in-memory storage. "
-        "Self-DDoS prevention will only work within this process!"
-    )
+    logger.warning("rate_limit_storage.falling_back_memory_storage")
     return _create_memory_storage()
 
 

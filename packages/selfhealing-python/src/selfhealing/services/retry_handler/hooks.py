@@ -7,8 +7,9 @@ Fail-Open 원칙: Hook 실패가 비즈니스 로직을 중단시키지 않는�
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import PolicyResult
 

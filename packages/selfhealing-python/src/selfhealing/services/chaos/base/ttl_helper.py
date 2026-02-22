@@ -6,10 +6,11 @@ Provides clock-skew resistant TTL tracking using monotonic time.
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -57,8 +58,9 @@ class MonotonicTTLHelper:
         self._start_time = time.monotonic()
         self._started = True
         logger.debug(
-            f"[MonotonicTTL] Timer started: ttl={self.ttl_seconds}s, "
-            f"monotonic_start={self._start_time:.2f}"
+            "monotonic_ttl.timer_started",
+            self=self.ttl_seconds,
+            self_1=self._start_time,
         )
 
     def is_started(self) -> bool:

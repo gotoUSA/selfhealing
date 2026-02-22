@@ -22,12 +22,13 @@ Usage:
 from __future__ import annotations
 
 import contextvars
-import structlog
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Generator, TypeVar
+
+import structlog
 
 from selfhealing.resilience.bulkhead.base import (
     Bulkhead,

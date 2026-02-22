@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import atexit
 import json
-import structlog
 import os
 import shutil
 import signal
@@ -32,6 +31,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.persistence.config import (
     DiskBufferSettings,
@@ -267,7 +268,7 @@ class DiskPersistentBuffer:
 
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "disk_buffer.quarantine_failed",
                 error=e,
             )
@@ -596,7 +597,7 @@ class DiskPersistentBuffer:
                 checksum=stored_checksum,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "disk_buffer.parse_error",
                 error=e,
             )
@@ -715,7 +716,7 @@ class DiskPersistentBuffer:
             try:
                 success = handler(entries)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "disk_buffer.flush_handler_error",
                     error=e,
                 )
@@ -821,7 +822,7 @@ class DiskPersistentBuffer:
             self._send_poison_pill_alert(entry)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "disk_buffer.dead_letter_move_failed",
                 error=e,
             )
@@ -921,7 +922,7 @@ class DiskPersistentBuffer:
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "disk_buffer.dead_letter_replay_failed",
                 error=e,
             )
@@ -1063,7 +1064,7 @@ class DiskPersistentBuffer:
                     try:
                         self._flush_group_buffer()
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             "disk_buffer.final_flush_failed",
                             error=e,
                         )

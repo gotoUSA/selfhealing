@@ -26,10 +26,11 @@ Pod 재시작 시 이전에 영속된 이벤트를 주 스토리지로 플러시
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.audit.persistence.disk_buffer import (
@@ -125,7 +126,7 @@ def drain_on_startup(
             success = flush_handler(entry_dicts)
         except Exception as e:
             error_msg = f"Handler error: {e}"
-            logger.error(
+            logger.exception(
                 "drain_on_startup.event",
                 error_msg=error_msg,
             )
@@ -161,11 +162,11 @@ def drain_on_startup(
     result.duration_seconds = time.time() - start_time
 
     logger.info(
-        f"[DrainOnStartup] Complete: "
-        f"drained={result.drained}, "
-        f"failed={result.failed}, "
-        f"skipped={result.skipped}, "
-        f"duration={result.duration_seconds:.2f}s"
+        "drain_on_startup.complete",
+        result=result.drained,
+        result_1=result.failed,
+        result_2=result.skipped,
+        result_3=result.duration_seconds,
     )
 
     return result
@@ -246,7 +247,10 @@ async def async_drain_on_startup(
     result.duration_seconds = time.time() - start_time
 
     logger.info(
-        f"[AsyncDrainOnStartup] Complete: " f"drained={result.drained}, failed={result.failed}, skipped={result.skipped}"
+        "async_drain_on_startup.complete",
+        result=result.drained,
+        result_1=result.failed,
+        result_2=result.skipped,
     )
 
     return result

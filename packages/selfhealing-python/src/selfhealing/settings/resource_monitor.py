@@ -10,7 +10,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -72,7 +71,7 @@ def get_resource_monitor_settings() -> ResourceMonitorSettings:
     if _settings is None:
         _settings = ResourceMonitorSettings()
         logger.debug(
-            "[ResourceMonitorSettings] Loaded: "
+            "[ResourceMonitorSettings] Loaded: "  # noqa: G004
             f"safety_margin={_settings.safety_margin}, "
             f"cpu_margin={_settings.cpu_margin}"
         )

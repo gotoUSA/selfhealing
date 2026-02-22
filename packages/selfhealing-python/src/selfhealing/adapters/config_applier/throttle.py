@@ -62,7 +62,8 @@ class ThrottleConfigApplier:
         # No-op 레거시 파라미터 — 성공 반환 (하위 호환)
         if parameter in self.LEGACY_NOOP_PARAMS:
             logger.info(
-                f"[ThrottleConfigApplier] '{parameter}' is deprecated (No-op). " f"Use throttle_sla_* parameters instead."
+                "throttle_config_applier.deprecated_no_op_use",
+                parameter=parameter,
             )
             return True
 
@@ -78,9 +79,10 @@ class ThrottleConfigApplier:
         throttle.config = new_config  # GIL atomic reference swap
 
         logger.info(
-            f"[ThrottleConfigApplier] Applied {parameter}: "
-            f"{getattr(old_config, config_attr)} → {int(value)} "
-            f"(config swap)"
+            "throttle_config_applier.applied_config_swap",
+            parameter=parameter,
+            getattr=getattr(old_config, config_attr),
+            int=int(value),
         )
         return True
 

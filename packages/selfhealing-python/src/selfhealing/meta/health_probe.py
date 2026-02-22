@@ -7,7 +7,6 @@ Self-Healing 시스템의 각 컴포넌트(Circuit Breaker, DLQ, Redis 등)의
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -16,8 +15,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
+import structlog
+
 from selfhealing.meta.audit_probe import AuditSystemProbe
+from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
 
 logger = structlog.get_logger()
 
@@ -109,7 +110,9 @@ class CircuitBreakerProbe(HealthProbe):
             all_states: dict[str, str] = {}
 
             try:
-                from selfhealing.services.circuit_breaker import get_circuit_breaker_service
+                from selfhealing.services.circuit_breaker import (
+                    get_circuit_breaker_service,
+                )
 
                 cb_service = get_circuit_breaker_service()
                 # CB 서비스 상태 확인
@@ -452,7 +455,7 @@ class HealthProbeManager:
                 result = probe.probe()
                 results[probe.component_name] = result
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "health_probe_manager.probe_error",
                     probe=probe.component_name,
                     error=e,
@@ -527,7 +530,7 @@ class HealthProbeManager:
             try:
                 self.probe_all()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "health_probe_manager.loop_error",
                     error=e,
                 )

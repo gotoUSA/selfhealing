@@ -7,8 +7,9 @@ and rollback support.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.services.security.models import ProtectionResult
 from selfhealing.services.security.policies import (
@@ -106,8 +107,10 @@ class ProtectionOrchestrator:
 
             except Exception as e:
                 failed.append(policy)
-                logger.error(
-                    f"[ProtectionOrchestrator] Policy {policy.value} failed: {e}"
+                logger.exception(
+                    "protection_orchestrator.policy_failed",
+                    policy=policy.value,
+                    error=e,
                 )
 
                 # 최고 우선순위 실패 시 즉시 중단 + 롤백 시도
@@ -159,8 +162,9 @@ class ProtectionOrchestrator:
             )
             logger.critical("protection_orchestrator.emergency_level_activated")
         except Exception as e:
-            logger.error(
-                f"[ProtectionOrchestrator] Failed to emit emergency event: {e}"
+            logger.exception(
+                "protection_orchestrator.failed_emit_emergency_event",
+                error=e,
             )
             raise
 
@@ -182,8 +186,9 @@ class ProtectionOrchestrator:
             )
             logger.warning("protection_orchestrator.emergency_level_activated")
         except Exception as e:
-            logger.error(
-                f"[ProtectionOrchestrator] Failed to emit emergency event: {e}"
+            logger.exception(
+                "protection_orchestrator.failed_emit_emergency_event",
+                error=e,
             )
             raise
 
@@ -204,8 +209,9 @@ class ProtectionOrchestrator:
             )
             logger.info("protection_orchestrator.emergency_level_activated")
         except Exception as e:
-            logger.error(
-                f"[ProtectionOrchestrator] Failed to emit emergency event: {e}"
+            logger.exception(
+                "protection_orchestrator.failed_emit_emergency_event",
+                error=e,
             )
             raise
 
@@ -214,7 +220,8 @@ class ProtectionOrchestrator:
         user_id = context.get("user_id")
         if user_id:
             logger.warning(
-                f"[ProtectionOrchestrator] Account frozen: user_id={user_id}"
+                "protection_orchestrator.account_frozen",
+                user_id=user_id,
             )
 
     def _execute_session_invalidate(self, context: dict[str, Any]) -> None:
@@ -260,7 +267,8 @@ class ProtectionOrchestrator:
 
             if rollback_fn is None:
                 logger.warning(
-                    f"[ProtectionOrchestrator] Policy {policy.value} cannot be rolled back"
+                    "protection_orchestrator.policy_cannot_rolled_back",
+                    policy=policy.value,
                 )
                 continue
 
@@ -272,16 +280,15 @@ class ProtectionOrchestrator:
                     policy=policy.value,
                 )
             except Exception as e:
-                logger.error(
-                    f"[ProtectionOrchestrator] Rollback failed for {policy.value}: {e}"
+                logger.exception(
+                    "protection_orchestrator.rollback_failed",
+                    policy=policy.value,
+                    error=e,
                 )
                 all_success = False
 
         if not all_success:
-            logger.critical(
-                "[ProtectionOrchestrator] Some rollbacks failed! "
-                "Manual intervention may be required."
-            )
+            logger.critical("protection_orchestrator.some_rollbacks_failed_manual")
 
         return rolled_back, all_success
 

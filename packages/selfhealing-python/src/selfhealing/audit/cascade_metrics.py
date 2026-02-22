@@ -17,10 +17,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -107,8 +108,9 @@ class CascadeMetrics:
             self._last_updated = datetime.now(timezone.utc)
 
         logger.debug(
-            f"[CascadeMetrics] Recorded event: namespace={namespace}, "
-            f"trigger={trigger_type}"
+            "cascade_metrics.recorded_event",
+            namespace=namespace,
+            trigger_type=trigger_type,
         )
 
     def record_effect(

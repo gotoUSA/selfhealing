@@ -6,8 +6,9 @@ Provides methods for querying DLQ entries.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 

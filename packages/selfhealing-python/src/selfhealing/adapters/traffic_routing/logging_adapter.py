@@ -14,8 +14,9 @@ ProviderRegistry에 등록하세요.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.traffic_routing import (
     RoutingChange,
@@ -51,7 +52,9 @@ class LoggingTrafficRoutingAdapter(TrafficRoutingAdapter):
             RoutingChange 결과
         """
         logger.warning(
-            f"[TrafficRouting] App-level routing update: " f"{from_region} → {to_region} " f"(DNS/LB adapter not configured)"
+            "traffic_routing.app_level_routing_update",
+            from_region=from_region,
+            to_region=to_region,
         )
 
         # 앱 레벨 라우팅 전파
@@ -75,7 +78,7 @@ class LoggingTrafficRoutingAdapter(TrafficRoutingAdapter):
                 )
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "traffic_routing.event_publish_failed",
                 error=e,
             )

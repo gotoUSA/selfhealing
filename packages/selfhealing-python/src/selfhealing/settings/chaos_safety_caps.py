@@ -15,7 +15,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -132,8 +131,8 @@ class ChaosSafetyCapsSettings(BaseSettings):
         """비율이 합리적인지 확인."""
         if v > 0.5:
             logger.warning(
-                f"[ChaosSafetyCapsSettings] High rate={v}, "
-                "consider using <= 0.5 for safety"
+                "chaos_safety_caps_settings.high_consider_using_safety",
+                v=v,
             )
         return v
 

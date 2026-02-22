@@ -30,13 +30,13 @@ Configuration via environment variables:
 """
 
 import json
-import structlog
 import os
 from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any
 
+import structlog
 from celery.signals import (
     before_task_publish,
     task_failure,
@@ -297,15 +297,18 @@ def on_task_failure(
         return
 
     logger.info(
-        f"[SelfHealing Signal] Task failed: {task_name}, task_id={task_id}, "
-        f"exception={type(exception).__name__}: {exception}"
+        "selfhealing_signal_task_failed",
+        task_name=task_name,
+        task_id=task_id,
+        value=type(exception).__name__,
+        error=exception,
     )
 
     try:
         _handle_task_failure_internal(sender, task_id, exception, args, kwargs, einfo)
     except Exception as e:
         # Never let signal handler crash affect task execution
-        logger.error(
+        logger.exception(
             "selfhealing_signal_error_failure",
             error=e,
         )
@@ -345,7 +348,7 @@ def on_task_success(
             _record_success_metrics(service_name, task_name)
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_signal_error_success",
             error=e,
         )
@@ -375,7 +378,7 @@ def on_task_retry(
         domain = _extract_domain_from_task_name(task_name)
         _record_retry_metrics(domain, task_name)
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_signal_error_retry",
             error=e,
         )
@@ -481,7 +484,9 @@ def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
         DeprecationWarning,
         stacklevel=2,
     )
-    from selfhealing.context.celery_context_utils import _setup_causation_context as _impl
+    from selfhealing.context.celery_context_utils import (
+        _setup_causation_context as _impl,
+    )
 
     return _impl(sender, task_id, task_name)
 
@@ -495,7 +500,9 @@ def _detect_causation_source(task_name: str) -> str:
         DeprecationWarning,
         stacklevel=2,
     )
-    from selfhealing.context.celery_context_utils import _detect_causation_source as _impl
+    from selfhealing.context.celery_context_utils import (
+        _detect_causation_source as _impl,
+    )
 
     return _impl(task_name)
 
@@ -509,7 +516,9 @@ def _cleanup_causation_context(sender: Any) -> None:
         DeprecationWarning,
         stacklevel=2,
     )
-    from selfhealing.context.celery_context_utils import _cleanup_causation_context as _impl
+    from selfhealing.context.celery_context_utils import (
+        _cleanup_causation_context as _impl,
+    )
 
     return _impl(sender)
 
@@ -571,7 +580,7 @@ def on_task_prerun(
         raise
     except Exception as e:
         # Never let signal handler crash affect task execution
-        logger.error(
+        logger.exception(
             "selfhealing_signal_error_prerun",
             error=e,
         )
@@ -614,7 +623,7 @@ def on_task_postrun(
         )
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_signal_error_postrun",
             error=e,
         )
@@ -648,7 +657,7 @@ def _record_circuit_breaker_failure(service_name: str, task_name: str, exception
             error=e,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_cb_failed_record",
             error=e,
         )
@@ -677,7 +686,7 @@ def _record_circuit_breaker_success(service_name: str, task_name: str):
             error=e,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_cb_failed_record",
             error=e,
         )
@@ -698,7 +707,7 @@ def _trigger_conditional_replay(service_name: str):
         )
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_cb_failed_trigger",
             error=e,
         )
@@ -771,8 +780,10 @@ def _store_to_dlq(
         )
 
         logger.info(
-            f"[SelfHealing DLQ] Stored failed operation: domain={domain}, "
-            f"failure_type={failure_type}, dlq_id={result.dlq_id}"
+            "selfhealing_dlq_stored_failed",
+            domain=domain,
+            failure_type=failure_type,
+            result=result.dlq_id,
         )
 
         # Record DLQ metric
@@ -789,7 +800,7 @@ def _store_to_dlq(
             error=e,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "selfhealing_dlq_failed_store",
             error=e,
         )
@@ -973,7 +984,9 @@ def _capture_forensic_context(
 ):
     """Capture forensic context for failed task."""
     try:
-        from selfhealing.services.forensic_context import capture_forensic_context  # type: ignore[import-not-found]  # noqa: E501 — 미구현 모듈, ImportError fallback으로 보호
+        from selfhealing.services.forensic_context import (
+            capture_forensic_context,  # type: ignore[import-not-found]  # noqa: E501 — 미구현 모듈, ImportError fallback으로 보호
+        )
 
         # API: capture_forensic_context(task_id, task_name, order, payment, user, request)
         context = capture_forensic_context(
@@ -1092,10 +1105,12 @@ def setup_selfhealing_signals(
     _signals_connected = True
 
     logger.info(
-        f"[SelfHealing] Signal hooks configured: "
-        f"enabled={_config.enabled}, cb={_config.cb_enabled}, "
-        f"dlq={_config.dlq_enabled}, metrics={_config.metrics_enabled}, "
-        f"forensics={_config.forensics_enabled}"
+        "self_healing.signal_hooks_configured",
+        _config=_config.enabled,
+        _config_1=_config.cb_enabled,
+        _config_2=_config.dlq_enabled,
+        _config_3=_config.metrics_enabled,
+        _config_4=_config.forensics_enabled,
     )
 
 
@@ -1117,7 +1132,7 @@ def disconnect_selfhealing_signals():
         _signals_connected = False
         logger.info("self_healing.signal_hooks_disconnected")
     except Exception as e:
-        logger.error(
+        logger.exception(
             "self_healing.error_disconnecting_signals",
             error=e,
         )

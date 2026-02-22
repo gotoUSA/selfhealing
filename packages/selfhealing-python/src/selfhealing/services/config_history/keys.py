@@ -7,7 +7,6 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 
 from selfhealing.settings.audit_settings import get_audit_settings
 
-
 # =============================================================================
 # Redis Key Helpers (Multi-Cluster Support)
 # Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md

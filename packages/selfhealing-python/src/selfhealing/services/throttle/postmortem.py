@@ -11,11 +11,12 @@ Postmortem 생성 시 Throttle 상태 정보를 수집하여 포함시킵니다.
 
 from __future__ import annotations
 
-import structlog
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

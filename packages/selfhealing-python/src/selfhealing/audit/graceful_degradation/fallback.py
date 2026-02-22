@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 import os
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.graceful_degradation.enums import FallbackConfig
 
@@ -346,7 +347,8 @@ class HashChainFallbackChain:
             if len(self._memory_buffer) > self._config.memory_max_entries:
                 removed = self._memory_buffer.pop(0)
                 logger.warning(
-                    f"[FallbackChain] Memory buffer full, dropped entry seq={removed.get('integrity', {}).get('sequence')}"
+                    "fallback_chain.memory_buffer_full_dropped",
+                    removed=removed.get('integrity', {}).get('sequence'),
                 )
 
             return entry
@@ -365,7 +367,7 @@ class HashChainFallbackChain:
             self._local_file_handle.flush()
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "fallback_chain.local_file_write_failed",
                 error=e,
             )

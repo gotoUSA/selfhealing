@@ -11,9 +11,10 @@ traceparent + baggage 헤더가 함께 outgoing HTTP 요청에 전파된다.
 from __future__ import annotations
 
 import importlib
-import structlog
 from functools import lru_cache
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

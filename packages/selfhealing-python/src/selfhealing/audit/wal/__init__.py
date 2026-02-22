@@ -19,7 +19,6 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import os
 import struct
 import threading
@@ -28,6 +27,8 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.wal._disk_manager import WALDiskManagerMixin
 from selfhealing.audit.wal._models import (

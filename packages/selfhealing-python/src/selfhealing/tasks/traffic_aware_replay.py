@@ -14,9 +14,10 @@ Health Checks:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.tasks.base import BaseNotifyingTask
 from selfhealing.tasks.notification_policy import (
@@ -86,9 +87,7 @@ def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
                     checks=checks,
                 )
         except ImportError:
-            logger.debug(
-                "[TrafficHealth] CircuitBreakerService not available, skipping CB check"
-            )
+            logger.debug("traffic_health.circuitbreakerservice_available_skipping_cb")
             checks["circuit_breaker"] = True  # 사용 불가 시 통과
         except Exception as e:
             logger.warning(
@@ -265,8 +264,8 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
         if not health_status.is_healthy:
             logger.info(
-                f"[TrafficAwareReplay] Skipping - traffic unhealthy: "
-                f"{health_status.reason}"
+                "traffic_aware_replay.skipping_traffic_unhealthy",
+                health_status=health_status.reason,
             )
             result = {
                 "status": "skipped",
@@ -281,17 +280,18 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
         # 3. Replay 실행
         logger.info(
-            f"[TrafficAwareReplay] Health OK, executing replay "
-            f"(max_items={effective_max_items})"
+            "traffic_aware_replay.health_ok_executing_replay",
+            effective_max_items=effective_max_items,
         )
 
         try:
             result = self._execute_replay(domain, effective_max_items)
 
             logger.info(
-                f"[TrafficAwareReplay] Completed: "
-                f"total={result['total']}, success={result['success']}, "
-                f"failed={result['failed']}"
+                "traffic_aware_replay.completed",
+                result=result['total'],
+                result_1=result['success'],
+                result_2=result['failed'],
             )
 
             final_result = {
@@ -306,7 +306,10 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             return final_result
 
         except Exception as e:
-            logger.error(f"[TrafficAwareReplay] Replay failed: {e}", exc_info=True)
+            logger.exception(
+                "traffic_aware_replay.replay_failed",
+                error=e,
+            )
             error_result = {
                 "status": "error",
                 "reason": str(e),
@@ -384,7 +387,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 "failed": batch_result.failed_count,
             }
         except ImportError:
-            logger.error("traffic_aware_replay.replayservice_available")
+            logger.exception("traffic_aware_replay.replayservice_available")
             raise RuntimeError("ReplayService not available")
 
     def _get_severity(self, result: dict[str, Any]) -> str:

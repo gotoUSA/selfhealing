@@ -6,10 +6,11 @@ Combines L1, L2, L3 validators into a single defense system.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
+
+import structlog
 
 from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
 from selfhealing.services.corruption_shield.validators import (
@@ -289,7 +290,9 @@ class CorruptionShield:
         except ImportError:
             # _write_to_wal 미사용 환경: 로거로 폴백
             logger.warning(
-                f"[CorruptionShield/Audit] {len(result.violations)} violations detected, " f"blocked={result.blocked}"
+                "violations_detected",
+                count=len(result.violations),
+                result=result.blocked,
             )
 
     def _log_violations(self, data: dict, result: ValidationResult) -> None:
@@ -301,7 +304,7 @@ class CorruptionShield:
 
             logger.log(
                 log_level,
-                f"[CorruptionShield] {violation.layer} violation: " f"{violation.code} - {violation.message}",
+                f"[CorruptionShield] {violation.layer} violation: " f"{violation.code} - {violation.message}",  # noqa: G004
             )
 
         # Log to security incident if configured

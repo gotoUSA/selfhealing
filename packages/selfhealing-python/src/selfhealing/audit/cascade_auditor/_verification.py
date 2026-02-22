@@ -7,8 +7,9 @@ Cascade Auditor - 무결성 검증 모듈.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -136,8 +137,10 @@ class VerificationMixin:
         backend.set(key, checkpoint)
 
         logger.info(
-            f"[CascadeAudit] Checkpoint created: namespace={namespace}, "
-            f"event_count={event_count}, hash={last_hash[:16] if last_hash else 'None'}..."
+            "cascade_audit.checkpoint_created",
+            namespace=namespace,
+            event_count=event_count,
+            last_hash=last_hash[:16] if last_hash else 'None',
         )
 
         return checkpoint
@@ -203,7 +206,8 @@ class VerificationMixin:
 
         if not checkpoint_found:
             logger.warning(
-                f"[CascadeAudit] Checkpoint hash not found, " f"falling back to full verification: namespace={namespace}"
+                "cascade_audit.checkpoint_hash_found_falling",
+                namespace=namespace,
             )
             return self.verify_chain_integrity(namespace)
 

@@ -22,12 +22,13 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -294,7 +295,7 @@ class EscalationAuditTrail:
 
         logger.log(
             log_level,
-            f"[EscalationAudit] {decision_type}: {decision_reason} "
+            f"[EscalationAudit] {decision_type}: {decision_reason} "  # noqa: G004
             f"(namespace={namespace}, by={triggered_by})",
         )
 

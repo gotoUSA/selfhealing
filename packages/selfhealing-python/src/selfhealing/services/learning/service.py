@@ -4,12 +4,13 @@ Self-Learning DNA Service - 자가 학습 서비스
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
+
+import structlog
 
 from .models import (
     BlacklistedParameter,
@@ -244,7 +245,7 @@ class ParameterBlacklist:
                 count=len(serialized),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "parameter_blacklist.failed_save_storage",
                 error=e,
             )
@@ -284,7 +285,7 @@ class LearningService:
 
         self._initialized = True
 
-        logger.info("learning_service.initialized")
+        logger.info("initialized")
 
     def start_session(self, stage_name: str) -> LearningSession:
         """
@@ -324,9 +325,10 @@ class LearningService:
             session.ended_at = datetime.now(timezone.utc)
             session.status = "completed"
             logger.info(
-                f"Learning session completed: {session_id}, "
-                f"patterns: {session.patterns_learned}, "
-                f"suggestions: {session.suggestions_generated}"
+                "learning_session_completed_patterns",
+                session_id=session_id,
+                session=session.patterns_learned,
+                session_2=session.suggestions_generated,
             )
         return session
 

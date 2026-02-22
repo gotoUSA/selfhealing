@@ -12,7 +12,6 @@ Provides zero-data-loss and integrity guarantees for distributed hash chain:
 """
 
 import json
-import structlog
 import os
 import threading
 import time
@@ -20,6 +19,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.hash_chain import get_hash_chain_settings
 
@@ -165,8 +166,8 @@ class MonotonicTimestamp:
                         seconds=self._monotonic_offset
                     )
                     logger.warning(
-                        f"[MonotonicTimestamp] Clock skew detected. "
-                        f"Adjusted by {self._monotonic_offset:.3f}s"
+                        "monotonic_timestamp.clock_skew_detected_adjusted",
+                        self=self._monotonic_offset,
                     )
                 else:
                     # Clock is normal - reset offset
@@ -430,7 +431,7 @@ class HashChainWAL:
             return uncommitted
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "hash_chain_wal.failed_get_uncommitted_entries",
                 error=e,
             )
@@ -583,15 +584,12 @@ class AtomicMergeSwap:
 
                 time.sleep(0.1)
 
-            logger.warning(
-                "[AtomicMergeSwap] Failed to acquire global lock "
-                f"(timeout: {self._blocking_timeout}s)"
-            )
+            logger.warning("atomic_merge_swap.failed_acquire_global_lock")
             self.acquired = False
             return self
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_merge_swap.lock_acquisition_error",
                 error=e,
             )
@@ -623,7 +621,7 @@ class AtomicMergeSwap:
                 logger.warning("atomic_merge_swap.lock_already_released_stolen")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_merge_swap.lock_release_error",
                 error=e,
             )
@@ -728,7 +726,7 @@ class ShardedDateLock:
             return self
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "sharded_date_lock.lock_error",
                 self=self._date,
                 error=e,
@@ -758,7 +756,7 @@ class ShardedDateLock:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "sharded_date_lock.release_error",
                 self=self._date,
                 error=e,
@@ -923,7 +921,7 @@ class IntegrityAuditTrail:
             return events
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "integrity_trail.failed_get_events",
                 error=e,
             )

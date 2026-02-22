@@ -9,6 +9,8 @@ CorruptionShieldConfig 이름은 하위 호환을 위해 alias 로 유지.
 
 from selfhealing.settings.corruption_shield import (  # noqa: F401
     CorruptionShieldSettings as CorruptionShieldConfig,
+)
+from selfhealing.settings.corruption_shield import (
     get_corruption_shield_settings,
     reset_corruption_shield_settings,
 )

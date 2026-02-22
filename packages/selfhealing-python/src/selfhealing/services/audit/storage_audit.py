@@ -18,8 +18,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import (
     _get_audit_adapter,
@@ -92,9 +93,13 @@ def log_storage_failure_audit(
             pass
 
     logger.warning(
-        f"[StorageAudit] STORAGE_FAILURE | storage={storage_type} | "
-        f"adapter={adapter_type} | op={operation} | service={service_name} | "
-        f"error={error_type} | failures={consecutive_failures}"
+        "storage_audit.event",
+        storage_type=storage_type,
+        adapter_type=adapter_type,
+        operation=operation,
+        service_name=service_name,
+        error_type=error_type,
+        consecutive_failures=consecutive_failures,
     )
     return wal_seq
 
@@ -151,9 +156,11 @@ def log_storage_recovery_audit(
             pass
 
     logger.info(
-        f"[StorageAudit] STORAGE_RECOVERY | storage={storage_type} | "
-        f"adapter={adapter_type} | total_failures={total_failures} | "
-        f"downtime={downtime_seconds}s"
+        "storage_audit.event",
+        storage_type=storage_type,
+        adapter_type=adapter_type,
+        total_failures=total_failures,
+        downtime_seconds=downtime_seconds,
     )
     return wal_seq
 

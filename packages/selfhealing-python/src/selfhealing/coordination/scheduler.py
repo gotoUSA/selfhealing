@@ -20,12 +20,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
+
+import structlog
 
 from selfhealing.coordination.factory import get_leader_elector
 from selfhealing.coordination.shutdown_integration import (
@@ -294,16 +295,12 @@ class LeaderScheduler:
 
     def _on_become_leader(self) -> None:
         """리더가 되었을 때 스케줄러 루프 시작."""
-        logger.info(
-            "scheduler.리더가_스케줄러_루프_시작",
-        )
+        logger.info("scheduler")
         self._start_scheduler_loop()
 
     def _on_lose_leader(self) -> None:
         """리더십을 잃었을 때 스케줄러 루프 중단."""
-        logger.info(
-            "scheduler.리더십_상실_스케줄러_루프",
-        )
+        logger.info("scheduler")
 
     def _start_scheduler_loop(self) -> None:
         """스케줄러 루프 시작 (별도 스레드)."""
@@ -319,13 +316,13 @@ class LeaderScheduler:
 
     def _scheduler_loop(self) -> None:
         """스케줄러 메인 루프."""
-        logger.info("scheduler.스케줄러_루프_시작")
+        logger.info("scheduler")
 
         while self._running and not self._stop_event.is_set():
             try:
                 # 리더십 확인
                 if not self._elector.is_leader():
-                    logger.debug("scheduler.리더_아님_대기")
+                    logger.debug("scheduler")
                     self._stop_event.wait(timeout=self._tick_interval)
                     continue
 
@@ -341,10 +338,13 @@ class LeaderScheduler:
                 self._stop_event.wait(timeout=self._tick_interval)
 
             except Exception as e:
-                logger.error(f"[Scheduler] 루프 오류: {e}", exc_info=True)
+                logger.exception(
+                    "scheduler.루프_오류",
+                    error=e,
+                )
                 self._stop_event.wait(timeout=self._tick_interval)
 
-        logger.info("scheduler.스케줄러_루프_종료")
+        logger.info("scheduler")
 
     def _execute_job(self, job: ScheduledJob) -> None:
         """
@@ -368,9 +368,10 @@ class LeaderScheduler:
 
         except Exception as e:
             job.mark_run(success=False)
-            logger.error(
-                f"[Scheduler] 작업 실패: {job.name} - {e}",
-                exc_info=True,
+            logger.exception(
+                "scheduler.작업_실패",
+                job=job.name,
+                error=e,
             )
 
     def get_job_stats(self) -> dict[str, dict]:

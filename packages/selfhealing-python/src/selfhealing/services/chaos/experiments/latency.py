@@ -7,8 +7,9 @@ Simulates network delays, slow database queries, or congested services.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -65,9 +66,13 @@ class LatencyInjectionExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject latency into target service with TTL."""
         logger.info(
-            f"[LatencyInjection] Injecting {self.latency_ms}±{self.latency_jitter_ms}ms "
-            f"latency to {self.config.target_service} at {self.config.injection_rate*100}% rate "
-            f"(TTL: {self._effective_ttl}s, expires: {self._expires_at})"
+            "latency_injection.injecting_ms_latency_rate",
+            self=self.latency_ms,
+            self_1=self.latency_jitter_ms,
+            self_2=self.config.target_service,
+            self_3=self.config.injection_rate*100,
+            self_4=self._effective_ttl,
+            self_5=self._expires_at,
         )
 
         try:
@@ -94,7 +99,7 @@ class LatencyInjectionExperiment(ChaosExperiment):
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "latency_injection.failed_inject",
                 error=e,
             )
@@ -105,7 +110,8 @@ class LatencyInjectionExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[LatencyInjection] Rollback already completed for {self.experiment_id}"
+                    "latency_injection.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -126,7 +132,7 @@ class LatencyInjectionExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "latency_injection.rollback_failed",
                     error=e,
                 )

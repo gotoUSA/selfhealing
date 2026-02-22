@@ -11,9 +11,10 @@ Thin Task, Fat Service Pattern:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -10,10 +10,11 @@ Tasks:
 
 from __future__ import annotations
 
-import structlog
 import os
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -97,7 +98,10 @@ def flush_redis_audit_to_db(
 
     except Exception as e:
         duration_ms = (time.time() - start) * 1000
-        logger.error(f"[flush_redis_audit_to_db] Failed: {e}", exc_info=True)
+        logger.exception(
+            "flush_redis_audit_to_db.failed",
+            error=e,
+        )
         return {
             "success": False,
             "flushed_count": 0,
@@ -150,7 +154,10 @@ def retry_audit_fallback_buffer() -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"[retry_audit_fallback_buffer] Failed: {e}", exc_info=True)
+        logger.exception(
+            "retry_audit_fallback_buffer.failed",
+            error=e,
+        )
         return {
             "success": False,
             "recovered_count": 0,
@@ -178,7 +185,7 @@ def get_redis_audit_buffer_stats() -> dict[str, Any]:
         return redis_buffer.get_buffer_stats()
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "get_redis_audit_buffer_stats.failed",
             error=e,
         )

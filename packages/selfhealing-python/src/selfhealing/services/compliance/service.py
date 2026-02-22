@@ -4,11 +4,12 @@ Compliance DNA Service - 규정 준수 관리 서비스
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from threading import Lock
+
+import structlog
 
 from .models import (
     ComplianceCheck,
@@ -178,7 +179,7 @@ class ComplianceService:
         # DORA-003 자동 검사 함수 등록 (Resilience Testing 요구사항)
         self._register_resilience_testing_check()
 
-        logger.info("compliance_service.initialized")
+        logger.info("initialized")
 
     def _log_compliance_audit(
         self,
@@ -249,7 +250,7 @@ class ComplianceService:
             recent_experiments = scheduler.get_execution_history(limit=500)
 
             if not recent_experiments:
-                logger.warning("compliance.dora_no_chaos_experiments")
+                logger.warning("compliance")
                 return False
 
             # 최근 30일 필터링
@@ -293,8 +294,8 @@ class ComplianceService:
 
             # 통과: 실패한 실험도 "복원력 한계 발견"으로 인정
             logger.info(
-                f"[Compliance] DORA-003: PASSED - {total_count} experiments in 30 days "
-                f"(includes failed experiments as valid resilience testing)"
+                "compliance.dora_passed_experiments_days",
+                total_count=total_count,
             )
             return True
 

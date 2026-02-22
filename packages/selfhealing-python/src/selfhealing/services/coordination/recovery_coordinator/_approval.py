@@ -6,9 +6,11 @@ ApprovalMixin for RecoveryCoordinator.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
+
 from ..enums import RecoveryStatus
 from ..recovery_state import RecoverySession
 
@@ -57,7 +59,9 @@ class ApprovalMixin:
         Phase 3.7: PendingRecoveryApprovalManager 연동
         """
         try:
-            from ..pending_recovery_approval import get_pending_recovery_approval_manager
+            from ..pending_recovery_approval import (
+                get_pending_recovery_approval_manager,
+            )
 
             manager = get_pending_recovery_approval_manager()
 
@@ -67,9 +71,9 @@ class ApprovalMixin:
                 trigger_level=session.trigger_level,
             )
         except ImportError:
-            logger.warning("recovery.pendingrecoveryapprovalmanager_available")
+            logger.warning("recovery")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "recovery.failed_create_approval_request",
                 error=e,
             )
@@ -98,7 +102,8 @@ class ApprovalMixin:
 
             if session.status != RecoveryStatus.READY_TO_RESTORE:
                 logger.warning(
-                    f"[Recovery] Cannot approve: session not in READY_TO_RESTORE state. " f"Current: {session.status}"
+                    "recovery.cannot_approve_session_state",
+                    session=session.status,
                 )
                 return None
 
@@ -183,7 +188,7 @@ class ApprovalMixin:
                 "budget_used_minutes": budget_info.get("used_minutes", 0),
             }
         except ImportError:
-            logger.warning("recovery.crisismultiplierprovider_available_weighted_budget")
+            logger.warning("recovery")
             return {
                 "stable": True,
                 "current_multiplier": 1.0,
@@ -191,7 +196,7 @@ class ApprovalMixin:
                 "assumed": True,
             }
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "recovery.weighted_budget_verification_error",
                 error=e,
             )
@@ -261,8 +266,10 @@ class ApprovalMixin:
         - PromQL: rate(selfhealing_http_request_errors_total[Xm])
         """
         logger.debug(
-            f"[Recovery] Stability check: namespace={namespace}, "
-            f"duration={duration_minutes}m, threshold={error_rate_threshold}"
+            "recovery.stability_check",
+            namespace=namespace,
+            duration_minutes=duration_minutes,
+            error_rate_threshold=error_rate_threshold,
         )
         return {
             "stable": True,

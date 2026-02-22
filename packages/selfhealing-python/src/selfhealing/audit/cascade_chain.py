@@ -13,8 +13,9 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.audit.cascade_config import (
     DEFAULT_CASCADE_CHAIN_CONFIG,
@@ -64,16 +65,21 @@ def check_chain_depth(
     # 경고 임계치 체크
     if current_depth >= config.warn_at_depth:
         logger.warning(
-            f"[CascadeChain] Depth warning: depth={current_depth}, "
-            f"warn_at={config.warn_at_depth}, cascade={cascade_id}, "
-            f"namespace={namespace}, trigger={trigger_type}"
+            "cascade_chain.depth_warning",
+            current_depth=current_depth,
+            config=config.warn_at_depth,
+            cascade_id=cascade_id,
+            namespace=namespace,
+            trigger_type=trigger_type,
         )
 
     # 최대 깊이 체크
     if current_depth >= config.max_chain_depth:
         logger.error(
-            f"[CascadeChain] Depth exceeded: depth={current_depth}, "
-            f"max={config.max_chain_depth}, cascade={cascade_id}"
+            "cascade_chain.depth_exceeded",
+            current_depth=current_depth,
+            config=config.max_chain_depth,
+            cascade_id=cascade_id,
         )
 
         # 메트릭 기록 (있는 경우)
@@ -87,8 +93,9 @@ def check_chain_depth(
             )
         else:
             logger.error(
-                f"[CascadeChain] Depth exceeded but not blocking: "
-                f"depth={current_depth}, max={config.max_chain_depth}"
+                "cascade_chain.depth_exceeded_blocking",
+                current_depth=current_depth,
+                config=config.max_chain_depth,
             )
 
 
@@ -246,8 +253,10 @@ def check_and_raise_cycle(
 
     if cycle_path:
         logger.error(
-            f"[CascadeChain] Cycle detected: path={cycle_path}, "
-            f"cascade={cascade_id}, namespace={namespace}"
+            "cascade_chain.cycle_detected",
+            cycle_path=cycle_path,
+            cascade_id=cascade_id,
+            namespace=namespace,
         )
 
         # 메트릭 기록 (있는 경우)

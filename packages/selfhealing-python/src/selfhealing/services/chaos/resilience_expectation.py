@@ -35,11 +35,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 

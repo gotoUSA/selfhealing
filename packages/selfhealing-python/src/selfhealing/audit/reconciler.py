@@ -24,12 +24,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.settings.audit_reconciler import AuditReconcilerSettings
@@ -215,7 +216,8 @@ class AuditReconciler:
         self._confirmed_ids_max_size = 10000
 
         logger.info(
-            f"[AuditReconciler] Initialized with interval={self._config.check_interval_seconds}s"
+            "audit_reconciler.initialized",
+            self=self._config.check_interval_seconds,
         )
 
     @classmethod
@@ -296,7 +298,7 @@ class AuditReconciler:
                 daemon=True,
             )
             self._thread.start()
-            logger.info("audit_reconciler.started")
+            logger.info("started")
             return True
 
     def stop(self, timeout: float = 1.0) -> None:
@@ -318,7 +320,7 @@ class AuditReconciler:
             if self._thread.is_alive():
                 logger.warning("audit_reconciler.thread_stop_gracefully")
 
-        logger.info("audit_reconciler.stopped")
+        logger.info("stopped")
 
     def _run_loop(self) -> None:
         """메인 검증 루프."""
@@ -344,12 +346,13 @@ class AuditReconciler:
                     self._send_alert("missing_threshold_exceeded", result.to_dict())
 
                 logger.debug(
-                    f"[AuditReconciler] Check completed: "
-                    f"missing={result.missing_count}, resent={result.resent_count}"
+                    "audit_reconciler.check_completed",
+                    result=result.missing_count,
+                    result_1=result.resent_count,
                 )
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "audit_reconciler.reconcile_loop_error",
                     error=e,
                 )
@@ -402,7 +405,7 @@ class AuditReconciler:
 
         except Exception as e:
             result.error = str(e)
-            logger.error(
+            logger.exception(
                 "audit_reconciler.reconcile_error",
                 error=e,
             )

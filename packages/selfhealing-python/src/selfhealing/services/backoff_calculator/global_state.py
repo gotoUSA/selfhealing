@@ -6,9 +6,10 @@ Redis-based global throttle state management for cluster-wide coordination.
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 from .models import GlobalThrottleState, ThrottleState
 

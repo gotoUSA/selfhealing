@@ -20,10 +20,12 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import threading
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -708,7 +710,9 @@ def _collect_deployment_context(
     deployment_context = None
     deployment_timeline_events = []
     try:
-        from selfhealing.services.postmortem.deployment_correlator import get_deployment_correlator
+        from selfhealing.services.postmortem.deployment_correlator import (
+            get_deployment_correlator,
+        )
 
         correlator = get_deployment_correlator()
 
@@ -763,7 +767,9 @@ def _collect_throttle_data(
 ) -> dict:
     """Throttle 상태 데이터 수집."""
     try:
-        from selfhealing.services.throttle.postmortem import collect_throttle_postmortem_data
+        from selfhealing.services.throttle.postmortem import (
+            collect_throttle_postmortem_data,
+        )
 
         return collect_throttle_postmortem_data(
             start_time=start_time,
@@ -820,7 +826,9 @@ def _build_deep_links(
 ) -> dict:
     """딥링크 생성."""
     try:
-        from selfhealing.services.postmortem.deep_links import get_postmortem_deep_link_builder
+        from selfhealing.services.postmortem.deep_links import (
+            get_postmortem_deep_link_builder,
+        )
 
         deep_link_builder = get_postmortem_deep_link_builder()
         postmortem_links = deep_link_builder.build_postmortem_links(
@@ -874,7 +882,9 @@ def generate_postmortem_data(
     """
     from selfhealing.utils.duration import calculate_incident_duration
     from selfhealing.utils.postmortem_actions import generate_dynamic_actions
-    from selfhealing.utils.postmortem_root_cause import build_postmortem_root_cause_fields
+    from selfhealing.utils.postmortem_root_cause import (
+        build_postmortem_root_cause_fields,
+    )
 
     if current_time is None:
         current_time = _get_current_timestamp()

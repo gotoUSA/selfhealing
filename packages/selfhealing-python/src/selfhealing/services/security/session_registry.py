@@ -19,9 +19,10 @@ Redis 키 구조:
 
 from __future__ import annotations
 
-import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
@@ -54,7 +55,9 @@ class UserSessionRegistry:
             try:
                 self._cache = ProviderRegistry.get_cache()
             except (ValueError, ImportError):
-                from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+                from selfhealing.adapters.cache.memory_adapter import (
+                    InMemoryCacheAdapter,
+                )
 
                 self._cache = InMemoryCacheAdapter()
         return self._cache
@@ -77,8 +80,10 @@ class UserSessionRegistry:
             ttl = self._get_session_ttl()
             self.cache.set(key, existing, ttl=timedelta(seconds=ttl))
             logger.debug(
-                f"[UserSessionRegistry] Registered session for user {user_id}: "
-                f"{session_key[:8]}... (total: {len(existing)})"
+                "cell_registry.bulkheads_registered",
+                user_id=user_id,
+                session_key=session_key[:8],
+                count=len(existing),
             )
         except Exception as e:
             logger.warning(

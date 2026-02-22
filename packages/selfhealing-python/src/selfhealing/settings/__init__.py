@@ -82,15 +82,15 @@ from selfhealing.settings.cascade_retention import (
     get_cascade_retention_settings,
     reset_cascade_retention_settings,
 )
-from selfhealing.settings.cell_topology import (
-    CellTopologySettings,
-    get_cell_topology_settings,
-    reset_cell_topology_settings,
-)
 from selfhealing.settings.celery_task import (
     CeleryTaskSettings,
     get_celery_task_settings,
     reset_celery_task_settings,
+)
+from selfhealing.settings.cell_topology import (
+    CellTopologySettings,
+    get_cell_topology_settings,
+    reset_cell_topology_settings,
 )
 from selfhealing.settings.chaos import (
     ChaosSettings,
@@ -189,18 +189,18 @@ from selfhealing.settings.error_budget_gate import (
     reset_error_budget_gate_settings,
 )
 
-# Event Buffer Settings (169_SETTINGS_SCALE_LIMITS.md)
-from selfhealing.settings.event_buffer import (
-    EventBufferSettings,
-    get_event_buffer_settings,
-    reset_event_buffer_settings,
-)
-
 # Week 2 HIGH Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
 from selfhealing.settings.error_budget_propagation import (
     ErrorBudgetPropagationSettings,
     get_error_budget_propagation_settings,
     reset_error_budget_propagation_settings,
+)
+
+# Event Buffer Settings (169_SETTINGS_SCALE_LIMITS.md)
+from selfhealing.settings.event_buffer import (
+    EventBufferSettings,
+    get_event_buffer_settings,
+    reset_event_buffer_settings,
 )
 from selfhealing.settings.forensic import (
     ForensicSettings,
@@ -229,11 +229,6 @@ from selfhealing.settings.l2_storage import (
     get_l2_storage_settings,
     reset_l2_storage_settings,
 )
-from selfhealing.settings.leader_election import (
-    LeaderElectionSettings,
-    get_leader_election_settings,
-    reset_leader_election_settings,
-)
 
 # 고급 기능
 from selfhealing.settings.layered_provider import (
@@ -249,6 +244,11 @@ from selfhealing.settings.layered_provider import (
     get_request_override,
     get_retry_layered,
     set_request_override,
+)
+from selfhealing.settings.leader_election import (
+    LeaderElectionSettings,
+    get_leader_election_settings,
+    reset_leader_election_settings,
 )
 from selfhealing.settings.logging_config import (
     LoggingSettings,
@@ -372,6 +372,15 @@ from selfhealing.settings.safety_bounds import (
     get_safety_bounds_settings,
     reset_safety_bounds_settings,
 )
+
+# Enterprise Scale Settings (169_SETTINGS_SCALE_LIMITS.md)
+from selfhealing.settings.scale import (
+    PROFILE_DEFAULTS,
+    ScaleProfile,
+    ScaleSettings,
+    get_scale_settings,
+    reset_scale_settings,
+)
 from selfhealing.settings.secrets import (
     SecretsSettings,
     get_secrets,
@@ -381,15 +390,6 @@ from selfhealing.settings.security import (
     SecuritySettings,
     get_security_settings,
     reset_security_settings,
-)
-
-# Enterprise Scale Settings (169_SETTINGS_SCALE_LIMITS.md)
-from selfhealing.settings.scale import (
-    PROFILE_DEFAULTS,
-    ScaleProfile,
-    ScaleSettings,
-    get_scale_settings,
-    reset_scale_settings,
 )
 
 # 확장 설정 (12)

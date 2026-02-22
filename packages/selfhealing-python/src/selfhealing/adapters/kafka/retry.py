@@ -31,10 +31,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.adapters.kafka.producer import KafkaAuditProducer
@@ -209,7 +210,7 @@ class NonBlockingRetryHandler:
 
         except Exception as e:
             self._stats["errors"] += 1
-            logger.error(
+            logger.exception(
                 "retry_handler.retry_전송_오류",
                 error=e,
             )
@@ -250,9 +251,10 @@ class NonBlockingRetryHandler:
             if success:
                 self._stats["dlq_sent"] += 1
                 logger.warning(
-                    f"[RetryHandler] DLQ로 이동: "
-                    f"topic={self._config.final_dlq_topic}, "
-                    f"retries={retry_count}, error={error}"
+                    "retry_handler.dlq로_이동",
+                    self=self._config.final_dlq_topic,
+                    retry_count=retry_count,
+                    error=error,
                 )
             else:
                 self._stats["errors"] += 1
@@ -265,7 +267,7 @@ class NonBlockingRetryHandler:
 
         except Exception as e:
             self._stats["errors"] += 1
-            logger.error(
+            logger.exception(
                 "retry_handler.dlq_전송_오류",
                 error=e,
             )

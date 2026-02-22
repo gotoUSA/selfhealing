@@ -7,9 +7,10 @@ Contains:
 
 from __future__ import annotations
 
-import structlog
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.integrity.local_manager import HashChainManager
 from selfhealing.audit.integrity.protocol import HashChainManagerProtocol

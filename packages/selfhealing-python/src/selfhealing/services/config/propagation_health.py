@@ -14,12 +14,13 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.config.propagator import PropagationTier
 
@@ -170,24 +171,30 @@ class PropagationHealthMonitor:
                 if latency_ms > self.TIER1_SLA_THRESHOLD_MS:
                     self._tier1_violations += 1
                     logger.warning(
-                        f"[PropagationHealth] Tier 1 SLA violation: "
-                        f"{config_type} propagation took {latency_ms:.1f}ms "
-                        f"(threshold: {self.TIER1_SLA_THRESHOLD_MS}ms) "
-                        f"[{source_cluster} → {target_cluster}]"
+                        "propagation_health.tier_sla_violation_propagation",
+                        config_type=config_type,
+                        latency_ms=latency_ms,
+                        self=self.TIER1_SLA_THRESHOLD_MS,
+                        source_cluster=source_cluster,
+                        target_cluster=target_cluster,
                     )
             elif tier == PropagationTier.TIER_2_EVENTUAL:
                 if latency_ms > self.TIER2_SLA_THRESHOLD_MS:
                     self._tier2_violations += 1
                     logger.warning(
-                        f"[PropagationHealth] Tier 2 SLA violation: "
-                        f"{config_type} propagation took {latency_ms:.1f}ms "
-                        f"(threshold: {self.TIER2_SLA_THRESHOLD_MS}ms)"
+                        "propagation_health.tier_sla_violation_propagation",
+                        config_type=config_type,
+                        latency_ms=latency_ms,
+                        self=self.TIER2_SLA_THRESHOLD_MS,
                     )
 
             logger.debug(
-                f"[PropagationHealth] Recorded: {config_type} "
-                f"latency={latency_ms:.1f}ms tier={tier.value} "
-                f"[{source_cluster} → {target_cluster}]"
+                "propagation_health.recorded_ms",
+                config_type=config_type,
+                latency_ms=latency_ms,
+                tier=tier.value,
+                source_cluster=source_cluster,
+                target_cluster=target_cluster,
             )
 
     def get_current_metrics(self) -> PropagationHealthMetrics:

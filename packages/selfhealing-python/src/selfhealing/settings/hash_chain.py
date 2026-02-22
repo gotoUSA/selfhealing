@@ -16,7 +16,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -92,15 +91,15 @@ class HashChainSettings(BaseSettings):
         """락 타임아웃이 블로킹 타임아웃보다 커야 함."""
         if self.merge_swap_timeout_seconds <= self.merge_swap_blocking_timeout_seconds:
             logger.warning(
-                f"[HashChainSettings] merge_swap_timeout_seconds ({self.merge_swap_timeout_seconds}) "
-                f"should be greater than merge_swap_blocking_timeout_seconds "
-                f"({self.merge_swap_blocking_timeout_seconds})"
+                "hash_chain_settings.greater_than",
+                self=self.merge_swap_timeout_seconds,
+                self_1=self.merge_swap_blocking_timeout_seconds,
             )
         if self.date_lock_timeout_seconds <= self.date_lock_blocking_timeout_seconds:
             logger.warning(
-                f"[HashChainSettings] date_lock_timeout_seconds ({self.date_lock_timeout_seconds}) "
-                f"should be greater than date_lock_blocking_timeout_seconds "
-                f"({self.date_lock_blocking_timeout_seconds})"
+                "hash_chain_settings.greater_than",
+                self=self.date_lock_timeout_seconds,
+                self_1=self.date_lock_blocking_timeout_seconds,
             )
         return self
 

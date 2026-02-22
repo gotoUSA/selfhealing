@@ -7,8 +7,9 @@ Uses Repository pattern for domain-free architecture.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -102,7 +103,7 @@ class ListOperationsMixin:
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dlq_service.list_failed",
                 error=e,
             )

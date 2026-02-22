@@ -29,11 +29,12 @@ Usage in settings.py:
 from __future__ import annotations
 
 import json
-import structlog
 import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -158,10 +159,10 @@ class SelfHealingMiddleware:
         cls._paths_loaded = True
 
         logger.info(
-            f"[SelfHealingMiddleware] Loaded patterns: "
-            f"DLQ={len(cls.DLQ_ELIGIBLE_PATHS)}, "
-            f"Infra={len(cls.INFRASTRUCTURE_FAILURE_PATHS)}, "
-            f"Domains={len(cls.DOMAIN_MAPPING)}"
+            "self_healing_middleware.loaded_patterns",
+            count=len(cls.DLQ_ELIGIBLE_PATHS),
+            count_1=len(cls.INFRASTRUCTURE_FAILURE_PATHS),
+            count_2=len(cls.DOMAIN_MAPPING),
         )
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
@@ -187,8 +188,9 @@ class SelfHealingMiddleware:
             dlq_id = self._store_to_dlq(request_data, error_context, request=request)
 
             logger.info(
-                f"[SelfHealingMiddleware] 🔒 Preemptive DLQ: CB is OPEN, "
-                f"request queued (dlq_id={dlq_id}, path={request.path})"
+                "self_healing_middleware.preemptive_dlq_cb_open",
+                dlq_id=dlq_id,
+                request=request.path,
             )
 
             self._log_audit_event(
@@ -265,8 +267,9 @@ class SelfHealingMiddleware:
 
             if is_infra_failure_path:
                 logger.warning(
-                    f"[SelfHealingMiddleware] 🔥 INFRA FAILURE detected: "
-                    f"path={request.path}, status={response.status_code}"
+                    "self_healing_middleware.infra_failure_detected",
+                    request=request.path,
+                    response=response.status_code,
                 )
 
             if self._is_dlq_eligible(request):
@@ -353,7 +356,9 @@ class SelfHealingMiddleware:
                 state = self._cb_service.get_state(self.CB_SERVICE_NAME)
                 if state and state.lower() in ("open", "half_open"):
                     logger.debug(
-                        f"[SelfHealingMiddleware] CB service is {state.upper()} for {self.CB_SERVICE_NAME}"
+                        "self_healing_middleware.cb_service",
+                        state=state.upper(),
+                        self=self.CB_SERVICE_NAME,
                     )
                     return True
 
@@ -394,9 +399,9 @@ class SelfHealingMiddleware:
                     error_context=error_context,
                 )
                 logger.info(
-                    f"[SelfHealingMiddleware] CB failure recorded: "
-                    f"service={self.CB_SERVICE_NAME}, "
-                    f"error_type={error_context.get('error_type')}"
+                    "self_healing_middleware.cb_failure_recorded",
+                    self=self.CB_SERVICE_NAME,
+                    error_context=error_context.get('error_type'),
                 )
 
                 self._log_audit_event(
@@ -405,7 +410,7 @@ class SelfHealingMiddleware:
                     request=request,
                 )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "self_healing_middleware.cb_failure_recording_failed",
                 error=e,
             )
@@ -415,8 +420,9 @@ class SelfHealingMiddleware:
 
             pool_circuit_breaker.record_failure()
             logger.info(
-                f"[SelfHealingMiddleware] PoolCB failure recorded: "
-                f"state={pool_circuit_breaker.state}, failures={pool_circuit_breaker._failure_count}"
+                "self_healing_middleware.poolcb_failure_recorded",
+                pool_circuit_breaker=pool_circuit_breaker.state,
+                pool_circuit_breaker_1=pool_circuit_breaker._failure_count,
             )
         except Exception as e:
             logger.warning(
@@ -466,9 +472,10 @@ class SelfHealingMiddleware:
 
             if result.success:
                 logger.info(
-                    f"[SelfHealingMiddleware] DLQ stored: "
-                    f"id={result.dlq_id}, domain={domain}, "
-                    f"path={request_data.get('path')}"
+                    "self_healing_middleware.dlq_stored",
+                    result=result.dlq_id,
+                    domain=domain,
+                    request_data=request_data.get('path'),
                 )
 
                 self._log_audit_event(
@@ -485,12 +492,13 @@ class SelfHealingMiddleware:
                 return result.dlq_id
             else:
                 logger.warning(
-                    f"[SelfHealingMiddleware] DLQ storage failed: {result.error}"
+                    "self_healing_middleware.dlq_storage_failed",
+                    result=result.error,
                 )
                 return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "self_healing_middleware.dlq_storage_error",
                 error=e,
             )

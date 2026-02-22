@@ -18,9 +18,10 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
+
+import structlog
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
@@ -109,7 +110,8 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
         if expired_keys:
             logger.debug(
-                f"[InMemoryRateLimitStorage] Cleaned up {len(expired_keys)} expired entries"
+                "in_memory_rate_limit_storage.cleaned_up_expired_entries",
+                count=len(expired_keys),
             )
 
     def get_state(self, key: str) -> RateLimitState:
@@ -143,8 +145,9 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             self._maybe_cleanup()
 
             logger.debug(
-                f"[InMemoryRateLimitStorage] Set cooldown for '{key}': "
-                f"until={cooldown_until}"
+                "in_memory_rate_limit_storage.set_cooldown",
+                key=key,
+                cooldown_until=cooldown_until,
             )
 
     def increment_consecutive_429s(self, key: str) -> int:
@@ -165,8 +168,9 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             self._maybe_cleanup()
 
             logger.debug(
-                f"[InMemoryRateLimitStorage] Incremented 429 counter for '{key}': "
-                f"{new_value}"
+                "in_memory_rate_limit_storage.incremented_counter",
+                key=key,
+                new_value=new_value,
             )
             return new_value
 

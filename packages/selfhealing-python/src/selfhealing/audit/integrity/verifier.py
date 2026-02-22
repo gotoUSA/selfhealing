@@ -9,9 +9,10 @@ Contains:
 from __future__ import annotations
 
 import json
-import structlog
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.integrity.models import compute_hash
 

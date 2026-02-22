@@ -29,9 +29,10 @@ FallbackPolicy 중복 실행 방지:
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any, Awaitable, Callable, Generic, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     AsyncResiliencePolicy,

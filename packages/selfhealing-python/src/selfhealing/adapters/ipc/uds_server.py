@@ -24,7 +24,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import select
 import socket
@@ -33,6 +32,8 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
+
+import structlog
 
 from selfhealing.adapters.ipc.auth import (
     AuthResult,
@@ -295,7 +296,7 @@ class UDSServer:
                 # 소켓 종료됨
                 break
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "uds_server.accept_error",
                     error=e,
                 )
@@ -404,7 +405,7 @@ class UDSServer:
             )
         except Exception as e:
             self._stats.failed_requests += 1
-            logger.error(
+            logger.exception(
                 "uds_server.request_error",
                 error=e,
             )

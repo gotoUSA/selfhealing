@@ -6,10 +6,11 @@ Handles SMS-specific notification sending.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
-from .models import NotificationConfig, ChannelDeliveryResult
+import structlog
+
+from .models import ChannelDeliveryResult, NotificationConfig
 
 logger = structlog.get_logger()
 
@@ -61,7 +62,9 @@ class SMSHandlerMixin:
             # Here you would integrate with your SMS provider (Twilio, AWS SNS, etc.)
             # For now, we log it
             logger.info(
-                f"[Security Notification] SMS would send to {recipients}: {sms_body}"
+                "security_notification_sms_send",
+                recipients=recipients,
+                sms_body=sms_body,
             )
 
             # Placeholder for actual SMS integration
@@ -78,7 +81,7 @@ class SMSHandlerMixin:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_sms_error",
                 error=e,
             )

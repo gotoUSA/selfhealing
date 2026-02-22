@@ -7,9 +7,10 @@ Tests fast-fail behavior, fallback strategies, and canary recovery.
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.services.chaos.base import (
@@ -103,7 +104,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cb_open_injection.failed_inject",
                 error=e,
             )
@@ -148,7 +149,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "cb_open_injection.rollback_failed",
                     error=e,
                 )
@@ -226,9 +227,9 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
             if status.get("in_canary", False):
                 logger.info(
-                    f"[CBOpenExperiment] Canary recovery started: "
-                    f"stage={status.get('canary_state')}, "
-                    f"traffic={status.get('traffic_percent')}%"
+                    "cb_open_experiment.canary_recovery_started",
+                    status=status.get('canary_state'),
+                    status_1=status.get('traffic_percent'),
                 )
                 return True
 

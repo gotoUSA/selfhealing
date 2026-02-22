@@ -6,11 +6,12 @@ Calculates shadow budget by estimating missed errors from logs.
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -183,8 +184,10 @@ class ShadowBudgetCalculator:
         )
 
         logger.info(
-            f"[ShadowBudget] Calculated for period {failsafe_period.period_id}: "
-            f"estimated_errors={estimated_errors}, adjustment={adjustment_percent:.2f}%"
+            "shadow_budget.calculated_period",
+            failsafe_period=failsafe_period.period_id,
+            estimated_errors=estimated_errors,
+            adjustment_percent=adjustment_percent,
         )
 
         return shadow_budget
@@ -236,13 +239,13 @@ class ShadowBudgetCalculator:
         total_weighted *= final_multiplier
 
         logger.debug(
-            f"[ShadowBudget] Weighted calculation: "
-            f"errors_by_severity={errors_by_severity}, "
-            f"source_reliability={source_reliability}, "
-            f"domain_mult={domain_multiplier:.2f}, "
-            f"pattern_mult={pattern_multiplier:.2f}, "
-            f"final_mult={final_multiplier:.2f}, "
-            f"total_weighted={total_weighted:.6f}"
+            "shadow_budget.weighted_calculation",
+            errors_by_severity=errors_by_severity,
+            source_reliability=source_reliability,
+            domain_multiplier=domain_multiplier,
+            pattern_multiplier=pattern_multiplier,
+            final_multiplier=final_multiplier,
+            total_weighted=total_weighted,
         )
 
         return total_weighted
@@ -276,8 +279,10 @@ class ShadowBudgetCalculator:
             weight = float(DEFAULT_SLA_HOURS) / domain_hours
 
             logger.debug(
-                f"[ShadowBudget] Domain weight: domain={domain}, "
-                f"sla_hours={domain_hours}, weight={weight:.2f}"
+                "shadow_budget.domain_weight",
+                domain=domain,
+                domain_hours=domain_hours,
+                weight=weight,
             )
 
             return weight
@@ -339,8 +344,10 @@ class ShadowBudgetCalculator:
                 weight = PATTERN_OCCURRENCE_WEIGHT["none"]
 
             logger.debug(
-                f"[ShadowBudget] Pattern weight: pattern={pattern_name}, "
-                f"occurrence_count={occurrence_count}, weight={weight:.2f}"
+                "shadow_budget.pattern_weight",
+                pattern_name=pattern_name,
+                occurrence_count=occurrence_count,
+                weight=weight,
             )
 
             return weight
@@ -434,8 +441,8 @@ class ShadowBudgetCalculator:
             )
 
             logger.warning(
-                f"[ShadowBudget] Freeze Mode ACTIVATED for large adjustment: "
-                f"{shadow.adjustment_percent:.2f}%"
+                "shadow_budget.freeze_mode_activated_large",
+                shadow=shadow.adjustment_percent,
             )
 
             # Audit 이벤트 기록
@@ -471,7 +478,8 @@ class ShadowBudgetCalculator:
                 )
 
                 logger.info(
-                    f"[ShadowBudget] Freeze Mode DEACTIVATED: calculation_id={calculation_id}"
+                    "shadow_budget.freeze_mode_deactivated",
+                    calculation_id=calculation_id,
                 )
 
         except Exception as e:
@@ -525,7 +533,8 @@ class ShadowBudgetCalculator:
             manager.send(payload)
 
             logger.debug(
-                f"[ShadowBudget] Notification sent for calculation_id={shadow.calculation_id}"
+                "shadow_budget.notification_sent",
+                shadow=shadow.calculation_id,
             )
 
         except Exception as e:

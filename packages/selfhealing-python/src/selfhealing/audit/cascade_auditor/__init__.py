@@ -40,9 +40,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.cascade_auditor._helpers import get_index_ids
 from selfhealing.audit.cascade_auditor._querying import QueryingMixin

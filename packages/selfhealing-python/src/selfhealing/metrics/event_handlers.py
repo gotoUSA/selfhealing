@@ -10,8 +10,9 @@ Key Features:
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.metrics.safe_gauge import SafeGauge

@@ -12,9 +12,10 @@ Race Condition을 방지하기 위해 Lua 스크립트를 사용합니다.
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -403,7 +404,10 @@ class RedisThrottleLimitManager:
         source = result[1].decode() if isinstance(result[1], bytes) else result[1]
 
         logger.info(
-            f"[RedisThrottleLimitManager] Loaded limit: " f"service={service_name}, limit={limit_value}, source={source}"
+            "redis_throttle_limit_manager.loaded_limit",
+            service_name=service_name,
+            limit_value=limit_value,
+            source=source,
         )
 
         return (limit_value, source)
@@ -431,7 +435,7 @@ class RedisThrottleLimitManager:
             self._redis.expire(key, self._default_ttl * 24)  # 24시간 유지
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_throttle_limit_manager.save_safe_limit_failed",
                 error=e,
             )
@@ -443,7 +447,7 @@ class RedisThrottleLimitManager:
             value = self._redis.get(self._get_limit_key(service_name))
             return int(value) if value else None
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_throttle_limit_manager.get_limit_failed",
                 error=e,
             )
@@ -514,7 +518,7 @@ class RedisThrottleLimitManager:
 
             return rtt_values
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_throttle_limit_manager.get_rtt_samples_failed",
                 error=e,
             )

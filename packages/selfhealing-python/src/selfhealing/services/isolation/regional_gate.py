@@ -20,10 +20,11 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 from __future__ import annotations
 
 import json
-import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.services.audit import log_region_isolation_audit
 
@@ -196,9 +197,11 @@ class RegionalIsolationGate:
             self._publish_event("isolated", isolation_info)
 
             logger.warning(
-                f"[RegionalIsolationGate] Region ISOLATED: {region} "
-                f"reason='{reason}' duration={duration_seconds}s "
-                f"by={operator}"
+                "cell_evacuation.cell_isolated",
+                region=region,
+                reason=reason,
+                duration_seconds=duration_seconds,
+                operator=operator,
             )
 
             # === Audit 기록: 리전 격리 (85_AUDIT_INTEGRATION Phase 1) ===
@@ -214,7 +217,7 @@ class RegionalIsolationGate:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "regional_isolation_gate.failed_isolate_region",
                 region=region,
                 error=e,
@@ -261,7 +264,7 @@ class RegionalIsolationGate:
             return False, None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "regional_isolation_gate.failed_check_isolation_status",
                 error=e,
             )
@@ -294,7 +297,7 @@ class RegionalIsolationGate:
             return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "regional_isolation_gate.failed_get_isolation_info",
                 error=e,
             )
@@ -360,7 +363,7 @@ class RegionalIsolationGate:
             return False
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "regional_isolation_gate.failed_restore_region",
                 region=region,
                 error=e,
@@ -408,7 +411,7 @@ class RegionalIsolationGate:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "regional_isolation_gate.failed_list_isolated_regions",
                 error=e,
             )
@@ -427,7 +430,7 @@ class RegionalIsolationGate:
             }
             self._redis.publish(self.ISOLATION_EVENT_CHANNEL, json.dumps(event))
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "regional_isolation_gate.failed_publish_event",
                 error=e,
             )

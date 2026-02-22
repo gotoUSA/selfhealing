@@ -20,7 +20,6 @@ V3 Optimization:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -85,7 +84,10 @@ class ErrorBudgetStatusView(APIView):
             )
 
         except Exception as e:
-            logger.error(f"[ErrorBudgetAPI] Status failed: {e}", exc_info=True)
+            logger.exception(
+                "error_budget_api.status_failed",
+                error=e,
+            )
             # FAIL-SAFE: 시스템 장애 시에도 기본 응답 제공 (200 OK)
             return Response(get_failsafe_status_response(str(e)))
 
@@ -184,8 +186,11 @@ class ErrorBudgetRecordView(APIView):
             result["reason"] = reason
 
         logger.info(
-            f"[ErrorBudgetAPI] Recorded {effective_errors} errors "
-            f"(domain={domain}, severity={severity}, multiplier={multiplier})"
+            "error_budget_api.recorded_errors",
+            effective_errors=effective_errors,
+            domain=domain,
+            severity=severity,
+            multiplier=multiplier,
         )
 
         return Response(

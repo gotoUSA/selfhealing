@@ -11,7 +11,6 @@ Endpoints:
 from __future__ import annotations
 
 import structlog
-
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -100,7 +99,7 @@ class MetaWatchdogLivenessView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "meta_watchdog.liveness_check_error",
                 error=e,
             )
@@ -182,7 +181,7 @@ class MetaWatchdogStatusView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "meta_watchdog.status_check_error",
                 error=e,
             )
@@ -245,7 +244,7 @@ class MetaWatchdogForceCheckView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "meta_watchdog.force_check_error",
                 error=e,
             )

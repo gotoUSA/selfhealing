@@ -12,8 +12,9 @@ Rate Limit 에스컬레이션 핸들러.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.meta.escalation import (
     EscalationEvent,
@@ -112,8 +113,10 @@ class RateLimitEscalationHandler:
         # 임계치 미만이면 무시
         if consecutive < self._threshold:
             logger.debug(
-                f"[RateLimitEscalationHandler] '{key}' consecutive={consecutive} "
-                f"< threshold={self._threshold}, skipping escalation"
+                "rate_limit_escalation_handler.skipping_escalation",
+                key=key,
+                consecutive=consecutive,
+                self=self._threshold,
             )
             return
 
@@ -153,8 +156,10 @@ class RateLimitEscalationHandler:
 
         if result.success:
             logger.critical(
-                f"[RateLimitEscalationHandler] ESCALATED: {key} "
-                f"(consecutive={consecutive}, channels={result.channels_sent})"
+                "rate_limit_escalation_handler.escalated",
+                key=key,
+                consecutive=consecutive,
+                result=result.channels_sent,
             )
         else:
             logger.error(

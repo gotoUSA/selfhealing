@@ -17,10 +17,11 @@ Thin Task, Fat Service 원칙:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.xtest_audit import log_xtest_cleanup_audit
 
@@ -153,7 +154,7 @@ class XTestCleanupService:
 
                 except Exception as e:
                     error_msg = f"Failed to clean session {session.session_id}: {e}"
-                    logger.error(
+                    logger.exception(
                         "x_test_cleanup.event",
                         error_msg=error_msg,
                     )
@@ -173,7 +174,10 @@ class XTestCleanupService:
 
         except Exception as e:
             error_msg = f"Cleanup failed: {e}"
-            logger.error(f"[XTestCleanup] {error_msg}", exc_info=True)
+            logger.exception(
+                "x_test_cleanup.event",
+                error_msg=error_msg,
+            )
             result.success = False
             result.errors.append(error_msg)
 
@@ -254,7 +258,7 @@ class XTestCleanupService:
         except ImportError:
             logger.debug("x_test_cleanup.circuit_breaker_service_available")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_cleanup.cb_restore_failed",
                 error=e,
             )
@@ -300,7 +304,7 @@ class XTestCleanupService:
         except ImportError:
             logger.debug("x_test_cleanup.dlq_service_available")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_cleanup.dlq_purge_failed",
                 error=e,
             )
@@ -339,7 +343,7 @@ class XTestCleanupService:
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_cleanup.idempotency_clear_failed",
                 error=e,
             )
@@ -378,7 +382,7 @@ class XTestCleanupService:
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_cleanup.rate_limit_reset_failed",
                 error=e,
             )
@@ -409,7 +413,7 @@ class XTestCleanupService:
         except ImportError:
             logger.debug("x_test_cleanup.scenario_module_available")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_cleanup.scenario_clear_failed",
                 error=e,
             )
@@ -445,7 +449,7 @@ class XTestCleanupService:
                 stats["pending_rate_limit_resets"] = len(rate_limit_keys) if rate_limit_keys else 0
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "x_test_cleanup.stats_collection_failed",
                 error=e,
             )

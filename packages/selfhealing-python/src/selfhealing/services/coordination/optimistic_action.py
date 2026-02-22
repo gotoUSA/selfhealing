@@ -19,13 +19,14 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -217,15 +218,19 @@ class OptimisticLocalActionExecutor:
                 self._schedule_central_sync(action, namespace, result)
 
             logger.info(
-                f"[OptimisticAction] Executed locally: action={action_type}, "
-                f"namespace={namespace}, id={action_id}"
+                "optimistic_action.executed_locally",
+                action_type=action_type,
+                namespace=namespace,
+                action_id=action_id,
             )
 
             return result
 
         except Exception as e:
             logger.exception(
-                f"[OptimisticAction] Failed: action={action}, namespace={namespace}"
+                "optimistic_action.failed",
+                action=action,
+                namespace=namespace,
             )
             return OptimisticActionResult(
                 success=False,
@@ -287,7 +292,9 @@ class OptimisticLocalActionExecutor:
                 self._stats["sync_failures"] += 1
 
                 logger.warning(
-                    f"[OptimisticAction] Sync failed: id={action_id}, error={e}"
+                    "optimistic_action.sync_failed",
+                    action_id=action_id,
+                    error=e,
                 )
 
         return results

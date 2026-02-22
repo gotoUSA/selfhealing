@@ -15,11 +15,12 @@ LeaderScheduler를 통해 클러스터 내 단일 리더만 집계를 수행합�
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.predictive_forecaster.time_series import (
@@ -414,11 +415,11 @@ class CellHealthAggregator:
         - metadata 경합 없음 (각 Cell이 물리적으로 분리된 CB 보유)
         """
         try:
-            from selfhealing.services.circuit_breaker import (
-                get_circuit_breaker_service,
-            )
             from selfhealing.services.cell_topology.cb_namespace import (
                 parse_composite_cb_name,
+            )
+            from selfhealing.services.circuit_breaker import (
+                get_circuit_breaker_service,
             )
 
             cb_service = get_circuit_breaker_service()
@@ -486,7 +487,7 @@ class CellHealthAggregator:
             # 건강도 갱신 완료 후 대피 정책 평가
             self._evaluate_evacuation_policy(registry)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cellhealthaggregator_failed",
                 error=e,
             )
@@ -511,7 +512,7 @@ class CellHealthAggregator:
             for cell_id, cell_info in all_cells.items():
                 policy.evaluate(cell_id, cell_info.health_score)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "CellHealthAggregator evacuation policy evaluation failed: %s",
                 e,
             )

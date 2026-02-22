@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
-import structlog
 import threading
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
 
@@ -118,10 +119,10 @@ end
 
 
 
-from ._step_handler import StepHandlerMixin
-from ._session_persistence import SessionPersistenceMixin
-from ._audit_recording import AuditRecordingMixin
 from ._approval import ApprovalMixin
+from ._audit_recording import AuditRecordingMixin
+from ._session_persistence import SessionPersistenceMixin
+from ._step_handler import StepHandlerMixin
 
 
 class RecoveryCoordinator(
@@ -290,7 +291,7 @@ class RecoveryCoordinator(
             self._regional_policy_engine = get_regional_recovery_policy_engine()
             return self._regional_policy_engine
         except ImportError:
-            logger.warning("recovery.regionalrecoverypolicyengine_available")
+            logger.warning("recovery")
             return None
     def _get_idempotent_registry(self) -> IdempotentStepHandlerRegistry | None:
         """멱등성 핸들러 레지스트리 획득 (Phase 2.7)."""
@@ -306,7 +307,7 @@ class RecoveryCoordinator(
             self._idempotent_registry = get_idempotent_step_handler_registry()
             return self._idempotent_registry
         except ImportError:
-            logger.warning("recovery.idempotentstephandlerregistry_available")
+            logger.warning("recovery")
             return None
     def _get_audit_recorder(self) -> RecoveryAuditRecorder:
         """
@@ -334,7 +335,7 @@ class RecoveryCoordinator(
 
             return get_cascade_event_auditor()
         except ImportError:
-            logger.debug("recovery.cascadeeventauditor_available")
+            logger.debug("recovery")
             return None
     def _record_cascade_event(
         self,
@@ -387,7 +388,10 @@ class RecoveryCoordinator(
             )
 
             logger.debug(
-                f"[Recovery] CascadeEvent recorded: id={cascade_event.id}, " f"trigger={trigger_type}, session={session.id}"
+                "recovery.cascadeevent_recorded",
+                cascade_event=cascade_event.id,
+                trigger_type=trigger_type,
+                session=session.id,
             )
 
             return cascade_event.id
@@ -539,9 +543,12 @@ class RecoveryCoordinator(
             self._record_recovery_started(session)
 
             logger.info(
-                f"[Recovery] Started: id={session_id}, "
-                f"namespace={namespace}, level={trigger_level}, "
-                f"steps={len(steps)}, requires_approval={requires_approval}"
+                "recovery.started",
+                session_id=session_id,
+                namespace=namespace,
+                trigger_level=trigger_level,
+                count=len(steps),
+                requires_approval=requires_approval,
             )
 
             return session
@@ -621,7 +628,10 @@ class RecoveryCoordinator(
                     self._record_step_executed(session, step, success=True, result=result)
 
                     logger.info(
-                        f"[Recovery] Step completed: {step.step_type.value}, " f"session={session.id}{idempotent_info}"
+                        "recovery.step_completed",
+                        step_type=step.step_type.value,
+                        session=session.id,
+                        idempotent_info=idempotent_info,
                     )
                 else:
                     step.status = RecoveryStatus.FAILED
@@ -638,7 +648,10 @@ class RecoveryCoordinator(
                     self._fail_session(session, step.error_message)
 
                     logger.error(
-                        f"[Recovery] Step failed: {step.step_type.value}, " f"session={session.id}, error={step.error_message}"
+                        "recovery.step_failed",
+                        step_type=step.step_type.value,
+                        session=session.id,
+                        step=step.error_message,
                     )
 
             except StepTimeoutError:
@@ -732,9 +745,12 @@ class RecoveryCoordinator(
             trigger_level = last_session.trigger_level
 
             logger.info(
-                f"[Recovery] Resuming from step {failed_step_index}: "
-                f"session={last_session.id}, level={trigger_level}, "
-                f"resume_attempt={resume_count + 1}/{settings.max_resume_count}"
+                "recovery.resuming_step",
+                failed_step_index=failed_step_index,
+                last_session=last_session.id,
+                trigger_level=trigger_level,
+                value=resume_count + 1,
+                settings=settings.max_resume_count,
             )
 
             # 4. 새 세션 시작 (RLock 재진입으로 데드락 없음)
@@ -756,7 +772,10 @@ class RecoveryCoordinator(
             self._save_session(new_session)
 
             logger.info(
-                f"[Recovery] Resumed: new_session={new_session.id}, " f"from={last_session.id}, step={failed_step_index}"
+                "recovery.resumed",
+                new_session=new_session.id,
+                last_session=last_session.id,
+                failed_step_index=failed_step_index,
             )
 
             return new_session

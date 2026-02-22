@@ -14,10 +14,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -166,9 +167,10 @@ class PauseReasonTracker:
 
         # 로깅
         logger.info(
-            f"[PauseReasonTracker] Recorded pause: "
-            f"rollout={rollout_id}, triggered_by={context.triggered_by}, "
-            f"chain_id={context.causation_chain_id}"
+            "pause_reason_tracker.recorded_pause",
+            rollout_id=rollout_id,
+            context=context.triggered_by,
+            context_2=context.causation_chain_id,
         )
 
         return context.causation_chain_id

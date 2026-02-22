@@ -10,9 +10,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
@@ -141,7 +142,7 @@ class PendingSequenceManager:
                 return False
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pending_seq.failed_reserve_sequence",
                 sequence=sequence,
                 error=e,
@@ -173,12 +174,13 @@ class PendingSequenceManager:
             else:
                 # Key may have expired (TTL) - still considered success
                 logger.debug(
-                    f"[PendingSeq] Sequence {sequence} already committed (or expired)"
+                    "pending_seq.sequence_already_committed_expired",
+                    sequence=sequence,
                 )
                 return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pending_seq.failed_commit_sequence",
                 sequence=sequence,
                 error=e,
@@ -224,7 +226,7 @@ class PendingSequenceManager:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pending_seq.failed_abort_sequence",
                 sequence=sequence,
                 error=e,
@@ -257,7 +259,7 @@ class PendingSequenceManager:
             return sorted(sequences)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pending_seq.failed_get_pending_sequences",
                 error=e,
             )
@@ -288,7 +290,7 @@ class PendingSequenceManager:
             return sorted(sequences)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pending_seq.failed_get_orphaned_sequences",
                 error=e,
             )
@@ -316,8 +318,10 @@ class PendingSequenceManager:
             return None
 
         except Exception as e:
-            logger.error(
-                f"[PendingSeq] Failed to get expected hash for {sequence}: {e}"
+            logger.exception(
+                "pending_seq.failed_get_expected_hash",
+                sequence=sequence,
+                error=e,
             )
             return None
 
@@ -375,7 +379,7 @@ class PendingSequenceManager:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pending_seq.failed_clear_orphaned",
                 sequence=sequence,
                 error=e,

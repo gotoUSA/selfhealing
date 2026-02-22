@@ -27,12 +27,13 @@ Version: 1.0.0
 from __future__ import annotations
 
 import atexit
-import structlog
 import os
 import signal
 import sys
 import threading
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.audit.sync_worker import AuditSyncWorker
@@ -177,7 +178,7 @@ def startup_async_audit_system() -> bool:
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "async_audit_lifecycle.startup_failed",
                 error=e,
             )

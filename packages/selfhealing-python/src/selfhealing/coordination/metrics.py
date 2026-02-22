@@ -6,8 +6,9 @@ Leader Election Prometheus Metrics.
 
 from __future__ import annotations
 
-import structlog
 import time
+
+import structlog
 
 logger = structlog.get_logger()
 

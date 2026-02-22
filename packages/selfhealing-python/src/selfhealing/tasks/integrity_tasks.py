@@ -13,10 +13,11 @@ Functions:
 
 from __future__ import annotations
 
-import structlog
 import time
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -119,7 +120,10 @@ def verify_hash_chain_integrity(
             lock.release()
 
     except Exception as e:
-        logger.error(f"[BackgroundIntegrityVerifier] Failed: {e}", exc_info=True)
+        logger.exception(
+            "background_integrity_verifier.failed",
+            error=e,
+        )
         return {"valid": False, "error": str(e), "namespace": namespace}
 
 
@@ -201,7 +205,9 @@ def _verify_with_retry(
 
     # 모든 재시도 실패 → 실제 위반으로 확정
     logger.critical(
-        f"[BackgroundIntegrityVerifier] All {max_retries} attempts failed. " f"Confirming integrity violation: {last_error}"
+        "background_integrity_verifier.all_attempts_failed_confirming",
+        max_retries=max_retries,
+        last_error=last_error,
     )
     return False, last_error
 
@@ -224,7 +230,7 @@ def _alert_integrity_violation(namespace: str, result: dict) -> None:
             error_message="Hash chain integrity violation detected during background verification",
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "background_integrity_verifier.audit_write_failed",
             error=e,
         )

@@ -29,8 +29,9 @@ Usage:
         )
 """
 
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.utils.time import utc_now
 
@@ -238,9 +239,12 @@ def _log_version_conflict(
     }
 
     logger.warning(
-        f"[VersionConflict] {config_type}: expected v{expected_version}, "
-        f"actual v{actual_version} by {conflicting_operator}, "
-        f"attempted by {attempted_by}"
+        "version_conflict.expected_actual_attempted",
+        config_type=config_type,
+        expected_version=expected_version,
+        actual_version=actual_version,
+        conflicting_operator=conflicting_operator,
+        attempted_by=attempted_by,
     )
 
     # Audit 시스템 연동 (가능한 경우)

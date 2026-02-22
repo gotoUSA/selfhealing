@@ -40,10 +40,11 @@ Test Isolation:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
@@ -254,7 +255,7 @@ class ServiceProviderRegistry:
             cache = cls.get_cache()
             results["cache"] = cache.health_check()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "service_provider_registry.cache_health_check_failed",
                 error=e,
             )
@@ -264,7 +265,7 @@ class ServiceProviderRegistry:
             queue = cls.get_queue()
             results["queue"] = queue.health_check()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "service_provider_registry.queue_health_check_failed",
                 error=e,
             )

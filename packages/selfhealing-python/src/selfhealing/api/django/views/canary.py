@@ -22,7 +22,6 @@ Reference:
 from __future__ import annotations
 
 import structlog
-
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -405,8 +404,10 @@ class CanaryRolloutActionView(APIView):
         updated_rollout = service.get_rollout(rollout_id)
 
         logger.info(
-            f"[CanaryAPI] Action executed: rollout={rollout_id}, "
-            f"action={action}, new_state={updated_rollout.state.value if updated_rollout else 'unknown'}"
+            "canary_api.action_executed",
+            rollout_id=rollout_id,
+            action=action,
+            updated_rollout=updated_rollout.state.value if updated_rollout else 'unknown',
         )
 
         return Response(
@@ -483,10 +484,12 @@ class CanaryPanicRollbackView(APIView):
         success_count = sum(1 for r in results if r.get("success"))
 
         logger.warning(
-            f"[CanaryAPI] PANIC ROLLBACK executed: "
-            f"by={_get_username(request)}, reason={reason}, "
-            f"emergency_code={emergency_code}, "
-            f"success={success_count}/{len(results)}"
+            "canary_api.panic_rollback_executed",
+            _get_username=_get_username(request),
+            reason=reason,
+            emergency_code=emergency_code,
+            success_count=success_count,
+            count=len(results),
         )
 
         return Response(

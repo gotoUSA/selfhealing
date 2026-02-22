@@ -7,7 +7,6 @@ Pod 재시작, Deployment 스케일링 등 인프라 레벨 복구 수행.
 
 from __future__ import annotations
 
-import structlog
 import os
 import re
 import shutil
@@ -17,6 +16,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -322,7 +323,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kubernetes_recovery_adapter.restart_failed",
                 error=e,
             )
@@ -376,7 +377,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kubernetes_recovery_adapter.scale_failed",
                 error=e,
             )
@@ -423,7 +424,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kubernetes_recovery_adapter.delete_pod_failed",
                 error=e,
             )

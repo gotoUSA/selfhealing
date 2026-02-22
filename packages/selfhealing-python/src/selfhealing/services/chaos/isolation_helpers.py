@@ -7,8 +7,9 @@ Chaos 실험 데이터를 별도 도메인에 저장하여 실제 데이터와 �
 작성일: 2026-01-14
 """
 
-import structlog
 from typing import Any
+
+import structlog
 
 from .constants import CHAOS_DOMAIN_PREFIX, CHAOS_METADATA_FLAGS
 
@@ -185,8 +186,10 @@ def cleanup_chaos_entries(
                     purged_count += 1
 
         logger.info(
-            f"[ChaosIsolation] Purged {purged_count} entries "
-            f"for experiment {experiment_id} in domain {isolated_domain}"
+            "chaos_isolation.purged_entries_experiment_domain",
+            purged_count=purged_count,
+            experiment_id=experiment_id,
+            isolated_domain=isolated_domain,
         )
 
         # === Self-Cleanup: FinOps 비용 환불 ===
@@ -197,13 +200,13 @@ def cleanup_chaos_entries(
         return purged_count
 
     except ImportError as e:
-        logger.error(
+        logger.exception(
             "chaos_isolation.cannot_import_dlq_service",
             error=e,
         )
         raise
     except Exception as e:
-        logger.error(
+        logger.exception(
             "chaos_isolation.cleanup_failed",
             error=e,
         )
@@ -249,8 +252,9 @@ def _record_cleanup_cost_refund(
             },
         )
         logger.info(
-            f"[FinOps] Self-Cleanup refund: -${refund_amount} "
-            f"for {cleaned_entries} entries"
+            "fin_ops.self_cleanup_refund_entries",
+            refund_amount=refund_amount,
+            cleaned_entries=cleaned_entries,
         )
     except Exception as e:
         logger.debug(
@@ -293,13 +297,14 @@ def cleanup_all_chaos_domains(max_entries_per_domain: int = 10000) -> dict[str, 
 
         total_deleted = sum(results.values())
         logger.info(
-            f"[ChaosIsolation] Total cleanup: {total_deleted} entries "
-            f"across {len(results)} chaos domains"
+            "chaos_isolation.total_cleanup_entries_across",
+            total_deleted=total_deleted,
+            count=len(results),
         )
         return results
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "chaos_isolation.full_cleanup_failed",
             error=e,
         )

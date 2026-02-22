@@ -8,9 +8,10 @@ Provides zero data loss guarantees through WAL-First protocol.
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.interfaces.repositories import (
     CircuitBreakerStateData,
@@ -309,7 +310,7 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             return results
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_cb_repo.error",
                 error=e,
             )

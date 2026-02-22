@@ -10,10 +10,10 @@ Endpoints:
 - POST /api/self-healing/config/drift-thresholds/reset/ - Reset to defaults
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
 
+import structlog
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response

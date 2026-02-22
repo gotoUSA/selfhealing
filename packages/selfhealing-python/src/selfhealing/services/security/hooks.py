@@ -24,8 +24,9 @@ Usage (호스트 앱의 AppConfig.ready()):
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -53,8 +54,9 @@ def register_session_invalidation_hook(hook: SessionInvalidationHook) -> None:
     """
     _hooks.append(hook)
     logger.info(
-        f"[SecurityHooks] Session invalidation hook registered: "
-        f"{getattr(hook, '__module__', '?')}.{getattr(hook, '__qualname__', repr(hook))}"
+        "security_hooks.session_invalidation_hook_registered",
+        getattr=getattr(hook, '__module__', '?'),
+        getattr_1=getattr(hook, '__qualname__', repr(hook)),
     )
 
 

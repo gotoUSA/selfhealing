@@ -15,10 +15,10 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import structlog
 import time
 from typing import Any
 
+import structlog
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -141,7 +141,10 @@ class ReplaySingleView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] Replay single: dlq_id={dlq_id}, " f"success={result['success']}, duration_ms={duration_ms}"
+            "test_mode_replay_single",
+            dlq_id=dlq_id,
+            result=result['success'],
+            duration_ms=duration_ms,
         )
 
         response_data = {
@@ -291,7 +294,10 @@ class ReplaySingleView(XTestModeMixin, APIView):
                 "data": result.data,
             }
         except Exception as e:
-            logger.error(f"[X-Test-Mode] Replay execution error: {e}", exc_info=True)
+            logger.exception(
+                "test_mode_replay_execution",
+                error=e,
+            )
             return {
                 "success": False,
                 "message": "Replay execution failed",
@@ -384,9 +390,11 @@ class ReplayBatchView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] Replay batch: domain={domain}, "
-            f"total={result['total']}, success={result['success_count']}, "
-            f"failed={result['failed_count']}"
+            "test_mode_replay_batch",
+            domain=domain,
+            result=result['total'],
+            result_2=result['success_count'],
+            result_3=result['failed_count'],
         )
 
         response_data = {
@@ -507,7 +515,10 @@ class ReplayBatchView(XTestModeMixin, APIView):
                 "results": results_summary,
             }
         except Exception as e:
-            logger.error(f"[X-Test-Mode] Batch replay error: {e}", exc_info=True)
+            logger.exception(
+                "test_mode_batch_replay",
+                error=e,
+            )
             return {
                 "total": 0,
                 "success_count": 0,
@@ -587,8 +598,10 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] Trigger replay on CB close: service={service_name}, "
-            f"eligible={eligible_count}, replayed={replay_result.get('success_count', 0)}"
+            "test_mode_trigger_replay",
+            service_name=service_name,
+            eligible_count=eligible_count,
+            replay_result=replay_result.get('success_count', 0),
         )
 
         response_data = {
@@ -698,7 +711,10 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
                 "skipped_count": result.skipped_count,
             }
         except Exception as e:
-            logger.error(f"[X-Test-Mode] Conditional replay error: {e}", exc_info=True)
+            logger.exception(
+                "test_mode_conditional_replay",
+                error=e,
+            )
             return {
                 "total": 0,
                 "success_count": 0,

@@ -12,9 +12,10 @@ Service-based Write Locality Router.
 
 from __future__ import annotations
 
-import structlog
 import re
 from dataclasses import dataclass
+
+import structlog
 
 from selfhealing.multiregion.config import get_multiregion_settings
 

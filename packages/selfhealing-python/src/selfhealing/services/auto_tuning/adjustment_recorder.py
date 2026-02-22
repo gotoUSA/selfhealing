@@ -7,12 +7,13 @@ Adjustment Recorder - 조정 기록기
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import uuid
 from datetime import datetime, timezone
 from threading import RLock
 from typing import Any
+
+import structlog
 
 from .models import AdjustmentRecord, TuningSession, TuningState
 
@@ -50,7 +51,7 @@ class AdjustmentRecorder:
         if self.enable_persistence:
             self._load_from_file()
 
-        logger.info("adjustment_recorder.initialized")
+        logger.info("initialized")
 
     def record(
         self,
@@ -110,8 +111,11 @@ class AdjustmentRecorder:
                 self._save_to_file()
 
             logger.info(
-                f"[AdjustmentRecorder] Recorded: {parameter} "
-                f"{old_value} → {new_value} ({record_id})"
+                "adjustment_recorder.recorded",
+                parameter=parameter,
+                old_value=old_value,
+                new_value=new_value,
+                record_id=record_id,
             )
 
             return record
@@ -228,7 +232,8 @@ class AdjustmentRecorder:
                 self._save_to_file()
 
             logger.info(
-                f"[AdjustmentRecorder] Ended session: {session.session_id if session else 'unknown'}"
+                "adjustment_recorder.ended_session",
+                session=session.session_id if session else 'unknown',
             )
             return session
 
@@ -353,7 +358,8 @@ class AdjustmentRecorder:
             self._current_session_id = data.get("current_session_id")
 
             logger.info(
-                f"[AdjustmentRecorder] Loaded {len(self._records)} records from file"
+                "adjustment_recorder.loaded_records_file",
+                count=len(self._records),
             )
         except Exception as e:
             logger.warning(

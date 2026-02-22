@@ -25,26 +25,6 @@ Usage:
     ``replay_service.py`` 플랫 파일에서 ``replay_service/`` 패키지로 전환.
 """
 
-from selfhealing.services.replay_service.models import (
-    ReplayResult,
-    BatchReplayResult,
-)
-from selfhealing.services.replay_service.handlers import (
-    ReplayHandler,
-    DefaultReplayHandler,
-    _replay_handlers,
-    register_replay_handler,
-    get_replay_handler,
-)
-from selfhealing.services.replay_service.service import (
-    ReplayService,
-    _replay_service,
-    get_replay_service,
-    replay_failed_operation,
-    batch_replay_by_failure_type,
-    logger,
-)
-
 # ---------------------------------------------------------------------------
 # Dynamic attribute forwarding – expose ALL sub-module attributes at package
 # level so that ``from selfhealing.services.replay_service import <name>``
@@ -60,11 +40,35 @@ import sys as _sys
 import types as _types
 from typing import Any as _Any
 
+from selfhealing.services.replay_service.handlers import (
+    DefaultReplayHandler,
+    ReplayHandler,
+    _replay_handlers,
+    get_replay_handler,
+    register_replay_handler,
+)
+from selfhealing.services.replay_service.models import (
+    BatchReplayResult,
+    ReplayResult,
+)
+from selfhealing.services.replay_service.service import (
+    ReplayService,
+    _replay_service,
+    batch_replay_by_failure_type,
+    get_replay_service,
+    logger,
+    replay_failed_operation,
+)
+
 _SUB_MODULES = ("models", "handlers", "service")
 
 from selfhealing.services.replay_service import (
-    models as _models_mod,
     handlers as _handlers_mod,
+)
+from selfhealing.services.replay_service import (
+    models as _models_mod,
+)
+from selfhealing.services.replay_service import (
     service as _service_mod,
 )
 

@@ -6,14 +6,14 @@ Handles Slack-specific notification sending and formatting.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
 import requests
+import structlog
 
 from .models import (
-    NotificationConfig,
     ChannelDeliveryResult,
+    NotificationConfig,
     _get_notification_limits,
 )
 
@@ -80,7 +80,7 @@ class SlackHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_slack_error",
                 error=e,
             )
@@ -218,7 +218,7 @@ class SlackHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_slack_alert",
                 error=e,
             )

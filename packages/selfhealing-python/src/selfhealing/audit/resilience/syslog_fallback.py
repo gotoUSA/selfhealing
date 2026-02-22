@@ -8,11 +8,12 @@ audit trail that survives application crashes.
 
 from __future__ import annotations
 
-import structlog
 import sys
 import threading
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -149,7 +150,7 @@ class SyslogFallback:
                 syslog.syslog(priority, message)
                 success = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "syslog_fallback.syslog_write_failed",
                     error=e,
                 )

@@ -34,12 +34,13 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -178,7 +179,10 @@ class BypassRegistry:
             cls._hooks.sort(key=lambda h: -h.priority)
 
             logger.info(
-                f"[BypassRegistry] Registered hook: {hook_name} " f"(priority={priority}, total_hooks={len(cls._hooks)})"
+                "cell_registry.bulkheads_registered",
+                hook_name=hook_name,
+                priority=priority,
+                count=len(cls._hooks),
             )
 
     @classmethod
@@ -240,7 +244,7 @@ class BypassRegistry:
                     return result
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "bypass_registry.hook_raised_exception",
                     hook=hook.name,
                     error=e,
@@ -262,9 +266,10 @@ class BypassRegistry:
         """Log bypass decision to audit system."""
         # Standard logging
         logger.info(
-            f"[BypassRegistry] BYPASS GRANTED: "
-            f"hook={result.hook_name}, reason={result.reason}, "
-            f"path={result.request_path}"
+            "bypass_registry.bypass_granted",
+            result=result.hook_name,
+            result_1=result.reason,
+            result_2=result.request_path,
         )
 
         # Audit system integration (lazy init)

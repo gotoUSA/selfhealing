@@ -5,7 +5,6 @@ API views for kill switch, safety checks, and blast radius verification.
 """
 
 import structlog
-
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -409,10 +408,12 @@ class KillAllView(APIView):
             )
 
         logger.warning(
-            f"[ChaosAPI] KILL ALL executed by {operator}: "
-            f"reason='{reason}', experiments_killed={experiments_killed}, "
-            f"rollbacks_initiated={rollbacks_initiated}, "
-            f"ttl_configs_cleared={ttl_configs_cleared}"
+            "chaos_api.kill_all_executed",
+            operator=operator,
+            reason=reason,
+            experiments_killed=experiments_killed,
+            rollbacks_initiated=rollbacks_initiated,
+            ttl_configs_cleared=ttl_configs_cleared,
         )
 
         return Response(

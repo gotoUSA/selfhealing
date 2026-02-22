@@ -6,10 +6,11 @@ Manages degraded mode operation when primary backends fail.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from .circuit_breaker import CircuitBreakerRegistry
 from .metrics import AuditMetrics
@@ -100,9 +101,8 @@ class DegradedModeManager:
                 self._metrics.set_degraded_mode(False)
 
                 logger.info(
-                    f"[DegradedMode] EXITED degraded mode after {duration:.1f}s"
-                    if duration
-                    else "[DegradedMode] EXITED degraded mode"
+                    "degraded_mode.exited_degraded_mode_after",
+                    duration=duration,
                 )
 
     def check_and_update(self) -> None:

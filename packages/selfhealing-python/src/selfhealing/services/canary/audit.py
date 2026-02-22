@@ -21,8 +21,9 @@ Usage:
 
 import hashlib
 import json
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.utils.time import utc_now
 
@@ -117,7 +118,7 @@ def log_canary_action(
     log_level = _get_log_level(action)
     logger.log(
         log_level,
-        f"[CanaryAudit] {action}: rollout={rollout.id}, "
+        f"[CanaryAudit] {action}: rollout={rollout.id}, "  # noqa: G004
         f"config={rollout.config_type}, stage={rollout.current_stage_index}, "
         f"clusters={rollout.affected_clusters}",
     )
@@ -202,7 +203,7 @@ def log_canary_metrics_check(
 
     logger.log(
         log_level,
-        f"[CanaryAudit] Metrics check: rollout={rollout_id}, "
+        f"[CanaryAudit] Metrics check: rollout={rollout_id}, "  # noqa: G003
         f"stage={stage_name}, passed={passed}" + (f", reason={failure_reason}" if failure_reason else ""),
     )
 

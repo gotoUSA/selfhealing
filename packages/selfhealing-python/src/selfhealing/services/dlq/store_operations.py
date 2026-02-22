@@ -15,11 +15,12 @@ Code reference:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -126,7 +127,7 @@ class StoreOperationsMixin:
             return DLQEntryResult.created(failed_op.id)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "dlq_service.failed_store_dlq",
                 error=e,
             )
@@ -203,7 +204,9 @@ class StoreOperationsMixin:
             )
             # Fallback 채널 메트릭 기록 (Fail-Open)
             try:
-                from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
+                from selfhealing.services.metrics.definitions import (
+                    throttle_dlq_fallback_total,
+                )
 
                 throttle_dlq_fallback_total.labels(channel="disk_persistent_buffer").inc()
             except Exception:
@@ -238,7 +241,9 @@ class StoreOperationsMixin:
                 )
                 # Fallback 채널 메트릭 기록 (Fail-Open)
                 try:
-                    from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
+                    from selfhealing.services.metrics.definitions import (
+                        throttle_dlq_fallback_total,
+                    )
 
                     throttle_dlq_fallback_total.labels(channel="jsonl").inc()
                 except Exception:
@@ -256,11 +261,15 @@ class StoreOperationsMixin:
                 file=sys.stderr,
             )
             logger.critical(
-                f"[DLQService] CRITICAL: All fallback methods failed! " f"DB: {original_error}, JSONL: {fallback_error}"
+                "dlq_service.critical_all_fallback_methods",
+                original_error=original_error,
+                fallback_error=fallback_error,
             )
             # Fallback 채널 메트릭 기록 (Fail-Open)
             try:
-                from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
+                from selfhealing.services.metrics.definitions import (
+                    throttle_dlq_fallback_total,
+                )
 
                 throttle_dlq_fallback_total.labels(channel="stderr").inc()
             except Exception:

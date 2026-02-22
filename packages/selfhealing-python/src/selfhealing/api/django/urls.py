@@ -203,6 +203,12 @@ from selfhealing.api.django.views.governance import (  # 4-Eyes Approval & L2 St
     MetricStatusView,
 )
 
+# Grafana Alert Webhook Views
+from selfhealing.api.django.views.grafana_webhook import (
+    GrafanaAlertWebhookTestView,
+    GrafanaAlertWebhookView,
+)
+
 # Error Budget Gate Health Views
 from selfhealing.api.django.views.health import (
     ErrorBudgetGateConfigView,
@@ -238,6 +244,31 @@ from selfhealing.api.django.views.l2_storage_status import (
     L2StorageSyncToL2View,
 )
 
+# Meta-Watchdog API Views (Self-Healing 시스템 자체 모니터링)
+from selfhealing.api.django.views.meta_watchdog import (
+    MetaWatchdogLivenessView,
+    MetaWatchdogStatusView,
+)
+
+# Post-mortem Views (분리된 실제 장애 분석 API)
+from selfhealing.api.django.views.postmortem import (
+    GetHealingIncidentsView as PostmortemIncidentsView,
+)
+from selfhealing.api.django.views.postmortem import (
+    PostmortemDetailView,
+)
+from selfhealing.api.django.views.postmortem import (
+    PostmortemGeneratorView as PostmortemGenerateView,
+)
+
+# Post-mortem Revision Views (리비전 관리 API)
+from selfhealing.api.django.views.postmortem_revision import (
+    PostmortemRevisionCompareView,
+    PostmortemRevisionDetailView,
+    PostmortemRevisionListView,
+    PostmortemSealView,
+)
+
 # Metric Sync Views
 # Recovery API Views
 from selfhealing.api.django.views.recovery import (
@@ -270,33 +301,6 @@ from selfhealing.api.django.views.tiering import (
     TierOverridesView,
     TierResetView,
     TierResolveLookupView,
-)
-
-# Post-mortem Views (분리된 실제 장애 분석 API)
-from selfhealing.api.django.views.postmortem import (
-    GetHealingIncidentsView as PostmortemIncidentsView,
-    PostmortemDetailView,
-    PostmortemGeneratorView as PostmortemGenerateView,
-)
-
-# Post-mortem Revision Views (리비전 관리 API)
-from selfhealing.api.django.views.postmortem_revision import (
-    PostmortemRevisionCompareView,
-    PostmortemRevisionDetailView,
-    PostmortemRevisionListView,
-    PostmortemSealView,
-)
-
-# Grafana Alert Webhook Views
-from selfhealing.api.django.views.grafana_webhook import (
-    GrafanaAlertWebhookView,
-    GrafanaAlertWebhookTestView,
-)
-
-# Meta-Watchdog API Views (Self-Healing 시스템 자체 모니터링)
-from selfhealing.api.django.views.meta_watchdog import (
-    MetaWatchdogLivenessView,
-    MetaWatchdogStatusView,
 )
 
 app_name = "selfhealing"
@@ -1166,7 +1170,6 @@ from selfhealing.api.django.views.xtest import (  # Stage 51: Observability & Bl
     ResetCBView,
     ResetDLQXTestView,
     ResetView,
-    XTestRetryConfigView,
     RetryRateLimitStatusView,
     RetrySimulateView,
     RunScenarioView,
@@ -1181,6 +1184,7 @@ from selfhealing.api.django.views.xtest import (  # Stage 51: Observability & Bl
     TriggerCBRecoveryView,
     TriggerReplayOnCBCloseView,
     TryRecoveryTransitionView,
+    XTestRetryConfigView,
 )
 
 urlpatterns += [

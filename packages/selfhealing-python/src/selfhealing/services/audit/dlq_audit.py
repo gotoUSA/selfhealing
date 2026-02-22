@@ -9,8 +9,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import (
     _get_audit_adapter,
@@ -86,8 +87,10 @@ def log_dlq_store_audit(
     if adapter is None:
         # Audit adapter not configured - log to standard logger
         logger.info(
-            f"[DLQAudit] STORE | id={dlq_id} | domain={domain} | "
-            f"failure_type={failure_type}"
+            "dlq_audit.store",
+            dlq_id=dlq_id,
+            domain=domain,
+            failure_type=failure_type,
         )
         return wal_seq
 
@@ -178,8 +181,11 @@ def log_dlq_replay_audit(
         # Audit adapter not configured - log to standard logger
         status = "SUCCESS" if success else "FAILED"
         logger.info(
-            f"[DLQAudit] REPLAY_{status} | id={dlq_id} | domain={domain} | "
-            f"error={error_message or 'none'}"
+            "dlq_audit.event",
+            status=status,
+            dlq_id=dlq_id,
+            domain=domain,
+            value=error_message or 'none',
         )
         return wal_seq
 

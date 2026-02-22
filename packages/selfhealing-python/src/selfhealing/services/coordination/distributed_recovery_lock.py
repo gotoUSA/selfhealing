@@ -19,12 +19,13 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import DistributedLockSettings, get_layered_settings
 
@@ -201,16 +202,19 @@ class DistributedRecoveryLock:
             if acquired:
                 self._acquired_locks[namespace] = session_id
                 logger.info(
-                    f"[RecoveryLock] Acquired: namespace={namespace}, "
-                    f"session={session_id}"
+                    "recovery_lock.acquired",
+                    namespace=namespace,
+                    session_id=session_id,
                 )
                 return True
 
         # 락 획득 실패
         current_owner = self.get_lock_owner(namespace)
         logger.warning(
-            f"[RecoveryLock] Failed to acquire: namespace={namespace}, "
-            f"session={session_id}, current_owner={current_owner}"
+            "recovery_lock.failed_acquire",
+            namespace=namespace,
+            session_id=session_id,
+            current_owner=current_owner,
         )
         return False
 
@@ -241,20 +245,24 @@ class DistributedRecoveryLock:
                 if result == 1:
                     self._acquired_locks.pop(namespace, None)
                     logger.info(
-                        f"[RecoveryLock] Released: namespace={namespace}, "
-                        f"session={session_id}"
+                        "recovery_lock.released",
+                        namespace=namespace,
+                        session_id=session_id,
                     )
                     return True
                 else:
                     logger.warning(
-                        f"[RecoveryLock] Release failed (not owner or expired): "
-                        f"namespace={namespace}, session={session_id}"
+                        "recovery_lock.release_failed_owner_expired",
+                        namespace=namespace,
+                        session_id=session_id,
                     )
                     return False
         except Exception as e:
-            logger.error(
-                f"[RecoveryLock] Release error: namespace={namespace}, "
-                f"session={session_id}, error={e}"
+            logger.exception(
+                "recovery_lock.release_error",
+                namespace=namespace,
+                session_id=session_id,
+                error=e,
             )
             return False
 
@@ -296,20 +304,25 @@ class DistributedRecoveryLock:
 
             if result == 1:
                 logger.debug(
-                    f"[RecoveryLock] Extended: namespace={namespace}, "
-                    f"session={session_id}, ttl_ms={extend_ms}"
+                    "recovery_lock.extended",
+                    namespace=namespace,
+                    session_id=session_id,
+                    extend_ms=extend_ms,
                 )
                 return True
             else:
                 logger.warning(
-                    f"[RecoveryLock] Extend failed (not owner or expired): "
-                    f"namespace={namespace}, session={session_id}"
+                    "recovery_lock.extend_failed_owner_expired",
+                    namespace=namespace,
+                    session_id=session_id,
                 )
                 return False
         except Exception as e:
-            logger.error(
-                f"[RecoveryLock] Extend error: namespace={namespace}, "
-                f"session={session_id}, error={e}"
+            logger.exception(
+                "recovery_lock.extend_error",
+                namespace=namespace,
+                session_id=session_id,
+                error=e,
             )
             return False
 
@@ -328,8 +341,10 @@ class DistributedRecoveryLock:
             lock_key = self._make_key(namespace)
             return redis.get(lock_key)
         except Exception as e:
-            logger.error(
-                f"[RecoveryLock] Get owner error: namespace={namespace}, " f"error={e}"
+            logger.exception(
+                "recovery_lock.get_owner_error",
+                namespace=namespace,
+                error=e,
             )
             return None
 
@@ -361,8 +376,10 @@ class DistributedRecoveryLock:
             ttl = redis.ttl(lock_key)
             return ttl if ttl > 0 else None
         except Exception as e:
-            logger.error(
-                f"[RecoveryLock] Get TTL error: namespace={namespace}, " f"error={e}"
+            logger.exception(
+                "recovery_lock.get_ttl_error",
+                namespace=namespace,
+                error=e,
             )
             return None
 

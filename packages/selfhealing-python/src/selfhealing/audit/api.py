@@ -9,7 +9,6 @@ Provides REST API for managing audit system resilience:
 """
 
 import structlog
-
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -70,7 +69,7 @@ class AuditHealthView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "audit_health_view.error",
                 error=e,
             )
@@ -116,7 +115,7 @@ class CircuitBreakerStatusView(View):
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "circuit_breaker_status_view.error",
                 error=e,
             )
@@ -150,7 +149,7 @@ class CircuitBreakerResetView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "circuit_breaker_reset_view.error",
                 error=e,
             )
@@ -184,7 +183,7 @@ class CircuitBreakerForceOpenView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "circuit_breaker_force_open_view.error",
                 error=e,
             )
@@ -211,7 +210,7 @@ class CircuitBreakerResetAllView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "circuit_breaker_reset_all_view.error",
                 error=e,
             )
@@ -244,7 +243,7 @@ class AuditMetricsView(View):
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "audit_metrics_view.error",
                 error=e,
             )
@@ -267,7 +266,7 @@ class DegradedModeStatusView(View):
             return JsonResponse(manager.get_status())
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "degraded_mode_status_view.error",
                 error=e,
             )
@@ -319,7 +318,7 @@ class DegradedModeForceView(View):
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "degraded_mode_force_view.error",
                 error=e,
             )
@@ -345,7 +344,7 @@ class MetricsResetView(View):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "metrics_reset_view.error",
                 error=e,
             )

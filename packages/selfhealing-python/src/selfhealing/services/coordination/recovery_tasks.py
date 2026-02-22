@@ -14,9 +14,10 @@ Reference:
     92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [21] CeleryTaskSettings 참조.
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 # Celery는 선택적 의존성
 try:
@@ -228,7 +229,9 @@ def check_recovery_trigger_task(
             )
 
             logger.info(
-                f"[check_recovery_trigger] Recovery STARTED: " f"session_id={session.session_id}, namespace={namespace}"
+                "check_recovery_trigger.recovery_started",
+                session=session.session_id,
+                namespace=namespace,
             )
 
             # 다음 스텝 실행 예약
@@ -498,7 +501,9 @@ def monitor_recovery_health_task(
 
         if result["tripped"]:
             logger.warning(
-                f"[monitor_recovery_health] CircuitBreaker TRIPPED: " f"namespace={namespace}, reason={result['reason']}"
+                "monitor_recovery_health.circuitbreaker_tripped",
+                namespace=namespace,
+                result=result['reason'],
             )
 
             # 재에스컬레이션 필요 시 Emergency 재진입

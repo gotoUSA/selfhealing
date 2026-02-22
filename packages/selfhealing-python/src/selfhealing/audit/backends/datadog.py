@@ -11,9 +11,10 @@ To activate this backend:
 4. Uncomment the actual implementation
 """
 
-import structlog
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 
@@ -61,10 +62,7 @@ class DatadogBackend(AuditBackend):
         self._client = None
         self._enabled = False
 
-        logger.info(
-            "[DatadogBackend] Initialized as interface only. "
-            "Enable with datadog-api-client and API key."
-        )
+        logger.info("datadog_backend.initialized_interface_only_enable")
 
     @property
     def name(self) -> str:
@@ -87,13 +85,10 @@ class DatadogBackend(AuditBackend):
             # self._client = ApiClient(configuration)
             # self._enabled = True
 
-            logger.warning(
-                "[DatadogBackend] enable() called but datadog-api-client not configured. "
-                "This is an interface-only stub."
-            )
+            logger.warning("datadog_backend.enable_called_datadog_api")
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "datadog_backend.failed_enable",
                 error=e,
             )
@@ -128,7 +123,7 @@ class DatadogBackend(AuditBackend):
         #     logs_api.submit_log(body=body)
         #     return True
         # except Exception as e:
-        #     logger.error(f"[DatadogBackend] Write failed: {e}")
+        #     logger.exception(f"[DatadogBackend] Write failed: {e}")
         #     return False
 
         return True

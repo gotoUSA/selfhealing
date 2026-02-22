@@ -6,11 +6,12 @@ Tracks fail-safe activation periods for reconciliation.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -77,8 +78,9 @@ class FailSafePeriodTracker:
                 self._periods = self._periods[-self._max_periods :]
 
             logger.info(
-                f"[FailSafeTracker] Period started: {period.period_id}, "
-                f"reason: {reason}"
+                "fail_safe_tracker.period_started_reason",
+                period=period.period_id,
+                reason=reason,
             )
 
             return period
@@ -104,8 +106,9 @@ class FailSafePeriodTracker:
         self._active_period = None
 
         logger.info(
-            f"[FailSafeTracker] Period ended: {period.period_id}, "
-            f"duration: {period.duration_minutes:.1f} min"
+            "fail_safe_tracker.period_ended_duration_min",
+            period=period.period_id,
+            period_1=period.duration_minutes,
         )
 
         return period

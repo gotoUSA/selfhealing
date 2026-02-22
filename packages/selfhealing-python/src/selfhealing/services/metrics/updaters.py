@@ -7,11 +7,12 @@ context managers for instrumentation, and alerting rule definitions.
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
@@ -93,7 +94,7 @@ def update_dlq_pending_gauges(
         return pending_by_domain
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "metrics.failed_update_dlq_pending",
             error=e,
         )
@@ -137,7 +138,7 @@ def update_dlq_status_gauges(
         return by_status
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "metrics.failed_update_dlq_status",
             error=e,
         )
@@ -162,7 +163,9 @@ def update_circuit_breaker_gauges(
 
             repository = ProviderRegistry.get_circuit_breaker_repo()
 
-        from selfhealing.services.cell_topology.cb_namespace import parse_composite_cb_name
+        from selfhealing.services.cell_topology.cb_namespace import (
+            parse_composite_cb_name,
+        )
 
         all_states = repository.get_all()
         states = {}
@@ -179,7 +182,7 @@ def update_circuit_breaker_gauges(
         return states
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "metrics.failed_update_circuit_breaker",
             error=e,
         )
@@ -226,7 +229,7 @@ def update_retry_success_rates(
         return rates
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "metrics.failed_update_retry_success",
             error=e,
         )

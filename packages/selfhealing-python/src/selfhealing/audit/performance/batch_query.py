@@ -4,8 +4,9 @@ Pipeline Batch Query (Multi-key retrieval).
 Provides batch query operations using Redis pipelines.
 """
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -91,7 +92,7 @@ class PipelineBatchQuery:
             return states
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pipeline_batch_query.batch_query_failed",
                 error=e,
             )
@@ -129,7 +130,7 @@ class PipelineBatchQuery:
             }
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "pipeline_batch_query.pending_check_failed",
                 error=e,
             )

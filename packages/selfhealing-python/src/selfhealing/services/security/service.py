@@ -12,10 +12,11 @@ Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
 
 from __future__ import annotations
 
-import structlog
 import re
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.audit.masking import mask_ip
 from selfhealing.services.audit import log_security_violation_audit
@@ -101,7 +102,9 @@ class SecurityViolationService:
             try:
                 self._cache = ProviderRegistry.get_cache()
             except (ValueError, ImportError):
-                from selfhealing.adapters.cache.memory_adapter import InMemoryCacheAdapter
+                from selfhealing.adapters.cache.memory_adapter import (
+                    InMemoryCacheAdapter,
+                )
 
                 self._cache = InMemoryCacheAdapter()
         return self._cache
@@ -167,9 +170,13 @@ class SecurityViolationService:
 
             # Log the violation
             logger.warning(
-                f"[Security Violation] type={violation_type_str} severity={severity.value} "
-                f"ip={source_ip} user_id={user_id} "
-                f"incident_id={incident.id} action={action_taken}"
+                "security_violation",
+                violation_type_str=violation_type_str,
+                severity=severity.value,
+                source_ip=source_ip,
+                user_id=user_id,
+                incident=incident.id,
+                action_taken=action_taken,
             )
 
             # === Audit 기록: 보안 위반 처리 (85_AUDIT_INTEGRATION Phase 1) ===
@@ -193,7 +200,7 @@ class SecurityViolationService:
             try:
                 self._send_security_notification(incident.id, violation_type_str, severity.value)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "security_violation_notification_failed",
                     error=e,
                 )
@@ -213,9 +220,9 @@ class SecurityViolationService:
             )
 
         except Exception as e:
-            logger.error(
-                f"[Security Violation] Failed to handle violation: {e}",
-                exc_info=True,
+            logger.exception(
+                "security_violation_failed_handle",
+                error=e,
             )
             return SecurityViolationResult.failed(str(e))
 
@@ -442,7 +449,7 @@ class SecurityViolationService:
 
             return f"User sessions cleared for user {user_id}: " f"{', '.join(invalidated_items)}"
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security.failed_invalidate_sessions",
                 error=e,
             )
@@ -645,7 +652,7 @@ class SecurityViolationService:
             return sanitize(raw_data)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security.masking_failed_returning_placeholder",
                 error=e,
             )
@@ -666,7 +673,7 @@ class SecurityViolationService:
             service = get_security_notification_service()
             service.notify_security_incident_by_id(incident_id, incident_type, severity)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security.failed_send_notification_incident",
                 incident_id=incident_id,
                 error=e,
@@ -697,11 +704,12 @@ class SecurityViolationService:
                 source="security_violation_service",
             )
             logger.warning(
-                f"[SecurityViolationService] Emitted SECURITY_VIOLATION_CRITICAL "
-                f"for incident {incident_id}, type={violation_type}"
+                "security_violation_service.emitted_incident",
+                incident_id=incident_id,
+                violation_type=violation_type,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_violation_service.failed_emit_critical_event",
                 error=e,
             )

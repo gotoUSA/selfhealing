@@ -7,9 +7,10 @@ When RegEx evaluation is slow or failing, bypass tiering and use static fallback
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -144,7 +145,7 @@ class TieringCircuitBreaker:
                 user="system",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "tiering_cb.shadow_audit_failed",
                 error=e,
             )

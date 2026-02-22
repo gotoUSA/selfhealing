@@ -9,11 +9,12 @@ Version: 6.4.0 - Drift Detection 메트릭 추가
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 # Drift Detection 메트릭
 try:
@@ -143,8 +144,11 @@ class ShadowLogger:
             )
 
             logger.warning(
-                f"[ShadowLog] L2 sync failed: service={service_name} "
-                f"state={intended_state} adapter={adapter_type} error={error}"
+                "shadow_log.sync_failed",
+                service_name=service_name,
+                intended_state=intended_state,
+                adapter_type=adapter_type,
+                error=error,
             )
 
     def get_unsynced_records(self) -> list[L2SyncFailureRecord]:

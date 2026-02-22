@@ -7,8 +7,9 @@ Bulkhead/Backpressure 연동 및 동적 설정 변경을 지원합니다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Awaitable, Callable, TypeVar
+
+import structlog
 
 from selfhealing.core.fallback_strategy import (
     FallbackMode,
@@ -23,12 +24,12 @@ from selfhealing.core.hedging.exceptions import (
     HedgingError,
 )
 from selfhealing.core.hedging.metrics import (
+    record_hedging_benefit,
     record_hedging_disabled,
     record_hedging_execution,
     record_hedging_failure,
     record_hedging_hedged,
     record_hedging_success,
-    record_hedging_benefit,
 )
 from selfhealing.core.hedging.otel import hedging_span, record_hedging_result
 

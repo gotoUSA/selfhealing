@@ -9,12 +9,12 @@ Moved from: coordination/config.py (위치 통일)
 
 from __future__ import annotations
 
-import structlog
 import os
 import socket
 from functools import lru_cache
 from typing import Literal
 
+import structlog
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -154,8 +154,10 @@ class LeaderElectionSettings(BaseSettings):
         recommended_max = self.lease_ttl_seconds / 3
         if not (recommended_min <= effective_interval <= recommended_max):
             logger.warning(
-                f"renew_interval ({effective_interval}s) outside recommended "
-                f"range [{recommended_min:.1f}s, {recommended_max:.1f}s]"
+                "outside_recommended_range",
+                effective_interval=effective_interval,
+                recommended_min=recommended_min,
+                recommended_max=recommended_max,
             )
 
         return self

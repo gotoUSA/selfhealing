@@ -6,8 +6,9 @@ WAL 디스크 관리 모듈.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -22,12 +23,12 @@ class WALDiskManagerMixin:
         # 우선순위 기반 Purge 시도
         if self._config.priority_based_purge:
             if self._purge_by_priority():
-                logger.info("wal.priority_based_purge_succeeded")
+                logger.info("wal")
                 return
 
         # Purge 실패 또는 비활성화 시 Fail-Open 모드 전환
         self._state = WALState.DISK_FULL_FAILOPEN
-        logger.critical("wal.disk_full_switching_fail")
+        logger.critical("wal")
 
         # 메트릭 기록
         try:
@@ -56,7 +57,7 @@ class WALDiskManagerMixin:
             )
             UnifiedNotificationManager().notify(payload)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "wal.failed_send_disk_full",
                 error=e,
             )
@@ -95,10 +96,13 @@ class WALDiskManagerMixin:
                     wal_file.unlink()
                     freed_bytes += file_size
                     logger.warning(
-                        f"[WAL] Priority purge: deleted {wal_file.name} " f"(priority={priority}, size={file_size})"
+                        "wal.priority_purge_deleted",
+                        wal_file=wal_file.name,
+                        priority=priority,
+                        file_size=file_size,
                     )
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "wal.failed_delete",
                         wal_file=wal_file,
                         error=e,
@@ -120,7 +124,8 @@ class WALDiskManagerMixin:
                 remaining_size = total_size - freed_bytes
                 if remaining_size <= critical_min_bytes:
                     logger.warning(
-                        f"[WAL] Priority purge stopped to protect CRITICAL logs " f"(remaining={remaining_size} bytes)"
+                        "wal.priority_purge_stopped_protect",
+                        remaining_size=remaining_size,
                     )
                     break
 
@@ -134,7 +139,7 @@ class WALDiskManagerMixin:
                         file_size=file_size,
                     )
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "wal.failed_delete",
                         wal_file=wal_file,
                         error=e,
@@ -148,8 +153,9 @@ class WALDiskManagerMixin:
             return True
 
         logger.critical(
-            f"[WAL] Priority purge insufficient, freed only {freed_bytes} bytes "
-            f"(target={target_free} bytes). CRITICAL logs at risk!"
+            "wal.priority_purge_insufficient_freed",
+            freed_bytes=freed_bytes,
+            target_free=target_free,
         )
         return False
 
@@ -174,7 +180,7 @@ class WALDiskManagerMixin:
 
             if free_ratio > self._config.disk_recovery_threshold:
                 self._state = WALState.ACTIVE
-                logger.info("wal.disk_space_recovered_resuming")
+                logger.info("wal")
                 return True
         except Exception as e:
             logger.debug(

@@ -20,7 +20,6 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from collections.abc import Callable
@@ -28,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -282,9 +283,10 @@ class PendingRecoveryApprovalManager:
             self._session_to_request[session_id] = request.request_id
 
             logger.info(
-                f"[PendingRecoveryApproval] Created request: "
-                f"id={request.request_id}, session={session_id}, "
-                f"namespace={namespace}"
+                "pending_recovery_approval.created_request",
+                request=request.request_id,
+                session_id=session_id,
+                namespace=namespace,
             )
 
             # 초기 알림 발송
@@ -320,7 +322,9 @@ class PendingRecoveryApprovalManager:
 
             if not request.is_pending():
                 logger.warning(
-                    f"[PendingRecoveryApproval] Request not pending: " f"{request_id}, status={request.status.value}"
+                    "pending_recovery_approval.request_pending",
+                    request_id=request_id,
+                    status=request.status.value,
                 )
                 return request
 
@@ -638,8 +642,10 @@ class PendingRecoveryApprovalManager:
         else:
             # 기본 로깅
             logger.info(
-                f"[PendingRecoveryApproval] Notification ({message_type}): "
-                f"id={request.request_id}, namespace={request.namespace}"
+                "pending_recovery_approval.notification",
+                message_type=message_type,
+                request=request.request_id,
+                request_2=request.namespace,
             )
 
     def _group_by_namespace(

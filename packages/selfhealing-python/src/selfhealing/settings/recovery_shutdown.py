@@ -18,7 +18,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -100,9 +99,11 @@ class RecoveryShutdownSettings(BaseSettings):
 
         if v < min_required:
             logger.warning(
-                f"max_shutdown_wait_seconds ({v}) < "
-                f"drain_timeout ({drain}) + recovery_extension ({extension}) = {min_required}. "
-                "Recovery may be interrupted."
+                "recovery_interrupted",
+                v=v,
+                drain=drain,
+                extension=extension,
+                min_required=min_required,
             )
         return v
 

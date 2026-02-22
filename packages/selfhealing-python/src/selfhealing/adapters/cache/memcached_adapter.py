@@ -8,11 +8,12 @@ Provides a lightweight, high-performance distributed cache alternative.
 from __future__ import annotations
 
 import json
-import structlog
 import time
 import uuid
 from datetime import timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
@@ -96,7 +97,7 @@ class MemcachedDistributedLock(DistributedLock):
                 return True
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_lock.failed_acquire_lock",
                 error=e,
             )
@@ -278,7 +279,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         try:
             return self.client.get(self._make_key(key))
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.get_failed_key",
                 key=key,
                 error=e,
@@ -296,7 +297,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             expire = int(ttl.total_seconds()) if ttl else 0
             return self.client.set(self._make_key(key), value, expire=expire)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.set_failed_key",
                 key=key,
                 error=e,
@@ -308,7 +309,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         try:
             return self.client.delete(self._make_key(key))
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.delete_failed_key",
                 key=key,
                 error=e,
@@ -320,7 +321,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         try:
             return self.client.get(self._make_key(key)) is not None
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.exists_check_failed_key",
                 key=key,
                 error=e,
@@ -354,7 +355,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             return amount
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.incr_failed_key",
                 key=key,
                 error=e,
@@ -381,7 +382,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             return 0
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.decr_failed_key",
                 key=key,
                 error=e,
@@ -402,7 +403,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
                 return False
             return self.client.set(full_key, value, expire=int(ttl.total_seconds()))
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.expire_failed_key",
                 key=key,
                 error=e,
@@ -466,7 +467,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             prefix_len = len(self._key_prefix)
             return {k[prefix_len:]: v for k, v in result.items() if v is not None}
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.mget_failed",
                 error=e,
             )
@@ -486,7 +487,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             return len(failed) == 0
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.mset_failed",
                 error=e,
             )
@@ -505,7 +506,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             result = self.client.get(test_key)
             return result == "ok"
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.health_check_failed",
                 error=e,
             )
@@ -522,7 +523,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
             logger.warning("memcached_cache.flushed_all_keys")
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.flush_failed",
                 error=e,
             )
@@ -542,7 +543,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         try:
             return self.client.stats()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.stats_failed",
                 error=e,
             )
@@ -559,7 +560,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
                 self._make_key(key), expire=int(ttl.total_seconds())
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "memcached_cache.touch_failed_key",
                 key=key,
                 error=e,

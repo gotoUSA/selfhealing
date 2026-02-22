@@ -27,9 +27,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
+import structlog
 from celery.signals import before_task_publish
 
 from selfhealing.context.causation_context import (
@@ -86,8 +86,9 @@ def on_before_task_publish(
     if causation_headers:
         headers.update(causation_headers)
         logger.debug(
-            f"[CausationPropagation] Injected causation headers for task: {sender}, "
-            f"cascade_id={causation_headers.get(CELERY_HEADER_CASCADE_ID)}"
+            "causation_propagation.injected_causation_headers_task",
+            sender=sender,
+            causation_headers=causation_headers.get(CELERY_HEADER_CASCADE_ID),
         )
 
 
@@ -148,7 +149,10 @@ def ensure_causation_context_for_task(
     token = _current_causation.set(info)
 
     logger.debug(
-        f"[CausationPropagation] Auto-created system cascade: " f"source={source}, cascade_id={cascade_id}, task={task_name}"
+        "causation_propagation.auto_created_system_cascade",
+        source=source,
+        cascade_id=cascade_id,
+        task_name=task_name,
     )
 
     return token

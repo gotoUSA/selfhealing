@@ -16,9 +16,10 @@ Logged fields:
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from enum import Enum
+
+import structlog
 
 logger = structlog.get_logger()
 

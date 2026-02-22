@@ -8,9 +8,10 @@ Enums, dataclasses, and configuration for security notifications.
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from enum import Enum
+
+import structlog
 
 from selfhealing.settings import get_config
 
@@ -73,7 +74,6 @@ def __getattr__(name: str):
 
 # NotificationChannel: 단일 소스는 interfaces/notification.py (Item 3 중복 제거)
 from selfhealing.interfaces.notification import NotificationChannel  # noqa: E402, F401
-
 
 # =============================================================================
 # Configuration

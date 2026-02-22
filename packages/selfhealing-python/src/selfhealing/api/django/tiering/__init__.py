@@ -40,8 +40,8 @@ from .defaults import (
 # Enums
 from .enums import (
     OverrideIdentifierType,
-    TierMatchType,
     TierFallbackReason,
+    TierMatchType,
 )
 
 # Middleware

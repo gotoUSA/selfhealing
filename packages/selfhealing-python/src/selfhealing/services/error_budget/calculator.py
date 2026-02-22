@@ -11,10 +11,11 @@ DLQ 유입량 및 장애 시간을 기반으로 계산합니다.
 
 from __future__ import annotations
 
-import structlog
 import warnings
 from collections.abc import Callable
 from datetime import datetime, timedelta
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.services.error_budget.models import ErrorBudgetStatus

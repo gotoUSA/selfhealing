@@ -20,6 +20,10 @@ Usage:
     ``stress_test_service.py`` 플랫 파일에서 ``stress_test_service/`` 패키지로 전환.
 """
 
+# Dynamic forwarding for patch compatibility
+import sys as _sys
+
+from selfhealing.services.stress_test_service import service as _service_module
 from selfhealing.services.stress_test_service.models import (
     BurstFailureResult,
     LockContentionResult,
@@ -30,10 +34,6 @@ from selfhealing.services.stress_test_service.service import (
     StressTestService,
     get_stress_test_service,
 )
-
-# Dynamic forwarding for patch compatibility
-import sys as _sys
-from selfhealing.services.stress_test_service import service as _service_module
 
 _pkg = _sys.modules[__name__]
 for _name in dir(_service_module):

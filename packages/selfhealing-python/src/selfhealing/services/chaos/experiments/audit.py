@@ -8,8 +8,9 @@ Includes:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -60,8 +61,9 @@ class AuditStorageFailureExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject audit storage failure simulation."""
         logger.warning(
-            f"[AuditStorageFailure] Injecting {self.failure_type} failures at "
-            f"{self.failure_rate*100}% rate"
+            "audit_storage_failure.injecting_failures_rate",
+            self=self.failure_type,
+            self_1=self.failure_rate*100,
         )
 
         try:
@@ -83,7 +85,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "audit_storage_failure.failed_inject",
                 error=e,
             )
@@ -113,7 +115,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "audit_storage_failure.rollback_failed",
                     error=e,
                 )
@@ -227,8 +229,10 @@ class ReplayFloodExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject replay flood simulation."""
         logger.warning(
-            f"[ReplayFlood] Starting flood: {self.flood_rate}/s for "
-            f"{self.duration_seconds}s (payload: {self.payload_size_bytes}B)"
+            "replay_flood.starting_flood_payload",
+            self=self.flood_rate,
+            self_1=self.duration_seconds,
+            self_2=self.payload_size_bytes,
         )
 
         try:
@@ -251,7 +255,7 @@ class ReplayFloodExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "replay_flood.failed_inject",
                 error=e,
             )
@@ -281,7 +285,7 @@ class ReplayFloodExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "replay_flood.rollback_failed",
                     error=e,
                 )

@@ -14,10 +14,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import structlog
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import AsyncGenerator
+
+import structlog
 
 from selfhealing.resilience.bulkhead.base import (
     BulkheadState,

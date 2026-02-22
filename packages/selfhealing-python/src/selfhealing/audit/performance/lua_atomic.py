@@ -4,9 +4,10 @@ Lua Script Atomic Hash Chain (5 RTT → 1 RTT).
 Provides atomic hash chain operations using Redis Lua scripts.
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -230,7 +231,7 @@ class LuaAtomicHashChain:
             return True, int(result) if result else 0, ""
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "lua_atomic_hash_chain.reserve_failed",
                 error=e,
             )
@@ -290,7 +291,7 @@ class LuaAtomicHashChain:
             return True, ""
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "lua_atomic_hash_chain.commit_failed",
                 error=e,
             )

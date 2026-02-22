@@ -15,8 +15,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import _try_add_to_buffer, _write_to_wal
 
@@ -228,12 +229,17 @@ def log_region_isolation_audit(
 
     if action == "isolate":
         logger.warning(
-            f"[RegionIsolationAudit] ISOLATED | region={region} | "
-            f"reason={reason} | duration={duration_seconds}s | by={operator}"
+            "cell_evacuation.cell_isolated",
+            region=region,
+            reason=reason,
+            duration_seconds=duration_seconds,
+            operator=operator,
         )
     else:
         logger.info(
-            f"[RegionIsolationAudit] RESTORED | region={region} | by={operator}"
+            "region_isolation_audit.restored",
+            region=region,
+            operator=operator,
         )
 
     return wal_seq
@@ -307,14 +313,19 @@ def log_compliance_audit(
 
     if passed:
         logger.info(
-            f"[ComplianceAudit] PASSED | stage={stage_name} | "
-            f"standard={standard} | check={check_id}"
+            "compliance_audit.passed",
+            stage_name=stage_name,
+            standard=standard,
+            check_id=check_id,
         )
     else:
         logger.warning(
-            f"[ComplianceAudit] VIOLATION | stage={stage_name} | "
-            f"standard={standard} | check={check_id} | "
-            f"severity={severity} | msg={message}"
+            "compliance_audit.violation",
+            stage_name=stage_name,
+            standard=standard,
+            check_id=check_id,
+            severity=severity,
+            message=message,
         )
     return wal_seq
 
@@ -388,14 +399,19 @@ def log_blast_radius_audit(
 
     if allowed:
         logger.info(
-            f"[BlastRadiusAudit] {action.upper()} | exp={experiment_id} | "
-            f"radius={blast_radius} | service={target_service}"
+            "blast_radius_audit.event",
+            action=action.upper(),
+            experiment_id=experiment_id,
+            blast_radius=blast_radius,
+            target_service=target_service,
         )
     else:
         logger.warning(
-            f"[BlastRadiusAudit] VIOLATION | exp={experiment_id} | "
-            f"radius={blast_radius} | service={target_service} | "
-            f"violations={violations}"
+            "blast_radius_audit.violation",
+            experiment_id=experiment_id,
+            blast_radius=blast_radius,
+            target_service=target_service,
+            violations=violations,
         )
     return wal_seq
 
@@ -530,7 +546,11 @@ def log_data_access_audit(
             pass
 
     logger.info(
-        f"[DataAccessAudit] {method} {path} | actor={actor_id} | "
-        f"resource={resource_type}:{resource_id}"
+        "data_access_audit.event",
+        method=method,
+        path=path,
+        actor_id=actor_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
     )
     return wal_seq

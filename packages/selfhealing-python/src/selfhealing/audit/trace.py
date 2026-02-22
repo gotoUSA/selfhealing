@@ -6,12 +6,13 @@ Integrates with OpenTelemetry and common tracing headers.
 """
 
 import contextvars
-import structlog
 import threading
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -394,8 +395,8 @@ def get_celery_trace_id_with_otel_context(task_id: str) -> dict[str, str | None]
 
     try:
         from selfhealing.observability import (
-            get_current_trace_id_from_otel,
             get_current_span_id_from_otel,
+            get_current_trace_id_from_otel,
             is_otel_enabled,
         )
 

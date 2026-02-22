@@ -16,10 +16,11 @@ Tie-breaking 순서 (동일 타임스탬프 시):
 
 from __future__ import annotations
 
-import structlog
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.multiregion.config import get_multiregion_settings
 
@@ -280,19 +281,21 @@ class LastWriteWinsResolver(ConflictResolver):
             self._metrics.record_event(is_conflict=True, resolution_method=resolution)
             self._last_keys[key] = incoming_conflict_key
             logger.debug(
-                f"[LWW] Accepted: {key} "
-                f"(ts={incoming_conflict_key.timestamp:.6f}, "
-                f"priority={incoming_conflict_key.region_priority}, "
-                f"resolution={resolution})"
+                "lww.accepted",
+                key=key,
+                incoming_conflict_key=incoming_conflict_key.timestamp,
+                incoming_conflict_key_2=incoming_conflict_key.region_priority,
+                resolution=resolution,
             )
             return incoming
         else:
             # 이전 값이 더 최신 (드랍)
             self._metrics.record_event(is_conflict=True, resolution_method="dropped")
             logger.debug(
-                f"[LWW] Dropped: {key} "
-                f"(incoming={incoming_conflict_key.timestamp:.6f} <= "
-                f"last={last_conflict_key.timestamp:.6f})"
+                "lww.dropped",
+                key=key,
+                incoming_conflict_key=incoming_conflict_key.timestamp,
+                last_conflict_key=last_conflict_key.timestamp,
             )
             return None
 

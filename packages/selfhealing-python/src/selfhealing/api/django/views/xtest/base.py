@@ -18,7 +18,6 @@ Regional Scope:
 - 리전 불일치 시 403 Forbidden 반환
 """
 
-import structlog
 import os
 import re
 import threading
@@ -26,6 +25,7 @@ import uuid
 from typing import Any
 
 import psutil
+import structlog
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
@@ -257,10 +257,7 @@ class XTestModeMixin:
             environment = os.getenv("ENVIRONMENT", "development").lower()
             if environment == "development":
                 # 개발 환경에서는 경고만 출력
-                logger.warning(
-                    "[X-Test-Mode] SELFHEALING_NAMESPACE_REGION not set in development. "
-                    "GLOBAL scope API allowed with warning."
-                )
+                logger.warning("test_mode_set_development")
                 return True, None
 
             logger.warning("test_mode.global_flag_warning")
@@ -279,8 +276,9 @@ class XTestModeMixin:
 
         if not target_region:
             logger.warning(
-                f"[X-Test-Mode] Missing X-Region header for GLOBAL scope API. "
-                f"current_region={current_region}, path={request.path}"
+                "test_mode_missing_region",
+                current_region=current_region,
+                request=request.path,
             )
             self._record_regional_scope_metrics(request, current_region, None, "denied_no_header")
             return False, Response(
@@ -297,8 +295,10 @@ class XTestModeMixin:
         # 리전 일치 확인
         if target_region.lower() != current_region.lower():
             logger.warning(
-                f"[X-Test-Mode] Cross-region X-Test denied: "
-                f"current={current_region}, target={target_region}, path={request.path}"
+                "test_mode_cross_region",
+                current_region=current_region,
+                target_region=target_region,
+                request=request.path,
             )
             self._record_regional_scope_metrics(request, current_region, target_region, "denied_mismatch")
             return False, Response(
@@ -344,7 +344,9 @@ class XTestModeMixin:
 
             if not result.is_safe:
                 logger.warning(
-                    f"[X-Test-Mode] Resource constraint check failed: {result.block_reason} " f"(user: {request.user})"
+                    "test_mode_resource_constraint",
+                    result=result.block_reason,
+                    request=request.user,
                 )
 
                 response = Response(
@@ -358,7 +360,9 @@ class XTestModeMixin:
                 return response
 
             logger.debug(
-                f"[X-Test-Mode] Resource check passed: " f"CPU={result.cpu_percent:.1f}%, Memory={result.memory_percent:.1f}%"
+                "test_mode_resource_check",
+                result=result.cpu_percent,
+                result_1=result.memory_percent,
             )
             return None
 
@@ -499,7 +503,10 @@ class XTestModeMixin:
 
             if success:
                 logger.debug(
-                    f"[X-Test-Mode] Registered artifact: " f"session={session_id}, component={component}, id={artifact_id}"
+                    "cell_registry.bulkheads_registered",
+                    session_id=session_id,
+                    component=component,
+                    artifact_id=artifact_id,
                 )
             return success
 
@@ -666,7 +673,9 @@ def collect_system_snapshot() -> dict[str, Any]:
     try:
         # 캐시에서 CPU/Memory 조회 (~0ms), 캐시 미가동 시 직접 측정으로 fallback (100ms)
         try:
-            from selfhealing.services.system_metrics_cache import get_system_metrics_cache
+            from selfhealing.services.system_metrics_cache import (
+                get_system_metrics_cache,
+            )
 
             cache = get_system_metrics_cache()
             if cache.is_running():
@@ -797,7 +806,9 @@ def get_healing_events(limit: int = 50, use_redis: bool = True) -> list[dict[str
     """
     if use_redis:
         try:
-            from selfhealing.services.healing_events_store import get_healing_events_redis
+            from selfhealing.services.healing_events_store import (
+                get_healing_events_redis,
+            )
 
             return get_healing_events_redis(limit=limit, days_back=1)
         except ImportError:

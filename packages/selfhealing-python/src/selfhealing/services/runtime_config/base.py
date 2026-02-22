@@ -6,11 +6,12 @@ Core infrastructure including storage, cache, and history tracking.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import asdict as dataclass_asdict
 from dataclasses import fields, is_dataclass
 from typing import Any
+
+import structlog
 
 from selfhealing.core.state_backend import get_state_backend
 
@@ -154,7 +155,11 @@ class BaseConfigManager:
                             applied_safe_defaults.append(f"{key}: {value!r} → {safe_value!r}")
                             current[key] = safe_value
                             logger.warning(
-                                f"[RuntimeConfig] Safe default applied: " f"{config_type}.{key} ({value!r} → {safe_value!r})"
+                                "runtime_config.safe_default_applied",
+                                config_type=config_type,
+                                key=key,
+                                value=value,
+                                safe_value=safe_value,
                             )
                         else:
                             current[key] = value
@@ -284,7 +289,10 @@ class BaseConfigManager:
                 )
 
             logger.info(
-                f"[RuntimeConfig] Audit logged: {config_type} " f"changed by {changed_by}, fields: {list(new_values.keys())}"
+                "runtime_config.audit_logged_changed_fields",
+                config_type=config_type,
+                changed_by=changed_by,
+                value=list(new_values.keys()),
             )
         except Exception as e:
             # Graceful degradation - audit failure should not break config update

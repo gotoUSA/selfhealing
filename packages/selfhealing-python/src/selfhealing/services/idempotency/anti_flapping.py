@@ -8,10 +8,11 @@ Canonical location: ``selfhealing.services.idempotency.anti_flapping``
 
 from __future__ import annotations
 
-import structlog
 import time
 from collections import defaultdict
 from threading import Lock
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -36,12 +36,13 @@ Usage:
 from __future__ import annotations
 
 import contextvars
-import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -371,7 +372,9 @@ def warn_if_untracked(operation: str) -> None:
             stacklevel=2,
         )
         logger.warning(
-            f"[ActorContext] UNTRACKED_OPERATION operation={operation} " f"actor={ActorContext.get_current().actor_id}"
+            "actor_context.event",
+            operation=operation,
+            ActorContext=ActorContext.get_current().actor_id,
         )
 
 

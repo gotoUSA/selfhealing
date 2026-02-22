@@ -16,10 +16,11 @@ Environment Variables:
 
 from __future__ import annotations
 
-import structlog
 import os
 from dataclasses import dataclass
 from urllib.parse import urlencode
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -78,10 +79,10 @@ class ActionableAlertUrlBuilder:
         self._runbook_base_url = os.getenv("CB_RUNBOOK_URL", "")
 
         logger.debug(
-            f"[ActionableAlertUrlBuilder] Initialized with "
-            f"dashboard={bool(self._dashboard_base_url)}, "
-            f"admin={bool(self._admin_base_url)}, "
-            f"runbook={bool(self._runbook_base_url)}"
+            "actionable_alert_url_builder.initialized",
+            value=bool(self._dashboard_base_url),
+            value_1=bool(self._admin_base_url),
+            value_2=bool(self._runbook_base_url),
         )
 
     def build_cb_open_urls(

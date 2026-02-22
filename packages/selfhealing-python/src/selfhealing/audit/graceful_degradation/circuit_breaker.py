@@ -7,12 +7,13 @@ Redis instance and allowing recovery time.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from .enums import HashChainCircuitBreakerConfig, CircuitState
+import structlog
+
+from .enums import CircuitState, HashChainCircuitBreakerConfig
 
 if TYPE_CHECKING:
     from .degradation_manager import HashChainDegradationManager

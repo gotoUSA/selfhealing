@@ -89,7 +89,10 @@ def check_recovery_monitoring_experiments(self) -> dict:
                     if hasattr(experiment, "complete_recovery_monitoring"):
                         experiment.complete_recovery_monitoring()
                         completed += 1
-                        logger.info(f"[ChaosRecoveryMonitor] Experiment {exp_id} recovery completed")
+                        logger.info(
+                            "chaos_recovery_monitor.experiment_recovery_completed",
+                            exp_id=exp_id,
+                        )
 
                         # Unregister from scheduler
                         scheduler.unregister_experiment_instance(exp_id)
@@ -100,14 +103,21 @@ def check_recovery_monitoring_experiments(self) -> dict:
                     if hasattr(experiment, "force_complete"):
                         experiment.force_complete(reason="hard_ttl_expired")
                         force_completed += 1
-                        logger.warning(f"[ChaosRecoveryMonitor] Experiment {exp_id} force completed (Hard TTL)")
+                        logger.warning(
+                            "chaos_recovery_monitor.experiment_force_completed_hard",
+                            exp_id=exp_id,
+                        )
 
                         # Unregister from scheduler
                         scheduler.unregister_experiment_instance(exp_id)
 
             except Exception as e:
                 exp_id = getattr(experiment, "experiment_id", "unknown")
-                logger.warning(f"[ChaosRecoveryMonitor] Error checking {exp_id}: {e}")
+                logger.warning(
+                    "chaos_recovery_monitor.error_checking",
+                    exp_id=exp_id,
+                    error=e,
+                )
                 errors.append({"experiment_id": exp_id, "error": str(e)})
 
         result = {
@@ -120,14 +130,19 @@ def check_recovery_monitoring_experiments(self) -> dict:
 
         if checked > 0:
             logger.info(
-                f"[ChaosRecoveryMonitor] Checked {checked} experiments: "
-                f"{completed} completed, {force_completed} force completed"
+                "chaos_recovery_monitor.checked_experiments_completed_force",
+                checked=checked,
+                completed=completed,
+                force_completed=force_completed,
             )
 
         return result
 
     except Exception as e:
-        logger.error(f"[ChaosRecoveryMonitor] Task failed: {e}", exc_info=True)
+        logger.exception(
+            "chaos_recovery_monitor.task_failed",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),

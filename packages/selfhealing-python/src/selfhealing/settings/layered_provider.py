@@ -10,10 +10,10 @@ Layered Configuration Provider.
 
 from __future__ import annotations
 
-import structlog
 from contextvars import ContextVar
 from typing import Any, TypeVar
 
+import structlog
 from pydantic_settings import BaseSettings
 
 logger = structlog.get_logger()
@@ -47,7 +47,9 @@ def set_request_override(config_type: str, overrides: dict[str, Any]) -> None:
     current[config_type] = overrides
     _request_overrides.set(current)
     logger.debug(
-        f"[LayeredProvider] Request override set for {config_type}: {overrides}"
+        "layered_provider.request_override_set",
+        config_type=config_type,
+        overrides=overrides,
     )
 
 
@@ -159,8 +161,9 @@ def get_layered_settings(
                 if key in valid_fields:
                     base_dict[key] = value
             logger.debug(
-                f"[LayeredProvider] Applied request overrides for {config_type}: "
-                f"{list(request_overrides.keys())}"
+                "layered_provider.applied_request_overrides",
+                config_type=config_type,
+                value=list(request_overrides.keys()),
             )
 
     # 병합된 값으로 새 인스턴스 생성

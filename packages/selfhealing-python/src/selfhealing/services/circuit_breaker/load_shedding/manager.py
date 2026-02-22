@@ -23,10 +23,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import random
 from collections.abc import Callable
 from datetime import datetime, timezone
+
+import structlog
 
 from selfhealing.services.circuit_breaker.load_shedding.error_rate import (
     ErrorRateProvider,
@@ -79,7 +80,7 @@ class LoadSheddingManager:
         self._audit_callback: Callable[[SheddingAuditEntry], None] | None = None
         self._initialized = True
 
-        logger.debug("load_shedding_manager.initialized")
+        logger.debug("initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -350,7 +351,7 @@ class LoadSheddingManager:
             try:
                 self._audit_callback(audit_entry)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "load_shedding_manager.audit_callback_failed",
                     error=e,
                 )
@@ -363,9 +364,11 @@ class LoadSheddingManager:
         )
 
         logger.info(
-            f"[LoadSheddingManager] {event_type}: "
-            f"level {previous_level_index} → {new_level_index}, "
-            f"affected services: {len(affected_services)}"
+            "load_shedding_manager.level_affected_services",
+            event_type=event_type,
+            previous_level_index=previous_level_index,
+            new_level_index=new_level_index,
+            count=len(affected_services),
         )
 
         return audit_entry

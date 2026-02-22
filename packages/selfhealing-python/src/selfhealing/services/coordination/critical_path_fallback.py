@@ -17,11 +17,12 @@ Reference:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -115,7 +116,8 @@ class CriticalPathFallback:
                         self._stats["redis_loads"] += 1
                         self._current_tier = "redis"
                         logger.debug(
-                            f"[CriticalPathFallback] Loaded from Redis: {namespace}"
+                            "critical_path_fallback.loaded_redis",
+                            namespace=namespace,
                         )
                         return self._decode_redis_hash(data)
                 except Exception as e:
@@ -134,7 +136,8 @@ class CriticalPathFallback:
                             self._stats["local_loads"] += 1
                             self._current_tier = "local"
                             logger.debug(
-                                f"[CriticalPathFallback] Loaded from local file: {namespace}"
+                                "critical_path_fallback.loaded_local_file",
+                                namespace=namespace,
                             )
                             return all_states[namespace]
             except Exception as e:
@@ -156,7 +159,8 @@ class CriticalPathFallback:
 
             # 4. 기본 상태 반환 (최후 수단)
             logger.info(
-                f"[CriticalPathFallback] Returning default state for {namespace}"
+                "critical_path_fallback.returning_default_state",
+                namespace=namespace,
             )
             return self._get_default_state(namespace)
 
@@ -339,7 +343,7 @@ class CriticalPathFallback:
                         count += 1
                 self._memory_audit_buffer.clear()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "critical_path_fallback.flush_failed",
                     error=e,
                 )

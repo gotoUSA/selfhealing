@@ -45,7 +45,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import uuid
 from collections.abc import Callable
@@ -53,6 +52,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.canary import get_canary_settings
 from selfhealing.settings.namespace import get_key_prefix

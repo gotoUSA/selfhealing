@@ -21,13 +21,11 @@ Usage:
 """
 
 # --- emergency.py exports ---
-from selfhealing.services.governance.emergency import (
-    EmergencyModeTracker,
-    GovernanceEmergencyState,
-    OperationMode,
-    get_current_operation_mode,
-    get_emergency_tracker,
-    is_emergency_mode_active,
+# --- api_service.py exports ---
+from selfhealing.services.governance.api_service import (
+    GovernanceApiService,
+    get_governance_api_service,
+    reset_governance_api_service,
 )
 
 # --- checks.py exports ---
@@ -46,6 +44,14 @@ from selfhealing.services.governance.checks import (
     require_not_emergency,
     require_system_enabled,
 )
+from selfhealing.services.governance.emergency import (
+    EmergencyModeTracker,
+    GovernanceEmergencyState,
+    OperationMode,
+    get_current_operation_mode,
+    get_emergency_tracker,
+    is_emergency_mode_active,
+)
 
 # --- service.py exports ---
 from selfhealing.services.governance.service import (
@@ -53,13 +59,6 @@ from selfhealing.services.governance.service import (
     GovernanceNotificationResult,
     GovernanceService,
     get_governance_service,
-)
-
-# --- api_service.py exports ---
-from selfhealing.services.governance.api_service import (
-    GovernanceApiService,
-    get_governance_api_service,
-    reset_governance_api_service,
 )
 
 __all__ = [

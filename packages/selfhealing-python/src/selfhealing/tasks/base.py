@@ -32,9 +32,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any, ClassVar
+
+import structlog
 
 from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
@@ -191,7 +192,8 @@ class BaseNotifyingTask:
         alert_key = f"{self.name}:{self._get_alert_key(result)}"
         if not self._can_send_alert(alert_key):
             logger.debug(
-                f"[BaseNotifyingTask] Alert suppressed by cooldown: {alert_key}"
+                "celery_task.alert_suppressed_cooldown",
+                alert_key=alert_key,
             )
             return False
 
@@ -200,8 +202,10 @@ class BaseNotifyingTask:
             value = result.get(policy.threshold_field, 0)
             if isinstance(value, (int, float)) and value < policy.threshold:
                 logger.debug(
-                    f"[BaseNotifyingTask] Alert suppressed by threshold: "
-                    f"{policy.threshold_field}={value} < {policy.threshold}"
+                    "celery_task.alert_suppressed_threshold",
+                    policy=policy.threshold_field,
+                    value=value,
+                    policy_2=policy.threshold,
                 )
                 return False
 
@@ -300,11 +304,13 @@ class BaseNotifyingTask:
             self._record_alert_sent(alert_key)
 
             logger.info(
-                f"[BaseNotifyingTask] Notification sent for {self.name}: {severity}"
+                "celery_task.notification_sent",
+                self=self.name,
+                severity=severity,
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_task.failed_send_notification",
                 error=e,
             )
@@ -332,7 +338,7 @@ class BaseNotifyingTask:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_task.failed_send_pre_notification",
                 error=e,
             )
@@ -344,8 +350,8 @@ class BaseNotifyingTask:
         Returns False to block execution until approved.
         """
         logger.warning(
-            f"[BaseNotifyingTask] Task {self.name} requires approval - "
-            f"execution blocked. Implement approval workflow."
+            "celery_task.task_requires_approval_execution",
+            self=self.name,
         )
 
         # Send approval request notification
@@ -374,7 +380,7 @@ class BaseNotifyingTask:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_task.failed_send_approval_request",
                 error=e,
             )
@@ -392,8 +398,9 @@ class BaseNotifyingTask:
             # Store in cache/Redis for later aggregation
             # For now, just log
             logger.info(
-                f"[BaseNotifyingTask] Adding to daily report: "
-                f"{self.name} -> {result}"
+                "celery_task.adding_daily_report",
+                self=self.name,
+                result=result,
             )
 
             # TODO: Implement actual storage (Redis or Django cache)
@@ -405,7 +412,7 @@ class BaseNotifyingTask:
             # cache.set(key, current, timeout=86400)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "celery_task.failed_add_daily_report",
                 error=e,
             )

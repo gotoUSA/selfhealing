@@ -6,9 +6,10 @@ Error Budget Enums and Constants
 
 from __future__ import annotations
 
-import structlog
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -151,9 +152,11 @@ def _send_failsafe_alert(
 
     # 1. 로그 (항상 남김)
     logger.critical(
-        f"[FAIL-SAFE] {component} 시스템 장애로 Fail-Safe 모드 전환. "
-        f"Error: {error_message}, Fallback: {fallback_action}, "
-        f"Count: {_failsafe_counter}"
+        "fail_safe_시스템_장애로",
+        component=component,
+        error_message=error_message,
+        fallback_action=fallback_action,
+        _failsafe_counter=_failsafe_counter,
     )
 
     # 2. AlertAdapter를 통한 알림 (설정된 경우)
@@ -172,7 +175,7 @@ def _send_failsafe_alert(
         logger.warning("error_budget.fail_safe_adapter_configured")
     except Exception as alert_error:
         # 알림 발송 실패해도 Fail-Safe 응답은 반환해야 함
-        logger.error(
+        logger.exception(
             "fail_safe_failed_send",
             alert_error=alert_error,
         )

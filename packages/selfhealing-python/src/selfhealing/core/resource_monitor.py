@@ -12,8 +12,9 @@ Chaos Experiment의 Resource Exhaustion이 안전 한계 내에서 동작하도�
 
 from __future__ import annotations
 
-import structlog
 from pathlib import Path
+
+import structlog
 
 from selfhealing.settings.resource_monitor import get_resource_monitor_settings
 
@@ -134,10 +135,12 @@ class CgroupResourceMonitor:
         safe_available = int(available * (1.0 - safety_margin))
 
         logger.debug(
-            f"[CgroupResourceMonitor] max={max_bytes / 1024 / 1024:.0f}MB, "
-            f"current={current_bytes / 1024 / 1024:.0f}MB, "
-            f"available={available / 1024 / 1024:.0f}MB, "
-            f"safe(margin={safety_margin * 100:.0f}%)={safe_available / 1024 / 1024:.0f}MB"
+            "cgroup_resource_monitor.mb_mb_mb_safe",
+            value=max_bytes / 1024 / 1024,
+            value_1=current_bytes / 1024 / 1024,
+            value_2=available / 1024 / 1024,
+            value_3=safety_margin * 100,
+            value_4=safe_available / 1024 / 1024,
         )
 
         return max(0, safe_available)
@@ -201,8 +204,9 @@ class CgroupResourceMonitor:
 
         # 안전 한계 초과 - 캡 적용
         logger.warning(
-            f"[CgroupResourceMonitor] Requested {requested_bytes / 1024 / 1024:.0f}MB "
-            f"exceeds safe limit {available / 1024 / 1024:.0f}MB, capping"
+            "cgroup_resource_monitor.requested_mb_exceeds_safe",
+            value=requested_bytes / 1024 / 1024,
+            value_1=available / 1024 / 1024,
         )
         return False, available
 
@@ -277,11 +281,11 @@ class CgroupResourceMonitor:
             minutes_to_oom = remaining / trend_slope
 
             logger.debug(
-                f"[CgroupResourceMonitor] OOM Prediction: "
-                f"current={current_level / 1024 / 1024:.0f}MB, "
-                f"limit={safe_limit / 1024 / 1024:.0f}MB, "
-                f"slope={trend_slope / 1024 / 1024:.2f}MB/step, "
-                f"est_minutes={minutes_to_oom:.1f}"
+                "cgroup_resource_monitor.oom_prediction_mb_mb",
+                value=current_level / 1024 / 1024,
+                value_1=safe_limit / 1024 / 1024,
+                value_2=trend_slope / 1024 / 1024,
+                minutes_to_oom=minutes_to_oom,
             )
 
             return max(0.0, minutes_to_oom)

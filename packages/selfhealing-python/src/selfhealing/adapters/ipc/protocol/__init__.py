@@ -9,9 +9,9 @@ from selfhealing.adapters.ipc.protocol.json_rpc import (
     JSONRPCErrorCode,
     JSONRPCRequest,
     JSONRPCResponse,
-    parse_request,
     create_error_response,
     create_success_response,
+    parse_request,
 )
 
 __all__ = [

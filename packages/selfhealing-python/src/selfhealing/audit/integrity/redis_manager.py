@@ -7,11 +7,12 @@ Contains:
 
 from __future__ import annotations
 
-import structlog
 import os
 import threading
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.audit.integrity.models import compute_hash
 from selfhealing.audit.integrity.verifier import HashChainVerifier
@@ -298,7 +299,7 @@ class RedisHashChainManager:
             logger.warning("redis_hash_chain.chain_state_reset_redis")
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_hash_chain.failed_reset",
                 error=e,
             )

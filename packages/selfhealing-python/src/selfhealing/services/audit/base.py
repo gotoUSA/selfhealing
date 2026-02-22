@@ -10,11 +10,12 @@ WAL 기반 누락 0 보장 (20_AUDIT_UNIFICATION_PLAN.md ADR-005):
 
 from __future__ import annotations
 
-import structlog
 import os
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.audit.event_buffer import AuditEventType
@@ -269,7 +270,7 @@ def _write_to_wal(
         )
         return seq
     except Exception as e:
-        logger.error(
+        logger.exception(
             "audit_helpers.wal_write_failed_critical",
             error=e,
         )

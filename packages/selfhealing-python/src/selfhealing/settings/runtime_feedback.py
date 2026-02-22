@@ -11,7 +11,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -82,7 +81,7 @@ def get_runtime_feedback_settings() -> RuntimeFeedbackSettings:
     if _settings is None:
         _settings = RuntimeFeedbackSettings()
         logger.debug(
-            "[RuntimeFeedbackSettings] Loaded: "
+            "[RuntimeFeedbackSettings] Loaded: "  # noqa: G004
             f"max_consecutive_failures={_settings.max_consecutive_failures}, "
             f"rollback_cooldown={_settings.rollback_cooldown}s, "
             f"adjustment_wait={_settings.adjustment_wait}s"

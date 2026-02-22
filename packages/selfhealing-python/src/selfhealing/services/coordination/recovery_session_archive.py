@@ -20,11 +20,12 @@ Reference:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from .enums import RecoveryStatus
 from .recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
@@ -363,8 +364,9 @@ class RecoverySessionArchiveService:
                 self._memory_storage[archive_data.session_id] = archive_data
 
         logger.info(
-            f"[RecoverySessionArchive] Archived: session_id={session.id}, "
-            f"status={session.status.value}"
+            "recovery_session_archive.archived",
+            session=session.id,
+            status=session.status.value,
         )
 
         return archive_data
@@ -419,9 +421,7 @@ class RecoverySessionArchiveService:
                     metadata_json=json.dumps(data.metadata),
                 )
         except ImportError:
-            logger.warning(
-                "[RecoverySessionArchive] Django model not available, using memory storage"
-            )
+            logger.warning("recovery_session_archive.django_model_available_using")
             with self._lock:
                 self._memory_storage[data.session_id] = data
         except Exception as e:
@@ -684,7 +684,9 @@ class RecoverySessionArchiveService:
         # 완료된 세션은 Resume 불가
         if archive_data.status in ("completed", "aborted"):
             logger.warning(
-                f"[RecoverySessionArchive] Cannot resume {archive_data.status} session: {session_id}"
+                "recovery_session_archive.cannot_resume_session",
+                archive_data=archive_data.status,
+                session_id=session_id,
             )
             return None
 
@@ -830,7 +832,8 @@ class RecoverySessionArchiveService:
                 ).delete()
 
                 logger.info(
-                    f"[RecoverySessionArchive] Cleaned up {deleted} old archives"
+                    "recovery_session_archive.cleaned_up_old_archives",
+                    deleted=deleted,
                 )
                 return deleted
             except ImportError:

@@ -6,8 +6,9 @@ Cascade Event 조회, 인과관계 추적 책임을 담당합니다.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.cascade_auditor._helpers import get_index_ids
 from selfhealing.audit.cascade_event import CascadeEvent

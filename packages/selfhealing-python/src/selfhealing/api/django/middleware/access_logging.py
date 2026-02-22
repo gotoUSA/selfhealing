@@ -13,11 +13,12 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -337,7 +338,7 @@ class SensitiveAccessLoggingMiddleware:
             self.access_logger.log_if_sensitive(request, response, response_time_ms)
         except Exception as e:
             # Log error but don't affect response
-            logger.error(
+            logger.exception(
                 "access_log.middleware_error_fail_open",
                 error=e,
             )

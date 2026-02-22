@@ -22,7 +22,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -254,8 +253,8 @@ class RecoveryCoordinatorSettings(BaseSettings):
         """성공률 임계값이 너무 낮으면 경고."""
         if v < 0.9:
             logger.warning(
-                f"[RecoveryCoordinatorSettings] Success threshold {v} is low, "
-                "consider using >= 0.9 for production stability"
+                "recovery_coordinator_settings.success_threshold_low_consider",
+                v=v,
             )
         return v
 

@@ -12,12 +12,13 @@ Framework-agnostic design - works with any pool implementation.
 """
 
 import threading
-import structlog
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger().bind(component="pool_monitor")
 

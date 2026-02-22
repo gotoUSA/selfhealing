@@ -16,7 +16,6 @@ Security:
 """
 
 import structlog
-
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
@@ -30,9 +29,15 @@ from selfhealing.services.postmortem_store import (
     get_healing_incidents,
     get_healing_incidents_count,
     get_incident_by_id,
+)
+from selfhealing.services.postmortem_store import (
+    build_timeline as _build_timeline,
+)
+from selfhealing.services.postmortem_store import (
     # Helper functions
     collect_service_states as _collect_service_states,
-    build_timeline as _build_timeline,
+)
+from selfhealing.services.postmortem_store import (
     generate_postmortem_data as _generate_postmortem_data,
 )
 

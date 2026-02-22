@@ -32,12 +32,13 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now as utc_now
 
@@ -219,7 +220,9 @@ class AtomicBudgetConsumer:
 
             except Exception as e:
                 logger.warning(
-                    f"[AtomicConsumer] Lock attempt {attempt + 1} failed: {e}"
+                    "atomic_consumer.lock_attempt_failed",
+                    value=attempt + 1,
+                    error=e,
                 )
 
         if not lock_acquired:
@@ -266,10 +269,10 @@ class AtomicBudgetConsumer:
             redis.set(budget_key, str(new_consumed))
 
             logger.debug(
-                f"[AtomicConsumer] Consumed: "
-                f"previous={current_consumed:.2f}, "
-                f"added={weighted_minutes:.2f}, "
-                f"total={new_consumed:.2f}"
+                "atomic_consumer.consumed",
+                current_consumed=current_consumed,
+                weighted_minutes=weighted_minutes,
+                new_consumed=new_consumed,
             )
 
             return AtomicConsumeResult(
@@ -279,7 +282,7 @@ class AtomicBudgetConsumer:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "atomic_consumer.consume_failed",
                 error=e,
             )
@@ -322,8 +325,9 @@ class AtomicBudgetConsumer:
         Lock 없이 진행하되, 결과에 표시합니다.
         """
         logger.warning(
-            f"[AtomicConsumer] Degraded mode: {reason}, "
-            f"consuming {weighted_minutes:.2f} minutes without lock"
+            "atomic_consumer.degraded_mode_consuming_minutes",
+            reason=reason,
+            weighted_minutes=weighted_minutes,
         )
 
         return AtomicConsumeResult(

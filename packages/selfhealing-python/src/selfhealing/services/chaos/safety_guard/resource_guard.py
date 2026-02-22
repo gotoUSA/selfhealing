@@ -26,10 +26,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 
 import psutil
+import structlog
 
 from selfhealing.core.resource_monitor import CgroupResourceMonitor
 from selfhealing.settings.resource_guard import get_resource_guard_settings
@@ -119,7 +119,9 @@ class ResourceGuard:
             CPU 사용률 (0.0 ~ 100.0)
         """
         try:
-            from selfhealing.services.system_metrics_cache import get_system_metrics_cache
+            from selfhealing.services.system_metrics_cache import (
+                get_system_metrics_cache,
+            )
 
             cache = get_system_metrics_cache()
             if cache.is_running():
@@ -254,7 +256,9 @@ class ResourceGuard:
             return result
 
         logger.debug(
-            f"[ResourceGuard] Resource check passed: " f"CPU={status.cpu_percent:.1f}%, Memory={status.memory_percent:.1f}%"
+            "resource_guard.resource_check_passed",
+            status=status.cpu_percent,
+            status_1=status.memory_percent,
         )
         return result
 

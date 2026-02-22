@@ -15,10 +15,10 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import structlog
 import uuid
 from typing import Any
 
+import structlog
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -139,9 +139,12 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] DLQ injection: domain={domain}, "
-            f"failure_type={failure_type}, count={len(created_ids)}, "
-            f"session={xtest_session}, user={user_str}"
+            "test_mode_dlq_injection",
+            domain=domain,
+            failure_type=failure_type,
+            count=len(created_ids),
+            xtest_session=xtest_session,
+            user_str=user_str,
         )
 
         response_data = {
@@ -246,8 +249,11 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
             )
 
         logger.info(
-            f"[X-Test-Mode] DLQ status query: domain={domain_filter}, "
-            f"status={status_filter}, total={stats.get('total', 0)}, user={request.user}"
+            "test_mode_dlq_status",
+            domain_filter=domain_filter,
+            status_filter=status_filter,
+            stats=stats.get('total', 0),
+            request=request.user,
         )
 
         response_data = {
@@ -371,7 +377,7 @@ class ForceStatusView(XTestModeMixin, APIView):
                 if not success:
                     raise ValueError(f"Failed to update status for entry {dlq_id}")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_mode_force_status",
                 error=e,
             )
@@ -387,8 +393,12 @@ class ForceStatusView(XTestModeMixin, APIView):
         user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
 
         logger.info(
-            f"[X-Test-Mode] DLQ force status: id={dlq_id}, "
-            f"{previous_status}→{new_status}, reason={reason}, user={user_str}"
+            "test_mode_dlq_force",
+            dlq_id=dlq_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            reason=reason,
+            user_str=user_str,
         )
 
         response_data = {
@@ -506,7 +516,7 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
             deleted_count = _delete_dlq_entries(dlq_service, ids_to_delete)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_mode_dlq_reset",
                 error=e,
             )
@@ -522,8 +532,11 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
         user_str = str(request.user) if request.user and request.user.is_authenticated else "anonymous"
 
         logger.info(
-            f"[X-Test-Mode] DLQ reset: deleted={deleted_count}, "
-            f"domain={domain_filter}, xtest_only={created_by_xtest}, user={user_str}"
+            "test_mode_dlq_reset",
+            deleted_count=deleted_count,
+            domain_filter=domain_filter,
+            created_by_xtest=created_by_xtest,
+            user_str=user_str,
         )
 
         response_data = {

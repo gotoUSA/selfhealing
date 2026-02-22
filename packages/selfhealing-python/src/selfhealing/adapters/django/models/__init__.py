@@ -51,12 +51,13 @@ if TYPE_CHECKING:
     pass
 
 
-from ._abstract_failed_operation import AbstractFailedOperation  # noqa: E402
 from ._abstract_audit_log import AbstractAuditLog  # noqa: E402
+from ._abstract_failed_external_request import (
+    AbstractFailedExternalRequest,  # noqa: E402
+)
+from ._abstract_failed_operation import AbstractFailedOperation  # noqa: E402
 from ._abstract_postmortem_record import AbstractPostmortemRecord  # noqa: E402
-from ._abstract_failed_external_request import AbstractFailedExternalRequest  # noqa: E402
 from ._abstract_security_incident import AbstractSecurityIncident  # noqa: E402
-
 
 __all__ = [
     "AbstractFailedOperation",

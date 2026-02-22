@@ -25,11 +25,12 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.coordination.enums import EmergencyScope
 from selfhealing.services.coordination.models import ScopedEmergencyState
@@ -288,8 +289,8 @@ class NamespacedEmergencyTracker:
 
             except Exception as e:
                 logger.warning(
-                    f"[NamespacedTracker] AtomicStateQuery failed, "
-                    f"falling back to manual query: {e}"
+                    "namespaced_tracker.atomicstatequery_failed_falling_back",
+                    error=e,
                 )
 
         # 폴백: 수동 조회 (2회 Redis 호출)
@@ -393,9 +394,11 @@ class NamespacedEmergencyTracker:
             self._save_state(target_ns, state)
 
             logger.warning(
-                f"[NamespacedTracker] Emergency ACTIVATED: "
-                f"namespace={target_ns}, level={level.name}, "
-                f"mode={governance_mode}, by={activated_by}"
+                "namespaced_tracker.emergency_activated",
+                target_ns=target_ns,
+                level=level.name,
+                governance_mode=governance_mode,
+                activated_by=activated_by,
             )
 
             return state
@@ -437,8 +440,9 @@ class NamespacedEmergencyTracker:
             self._save_state(target_ns, state)
 
             logger.info(
-                f"[NamespacedTracker] Emergency DEACTIVATED: "
-                f"namespace={target_ns}, by={deactivated_by}"
+                "namespaced_tracker.emergency_deactivated",
+                target_ns=target_ns,
+                deactivated_by=deactivated_by,
             )
 
             return state

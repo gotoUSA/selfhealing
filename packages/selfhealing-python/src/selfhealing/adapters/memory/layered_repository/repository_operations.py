@@ -6,10 +6,11 @@ Provides CircuitBreakerStateRepository interface implementation with L1 priority
 
 from __future__ import annotations
 
-import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime
+
+import structlog
 
 from selfhealing.interfaces.repositories import CircuitBreakerStateData
 

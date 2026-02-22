@@ -11,9 +11,10 @@ To activate this backend:
 4. Configure firewall rules
 """
 
-import structlog
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.backends.base import (
     AsyncAuditBackend,
@@ -72,10 +73,7 @@ class RemoteAuditBackend(AsyncAuditBackend):
         self._session = None
         self._enabled = False
 
-        logger.info(
-            "[RemoteAuditBackend] Initialized as interface only. "
-            "Enable by deploying remote audit server and configuring mTLS."
-        )
+        logger.info("remote_audit_backend.initialized_interface_only_enable")
 
     @property
     def name(self) -> str:
@@ -98,13 +96,10 @@ class RemoteAuditBackend(AsyncAuditBackend):
             # response.raise_for_status()
             # self._enabled = True
 
-            logger.warning(
-                "[RemoteAuditBackend] enable() called but remote server not configured. "
-                "This is an interface-only stub."
-            )
+            logger.warning("remote_audit_backend.enable_called_remote_server")
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "remote_audit_backend.failed_enable",
                 error=e,
             )
@@ -129,7 +124,7 @@ class RemoteAuditBackend(AsyncAuditBackend):
         #     response.raise_for_status()
         #     return True
         # except Exception as e:
-        #     logger.error(f"[RemoteAuditBackend] Write failed: {e}")
+        #     logger.exception(f"[RemoteAuditBackend] Write failed: {e}")
         #     return False
 
         return True

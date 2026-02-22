@@ -5,7 +5,6 @@ API views for SafetyGuard, BlastRadius, Scheduler, and Report configuration.
 """
 
 import structlog
-
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request

@@ -19,10 +19,10 @@ Environment Variables:
 
 from __future__ import annotations
 
-import structlog
 from functools import lru_cache
 from typing import Literal
 
+import structlog
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

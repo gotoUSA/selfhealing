@@ -16,10 +16,11 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from datetime import datetime, timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -268,8 +269,8 @@ class SafetyGuard:
                 result.block_message = f"CB Freeze Mode active: {state.reason or 'System stability protection'}"
                 result.checks_failed.append("freeze_mode")
                 logger.warning(
-                    f"[SafetyGuard] CB Freeze Mode active, blocking chaos experiment. "
-                    f"Reason: {state.reason}"
+                    "safety_guard.cb_freeze_mode_active",
+                    state=state.reason,
                 )
                 return True
 
@@ -277,9 +278,7 @@ class SafetyGuard:
             return False
 
         except ImportError:
-            logger.debug(
-                "[SafetyGuard] FreezeModeManager not available, skipping check"
-            )
+            logger.debug("safety_guard.freezemodemanager_available_skipping_check")
             result.checks_passed.append("freeze_mode")
             return False
         except Exception as e:
@@ -375,8 +374,9 @@ class SafetyGuard:
             )
         else:
             logger.warning(
-                f"[SafetyGuard] Checks passed with warnings for {experiment_id}: "
-                f"{result.warnings}"
+                "safety_guard.checks_passed_warnings",
+                experiment_id=experiment_id,
+                result=result.warnings,
             )
 
     def _handle_check_error(self, e: Exception) -> SafetyCheckResult:
@@ -832,7 +832,8 @@ class SafetyGuard:
                 )
         except Exception as e:
             logger.warning(
-                f"[SafetyGuard] Could not send budget exceeded notification: {e}"
+                "safety_guard.send_budget_exceeded_notification",
+                error=e,
             )
 
     def _notify_chaos_budget_warning(self, budget_status: dict[str, Any]) -> None:
@@ -855,7 +856,8 @@ class SafetyGuard:
                 )
         except Exception as e:
             logger.debug(
-                f"[SafetyGuard] Could not send budget warning notification: {e}"
+                "safety_guard.send_budget_warning_notification",
+                error=e,
             )
 
     def _check_cooldown(self) -> dict[str, Any]:

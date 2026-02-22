@@ -32,11 +32,12 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now as utc_now
 
@@ -249,11 +250,11 @@ class WeightedAuditRecorder:
         self._entries.append(entry)
 
         logger.debug(
-            f"[WeightedAudit] Recorded: "
-            f"audit_id={entry.audit_id}, "
-            f"raw={entry.raw_consumption_minutes:.2f}, "
-            f"weighted={entry.weighted_consumption_minutes:.2f}, "
-            f"multiplier={entry.final_multiplier}x"
+            "weighted_audit.recorded",
+            entry=entry.audit_id,
+            entry_1=entry.raw_consumption_minutes,
+            entry_2=entry.weighted_consumption_minutes,
+            entry_3=entry.final_multiplier,
         )
 
         # Hash Chain에 기록
@@ -269,8 +270,8 @@ class WeightedAuditRecorder:
                 manager.add_entry(chain_entry)
 
                 logger.debug(
-                    f"[WeightedAudit] Added to hash chain: "
-                    f"audit_id={entry.audit_id}"
+                    "weighted_audit.added_hash_chain",
+                    entry=entry.audit_id,
                 )
             except Exception as e:
                 logger.warning(

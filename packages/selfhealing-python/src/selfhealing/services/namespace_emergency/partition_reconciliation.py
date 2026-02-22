@@ -25,12 +25,13 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -247,9 +248,7 @@ class PartitionReconciliationService:
 
                 self._tiered_redis = TieredRedisProvider()
             except ImportError:
-                logger.warning(
-                    "[PartitionReconciliation] TieredRedisProvider not available"
-                )
+                logger.warning("partition_reconciliation.tieredredisprovider_available")
         return self._tiered_redis
 
     def _get_current_namespace(self) -> str:
@@ -457,8 +456,10 @@ class PartitionReconciliationService:
             # 정상 복구 로그
             if not actions:
                 logger.info(
-                    f"[PartitionReconciliation] Recovery complete, no actions needed: "
-                    f"namespace={current_ns}, global={global_mode}, regional={regional_mode}"
+                    "partition_reconciliation.recovery_complete_no_actions",
+                    current_ns=current_ns,
+                    global_mode=global_mode,
+                    regional_mode=regional_mode,
                 )
 
             return ReconciliationResult(
@@ -469,7 +470,7 @@ class PartitionReconciliationService:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "partition_reconciliation.reconciliation_failed",
                 error=e,
             )
@@ -489,7 +490,9 @@ class PartitionReconciliationService:
                 ]
 
         logger.warning(
-            f"[PartitionReconciliation] Action: {action.action_type} - {action.message}"
+            "partition_reconciliation.action",
+            action=action.action_type,
+            action_1=action.message,
         )
 
     # =========================================================================
@@ -515,8 +518,9 @@ class PartitionReconciliationService:
         self._heartbeat_thread.start()
 
         logger.info(
-            f"[PartitionReconciliation] Heartbeat loop started: "
-            f"interval={self._heartbeat_interval}s, threshold={self._partition_threshold}s"
+            "partition_reconciliation.heartbeat_loop_started",
+            self=self._heartbeat_interval,
+            self_1=self._partition_threshold,
         )
 
     def stop_heartbeat_loop(self) -> None:
@@ -539,20 +543,17 @@ class PartitionReconciliationService:
                 # 고립 상태 변화 감지
                 if status.is_partitioned and not was_partitioned:
                     logger.warning(
-                        f"[PartitionReconciliation] PARTITION DETECTED: "
-                        f"duration={status.partition_duration_seconds:.1f}s"
+                        "partition_reconciliation.partition_detected",
+                        status=status.partition_duration_seconds,
                     )
                 elif not status.is_partitioned and was_partitioned:
-                    logger.info(
-                        "[PartitionReconciliation] PARTITION RECOVERED: "
-                        "triggering reconciliation"
-                    )
+                    logger.info("partition_reconciliation.partition_recovered_triggering_reconciliation")
                     self.reconcile_after_recovery()
 
                 was_partitioned = status.is_partitioned
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "partition_reconciliation.heartbeat_error",
                     error=e,
                 )

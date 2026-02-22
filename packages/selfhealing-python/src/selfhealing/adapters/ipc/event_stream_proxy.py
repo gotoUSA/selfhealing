@@ -31,7 +31,6 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import queue
 import threading
 import time
@@ -39,6 +38,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterator
+
+import structlog
 
 logger = structlog.get_logger()
 

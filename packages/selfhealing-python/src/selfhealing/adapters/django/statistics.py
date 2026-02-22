@@ -23,9 +23,10 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.interfaces.statistics import (
     AuditTrailEntry,
@@ -121,7 +122,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return counts
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -152,7 +153,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -183,7 +184,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -231,7 +232,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 trend=trend,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -259,7 +260,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return round(resolved / total, 4)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -277,7 +278,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             result = model.objects.aggregate(avg_retry=Avg("retry_count"))
             return round(result["avg_retry"] or 0.0, 2)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -331,7 +332,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 has_prev=page > 1,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -347,7 +348,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             entry = model.objects.filter(pk=entry_id).values().first()
             return dict(entry) if entry else None
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -394,7 +395,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return breaches
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -439,7 +440,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 archived_older_than_90_days=archived_old,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -467,7 +468,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             )
             return count
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -503,7 +504,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             )
             return count
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -540,7 +541,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return summary
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -565,7 +566,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return summary
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -593,7 +594,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for entry in entries
             ]
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -619,7 +620,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for name, state in states.items()
             ]
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -649,7 +650,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return str(obj.pk)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )
@@ -792,7 +793,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "django_statistics_adapter.error",
                 error=e,
             )

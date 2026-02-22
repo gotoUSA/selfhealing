@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -125,8 +124,8 @@ class ChaosExperimentSettings(BaseSettings):
         # Note: cross-field validation은 model_validator에서 처리
         if v > 1800:
             logger.warning(
-                f"[ChaosExperiment] grace_period_seconds={v}는 매우 긴 값입니다. "
-                "실험 시작이 지연될 수 있습니다."
+                "chaos_experiment.매우_값입니다_실험_시작이",
+                v=v,
             )
         return v
 

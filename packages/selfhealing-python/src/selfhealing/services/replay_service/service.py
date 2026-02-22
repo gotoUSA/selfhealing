@@ -19,8 +19,9 @@ DLQ 재생 기능을 제공합니다.
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 from selfhealing.services.audit import log_dlq_replay_audit
@@ -30,8 +31,8 @@ from selfhealing.services.governance.checks import (
 )
 from selfhealing.settings import get_config
 
-from .models import ReplayResult, BatchReplayResult
-from .handlers import get_replay_handler, DefaultReplayHandler
+from .handlers import DefaultReplayHandler, get_replay_handler
+from .models import BatchReplayResult, ReplayResult
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import (
@@ -179,9 +180,10 @@ class ReplayService:
             result = handler.replay(failed_op_data)
         except Exception as e:
             # Handler raised an unexpected exception - escalate to REQUIRES_REVIEW
-            logger.error(
-                f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}",
-                exc_info=True,
+            logger.exception(
+                "replay_service.handler_exception_dlq",
+                dlq_id=dlq_id,
+                error=e,
             )
             self.repository.complete_replay(
                 id=dlq_id,
@@ -284,8 +286,10 @@ class ReplayService:
 
         if not governance.allowed:
             logger.warning(
-                f"[ReplayService] replay_batch blocked: {governance.block_message}. "
-                f"domain={domain}, failure_type={failure_type}"
+                "replay_service.blocked",
+                governance=governance.block_message,
+                domain=domain,
+                failure_type=failure_type,
             )
             return BatchReplayResult(
                 total=0,
@@ -355,15 +359,15 @@ class ReplayService:
                 failures=batch_result.failed_count,
             )
             logger.debug(
-                f"[ReplayService] Adaptive batch recorded: " f"next_max_items={adaptive_manager.get_current_max_items()}"
+                "replay_service.adaptive_batch_recorded",
+                adaptive_manager=adaptive_manager.get_current_max_items(),
             )
 
         logger.info(
-            f"[ReplayService] Batch replay completed: "
-            f"total={batch_result.total}, success={batch_result.success_count}, "
-            f"failed={batch_result.failed_count}"
-            + (f", adaptive_max_items={adaptive_manager.get_current_max_items()}" if adaptive_manager else "")
-            + (f", priority_mode=True, domains={domains_processed}" if priority_used else "")
+            "replay_service.batch_replay_completed",
+            batch_result=batch_result.total,
+            batch_result_1=batch_result.success_count,
+            batch_result_2=batch_result.failed_count,
         )
 
         return batch_result
@@ -535,7 +539,10 @@ class ReplayService:
                     remaining -= len(entries)
 
                     logger.debug(
-                        f"[ReplayService] Priority fetch: domain={domain}, " f"priority={priority}, count={len(entries)}"
+                        "replay_service.priority_fetch",
+                        domain=domain,
+                        priority=priority,
+                        count=len(entries),
                     )
 
         # If still have capacity, get entries from unconfigured domains
@@ -560,7 +567,9 @@ class ReplayService:
                     remaining -= 1
 
         logger.info(
-            f"[ReplayService] Priority-based fetch complete: " f"total={len(all_entries)}, domains={domains_processed}"
+            "replay_service.priority_based_fetch_complete",
+            count=len(all_entries),
+            domains_processed=domains_processed,
         )
 
         return all_entries, domains_processed
@@ -612,9 +621,10 @@ class ReplayService:
         try:
             result = handler.replay(failed_op_data)
         except Exception as e:
-            logger.error(
-                f"[ReplayService] Handler exception for DLQ {dlq_id}: {e}",
-                exc_info=True,
+            logger.exception(
+                "replay_service.handler_exception_dlq",
+                dlq_id=dlq_id,
+                error=e,
             )
             self.repository.complete_replay(
                 id=dlq_id,
@@ -728,13 +738,17 @@ class ReplayService:
                             note=f"Conditional replay failed after circuit close for {service_name}: {result.error}",
                         )
                         logger.warning(
-                            f"[ReplayService] Escalated DLQ {entry.id} to REQUIRES_REVIEW " f"after conditional replay failure"
+                            "replay_service.escalated_dlq_after_conditional",
+                            entry=entry.id,
                         )
 
         logger.info(
-            f"[ReplayService] Circuit close replay for {service_name}: "
-            f"total={batch_result.total}, success={batch_result.success_count}, "
-            f"failed={batch_result.failed_count} (escalated={batch_result.failed_count if escalate_failures else 0})"
+            "replay_service.circuit_close_replay",
+            service_name=service_name,
+            batch_result=batch_result.total,
+            batch_result_2=batch_result.success_count,
+            batch_result_3=batch_result.failed_count,
+            batch_result_4=batch_result.failed_count if escalate_failures else 0,
         )
 
         return batch_result

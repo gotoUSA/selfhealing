@@ -11,13 +11,14 @@ WAL 파일 보관 기간 기반 정리 기능 제공.
 
 from __future__ import annotations
 
-import structlog
 import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Thread
 from typing import Callable
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -131,7 +132,7 @@ class WALRetentionCleaner:
                     wal_file=wal_file,
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "retention_cleaner.failed_clean",
                     wal_file=wal_file,
                     error=e,
@@ -259,7 +260,7 @@ class RetentionCleanupScheduler:
                     self._on_cleanup(deleted)
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "retention_scheduler.cleanup_error",
                     error=e,
                 )
@@ -325,7 +326,7 @@ def mark_as_synced(wal_file: Path | str) -> bool:
         synced_marker.touch()
         return True
     except Exception as e:
-        logger.error(
+        logger.exception(
             "retention_cleaner.failed_mark_synced",
             error=e,
         )

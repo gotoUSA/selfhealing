@@ -18,7 +18,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -133,13 +132,13 @@ class AntiFlappingSettings(BaseSettings):
         """히스테리시스 팩터 경고."""
         if v < 1.1:
             logger.warning(
-                f"[SafeDefault] Low recovery_hysteresis_factor={v}, "
-                "recommend >= 1.1 for stability"
+                "safe_default.low_recommend_stability",
+                v=v,
             )
         if v > 1.5:
             logger.warning(
-                f"[SafeDefault] High recovery_hysteresis_factor={v}, "
-                "may delay recovery too much"
+                "safe_default.high_delay_recovery_too",
+                v=v,
             )
         return v
 

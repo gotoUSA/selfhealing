@@ -6,8 +6,9 @@ Config Apply Service
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.governance_checks import (
     GovernanceCheckMixin,
@@ -133,9 +134,10 @@ class ConfigApplyService(GovernanceCheckMixin):
                 except Exception as e:
                     failed_count += 1
                     pending_service.mark_failed(change.id, str(e))
-                    logger.error(
-                        f"[ConfigApplyService] Exception applying {change.id}: {e}",
-                        exc_info=True,
+                    logger.exception(
+                        "config_apply_service.exception_applying",
+                        change=change.id,
+                        error=e,
                     )
                     results.append(
                         {
@@ -154,7 +156,10 @@ class ConfigApplyService(GovernanceCheckMixin):
             }
 
         except Exception as e:
-            logger.error(f"[ConfigApplyService] Error: {e}", exc_info=True)
+            logger.exception(
+                "config_apply_service.error",
+                error=e,
+            )
             raise
 
     def apply_graceful_change(
@@ -224,7 +229,10 @@ class ConfigApplyService(GovernanceCheckMixin):
             return result
 
         except Exception as e:
-            logger.error(f"[ConfigApplyService] Graceful apply error: {e}", exc_info=True)
+            logger.exception(
+                "config_apply_service.graceful_apply_error",
+                error=e,
+            )
             return {
                 "status": "error",
                 "error": str(e),

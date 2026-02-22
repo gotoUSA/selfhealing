@@ -25,18 +25,19 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import queue
 import threading
 import time
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from selfhealing.utils.async_logger import (
-    AsyncHealingLogger,
-    LogFlushPriority,
-    EventSeverity,
-    PrioritizedEvent,
     SEVERITY_PRIORITY_MAP,
+    AsyncHealingLogger,
+    EventSeverity,
+    LogFlushPriority,
+    PrioritizedEvent,
 )
 
 if TYPE_CHECKING:
@@ -208,7 +209,7 @@ class DurableEventLogger(AsyncHealingLogger):
             return recovered_count
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "durable_event_logger.wal_recovery_failed",
                 error=e,
             )

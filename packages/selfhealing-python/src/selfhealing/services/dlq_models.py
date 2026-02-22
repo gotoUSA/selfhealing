@@ -27,9 +27,9 @@ from selfhealing.services.dlq.models import (  # noqa: F401  # Configuration; Re
     DLQConfig,
     DLQEntryResult,
     DLQPaginatedResult,
+    DlqReplayResult,
     DLQThrottleBatchReplayResult,
     DLQThrottleReplayResult,
-    DlqReplayResult,
     ReplayResult,
     ResolveResult,
 )

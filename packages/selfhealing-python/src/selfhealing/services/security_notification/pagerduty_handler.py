@@ -6,14 +6,14 @@ Handles PagerDuty-specific incident triggering.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
 import requests
+import structlog
 
 from .models import (
-    NotificationConfig,
     ChannelDeliveryResult,
+    NotificationConfig,
     _get_notification_limits,
 )
 
@@ -121,7 +121,7 @@ class PagerDutyHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_pagerduty_error",
                 error=e,
             )
@@ -193,7 +193,7 @@ class PagerDutyHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "security_notification_pagerduty_alert",
                 error=e,
             )

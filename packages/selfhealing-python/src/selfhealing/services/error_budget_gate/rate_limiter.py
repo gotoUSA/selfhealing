@@ -10,10 +10,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -51,7 +52,9 @@ class InMemoryRateLimiter:
             self._max_requests = max_requests
             self._window_seconds = window_seconds
             logger.info(
-                f"[RateLimiter] Updated limits: {max_requests} requests / {window_seconds}s"
+                "rate_limiter.updated_limits_requests",
+                max_requests=max_requests,
+                window_seconds=window_seconds,
             )
 
     def _cleanup_old_timestamps(self, now: float) -> None:

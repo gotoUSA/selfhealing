@@ -12,12 +12,13 @@ Throttle 거부 요청을 DLQ에 저장하고, Recovery 시 자동 Replay하는 
 
 from __future__ import annotations
 
-import structlog
 import random
 import threading
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.dlq import DLQService
@@ -40,11 +41,21 @@ _throttle_replay_permanently_failed_total = None
 
 try:
     from selfhealing.services.metrics.definitions import (
-        throttle_rejection_dlq_stored_total as _throttle_rejection_dlq_stored_total,
-        throttle_rejection_sampled_out_total as _throttle_rejection_sampled_out_total,
-        throttle_rejection_hedged_skipped_total as _throttle_rejection_hedged_skipped_total,
         throttle_recovery_replay_total as _throttle_recovery_replay_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_rejection_dlq_stored_total as _throttle_rejection_dlq_stored_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_rejection_hedged_skipped_total as _throttle_rejection_hedged_skipped_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_rejection_sampled_out_total as _throttle_rejection_sampled_out_total,
+    )
+    from selfhealing.services.metrics.definitions import (
         throttle_replay_adaptive_interval_ms as _throttle_replay_adaptive_interval_ms,
+    )
+    from selfhealing.services.metrics.definitions import (
         throttle_replay_permanently_failed_total as _throttle_replay_permanently_failed_total,
     )
 
@@ -288,8 +299,9 @@ class ThrottleDLQReplayMixin:
 
         if recovery_percent < self._replay_min_recovery_percent:
             logger.debug(
-                f"[AdaptiveThrottle] Recovery {recovery_percent:.1f}% "
-                f"< {self._replay_min_recovery_percent}%, skipping DLQ replay"
+                "adaptive_throttle.recovery_skipping_dlq_replay",
+                recovery_percent=recovery_percent,
+                self=self._replay_min_recovery_percent,
             )
             return
 
@@ -331,7 +343,9 @@ class ThrottleDLQReplayMixin:
             return
 
         logger.info(
-            f"[AdaptiveThrottle] Starting DLQ replay for " f"{len(pending_entries)} entries (recovery={recovery_percent:.1f}%)"
+            "adaptive_throttle.starting_dlq_replay_entries",
+            count=len(pending_entries),
+            recovery_percent=recovery_percent,
         )
 
         replayed = 0
@@ -349,9 +363,10 @@ class ThrottleDLQReplayMixin:
             # can_retry 소진 확인 (FailedOperationData.can_retry)
             if not entry.can_retry:
                 logger.warning(
-                    f"[AdaptiveThrottle] Entry {entry.id} exhausted retries "
-                    f"({entry.retry_count}/{entry.max_retries}), "
-                    f"marking permanently_failed"
+                    "adaptive_throttle.entry_exhausted_retries_marking",
+                    entry=entry.id,
+                    entry_1=entry.retry_count,
+                    entry_2=entry.max_retries,
                 )
                 try:
                     self._dlq_service.resolve_entry(entry.id, notes="permanently_failed")

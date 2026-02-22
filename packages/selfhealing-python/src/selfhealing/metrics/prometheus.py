@@ -4,9 +4,10 @@ Prometheus metrics for the self-healing system.
 This module provides Prometheus metric definitions and collection utilities.
 """
 
-import structlog
 from contextlib import contextmanager
 from datetime import datetime, timezone
+
+import structlog
 
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
@@ -73,7 +74,7 @@ class SelfHealingMetrics:
         self._initialized = False
 
         if not PROMETHEUS_AVAILABLE:
-            logger.warning("metrics.no_ops_installed")
+            logger.warning("metrics")
             return
 
         # =============================================================================
@@ -635,7 +636,11 @@ class SelfHealingMetrics:
             ).observe(duration_seconds)
 
             logger.debug(
-                f"[Metrics] HTTP request: {method} {endpoint} " f"status={status_code} duration={duration_seconds:.3f}s"
+                "metrics.http_request",
+                method=method,
+                endpoint=endpoint,
+                status_code=status_code,
+                duration_seconds=duration_seconds,
             )
         except Exception as e:
             logger.warning(

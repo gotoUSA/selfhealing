@@ -21,9 +21,10 @@ Usage:
     # result.safe_clusters만 롤아웃 진행
 """
 
-import structlog
 from dataclasses import dataclass
 from enum import Enum
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -149,7 +150,8 @@ class CanaryChaosGuard:
         if force_during_chaos:
             # 강제 진행 - 경고만
             logger.warning(
-                f"[ChaosGuard] FORCE: Proceeding despite active chaos on {conflict_set}"
+                "chaos_guard.force_proceeding_despite_active",
+                conflict_set=conflict_set,
             )
             return ChaosConflictResult(
                 has_conflict=True,
@@ -180,7 +182,8 @@ class CanaryChaosGuard:
         if self._policy == ChaosConflictPolicy.STRICT:
             # STRICT: 어떤 클러스터라도 카오스 중이면 전체 차단
             logger.warning(
-                f"[ChaosGuard] STRICT: Blocked due to active chaos on {conflict_set}"
+                "chaos_guard.strict_blocked_due_active",
+                conflict_set=conflict_set,
             )
             return ChaosConflictResult(
                 has_conflict=True,
@@ -195,9 +198,7 @@ class CanaryChaosGuard:
             # SMART: 카오스 중인 클러스터만 제외
             if not safe_set:
                 # 모든 클러스터가 카오스 중
-                logger.warning(
-                    "[ChaosGuard] SMART: All target clusters have active chaos"
-                )
+                logger.warning("chaos_guard.smart_all_target_clusters")
                 return ChaosConflictResult(
                     has_conflict=True,
                     chaos_clusters=list(conflict_set),
@@ -209,8 +210,9 @@ class CanaryChaosGuard:
 
             # 안전한 클러스터만 진행
             logger.info(
-                f"[ChaosGuard] SMART: Excluding {conflict_set}, "
-                f"proceeding with {safe_set}"
+                "chaos_guard.smart_excluding_proceeding",
+                conflict_set=conflict_set,
+                safe_set=safe_set,
             )
             return ChaosConflictResult(
                 has_conflict=True,

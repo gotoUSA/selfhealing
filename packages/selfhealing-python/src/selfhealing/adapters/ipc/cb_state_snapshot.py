@@ -34,7 +34,6 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import mmap
 import os
 import struct
@@ -45,6 +44,8 @@ from datetime import datetime, timezone
 from enum import IntEnum
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -241,7 +242,7 @@ class CBStateSnapshot:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cb_state_snapshot.start_failed",
                 error=e,
             )
@@ -423,7 +424,7 @@ class CBStateSnapshot:
             return None
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cb_state_snapshot.get_state_error",
                 error=e,
             )
@@ -480,7 +481,7 @@ class CBStateSnapshot:
             return entries
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cb_state_snapshot.get_all_states_error",
                 error=e,
             )
@@ -564,7 +565,7 @@ class CBStateSnapshot:
                 return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cb_state_snapshot.update_state_error",
                 error=e,
             )
@@ -576,7 +577,7 @@ class CBStateSnapshot:
             try:
                 self._sync_from_registry()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "cb_state_snapshot.update_loop_error",
                     error=e,
                 )

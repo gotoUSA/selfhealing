@@ -22,8 +22,9 @@ Fail-Open 원칙:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     GuardResult,

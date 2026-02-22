@@ -57,7 +57,10 @@ def replay_single_dlq_entry(
     Returns:
         Dictionary with replay result
     """
-    logger.info(f"[DLQ Replay Task] Starting replay for DLQ entry: {dlq_id}")
+    logger.info(
+        "dlq_replay_task_starting",
+        dlq_id=dlq_id,
+    )
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
@@ -79,7 +82,11 @@ def replay_single_dlq_entry(
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Replay Task] Unexpected error replaying DLQ entry {dlq_id}: {e}")
+        logger.exception(
+            "dlq_replay_task_unexpected",
+            dlq_id=dlq_id,
+            error=e,
+        )
         return {
             "success": False,
             "dlq_id": dlq_id,
@@ -123,7 +130,11 @@ def replay_batch_by_domain(
     Returns:
         Dictionary with batch replay summary
     """
-    logger.info(f"[DLQ Batch Replay Task] Starting batch replay for domain={domain}, max_items={max_items}")
+    logger.info(
+        "dlq_batch_replay_task",
+        domain=domain,
+        max_items=max_items,
+    )
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
@@ -145,7 +156,10 @@ def replay_batch_by_domain(
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Batch Replay Task] Unexpected error: {e}")
+        logger.exception(
+            "dlq_batch_replay_task",
+            error=e,
+        )
         return {
             "success": False,
             "domain": domain,
@@ -179,7 +193,10 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
     Returns:
         Dictionary with cleanup summary
     """
-    logger.info(f"[DLQ Cleanup] Starting cleanup of entries older than {days_old} days")
+    logger.info(
+        "dlq_cleanup_starting_cleanup",
+        days_old=days_old,
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -196,7 +213,10 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
 
         archived_count = stats_repo.archive_old_entries(older_than_days=days_old)
 
-        logger.info(f"[DLQ Cleanup] Completed: archived={archived_count}")
+        logger.info(
+            "dlq_cleanup_completed",
+            archived_count=archived_count,
+        )
 
         return {
             "success": True,
@@ -204,7 +224,10 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[DLQ Cleanup] Unexpected error: {e}")
+        logger.exception(
+            "dlq_cleanup_unexpected_error",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),

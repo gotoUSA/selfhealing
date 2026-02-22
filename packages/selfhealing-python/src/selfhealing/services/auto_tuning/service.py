@@ -7,12 +7,13 @@ RuntimeFeedbackLoop, DecisionEngine, SafetyBounds를 조합하여
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from threading import RLock, Timer
 from typing import Any
+
+import structlog
 
 # Governance integration
 from selfhealing.services.governance_checks import (

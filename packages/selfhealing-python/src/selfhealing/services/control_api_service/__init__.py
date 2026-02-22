@@ -12,7 +12,6 @@ Provides the core business logic for the Self-Healing Control API.
 from __future__ import annotations
 
 # === Explicit re-exports ===
-
 # Models
 from .models import (
     ControlRequest,
@@ -62,7 +61,9 @@ from typing import Any as _Any  # noqa: E402
 _SUB_MODULES = ("models", "risk", "service")
 
 # Eager copy of all sub-module attributes to package level
-from . import models as _models_mod, risk as _risk_mod, service as _service_mod  # noqa: E402
+from . import models as _models_mod  # noqa: E402
+from . import risk as _risk_mod
+from . import service as _service_mod
 
 _pkg = _sys.modules[__name__]
 for _mod in (_models_mod, _risk_mod, _service_mod):

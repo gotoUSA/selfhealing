@@ -251,7 +251,10 @@ class AbstractAuditLog(models.Model if DJANGO_AVAILABLE else object):
                 ...
             )
             if not created:
-                logger.info(f"Duplicate audit event: {audit_event_id}")
+                logger.info(
+                    "duplicate_audit_event",
+                    audit_event_id=audit_event_id,
+                )
         """
         from django.db import IntegrityError
 

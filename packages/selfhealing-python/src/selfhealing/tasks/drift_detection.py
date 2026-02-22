@@ -14,10 +14,11 @@ is done in the framework-specific adapter layer.
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -133,13 +134,15 @@ class SLADriftDetector:
                 if domain_result["warning"]:
                     results["warnings"].append(domain_result["warning"])
                     logger.warning(
-                        f"[SLA Drift] WARNING: {domain_result['warning']['message']}"
+                        "sla_drift_warning",
+                        domain_result=domain_result['warning']['message'],
                     )
 
             if results["warnings"]:
                 self._send_drift_notifications(results["warnings"])
                 logger.warning(
-                    f"[SLA Drift] Completed with {len(results['warnings'])} warning(s)"
+                    "sla_drift_completed_warning",
+                    count=len(results['warnings']),
                 )
             else:
                 logger.info("drift_detection.sla_check_no_violations")
@@ -147,8 +150,9 @@ class SLADriftDetector:
             return results
 
         except Exception as e:
-            logger.error(
-                f"[SLA Drift] Error during drift detection: {e}", exc_info=True
+            logger.exception(
+                "sla_drift_error_during",
+                error=e,
             )
             return {
                 "success": False,
@@ -327,11 +331,12 @@ class SLADriftDetector:
 
             # Log warning
             logger.warning(
-                f"[SLADriftWarning] domain={domain} "
-                f"type={warning_type} "
-                f"severity={severity} "
-                f"message={warning.get('message')} "
-                f"recommendation={warning.get('recommendation')}"
+                "sla_drift_warning.event",
+                domain=domain,
+                warning_type=warning_type,
+                severity=severity,
+                warning=warning.get('message'),
+                warning_4=warning.get('recommendation'),
             )
 
             # Send notification via SecurityNotificationService
@@ -349,7 +354,7 @@ class SLADriftDetector:
                     },
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "sla_drift_warning.failed_send_notification",
                     error=e,
                 )
@@ -388,7 +393,8 @@ class ChaosExperimentCleaner:
             resolved_count = self.resolve_expired_experiments()
 
             logger.info(
-                f"[ChaosCleanup] Completed - resolved {resolved_count} expired experiments"
+                "chaos_cleanup.completed_resolved_expired_experiments",
+                resolved_count=resolved_count,
             )
 
             return {
@@ -398,7 +404,10 @@ class ChaosExperimentCleaner:
             }
 
         except Exception as e:
-            logger.error(f"[ChaosCleanup] Error during cleanup: {e}", exc_info=True)
+            logger.exception(
+                "chaos_cleanup.error_during_cleanup",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -446,8 +455,10 @@ class DecisionRecorder:
             Dictionary with recording result
         """
         logger.info(
-            f"[DecisionRecord] Recording decision for operation {operation_id}: "
-            f"decision={decision}, decided_by={decided_by}"
+            "decision_record.recording_decision_operation",
+            operation_id=operation_id,
+            decision=decision,
+            decided_by=decided_by,
         )
 
         try:
@@ -479,9 +490,11 @@ class DecisionRecorder:
             operation.save(update_fields=["metadata", "updated_at"])
 
             logger.info(
-                f"[DecisionRecord] Recorded: operation={operation_id} "
-                f"decision={decision} decided_by={decided_by} "
-                f"advisory_recommendation={advisory.get('recommended_action', 'N/A')}"
+                "decision_record.recorded",
+                operation_id=operation_id,
+                decision=decision,
+                decided_by=decided_by,
+                advisory=advisory.get('recommended_action', 'N/A'),
             )
 
             return {
@@ -491,8 +504,9 @@ class DecisionRecorder:
             }
 
         except Exception as e:
-            logger.error(
-                f"[DecisionRecord] Error recording decision: {e}", exc_info=True
+            logger.exception(
+                "decision_record.error_recording_decision",
+                error=e,
             )
             return {
                 "success": False,

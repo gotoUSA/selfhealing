@@ -7,10 +7,11 @@ SLA 위반 시 즉시 실험을 중단하고 롤백을 트리거합니다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import asdict, dataclass, field
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -354,8 +355,9 @@ class StopConditionsChecker:
 
         if should_stop:
             logger.warning(
-                f"[StopConditions] Experiment {experiment_id} should be stopped. "
-                f"Violations: {[v.message for v in violations]}"
+                "stop_conditions.experiment_stopped_violations",
+                experiment_id=experiment_id,
+                value=[v.message for v in violations],
             )
 
         return StopConditionCheckResult(

@@ -12,9 +12,10 @@ EventBus 핸들러 우선순위:
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -71,15 +72,18 @@ def on_circuit_breaker_closed_integrity_gate(event: Any) -> None:
         if not result["valid"]:
             event.data[INTEGRITY_FAILED_KEY] = True
             logger.critical(
-                f"[IntegrityGate] INTEGRITY VIOLATION for {service_name}! "
-                f"Replay will be BLOCKED. errors={result.get('errors', [])}"
+                "integrity_gate.integrity_violation_replay_blocked",
+                service_name=service_name,
+                result=result.get('errors', []),
             )
             _send_integrity_violation_alert(service_name, result, duration_ms)
         else:
             event.data[INTEGRITY_FAILED_KEY] = False
             logger.info(
-                f"[IntegrityGate] Integrity OK for {service_name} "
-                f"({result.get('checked', 0)} entries, {duration_ms:.1f}ms)"
+                "integrity_gate.integrity_ok_entries_ms",
+                service_name=service_name,
+                result=result.get('checked', 0),
+                duration_ms=duration_ms,
             )
 
         _update_health_score(result, duration_ms)
@@ -95,7 +99,9 @@ def on_circuit_breaker_closed_integrity_gate(event: Any) -> None:
             event.data[INTEGRITY_FAILED_KEY] = False
         else:
             logger.critical(
-                f"[IntegrityGate] Gate check failed for {service_name}: {e}. " f"Fail-Secure: BLOCKING replay. (PCI-DSS mode)"
+                "integrity_gate.gate_check_failed_fail",
+                service_name=service_name,
+                error=e,
             )
             event.data[INTEGRITY_FAILED_KEY] = True
 
@@ -193,7 +199,7 @@ def _send_integrity_violation_alert(
             error_message="Hash chain integrity violation detected during post-recovery check",
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "integrity_gate.audit_write_failed",
             error=e,
         )

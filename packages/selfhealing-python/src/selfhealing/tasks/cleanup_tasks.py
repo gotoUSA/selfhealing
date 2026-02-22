@@ -14,8 +14,9 @@ Tasks:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -50,9 +51,9 @@ def archive_old_dlq_entries(older_than_days: int = 30) -> dict[str, Any]:
         return result.to_dict()
 
     except Exception as e:
-        logger.error(
-            f"[CleanupTask] archive_old_dlq_entries failed: {e}",
-            exc_info=True,  # 스택트레이스 포함
+        logger.exception(
+            "cleanup_task.failed",
+            error=e,
         )
         raise
 
@@ -81,9 +82,9 @@ def cleanup_expired_config(older_than_hours: int = 24) -> dict[str, Any]:
         return result.to_dict()
 
     except Exception as e:
-        logger.error(
-            f"[CleanupTask] cleanup_expired_config failed: {e}",
-            exc_info=True,  # 스택트레이스 포함
+        logger.exception(
+            "cleanup_task.failed",
+            error=e,
         )
         raise
 
@@ -112,9 +113,9 @@ def expire_approval_requests(older_than_hours: int = 72) -> dict[str, Any]:
         return result.to_dict()
 
     except Exception as e:
-        logger.error(
-            f"[CleanupTask] expire_approval_requests failed: {e}",
-            exc_info=True,  # 스택트레이스 포함
+        logger.exception(
+            "cleanup_task.failed",
+            error=e,
         )
         raise
 
@@ -153,9 +154,9 @@ def purge_archived_dlq_entries(
         return result.to_dict()
 
     except Exception as e:
-        logger.error(
-            f"[CleanupTask] purge_archived_dlq_entries failed: {e}",
-            exc_info=True,  # 스택트레이스 포함
+        logger.exception(
+            "cleanup_task.failed",
+            error=e,
         )
         raise
 
@@ -206,9 +207,9 @@ def flush_expired_jwt_tokens() -> dict[str, Any]:
         return {"success": True, "message": msg}
 
     except Exception as e:
-        logger.error(
-            f"[CleanupTask] flush_expired_jwt_tokens failed: {e}",
-            exc_info=True,
+        logger.exception(
+            "cleanup_task.failed",
+            error=e,
         )
         raise
 

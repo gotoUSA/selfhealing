@@ -17,9 +17,9 @@ Environment Variables:
     SELFHEALING_CRITICAL_WORKER_POOL_ENTERPRISE_WORKER_COUNT=8
 """
 
-import structlog
 from enum import Enum
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -308,7 +308,8 @@ class CriticalWorkerSettings(BaseSettings):
         """최소 1개 Worker 보장."""
         if v < 1:
             logger.warning(
-                f"[SafeDefault] critical_worker_count={v} is invalid, using 1"
+                "safe_default.invalid_using",
+                v=v,
             )
             return 1
         return v

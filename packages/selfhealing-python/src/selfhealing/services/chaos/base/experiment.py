@@ -11,12 +11,13 @@ implement the required abstract methods: inject_chaos() and rollback().
 from __future__ import annotations
 
 import abc
-import structlog
 import threading
 import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -209,7 +210,9 @@ class ChaosExperiment(abc.ABC):
         """
         if self.status != ExperimentStatus.RECOVERY_MONITORING:
             logger.warning(
-                f"[ChaosExperiment] {self.experiment_id} - " f"Cannot complete recovery monitoring from status {self.status}"
+                "chaos_experiment.cannot_complete_recovery_monitoring",
+                self=self.experiment_id,
+                self_1=self.status,
             )
             return
 
@@ -265,8 +268,9 @@ class ChaosExperiment(abc.ABC):
         """
         if self.status != ExperimentStatus.RUNNING:
             logger.warning(
-                f"[ChaosExperiment] {self.experiment_id} - "
-                f"Cannot transition to RECOVERY_MONITORING from status {self.status}"
+                "chaos_experiment.cannot_transition_status",
+                self=self.experiment_id,
+                self_1=self.status,
             )
             return
 
@@ -285,8 +289,9 @@ class ChaosExperiment(abc.ABC):
         )
 
         logger.info(
-            f"[ChaosExperiment] {self.experiment_id} - "
-            f"Transitioned to RECOVERY_MONITORING (grace period: {self.config.grace_period_seconds}s)"
+            "chaos_experiment.transitioned_grace_period",
+            self=self.experiment_id,
+            self_1=self.config.grace_period_seconds,
         )
 
     def _verify_canary_recovery(self) -> dict[str, Any]:
@@ -372,7 +377,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos.certificateexpirymonitor_available")
+            logger.debug("chaos")
             return {"check_performed": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -404,7 +409,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos.connectionhealthmonitor_available")
+            logger.debug("chaos")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -459,8 +464,10 @@ class ChaosExperiment(abc.ABC):
         )
 
         logger.info(
-            f"[DryRun] Would inject chaos to {self.config.target_service} "
-            f"with TTL {self._effective_ttl}s (expires at {self._expires_at})"
+            "dry_run.inject_chaos_ttl_expires",
+            self=self.config.target_service,
+            self_1=self._effective_ttl,
+            self_2=self._expires_at,
         )
 
         duration = min(5, self.config.duration_seconds or self.default_duration_seconds)
@@ -709,7 +716,7 @@ class ChaosExperiment(abc.ABC):
             shield = get_corruption_shield()
             return shield.get_stats()
         except ImportError:
-            logger.debug("chaos.corruption_shield_available_import")
+            logger.debug("chaos")
             return {}
         except Exception as e:
             logger.warning(
@@ -733,7 +740,7 @@ class ChaosExperiment(abc.ABC):
                 "pending_count": (service.get_pending_count() if hasattr(service, "get_pending_count") else 0),
             }
         except ImportError:
-            logger.debug("chaos.dlq_service_available_import")
+            logger.debug("chaos")
             return {}
         except Exception as e:
             logger.warning(
@@ -755,7 +762,7 @@ class ChaosExperiment(abc.ABC):
             throttle = get_adaptive_throttle()
             return throttle.get_stats() if hasattr(throttle, "get_stats") else {}
         except ImportError:
-            logger.debug("chaos.adaptive_throttle_available_import")
+            logger.debug("chaos")
             return {}
         except Exception as e:
             logger.warning(
@@ -785,7 +792,7 @@ class ChaosExperiment(abc.ABC):
             state = manager.get_state()
             return state.to_dict()
         except ImportError:
-            logger.debug("chaos.emergencymodemanager_available_import_failed")
+            logger.debug("chaos")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -816,7 +823,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos.tieringcircuitbreaker_available_import_failed")
+            logger.debug("chaos")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -839,7 +846,7 @@ class ChaosExperiment(abc.ABC):
 
             return get_current_state()
         except ImportError:
-            logger.debug("chaos.rate_limit_module_available")
+            logger.debug("chaos")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -874,7 +881,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos.tierregistry_available_import_failed")
+            logger.debug("chaos")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(

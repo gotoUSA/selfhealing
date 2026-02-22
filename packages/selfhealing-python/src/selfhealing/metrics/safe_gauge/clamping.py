@@ -6,8 +6,9 @@ Prevents invalid metric values (negative counts, out-of-range percentages).
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -27,8 +28,9 @@ def clamp_non_negative(value: float, metric_name: str = "unknown") -> float:
     """
     if value < 0:
         logger.warning(
-            f"[SafeGauge] Clamping negative value {value} to 0 "
-            f"for metric '{metric_name}'"
+            "safe_gauge.clamping_negative_value_metric",
+            value=value,
+            metric_name=metric_name,
         )
         return 0.0
     return float(value)
@@ -49,14 +51,16 @@ def clamp_percentage(value: float, metric_name: str = "unknown") -> float:
     """
     if value < 0:
         logger.warning(
-            f"[SafeGauge] Clamping negative percentage {value} to 0 "
-            f"for metric '{metric_name}'"
+            "safe_gauge.clamping_negative_percentage_metric",
+            value=value,
+            metric_name=metric_name,
         )
         return 0.0
     if value > 100:
         logger.warning(
-            f"[SafeGauge] Clamping percentage {value} to 100 "
-            f"for metric '{metric_name}'"
+            "safe_gauge.clamping_percentage_metric",
+            value=value,
+            metric_name=metric_name,
         )
         return 100.0
     return float(value)

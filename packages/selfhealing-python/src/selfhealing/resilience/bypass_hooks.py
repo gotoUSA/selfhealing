@@ -19,9 +19,10 @@ Hook Priority Levels:
 
 from __future__ import annotations
 
-import structlog
 import os
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest

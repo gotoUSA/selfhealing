@@ -26,12 +26,13 @@ Note:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from concurrent import futures
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterator
+
+import structlog
 
 from selfhealing.adapters.ipc.auth import (
     SidecarAuthenticator,

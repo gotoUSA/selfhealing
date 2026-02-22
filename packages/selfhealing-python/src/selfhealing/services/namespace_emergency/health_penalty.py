@@ -25,11 +25,12 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.services.coordination.enums import EmergencyScope
 
@@ -227,8 +228,10 @@ class EmergencyHealthPenalty:
             self._cache_timestamp[cache_key] = now
 
         logger.debug(
-            f"[EmergencyHealthPenalty] namespace={ns}, "
-            f"penalty={penalty}, mode={state.governance_mode}"
+            "emergency_health_penalty.event",
+            ns=ns,
+            penalty=penalty,
+            state=state.governance_mode,
         )
 
         return penalty
@@ -256,9 +259,10 @@ class EmergencyHealthPenalty:
 
         if penalty > 0:
             logger.debug(
-                f"[EmergencyHealthPenalty] Applied penalty: "
-                f"base={base_score:.1f}, penalty={penalty:.1f}, "
-                f"adjusted={result:.1f}"
+                "emergency_health_penalty.applied_penalty",
+                base_score=base_score,
+                penalty=penalty,
+                result=result,
             )
 
         return result
@@ -335,8 +339,8 @@ class EmergencyHealthPenalty:
                 self._cache_timestamp.clear()
 
         logger.debug(
-            f"[EmergencyHealthPenalty] Cache invalidated: "
-            f"namespace={namespace or 'all'}"
+            "emergency_health_penalty.cache_invalidated",
+            value=namespace or 'all',
         )
 
 

@@ -11,7 +11,6 @@ from typing import Any
 
 from selfhealing.services.governance.checks import GovernanceCheckResult
 
-
 # =============================================================================
 # Replay Result
 # =============================================================================

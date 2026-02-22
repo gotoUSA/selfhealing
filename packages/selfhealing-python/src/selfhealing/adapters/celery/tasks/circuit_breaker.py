@@ -44,7 +44,11 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
     Returns:
         Dictionary with replay result summary
     """
-    logger.info(f"[Circuit Recovery] Starting conditional replay for '{service_name}', " f"max_items={max_items}")
+    logger.info(
+        "circuit_recovery_starting_conditional",
+        service_name=service_name,
+        max_items=max_items,
+    )
 
     try:
         # Error Budget Gate 체크: 에러 예산 부족 시 Replay 차단
@@ -54,8 +58,9 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
             gate_result = check_automation_allowed()
             if not gate_result.allowed:
                 logger.warning(
-                    f"[Circuit Recovery] Blocked by Error Budget Gate: "
-                    f"budget={gate_result.error_budget_percent}% < threshold={gate_result.threshold_percent}%"
+                    "circuit_recovery_blocked_error",
+                    gate_result=gate_result.error_budget_percent,
+                    gate_result_1=gate_result.threshold_percent,
                 )
                 return {
                     "success": False,
@@ -84,7 +89,10 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
         failed_count = 0
 
         for operation in pending:
-            logger.info(f"[Circuit Recovery] Would replay operation {operation.id}")
+            logger.info(
+                "circuit_recovery_replay_operation",
+                operation=operation.id,
+            )
             # In a real implementation:
             # result = replay_operation(operation)
             # if result.success:
@@ -95,8 +103,11 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
             #     failed_count += 1
 
         logger.info(
-            f"[Circuit Recovery] Completed for '{service_name}': "
-            f"total={len(pending)}, success={success_count}, failed={failed_count}"
+            "circuit_recovery_completed",
+            service_name=service_name,
+            count=len(pending),
+            success_count=success_count,
+            failed_count=failed_count,
         )
 
         return {
@@ -108,9 +119,10 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
         }
 
     except Exception as e:
-        logger.error(
-            f"[Circuit Recovery] Failed for '{service_name}': {e}",
-            exc_info=True,
+        logger.exception(
+            "circuit_recovery_failed",
+            service_name=service_name,
+            error=e,
         )
         return {
             "success": False,
@@ -143,8 +155,10 @@ def check_circuit_breaker_recovery(self) -> dict:
 
     try:
         from selfhealing.core.timezone import now
-        from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
         from selfhealing.factory import ProviderRegistry
+        from selfhealing.interfaces.repositories import (
+            CircuitBreakerStateEnum as CircuitState,
+        )
 
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
         current_time = now()
@@ -175,7 +189,9 @@ def check_circuit_breaker_recovery(self) -> dict:
                 if success:
                     transitioned.append(service_name)
                     logger.info(
-                        f"[Circuit Check] Transitioned '{service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                        "circuit_check_transitioned_open",
+                        service_name=service_name,
+                        elapsed=elapsed,
                     )
 
         return {
@@ -185,7 +201,10 @@ def check_circuit_breaker_recovery(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[Circuit Check] Error: {e}", exc_info=True)
+        logger.exception(
+            "circuit_check_error",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -219,7 +238,11 @@ def force_open_circuit_breaker(
     Returns:
         Dictionary with operation result
     """
-    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
+    logger.warning(
+        "circuit_breaker_force_opening",
+        service_name=service_name,
+        reason=reason,
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -236,7 +259,10 @@ def force_open_circuit_breaker(
         )
 
         if success:
-            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
+            logger.warning(
+                "circuit_breaker_successfully_opened",
+                service_name=service_name,
+            )
             return {
                 "success": True,
                 "service_name": service_name,
@@ -252,7 +278,10 @@ def force_open_circuit_breaker(
             }
 
     except Exception as e:
-        logger.error(f"[Circuit Breaker] Error opening circuit: {e}", exc_info=True)
+        logger.exception(
+            "circuit_breaker_error_opening",
+            error=e,
+        )
         return {
             "success": False,
             "service_name": service_name,
@@ -289,7 +318,11 @@ def force_close_circuit_breaker(
     Returns:
         Dictionary with operation result
     """
-    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
+    logger.info(
+        "circuit_breaker_force_closing",
+        service_name=service_name,
+        reason=reason,
+    )
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -313,11 +346,17 @@ def force_close_circuit_breaker(
         )
 
         if success:
-            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
+            logger.info(
+                "circuit_breaker_successfully_closed",
+                service_name=service_name,
+            )
 
             if trigger_replay:
                 conditional_replay_on_circuit_close.delay(service_name)
-                logger.info(f"[Circuit Breaker] Triggered replay for '{service_name}'")
+                logger.info(
+                    "circuit_breaker_triggered_replay",
+                    service_name=service_name,
+                )
 
             return {
                 "success": True,
@@ -335,7 +374,10 @@ def force_close_circuit_breaker(
             }
 
     except Exception as e:
-        logger.error(f"[Circuit Breaker] Error closing circuit: {e}", exc_info=True)
+        logger.exception(
+            "circuit_breaker_error_closing",
+            error=e,
+        )
         return {
             "success": False,
             "service_name": service_name,
@@ -376,7 +418,11 @@ def send_cb_open_notification(
     Returns:
         알림 발송 결과 딕셔너리
     """
-    logger.info(f"[SendCBOpenNotification] Sending notification for '{service_name}' " f"(attempt {self.request.retries + 1})")
+    logger.info(
+        "send_cb_open_notification.sending_notification_attempt",
+        service_name=service_name,
+        self=self.request.retries + 1,
+    )
 
     try:
         from selfhealing.services.circuit_breaker.actionable_alert_urls import (
@@ -419,7 +465,10 @@ def send_cb_open_notification(
             )
         )
 
-        logger.info(f"[SendCBOpenNotification] Notification sent for '{service_name}'")
+        logger.info(
+            "send_cb_open_notification.notification_sent",
+            service_name=service_name,
+        )
 
         return {
             "success": True,
@@ -428,9 +477,10 @@ def send_cb_open_notification(
         }
 
     except Exception as e:
-        logger.error(
-            f"[SendCBOpenNotification] Failed for '{service_name}': {e}",
-            exc_info=True,
+        logger.exception(
+            "send_cb_open_notification.failed",
+            service_name=service_name,
+            error=e,
         )
         raise
 
@@ -468,7 +518,10 @@ def collect_cb_open_snapshot(
     Returns:
         스냅샷 수집 결과 딕셔너리
     """
-    logger.info(f"[CollectCBOpenSnapshot] Collecting snapshot for '{service_name}'")
+    logger.info(
+        "collect_cb_open_snapshot.collecting_snapshot",
+        service_name=service_name,
+    )
 
     try:
         from selfhealing.api.django.views.xtest.base import collect_system_snapshot
@@ -514,15 +567,24 @@ def collect_cb_open_snapshot(
                 cb_states[name] = status.get("state", "UNKNOWN") if status else "UNKNOWN"
             snapshot["cb_states"] = str(cb_states)  # Redis HASH는 문자열만 저장
         except Exception as e:
-            logger.debug(f"[CollectCBOpenSnapshot] Failed to get CB states: {e}")
+            logger.debug(
+                "collect_cb_open_snapshot.failed_get_cb_states",
+                error=e,
+            )
 
         # Redis에 저장
         success = save_open_snapshot_to_redis(service_name, snapshot)
 
         if success:
-            logger.info(f"[CollectCBOpenSnapshot] Snapshot saved for '{service_name}'")
+            logger.info(
+                "collect_cb_open_snapshot.snapshot_saved",
+                service_name=service_name,
+            )
         else:
-            logger.warning(f"[CollectCBOpenSnapshot] Failed to save snapshot for '{service_name}'")
+            logger.warning(
+                "collect_cb_open_snapshot.failed_save_snapshot",
+                service_name=service_name,
+            )
 
         return {
             "success": success,
@@ -531,9 +593,10 @@ def collect_cb_open_snapshot(
         }
 
     except Exception as e:
-        logger.error(
-            f"[CollectCBOpenSnapshot] Failed for '{service_name}': {e}",
-            exc_info=True,
+        logger.exception(
+            "collect_cb_open_snapshot.failed",
+            service_name=service_name,
+            error=e,
         )
         return {
             "success": False,
@@ -566,8 +629,10 @@ def expire_manual_overrides(self) -> dict:
 
     try:
         from selfhealing.core.timezone import now
-        from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
         from selfhealing.factory import ProviderRegistry
+        from selfhealing.interfaces.repositories import (
+            CircuitBreakerStateEnum as CircuitState,
+        )
 
         cb_repo = ProviderRegistry.get_circuit_breaker_repo()
         current_time = now()
@@ -617,7 +682,10 @@ def expire_manual_overrides(self) -> dict:
             )
 
             logger.warning(
-                f"[Circuit Breaker] Expired manual override for '{service_name}': " f"{previous_state} -> {new_state}"
+                "circuit_breaker_expired_manual",
+                service_name=service_name,
+                previous_state=previous_state,
+                new_state=new_state,
             )
 
         return {
@@ -628,7 +696,10 @@ def expire_manual_overrides(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[Circuit Breaker] Error expiring overrides: {e}", exc_info=True)
+        logger.exception(
+            "circuit_breaker_error_expiring",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),

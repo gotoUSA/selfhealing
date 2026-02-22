@@ -12,12 +12,13 @@ Redis 다운 시 완전 Fail-Open(제한 없음) 또는 완전 Fail-Closed(모�
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -222,7 +223,7 @@ class SafeOpenFallbackManager:
                             state.last_saved_at = now
                         return True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "safe_open_fallback.save_limit_failed",
                     error=e,
                 )
@@ -278,7 +279,9 @@ class SafeOpenFallbackManager:
         with self._lock:
             if state.last_known_safe_limit > 0:
                 logger.debug(
-                    f"[SafeOpenFallback] Using local cache: " f"service={service_name}, limit={state.last_known_safe_limit}"
+                    "safe_open_fallback.using_local_cache",
+                    service_name=service_name,
+                    state=state.last_known_safe_limit,
                 )
                 return (state.last_known_safe_limit, "local_cache")
 

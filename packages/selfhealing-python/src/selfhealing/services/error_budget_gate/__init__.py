@@ -21,7 +21,10 @@ Usage:
     # 방법 1: 조건 체크
     result = check_automation_allowed()
     if not result.allowed:
-        logger.warning(f"Automation blocked: {result.reason}")
+        logger.warning(
+            "automation_blocked",
+            result=result.reason,
+        )
         return  # 자동화 중단
 
     # 방법 2: 예외 발생 (권장)

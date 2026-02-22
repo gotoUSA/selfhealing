@@ -11,11 +11,12 @@ HALF_OPEN 상태에서 Canary 비율(10%→30%→60%)의 요청만 백엔드로 
 
 from __future__ import annotations
 
-import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
+
+import structlog
 
 from selfhealing.services.circuit_breaker.canary_recovery import (
     CanaryRecoveryManager,

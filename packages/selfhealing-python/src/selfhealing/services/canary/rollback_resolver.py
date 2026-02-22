@@ -15,10 +15,11 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -184,7 +185,8 @@ class RollbackValueResolver:
                     )
             except Exception as e:
                 logger.warning(
-                    f"[RollbackValueResolver] ConfigHistory lookup failed: {e}"
+                    "rollback_value_resolver.confighistory_lookup_failed",
+                    error=e,
                 )
 
         # Tier 3: DefaultConfig

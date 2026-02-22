@@ -11,12 +11,12 @@ Note:
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
 from django.db import connection, connections
 
 logger = structlog.get_logger()
@@ -79,7 +79,7 @@ class PostgresRepository:
                 cursor.fetchone()
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "postgres_repository.ping_failed",
                 error=e,
             )
@@ -427,7 +427,9 @@ class PostgresRepository:
         """
         # DeadlineContext 남은 시간이 statement_timeout보다 짧으면 자동 축소
         try:
-            from selfhealing.scaling.deadline_context import get_deadline_aware_statement_timeout
+            from selfhealing.scaling.deadline_context import (
+                get_deadline_aware_statement_timeout,
+            )
 
             deadline_timeout = get_deadline_aware_statement_timeout(
                 default_db_timeout_ms=statement_timeout_ms if statement_timeout_ms > 0 else 30_000,

@@ -13,13 +13,14 @@ Netflix Hystrix, Google Autopilot 스타일의 자율 조정 시스템
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.settings.runtime_feedback import get_runtime_feedback_settings
 
@@ -145,7 +146,7 @@ class RuntimeFeedbackLoop:
         # 메트릭 베이스라인 (조정 전 baseline)
         self._baseline_metrics: dict[str, float] | None = None
 
-        logger.info("runtime_feedback.initialized")
+        logger.info("initialized")
 
     @property
     def state(self) -> FeedbackLoopState:
@@ -164,7 +165,7 @@ class RuntimeFeedbackLoop:
             self._state = FeedbackLoopState.RUNNING
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
-            logger.info("runtime_feedback.started")
+            logger.info("started")
             return True
 
     def stop(self) -> bool:
@@ -178,7 +179,7 @@ class RuntimeFeedbackLoop:
             self._thread.join(timeout=1)  # 1초면 충분 (Event로 즉시 깨어남)
             self._thread = None
 
-        logger.info("runtime_feedback.stopped")
+        logger.info("stopped")
         return True
 
     def pause(self, reason: str = "manual") -> bool:
@@ -203,7 +204,7 @@ class RuntimeFeedbackLoop:
 
             self._state = FeedbackLoopState.RUNNING
             self._consecutive_failures = 0
-            logger.info("runtime_feedback.resumed")
+            logger.info("resumed")
             return True
 
     def _run_loop(self):
@@ -213,7 +214,7 @@ class RuntimeFeedbackLoop:
                 if self._state == FeedbackLoopState.RUNNING and self.enabled:
                     self.observe_and_adjust()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "runtime_feedback.loop_error",
                     error=e,
                 )
@@ -247,7 +248,7 @@ class RuntimeFeedbackLoop:
         try:
             metrics = self.metrics_adapter.fetch_current_metrics()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "runtime_feedback.metrics_fetch_failed",
                 error=e,
             )
@@ -293,8 +294,9 @@ class RuntimeFeedbackLoop:
             decision.parameter, decision.suggested_value
         ):
             logger.warning(
-                f"[RuntimeFeedback] Rejected by safety bounds: "
-                f"{decision.parameter}={decision.suggested_value}"
+                "runtime_feedback.rejected_safety_bounds",
+                decision=decision.parameter,
+                decision_1=decision.suggested_value,
             )
             return None
 
@@ -308,7 +310,7 @@ class RuntimeFeedbackLoop:
                 decision.parameter, decision.suggested_value
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "runtime_feedback.apply_failed",
                 error=e,
             )
@@ -360,12 +362,10 @@ class RuntimeFeedbackLoop:
                 post_metrics = self.metrics_adapter.fetch_current_metrics()
 
                 if self._detect_degradation(pre_metrics, post_metrics):
-                    logger.warning(
-                        "[RuntimeFeedback] Degradation detected, initiating rollback"
-                    )
+                    logger.warning("runtime_feedback.degradation_detected_initiating_rollback")
                     self._rollback_adjustments(adjustments)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "runtime_feedback.health_check_failed",
                     error=e,
                 )
@@ -389,7 +389,8 @@ class RuntimeFeedbackLoop:
             error_increase = (post_error - pre_error) / pre_error
             if error_increase > 0.2:
                 logger.warning(
-                    f"[RuntimeFeedback] Error rate increased: {error_increase:.1%}"
+                    "runtime_feedback.error_rate_increased",
+                    error_increase=error_increase,
                 )
                 return True
         elif post_error > 0.05 and pre_error == 0:
@@ -404,7 +405,8 @@ class RuntimeFeedbackLoop:
             latency_increase = (post_latency - pre_latency) / pre_latency
             if latency_increase > 0.5:
                 logger.warning(
-                    f"[RuntimeFeedback] Latency increased: {latency_increase:.1%}"
+                    "runtime_feedback.latency_increased",
+                    latency_increase=latency_increase,
                 )
                 return True
 
@@ -427,13 +429,15 @@ class RuntimeFeedbackLoop:
 
                 if success:
                     logger.info(
-                        f"[RuntimeFeedback] Rolled back {result.parameter}: "
-                        f"{result.new_value} → {result.old_value}"
+                        "runtime_feedback.rolled_back",
+                        result=result.parameter,
+                        result_1=result.new_value,
+                        result_2=result.old_value,
                     )
                     self._record_rollback_audit(result)
                     self._send_rollback_alert(result)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "runtime_feedback.rollback_failed",
                     error=e,
                 )
@@ -599,11 +603,13 @@ class RuntimeFeedbackLoop:
                 success = self.config_applier.rollback(parameter, old_value)
                 if success:
                     logger.info(
-                        f"[RuntimeFeedback] Manual rollback: {parameter} → {old_value}"
+                        "runtime_feedback.manual_rollback",
+                        parameter=parameter,
+                        old_value=old_value,
                     )
                 return success
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "runtime_feedback.manual_rollback_failed",
                     error=e,
                 )

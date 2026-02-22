@@ -21,9 +21,10 @@ Usage:
         lock.release("circuit_breaker", "rollout-123")
 """
 
-import structlog
 from datetime import timedelta
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -138,15 +139,19 @@ class CanaryConfigLock:
         if acquired:
             self._acquired_locks[config_type] = rollout_id
             logger.info(
-                f"[CanaryLock] Acquired: config={config_type}, " f"rollout={rollout_id}"
+                "canary_lock.acquired",
+                config_type=config_type,
+                rollout_id=rollout_id,
             )
             return True
 
         # 락 획득 실패
         current_owner = self.get_lock_owner(config_type)
         logger.warning(
-            f"[CanaryLock] Failed to acquire: config={config_type}, "
-            f"rollout={rollout_id}, current_owner={current_owner}"
+            "canary_lock.failed_acquire",
+            config_type=config_type,
+            rollout_id=rollout_id,
+            current_owner=current_owner,
         )
         return False
 
@@ -189,19 +194,21 @@ class CanaryConfigLock:
             if result == 1:
                 self._acquired_locks.pop(config_type, None)
                 logger.info(
-                    f"[CanaryLock] Released: config={config_type}, "
-                    f"rollout={rollout_id}"
+                    "canary_lock.released",
+                    config_type=config_type,
+                    rollout_id=rollout_id,
                 )
                 return True
             else:
                 logger.warning(
-                    f"[CanaryLock] Release failed (not owner or expired): "
-                    f"config={config_type}, rollout={rollout_id}"
+                    "canary_lock.release_failed_owner_expired",
+                    config_type=config_type,
+                    rollout_id=rollout_id,
                 )
                 return False
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "canary_lock.release_error",
                 error=e,
             )
@@ -293,19 +300,22 @@ class CanaryConfigLock:
 
             if result == 1:
                 logger.info(
-                    f"[CanaryLock] Extended: config={config_type}, "
-                    f"rollout={rollout_id}, additional={extend_time}"
+                    "canary_lock.extended",
+                    config_type=config_type,
+                    rollout_id=rollout_id,
+                    extend_time=extend_time,
                 )
                 return True
             else:
                 logger.warning(
-                    f"[CanaryLock] Extend failed: config={config_type}, "
-                    f"rollout={rollout_id}"
+                    "canary_lock.extend_failed",
+                    config_type=config_type,
+                    rollout_id=rollout_id,
                 )
                 return False
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "canary_lock.extend_error",
                 error=e,
             )
@@ -337,13 +347,14 @@ class CanaryConfigLock:
         try:
             result = self._redis.delete(lock_key)
             logger.warning(
-                f"[CanaryLock] Force released: config={config_type}, "
-                f"deleted={result}"
+                "canary_lock.force_released",
+                config_type=config_type,
+                result=result,
             )
             return result > 0
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "canary_lock.force_release_error",
                 error=e,
             )

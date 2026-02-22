@@ -31,7 +31,6 @@ Version: 1.0.0
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import tempfile
 import threading
@@ -41,6 +40,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     import redis
@@ -420,7 +421,7 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
             else:
                 self._write_to_redis(namespace, data)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_checkpoint.save_failed",
                 error=e,
             )
@@ -672,11 +673,13 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
             self._redis.set(key, value)
             redis_success = True
             logger.debug(
-                f"[KafkaRedisCheckpoint] Redis saved: namespace={namespace}, "
-                f"seq={data.wal_sequence}, offset={data.kafka_offset}"
+                "kafka_redis_checkpoint.redis_saved",
+                namespace=namespace,
+                data=data.wal_sequence,
+                data_2=data.kafka_offset,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "kafka_redis_checkpoint.redis_save_failed",
                 error=e,
             )

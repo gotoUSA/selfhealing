@@ -20,13 +20,14 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import (
     RecoveryCircuitBreakerSettings,
@@ -246,8 +247,8 @@ class RecoveryCircuitBreaker:
                     self._half_open_requests[namespace] = 0
                     self._half_open_failures[namespace] = 0
                     logger.info(
-                        f"[RecoveryCircuitBreaker] Transitioned to HALF_OPEN: "
-                        f"namespace={namespace}"
+                        "recovery_circuit_breaker.transitioned",
+                        namespace=namespace,
                     )
 
             return self._states.get(namespace, RecoveryCircuitState.CLOSED)
@@ -362,8 +363,9 @@ class RecoveryCircuitBreaker:
             self._trip_counts[namespace] = self._trip_counts.get(namespace, 0) + 1
 
             logger.warning(
-                f"[RecoveryCircuitBreaker] Force opened: "
-                f"namespace={namespace}, reason={reason}"
+                "recovery_circuit_breaker.force_opened",
+                namespace=namespace,
+                reason=reason,
             )
 
     def get_status(self, namespace: str) -> dict[str, Any]:
@@ -449,9 +451,11 @@ class RecoveryCircuitBreaker:
         should_re_escalate = self._config.re_escalation_enabled and not is_permanent
 
         logger.warning(
-            f"[RecoveryCircuitBreaker] TRIPPED: namespace={namespace}, "
-            f"reason={reason}, trip_count={trip_count}, "
-            f"permanent={is_permanent}"
+            "recovery_circuit_breaker.tripped",
+            namespace=namespace,
+            reason=reason,
+            trip_count=trip_count,
+            is_permanent=is_permanent,
         )
 
         return {
@@ -502,8 +506,8 @@ class RecoveryCircuitBreaker:
                 self._trip_counts[namespace] = 0
 
                 logger.info(
-                    f"[RecoveryCircuitBreaker] Transitioned to CLOSED: "
-                    f"namespace={namespace}"
+                    "recovery_circuit_breaker.transitioned_closed",
+                    namespace=namespace,
                 )
 
                 return {

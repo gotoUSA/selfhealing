@@ -68,7 +68,10 @@ def flush_redis_audit_buffer(
         logger.warning("redis_audit_buffer.distributed_lock_unavailable")
         lock_acquired = True
     except Exception as e:
-        logger.error(f"[flush_redis_audit_buffer] Lock acquisition error: {e}")
+        logger.exception(
+            "flush_redis_audit_buffer.lock_acquisition_error",
+            error=e,
+        )
         lock_acquired = True  # Fail-open
 
     if not lock_acquired:
@@ -112,7 +115,7 @@ def flush_redis_audit_buffer(
         duration_ms = (time.time() - start_time) * 1000
 
         logger.info(
-            f"[flush_redis_audit_buffer] Completed",
+            f"[flush_redis_audit_buffer] Completed",  # noqa: G004
             extra={
                 "flushed_count": flushed_count,
                 "duration_ms": round(duration_ms, 1),
@@ -136,10 +139,9 @@ def flush_redis_audit_buffer(
         }
 
     except Exception as e:
-        logger.error(
-            f"[flush_redis_audit_buffer] Failed: {e}",
-            exc_info=True,
-            extra={"task_id": task_id},
+        logger.exception(
+            "flush_redis_audit_buffer.failed",
+            error=e,
         )
 
         # 재시도
@@ -151,7 +153,10 @@ def flush_redis_audit_buffer(
             try:
                 lock.release(namespace=lock_namespace, session_id=session_id)
             except Exception as e:
-                logger.warning(f"[flush_redis_audit_buffer] Lock release failed: {e}")
+                logger.warning(
+                    "flush_redis_audit_buffer.lock_release_failed",
+                    error=e,
+                )
 
 
 @shared_task(
@@ -191,7 +196,7 @@ def recover_orphaned_processing_queues(
         recovered_total = redis_buffer.recover_orphaned_processing_queues(timeout_seconds=timeout_seconds)
 
         logger.info(
-            f"[recover_orphaned_processing_queues] Completed",
+            f"[recover_orphaned_processing_queues] Completed",  # noqa: G004
             extra={
                 "recovered_total": recovered_total,
                 "task_id": task_id,
@@ -213,10 +218,9 @@ def recover_orphaned_processing_queues(
         }
 
     except Exception as e:
-        logger.error(
-            f"[recover_orphaned_processing_queues] Failed: {e}",
-            exc_info=True,
-            extra={"task_id": task_id},
+        logger.exception(
+            "recover_orphaned_processing_queues.failed",
+            error=e,
         )
         return {
             "status": "error",
@@ -254,7 +258,7 @@ def apply_audit_buffer_safety_ltrim(self) -> dict:
         total_trimmed = sum(trimmed.values())
 
         logger.info(
-            f"[apply_audit_buffer_safety_ltrim] Completed",
+            f"[apply_audit_buffer_safety_ltrim] Completed",  # noqa: G004
             extra={
                 "trimmed_domains": trimmed,
                 "total_trimmed": total_trimmed,
@@ -270,10 +274,9 @@ def apply_audit_buffer_safety_ltrim(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(
-            f"[apply_audit_buffer_safety_ltrim] Failed: {e}",
-            exc_info=True,
-            extra={"task_id": task_id},
+        logger.exception(
+            "apply_audit_buffer_safety_ltrim.failed",
+            error=e,
         )
         return {
             "status": "error",
@@ -292,7 +295,10 @@ def _get_redis_buffer():
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
         return create_redis_audit_buffer(redis_url)
     except Exception as e:
-        logger.error(f"[_get_redis_buffer] Failed to create buffer: {e}")
+        logger.exception(
+            "failed_create_buffer",
+            error=e,
+        )
         return None
 
 
@@ -312,7 +318,10 @@ def _get_target_adapter():
         logger.warning("audit_flush.file_adapter_unavailable")
         return None
     except Exception as e:
-        logger.error(f"[_get_target_adapter] Failed: {e}")
+        logger.exception(
+            "failed",
+            error=e,
+        )
         return None
 
 

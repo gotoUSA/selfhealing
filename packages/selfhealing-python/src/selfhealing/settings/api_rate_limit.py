@@ -16,7 +16,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -130,8 +129,8 @@ class ApiRateLimitSettings(BaseSettings):
         """
         if v > 50:
             logger.warning(
-                f"[ApiRateLimit] High emergency_limit={v}, "
-                "consider using <= 50 for safety during Redis failures"
+                "api_rate_limit.high_consider_using_safety",
+                v=v,
             )
         return v
 

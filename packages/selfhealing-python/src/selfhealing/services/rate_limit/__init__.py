@@ -5,8 +5,8 @@ Kafka 기반 분산 429 이벤트 전파를 포함한 Rate Limit 관련 서비�
 """
 
 from selfhealing.services.rate_limit.distributed_channel import (
-    DistributedRateLimitChannel,
     RATE_LIMIT_TOPIC,
+    DistributedRateLimitChannel,
 )
 
 __all__ = [

@@ -33,10 +33,10 @@ Usage:
 from .circuit_breaker import HashChainCircuitBreaker
 from .degradation_manager import HashChainDegradationManager
 from .enums import (
-    HashChainCircuitBreakerConfig,
     CircuitState,
     DegradationLevel,
     FallbackConfig,
+    HashChainCircuitBreakerConfig,
 )
 from .fallback import HashChainFallbackChain
 from .manager import HashChainGracefulDegradationManager

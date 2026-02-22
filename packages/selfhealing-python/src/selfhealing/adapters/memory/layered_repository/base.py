@@ -7,11 +7,12 @@ L2 저장소 동기화 시 Bulkhead 패턴을 사용하여 리소스 격리를 �
 
 from __future__ import annotations
 
-import structlog
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.adapters.memory.drift_reconciliation import (
     DriftReconciler,
@@ -132,8 +133,9 @@ class LayeredRepositoryBase:
             )
             self._bulkhead = registry.get(conn_type)
             logger.debug(
-                f"[LayeredRepositoryBase] Bulkhead initialized: "
-                f"adapter={self._adapter_type}, bulkhead={self._bulkhead.name}"
+                "layered_repository_base.bulkhead_initialized",
+                self=self._adapter_type,
+                _bulkhead=self._bulkhead.name,
             )
         except Exception as e:
             logger.warning(

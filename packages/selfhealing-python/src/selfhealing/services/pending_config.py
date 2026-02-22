@@ -15,13 +15,14 @@ Audit:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 from selfhealing.core.apply_strategy import ApplyOptions, ApplyStrategy
 from selfhealing.core.state_backend import get_state_backend
@@ -178,7 +179,10 @@ class PendingConfigService:
             self._save_state()
 
             logger.info(
-                f"[PendingConfig] Created pending change {change_id} " f"for {config_type}, scheduled at {scheduled_time}"
+                "pending_config.created_pending_change_scheduled",
+                change_id=change_id,
+                config_type=config_type,
+                scheduled_time=scheduled_time,
             )
 
             return change

@@ -34,14 +34,15 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 if TYPE_CHECKING:
-    from selfhealing.adapters.kafka.event_bus import KafkaEventBus
     from selfhealing.adapters.kafka.consumer import ConsumedEvent
+    from selfhealing.adapters.kafka.event_bus import KafkaEventBus
 
 logger = structlog.get_logger()
 
@@ -102,7 +103,7 @@ class DistributedRateLimitChannel:
 
                 self._kafka_bus = KafkaEventBus()
             except ImportError as e:
-                logger.error(
+                logger.exception(
                     "distributed_rate_limit_channel.kafka_available",
                     error=e,
                 )
@@ -148,18 +149,20 @@ class DistributedRateLimitChannel:
 
             if success:
                 logger.info(
-                    f"[DistributedRateLimitChannel] Broadcasted 429 for '{key}' "
-                    f"(consecutive={consecutive_429s})"
+                    "distributed_rate_limit_channel.broadcasted",
+                    key=key,
+                    consecutive_429s=consecutive_429s,
                 )
             else:
                 logger.warning(
-                    f"[DistributedRateLimitChannel] Failed to broadcast 429 for '{key}'"
+                    "distributed_rate_limit_channel.failed_broadcast",
+                    key=key,
                 )
 
             return success
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "distributed_rate_limit_channel.broadcast_error",
                 error=e,
             )
@@ -178,8 +181,8 @@ class DistributedRateLimitChannel:
         with self._lock:
             self._handlers.append(handler)
             logger.info(
-                f"[DistributedRateLimitChannel] Handler registered "
-                f"(total: {len(self._handlers)})"
+                "distributed_rate_limit_channel.handler_registered_total",
+                count=len(self._handlers),
             )
 
         # 아직 구독 설정 안 됐으면 Kafka 구독 설정
@@ -212,7 +215,7 @@ class DistributedRateLimitChannel:
             try:
                 handler(event_data)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "distributed_rate_limit_channel.handler_error",
                     error=e,
                 )
@@ -230,9 +233,9 @@ class DistributedRateLimitChannel:
             kafka_bus = self._ensure_kafka_bus()
             kafka_bus.start()
             self._running = True
-            logger.info("distributed_rate_limit_channel.started")
+            logger.info("started")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "distributed_rate_limit_channel.start_failed",
                 error=e,
             )
@@ -246,9 +249,9 @@ class DistributedRateLimitChannel:
             if self._kafka_bus:
                 self._kafka_bus.stop()
             self._running = False
-            logger.info("distributed_rate_limit_channel.stopped")
+            logger.info("stopped")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "distributed_rate_limit_channel.stop_failed",
                 error=e,
             )

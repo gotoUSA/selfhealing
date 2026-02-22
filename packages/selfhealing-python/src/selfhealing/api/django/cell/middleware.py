@@ -25,11 +25,11 @@ MIDDLEWARE 설정:
 
 from __future__ import annotations
 
-import structlog
 import time
 from ipaddress import ip_address, ip_network
 from typing import Any
 
+import structlog
 from django.http import HttpRequest, HttpResponse
 
 logger = structlog.get_logger()

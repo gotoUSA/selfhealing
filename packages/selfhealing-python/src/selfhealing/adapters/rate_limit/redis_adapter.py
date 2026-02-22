@@ -16,9 +16,10 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 import time
 from typing import Any
+
+import structlog
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitState,
@@ -241,7 +242,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_rate_limit_storage.failed_get_state",
                 error=e,
             )
@@ -279,7 +280,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_rate_limit_storage.failed_set_cooldown",
                 error=e,
             )
@@ -305,7 +306,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             return new_value
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_rate_limit_storage.failed_increment",
                 error=e,
             )
@@ -321,7 +322,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_rate_limit_storage.failed_reset",
                 error=e,
             )
@@ -341,7 +342,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "redis_rate_limit_storage.failed_clear",
                 error=e,
             )

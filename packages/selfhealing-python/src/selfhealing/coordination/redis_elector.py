@@ -8,12 +8,13 @@ Fencing Token, 리전 우선순위, Self-Fencing, 비동기 콜백 지원.
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable
+
+import structlog
 
 from selfhealing.coordination.base import (
     LeaderElector,
@@ -250,7 +251,7 @@ class RedisLeaderElector(LeaderElector):
                 is_self=(data["node_id"] == self._node_id),
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "leader_elector.리더_정보_조회_실패",
                 error=e,
             )
@@ -281,12 +282,14 @@ class RedisLeaderElector(LeaderElector):
             if result > 0:
                 self._fencing_token = int(result)
                 logger.info(
-                    f"[LeaderElector] 리더 획득 성공 " f"(resource={self._resource_name}, fencing_token={self._fencing_token})"
+                    "leader_elector.리더_획득_성공",
+                    self=self._resource_name,
+                    self_1=self._fencing_token,
                 )
                 return True
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "leader_elector.리더_획득_실패",
                 error=e,
             )
@@ -314,7 +317,7 @@ class RedisLeaderElector(LeaderElector):
                 return True
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "leader_elector.lease_갱신_실패",
                 error=e,
             )
@@ -340,7 +343,7 @@ class RedisLeaderElector(LeaderElector):
                 self=self._resource_name,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "leader_elector.리더십_반납_실패",
                 error=e,
             )
@@ -350,7 +353,7 @@ class RedisLeaderElector(LeaderElector):
         try:
             callback()
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "leader_elector.콜백_오류",
                 callback_type=callback_type,
                 error=e,
@@ -507,7 +510,7 @@ class RedisLeaderElector(LeaderElector):
                         break
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "leader_elector.선출_루프_오류",
                     error=e,
                 )

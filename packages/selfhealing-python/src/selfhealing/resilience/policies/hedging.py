@@ -21,8 +21,9 @@ Policy 내부에 유지한다. 부하 레벨의 갱신 방법만 HedgingConfigUp
 
 from __future__ import annotations
 
-import structlog
 from typing import Any, Awaitable, Callable, TypeVar
+
+import structlog
 
 from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
 from selfhealing.core.hedging.config import (

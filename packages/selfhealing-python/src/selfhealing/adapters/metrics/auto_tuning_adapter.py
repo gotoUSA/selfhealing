@@ -11,8 +11,9 @@ RuntimeFeedbackLoop에서 사용하는 메트릭 수집 어댑터들
 
 from __future__ import annotations
 
-import structlog
 from typing import Protocol
+
+import structlog
 
 logger = structlog.get_logger()
 

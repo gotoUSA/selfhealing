@@ -4,11 +4,12 @@ Performance Manager (Unified Access).
 Provides unified management for all performance optimization components.
 """
 
-import structlog
 import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.performance.async_writer import AsyncAuditWriter
 from selfhealing.audit.performance.batch_query import PipelineBatchQuery

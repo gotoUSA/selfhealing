@@ -19,13 +19,6 @@ from selfhealing.api.django.serializers.config import (
     SLAConfigSerializer,
 )
 
-# Metric Sync Serializers
-from selfhealing.api.django.serializers.metric_sync import (
-    DriftReportResponseSerializer,
-    MetricSyncRequestSerializer,
-    MetricSyncResponseSerializer,
-)
-
 # Control API Serializers
 from selfhealing.api.django.serializers.control import (
     AuditLogListResponseSerializer,
@@ -44,6 +37,13 @@ from selfhealing.api.django.serializers.control import (
     RiskLevels,
     ServiceMetricsSerializer,
     ServiceStateSerializer,
+)
+
+# Metric Sync Serializers
+from selfhealing.api.django.serializers.metric_sync import (
+    DriftReportResponseSerializer,
+    MetricSyncRequestSerializer,
+    MetricSyncResponseSerializer,
 )
 
 __all__ = [

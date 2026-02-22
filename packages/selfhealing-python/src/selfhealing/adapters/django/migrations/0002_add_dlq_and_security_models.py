@@ -3,8 +3,9 @@
 # tables already exist (managed by shopping app migrations).
 # For fresh installations, the tables will be created automatically.
 
-import django.db.models.deletion
 from decimal import Decimal
+
+import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 

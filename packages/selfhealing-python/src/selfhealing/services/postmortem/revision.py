@@ -28,13 +28,14 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -480,8 +481,10 @@ class PostmortemRevisionManager:
         self._save_revision(revision)
 
         logger.info(
-            f"[RevisionManager] Created revision: incident_id={incident_id}, "
-            f"revision_number={new_revision_number}, change_type={change_type.value}"
+            "revision_manager.created_revision",
+            incident_id=incident_id,
+            new_revision_number=new_revision_number,
+            change_type=change_type.value,
         )
 
         return revision
@@ -730,9 +733,11 @@ class PostmortemRevisionManager:
             self._memory_sealed[incident_id] = False
 
         logger.warning(
-            f"[RevisionManager] Postmortem unsealed: incident_id={incident_id}, "
-            f"unsealed_by={unsealed_by}, reason={unseal_reason}, "
-            f"approval_chain={approval_chain}"
+            "revision_manager.postmortem_unsealed",
+            incident_id=incident_id,
+            unsealed_by=unsealed_by,
+            unseal_reason=unseal_reason,
+            approval_chain=approval_chain,
         )
 
         return True
@@ -855,7 +860,7 @@ def migrate_existing_postmortems(
     try:
         from selfhealing.services.postmortem.store import get_healing_incidents
     except ImportError:
-        logger.warning("migration.postmortem_store_available")
+        logger.warning("migration")
         return result
 
     offset = 0
@@ -874,7 +879,7 @@ def migrate_existing_postmortems(
             incident_id = incident.get("incident_id")
 
             if not incident_id:
-                logger.warning("migration.postmortem_missing_skipping")
+                logger.warning("migration")
                 result["failed"] += 1
                 continue
 
@@ -909,9 +914,11 @@ def migrate_existing_postmortems(
         offset += batch_size
 
     logger.info(
-        f"[Migration] Complete: total={result['total']}, "
-        f"migrated={result['migrated']}, skipped={result['skipped']}, "
-        f"failed={result['failed']}"
+        "migration.complete",
+        result=result['total'],
+        result_1=result['migrated'],
+        result_2=result['skipped'],
+        result_3=result['failed'],
     )
 
     return result

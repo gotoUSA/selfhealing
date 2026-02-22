@@ -45,8 +45,10 @@ class PacketLossExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject packet loss with TTL."""
         logger.info(
-            f"[PacketLoss] Injecting {self.loss_rate*100}% packet loss "
-            f"to {self.config.target_service} (TTL: {self._effective_ttl}s)"
+            "packet_loss.injecting_packet_loss_ttl",
+            self=self.loss_rate*100,
+            self_1=self.config.target_service,
+            self_2=self._effective_ttl,
         )
 
         try:
@@ -67,7 +69,7 @@ class PacketLossExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "packet_loss.failed_inject",
                 error=e,
             )
@@ -78,7 +80,8 @@ class PacketLossExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[PacketLoss] Rollback already completed for {self.experiment_id}"
+                    "packet_loss.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -99,7 +102,7 @@ class PacketLossExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "packet_loss.rollback_failed",
                     error=e,
                 )
@@ -131,9 +134,10 @@ class ConnectionResetExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """Inject connection reset behavior with TTL."""
         logger.info(
-            f"[ConnectionReset] Injecting connection resets "
-            f"to {self.config.target_service} at {self.reset_probability*100}% probability "
-            f"(TTL: {self._effective_ttl}s)"
+            "connection_reset.injecting_connection_resets_probability",
+            self=self.config.target_service,
+            self_1=self.reset_probability*100,
+            self_2=self._effective_ttl,
         )
 
         try:
@@ -155,7 +159,7 @@ class ConnectionResetExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "connection_reset.failed_inject",
                 error=e,
             )
@@ -166,7 +170,8 @@ class ConnectionResetExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[ConnectionReset] Rollback already completed for {self.experiment_id}"
+                    "connection_reset.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -187,7 +192,7 @@ class ConnectionResetExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "connection_reset.rollback_failed",
                     error=e,
                 )
@@ -235,8 +240,10 @@ class NetworkBlackholeExperiment(ChaosExperiment):
     def inject_chaos(self) -> bool:
         """네트워크 블랙홀 시뮬레이션 주입."""
         logger.warning(
-            f"[NetworkBlackhole] Blackholing {len(self.affected_endpoints)} endpoints "
-            f"for {self.duration_seconds}s (TTL: {self._effective_ttl}s)"
+            "network_blackhole.blackholing_endpoints_ttl",
+            count=len(self.affected_endpoints),
+            self=self.duration_seconds,
+            self_2=self._effective_ttl,
         )
 
         try:
@@ -256,7 +263,7 @@ class NetworkBlackholeExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "network_blackhole.failed_inject",
                 error=e,
             )
@@ -350,9 +357,11 @@ class ConnectionPartitionExperiment(ChaosExperiment):
         )
 
         logger.info(
-            f"[ConnectionPartition] Injecting simulated {self.partition_type} partition "
-            f"(db={self.db_available}, cache={self.cache_available}) "
-            f"(TTL: {self._effective_ttl}s)"
+            "connection_partition.injecting_simulated_partition_ttl",
+            self=self.partition_type,
+            self_1=self.db_available,
+            self_2=self.cache_available,
+            self_3=self._effective_ttl,
         )
 
         try:
@@ -387,14 +396,14 @@ class ConnectionPartitionExperiment(ChaosExperiment):
             )
 
             logger.info(
-                f"[ConnectionPartition] Partition simulation set: "
-                f"partial={partition_state.is_partial_partition}, "
-                f"full={partition_state.is_full_partition}"
+                "connection_partition.partition_simulation_set",
+                partition_state=partition_state.is_partial_partition,
+                partition_state_1=partition_state.is_full_partition,
             )
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "connection_partition.failed_inject",
                 error=e,
             )
@@ -405,7 +414,8 @@ class ConnectionPartitionExperiment(ChaosExperiment):
         with self._rollback_lock:
             if self._rollback_completed:
                 logger.info(
-                    f"[ConnectionPartition] Rollback already completed for {self.experiment_id}"
+                    "connection_partition.rollback_already_completed",
+                    self=self.experiment_id,
                 )
                 return
 
@@ -429,7 +439,7 @@ class ConnectionPartitionExperiment(ChaosExperiment):
                 self._rollback_completed = True
                 logger.info("connection_partition.partition_simulation_cleared")
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "connection_partition.rollback_failed",
                     error=e,
                 )

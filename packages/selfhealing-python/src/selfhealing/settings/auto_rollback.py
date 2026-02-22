@@ -15,7 +15,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -133,7 +132,7 @@ def get_auto_rollback_settings() -> AutoRollbackSettings:
     if _settings is None:
         _settings = AutoRollbackSettings()
         logger.debug(
-            "[AutoRollbackSettings] Loaded: "
+            "[AutoRollbackSettings] Loaded: "  # noqa: G004
             f"error_rate={_settings.error_rate_major}/{_settings.error_rate_critical}, "
             f"latency={_settings.latency_major_ms}/{_settings.latency_critical_ms}ms"
         )

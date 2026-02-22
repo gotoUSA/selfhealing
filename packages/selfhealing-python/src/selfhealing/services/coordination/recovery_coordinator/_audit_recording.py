@@ -6,8 +6,10 @@ AuditRecordingMixin for RecoveryCoordinator.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
+
 from ..recovery_audit import RecoveryAuditEventType
 from ..recovery_state import RecoverySession, RecoveryStep
 

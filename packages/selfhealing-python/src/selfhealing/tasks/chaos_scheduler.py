@@ -18,8 +18,9 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.settings.chaos import get_chaos_settings
 
@@ -480,7 +481,7 @@ def hunt_zombie_experiments() -> dict[str, Any]:
                     idempotency.release_lock(lock_key)
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "zombie_hunter.failed_abort",
                     exp_id=exp_id,
                     error=e,
@@ -503,7 +504,10 @@ def hunt_zombie_experiments() -> dict[str, Any]:
         return result
 
     except Exception as e:
-        logger.error(f"[ZombieHunter] Task failed: {e}", exc_info=True)
+        logger.exception(
+            "zombie_hunter.task_failed",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),

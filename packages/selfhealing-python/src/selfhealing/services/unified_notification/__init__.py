@@ -25,8 +25,22 @@ Reference:
 
 from __future__ import annotations
 
-# === Explicit re-exports ===
+# Convenience functions
+from .convenience import (
+    notify,
+    notify_error,
+    notify_security,
+    notify_sla,
+)
 
+# Formatters
+from .formatters import (
+    format_cb_notification_with_actions,
+    format_cb_slack_blocks,
+    format_sla_slack_blocks,
+)
+
+# === Explicit re-exports ===
 # Models
 from .models import (
     NotificationCategory,
@@ -49,21 +63,6 @@ from .service import (
     get_unified_notification_manager,
     logger,
     reset_notification_manager,
-)
-
-# Convenience functions
-from .convenience import (
-    notify,
-    notify_error,
-    notify_security,
-    notify_sla,
-)
-
-# Formatters
-from .formatters import (
-    format_cb_notification_with_actions,
-    format_cb_slack_blocks,
-    format_sla_slack_blocks,
 )
 
 __all__ = [

@@ -13,9 +13,9 @@ Environment Variables:
     SELFHEALING_SCALE_FLUSH_INTERVAL_SECONDS=1.0
 """
 
-import structlog
 from enum import Enum
 
+import structlog
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

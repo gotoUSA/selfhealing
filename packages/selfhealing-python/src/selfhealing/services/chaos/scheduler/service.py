@@ -6,11 +6,12 @@ Celery Beat-based scheduler for autonomous chaos experiments.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -234,8 +235,11 @@ class ChaosSchedulerService:
             self._persist_schedules()
 
             logger.info(
-                f"[ChaosScheduler] Created schedule {schedule.id} for {experiment_type} "
-                f"targeting {target_service} ({blast_radius})"
+                "chaos_scheduler.created_schedule_targeting",
+                schedule=schedule.id,
+                experiment_type=experiment_type,
+                target_service=target_service,
+                blast_radius=blast_radius,
             )
 
             return schedule
@@ -380,7 +384,9 @@ class ChaosSchedulerService:
             self._persist_schedules()
 
             logger.info(
-                f"[ChaosScheduler] Schedule {schedule_id} approved by {approved_by}"
+                "chaos_scheduler.schedule_approved",
+                schedule_id=schedule_id,
+                approved_by=approved_by,
             )
 
             # Record audit
@@ -421,7 +427,10 @@ class ChaosSchedulerService:
             self._persist_schedules()
 
             logger.info(
-                f"[ChaosScheduler] Schedule {schedule_id} denied by {denied_by}: {reason}"
+                "chaos_scheduler.schedule_denied",
+                schedule_id=schedule_id,
+                denied_by=denied_by,
+                reason=reason,
             )
 
             return schedule
@@ -487,8 +496,9 @@ class ChaosSchedulerService:
 
             if idem_result.is_duplicate:
                 logger.warning(
-                    f"[ChaosScheduler] Duplicate experiment blocked: "
-                    f"schedule_id={schedule_id}, reason={idem_result.message}"
+                    "chaos_scheduler.duplicate_experiment_blocked",
+                    schedule_id=schedule_id,
+                    idem_result=idem_result.message,
                 )
                 return ExecutionResult(
                     schedule_id=schedule_id,
@@ -550,8 +560,9 @@ class ChaosSchedulerService:
             gate_result = check_automation_allowed()
             if not gate_result.allowed:
                 logger.warning(
-                    f"[ChaosScheduler] Experiment blocked by Error Budget Gate: "
-                    f"{gate_result.error_budget_percent}% < {gate_result.threshold_percent}%"
+                    "chaos_scheduler.experiment_blocked_error_budget",
+                    gate_result=gate_result.error_budget_percent,
+                    gate_result_1=gate_result.threshold_percent,
                 )
                 return self._make_skipped_result(
                     schedule_id,
@@ -797,7 +808,8 @@ class ChaosSchedulerService:
             if self._config.dry_run_mode:
                 config.dry_run = True
                 logger.info(
-                    f"[ChaosScheduler] Running in DRY RUN mode: {self._config.dry_run_reason}"
+                    "chaos_scheduler.running_dry_run_mode",
+                    self=self._config.dry_run_reason,
                 )
 
             experiment = create_experiment(
@@ -919,7 +931,7 @@ class ChaosSchedulerService:
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "chaos_scheduler.set_kill_flag",
                 error=e,
             )
@@ -976,7 +988,8 @@ class ChaosSchedulerService:
         with self._lock:
             self._experiment_instances[experiment_id] = experiment
             logger.debug(
-                f"[ChaosScheduler] Registered experiment instance {experiment_id}"
+                "cell_registry.bulkheads_registered",
+                experiment_id=experiment_id,
             )
 
     def unregister_experiment_instance(self, experiment_id: str) -> None:
@@ -990,7 +1003,8 @@ class ChaosSchedulerService:
             if experiment_id in self._experiment_instances:
                 del self._experiment_instances[experiment_id]
                 logger.debug(
-                    f"[ChaosScheduler] Unregistered experiment instance {experiment_id}"
+                    "chaos_scheduler.unregistered_experiment_instance",
+                    experiment_id=experiment_id,
                 )
 
     def get_experiments_by_status(self, status: str) -> list[Any]:
@@ -1019,7 +1033,9 @@ class ChaosSchedulerService:
                             matching.append(experiment)
                 except Exception as e:
                     logger.warning(
-                        f"[ChaosScheduler] Error checking experiment {exp_id} status: {e}"
+                        "chaos_scheduler.error_checking_experiment_status",
+                        exp_id=exp_id,
+                        error=e,
                     )
             return matching
 
@@ -1064,13 +1080,11 @@ class ChaosSchedulerService:
             cron = croniter(cron_expr, current)
             return cron.get_next(datetime)
         except ImportError:
-            logger.warning(
-                "[ChaosScheduler] croniter not installed. "
-                "Install with: pip install croniter. Using daily fallback."
-            )
+            logger.warning("chaos_scheduler.croniter_installed_install_pip")
         except Exception as e:
             logger.warning(
-                f"[ChaosScheduler] Invalid cron expression: {e}. Using daily fallback."
+                "chaos_scheduler.invalid_cron_expression_using",
+                error=e,
             )
 
         # Fallback to daily at 2 AM
@@ -1136,4 +1150,4 @@ class ChaosSchedulerService:
 
     def _record_audit(self, event_type: str, data: dict[str, Any]) -> None:
         """Record audit event."""
-        logger.info(f"[ChaosSchedulerAudit] {event_type}", extra={"audit_data": data})
+        logger.info(f"[ChaosSchedulerAudit] {event_type}", extra={"audit_data": data})  # noqa: G004

@@ -5,8 +5,9 @@ appliers 리스트를 순서대로 순회하며, 첫 번째로 처리 가능한
 applier가 요청을 수행한다. 어떤 applier도 처리하지 못하면 False를 반환한다.
 """
 
-import structlog
 from typing import Protocol
+
+import structlog
 
 logger = structlog.get_logger()
 

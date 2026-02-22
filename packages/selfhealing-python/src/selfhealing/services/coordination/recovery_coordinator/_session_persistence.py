@@ -7,10 +7,13 @@ SessionPersistenceMixin for RecoveryCoordinator.
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
+
 from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
+
 from ..enums import CompensationStatus, RecoveryStatus
 from ..recovery_state import CompensationResult, RecoverySession, RecoveryStep
 from . import SESSION_CAS_SCRIPT, SessionVersionConflictError, StepTimeoutError
@@ -142,9 +145,10 @@ class SessionPersistenceMixin:
         # 보상 실패 Step이 있으면 로깅
         if not comp_result.all_compensated:
             logger.warning(
-                f"[Recovery] Compensation incomplete: session={session.id}, "
-                f"failed={len(comp_result.failed_steps)}, "
-                f"skipped={len(comp_result.skipped_steps)}"
+                "recovery.compensation_incomplete",
+                session=session.id,
+                count=len(comp_result.failed_steps),
+                count_2=len(comp_result.skipped_steps),
             )
 
         # 최종 실패 상태 설정
@@ -310,8 +314,9 @@ class SessionPersistenceMixin:
             )
 
             logger.info(
-                f"[Recovery] Failure stored to DLQ: session={session.id}, "
-                f"compensation_failures={len(compensation_failures or [])}"
+                "recovery.failure_stored_dlq",
+                session=session.id,
+                count=len(compensation_failures or []),
             )
 
         except Exception as e:

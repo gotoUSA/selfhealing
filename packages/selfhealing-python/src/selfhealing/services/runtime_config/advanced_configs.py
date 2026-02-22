@@ -12,8 +12,9 @@ Provides get/update methods for advanced configuration types:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import DriftThresholdSettings as DriftThresholdConfig
 
@@ -218,22 +219,26 @@ class AdvancedConfigMixin:
             if default_window_days is not None:
                 current["default_window_days"] = default_window_days
                 logger.info(
-                    f"[RuntimeConfig] Updated slo.default_window_days = {default_window_days}"
+                    "runtime_config.updated_slo",
+                    default_window_days=default_window_days,
                 )
             if default_target is not None:
                 current["default_target"] = default_target
                 logger.info(
-                    f"[RuntimeConfig] Updated slo.default_target = {default_target}"
+                    "runtime_config.updated_slo",
+                    default_target=default_target,
                 )
             if default_fast_burn_rate is not None:
                 current["default_fast_burn_rate"] = default_fast_burn_rate
                 logger.info(
-                    f"[RuntimeConfig] Updated slo.default_fast_burn_rate = {default_fast_burn_rate}"
+                    "runtime_config.updated_slo",
+                    default_fast_burn_rate=default_fast_burn_rate,
                 )
             if default_slow_burn_rate is not None:
                 current["default_slow_burn_rate"] = default_slow_burn_rate
                 logger.info(
-                    f"[RuntimeConfig] Updated slo.default_slow_burn_rate = {default_slow_burn_rate}"
+                    "runtime_config.updated_slo",
+                    default_slow_burn_rate=default_slow_burn_rate,
                 )
 
             # Add/update SLOs
@@ -256,9 +261,7 @@ class AdvancedConfigMixin:
 
         slo_name = slo_def.get("name")
         if not slo_name:
-            logger.warning(
-                "[RuntimeConfig] SLO definition missing 'name' field, skipping"
-            )
+            logger.warning("runtime_config.slo_definition_missing_name")
             return
 
         # Find existing SLO by name

@@ -7,8 +7,9 @@ All operations are pass-through with no side effects.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.adapters.airgap.base import BaseAirGapAdapter
 

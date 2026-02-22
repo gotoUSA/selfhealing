@@ -8,13 +8,14 @@ provides unified status, and triggers recovery when possible.
 from __future__ import annotations
 
 import json
-import structlog
 import os
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from .enums import DegradationLevel, FallbackConfig
 from .fallback import HashChainFallbackChain
@@ -126,8 +127,10 @@ class HashChainDegradationManager:
             self._level_changed_at = datetime.now(timezone.utc).isoformat()
 
             logger.warning(
-                f"[HashChainDegradation] Level changed: {old_level.value} → {level.value}"
-                f"{f' ({reason})' if reason else ''}"
+                "hash_chain_degradation.level_changed_reason_else",
+                old_level=old_level.value,
+                level=level.value,
+                value=f' ({reason})' if reason else '',
             )
 
             # Record in Redis if available
@@ -139,16 +142,18 @@ class HashChainDegradationManager:
                     try:
                         callback(level)
                     except Exception as e:
-                        logger.error(
-                            f"[HashChainDegradation] Recovery callback failed: {e}"
+                        logger.exception(
+                            "hash_chain_degradation.recovery_callback_failed",
+                            error=e,
                         )
             else:
                 for callback in self._on_degradation_callbacks:
                     try:
                         callback(level)
                     except Exception as e:
-                        logger.error(
-                            f"[HashChainDegradation] Degradation callback failed: {e}"
+                        logger.exception(
+                            "hash_chain_degradation.degradation_callback_failed",
+                            error=e,
                         )
 
     def _record_level_change(
@@ -233,7 +238,7 @@ class HashChainDegradationManager:
                 self.set_level(DegradationLevel.NORMAL, "redis_recovered")
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "watchdog.recovery_failed",
                     error=e,
                 )

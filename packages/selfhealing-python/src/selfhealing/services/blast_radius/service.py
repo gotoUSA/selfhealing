@@ -10,9 +10,10 @@ Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from threading import Lock
+
+import structlog
 
 from selfhealing.services.audit import log_blast_radius_audit
 

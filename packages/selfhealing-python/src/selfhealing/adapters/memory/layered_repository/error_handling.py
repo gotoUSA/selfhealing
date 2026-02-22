@@ -6,8 +6,9 @@ Provides methods for handling L2 errors and success states.
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -106,9 +107,8 @@ class ErrorHandlingMixin:
         if was_unhealthy:
             self._l2_was_unhealthy = False
             logger.info(
-                f"[LayeredRepo] L2 recovery detected after "
-                f"{self._metrics.get('l2_sync_failure_count', 0)} failures. "
-                f"Initiating drift reconciliation."
+                "layered_repo.recovery_detected_after_failures",
+                self=self._metrics.get('l2_sync_failure_count', 0),
             )
 
             # Audit 기록: L2 복구

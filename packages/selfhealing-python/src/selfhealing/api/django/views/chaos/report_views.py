@@ -4,9 +4,9 @@ Chaos Engineering Report Views.
 API views for resilience reports and grade history.
 """
 
-import structlog
 from datetime import datetime
 
+import structlog
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -110,7 +110,9 @@ class ReportGenerateView(APIView):
         report = generator.generate_daily_report(report_date=report_date)
 
         logger.info(
-            f"[ChaosAPI] Report generated: {report.report_id} by {request.user}"
+            "chaos_api.report_generated",
+            report=report.report_id,
+            request=request.user,
         )
 
         return Response(
@@ -249,9 +251,12 @@ class DryRunAnalysisView(APIView):
         )
 
         logger.info(
-            f"[ChaosAPI] Dry run analysis completed by {request.user}: "
-            f"target={target_service}, type={experiment_type}, "
-            f"risk={overall_risk_level}, allowed={experiment_allowed}"
+            "chaos_api.dry_run_analysis_completed",
+            request=request.user,
+            target_service=target_service,
+            experiment_type=experiment_type,
+            overall_risk_level=overall_risk_level,
+            experiment_allowed=experiment_allowed,
         )
 
         response_data = {

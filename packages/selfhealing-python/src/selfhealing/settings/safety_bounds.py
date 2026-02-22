@@ -12,7 +12,6 @@ Environment Variables (각 파라미터별):
 """
 
 import structlog
-
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -301,7 +300,7 @@ def get_safety_bounds_settings() -> SafetyBoundsSettings:
     if _settings is None:
         _settings = SafetyBoundsSettings()
         logger.debug(
-            "[SafetyBoundsSettings] Loaded: "
+            "[SafetyBoundsSettings] Loaded: "  # noqa: G004
             f"timeout_ms={_settings.timeout_ms_min}-{_settings.timeout_ms_max}, "
             f"retry_count={_settings.retry_count_min}-{_settings.retry_count_max}"
         )

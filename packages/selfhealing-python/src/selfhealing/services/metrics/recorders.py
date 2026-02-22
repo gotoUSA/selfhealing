@@ -9,9 +9,10 @@ and set gauge values for specific events.
 
 from __future__ import annotations
 
-import structlog
 import time
 from datetime import datetime
+
+import structlog
 
 from selfhealing.core.test_mode_context import TestModeContext
 
@@ -129,8 +130,11 @@ def record_retry_attempt(domain: str, attempt_count: int, outcome: str) -> None:
             is_synthetic=is_synthetic,
         ).inc()
         logger.debug(
-            f"[Metrics] Retry recorded: domain={domain}, attempts={attempt_count}, "
-            f"outcome={outcome}, is_synthetic={is_synthetic}"
+            "metrics.retry_recorded",
+            domain=domain,
+            attempt_count=attempt_count,
+            outcome=outcome,
+            is_synthetic=is_synthetic,
         )
     except Exception as e:
         logger.warning(
@@ -194,7 +198,9 @@ def record_circuit_breaker_state_change(
         to_state: New state
     """
     try:
-        from selfhealing.services.cell_topology.cb_namespace import parse_composite_cb_name
+        from selfhealing.services.cell_topology.cb_namespace import (
+            parse_composite_cb_name,
+        )
 
         base_service, cell_id = parse_composite_cb_name(service)
         is_synthetic = TestModeContext.get_synthetic_label_value()
@@ -208,7 +214,11 @@ def record_circuit_breaker_state_change(
             is_synthetic=is_synthetic,
         ).inc()
         logger.info(
-            f"[Metrics] Circuit breaker transition: {service} {from_state} -> {to_state}, " f"is_synthetic={is_synthetic}"
+            "metrics.circuit_breaker_transition",
+            service=service,
+            from_state=from_state,
+            to_state=to_state,
+            is_synthetic=is_synthetic,
         )
     except Exception as e:
         logger.warning(
@@ -307,8 +317,11 @@ def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
             is_synthetic=is_synthetic,
         ).inc()
         logger.debug(
-            f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, "
-            f"success={success}, is_synthetic={is_synthetic}"
+            "metrics.replay_recorded",
+            domain=domain,
+            replay_type=replay_type,
+            success=success,
+            is_synthetic=is_synthetic,
         )
     except Exception as e:
         logger.warning(
@@ -360,9 +373,13 @@ def record_error_budget_status(
         burn_rate_1h.labels(slo_name=slo_name).set(burn_rate_1h_value)
         burn_rate_6h.labels(slo_name=slo_name).set(burn_rate_6h_value)
         logger.debug(
-            f"[Metrics] Error budget recorded: slo={slo_name}, "
-            f"remaining={remaining_percent:.1f}%, burn_1h={burn_rate_1h_value:.2f}, "
-            f"is_synthetic={is_synthetic}, region={region}, tier={tier}"
+            "metrics.error_budget_recorded",
+            slo_name=slo_name,
+            remaining_percent=remaining_percent,
+            burn_rate_1h_value=burn_rate_1h_value,
+            is_synthetic=is_synthetic,
+            region=region,
+            tier=tier,
         )
     except Exception as e:
         logger.warning(
@@ -462,7 +479,7 @@ def record_failsafe_triggered(component: str) -> None:
             component=component,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "metrics.failed_record_fail_safe",
             error=e,
         )
@@ -526,7 +543,7 @@ def emit_heartbeat(component: str = "error_budget") -> None:
             current_time=current_time,
         )
     except Exception as e:
-        logger.error(
+        logger.exception(
             "metrics.failed_emit_heartbeat",
             error=e,
         )

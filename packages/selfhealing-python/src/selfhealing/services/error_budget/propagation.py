@@ -32,9 +32,10 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.constants import (
@@ -355,8 +356,12 @@ class DomainPropagationMultiplier:
         final = max(decayed, self.config.min_multiplier)
 
         logger.debug(
-            f"[DomainPropagation] crisis={crisis_domain}, error={error_domain}, "
-            f"hop={hop_distance}, base={base:.2f}, decayed={final:.2f}"
+            "domain_propagation.event",
+            crisis_domain=crisis_domain,
+            error_domain=error_domain,
+            hop_distance=hop_distance,
+            base=base,
+            final=final,
         )
 
         return final
@@ -438,9 +443,10 @@ class DomainPropagationMultiplier:
             ).inc()
 
             logger.debug(
-                f"[DomainPropagation] Depth limit reached: "
-                f"crisis={crisis_domain}, error={error_domain}, "
-                f"max_hops={self.config.max_hops}"
+                "domain_propagation.depth_limit_reached",
+                crisis_domain=crisis_domain,
+                error_domain=error_domain,
+                self=self.config.max_hops,
             )
         except Exception:
             pass  # 메트릭 실패는 무시

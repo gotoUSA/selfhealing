@@ -16,9 +16,9 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4
 """
 
-import structlog
 from datetime import datetime, timezone
 
+import structlog
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -216,9 +216,10 @@ class RecoveryStartView(APIView):
         )
 
         logger.info(
-            f"[RecoveryStartView] Recovery started: "
-            f"session_id={session.session_id}, namespace={namespace}, "
-            f"user={request.user}"
+            "recovery_start_view.recovery_started",
+            session=session.session_id,
+            namespace=namespace,
+            request=request.user,
         )
 
         return Response(

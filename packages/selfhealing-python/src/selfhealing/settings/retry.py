@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -110,8 +109,8 @@ class RetrySettings(BaseSettings):
         """Warn if max_delay is very high."""
         if v > 600:
             logger.warning(
-                f"[SafeDefault] High max_delay={v}s, "
-                "consider using <= 600s for responsiveness"
+                "safe_default.high_consider_using_responsiveness",
+                v=v,
             )
         return v
 

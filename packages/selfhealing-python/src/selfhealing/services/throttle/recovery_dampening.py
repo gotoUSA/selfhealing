@@ -12,12 +12,13 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 즉시 100% 복구하지 않고
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -113,7 +114,9 @@ class RecoveryDampeningManager:
         """
         if not self.config.enabled:
             logger.info(
-                f"[RecoveryDampening] Disabled, returning full limit: " f"service={service_name}, limit={target_limit}"
+                "recovery_dampening.disabled_returning_full_limit",
+                service_name=service_name,
+                target_limit=target_limit,
             )
             return target_limit
 
@@ -142,9 +145,10 @@ class RecoveryDampeningManager:
             )
 
             logger.info(
-                f"[RecoveryDampening] Started recovery: "
-                f"service={service_name}, target={target_limit}, "
-                f"phase_1_limit={phase_1_limit}"
+                "recovery_dampening.started_recovery",
+                service_name=service_name,
+                target_limit=target_limit,
+                phase_1_limit=phase_1_limit,
             )
 
             return phase_1_limit
@@ -215,7 +219,7 @@ class RecoveryDampeningManager:
                 try:
                     self._on_limit_change(service_name, new_limit)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "recovery_dampening.callback_failed",
                         error=e,
                     )

@@ -14,12 +14,13 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.canary.override import EmergencyOverrideRequest
@@ -205,12 +206,12 @@ class InterlockBypassAuditor:
 
         # 로깅
         logger.warning(
-            f"[AUDIT] Interlock Bypass: "
-            f"id={entry.audit_id}, "
-            f"by={entry.bypassed_by}, "
-            f"reason={entry.bypass_reason[:50]}..., "
-            f"level={entry.emergency_level_name}, "
-            f"severity={entry.severity}"
+            "audit.interlock_bypass",
+            entry=entry.audit_id,
+            entry_1=entry.bypassed_by,
+            entry_2=entry.bypass_reason[:50],
+            entry_3=entry.emergency_level_name,
+            entry_4=entry.severity,
         )
 
         return entry

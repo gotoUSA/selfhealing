@@ -8,9 +8,10 @@ ErrorBudgetStatus의 burn_rate_1h, burn_rate_6h를 사용하여
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.error_budget.models import ErrorBudgetStatus

@@ -41,10 +41,11 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.services.canary.audit import log_canary_action
 from selfhealing.services.canary.chaos_guard import (
@@ -330,7 +331,10 @@ class CanaryRolloutService:
         )
 
         logger.info(
-            f"[CanaryRollout] Started: id={rollout_id}, " f"stage={first_stage.name}, clusters={chaos_result.safe_clusters}"
+            "canary_rollout.started",
+            rollout_id=rollout_id,
+            first_stage=first_stage.name,
+            chaos_result=chaos_result.safe_clusters,
         )
 
         return True
@@ -416,7 +420,10 @@ class CanaryRolloutService:
                 },
             )
             logger.warning(
-                f"[CanaryRollout] Governance bypassed: rollout={rollout_id}, " f"reason={bypass_reason}, by={requested_by}"
+                "canary_rollout.governance_bypassed",
+                rollout_id=rollout_id,
+                bypass_reason=bypass_reason,
+                requested_by=requested_by,
             )
 
         # 현재 단계 메트릭 검증 (force가 아니면)
@@ -566,9 +573,11 @@ class CanaryRolloutService:
             rollout.paused_at = utc_now()
         else:
             logger.debug(
-                f"[CanaryRollout] Keeping existing trigger: "
-                f"{existing_trigger} (priority {existing_priority}) > "
-                f"{triggered_by} (priority {new_priority})"
+                "canary_rollout.keeping_existing_trigger_priority",
+                existing_trigger=existing_trigger,
+                existing_priority=existing_priority,
+                triggered_by=triggered_by,
+                new_priority=new_priority,
             )
 
         rollout.state = CanaryState.PAUSED
@@ -660,14 +669,16 @@ class CanaryRolloutService:
                 # Whitelist가 명시된 경우: 해당 사유만 재개
                 if triggered_by not in triggered_by_whitelist:
                     logger.debug(
-                        f"[CanaryRollout] Skipping resume for {rollout.id}: " f"triggered_by={triggered_by} not in whitelist"
+                        "canary_rollout.skipping_resume_whitelist",
+                        rollout=rollout.id,
+                        triggered_by=triggered_by,
                     )
                     continue
             else:
                 # Whitelist=None: 기존 동작 (모든 PAUSED 재개) + 경고
                 logger.warning(
-                    f"[CanaryRollout] Resuming {rollout.id} without whitelist filter. "
-                    f"Consider using triggered_by_whitelist for safety."
+                    "canary_rollout.resuming_without_whitelist_filter",
+                    rollout=rollout.id,
                 )
 
             if self.resume(rollout.id):
@@ -725,8 +736,9 @@ class CanaryRolloutService:
             # 마지막 배치가 아니면 대기
             if i + max_batch_size < len(candidates):
                 logger.info(
-                    f"[CanaryRollout] Resumed batch {i // max_batch_size + 1}, "
-                    f"waiting {interval_seconds}s before next batch"
+                    "canary_rollout.resumed_batch_waiting_before",
+                    value=i // max_batch_size + 1,
+                    interval_seconds=interval_seconds,
                 )
                 time.sleep(interval_seconds)
 

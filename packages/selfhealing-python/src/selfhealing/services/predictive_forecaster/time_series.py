@@ -30,10 +30,11 @@ Usage:
 from __future__ import annotations
 
 import collections
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -266,7 +267,10 @@ class HoltLinearForecaster:
 
             backend.set(key, state, ttl_seconds=settings.state_ttl)
             logger.info(
-                f"[HoltLinearForecaster] Saved state for '{metric_name}' " f"({self._count} points, level={self._level:.4f})"
+                "holt_linear_forecaster.saved_state_points",
+                metric_name=metric_name,
+                self=self._count,
+                self_2=self._level,
             )
             return True
         except Exception as e:
@@ -322,8 +326,10 @@ class HoltLinearForecaster:
                 )
 
             logger.info(
-                f"[HoltLinearForecaster] Restored state for '{metric_name}' "
-                f"({self._count} points, level={self._level:.4f})"
+                "holt_linear_forecaster.restored_state_points",
+                metric_name=metric_name,
+                self=self._count,
+                self_2=self._level,
             )
             return True
         except Exception as e:

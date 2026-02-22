@@ -25,15 +25,16 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
+
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.constants import (
-    get_domain_sensitivity,
     DEFAULT_LEVEL_MULTIPLIERS,
     MAX_COMBINED_MULTIPLIER,
+    get_domain_sensitivity,
 )
 
 logger = structlog.get_logger()
@@ -149,7 +150,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._emergency_tracker = get_namespaced_emergency_tracker()
             except ImportError:
-                logger.warning("provider.namespacedemergencytracker_available")
+                logger.warning("provider")
         return self._emergency_tracker
 
     def _get_precedence_resolver(self) -> Any:
@@ -162,7 +163,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._precedence_resolver = MultiplierPrecedenceResolver()
             except ImportError:
-                logger.debug("provider.multiplierprecedenceresolver_available_using_max")
+                logger.debug("provider")
         return self._precedence_resolver
 
     def get_current_multiplier(
@@ -208,9 +209,12 @@ class CheckOnUseMultiplierProvider:
         )
 
         logger.debug(
-            f"[Provider] Context: level={current_level.name}, "
-            f"level_mult={level_multiplier}, domain={domain}, "
-            f"domain_mult={domain_multiplier}, final={final_multiplier}"
+            "provider.context",
+            current_level=current_level.name,
+            level_multiplier=level_multiplier,
+            domain=domain,
+            domain_multiplier=domain_multiplier,
+            final_multiplier=final_multiplier,
         )
 
         return ctx

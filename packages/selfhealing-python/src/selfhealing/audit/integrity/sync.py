@@ -8,10 +8,11 @@ Contains:
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -104,16 +105,18 @@ class StartupHashChainSync:
                 self._sync_redis_to_file(file_seq, file_hash)
                 result["action"] = "synced_redis_to_file"
                 logger.warning(
-                    f"[StartupSync] Redis sequence {redis_seq} behind file {file_seq}. "
-                    "Synced Redis to file state."
+                    "startup_sync.redis_sequence_behind_file",
+                    redis_seq=redis_seq,
+                    file_seq=file_seq,
                 )
 
             elif redis_seq > file_seq:
                 # Redis ahead - normal, some writes didn't complete
                 result["action"] = "redis_ahead_ok"
                 logger.info(
-                    f"[StartupSync] Redis sequence {redis_seq} ahead of file {file_seq}. "
-                    "Normal state, file writes may be pending."
+                    "startup_sync.redis_sequence_ahead_file",
+                    redis_seq=redis_seq,
+                    file_seq=file_seq,
                 )
 
             else:
@@ -133,7 +136,7 @@ class StartupHashChainSync:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "startup_sync.failed",
                 error=e,
             )
@@ -233,7 +236,7 @@ class StartupHashChainSync:
             return seq, prev_hash
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "startup_sync.failed_get_redis_state",
                 error=e,
             )
@@ -273,7 +276,7 @@ class StartupHashChainSync:
             )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "startup_sync.failed_sync_redis_file",
                 error=e,
             )
@@ -325,7 +328,7 @@ class StartupHashChainSync:
             return cleaned
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "startup_sync.failed_cleanup_pending",
                 error=e,
             )

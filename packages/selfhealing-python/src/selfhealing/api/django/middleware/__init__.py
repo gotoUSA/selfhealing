@@ -24,9 +24,19 @@ from selfhealing.api.django.middleware.access_logging import (
 )
 
 # ============================================================
+# Actor Context
+# ============================================================
+from selfhealing.api.django.middleware.actor_context import ActorContextMiddleware
+
+# ============================================================
 # Health Bridge
 # ============================================================
 from selfhealing.api.django.middleware.health_bridge import HealthBridgeMiddleware
+
+# ============================================================
+# IP Ban Enforcement
+# ============================================================
+from selfhealing.api.django.middleware.ip_ban import IPBanMiddleware
 
 # ============================================================
 # Fail-Secure Permissions
@@ -48,16 +58,6 @@ from selfhealing.api.django.middleware.recovery_logger import (
 # Self-Healing
 # ============================================================
 from selfhealing.api.django.middleware.self_healing import SelfHealingMiddleware
-
-# ============================================================
-# IP Ban Enforcement
-# ============================================================
-from selfhealing.api.django.middleware.ip_ban import IPBanMiddleware
-
-# ============================================================
-# Actor Context
-# ============================================================
-from selfhealing.api.django.middleware.actor_context import ActorContextMiddleware
 
 # ============================================================
 # Public API

@@ -57,8 +57,15 @@ def send_sla_notification(
     handler = dispatch.get(notification_type)
     if handler:
         handler(event_data)
-        logger.info(f"[SendSLANotification] Sent {notification_type} notification " f"(attempt {self.request.retries + 1})")
+        logger.info(
+            "send_sla_notification.sent_notification_attempt",
+            notification_type=notification_type,
+            self=self.request.retries + 1,
+        )
     else:
-        logger.warning(f"[SendSLANotification] Unknown notification type: {notification_type}")
+        logger.warning(
+            "send_sla_notification.unknown_notification_type",
+            notification_type=notification_type,
+        )
 
     return {"status": "sent", "type": notification_type}

@@ -14,7 +14,6 @@ Environment Variables:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -79,7 +78,8 @@ class SamplingSettings(BaseSettings):
         # Note: min_samples 기본값(10)보다 작으면 경고
         if v < 10:
             logger.warning(
-                f"[SafeDefault] max_samples={v} is very low, may reduce accuracy"
+                "safe_default.very_low_reduce_accuracy",
+                v=v,
             )
         return v
 
@@ -94,7 +94,8 @@ class SamplingSettings(BaseSettings):
             )
         if v > 0.5:
             logger.warning(
-                f"[SafeDefault] High sample_rate={v}, may impact performance"
+                "safe_default.high_impact_performance",
+                v=v,
             )
         return v
 

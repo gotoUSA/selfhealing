@@ -11,10 +11,10 @@ Provides role-based access control for the Self-Healing system:
 
 from __future__ import annotations
 
-import structlog
 import os
 from typing import TYPE_CHECKING
 
+import structlog
 from rest_framework.permissions import BasePermission
 
 if TYPE_CHECKING:
@@ -42,11 +42,7 @@ def _is_auth_disabled() -> bool:
     if is_production:
         # 프로덕션에서 바이패스 시도 감지 시 경고 로그
         if os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in ("true", "1", "yes"):
-            logger.error(
-                "[SECURITY] DISABLE_SELFHEALING_AUTH is set in PRODUCTION environment! "
-                "Auth bypass is BLOCKED. Remove this environment variable immediately. "
-                f"ENVIRONMENT={environment}, DJANGO_SETTINGS_MODULE={django_settings}"
-            )
+            logger.error("security.set_production_environment_auth")
         return False
 
     return os.environ.get("DISABLE_SELFHEALING_AUTH", "").lower() in (
@@ -292,9 +288,10 @@ class EmergencyEscalationPermission(BasePermission):
             has_perm = IsOperator().has_permission(request, view)
             if has_perm:
                 logger.warning(
-                    f"[RBAC] Emergency escalation to STRICT by operator: "
-                    f"user={request.user}, reason={reason[:50]}, "
-                    f"expiry_hours={self.emergency_expiry_hours}"
+                    "rbac.emergency_escalation_strict_operator",
+                    request=request.user,
+                    reason=reason[:50],
+                    self=self.emergency_expiry_hours,
                 )
             return has_perm
 
@@ -466,9 +463,10 @@ class ThresholdBasedPermission(BasePermission):
 
         if IsSelfHealingAdmin().has_permission(request, view):
             logger.warning(
-                f"[RBAC] High-risk operation approved by single admin: "
-                f"discrepancy={discrepancy:.1%}, user={request.user}, "
-                f"threshold_exceeded={thresholds['admin_approve']:.1%}"
+                "rbac.high_risk_operation_approved",
+                discrepancy=discrepancy,
+                request=request.user,
+                thresholds=thresholds['admin_approve'],
             )
             return True
         return False
@@ -509,9 +507,10 @@ class ThresholdBasedPermission(BasePermission):
         if not approval_id:
             self.message = self.DUAL_APPROVAL_REQUIRED_MSG
             logger.warning(
-                f"[RBAC] Dual approval required but no approval_id provided: "
-                f"discrepancy={discrepancy:.1%}, user={actor}, "
-                f"threshold={thresholds['dual_approval']:.1%}"
+                "rbac.dual_approval_required_no",
+                discrepancy=discrepancy,
+                actor=actor,
+                thresholds=thresholds['dual_approval'],
             )
             # 알림 발송 (승인 요청이 필요하다는 것을 Admin들에게 알림)
             self._notify_dual_approval_needed(actor, discrepancy, request)
@@ -533,20 +532,21 @@ class ThresholdBasedPermission(BasePermission):
                             f"현재 상태: {approval_request['status']}"
                         )
                         logger.warning(
-                            f"[RBAC] Dual approval request not approved: "
-                            f"approval_id={approval_id}, status={approval_request['status']}"
+                            "rbac.dual_approval_request_approved",
+                            approval_id=approval_id,
+                            approval_request=approval_request['status'],
                         )
                         return False
 
                     # 요청자 != 현재 사용자 확인 (4-Eyes: 승인자가 실행자가 아니어도 됨)
                     # 승인은 되었으므로 진행 허용
                     logger.info(
-                        f"[RBAC] Dual approval verified: "
-                        f"approval_id={approval_id}, "
-                        f"requested_by={approval_request['requested_by']}, "
-                        f"approved_by={approval_request['approved_by']}, "
-                        f"executed_by={actor}, "
-                        f"discrepancy={discrepancy:.1%}"
+                        "rbac.dual_approval_verified",
+                        approval_id=approval_id,
+                        approval_request=approval_request['requested_by'],
+                        approval_request_2=approval_request['approved_by'],
+                        actor=actor,
+                        discrepancy=discrepancy,
                     )
                     return True
 
@@ -559,7 +559,7 @@ class ThresholdBasedPermission(BasePermission):
             return False
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rbac.failed_verify_dual_approval",
                 error=e,
             )
@@ -680,7 +680,9 @@ class IsPanicRollbackAuthorized(BasePermission):
         # Operator + Emergency Escalation (Break Glass)
         if IsOperator().has_permission(request, view):
             logger.warning(
-                f"[RBAC] Panic rollback authorized (Emergency Escalation): " f"user={request.user}, reason={reason[:50]}"
+                "rbac.panic_rollback_authorized_emergency",
+                request=request.user,
+                reason=reason[:50],
             )
             return True
 
@@ -732,7 +734,8 @@ class HasChaosTestPermission(BasePermission):
             # 1. 테스트 환경 바이패스 (DISABLE_SELFHEALING_AUTH=true)
             if _is_auth_disabled():
                 logger.debug(
-                    f"[RBAC] X-Test permission bypassed (auth disabled): " f"path={getattr(request, 'path', 'unknown')}"
+                    "rbac.test_permission_bypassed_auth",
+                    getattr=getattr(request, 'path', 'unknown'),
                 )
                 return True
 
@@ -740,9 +743,10 @@ class HasChaosTestPermission(BasePermission):
             environment = os.environ.get("ENVIRONMENT", "development").lower()
             if environment == "production":
                 logger.error(
-                    f"[RBAC] X-Test access DENIED in production: "
-                    f"user={request.user}, path={getattr(request, 'path', 'unknown')}, "
-                    f"ip={self._get_client_ip(request)}"
+                    "rbac.test_access_denied_production",
+                    request=request.user,
+                    getattr=getattr(request, 'path', 'unknown'),
+                    self=self._get_client_ip(request),
                 )
                 self.message = (
                     "X-Test/Chaos API는 프로덕션 환경에서 사용할 수 없습니다. " "보안 정책에 따라 접근이 차단되었습니다."
@@ -752,7 +756,8 @@ class HasChaosTestPermission(BasePermission):
             # 3. 인증 필요
             if not request.user or not request.user.is_authenticated:
                 logger.warning(
-                    f"[RBAC] X-Test permission denied (not authenticated): " f"path={getattr(request, 'path', 'unknown')}"
+                    "rbac.test_permission_denied_authenticated",
+                    getattr=getattr(request, 'path', 'unknown'),
                 )
                 self.message = "X-Test/Chaos API 접근에는 인증이 필요합니다."
                 return False
@@ -778,14 +783,18 @@ class HasChaosTestPermission(BasePermission):
 
             # 6. 권한 없음 - 거부
             logger.warning(
-                f"[RBAC] X-Test permission denied (no group): " f"user={request.user}, required_groups={allowed_groups}"
+                "rbac.test_permission_denied_no",
+                request=request.user,
+                allowed_groups=allowed_groups,
             )
             return False
 
         except Exception as e:
             # Fail-Secure: 예외 발생 시 거부
-            logger.error(
-                f"[RBAC] X-Test permission check failed (deny): " f"error={e}, user={getattr(request, 'user', 'unknown')}"
+            logger.exception(
+                "rbac.test_permission_check_failed",
+                error=e,
+                getattr=getattr(request, 'user', 'unknown'),
             )
             self.message = "권한 확인 중 오류가 발생했습니다. 접근이 거부되었습니다."
             return False

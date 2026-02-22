@@ -8,10 +8,11 @@ OpenTelemetry 활성화 시 자동 계측을 활용하고,
 
 from __future__ import annotations
 
-import structlog
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Generator
+
+import structlog
 
 if TYPE_CHECKING:
     import requests
@@ -64,9 +65,8 @@ def suppress_otel_instrumentation() -> Generator[None, None, None]:
         return
 
     try:
-        from opentelemetry.context import attach, detach
-        from opentelemetry.context import _SUPPRESS_INSTRUMENTATION_KEY
         from opentelemetry import context
+        from opentelemetry.context import _SUPPRESS_INSTRUMENTATION_KEY, attach, detach
 
         # Create context with suppression flag
         token = attach(context.set_value(_SUPPRESS_INSTRUMENTATION_KEY, True))

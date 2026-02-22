@@ -18,11 +18,12 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Generator
+
+import structlog
 
 from selfhealing.resilience.bulkhead.base import (
     Bulkhead,

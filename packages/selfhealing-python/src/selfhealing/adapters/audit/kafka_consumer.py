@@ -23,13 +23,14 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
+
+import structlog
 
 if TYPE_CHECKING:
     from confluent_kafka import Consumer, Message
@@ -217,14 +218,14 @@ class BaseAuditConsumer(ABC):
                         self._error_count += 1
 
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "consumer.process_error",
                         error=e,
                     )
                     self._error_count += 1
 
         except KeyboardInterrupt:
-            logger.info("consumer.interrupted_user")
+            logger.info("consumer")
         finally:
             self.close()
 
@@ -245,8 +246,10 @@ class BaseAuditConsumer(ABC):
                 )
 
         logger.info(
-            f"[Consumer] Closed. Processed: {self._processed_count}, "
-            f"Errors: {self._error_count}, Skipped: {self._skipped_count}"
+            "consumer.closed_processed_errors_skipped",
+            self=self._processed_count,
+            self_1=self._error_count,
+            self_2=self._skipped_count,
         )
 
     def get_stats(self) -> dict[str, Any]:
@@ -361,7 +364,7 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
                 self._mark_processed(key)
             return success
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "idempotent_consumer.process_error",
                 error=e,
             )
@@ -381,7 +384,7 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "idempotent_consumer.parse_error",
                 error=e,
             )
@@ -450,7 +453,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
             try:
                 self._on_rebalance_callback("assign", partitions)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "rebalance_consumer.rebalance_callback_error",
                     error=e,
                 )
@@ -466,7 +469,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
                     count=len(offsets_to_commit),
                 )
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "rebalance_consumer.failed_commit_revoke",
                     error=e,
                 )
@@ -482,7 +485,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
             try:
                 self._on_rebalance_callback("revoke", partitions)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "rebalance_consumer.rebalance_callback_error",
                     error=e,
                 )
@@ -515,7 +518,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
 
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "rebalance_consumer.parse_error",
                 error=e,
             )
@@ -609,7 +612,7 @@ class PostgreSQLSinkConsumer(IdempotentAuditConsumer):
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "postgre_sql_sink.parse_error",
                 error=e,
             )
@@ -646,7 +649,7 @@ class PostgreSQLSinkConsumer(IdempotentAuditConsumer):
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "postgre_sql_sink.db_error",
                 error=e,
             )

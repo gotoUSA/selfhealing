@@ -50,7 +50,7 @@ def collect_self_healing_metrics(self) -> dict:
     Returns:
         Dictionary with collected metric values
     """
-    logger.debug("metrics.collection_started")
+    logger.debug("metrics")
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -79,7 +79,10 @@ def collect_self_healing_metrics(self) -> dict:
             "circuit_breakers_half_open": cb_summary.half_open,
         }
 
-        logger.debug(f"[Metrics] Collection complete: pending={status_counts.pending}")
+        logger.debug(
+            "metrics.collection_complete",
+            status_counts=status_counts.pending,
+        )
 
         return {
             "success": True,
@@ -87,7 +90,10 @@ def collect_self_healing_metrics(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[Metrics] Failed to collect metrics: {e}", exc_info=True)
+        logger.exception(
+            "metrics.failed_collect_metrics",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -147,7 +153,10 @@ def check_and_report_sla_breaches(self) -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[SLA Check] Failed: {e}", exc_info=True)
+        logger.exception(
+            "sla_check_failed",
+            error=e,
+        )
         return {
             "success": False,
             "error": str(e),
@@ -188,7 +197,10 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
         config = manager.get_error_budget_config()
 
         if not config.get("heartbeat_enabled", True):
-            logger.debug(f"[Heartbeat] Disabled for component={component}")
+            logger.debug(
+                "heartbeat.disabled",
+                component=component,
+            )
             return {
                 "success": True,
                 "component": component,
@@ -201,7 +213,11 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
         emit_heartbeat(component=component)
 
         current_time = time.time()
-        logger.debug(f"[Heartbeat] Emitted for component={component} at {current_time}")
+        logger.debug(
+            "heartbeat.emitted",
+            component=component,
+            current_time=current_time,
+        )
 
         return {
             "success": True,
@@ -213,7 +229,10 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
         }
 
     except Exception as e:
-        logger.error(f"[Heartbeat] Failed to emit heartbeat: {e}", exc_info=True)
+        logger.exception(
+            "heartbeat.failed_emit_heartbeat",
+            error=e,
+        )
         try:
             from selfhealing.services.metrics.recorders import emit_heartbeat
 
@@ -264,7 +283,10 @@ def notify_failsafe_recovery(
         config = manager.get_error_budget_config()
 
         if not config.get("recovery_alert_enabled", True):
-            logger.info(f"[Recovery] Recovery alert disabled, skipping for {component}")
+            logger.info(
+                "recovery.recovery_alert_disabled_skipping",
+                component=component,
+            )
             return {
                 "success": True,
                 "component": component,
@@ -290,11 +312,18 @@ def notify_failsafe_recovery(
                     downtime_seconds=downtime_seconds,
                     recovery_reason=recovery_reason,
                 )
-                logger.info(f"[Recovery] Sent recovery alert for {component}, " f"downtime={downtime_seconds:.1f}s")
+                logger.info(
+                    "recovery.sent_recovery_alert",
+                    component=component,
+                    downtime_seconds=downtime_seconds,
+                )
             else:
-                logger.warning("[Recovery] Alert adapter does not support recovery notifications")
+                logger.warning("recovery.alert_adapter_support_recovery")
         except Exception as adapter_error:
-            logger.warning(f"[Recovery] Could not send alert via adapter: {adapter_error}")
+            logger.warning(
+                "recovery.send_alert_via_adapter",
+                adapter_error=adapter_error,
+            )
 
         return {
             "success": True,
@@ -305,7 +334,10 @@ def notify_failsafe_recovery(
         }
 
     except Exception as e:
-        logger.error(f"[Recovery] Failed to send recovery notification: {e}", exc_info=True)
+        logger.exception(
+            "recovery.failed_send_recovery_notification",
+            error=e,
+        )
         return {
             "success": False,
             "component": component,

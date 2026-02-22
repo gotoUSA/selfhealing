@@ -32,7 +32,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-
 # =============================================================================
 # AnomalyDetectionStrategy — 이상 탐지 전략
 # =============================================================================

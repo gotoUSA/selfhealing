@@ -24,13 +24,14 @@ Reference:
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -393,8 +394,9 @@ class RecoveryAuditRecorder:
             self._entries = self._entries[-1000:]
 
         logger.debug(
-            f"[RecoveryAuditRecorder] Event recorded: "
-            f"type={event_type.value}, session={session_id}"
+            "recovery_audit_recorder.event_recorded",
+            event_type=event_type.value,
+            session_id=session_id,
         )
 
         return entry
@@ -471,15 +473,17 @@ class RecoveryAuditRecorder:
             try:
                 self._notification_callback(entry)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "recovery_audit_recorder.notification_failed",
                     error=e,
                 )
 
         logger.critical(
-            f"[RecoveryAuditRecorder] DANGEROUS_FORCE_RECOVERY recorded: "
-            f"type={force_type.value}, session={session_id}, "
-            f"executed_by={executed_by}, reason={reason}"
+            "recovery_audit_recorder.recorded",
+            force_type=force_type.value,
+            session_id=session_id,
+            executed_by=executed_by,
+            reason=reason,
         )
 
         return entry
@@ -505,7 +509,7 @@ class RecoveryAuditRecorder:
             backend.set(key, existing)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "recovery_audit_recorder.persist_failed",
                 error=e,
             )
@@ -540,7 +544,7 @@ class RecoveryAuditRecorder:
             return entries
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "recovery_audit_recorder.get_history_failed",
                 error=e,
             )

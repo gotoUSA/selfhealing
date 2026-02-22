@@ -8,9 +8,10 @@ Contains:
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.integrity.models import compute_hash
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
@@ -134,7 +135,7 @@ class DailyHashAnchor:
             return anchor_data
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "daily_anchor.failed_create_anchor",
                 date=date,
                 error=e,
@@ -167,7 +168,7 @@ class DailyHashAnchor:
             return {"sequence": sequence, "previous_hash": previous_hash}
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "daily_anchor.failed_get_current_state",
                 error=e,
             )
@@ -204,7 +205,7 @@ class DailyHashAnchor:
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "daily_anchor.failed_get_anchor",
                 date=date,
                 error=e,

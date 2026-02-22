@@ -4,8 +4,9 @@ Pre-computed Cache Service - Compute Functions for L3 Endpoints.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from .constants import CACHE_KEY_ERROR_BUDGET, CACHE_KEY_HEALTH, CACHE_KEY_POOL_STATUS
 from .multi_tier import get_cached_response
@@ -28,7 +29,7 @@ def compute_health_status() -> dict[str, Any]:
         health = service.get_overall_health()
         return health.to_dict()
     except Exception as e:
-        logger.error(
+        logger.exception(
             "precomputed_cache.health_compute_failed",
             error=e,
         )
@@ -53,7 +54,7 @@ def compute_error_budget_status() -> dict[str, Any]:
             "timestamp": timezone.now().isoformat(),
         }
     except Exception as e:
-        logger.error(
+        logger.exception(
             "precomputed_cache.error_budget_compute_failed",
             error=e,
         )
@@ -101,7 +102,7 @@ def compute_pool_status() -> dict[str, Any]:
             "use_connection_pool": os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
         }
     except Exception as e:
-        logger.error(
+        logger.exception(
             "precomputed_cache.pool_status_compute_failed",
             error=e,
         )

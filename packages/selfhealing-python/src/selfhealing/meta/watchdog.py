@@ -13,12 +13,13 @@ Self-Healing 시스템 자체가 장애 나면 자동 복구하거나 인간에�
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
 from selfhealing.meta.escalation import (
@@ -242,7 +243,7 @@ class SelfHealerWatchdog:
             return self._build_watchdog_state(overall_status, component_statuses, escalation_pending)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.health_check_failed",
                 error=e,
             )
@@ -493,7 +494,7 @@ class SelfHealerWatchdog:
             logger.debug("watchdog.cb_service_unavailable")
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.cb_recovery_failed",
                 error=e,
             )
@@ -527,7 +528,7 @@ class SelfHealerWatchdog:
 
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.dlq_recovery_failed",
                 error=e,
             )
@@ -601,7 +602,7 @@ class SelfHealerWatchdog:
             logger.warning("watchdog.recoveryadapter_available")
             return False
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.redis_stage_error",
                 error=e,
             )
@@ -624,7 +625,7 @@ class SelfHealerWatchdog:
             # Coordinator 리셋 등 복구 로직
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.recovery_pipeline_error",
                 error=e,
             )
@@ -696,12 +697,12 @@ class SelfHealerWatchdog:
                 error_message=result.error or "Unknown error",
             )
         except ImportError:
-            logger.error(
+            logger.exception(
                 "watchdog.fallback_escalation_available",
                 component=component,
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "watchdog.fallback_escalation_failed",
                 component=component,
                 error=e,
@@ -713,7 +714,7 @@ class SelfHealerWatchdog:
             try:
                 self.check_health()
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "watchdog.loop_error",
                     error=e,
                 )

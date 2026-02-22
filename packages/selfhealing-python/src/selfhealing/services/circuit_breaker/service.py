@@ -18,16 +18,17 @@ Features:
 
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any, Callable
+
+import structlog
 
 from selfhealing.core.timezone import now
 
 from .config import (
     CircuitBreakerConfig,
+    CircuitBreakerFallbackResult,
     CircuitBreakerResult,
     CircuitState,
-    CircuitBreakerFallbackResult,
 )
 from .manual_control import ManualControlMixin
 from .protection import ProtectionMixin
@@ -123,8 +124,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         if callback not in self._state_change_callbacks[state]:
             self._state_change_callbacks[state].append(callback)
             logger.debug(
-                f"[CircuitBreaker] Registered sync callback for state '{state}': "
-                f"{getattr(callback, '__name__', str(callback))}"
+                "cell_registry.bulkheads_registered",
+                state=state,
+                getattr=getattr(callback, '__name__', str(callback)),
             )
 
     def unregister_state_change_callback(
@@ -171,7 +173,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             try:
                 callback(service_name, old_state, new_state)
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "circuit_breaker.sync_callback_failed",
                     new_state=new_state,
                     error=e,
@@ -440,7 +442,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             )
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "circuit_breaker.failed_enqueue_dlq",
                 error=e,
             )
@@ -533,9 +535,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
             # Log with snapshot
             logger.warning(
-                f"[CircuitBreaker] Circuit auto-opened for '{service_name}' "
-                f"(failures: {updated_state.failure_count}, "
-                f"total_calls: {self.get_total_calls(service_name)})"
+                "circuit_breaker.circuit_auto_opened_failures",
+                service_name=service_name,
+                updated_state=updated_state.failure_count,
+                self=self.get_total_calls(service_name),
             )
 
             # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
@@ -588,8 +591,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         window_size = self.config.sliding_window_size
         if window_size > 0 and total_calls > window_size:
             logger.debug(
-                f"[CircuitBreaker] Capping total_calls for '{state.service_name}': "
-                f"{total_calls} → {window_size} (sliding_window_size)"
+                "circuit_breaker.capping",
+                state=state.service_name,
+                total_calls=total_calls,
+                window_size=window_size,
             )
             # 비율 계산 시 window 범위 내 카운트만 사용
             # count-based threshold는 failure_count 원본을 사용 (§9.4)
@@ -598,8 +603,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         # Check minimum_calls - prevent false positives with low traffic
         if total_calls < self.config.minimum_calls:
             logger.debug(
-                f"[CircuitBreaker] Not opening '{state.service_name}': "
-                f"total_calls ({total_calls}) < minimum_calls ({self.config.minimum_calls})"
+                "circuit_breaker.opening",
+                state=state.service_name,
+                total_calls=total_calls,
+                self=self.config.minimum_calls,
             )
             return False
 
@@ -608,9 +615,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             failure_rate = (state.failure_count / total_calls * 100) if total_calls > 0 else 0
             if failure_rate >= self.config.failure_rate_threshold:
                 logger.info(
-                    f"[CircuitBreaker] Rate threshold exceeded for '{state.service_name}': "
-                    f"{failure_rate:.1f}% >= {self.config.failure_rate_threshold}% "
-                    f"(window_size={window_size})"
+                    "circuit_breaker.rate_threshold_exceeded",
+                    state=state.service_name,
+                    failure_rate=failure_rate,
+                    self=self.config.failure_rate_threshold,
+                    window_size=window_size,
                 )
                 return True
 
@@ -662,7 +671,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Add system metrics if available
         try:
-            from selfhealing.services.system_metrics_cache import get_system_metrics_cache
+            from selfhealing.services.system_metrics_cache import (
+                get_system_metrics_cache,
+            )
 
             cache = get_system_metrics_cache()
             if cache.is_running():
@@ -838,7 +849,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         if circuit_closed:
             logger.info(
-                f"[CircuitBreaker] Circuit auto-closed for '{service_name}' " f"(successes: {self.config.success_threshold})"
+                "circuit_breaker.circuit_auto_closed_successes",
+                service_name=service_name,
+                self=self.config.success_threshold,
             )
 
             # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
@@ -919,7 +932,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     )
                     transitioned.append(state.service_name)
                     logger.info(
-                        f"[CircuitBreaker] Transitioned '{state.service_name}' " f"from OPEN to HALF_OPEN after {elapsed:.0f}s"
+                        "circuit_breaker.transitioned_open_after",
+                        state=state.service_name,
+                        elapsed=elapsed,
                     )
 
             return {
@@ -929,9 +944,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             }
 
         except Exception as e:
-            logger.error(
-                f"[CircuitBreaker] Error checking recovery transitions: {e}",
-                exc_info=True,
+            logger.exception(
+                "circuit_breaker.error_checking_recovery_transitions",
+                error=e,
             )
             return {
                 "success": False,
@@ -1039,7 +1054,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                         )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cb_reconciliation_failed",
                 error=e,
             )

@@ -16,9 +16,9 @@ Reference:
 - docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
-import structlog
 from typing import Any
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -83,8 +83,8 @@ class SLOSettings(BaseSettings):
         """Warn for extremely high targets."""
         if v > 0.9999:
             logger.warning(
-                f"[SafeDefault] Very high SLO target={v}, "
-                "consider if this is achievable"
+                "safe_default.very_high_slo_consider",
+                v=v,
             )
         return v
 

@@ -11,12 +11,13 @@ Enables graceful degradation when partial failures occur.
 
 from __future__ import annotations
 
-import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+
+import structlog
 
 logger = structlog.get_logger().bind(component="connection_health_monitor")
 

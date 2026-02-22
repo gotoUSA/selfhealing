@@ -28,10 +28,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import TYPE_CHECKING
+
+import structlog
 
 from selfhealing.services.governance.checks import GovernanceCheckMixin
 from selfhealing.services.throttle.adaptive_dlq_replay import ThrottleDLQReplayMixin
@@ -83,7 +84,9 @@ def _record_limit_history(
     실패해도 주요 기능에 영향 없음.
     """
     try:
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.record_limit_change(
@@ -135,30 +138,76 @@ _throttle_error_budget_preemptive_total = None
 
 try:
     from selfhealing.services.metrics.definitions import (
-        throttle_current_limit as _throttle_current_limit,
-        throttle_rtt_ms as _throttle_rtt_histogram,
-        throttle_gradient as _throttle_gradient_gauge,
-        throttle_denied_total as _throttle_denied_total,
-        throttle_emergency_adjustments_total as _throttle_emergency_adjustments_total,
-        throttle_cb_adjustments_total as _throttle_cb_adjustments_total,
-        throttle_requests_total as _throttle_requests_total,
         throttle_allowed_total as _throttle_allowed_total,
-        throttle_sla_warnings_total as _throttle_sla_warnings_total,
-        throttle_sla_criticals_total as _throttle_sla_criticals_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_cb_adjustments_total as _throttle_cb_adjustments_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_current_limit as _throttle_current_limit,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_denied_total as _throttle_denied_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_emergency_adjustments_total as _throttle_emergency_adjustments_total,
+    )
+    from selfhealing.services.metrics.definitions import (
         throttle_emergency_level as _throttle_emergency_level_gauge,
-        throttle_gradient_frozen as _throttle_gradient_frozen_gauge,
-        throttle_recovery_dampening_active as _recovery_active_gauge,
-        throttle_recovery_dampening_step as _recovery_step_gauge,
-        throttle_full_stop_active as _full_stop_gauge,
-        throttle_full_stop_activations_total as _throttle_full_stop_activations_total,
-        throttle_limit_changes_total as _throttle_limit_changes_total,
-        throttle_limit_change_magnitude as _throttle_limit_change_magnitude,
-        throttle_saturation_ratio as _throttle_saturation_ratio,
-        throttle_max_limit as _throttle_max_limit_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
         throttle_error_budget_adjustments_total as _throttle_error_budget_adjustments_total,
+    )
+    from selfhealing.services.metrics.definitions import (
         throttle_error_budget_multiplier as _throttle_error_budget_multiplier_gauge,
-        throttle_error_budget_reduction_active as _throttle_error_budget_reduction_active_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
         throttle_error_budget_preemptive_total as _throttle_error_budget_preemptive_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_error_budget_reduction_active as _throttle_error_budget_reduction_active_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_full_stop_activations_total as _throttle_full_stop_activations_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_full_stop_active as _full_stop_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_gradient as _throttle_gradient_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_gradient_frozen as _throttle_gradient_frozen_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_limit_change_magnitude as _throttle_limit_change_magnitude,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_limit_changes_total as _throttle_limit_changes_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_max_limit as _throttle_max_limit_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_recovery_dampening_active as _recovery_active_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_recovery_dampening_step as _recovery_step_gauge,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_requests_total as _throttle_requests_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_rtt_ms as _throttle_rtt_histogram,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_saturation_ratio as _throttle_saturation_ratio,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_sla_criticals_total as _throttle_sla_criticals_total,
+    )
+    from selfhealing.services.metrics.definitions import (
+        throttle_sla_warnings_total as _throttle_sla_warnings_total,
     )
 
     _METRICS_AVAILABLE = True
@@ -442,7 +491,7 @@ def _emit_throttle_event(
         return
 
     try:
-        from selfhealing.services.event_bus import EventType, EventPriority
+        from selfhealing.services.event_bus import EventPriority, EventType
 
         event_type = getattr(EventType, event_type_name, None)
         if event_type is None:
@@ -479,7 +528,6 @@ from selfhealing.services.throttle.gradient import (  # noqa: F401
     RTTSample,
 )
 
-
 # =============================================================================
 # Emergency Level → Throttle Limit 배율 매핑
 # =============================================================================
@@ -498,11 +546,11 @@ PROTECTED_TIERS_ON_429: set[str] = {"critical"}
 
 
 
-from selfhealing.services.throttle.adaptive._rate_limit import RateLimitHandlerMixin
-from selfhealing.services.throttle.adaptive._governance import GovernanceEventMixin
-from selfhealing.services.throttle.adaptive._error_budget import ErrorBudgetHandlerMixin
 from selfhealing.services.throttle.adaptive._emergency import EmergencyModeMixin
+from selfhealing.services.throttle.adaptive._error_budget import ErrorBudgetHandlerMixin
 from selfhealing.services.throttle.adaptive._full_stop import FullStopMixin
+from selfhealing.services.throttle.adaptive._governance import GovernanceEventMixin
+from selfhealing.services.throttle.adaptive._rate_limit import RateLimitHandlerMixin
 from selfhealing.services.throttle.adaptive._recovery import RecoveryDampeningMixin
 
 
@@ -746,10 +794,7 @@ class AdaptiveThrottle(
         with self._adjustment_lock:
             # 로컬 플래그 조기 반환 (LEVEL_3 또는 Kill Switch에 의해 즉시 설정됨)
             if self._gradient_frozen:
-                logger.debug(
-                    "[AdaptiveThrottle] Gradient frozen (LEVEL_3/KillSwitch), "
-                    "skipping limit adjustment but RTT data collected"
-                )
+                logger.debug("adaptive_throttle.gradient_frozen_skipping_limit")
                 return
 
             # Governance Safety Net: EventBus 이벤트 유실 대비 Drift 교정 (30초 TTL 캐시)
@@ -782,8 +827,11 @@ class AdaptiveThrottle(
                 self._adaptive_stats["sla_criticals"] += 1
                 new_limit = int(self._current_limit * 0.7)  # -30%
                 logger.warning(
-                    f"[AdaptiveThrottle] CRITICAL RTT={rtt_ms:.1f}ms >= {self.config.sla_critical_ms}ms, "
-                    f"limit: {self._current_limit} → {new_limit}"
+                    "adaptive_throttle.critical_ms_ms_limit",
+                    rtt_ms=rtt_ms,
+                    self=self.config.sla_critical_ms,
+                    self_2=self._current_limit,
+                    new_limit=new_limit,
                 )
                 self.current_limit = new_limit
                 self._adaptive_stats["adjustments_down"] += 1
@@ -848,8 +896,11 @@ class AdaptiveThrottle(
                 self._adaptive_stats["sla_warnings"] += 1
                 new_limit = int(self._current_limit * self.config.decrease_ratio)
                 logger.info(
-                    f"[AdaptiveThrottle] WARNING RTT={rtt_ms:.1f}ms >= {self.config.sla_warning_ms}ms, "
-                    f"limit: {self._current_limit} → {new_limit}"
+                    "adaptive_throttle.warning_ms_ms_limit",
+                    rtt_ms=rtt_ms,
+                    self=self.config.sla_warning_ms,
+                    self_2=self._current_limit,
+                    new_limit=new_limit,
                 )
                 self.current_limit = new_limit
                 self._adaptive_stats["adjustments_down"] += 1
@@ -1244,9 +1295,11 @@ class AdaptiveThrottle(
         old_config = self.config
         self.config = new_config
         logger.info(
-            f"[AdaptiveThrottle] Config swapped: "
-            f"sla_warning_ms={old_config.sla_warning_ms}→{new_config.sla_warning_ms}, "
-            f"sla_critical_ms={old_config.sla_critical_ms}→{new_config.sla_critical_ms}"
+            "adaptive_throttle.config_swapped",
+            old_config=old_config.sla_warning_ms,
+            new_config=new_config.sla_warning_ms,
+            old_config_2=old_config.sla_critical_ms,
+            new_config_3=new_config.sla_critical_ms,
         )
         return old_config
 

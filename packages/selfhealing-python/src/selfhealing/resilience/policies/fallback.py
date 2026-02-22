@@ -23,10 +23,11 @@ RetryPolicy가 기존 RetryHandler를 재사용하지 않은 선례와 동일하
 
 from __future__ import annotations
 
-import structlog
 import warnings
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,

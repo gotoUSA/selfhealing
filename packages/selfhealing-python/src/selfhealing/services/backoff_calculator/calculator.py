@@ -6,11 +6,12 @@ Core backoff calculation logic with throttle-awareness.
 
 from __future__ import annotations
 
-import structlog
 import random
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from .global_state import GlobalThrottleStateManager
 from .models import (
@@ -449,8 +450,9 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
         # 시스템 타임아웃 기준 cap (임의적 2배 대신)
         if adjusted_delay > SYSTEM_TIMEOUT_SECONDS:
             logger.warning(
-                f"[ThrottleAwareBackoff] Delay capped at SYSTEM_TIMEOUT: "
-                f"original={base_delay * multiplier}s → {SYSTEM_TIMEOUT_SECONDS}s"
+                "throttle_aware_backoff.delay_capped",
+                value=base_delay * multiplier,
+                SYSTEM_TIMEOUT_SECONDS=SYSTEM_TIMEOUT_SECONDS,
             )
             adjusted_delay = SYSTEM_TIMEOUT_SECONDS
 

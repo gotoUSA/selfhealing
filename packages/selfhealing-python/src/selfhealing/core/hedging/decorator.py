@@ -22,9 +22,9 @@ import asyncio
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
+from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 from selfhealing.core.hedging.config import HedgingConfig, HedgingMode
 from selfhealing.core.hedging.strategy import HedgingStrategy
-from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 
 T = TypeVar("T")
 

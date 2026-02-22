@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -473,7 +474,9 @@ class NotificationAggregator:
             self._redis_client.set(hash_key, "1", ex=self.DEFAULT_SENT_TTL)
 
         logger.info(
-            f"[NotificationAggregator] Summary created: " f"{summary.total_incidents} incidents (namespace={namespace})"
+            "notification_aggregator.summary_created_incidents",
+            summary=summary.total_incidents,
+            namespace=namespace,
         )
 
         return summary

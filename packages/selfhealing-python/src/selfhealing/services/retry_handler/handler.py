@@ -11,10 +11,11 @@ and throttle-aware backoff.
 
 from __future__ import annotations
 
-import structlog
 import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.core.timezone import now
 
@@ -336,8 +337,9 @@ class RetryHandler:
 
                     if grace_attempt_number <= grace_attempts:
                         logger.warning(
-                            f"[RetryHandler] CRITICAL tier grace retry "
-                            f"{grace_attempt_number}/{grace_attempts} during FULL_STOP"
+                            "retry_handler.critical_tier_grace_retry",
+                            grace_attempt_number=grace_attempt_number,
+                            grace_attempts=grace_attempts,
                         )
                         self._record_critical_tier_grace_metric()
                         return self.config.critical_tier_full_stop_max_delay
@@ -350,8 +352,11 @@ class RetryHandler:
 
             if multiplier > 1.0:
                 logger.info(
-                    f"[RetryHandler] Backoff adjusted: {self.backoff.calculate(attempt)}s → "
-                    f"{delay}s (×{multiplier:.1f}, reason={reason})"
+                    "retry_handler.backoff_adjusted",
+                    self=self.backoff.calculate(attempt),
+                    delay=delay,
+                    multiplier=multiplier,
+                    reason=reason,
                 )
 
             return delay
@@ -401,8 +406,9 @@ class RetryHandler:
 
                     if combined != throttle_delay:
                         logger.info(
-                            f"[RetryHandler] Using 429 cooldown ({rate_limit_delay}s) "
-                            f"over throttle backoff ({throttle_delay}s)"
+                            "retry_handler.using_cooldown_over_throttle",
+                            rate_limit_delay=rate_limit_delay,
+                            throttle_delay=throttle_delay,
                         )
 
                     return combined
@@ -433,9 +439,9 @@ class RetryHandler:
         gate_result = self._check_error_budget_gate()
         if gate_result is not None and not gate_result.allowed:
             logger.warning(
-                f"[RetryHandler] execute blocked by ErrorBudgetGate: "
-                f"budget={gate_result.error_budget_percent}%, "
-                f"threshold={gate_result.threshold_percent}%"
+                "retry_handler.execute_blocked_errorbudgetgate",
+                gate_result=gate_result.error_budget_percent,
+                gate_result_1=gate_result.threshold_percent,
             )
             return RetryResult(
                 success=False,
@@ -748,7 +754,7 @@ class RetryHandler:
                 return None
 
         except Exception as dlq_error:
-            logger.error(
+            logger.exception(
                 "retry_handler.failed_create_dlq_entry",
                 dlq_error=dlq_error,
             )

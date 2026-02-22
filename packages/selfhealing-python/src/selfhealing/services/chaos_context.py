@@ -10,12 +10,13 @@ in the DLQ to prevent confusion with real incidents.
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.core.timezone import now
 

@@ -15,10 +15,11 @@ Layer 2(RegionHeartbeat)를 담당합니다.
 
 from __future__ import annotations
 
-import structlog
 import threading
 import time
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.multiregion.config import MultiRegionSettings
@@ -104,8 +105,10 @@ class RegionHeartbeat:
         )
         self._worker.start()
         logger.info(
-            f"[Heartbeat] Started for {self._settings.current_region} "
-            f"(interval={self.HEARTBEAT_INTERVAL}s, ttl={self.HEARTBEAT_TTL}s)"
+            "heartbeat.started",
+            self=self._settings.current_region,
+            self_1=self.HEARTBEAT_INTERVAL,
+            self_2=self.HEARTBEAT_TTL,
         )
 
     def _run(self) -> None:

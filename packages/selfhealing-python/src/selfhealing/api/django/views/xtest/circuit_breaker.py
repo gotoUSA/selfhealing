@@ -9,9 +9,9 @@ Circuit Breaker 관련 테스트 API:
 - TriggerCBRecoveryView: CB 복구 트리거
 """
 
-import structlog
 import time
 
+import structlog
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.request import Request
@@ -110,9 +110,12 @@ class InjectCBFailureView(XTestModeMixin, APIView):
         snapshot = collect_system_snapshot()
 
         logger.info(
-            f"[X-Test-Mode] CB failure injection: service={service_name}, "
-            f"count={failure_count}, state={previous_state}→{current_state}, "
-            f"user={request.user}"
+            "test_mode_cb_failure",
+            service_name=service_name,
+            failure_count=failure_count,
+            previous_state=previous_state,
+            current_state=current_state,
+            request=request.user,
         )
 
         response_data = {
@@ -178,7 +181,11 @@ class ResetCBView(XTestModeMixin, APIView):
         current_state = cb_service.get_state(service_name)
 
         logger.info(
-            f"[X-Test-Mode] CB reset: service={service_name}, " f"state={previous_state}→{current_state}, user={request.user}"
+            "test_mode_cb_reset",
+            service_name=service_name,
+            previous_state=previous_state,
+            current_state=current_state,
+            request=request.user,
         )
 
         response_data = {
@@ -383,8 +390,12 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
         recovery_success = state_after == "closed"
 
         logger.info(
-            f"[X-Test-Mode] CB recovery triggered for '{service_name}': "
-            f"{state_before} → {state_after} (successes: {successes_recorded}, force: {force_close})"
+            "test_mode_cb_recovery",
+            service_name=service_name,
+            state_before=state_before,
+            state_after=state_after,
+            successes_recorded=successes_recorded,
+            force_close=force_close,
         )
 
         response_data = {
@@ -467,9 +478,12 @@ class TryRecoveryTransitionView(XTestModeMixin, APIView):
         transition_occurred = state_str_before != state_str_after
 
         logger.info(
-            f"[X-Test-Mode] Try recovery transition for '{service_name}': "
-            f"state={state_str_before}→{state_str_after}, "
-            f"allowed={allowed}, transition={transition_occurred}"
+            "test_mode_try_recovery",
+            service_name=service_name,
+            state_str_before=state_str_before,
+            state_str_after=state_str_after,
+            allowed=allowed,
+            transition_occurred=transition_occurred,
         )
 
         response_data = {
@@ -551,8 +565,9 @@ class SwitchToAutoModeView(XTestModeMixin, APIView):
         state_after = cb_service.get_or_create_state(service_name)
 
         logger.info(
-            f"[X-Test-Mode] CB switched to auto mode for '{service_name}': "
-            f"manually_controlled={was_manually_controlled} → False"
+            "test_mode_cb_switched",
+            service_name=service_name,
+            was_manually_controlled=was_manually_controlled,
         )
 
         response_data = {

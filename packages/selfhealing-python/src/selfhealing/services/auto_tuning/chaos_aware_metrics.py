@@ -7,8 +7,9 @@ Chaos 실험 인식 메트릭 어댑터.
 
 from __future__ import annotations
 
-import structlog
 from typing import Protocol
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -68,8 +69,8 @@ class ChaosAwareMetricsAdapter:
         """
         if self._skip_during_chaos and self._is_chaos_experiment_running():
             logger.info(
-                f"[ChaosAwareMetrics] Skipping metrics for {service}: "
-                f"Chaos experiment active"
+                "chaos_aware_metrics.skipping_metrics_chaos_experiment",
+                service=service,
             )
             return {}  # 빈 메트릭 반환 → 조정 없음
 

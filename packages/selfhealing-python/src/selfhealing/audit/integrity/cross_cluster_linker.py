@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import structlog
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.core.cluster_identity import ClusterIdentity
@@ -260,12 +261,14 @@ class CrossClusterAuditLinker:
             )
 
             logger.info(
-                f"[CrossClusterAuditLinker] Created local anchor for {target_date}: " f"{anchor.compute_anchor_hash()[:16]}..."
+                "cross_cluster_audit_linker.created_local_anchor",
+                target_date=target_date,
+                anchor=anchor.compute_anchor_hash()[:16],
             )
             return anchor
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cross_cluster_audit_linker.failed_create_local_anchor",
                 error=e,
             )
@@ -295,7 +298,7 @@ class CrossClusterAuditLinker:
                 return ClusterDailyAnchor.from_dict(json.loads(data))
             return None
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cross_cluster_audit_linker.failed_get_local_anchor",
                 error=e,
             )
@@ -360,13 +363,15 @@ class CrossClusterAuditLinker:
             )
 
             logger.info(
-                f"[CrossClusterAuditLinker] Submitted to global: {anchor.cluster_id} / "
-                f"{anchor.anchor_date} (Global hash: {global_anchor.global_hash[:16]}...)"
+                "cross_cluster_audit_linker.submitted_global_global_hash",
+                anchor=anchor.cluster_id,
+                anchor_1=anchor.anchor_date,
+                global_anchor=global_anchor.global_hash[:16],
             )
             return True
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cross_cluster_audit_linker.failed_submit_global",
                 error=e,
             )
@@ -396,7 +401,7 @@ class CrossClusterAuditLinker:
                 return GlobalDailyAnchor.from_dict(json.loads(data))
             return None
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cross_cluster_audit_linker.failed_get_global_anchor",
                 error=e,
             )
@@ -464,7 +469,7 @@ class CrossClusterAuditLinker:
             dates = self._global_redis.zrevrange(self.GLOBAL_ANCHOR_LIST_KEY, 0, limit - 1)
             return [d.decode() if isinstance(d, bytes) else d for d in dates]
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "cross_cluster_audit_linker.failed_list_global_anchors",
                 error=e,
             )

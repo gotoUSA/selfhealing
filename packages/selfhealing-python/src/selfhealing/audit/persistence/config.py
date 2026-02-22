@@ -16,15 +16,14 @@ Disk-Persistent Buffer 설정.
 from __future__ import annotations
 
 import os
-import structlog
 import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field
+import structlog
+from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
 
 logger = structlog.get_logger()
 

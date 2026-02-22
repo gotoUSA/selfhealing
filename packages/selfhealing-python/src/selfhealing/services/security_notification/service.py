@@ -14,8 +14,9 @@ Handles security-related notifications across multiple channels:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.settings import get_config
 
@@ -143,8 +144,10 @@ class SecurityNotificationService(
         success_count = sum(1 for r in result.results if r.success)
         total_count = len(result.results)
         logger.info(
-            f"[Security Notification] Incident {incident_id}: "
-            f"{success_count}/{total_count} notifications sent"
+            "security_notification_incident_notifications",
+            incident_id=incident_id,
+            success_count=success_count,
+            total_count=total_count,
         )
 
         return result
@@ -291,7 +294,10 @@ class SecurityNotificationService(
 
         success_count = sum(1 for r in result.results if r.success)
         logger.info(
-            f"[Security Notification] Alert '{title}': {success_count}/{len(result.results)} notifications sent"
+            "security_notification_alert_notifications",
+            title=title,
+            success_count=success_count,
+            count=len(result.results),
         )
 
         return result

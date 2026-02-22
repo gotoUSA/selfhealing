@@ -19,7 +19,6 @@ Reference:
 """
 
 import structlog
-
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -148,8 +147,8 @@ class NotificationChannelSettings(BaseSettings):
         """Rate limit이 너무 높으면 경고."""
         if v > 100:
             logger.warning(
-                f"[NotificationChannel] rate_limit_per_minute={v}는 높은 값입니다. "
-                "알림 폭주에 주의하세요."
+                "notification_channel.높은_값입니다_알림_폭주에",
+                v=v,
             )
         return v
 

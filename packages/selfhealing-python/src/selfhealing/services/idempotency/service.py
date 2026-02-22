@@ -8,10 +8,11 @@ Canonical location: ``selfhealing.services.idempotency.service``
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.core.time_provider import get_time_provider
 from selfhealing.settings import get_config

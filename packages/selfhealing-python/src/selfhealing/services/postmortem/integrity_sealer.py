@@ -17,10 +17,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -104,15 +105,15 @@ class IntegritySealer:
             sealed["sealed_at"] = sealed_at
 
             logger.info(
-                f"[IntegritySealer] Postmortem sealed: "
-                f"incident_id={postmortem.get('incident_id')}, "
-                f"sequence={integrity_info.get('sequence')}"
+                "integrity_sealer.postmortem_sealed",
+                postmortem=postmortem.get('incident_id'),
+                integrity_info=integrity_info.get('sequence'),
             )
 
             return sealed
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "integrity_sealer.failed_seal_postmortem",
                 error=e,
             )
@@ -245,7 +246,7 @@ class IntegritySealer:
             hash_chain.reset()
             logger.warning("integrity_sealer.chain_state_reset")
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "integrity_sealer.failed_reset_chain",
                 error=e,
             )

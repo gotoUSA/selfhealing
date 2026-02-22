@@ -7,10 +7,11 @@ Backpressure 레벨에 따라 자동으로 기능을 활성화/비활성화합�
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Callable
+
+import structlog
 
 from selfhealing.scaling.config import (
     BackpressureLevel,
@@ -179,7 +180,7 @@ class GracefulDegradation:
                     try:
                         feature.on_enable()
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             "graceful_degradation.error",
                             error=e,
                         )
@@ -194,7 +195,7 @@ class GracefulDegradation:
                     try:
                         feature.on_disable()
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             "graceful_degradation.error",
                             error=e,
                         )

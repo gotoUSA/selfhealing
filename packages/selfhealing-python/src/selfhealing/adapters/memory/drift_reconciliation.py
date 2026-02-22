@@ -8,7 +8,6 @@ L2 복구 시 L1과 L2 간 상태 불일치(드리프트)를 해결합니다.
 from __future__ import annotations
 
 import asyncio
-import structlog
 import random
 import threading
 import time
@@ -17,6 +16,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -134,8 +135,10 @@ class DriftReconciler:
             result = DriftReconciliationResult.L1_WINS
             winner = "l1"
             logger.info(
-                f"[DriftReconciler] Reconciled {service_name}: "
-                f"{l1_state.upper()} wins over {l2_state.upper()} (L1 more restrictive)"
+                "drift_reconciler.reconciled_wins_over_more",
+                service_name=service_name,
+                l1_state=l1_state.upper(),
+                l2_state=l2_state.upper(),
             )
         elif l2_priority > l1_priority:
             # L2가 더 제한적 → L1에 전파
@@ -143,8 +146,10 @@ class DriftReconciler:
             result = DriftReconciliationResult.L2_WINS
             winner = "l2"
             logger.info(
-                f"[DriftReconciler] Reconciled {service_name}: "
-                f"{l2_state.upper()} wins over {l1_state.upper()} (L2 more restrictive)"
+                "drift_reconciler.reconciled_wins_over_more",
+                service_name=service_name,
+                l2_state=l2_state.upper(),
+                l1_state=l1_state.upper(),
             )
         else:
             # 같은 레벨: 타임스탬프 비교
@@ -218,7 +223,9 @@ class DriftReconciler:
 
         if jitter > 0:
             logger.debug(
-                f"[DriftReconciler] Scheduling reconciliation for {service_name} " f"in {jitter:.2f}s (jitter applied)"
+                "drift_reconciler.scheduling_reconciliation_jitter_applied",
+                service_name=service_name,
+                jitter=jitter,
             )
             time.sleep(jitter)
 
@@ -244,7 +251,9 @@ class DriftReconciler:
 
         if jitter > 0:
             logger.info(
-                f"[DriftReconciler] Scheduling reconciliation for {service_name} " f"in {jitter:.2f}s (jitter applied)"
+                "drift_reconciler.scheduling_reconciliation_jitter_applied",
+                service_name=service_name,
+                jitter=jitter,
             )
             await asyncio.sleep(jitter)
 

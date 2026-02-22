@@ -11,12 +11,13 @@ utilities are general-purpose and not metrics-specific.
 from __future__ import annotations
 
 import asyncio
-import structlog
 import random
 import time
 from collections.abc import Callable
 from functools import wraps
 from typing import ParamSpec, TypeVar
+
+import structlog
 
 logger = structlog.get_logger()
 

@@ -15,8 +15,9 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from selfhealing.services.audit.base import _write_to_wal
 
@@ -73,7 +74,12 @@ def log_xtest_operation_audit(
 
     if wal_seq:
         logger.debug(
-            f"[X-Test-Audit] {action} | component={component} | " f"session={session_id} | result={result} | wal_seq={wal_seq}"
+            "test_audit",
+            action=action,
+            component=component,
+            session_id=session_id,
+            result=result,
+            wal_seq=wal_seq,
         )
 
     return wal_seq
@@ -137,9 +143,13 @@ def log_xtest_scenario_audit(
 
     if wal_seq:
         logger.info(
-            f"[X-Test-Audit] Scenario completed | name={scenario_name} | "
-            f"service={service_name} | status={status} | "
-            f"steps={steps_completed}/{steps_total} | duration={duration_ms}ms"
+            "test_audit_scenario_completed",
+            scenario_name=scenario_name,
+            service_name=service_name,
+            status=status,
+            steps_completed=steps_completed,
+            steps_total=steps_total,
+            duration_ms=duration_ms,
         )
 
     return wal_seq

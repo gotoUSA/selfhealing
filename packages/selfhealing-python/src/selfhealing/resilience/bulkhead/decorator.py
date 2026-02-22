@@ -26,10 +26,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import structlog
 import warnings
 from functools import wraps
 from typing import Any, Callable, TypeVar
+
+import structlog
 
 from selfhealing.core.connection_health import ConnectionType
 

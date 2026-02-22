@@ -20,11 +20,11 @@ from selfhealing.core.action_executor import (
 )
 from selfhealing.core.adaptive_jitter import AdaptiveJitter
 from selfhealing.core.backoff import (
-    LegacyBackoffConfig,
     BackoffStrategy,
     ConstantBackoff,
     DecorrelatedJitterBackoff,
     ExponentialBackoff,
+    LegacyBackoffConfig,
     LinearBackoff,
     calculate_backoff,
     get_backoff_calculator,
@@ -47,8 +47,8 @@ from selfhealing.core.connection_health import (
     PartitionState,
 )
 from selfhealing.core.decision_logger import (
-    DecisionLogger,
     DecisionBoundaryEventType,
+    DecisionLogger,
     ReasonCode,
     log_enter_pre_decision_zone,
     log_exit_pre_decision_zone,
@@ -81,10 +81,10 @@ from selfhealing.core.pool_monitor import (
     PoolStatsProvider,
 )
 from selfhealing.core.pool_watchdog import (
-    PoolRecoveryHandler,
-    PoolWatchdog,
     PoolRecoveryAction,
+    PoolRecoveryHandler,
     PoolRecoveryResult,
+    PoolWatchdog,
 )
 from selfhealing.core.request_context import (
     RequestLifecycleContext,
@@ -125,9 +125,11 @@ from selfhealing.core.tls_handler import (
     TLSResilientClient,
 )
 from selfhealing.interfaces.repositories import (
-    CircuitBreakerStateEnum as CircuitState,
     CircuitBreakerStateData,
     FailedOperationData,
+)
+from selfhealing.interfaces.repositories import (
+    CircuitBreakerStateEnum as CircuitState,
 )
 
 __all__ = [

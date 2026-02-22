@@ -19,12 +19,13 @@ Design Philosophy:
 
 from __future__ import annotations
 
-import structlog
 import random
 import threading
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
+
+import structlog
 
 from selfhealing.adapters.rate_limit import get_rate_limit_storage
 from selfhealing.interfaces.rate_limit_storage import (
@@ -266,7 +267,10 @@ class RateLimitCoordinator:
             wait_time = state.remaining_cooldown
 
             logger.info(
-                f"[RateLimitCoordinator] Waiting {wait_time:.2f}s for '{key}' " f"(consecutive_429s={state.consecutive_429s})"
+                "rate_limit_coordinator.waiting",
+                wait_time=wait_time,
+                key=key,
+                state=state.consecutive_429s,
             )
 
             time.sleep(wait_time)
@@ -359,9 +363,11 @@ class RateLimitCoordinator:
             self._schedule_cooldown_end_event(key, cooldown_until)
 
         logger.warning(
-            f"[RateLimitCoordinator] Rate limited on '{key}' "
-            f"(status={status_code}, consecutive={consecutive}, "
-            f"cooldown={delay:.2f}s)"
+            "rate_limit_coordinator.rate_limited",
+            key=key,
+            status_code=status_code,
+            consecutive=consecutive,
+            delay=delay,
         )
 
         return delay

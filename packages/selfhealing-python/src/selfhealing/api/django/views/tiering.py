@@ -16,9 +16,9 @@ Endpoints:
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
+import structlog
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError

@@ -20,9 +20,10 @@ Django REST Framework의 예외 처리를 확장하여 표준화된 에러 응�
 
 from __future__ import annotations
 
-import structlog
 import uuid
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from rest_framework.request import Request

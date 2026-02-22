@@ -42,13 +42,14 @@ Audit Logging 연동:
 from __future__ import annotations
 
 import functools
-import structlog
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import structlog
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
@@ -762,8 +763,9 @@ def require_governance(
             )
             if not result.allowed:
                 logger.warning(
-                    f"[GovernanceChecks] {func.__name__} blocked: "
-                    f"{result.block_reason.value if result.block_reason else 'unknown'}"
+                    "governance_checks.blocked",
+                    func=func.__name__,
+                    result=result.block_reason.value if result.block_reason else 'unknown',
                 )
                 return result
             return func(*args, **kwargs)

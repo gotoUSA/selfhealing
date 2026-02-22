@@ -8,10 +8,11 @@ Contains:
 from __future__ import annotations
 
 import json
-import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 from selfhealing.audit.integrity.models import compute_hash
 
@@ -89,7 +90,7 @@ class HashChainReconciler:
 
             if not degraded_entries:
                 result["status"] = "no_degraded_entries"
-                logger.info("reconciler.no_degraded_entries_reconcile")
+                logger.info("reconciler")
                 return result
 
             # Step 2: Get current Redis chain state
@@ -111,14 +112,16 @@ class HashChainReconciler:
             self._last_reconciliation = datetime.now(timezone.utc)
 
             logger.info(
-                f"[Reconciler] Completed: merged {merged_count} entries "
-                f"(seq {result['new_sequence_start']}-{result['new_sequence_end']})"
+                "reconciler.completed_merged_entries_seq",
+                merged_count=merged_count,
+                result=result['new_sequence_start'],
+                result_2=result['new_sequence_end'],
             )
 
             return result
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "reconciler.reconciliation_failed",
                 error=e,
             )

@@ -35,12 +35,13 @@ Version: 2.0.0 (RingBuffer + WAL 통합)
 
 from __future__ import annotations
 
-import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
     from django.http import HttpRequest

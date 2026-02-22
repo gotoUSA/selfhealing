@@ -16,7 +16,6 @@ Region Replicator - 리전 간 데이터 복제.
 from __future__ import annotations
 
 import json
-import structlog
 import queue
 import re
 import threading
@@ -24,6 +23,8 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
+
+import structlog
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
@@ -260,7 +261,7 @@ class RedisReplicationTarget:
                     decode_responses=True,
                 )
             except ImportError:
-                logger.error("replicator.redis_package_installed")
+                logger.exception("replicator.redis_package_installed")
                 raise
         return self._client
 
@@ -297,7 +298,7 @@ class RedisReplicationTarget:
 
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "replicator.apply_event_error",
                 self=self.endpoint.region,
                 error=e,
@@ -457,7 +458,7 @@ class RegionReplicator:
                     batch = []
 
             except Exception as e:
-                logger.error(
+                logger.exception(
                     "replicator.worker_error",
                     error=e,
                 )
@@ -474,7 +475,7 @@ class RegionReplicator:
                         with self._stats_lock:
                             self._stats["failed"] += 1
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         "replicator.batch_apply_error",
                         target=target.endpoint.region,
                         error=e,
@@ -540,7 +541,7 @@ class RegionReplicator:
 
             return True
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "replicator.local_apply_error",
                 error=e,
             )

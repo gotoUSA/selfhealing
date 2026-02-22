@@ -14,9 +14,9 @@ Environment Variables:
 SLA 일괄 설정 및 도메인별 임계값 관리.
 """
 
-import structlog
 from datetime import timedelta
 
+import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -65,8 +65,8 @@ class SLASettings(BaseSettings):
         """Warn for very long SLA thresholds."""
         if v > 168:  # More than a week
             logger.warning(
-                f"[SafeDefault] Very long SLA default_hours={v}h, "
-                "consider using <= 168h (1 week)"
+                "safe_default.very_long_sla_consider",
+                v=v,
             )
         return v
 

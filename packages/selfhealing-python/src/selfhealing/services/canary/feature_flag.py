@@ -41,7 +41,6 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import structlog
 import os
 import random
 from collections.abc import Callable
@@ -49,6 +48,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+import structlog
 
 from selfhealing.utils.time import utc_now
 
@@ -318,8 +319,10 @@ class CanaryFeatureFlag:
         """
         self._flags[config.config_type] = config
         logger.info(
-            f"[CanaryFeatureFlag] Registered: {config.config_type} "
-            f"(percentage={config.percentage}%, strategy={config.strategy.value})"
+            "cell_registry.bulkheads_registered",
+            config=config.config_type,
+            config_1=config.percentage,
+            strategy=config.strategy.value,
         )
 
     def unregister_flag(self, config_type: str) -> bool:

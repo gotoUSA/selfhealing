@@ -42,8 +42,8 @@ Usage:
 
 from selfhealing.adapters.ipc.auth import SidecarAuthenticator
 from selfhealing.adapters.ipc.cb_state_cache import (
-    IPCStateCache,
     CBStateCache,
+    IPCStateCache,
     get_cb_state_cache,
     reset_cb_state_cache,
 )
@@ -94,7 +94,11 @@ from selfhealing.adapters.ipc.uds_client import (
     FailOpenUDSClient,
     UDSClient,
 )
-from selfhealing.adapters.ipc.uds_server import UDSServer, get_uds_server, reset_uds_server
+from selfhealing.adapters.ipc.uds_server import (
+    UDSServer,
+    get_uds_server,
+    reset_uds_server,
+)
 
 __all__ = [
     # Server/Client

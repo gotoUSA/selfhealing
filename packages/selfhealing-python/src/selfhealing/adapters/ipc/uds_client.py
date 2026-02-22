@@ -23,12 +23,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import structlog
 import socket
 import sys
 import time
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 from selfhealing.adapters.ipc.protocol.json_rpc import (
     JSONRPCErrorCode,

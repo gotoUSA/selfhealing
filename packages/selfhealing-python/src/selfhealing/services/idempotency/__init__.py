@@ -53,7 +53,11 @@ _SUB_MODULES = ("models", "service", "anti_flapping")
 
 from . import (  # noqa: E402
     anti_flapping as _anti_flapping_mod,
+)
+from . import (
     models as _models_mod,
+)
+from . import (
     service as _service_mod,
 )
 

@@ -21,9 +21,9 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import structlog
 from typing import Any
 
+import structlog
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework import status
@@ -215,7 +215,7 @@ class GenerateKeyView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_idempotency_key_generation",
                 error=e,
             )
@@ -377,7 +377,7 @@ class CheckDuplicateView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_idempotency_duplicate_check",
                 error=e,
             )
@@ -559,7 +559,7 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_idempotency_status_retrieval",
                 error=e,
             )
@@ -699,7 +699,7 @@ class RegisterKeyView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_idempotency_registration_failed",
                 error=e,
             )
@@ -830,7 +830,7 @@ class ClearKeysView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "test_idempotency_clear_failed",
                 error=e,
             )
